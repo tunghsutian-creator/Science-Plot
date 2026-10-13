@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import builtins
+import errno
+import importlib.machinery
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Self
 
 import pytest
 
@@ -9,6 +15,8 @@ from sciplot_core.doctor import (
     _publication_foundation_available,
     _vsz_lifecycle_available,
     doctor_payload,
+    readiness_checks,
+    runtime_checks,
 )
 from sciplot_core.doctor import payload as doctor_module
 
@@ -100,3 +108,203 @@ def test_doctor_exposes_readiness_evidence_scope() -> None:
     }
     assert envelopes["claims"]["current_implementation_certified"] is False
     assert envelopes["claims"]["human_validation_bound_to_current_build"] is False
+
+
+def test_doctor_reports_runtime_and_optional_development_prerequisites_separately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        doctor_module,
+        "_veusz_qt_runtime_status",
+        lambda: (False, "Vendored Veusz qtloops compiled helper is absent"),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "_qt_build_prerequisite_status",
+        lambda *, needed: (False, "qmake cannot run; sip-build is absent") if needed else (True, "ok"),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "_local_socket_status",
+        lambda: (False, "AF_UNIX denied by sandbox; no service contacted"),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "_ready_rule_fixtures_exist",
+        lambda rules: (False, "missing 24 rule fixtures under SCIPLOT_REFERENCE_DATA"),
+    )
+
+    payload = doctor_payload()
+    checks = {check["id"]: check for check in payload["checks"]}
+
+    assert payload["status"] == "blocked"
+    assert checks["veusz_qt_runtime"]["required"] is True
+    assert checks["qt_build_prerequisites"]["required"] is False
+    assert checks["local_socket_transport"]["required"] is False
+    assert "sciplot plot" in checks["local_socket_transport"]["label"]
+    assert payload["optional_capabilities"]["plot_socket_transport"] == {
+        "required_for_task_native_readiness": False,
+        "default_route": "sciplot plot",
+        "available": False,
+    }
+    assert checks["ready_rule_fixtures"]["required"] is False
+    assert "Real-data acceptance only; not needed for ordinary use" in checks["ready_rule_fixtures"]["detail"]
+    assert "Build the vendored Veusz qtloops helper" in " ".join(payload["next_actions"])
+    assert not any("fixture" in action.lower() for action in payload["next_actions"])
+
+
+def test_socket_denial_does_not_block_socket_independent_task_native_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(doctor_module, "_veusz_qt_runtime_status", lambda: (True, "qtloops loaded"))
+    monkeypatch.setattr(doctor_module, "_qt_build_prerequisite_status", lambda *, needed: (True, "not needed"))
+    monkeypatch.setattr(doctor_module, "_local_socket_status", lambda: (False, "AF_UNIX denied"))
+    monkeypatch.setattr(doctor_module, "_ready_rule_fixtures_exist", lambda rules: (False, "private corpus absent"))
+
+    payload = doctor_payload()
+
+    assert payload["status"] == "ready"
+    assert payload["optional_capabilities"]["plot_socket_transport"]["available"] is False
+    assert next(check for check in payload["checks"] if check["id"] == "ready_rule_fixtures")["required"] is False
+
+
+def test_doctor_identifies_unix_socket_permission_denial_before_service_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def deny_socket(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError(errno.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(runtime_checks.socket, "socket", deny_socket)
+
+    ok, detail = runtime_checks._local_socket_status()
+
+    assert ok is False
+    assert "AF_UNIX" in detail
+    assert "denied by OS or sandbox" in detail
+    assert "errno 1" in detail
+    assert "no SciPlot service was contacted" in detail
+
+
+def test_doctor_socket_probe_removes_temporary_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bound: list[Path] = []
+
+    class FakeSocket:
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            pass
+
+        def bind(self, path: str) -> None:
+            bound.append(Path(path))
+            Path(path).touch()
+
+        def listen(self, _backlog: int) -> None:
+            pass
+
+    monkeypatch.setattr(runtime_checks.socket, "socket", lambda *_args: FakeSocket())
+
+    ok, detail = runtime_checks._local_socket_status()
+
+    assert ok is True
+    assert "no service was contacted" in detail
+    assert len(bound) == 1
+    assert not bound[0].exists()
+
+
+def test_doctor_distinguishes_missing_qtloops_binary_from_load_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_import = builtins.__import__
+
+    def failing_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "PyQt6":
+            return SimpleNamespace(QtCore=object(), QtGui=object(), QtWidgets=object())
+        if name == "veusz.helpers":
+            raise ImportError("qtloops load failed")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(runtime_checks, "_module_available", lambda _name: True)
+    monkeypatch.setattr(runtime_checks, "VEUSZ_ROOT", tmp_path)
+    monkeypatch.setattr(runtime_checks.sys, "path", runtime_checks.sys.path.copy())
+    monkeypatch.setattr(builtins, "__import__", failing_import)
+
+    missing, missing_detail = runtime_checks._veusz_qt_runtime_status()
+    helper_dir = tmp_path / "veusz" / "helpers"
+    helper_dir.mkdir(parents=True)
+    (helper_dir / ("qtloops" + importlib.machinery.EXTENSION_SUFFIXES[0])).touch()
+    unloadable, unloadable_detail = runtime_checks._veusz_qt_runtime_status()
+
+    assert missing is unloadable is False
+    assert "compiled helper is absent" in missing_detail
+    assert "compiled helper is present but cannot load" in unloadable_detail
+
+
+def test_doctor_does_not_mislabel_pyqt_load_failure_as_missing_qtloops(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_import = builtins.__import__
+
+    def failing_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "PyQt6":
+            raise OSError("Qt shared library unavailable")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(runtime_checks, "_module_available", lambda _name: True)
+    monkeypatch.setattr(runtime_checks, "VEUSZ_ROOT", tmp_path)
+    monkeypatch.setattr(runtime_checks.sys, "path", runtime_checks.sys.path.copy())
+    monkeypatch.setattr(builtins, "__import__", failing_import)
+
+    ok, detail = runtime_checks._veusz_qt_runtime_status()
+
+    assert ok is False
+    assert "PyQt6/Qt runtime cannot load" in detail
+    assert "qtloops" not in detail
+
+
+def test_doctor_source_build_check_requires_working_qt6_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QMAKE_EXE", raising=False)
+    paths = {
+        "qmake-qt6": None,
+        "qmake6": None,
+        "qmake": "/usr/bin/qmake",
+        "sip-build": None,
+        "c++": "/usr/bin/c++",
+    }
+    monkeypatch.setattr(runtime_checks.shutil, "which", paths.get)
+    monkeypatch.setattr(
+        runtime_checks.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 1, "", "qmake cannot execute"),
+    )
+
+    ok, detail = runtime_checks._qt_build_prerequisite_status(needed=True)
+
+    assert ok is False
+    assert "qmake cannot execute" in detail
+    assert "sip-build is absent" in detail
+    assert "Needed only to build" in detail
+    assert runtime_checks._qt_build_prerequisite_status(needed=False)[0] is True
+
+
+def test_doctor_names_configured_private_fixture_root_without_requiring_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reference = tmp_path / "private-reference-data"
+    monkeypatch.setenv("SCIPLOT_REFERENCE_DATA", str(reference))
+    rule = SimpleNamespace(
+        rule_id="synthetic_unit_rule",
+        fixture_status="ready",
+        fixture_path="tests/fixtures/real_world/synthetic_unit_rule/source.csv",
+    )
+
+    ok, detail = readiness_checks._ready_rule_fixtures_exist([rule])
+
+    assert ok is False
+    assert "synthetic_unit_rule" in detail
+    assert str(reference) in detail
+    assert "SCIPLOT_REFERENCE_DATA" in detail

@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import ast
+import importlib.machinery
 import importlib.util
+import os
+import shutil
+import socket
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
+
 from sciplot_core._paths import REPO_ROOT, VEUSZ_ROOT
 from sciplot_core.publication import (
     get_publication_profile,
@@ -37,13 +44,96 @@ def _veusz_qt_runtime_status() -> tuple[bool, str]:
         sys.path.insert(0, veusz_root)
     try:
         from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: F401
+    except Exception as exc:  # noqa: BLE001 - Report any Qt runtime-load failure.
+        return False, f"PyQt6/Qt runtime cannot load: {type(exc).__name__}: {exc}"
+    try:
         from veusz.helpers import qtloops  # noqa: F401
-    except Exception as exc:
-        return False, f"{type(exc).__name__}: {exc}"
+    except Exception as exc:  # noqa: BLE001 - Doctor must report any native-load failure.
+        helper = VEUSZ_ROOT / "veusz" / "helpers" / "qtloops"
+        suffixes = importlib.machinery.EXTENSION_SUFFIXES
+        built = any(helper.with_name(helper.name + suffix).is_file() for suffix in suffixes)
+        if not built:
+            return False, (
+                f"Vendored Veusz qtloops compiled helper is absent under {helper.parent}; "
+                f"import failed: {type(exc).__name__}: {exc}"
+            )
+        return False, (
+            "Vendored Veusz qtloops compiled helper is present but cannot load "
+            f"in this Python/PyQt6/Qt runtime: {type(exc).__name__}: {exc}"
+        )
     return (
         True,
         f"PyQt {QtCore.PYQT_VERSION_STR}; Qt runtime {QtCore.qVersion()}; Veusz qtloops loaded",
     )
+
+
+def _qt_build_prerequisite_status(*, needed: bool) -> tuple[bool, str]:
+    """Describe source-build tools only when the native helper cannot load."""
+
+    if not needed:
+        return True, "Compiled Veusz Qt helper loads; a build toolchain is not needed for use."
+    qmake = shutil.which(os.environ.get("QMAKE_EXE") or "qmake-qt6")
+    if qmake is None and not os.environ.get("QMAKE_EXE"):
+        qmake = shutil.which("qmake6") or shutil.which("qmake")
+    sip_build = shutil.which("sip-build")
+    compiler = shutil.which("c++") or shutil.which("g++") or shutil.which("clang++")
+    problems: list[str] = []
+    if qmake is None:
+        problems.append("Qt 6 qmake is absent (qmake-qt6/qmake6/qmake or QMAKE_EXE)")
+    else:
+        try:
+            query = subprocess.run(
+                [qmake, "-query", "QT_VERSION"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            problems.append(f"qmake at {qmake} cannot run: {type(exc).__name__}: {exc}")
+        else:
+            version = query.stdout.strip()
+            if query.returncode != 0 or not version.startswith("6."):
+                reason = query.stderr.strip() or version or f"exit {query.returncode}"
+                problems.append(f"qmake at {qmake} does not report Qt 6: {reason}")
+    if sip_build is None:
+        problems.append("sip-build is absent from PATH")
+    if compiler is None:
+        problems.append("a C++ compiler is absent from PATH")
+    if problems:
+        return False, "; ".join(problems) + ". Needed only to build the vendored Qt helper."
+    return True, (
+        f"Qt 6 qmake ({qmake}), sip-build ({sip_build}), and C++ compiler "
+        f"({compiler}) found for a source build; this does not prove the helper compiles."
+    )
+
+
+def _local_socket_status() -> tuple[bool, str]:
+    """Probe the local plot-engine transport without contacting a service."""
+
+    if not hasattr(socket, "AF_UNIX"):
+        return False, "AF_UNIX is unavailable on this platform; local plot-engine transport needs it."
+    try:
+        with tempfile.TemporaryDirectory(prefix="sp-doctor-") as temporary:
+            path = Path(temporary) / "s"
+            try:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                    listener.bind(str(path))
+                    listener.listen(1)
+            except PermissionError as exc:
+                return False, (
+                    f"AF_UNIX socket creation/bind denied by OS or sandbox "
+                    f"(errno {exc.errno}: {exc.strerror}); no SciPlot service was contacted."
+                )
+            except OSError as exc:
+                return False, (
+                    f"AF_UNIX local socket creation/bind failed "
+                    f"({type(exc).__name__}, errno {exc.errno}: {exc.strerror}); "
+                    "no SciPlot service was contacted."
+                )
+    except OSError as exc:
+        return False, f"Cannot create private socket probe directory: {type(exc).__name__}: {exc}"
+    return True, "AF_UNIX local socket creation/bind succeeded; no service was contacted."
 
 
 def _top_level_symbols(path: Path) -> set[str]:
@@ -92,7 +182,7 @@ def _publication_foundation_available() -> bool:
 
     try:
         profile = get_publication_profile("sciplot_single_panel_v1")
-    except Exception:
+    except Exception:  # noqa: BLE001 - A broken profile is a failed readiness check.
         return False
     publication_symbols = _top_level_symbols(
         REPO_ROOT / "src" / "sciplot_core" / "publication"

@@ -14,13 +14,18 @@ def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
         ]
     actions: list[str] = []
     failed_ids = {str(check["id"]) for check in required_failures}
-    if {"pyqt6", "veusz_vendor", "veusz_qt_runtime"} & failed_ids:
+    if "pyqt6" in failed_ids:
+        actions.append("Install the PyQt6 Studio dependency in this Python environment.")
+    if "veusz_vendor" in failed_ids:
+        actions.append("Restore the vendored Veusz source tree.")
+    if "veusz_qt_runtime" in failed_ids:
         actions.append(
-            "Install the Studio dependencies and verify the vendored Veusz runtime."
+            "Build the vendored Veusz qtloops helper for this Python/PyQt6/Qt runtime; "
+            "check the optional Qt 6 qmake, sip-build, and C++ source-build diagnostics."
         )
     if "python_version" in failed_ids:
         actions.append("Use Python 3.11 or newer.")
-    if {"ready_rules", "ready_rule_fixtures"} & failed_ids:
+    if "ready_rules" in failed_ids:
         actions.append(
             "Keep automatic plotting limited to fixture-backed ready material rules."
         )
