@@ -8,6 +8,7 @@
 import os
 import shutil
 import subprocess
+import tempfile
 
 try:
     import tomllib
@@ -24,8 +25,6 @@ def find_on_path(names, mainname):
 
     mainname is the generic name to report
     """
-    path = os.getenv('PATH', os.path.defpath)
-    pathparts = path.split(os.path.pathsep)
     for cmd in names:
         resolved = shutil.which(cmd)
         if resolved:
@@ -217,37 +216,18 @@ class sip_build_ext(build_ext):
         return generated_sources + other_sources
 
     def _sip_sources(self, source):
-        """Reuse only a completed binding generation, including its module entry."""
+        """Generate current bindings in an isolated directory; never reuse partial SIP output."""
         modulename = os.path.splitext(os.path.basename(source))[0]
-        builddir = os.path.join(self.build_temp, 'sip-' + modulename)
+        os.makedirs(self.build_temp, exist_ok=True)
+        builddir = tempfile.mkdtemp(prefix='sip-' + modulename + '-', dir=self.build_temp)
+        self._sip_compile(source, builddir)
         dirname = os.path.join(builddir, 'output', modulename)
-        complete = os.path.join(builddir, '.sciplot-sip-complete')
-
-        def generated():
-            if not os.path.isdir(dirname):
-                return []
-            return [os.path.join(dirname, name) for name in sorted(os.listdir(dirname))
-                    if name.endswith(('.cpp', '.c'))]
-
-        def has_module(files):
-            return any(os.path.basename(path) in (
+        files = [os.path.join(dirname, name) for name in sorted(os.listdir(dirname))
+                 if name.endswith(('.cpp', '.c'))] if os.path.isdir(dirname) else []
+        if not any(os.path.basename(path) in (
                 'sip' + modulename + 'cmodule.cpp', 'sip' + modulename + 'cmodule.c')
-                for path in files)
-
-        files = generated()
-        if self.force or not os.path.isfile(complete) or not has_module(files):
-            # A failed SIP invocation may leave a directory and partial files.
-            # Invalidate completion before retrying so another failure cannot
-            # turn the next build into a link without Python's module entry.
-            if os.path.exists(complete):
-                os.unlink(complete)
-            os.makedirs(builddir, exist_ok=True)
-            self._sip_compile(source, builddir)
-            files = generated()
-            if not has_module(files):
-                raise RuntimeError('SIP did not generate the module entry for ' + modulename)
-            with open(complete, 'w') as marker:
-                marker.write(modulename + '\n')
+                for path in files):
+            raise RuntimeError('SIP did not generate the module entry for ' + modulename)
         return files
 
     def _sip_compile(self, source, sip_builddir):
