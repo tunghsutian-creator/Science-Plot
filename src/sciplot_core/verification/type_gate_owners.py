@@ -34,6 +34,7 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
             "tests/test_architecture_boundaries.py",
             "tests/test_cli_surface.py",
             "tests/test_doctor_contract_topology.py",
+            "tests/test_private_corpus_preflight.py",
         }
     ),
     pytest_targets=(
@@ -41,6 +42,7 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
         "tests/test_external_ai_verification.py",
         "tests/test_cli_surface.py",
         "tests/test_doctor_contract_topology.py",
+        "tests/test_private_corpus_preflight.py",
         "tests/test_architecture_boundaries.py::test_non_probe_source_has_no_exact_duplicate_function_implementations",
         "tests/test_architecture_boundaries.py::test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint",
         *ARCHITECTURE_CORE_TARGETS,
