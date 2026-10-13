@@ -28,6 +28,20 @@ Implemented on the local integration branch, not yet published or released:
   UTF-8 bytes from re-encoded MCP/RPC result bytes and retains three warm
   same-operation RPC observations. No cross-transport or before/after speedup
   is inferred from them.
+- An opt-in `plot.intent` route now resolves only Managed FigureSpec v2 axis
+  labels and annotation text from an exact stable ID or unique current label.
+  Its plan shows the literal before/after value and unit or anchor context;
+  explicit apply delegates to the same revision-checked, idempotent semantic
+  patch transaction. Ambiguous labels fail closed. An axis-label regression
+  checks unchanged scientific state; native preview/export is not yet verified
+  in this cloud runner.
+- Managed summary reads now explain observed changed inputs and affected saved
+  dependency nodes. They leave future cache reuse, native scientific audit and
+  export inventory unverified. A changed-native summary defers native
+  inspection while retaining its external-mutation resolution guard; the
+  original full description still follows its prior inspection path. This is
+  an explanation of current evidence, not a second scheduler or a guaranteed
+  future execution plan.
 
 Verification still open: the current cloud sandbox lacks compiled vendored
 Veusz Qt helpers and denies AF_UNIX sockets, so native workflow/socket tests and
@@ -37,21 +51,21 @@ resolve the public test-tier boundary or provision the authorized corpus before
 claiming a full source-only CI pass. No clean Mac, independent human or external
 AI-client token/cost acceptance is implied by the local regression evidence.
 
-Candidate next slices, to prioritize only after the existing native and
-external-evidence gates are addressed. Each should use the existing document,
-patch and dependency owners rather than another grammar, cache or renderer:
+Remaining acceptance and candidate next slices. The first two have a bounded
+local implementation above; their broader native/client evidence gates remain
+open. Later additions should use existing document, patch and dependency
+owners rather than another grammar, cache or renderer:
 
-1. Add bounded typed intents for axis labels, annotation text and themes. Map
-   an unambiguous named intent to stable targets, ask on ambiguity, then use
-   the present revision/preview transaction. [Vega-Lite parameters](https://vega.github.io/vega-lite/docs/parameter.html)
-   provide a useful interaction/declarative separation, not a SciPlot schema
-   migration. Exit only after exact-target, stale-revision, native review and
-   unchanged-science checks.
-2. Add a read-only explanation of which existing dependency nodes are dirty,
-   reusable or due to run before rebuilding. [DVC status](https://doc.dvc.org/command-reference/status)
-   and [repro](https://doc.dvc.org/command-reference/repro) are UX references;
-   this must project the current DAG, not introduce a second scheduler. Exit
-   when its explanation agrees with actual local execution and recovery.
+1. The bounded axis-label/annotation-text route is implemented locally; a
+   theme intent remains a proposal. Before broadening, check exact targets,
+   stale revisions, native review and unchanged science. [Vega-Lite parameters](https://vega.github.io/vega-lite/docs/parameter.html)
+   are an interaction/declarative reference, not a SciPlot schema migration.
+2. The read-only dependency explanation is implemented for observed saved
+   state; it deliberately does not declare nodes reusable or due to run with
+   certainty. Compare its statements with actual local execution and recovery
+   before claiming predictive accuracy. [DVC status](https://doc.dvc.org/command-reference/status)
+   and [repro](https://doc.dvc.org/command-reference/repro) are UX references,
+   not a second SciPlot scheduler.
 3. Record the resolved font-file identity where the native runtime can prove
    it, leaving unobserved identity explicitly unknown. [Matplotlib's font
    manager](https://matplotlib.org/stable/api/font_manager_api.html) illustrates
