@@ -126,14 +126,25 @@ def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tm
             assert found["matches"][0]["project"] == project and found["matches"][0]["source_current"] is True
             failure_query = await _call(client, "sciplot_task_inspect", {"task": created["task_dir"]})
             failure_figure = failure_query["current_project"]["figures"][0]
-            failed_call = await client.call_tool("sciplot_task_start", {"request": {
+            invalid_task = tmp_path / "invalid_width"
+            invalid_width = await client.call_tool("sciplot_task_start", {"request": {
                 "version": 1, "action": "edit", "project": project, "export": False,
                 "expected_document_sha256": failure_figure["document_sha256"],
                 "operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2"}}]},
+                "task_dir": str(invalid_task)})
+            assert invalid_width.is_error and not invalid_task.exists()
+            assert invalid_width.structured_content["error"]["code"] == "invalid_sample_style"
+            assert invalid_width.structured_content["repair"]["issues"][0]["constraint"] == "positive_physical_size"
+            assert file_sha256(Path(failure_figure["document"])) == failure_figure["document_sha256"]
+            failed_call = await client.call_tool("sciplot_task_start", {"request": {
+                "version": 1, "action": "edit", "project": project, "export": False,
+                "expected_document_sha256": failure_figure["document_sha256"],
+                "operations": [{"op": "set_sample_style", "samples": ["Missing A"], "style": {"width": "2pt"}}]},
                 "task_dir": str(tmp_path / "failed_preview")})
             assert failed_call.is_error
             failed_preview = failed_call.structured_content
             assert failed_preview["status"] == "blocked" and failed_preview["phase"] == "previewing"
+            assert failed_preview["blocker"]["reason_code"] == "unknown_sample_style_target"
             corrected = await _call(client, "sciplot_task_resume", {"task": failed_preview["task_dir"], "response": {
                 "expected_preview_revision": failed_preview["preview_revision"],
                 "revise_operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2.5pt"}}]}})

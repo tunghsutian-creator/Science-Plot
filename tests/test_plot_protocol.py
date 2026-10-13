@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import json
 import os
-from pathlib import Path
 import signal
 import socket
 import tempfile
 import threading
 import time
-from typing import Any, ClassVar, Iterator
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import Any, ClassVar, Self
 
 import pytest
 
@@ -170,6 +171,51 @@ def test_uncertain_disconnect_is_not_automatically_replayed() -> None:
             assert error.value.repair["action"] == "retry_same_request"
 
 
+def test_slow_response_cannot_extend_the_total_exchange_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = [0.0]
+    sent: list[bytes] = []
+    chunks = iter([b'{"jsonrpc":', b'"2.0","id":', b'"same-id",', b'"result":{}}\n'])
+
+    class SlowSocket:
+        timeout = 0.0
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            pass
+
+        def settimeout(self, timeout: float) -> None:
+            self.timeout = timeout
+
+        def connect(self, _path: str) -> None:
+            pass
+
+        def sendall(self, payload: bytes) -> None:
+            sent.append(payload)
+
+        def recv(self, _limit: int) -> bytes:
+            delay = 0.04
+            if self.timeout < delay:
+                clock[0] += self.timeout
+                raise TimeoutError("The partial response exhausted the remaining deadline.")
+            clock[0] += delay
+            return next(chunks)
+
+    monkeypatch.setattr(client.socket, "socket", lambda *_args: SlowSocket())
+    monkeypatch.setattr(client.time, "monotonic", lambda: clock[0])
+    request = {"jsonrpc": "2.0", "id": "same-id", "method": "plot.patch", "params": {
+        "plot": "/tmp/plot", "request": {"idempotency_key": "same-key"}}}
+    with pytest.raises(TransportError) as error:
+        client._exchange(Path("/tmp/private/engine.sock"), request, 0.1)
+    assert error.value.reason_code == "transport_outcome_unknown"
+    assert error.value.repair is not None
+    assert error.value.repair["request_id"] == "same-id"
+    assert error.value.repair["action"] == "retry_same_request"
+    assert sent == [rpc.encode(request)]
+    assert clock[0] == pytest.approx(0.1)
+
+
 def test_simultaneous_client_start_and_crash_reconnect_keep_owned_socket() -> None:
     with tempfile.TemporaryDirectory(prefix="spp-", dir="/tmp") as temporary:
         path = Path(temporary) / "engine.sock"
@@ -254,10 +300,11 @@ def test_cli_create_paths_bind_caller_directory_before_daemon(
 
 
 def test_mcp_semantic_schemas_and_dispatch_share_core(monkeypatch: pytest.MonkeyPatch) -> None:
+    from test_task_capabilities import expand
+
     from sciplot_core.mcp_server.schemas import tool_definitions
     from sciplot_core.mcp_server.services import invoke_owner
     from sciplot_core.plot_document.schema import patch_schema
-    from test_task_capabilities import expand
 
     tools = {item.name: item for item in tool_definitions()}
     assert expand(tools["sciplot_plot_patch"].input_schema)["properties"]["request"] == patch_schema()
@@ -277,7 +324,11 @@ def test_mcp_semantic_schemas_and_dispatch_share_core(monkeypatch: pytest.Monkey
 
 def test_lifecycle_contract_rejects_unknown_and_relative_fields() -> None:
     from sciplot_core.plot_document.errors import DocumentError
-    from sciplot_core.plot_engine.contracts import validate_create, validate_decide, validate_rollback
+    from sciplot_core.plot_engine.contracts import (
+        validate_create,
+        validate_decide,
+        validate_rollback,
+    )
 
     for invalid in ({"source": "ambiguous.csv", "idempotency_key": "k"},
                     {"source": "/tmp/raw.csv", "idempotency_key": "k", "guess_mapping": True}):

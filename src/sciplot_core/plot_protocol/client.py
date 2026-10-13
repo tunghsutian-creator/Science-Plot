@@ -2,34 +2,56 @@
 
 from __future__ import annotations
 
-import os
 import math
-from pathlib import Path
+import os
 import socket
 import stat
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sciplot_core.plot_protocol.paths import TransportError, lifecycle_lock, prepare_socket, read_owner
-from sciplot_core.plot_protocol.rpc import (
-    MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, RemoteError, decode, encode, handle, validate_call, validate_params,
+from sciplot_core.plot_protocol.paths import (
+    TransportError,
+    lifecycle_lock,
+    prepare_socket,
+    read_owner,
 )
+from sciplot_core.plot_protocol.rpc import (
+    MAX_REQUEST_BYTES,
+    MAX_RESPONSE_BYTES,
+    RemoteError,
+    decode,
+    encode,
+    handle,
+    validate_call,
+    validate_params,
+)
+
+
+def _remaining_timeout(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("The local exchange exceeded its total deadline.")
+    return remaining
 
 
 def _exchange(path: Path, request: dict[str, Any], timeout: float) -> dict[str, Any]:
     payload = encode(request)
     if len(payload) > MAX_REQUEST_BYTES:
         raise TransportError("rpc_frame_too_large", "The local plot request exceeds 1 MiB; no request was sent.")
+    deadline = time.monotonic() + timeout
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-        connection.settimeout(timeout)
+        connection.settimeout(_remaining_timeout(deadline))
         connection.connect(str(path))
         try:
+            connection.settimeout(_remaining_timeout(deadline))
             connection.sendall(payload)
             data = bytearray()
             while True:
+                connection.settimeout(_remaining_timeout(deadline))
                 chunk = connection.recv(min(65536, MAX_RESPONSE_BYTES + 1 - len(data)))
                 if not chunk:
                     raise OSError("Local engine disconnected before its response.")

@@ -3,8 +3,10 @@
 import json
 import os
 import signal
+import socket as socket_module
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from time import perf_counter
 
@@ -16,6 +18,8 @@ from mcp.client.stdio import StdioServerParameters
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
+from sciplot_core.plot_engine.storage import load_head
+from sciplot_core.plot_protocol import rpc
 from sciplot_core.plot_protocol.client import _ping, call
 from sciplot_core.plot_protocol.paths import read_owner
 
@@ -136,3 +140,73 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
                 engine_pid = read_owner(socket)["pid"]
             if engine_pid is not None:
                 os.kill(engine_pid, signal.SIGTERM)
+
+
+@pytest.mark.comprehensive
+def test_native_mutation_lost_reply_and_daemon_restart_replay_once(tmp_path):
+    from managed_plot_helpers import patch, request_for_source
+
+    create_request = request_for_source(tmp_path)
+    source = Path(create_request["data_binding"]["data_sources"][0]["path"])
+    source_hash = file_sha256(source)
+    with tempfile.TemporaryDirectory(prefix="sprecovery-", dir="/tmp") as temporary:
+        socket_path = Path(temporary) / "engine.sock"
+        engine_pid = None
+        try:
+            created = call("plot.create", {"request": create_request}, socket_path=socket_path)
+            assert created["ready_to_use"], created
+            engine_pid = read_owner(socket_path)["pid"]
+            root = Path(created["plot"])
+            described = call("plot.describe", {"plot": str(root)}, socket_path=socket_path)
+            edit = patch(described, "lost-reply-width", "style.line.width", "1.2pt", "series:A")
+            params = {"plot": str(root), "request": edit}
+            request_id = "lost-mutation-reply"
+            # Send the real mutation, then lose the caller's reply channel.
+            # A later explicit retry must recover its durable outcome once.
+            with socket_module.socket(socket_module.AF_UNIX, socket_module.SOCK_STREAM) as connection:
+                connection.connect(str(socket_path))
+                connection.sendall(rpc.encode({"jsonrpc": "2.0", "id": request_id,
+                                               "method": "plot.patch", "params": params}))
+            replayed = call("plot.patch", params, socket_path=socket_path, request_id=request_id)
+            assert replayed["ready_to_use"] and replayed["replayed"] and replayed["revision"] == 1, replayed
+            assert replayed["scientific_hash"] == created["scientific_hash"]
+            head = load_head(root)
+            native = Path(head["binding"]["document"])
+            native_hash = file_sha256(native)
+            canonical_paths = [root / "head.json", *root.glob("revisions/*.json")]
+            assert len(canonical_paths) == 3  # Head plus revisions zero and one.
+            canonical_before = {str(path): file_sha256(path) for path in canonical_paths}
+            first_pid = engine_pid
+            os.kill(first_pid, signal.SIGTERM)
+            deadline = time.monotonic() + 5
+            while True:
+                with socket_module.socket(socket_module.AF_UNIX, socket_module.SOCK_STREAM) as connection:
+                    try:
+                        connection.connect(str(socket_path))
+                    except (ConnectionRefusedError, FileNotFoundError):
+                        break
+                assert time.monotonic() < deadline, "The terminated daemon still accepts connections."
+                time.sleep(0.01)
+            restarted = call("plot.patch", params, socket_path=socket_path, request_id=request_id)
+            engine_pid = read_owner(socket_path)["pid"]
+            assert engine_pid != first_pid and _ping(socket_path, 3)["pid"] == engine_pid
+            assert restarted["ready_to_use"] and restarted["replayed"] and restarted["revision"] == 1, restarted
+            assert restarted["scientific_hash"] == created["scientific_hash"]
+            assert {str(path): file_sha256(path) for path in canonical_paths} == canonical_before
+            assert len(list(root.glob("revisions/*.json"))) == 2
+            assert file_sha256(native) == native_hash and file_sha256(source) == source_hash
+            evidence = REPO_ROOT / ".tmp_verify/protocol_mac_20261013/native_lost_reply_recovery.json"
+            evidence.parent.mkdir(parents=True, exist_ok=True)
+            evidence.write_text(json.dumps({"status": "passed", "plot": str(root),
+                "transport": "Actual AF_UNIX with native managed compilation",
+                "lost_reply_explicit_same_request_replay": True, "daemon_restart_same_request_replay": True,
+                "request_id": request_id, "revision": 1, "revision_count": 2,
+                "first_server_pid": first_pid, "restarted_server_pid": engine_pid,
+                "native_unchanged_on_restart_replay": True, "canonical_history_unchanged_on_restart_replay": True,
+                "scientific_hash_unchanged": True, "source_unchanged": True}, indent=2))
+        finally:
+            if engine_pid is not None:
+                try:
+                    os.kill(engine_pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass

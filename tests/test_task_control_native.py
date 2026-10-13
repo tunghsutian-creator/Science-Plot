@@ -13,7 +13,7 @@ from sciplot_core.studio_core.control_results import compact_result
 
 def _cli(*args: object) -> dict:
     result = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), *map(str, args), "--json"],
-                            cwd=REPO_ROOT, capture_output=True, text=True, timeout=120)
+                            cwd=REPO_ROOT, capture_output=True, text=True, timeout=120, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     return json.loads(result.stdout)
 
@@ -132,7 +132,7 @@ def test_three_sample_style_rounds_save_without_export_then_publish_current_data
             response.write_text(json.dumps({"expected_operation_id": first_id,
                 "revise_operations": [{"op": "set_sample_style", "samples": ["E0"], "style": {"width": 2}}]}))
             rejected = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "task", "resume", review["task_dir"],
-                                       "--response", str(response), "--json"], capture_output=True, text=True, timeout=120)
+                                       "--response", str(response), "--json"], capture_output=True, text=True, timeout=120, check=False)
             assert rejected.returncode == 1
             assert json.loads(rejected.stdout)["reason_code"] == "invalid_task_response"
             assert task_record.read_bytes() == task_bytes and previous_image.read_bytes() == previous_bytes
@@ -206,12 +206,23 @@ def test_failed_native_preview_is_corrected_in_place_and_then_saved(tmp_path):
     edit_request = {"version": 1, "action": "edit", "project": str(project),
         "expected_document_sha256": figure["document_sha256"], "export": False,
         "operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2"}}]}
+    invalid_task = tmp_path / "invalid_width"
+    request.write_text(json.dumps(edit_request))
+    invalid = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "task", "start", "--request", str(request),
+                              "--task-dir", str(invalid_task), "--json"], capture_output=True, text=True, timeout=120, check=False)
+    assert invalid.returncode == 1 and not invalid_task.exists()
+    invalid_payload = json.loads(invalid.stdout)
+    assert invalid_payload["reason_code"] == "invalid_sample_style"
+    assert invalid_payload["repair"]["issues"][0]["constraint"] == "positive_physical_size"
+    assert document.read_bytes() == before and sorted((project / "runs").iterdir()) == runs
+    edit_request["operations"] = [{"op": "set_sample_style", "samples": ["Missing A"], "style": {"width": "2pt"}}]
     request.write_text(json.dumps(edit_request))
     failed = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "task", "start", "--request", str(request),
-                             "--task-dir", str(task), "--json"], capture_output=True, text=True, timeout=120)
+                             "--task-dir", str(task), "--json"], capture_output=True, text=True, timeout=120, check=False)
     assert failed.returncode == 1
     blocked = json.loads(failed.stdout)
     assert blocked["status"] == "blocked" and blocked["phase"] == "previewing"
+    assert blocked["blocker"]["reason_code"] == "unknown_sample_style_target"
     assert document.read_bytes() == before
     correction = {"expected_preview_revision": blocked["preview_revision"],
                   "revise_operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2.5pt"}}]}
