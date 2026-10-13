@@ -3,9 +3,9 @@ from __future__ import annotations
 import base64
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import anyio
 import pytest
@@ -36,7 +36,8 @@ def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 32
+            assert len(tools.tools) == 33
+            assert "sciplot_plot_intent" in {tool.name for tool in tools.tools}
             caps = await _call(client, "sciplot_capabilities", {})
             assert caps["transport"] == "mcp_stdio"
             assert caps["model_configuration_required"] is False
@@ -62,7 +63,7 @@ def test_stdio_native_preview_style_apply_export_and_new_connection(tmp_path):
     raw = source.read_bytes()
     setup = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "studio", str(source),
         "--out", str(tmp_path / "Visible"), "--rule", "uvvis_spectrum", "--export", "pdf,tiff_300", "--json"],
-        cwd=REPO_ROOT, capture_output=True, text=True, timeout=180)
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=180, check=False)
     assert setup.returncode == 0, setup.stdout + setup.stderr
     created = json.loads(setup.stdout)
     project, document = created["project_dir"], Path(created["document"])
