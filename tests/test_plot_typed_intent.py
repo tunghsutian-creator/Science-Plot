@@ -126,9 +126,13 @@ def test_stale_and_legacy_requests_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(EngineError) as stale:
         compile_intent(document, validate_intent(_request(base_revision=1)))
     assert stale.value.reason_code == "document_revision_conflict"
+    assert stale.value.repair == {"action": "plot.describe", "description": {"scope": "summary"},
+                                  "current_revision": 0}
     with pytest.raises(EngineError) as identity:
         compile_intent(document, validate_intent(_request(plot_id="wrong")))
     assert identity.value.reason_code == "document_identity_conflict"
+    assert identity.value.repair == {"action": "plot.describe", "description": {"scope": "summary"},
+                                     "current_plot_id": "intent-test"}
     legacy = deepcopy(document)
     legacy["plot_type"] = "LegacyPlot"
     with pytest.raises(EngineError) as unsupported:
@@ -194,6 +198,27 @@ def test_plan_fails_if_inputs_drift_between_reads(tmp_path: Path, monkeypatch: p
         PlotService(backend=object()).intent(root, _request())
     assert drift.value.reason_code == "document_inputs_changed"
     assert len(checks) == 2
+    assert not list(root.rglob("*"))
+
+
+def test_plan_fails_if_competing_transaction_starts_during_read(tmp_path: Path,
+                                                               monkeypatch: pytest.MonkeyPatch) -> None:
+    document = _document(tmp_path)
+    root = tmp_path / "plot"
+    root.mkdir()
+    monkeypatch.setattr(service_module, "canonical_path", lambda path: path)
+    monkeypatch.setattr(service_module, "load_head", lambda _: {"document": document, "binding": {}})
+    monkeypatch.setattr(service_module, "require_current", lambda *_: None)
+    pending = {"request": {"idempotency_key": "earlier-edit"}, "phase": "applying"}
+    observations = iter((None, pending))
+    monkeypatch.setattr(service_module, "active", lambda _: next(observations))
+    with pytest.raises(EngineError) as error:
+        PlotService(backend=object()).intent(root, _request())
+    assert error.value.reason_code == "document_transaction_pending"
+    assert error.value.repair == {
+        "action": "plot.describe", "plot": str(root), "description": {"scope": "summary"},
+        "pending": {"idempotency_key": "earlier-edit", "phase": "applying"},
+    }
     assert not list(root.rglob("*"))
 
 
