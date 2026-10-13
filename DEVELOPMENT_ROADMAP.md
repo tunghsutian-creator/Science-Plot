@@ -79,6 +79,28 @@ was classified as a product failure. This inventory comes from a pre-final
 commit, not a current-HEAD full-suite pass; blocked cases may expose further
 assertions after prerequisites are met.
 
+Proposed P0 verification repair, **not implemented**: `focused` and
+`comprehensive` remain runtime-depth tiers. An explicit private-corpus
+requirement would be an orthogonal marker at individual test or parameter-case
+granularity, not a blanket module exclusion; mixed public/synthetic and
+private-source cases already occur in one test module. Start with the 111 saved
+first blockers, then review the complete fixture dependency inventory before
+marking anything. A public source-checkout regression may exclude only reviewed
+private cases **after** an authorized private runner is operating; a green
+public subset is not scientific acceptance. Public CI must still run its full
+public `focused` and `comprehensive` native-backed gates; this is not a Qt
+bypass. On the same commit, the authorized Mac/private/native run must execute
+the full unfiltered suite, with independent
+human acceptance tracked separately. Its missing-corpus preflight must exit
+nonzero with a clear BLOCKED result, never silently skip or replace data. The
+current Doctor's optional fixture-existence check is not that full preflight.
+When implementing, make `verify --changed` show private evidence as pending
+rather than falsely green; coordinate changed-owner selection, smoke and other
+acceptance outside pytest, the advanced guide, and the release `full_pytest`
+gate so private and public evidence cannot be conflated. The private release
+gate remains blocked until real execution exists. Keep existing CI/markers
+unchanged until that gate can be validated end to end.
+
 Remaining acceptance and candidate next slices. The first two have a bounded
 local implementation above; their broader native/client evidence gates remain
 open. Later additions should use existing document, patch and dependency
