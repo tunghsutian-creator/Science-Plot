@@ -1,7 +1,62 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-08. External AI is the task interface. Current behavior belongs
+Status: 2026-10-13. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
+
+## 2026-10-13 continuation: implementation, evidence, and next slices
+
+Implemented on the local integration branch, not yet published or released:
+
+- The repository policy now permits only explicitly curated documentation and
+  showcase assets. The tracked-ignored-file gate still rejects local-only work,
+  and a source-control regression checks both allowed and private paths. A
+  development-only NumPy bound keeps the Python 3.11 mypy gate compatible with
+  its dependency stubs; ordinary runtime NumPy resolution is unchanged.
+- Managed FigureTemplate v2 has additional source-revision and semantic-edit
+  regressions: exact changed source values and units, unchanged presentation
+  state during scientific refresh, stale-source rejection, no-op without a
+  revision and exact changed-source IR values/units. The supported plotting
+  model and LegacyPlot authority rules are unchanged.
+- `project.open` and `plot.describe` accept opt-in ManagedPlot summary or exact
+  target/property edit reads. Omitting the selector returns the prior full
+  response; LegacyPlot summary remains full and LegacyPlot edit is rejected.
+  Focused tests cover contracts, revision/currentness guards, CLI/RPC/MCP
+  adapter routing and selector errors. Local encoded response bytes are smaller
+  on the test figure. Actual external-client tokens, billed cost and
+  user-visible time are unknown.
+- The existing local protocol evidence now distinguishes actual CLI stdout
+  UTF-8 bytes from re-encoded MCP/RPC result bytes and retains three warm
+  same-operation RPC observations. No cross-transport or before/after speedup
+  is inferred from them.
+
+Verification still open: the current cloud sandbox lacks compiled vendored
+Veusz Qt helpers and denies AF_UNIX sockets, so native workflow/socket tests and
+their new measurements are unverified here. This minimal source checkout also
+lacks the separate local original-data corpus referenced by some broad tests;
+resolve the public test-tier boundary or provision the authorized corpus before
+claiming a full source-only CI pass. No clean Mac, independent human or external
+AI-client token/cost acceptance is implied by the local regression evidence.
+
+Candidate next slices, to prioritize only after the existing native and
+external-evidence gates are addressed. Each should use the existing document,
+patch and dependency owners rather than another grammar, cache or renderer:
+
+1. Add bounded typed intents for axis labels, annotation text and themes. Map
+   an unambiguous named intent to stable targets, ask on ambiguity, then use
+   the present revision/preview transaction. [Vega-Lite parameters](https://vega.github.io/vega-lite/docs/parameter.html)
+   provide a useful interaction/declarative separation, not a SciPlot schema
+   migration. Exit only after exact-target, stale-revision, native review and
+   unchanged-science checks.
+2. Add a read-only explanation of which existing dependency nodes are dirty,
+   reusable or due to run before rebuilding. [DVC status](https://doc.dvc.org/command-reference/status)
+   and [repro](https://doc.dvc.org/command-reference/repro) are UX references;
+   this must project the current DAG, not introduce a second scheduler. Exit
+   when its explanation agrees with actual local execution and recovery.
+3. Record the resolved font-file identity where the native runtime can prove
+   it, leaving unobserved identity explicitly unknown. [Matplotlib's font
+   manager](https://matplotlib.org/stable/api/font_manager_api.html) illustrates
+   why a family name alone is not portability evidence. Exit only after
+   cross-environment visual and resource-identity checks.
 
 ## Semantic document migration after the verified presentation slice
 
