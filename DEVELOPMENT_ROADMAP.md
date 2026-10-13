@@ -115,12 +115,27 @@ produced a one-page PDF and 1062×659 TIFF, with its TIFF hash unchanged by the
 QA lifetime fix. These 10 tests are targeted Linux native evidence, not a
 complete native, Mac or private-data acceptance.
 
+At code commit `79a9b9f`, a bounded matched-Qt follow-up retried all 50 exact
+test/parameter IDs whose first traceback in the saved pre-build focused log
+stopped at missing `qtloops`: all 50 passed. The selection spans synthetic TTS
+export/style/error handling, tracked-fixture studio plans, and a child native
+worker guarded by a local `fcntl.flock` lease. This is a count of test IDs,
+not of native render calls; the four selected TTS files also contain pure
+validation tests. Separately, nine selected direct native live-edit,
+annotation, document-edit and managed-recovery tests passed, as did both
+LegacyPlot human-save reimport parameters. The reimport test initially reached
+its final optional evidence write on a fresh checkout and failed because its
+ignored output directory was absent. A reviewed test-only fix now creates
+that parent; both parameters pass in a fresh worktree without precreation.
+The original 10 direct-native cases above were also rerun at this code commit
+and passed. These targeted runs do not constitute a current-HEAD full suite.
+
 Verification still open: compiled Veusz helpers are present only in the
 isolated validation worktree, and the cloud sandbox denies AF_UNIX sockets, so
 socket-backed protocol tests and their new measurements are unverified here.
-The isolated direct-native selection above does not cover other workflows.
-This minimal source checkout also
-lacks the separate local original-data corpus referenced by some broad tests;
+The direct-native and historical-blocker selections do not cover every
+workflow. This minimal source checkout also lacks the separate local
+original-data corpus referenced by some broad tests;
 resolve the public test-tier boundary or provision the authorized corpus before
 claiming a full source-only CI pass. No clean Mac, independent human or external
 AI-client token/cost acceptance is implied by the local regression evidence.
@@ -132,8 +147,10 @@ Its 171 observed non-passes were classified from their tracebacks: 111 stop
 at the absent private original-data corpus, 50 at the missing compiled Veusz
 `qtloops` helper and 10 at denied AF_UNIX socket creation. No first traceback
 was classified as a product failure. This inventory comes from a pre-final
-commit, not a current-HEAD full-suite pass; blocked cases may expose further
-assertions after prerequisites are met.
+commit, not a current-HEAD full-suite pass. The 50 `qtloops`-blocked IDs were
+subsequently rerun and passed in the bounded selection above; the missing
+private-data and socket cases may still expose later assertions once their
+prerequisites are available.
 
 Proposed P0 validation-tier repair, **not implemented**: `focused` and
 `comprehensive` remain runtime-depth tiers. An explicit private-corpus
