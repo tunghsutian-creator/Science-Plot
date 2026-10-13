@@ -13,9 +13,21 @@ Record-device observations and PDF resource names do not prove the system file
 used for every glyph. Resolved whole-font-file and fallback-glyph identities
 remain unobserved. Historical mechanical and both rheology accepted-profile
 captures have matching structure and zero changed raster pixels, but their
-strict environment assertions reject changed Python/binary, OS and package
+strict environment assertions reject changed Python/binary and package
 identities. Their immutable baselines were retained. This is bounded Mac
 evidence, not established cross-environment font portability.
+
+The measured environment differences are limited to these fields; platform,
+requested Arial font-file hashes, Qt module hashes and raster pixels match.
+
+| Field | Recorded golden | Current Mac verification |
+| --- | --- | --- |
+| `python` | 3.14.7 | 3.14.8 |
+| `python_binary_sha256` | `87d4df53fd91304be5bac391fb204643c36b7df2023c04a0953bcbc7d4fdf634` | `1b5cb11d163e5ba34e2a05fc533c0ed89574d4425f9749a9d89405f651980e0d` |
+| `packages/Pillow` | 12.2.0 | 12.3.0 |
+| `packages/PyMuPDF` | 1.27.2.3 | 1.28.2 |
+| `packages/PyQt6-Qt6` | 6.11.1 | 6.11.2 |
+| `packages/PyQt6-sip` | 13.11.1 | 13.13.0 |
 
 ## Observation boundary
 

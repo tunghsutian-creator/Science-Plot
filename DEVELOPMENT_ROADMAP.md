@@ -11,13 +11,24 @@ The verified cloud bundle ending at `0189228` was imported once into the separat
 main and the original scientific inputs were preserved.
 
 Mac repairs close interrupted SIP generation, stale generated-binding reuse,
-venv build-tool lookup, incomplete native-helper readiness, and the RPC total
-response deadline. Each SIP generation uses a fresh ignored build directory;
+venv build-tool lookup, incomplete native-helper readiness, the RPC total
+response deadline, and category text QA painter lifetime. Each SIP generation
+uses a fresh ignored build directory;
 Doctor loads all five helpers. CLI/MCP preview recovery tests now distinguish
 invalid ingress from a valid request with an unresolved sample target. Actual
 AF_UNIX lost-reply recovery, daemon restart and same-key retry preserve revision,
 source, scientific and native identities. Linux CI uses one distribution Qt/PyQt
 toolchain with explicit identity checks; the verified Ruff rule set is pinned.
+
+Two Mac native SIGBUS reports traced QPainter destruction during cyclic GC.
+Category-display QA retained its renderer through an instance callback cycle.
+The central fix breaks that cycle with a weak reference, keeps inline temporary
+renderers alive through painting, and releases them before the paint helper.
+Four GC-disabled lifetime controls fail on the old implementation and pass the
+fix. Three native save/load/paint cycles release all 144 observed renderers;
+three clipping and three missing-text controls remain rejected. Golden and raw
+scientific bytes were retained. This is a fixed lifecycle defect, separate from
+the strict environment mismatch below.
 
 On macOS 27.0.1 arm64, Python 3.14.8 and Qt 6.11.2, all five helpers compiled
 and loaded. Doctor is ready; runtime smoke passes. All 24 ready rules complete
@@ -26,7 +37,7 @@ checks. The 137 independently declared private cases pass. The complete focused
 tier also passes. These claims are distinct from the unfiltered release gate.
 
 The immutable historical golden gate remains blocked by environment drift:
-Python/binary, OS and package identities differ from its original recorded
+Python/binary and package identities differ from its original recorded
 environment. Current accepted mechanical and both rheology profiles retain
 matching structure and exact raster pixels (zero changed pixels); the strict
 environment assertion still fails. Four golden test nodes remain non-green.
