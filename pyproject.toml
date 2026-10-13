@@ -23,6 +23,8 @@ dependencies = [
 [project.optional-dependencies]
 mcp = ["mcp==2.1.1"]
 dev = [
+  # The mypy gate targets Python 3.11; NumPy 2.5 drops 3.11 support.
+  "numpy<2.5",
   "types-jsonschema==4.26.0.20260518",
   "mypy==2.3.0",
   "pandas-stubs==3.0.3.260530",
