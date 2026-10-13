@@ -32,8 +32,9 @@ Implemented on the local integration branch, not yet published or released:
   previously identified ManagedPlot, then the exact selected edit contract or
   literal typed text-intent plan. Unknown authority and LegacyPlot still start
   with the full response. A fixture-scoped MCP serialization comparison is
-  recorded separately from the unchanged full tool-definition payload; it is
-  not external-client token, cost or end-to-end latency evidence.
+  recorded separately from the full tool-definition payload, which response
+  scoping does not remove; it is not external-client token, cost or end-to-end
+  latency evidence.
 - An opt-in `plot.intent` route now resolves only Managed FigureSpec v2 axis
   labels and annotation text from an exact stable ID or unique current label.
   Its plan shows the literal before/after value and unit or anchor context;
