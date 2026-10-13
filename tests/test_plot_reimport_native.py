@@ -1,9 +1,9 @@
 """A human-saved VSZ can rejoin semantic history without being regenerated."""
 
 import json
-from pathlib import Path
 import re
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -21,7 +21,7 @@ def test_native_save_reimport_keeps_actual_bytes_and_reopens_editable_state(tmp_
     original = source.read_bytes()
     created = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "studio", str(source),
                               "--rule", "uvvis_spectrum", "--export", "pdf,tiff_300", "--json"],
-                             capture_output=True, text=True, timeout=180, cwd=REPO_ROOT)
+                             check=False, capture_output=True, text=True, timeout=180, cwd=REPO_ROOT)
     assert created.returncode == 0, created.stdout + created.stderr
     project = Path(json.loads(created.stdout)["project_dir"])
     service = PlotService()
@@ -62,6 +62,7 @@ def test_native_save_reimport_keeps_actual_bytes_and_reopens_editable_state(tmp_
                 {"op": "set", "target": ["series:E2"], "property": "style.line.width", "value": "0.7pt"}]})
         assert patched["ready_to_use"] and patched["revision"] == 2
         evidence = REPO_ROOT / f".tmp_verify/document_migration_20261007/external_mutation_legacy_{'opaque' if opaque else 'known'}.json"
+        evidence.parent.mkdir(parents=True, exist_ok=True)
         evidence.write_text(json.dumps({"stale": stale, "review": review, "accepted": result,
                                        "external_mutation": mutation, "subsequent_patch": patched,
                                        "source_unchanged": source.read_bytes() == original},
