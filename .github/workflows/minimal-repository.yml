@@ -48,7 +48,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
-            build-essential qt6-base-dev python3-dev python3-venv zsh \
+            build-essential qt6-base-dev qt6-image-formats-plugins python3-dev python3-venv zsh \
             python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev pyqt6-dev-tools
           # Ubuntu's PyQt6 and qmake use the same distribution Qt libraries.
           # A PyPI PyQt6 wheel carries a separate Qt runtime, so keep the
@@ -64,6 +64,7 @@ jobs:
           import subprocess
           import shutil
           import sys
+          import tempfile
           from pathlib import Path
           import PyQt6
           from PyQt6 import QtCore, QtGui, QtWidgets, QtPrintSupport, QtSvg, QtSvgWidgets, sip, uic
@@ -79,6 +80,18 @@ jobs:
           assert Path(uic.__file__).resolve().is_relative_to(binding.parent), uic.__file__
           assert callable(loadUi) and all((QtGui, QtWidgets, QtPrintSupport, QtSvg, QtSvgWidgets, sip))
           assert shutil.which("zsh"), "Delivery launchers require zsh"
+          formats = {bytes(name).decode("ascii").lower() for name in QtGui.QImageWriter.supportedImageFormats()}
+          assert {"png", "tiff"} <= formats, sorted(formats)
+          with tempfile.TemporaryDirectory(prefix="sciplot-qt-tiff-") as temporary:
+              path = Path(temporary) / "probe.tiff"
+              image = QtGui.QImage(1, 1, QtGui.QImage.Format.Format_RGB32)
+              image.fill(QtGui.QColor("red"))
+              writer = QtGui.QImageWriter(str(path), b"tiff")
+              assert writer.write(image), writer.errorString()
+              assert path.is_file() and path.stat().st_size > 0
+              reopened = QtGui.QImage(str(path))
+              assert not reopened.isNull() and (reopened.width(), reopened.height()) == (1, 1)
+              assert reopened.pixelColor(0, 0) == image.pixelColor(0, 0)
           print(f"Python {sys.version.split()[0]}; PyQt {QtCore.PYQT_VERSION_STR}; Qt build/runtime {runtime}; {binding}")
           PY
       - name: Run lint gate
