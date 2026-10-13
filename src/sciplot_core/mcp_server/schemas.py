@@ -61,17 +61,17 @@ def tool_definitions() -> list[Tool]:
         object_schema({"scope": {"const": "summary"}}, ["scope"]),
         object_schema({"scope": {"const": "edit"}, "target": string, "property": string},
                       ["scope", "target", "property"]),
-    ], "description": "Optional ManagedPlot projection. Omit for the unchanged full response. Edit requires an exact stable target ID and property from a summary."}
+    ], "description": "For a previously identified ManagedPlot, request summary first, then edit for one advertised stable target ID/property. Omit for unknown or LegacyPlot authority, or when the full response is needed. Omission preserves the unchanged full response."}
     semantic_plot = {"plot": {**semantic_path, "description": "Stable absolute local plot document directory returned by project_open or plot_create."}}
-    add("project_open", "Open one existing saved figure as a persistent semantic document. Returns stable object IDs, exact revision, current capabilities and legacy coverage. Does not overwrite the native figure.",
+    add("project_open", "Open one existing saved figure. For a known ManagedPlot, pass description scope summary to get currentness, revision and edit targets without the full schema; for unknown or LegacyPlot authority omit description. Legacy remains under its native coverage. Does not overwrite the figure.",
         {"target": semantic_path, "figure_id": string, "description": description}, ["target"], idempotent=True)
-    add("plot_describe", "Read current semantic objects, scientific and presentation hashes, dependency status and the next decision. Reuses the durable document without rebuilding scientific data.",
+    add("plot_describe", "Read current saved state without rebuilding science. After a ManagedPlot summary, pass description scope edit with one advertised target/property for its current value, exact schema and risk. Omit description for the full response. Stale/native changes and pending work remain explicit.",
         {**semantic_plot, "description": description}, ["plot"], read_only=True)
     add("plot_create", "Create a source-bound semantic plot from an exact source and explicit optional rule/template/profile. Keep idempotency_key unchanged when retrying; unresolved scientific choices return a decision.",
         {"request": create_schema()}, ["request"], idempotent=True, destructive=True)
     add("plot_patch", "Apply one atomic semantic change batch to exact stable object IDs and base_revision. Local engine classifies risk, checks scientific invariants and compiles/exports. Reuse the identical idempotency_key after a lost reply; never swap data bindings through a presentation patch.",
         {**semantic_plot, "request": patch_schema()}, ["plot", "request"], idempotent=True, destructive=True)
-    add("plot_intent", "Plan or apply one exact FigureSpec v2 axis label or annotation text edit. Select a stable target ID or unique exact current label, supply the literal replacement value, plot ID, revision, and idempotency key. Plan is read-only; apply uses the existing plot patch transaction.",
+    add("plot_intent", "After current ManagedPlot FigureSpec v2 state, plan then apply one literal axis label or annotation text edit. Select an advertised stable target ID or unique exact current label, plot ID, revision and idempotency key. Plan is read-only and returns unit/anchor context; apply uses the existing plot patch transaction. Not for LegacyPlot.",
         {**semantic_plot, "request": intent_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_render", "Render the current semantic document through its native backend; reuses valid current cache and preserves the saved scientific state.",
         semantic_plot, ["plot"], idempotent=True)

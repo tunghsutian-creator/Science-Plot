@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import base64
+import json
+import sys
 from contextlib import redirect_stdout
 from copy import deepcopy
 from importlib.metadata import version
-import json
 from pathlib import Path
-import sys
 from typing import Any
 
 import anyio
@@ -17,22 +17,34 @@ from mcp import MCPError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
-    BlobResourceContents, CallToolResult, ImageContent, ListResourcesResult,
-    ListToolsResult, ReadResourceResult, Resource, ResourceLink, TextContent,
+    BlobResourceContents,
+    CallToolResult,
+    ImageContent,
+    ListResourcesResult,
+    ListToolsResult,
+    ReadResourceResult,
+    Resource,
+    ResourceLink,
+    TextContent,
     TextResourceContents,
 )
 
 from sciplot_core.mcp_server.errors import AdapterError, error_payload
-from sciplot_core.studio_core.control_results import compact_result
 from sciplot_core.mcp_server.resources import ResourceSnapshot, ResourceStore
 from sciplot_core.mcp_server.schemas import tool_definitions
 from sciplot_core.mcp_server.services import invoke_owner
-
+from sciplot_core.studio_core.control_results import compact_result
 
 INSTRUCTIONS = (
     "SciPlot executes local scientific plotting without calling a model. Prefer "
-    "project_open then plot_patch for semantic saved-figure edits, or plot_create "
-    "for source-bound creation. Use returned stable object IDs and revision; "
+    "project_open for semantic saved-figure edits, or plot_create for source-bound "
+    "creation. For a previously identified ManagedPlot, open with description "
+    "scope summary, then request only the chosen target/property with plot_describe "
+    "scope edit before plot_patch. For an exact FigureSpec v2 axis label or "
+    "annotation text, plot_intent plan then apply uses the same patch transaction. "
+    "If authority is unknown or LegacyPlot, use the full open; retain its native "
+    "coverage, never convert it just for compact reads. Check status, changed "
+    "inputs and pending work before editing. Use returned stable IDs and revision; "
     "keep idempotency_key unchanged on retry. Follow local decision and export "
     "receipts instead of reapplying committed work. Existing task_start/task_resume "
     "remain supported for their advertised workflows. Inspect existing saved "
@@ -165,7 +177,7 @@ class Adapter:
                 if name == "sciplot_read_result":
                     return _read_result(self.resources.get(arguments["uri"]))
                 return await anyio.to_thread.run_sync(self._execute, name, arguments)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - MCP must encode all owner failures as tool errors.
             payload = error_payload(exc)
             from jsonschema.exceptions import ValidationError
 

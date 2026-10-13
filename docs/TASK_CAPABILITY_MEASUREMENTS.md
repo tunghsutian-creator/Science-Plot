@@ -1,5 +1,42 @@
 # Task capability and local plotting measurements
 
+## 2026-10-13 — saved ManagedPlot AI-entry payload boundary
+
+The agent entry now chooses a summary first for a previously identified
+ManagedPlot, then one scoped edit contract or the exact FigureSpec v2 text
+intent. Unknown-authority and LegacyPlot figures keep the full first open;
+the wire default and scientific/recovery guards are unchanged. This measures
+local serialized bytes, not a new response default or an AI-client trial.
+
+Using the in-memory FigureSpec v2 fixture from
+`tests/test_managed_description_scopes.py`, serialized with compact UTF-8 JSON,
+`ensure_ascii=False`, `Tool.model_dump(mode="json", by_alias=True,
+exclude_none=True)` and `CallToolResult.model_dump` with the same options:
+Reproduce in this checkout with `PYTHONPATH=src:tests .venv/bin/python -m
+pytest -q -s tests/test_documentation_contract.py::test_saved_figure_mcp_entry_byte_measurement`
+(or another environment's SciPlot venv).
+
+| Local payload | Bytes |
+| --- | ---: |
+| All 33 default MCP tool definitions, array only | 138,477 |
+| Four saved-edit tool definitions (open, describe, patch, intent) | 5,617 |
+| MCP server instruction text, separately | 1,383 |
+| Full open MCP call result | 122,784 |
+| Managed summary MCP call result | 4,794 |
+| One `axis.label` scoped edit MCP call result | 3,086 |
+| Summary plus scoped edit call results | 7,880 |
+
+The two selective call results are 114,904 bytes smaller than the one full
+result for this fixture, but require two calls and carry less information.
+Selecting a response scope does **not** remove the tool definitions: a client
+that loads all 33 still receives the same 138,477-byte definition array.
+These MCP `CallToolResult` sizes include both the structured payload and its
+text content block, so they differ from the single JSON-RPC envelope bytes in
+`test_managed_description_scopes.py` and are not cross-transport comparisons.
+Actual MCP framing, client tool filtering, model context, billed tokens,
+network latency, end-to-end time and human usability were not measured.
+
+
 ## 2026-10-07 — bounded protocol failures and local recovery
 
 The entrypoint now returns structured JSON argument errors (exit 2) and rejects
