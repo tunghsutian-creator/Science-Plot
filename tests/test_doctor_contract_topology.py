@@ -149,7 +149,7 @@ def test_doctor_reports_runtime_and_optional_development_prerequisites_separatel
     }
     assert checks["ready_rule_fixtures"]["required"] is False
     assert "Real-data acceptance only; not needed for ordinary use" in checks["ready_rule_fixtures"]["detail"]
-    assert "Build the vendored Veusz qtloops helper" in " ".join(payload["next_actions"])
+    assert "Build the vendored Veusz native helpers" in " ".join(payload["next_actions"])
     assert not any("fixture" in action.lower() for action in payload["next_actions"])
 
 
@@ -222,14 +222,16 @@ def test_doctor_distinguishes_missing_qtloops_binary_from_load_failure(
     def failing_import(name: str, *args: object, **kwargs: object) -> object:
         if name == "PyQt6":
             return SimpleNamespace(QtCore=object(), QtGui=object(), QtWidgets=object())
-        if name == "veusz.helpers":
-            raise ImportError("qtloops load failed")
         return original_import(name, *args, **kwargs)
+
+    def failing_helper_import(_name: str) -> object:
+        raise ImportError("qtloops load failed")
 
     monkeypatch.setattr(runtime_checks, "_module_available", lambda _name: True)
     monkeypatch.setattr(runtime_checks, "VEUSZ_ROOT", tmp_path)
     monkeypatch.setattr(runtime_checks.sys, "path", runtime_checks.sys.path.copy())
     monkeypatch.setattr(builtins, "__import__", failing_import)
+    monkeypatch.setattr(runtime_checks.importlib, "import_module", failing_helper_import)
 
     missing, missing_detail = runtime_checks._veusz_qt_runtime_status()
     helper_dir = tmp_path / "veusz" / "helpers"
@@ -240,6 +242,64 @@ def test_doctor_distinguishes_missing_qtloops_binary_from_load_failure(
     assert missing is unloadable is False
     assert "compiled helper is absent" in missing_detail
     assert "compiled helper is present but cannot load" in unloadable_detail
+
+
+@pytest.mark.parametrize("failed_helper", ["qtmml", "recordpaint", "threed", "_nc_cntr"])
+def test_doctor_rejects_each_broken_helper_even_when_qtloops_loads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failed_helper: str,
+) -> None:
+    original_import = builtins.__import__
+    loaded: list[str] = []
+
+    def import_qt(name: str, *args: object, **kwargs: object) -> object:
+        if name == "PyQt6":
+            return SimpleNamespace(QtCore=object(), QtGui=object(), QtWidgets=object())
+        return original_import(name, *args, **kwargs)
+
+    def import_helper(name: str) -> object:
+        loaded.append(name)
+        if name == "veusz.helpers." + failed_helper:
+            raise ImportError(f"dynamic module does not define module export function (PyInit_{failed_helper})")
+        return object()
+
+    helper_dir = tmp_path / "veusz" / "helpers"
+    helper_dir.mkdir(parents=True)
+    (helper_dir / (failed_helper + importlib.machinery.EXTENSION_SUFFIXES[0])).touch()
+    monkeypatch.setattr(runtime_checks, "_module_available", lambda _name: True)
+    monkeypatch.setattr(runtime_checks, "VEUSZ_ROOT", tmp_path)
+    monkeypatch.setattr(runtime_checks.sys, "path", runtime_checks.sys.path.copy())
+    monkeypatch.setattr(builtins, "__import__", import_qt)
+    monkeypatch.setattr(runtime_checks.importlib, "import_module", import_helper)
+
+    ok, detail = runtime_checks._veusz_qt_runtime_status()
+
+    assert ok is False
+    assert loaded[0] == "veusz.helpers.qtloops"
+    assert loaded[-1] == "veusz.helpers." + failed_helper
+    assert failed_helper in detail and "compiled helper is present but cannot load" in detail
+    assert "PyInit_" + failed_helper in detail
+
+
+def test_doctor_requires_every_native_helper_to_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    original_import = builtins.__import__
+    loaded: list[str] = []
+
+    def import_qt(name: str, *args: object, **kwargs: object) -> object:
+        if name == "PyQt6":
+            core = SimpleNamespace(PYQT_VERSION_STR="6.11.0", qVersion=lambda: "6.11.2")
+            return SimpleNamespace(QtCore=core, QtGui=object(), QtWidgets=object())
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(runtime_checks, "_module_available", lambda _name: True)
+    monkeypatch.setattr(builtins, "__import__", import_qt)
+    monkeypatch.setattr(runtime_checks.importlib, "import_module", lambda name: loaded.append(name) or object())
+
+    ok, detail = runtime_checks._veusz_qt_runtime_status()
+
+    assert ok is True
+    assert loaded == ["veusz.helpers." + name for name in
+                      ("qtloops", "qtmml", "recordpaint", "threed", "_nc_cntr")]
+    assert "Qt runtime 6.11.2" in detail
 
 
 def test_doctor_does_not_mislabel_pyqt_load_failure_as_missing_qtloops(

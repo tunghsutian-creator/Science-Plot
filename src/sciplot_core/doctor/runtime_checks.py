@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import importlib.util
 import os
 import shutil
@@ -45,26 +46,29 @@ def _veusz_qt_runtime_status() -> tuple[bool, str]:
         from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: F401
     except Exception as exc:  # noqa: BLE001 - Report any Qt runtime-load failure.
         return False, f"PyQt6/Qt runtime cannot load: {type(exc).__name__}: {exc}"
-    try:
-        from veusz.helpers import qtloops  # noqa: F401
-    except Exception as exc:  # noqa: BLE001 - Doctor must report any native-load failure.
-        helper = VEUSZ_ROOT / "veusz" / "helpers" / "qtloops"
-        built = any(
-            candidate.is_file() and candidate.suffix in {".so", ".pyd"}
-            for candidate in helper.parent.glob("qtloops*")
-        )
-        if not built:
-            return False, (
-                f"Vendored Veusz qtloops compiled helper is absent under {helper.parent}; "
-                f"import failed: {type(exc).__name__}: {exc}"
+    helpers = ("qtloops", "qtmml", "recordpaint", "threed", "_nc_cntr")
+    for name in helpers:
+        try:
+            importlib.import_module("veusz.helpers." + name)
+        except Exception as exc:  # noqa: BLE001 - Report every native-load failure.
+            helper = VEUSZ_ROOT / "veusz" / "helpers" / name
+            built = any(
+                candidate.is_file() and candidate.suffix in {".so", ".pyd"}
+                for candidate in helper.parent.glob(name + "*")
             )
-        return False, (
-            "Vendored Veusz qtloops compiled helper is present but cannot load "
-            f"in this Python/PyQt6/Qt runtime: {type(exc).__name__}: {exc}"
-        )
+            if not built:
+                return False, (
+                    f"Vendored Veusz {name} compiled helper is absent under {helper.parent}; "
+                    f"import failed: {type(exc).__name__}: {exc}"
+                )
+            return False, (
+                f"Vendored Veusz {name} compiled helper is present but cannot load "
+                f"in this Python/PyQt6/Qt runtime: {type(exc).__name__}: {exc}"
+            )
     return (
         True,
-        f"PyQt {QtCore.PYQT_VERSION_STR}; Qt runtime {QtCore.qVersion()}; Veusz qtloops loaded",
+        f"PyQt {QtCore.PYQT_VERSION_STR}; Qt runtime {QtCore.qVersion()}; "
+        f"Veusz native helpers loaded: {', '.join(helpers)}",
     )
 
 

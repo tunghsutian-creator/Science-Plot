@@ -29,7 +29,8 @@ dev = [
   "mypy==2.3.0",
   "pandas-stubs==3.0.3.260530",
   "pytest>=9,<10",
-  "ruff>=0.15,<1",
+  # Preserve the verified lint rule set; newer minor releases change defaults.
+  "ruff==0.15.15",
 ]
 studio = [
   "astropy",

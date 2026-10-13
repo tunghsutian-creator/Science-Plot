@@ -27,11 +27,11 @@ def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
         if runtime_detail.startswith("PyQt6/Qt runtime cannot load"):
             actions.append(
                 "Repair the PyQt6/Qt runtime shared-library load in this Python "
-                "environment before checking or rebuilding Veusz qtloops."
+                "environment before checking or rebuilding Veusz native helpers."
             )
         elif runtime_detail != "PyQt6 is not importable.":
             actions.append(
-                "Build the vendored Veusz qtloops helper for this Python/PyQt6/Qt runtime; "
+                "Build the vendored Veusz native helpers for this Python/PyQt6/Qt runtime; "
                 "check the optional Qt 6 qmake, sip-build, and C++ source-build diagnostics."
             )
     if "python_version" in failed_ids:
