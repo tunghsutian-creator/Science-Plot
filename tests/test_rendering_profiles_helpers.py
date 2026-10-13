@@ -84,3 +84,93 @@ def test_accepted_route_cannot_substitute_a_freshly_generated_document(tmp_path)
                                  {"document_sha256": "freshly-generated-document"})
     with pytest.raises(AssertionError, match="did not reopen the immutable accepted VSZ"):
         assert_three_way(profile, substituted, clean, clean, output_dir=tmp_path / "gates")
+
+
+@pytest.mark.parametrize("paint_failure", [False, True])
+def test_native_capture_releases_renderers_without_cycle_gc(monkeypatch, paint_failure):
+    import gc
+    from types import SimpleNamespace
+    from weakref import ref
+
+    import rendering_profiles_native as capture
+
+    renderer_refs = []
+    helper_release_observations = []
+
+    class PaintFailed(Exception):
+        pass
+
+    class Renderer:
+        def __init__(self, painter, *_args, **_kwargs):
+            self.painter = painter
+            renderer_refs.append(ref(self))
+
+        def render(self):
+            return "painted"
+
+        def getBounds(self):
+            return (10, 20, 30, 40)
+
+    utils = SimpleNamespace(Renderer=Renderer)
+    bar = SimpleNamespace(plotBars=lambda *_args: None)
+    polygon = SimpleNamespace(draw=lambda *_args, **_kwargs: None)
+    line = SimpleNamespace(draw=lambda *_args, **_kwargs: None)
+    original_hooks = (bar.plotBars, polygon.draw, line.draw)
+    font = SimpleNamespace(family=lambda: "Requested", pointSizeF=lambda: 9.5,
+                           pixelSize=lambda: 12, weight=lambda: 400, italic=lambda: False)
+    modules = {
+        "veusz.utils": utils,
+        "PyQt6.QtGui": SimpleNamespace(QFontInfo=lambda _font: SimpleNamespace(family=lambda: "Resolved")),
+        "veusz.widgets.bar": SimpleNamespace(BarPlotter=bar),
+        "veusz.widgets.polygon": SimpleNamespace(Polygon=polygon),
+        "veusz.widgets.line": SimpleNamespace(Line=line),
+    }
+    monkeypatch.setattr(capture, "import_module", modules.__getitem__)
+
+    class PaintHelper:
+        def __init__(self, _document, _page_size, *, dpi):
+            assert dpi == (150, 150)
+
+        def __del__(self):
+            helper_release_observations.append(any(renderer_ref() is not None for renderer_ref in renderer_refs))
+
+    class Document:
+        def pageSize(self, _page, *, dpi, integer):
+            assert dpi == (150, 150) and integer is False
+            return (100, 100)
+
+        def paintTo(self, helper, _page):
+            painter = SimpleNamespace(widget=SimpleNamespace(path="/page/axis"), helper=helper)
+            renderer = utils.Renderer(painter, font, 150, 300, "Label", 0, 0, 12)
+            assert renderer.render() == renderer.render() == "painted"
+            del renderer
+            assert utils.Renderer(painter, font, 15, 30, "Inline", angle=45).render() == "painted"
+            if paint_failure:
+                raise PaintFailed
+
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        if paint_failure:
+            with pytest.raises(PaintFailed):
+                capture._painted_text(Document(), SimpleNamespace(PaintHelper=PaintHelper))
+        else:
+            text, primitives = capture._painted_text(Document(), SimpleNamespace(PaintHelper=PaintHelper))
+            assert primitives == []
+            common = {"widget_path": "/page/axis",
+                      "bounds_mm": [value * 25.4 / 150 for value in (10, 20, 30, 40)],
+                      "font_family": "Requested", "resolved_font_family": "Resolved",
+                      "font_size_pt": 9.5, "font_pixel_size": 12, "font_weight": 400, "italic": False}
+            assert text == [
+                {**common, "text": "Inline", "anchor_mm": [15 * 25.4 / 150, 30 * 25.4 / 150], "angle": 45.0},
+                {**common, "text": "Label", "anchor_mm": [25.4, 50.8], "angle": 12.0},
+                {**common, "text": "Label", "anchor_mm": [25.4, 50.8], "angle": 12.0},
+            ]
+            assert helper_release_observations == [False]
+        assert utils.Renderer is Renderer
+        assert (bar.plotBars, polygon.draw, line.draw) == original_hooks
+        assert len(renderer_refs) == 2
+        assert all(renderer_ref() is None for renderer_ref in renderer_refs)
+    finally:
+        if was_enabled:
+            gc.enable()
