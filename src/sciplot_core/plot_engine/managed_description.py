@@ -53,15 +53,23 @@ def describe_managed(root: Path, head: dict[str, Any], result: dict[str, Any], b
         "dependencies": {"nodes": graph["nodes"], "build_keys": build_keys(graph),
                          "invalidated": invalidated_nodes(graph, list(dict.fromkeys(dirty)))}})
     if str(native) in changed:
-        from .managed_external import inspect_managed_mutation
+        if description is not None and description["scope"] == "summary":
+            # A compact rebuild read must not launch the native inspector merely
+            # to explain why the current artifact is stale. Explicit resolution
+            # still uses the existing review flow and complete-state audit.
+            result["external_mutation_unavailable"] = {
+                "reason_code": "native_inspection_deferred",
+                "message": "Read-only summary did not inspect the changed native artifact."}
+        else:
+            from .managed_external import inspect_managed_mutation
 
-        owner = getattr(backend, "managed", None)
-        if owner is not None and not changed - {str(native)}:
-            try:
-                result["external_mutation"] = inspect_managed_mutation(root, binding, owner.compiler)
-            except ValueError as exc:
-                result["external_mutation_unavailable"] = {"reason_code": getattr(exc, "reason_code", "native_inspection_failed"),
-                                                          "message": str(exc)[:240]}
+            owner = getattr(backend, "managed", None)
+            if owner is not None and not changed - {str(native)}:
+                try:
+                    result["external_mutation"] = inspect_managed_mutation(root, binding, owner.compiler)
+                except ValueError as exc:
+                    result["external_mutation_unavailable"] = {"reason_code": getattr(exc, "reason_code", "native_inspection_failed"),
+                                                              "message": str(exc)[:240]}
         result["next_step"] = {"action": "resolve_external_mutation", "automatic_adoption": False}
     elif not native.is_file() and not changed:
         result["status"] = "dirty"
@@ -79,11 +87,11 @@ def describe_managed(root: Path, head: dict[str, Any], result: dict[str, Any], b
             except OSError:
                 result["next_step"].update({"action": "restore_builtin_executor", "implementation_available": False})
     if description is not None:
-        return _scoped_description(result, document, spec, description)
+        return _scoped_description(result, document, binding, spec, description)
     return result
 
 
-def _scoped_description(result: dict[str, Any], document: dict[str, Any], spec: dict[str, Any] | None,
+def _scoped_description(result: dict[str, Any], document: dict[str, Any], binding: dict[str, Any], spec: dict[str, Any] | None,
                         description: dict[str, Any]) -> dict[str, Any]:
     """Project only advertised edit state; keep every safety and currentness guard."""
     kept = ("kind", "version", "status", "plot_type", "plot", "plot_id", "revision",
@@ -102,6 +110,9 @@ def _scoped_description(result: dict[str, Any], document: dict[str, Any], spec: 
         property_names = {target: list(obj["capabilities"]) for target, obj in objects.items()}
     compact["description_scope"] = description["scope"]
     if description["scope"] == "summary":
+        from .managed_rebuild_explanation import explain_rebuild
+
+        compact["rebuild_explanation"] = explain_rebuild(result, document, binding)
         compact["edit_targets"] = {target: {"kind": objects[target]["kind"], "label": objects[target]["label"],
                                             "properties": properties} for target, properties in property_names.items()}
         if "next_step" not in compact and result["status"] == "current" and compact["pending"] is None and property_names:
