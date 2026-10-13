@@ -3,9 +3,57 @@
 Status: 2026-10-13. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
+## 2026-10-13 Mac verification and remaining gates
+
+The Mac checkout and origin/main were both at `aae12926` with a clean worktree.
+The verified cloud bundle ending at `0189228` was imported once into the separate
+`codex/sciplot-mac-final-20261013` branch. Local repairs retain that history;
+main and the original scientific inputs were preserved.
+
+Mac repairs close interrupted SIP generation, stale generated-binding reuse,
+venv build-tool lookup, incomplete native-helper readiness, and the RPC total
+response deadline. Each SIP generation uses a fresh ignored build directory;
+Doctor loads all five helpers. CLI/MCP preview recovery tests now distinguish
+invalid ingress from a valid request with an unresolved sample target. Actual
+AF_UNIX lost-reply recovery, daemon restart and same-key retry preserve revision,
+source, scientific and native identities. Linux CI uses one distribution Qt/PyQt
+toolchain with explicit identity checks; the verified Ruff rule set is pinned.
+
+On macOS 27.0.1 arm64, Python 3.14.8 and Qt 6.11.2, all five helpers compiled
+and loaded. Doctor is ready; runtime smoke passes. All 24 ready rules complete
+real-data creation, native reopen/edit/export, artifact QA and physical-size
+checks. The 137 independently declared private cases pass. The complete focused
+tier also passes. These claims are distinct from the unfiltered release gate.
+
+The immutable historical golden gate remains blocked by environment drift:
+Python/binary, OS and package identities differ from its original recorded
+environment. Current accepted mechanical and both rheology profiles retain
+matching structure and exact raster pixels (zero changed pixels); the strict
+environment assertion still fails. Four golden test nodes remain non-green.
+Do not rewrite golden inputs, loosen environment checks, or call the full suite
+passed. Reproduce the pinned environment or separately review a new versioned
+environment acceptance before closing this release gate.
+
+Private source evidence formally verifies 20/24 fixture hashes. Four rule groups
+still lack their original source_provenance.json, although their 16 data files
+match the locally recorded README hashes. The 137-node dependency inventory is
+still preliminary; its preflight intentionally reports BLOCKED. Complete the
+remaining parameter and transitive-source mapping before claiming a complete
+private-corpus gate. Public CI retains the full tiers and cannot substitute for
+this private evidence; no private data is uploaded to make it green.
+
+All three 24-rule contact sheets and a delivered 300 dpi Figure TIFF were
+inspected for visible clipping, overlap and legibility. This is agent inspection
+of an uncalibrated display, not independent human or journal acceptance. Mac
+record-painter text matches Arial and the example PDF embeds ArialMT; exact
+selected font-file/glyph identities and portability remain incomplete. No real
+client per-request usage/billing interface is available, so input/output/cache
+tokens, fees and matched end-to-end savings remain unknown. Those are evidence
+limits, not observed product failures.
+
 ## 2026-10-13 continuation: implementation, evidence, and next slices
 
-Implemented on the local integration branch, not yet published or released:
+Implemented on the integration branch; main/release publication remains separate:
 
 - The repository policy now permits only explicitly curated documentation and
   showcase assets. The tracked-ignored-file gate still rejects local-only work,

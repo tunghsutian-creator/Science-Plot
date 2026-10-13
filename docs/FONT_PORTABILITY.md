@@ -1,5 +1,24 @@
 # Font portability evidence
 
+## 2026-10-13 Mac observation
+
+A locally compiled Veusz Figure export on macOS 27.0.1 arm64, Python 3.14.8,
+PyQt6 6.11.0 / Qt 6.11.2 passed native scientific and publication QA. The
+delivered 300 dpi TIFF was visually inspected. Ten synchronous text draws on
+the RecordPaintDevice requested and resolved Arial; the exported PDF contains
+an embedded Type0 ArialMT font resource. Saved native settings also produced
+44 successful Qt screen matches: 10 Arial and 34 Times New Roman.
+
+Record-device observations and PDF resource names do not prove the system file
+used for every glyph. Resolved whole-font-file and fallback-glyph identities
+remain unobserved. Historical mechanical and both rheology accepted-profile
+captures have matching structure and zero changed raster pixels, but their
+strict environment assertions reject changed Python/binary, OS and package
+identities. Their immutable baselines were retained. This is bounded Mac
+evidence, not established cross-environment font portability.
+
+## Observation boundary
+
 The managed render recipe records requested font configuration, but currently
 does **not** know which system font file the Veusz/Qt renderer used. Its
 `fonts.coverage` value remains

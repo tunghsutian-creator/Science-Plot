@@ -248,6 +248,11 @@ with the `python3 -m venv .venv` command. Continue when Doctor reports
 `status=ready`. If `qmake` is outside your `PATH`, set `QMAKE_EXE` to its location
 before building.
 
+The build resolves `sip-build` from the invoked Python environment, so a direct
+`.venv/bin/python` invocation does not require activation. Interrupted binding
+generation is retried in a new build directory. Doctor requires all five
+vendored native helpers to load successfully.
+
 Source setup has been checked locally on macOS. Windows and Linux installation
 are not yet verified; independent installation and beginner acceptance are
 tracked in the [acceptance protocol](docs/INDEPENDENT_ACCEPTANCE.md).

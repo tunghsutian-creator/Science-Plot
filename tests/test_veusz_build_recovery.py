@@ -95,3 +95,33 @@ def test_force_regeneration_does_not_link_removed_generated_classes(tmp_path):
     assert Path(second[0]).name == 'sipthreedcmodule.cpp'
     assert calls[0] != calls[1]
     assert all(Path(path).is_file() for path in first)
+
+
+def test_direct_venv_python_uses_its_sip_build_without_path_activation(tmp_path, monkeypatch):
+    command = builder(tmp_path / 'build')
+    namespace = command._sip_compile.__func__.__globals__
+    scripts = tmp_path / 'venv/bin'
+    scripts.mkdir(parents=True)
+    executable = scripts / 'sip-build'
+    executable.write_text('#!/bin/sh\n')
+    executable.chmod(0o700)
+    platlib = tmp_path / 'venv/lib'
+    qtcore = platlib / 'PyQt6/bindings/QtCore'
+    qtcore.mkdir(parents=True)
+    (qtcore / 'QtCore.toml').write_text('sip-abi-version="13.11"\n')
+    monkeypatch.setitem(namespace, 'get_path', lambda name: str(scripts if name == 'scripts' else platlib))
+    monkeypatch.setattr(namespace['shutil'], 'which', lambda _: None)
+    calls = []
+
+    def generated(args, cwd):
+        calls.append(args)
+        output = Path(cwd) / 'output'
+        (output / 'threed').mkdir()
+        (output / 'sip.h').write_text('// generated SIP header')
+
+    monkeypatch.setattr(namespace['subprocess'], 'check_call', generated)
+    directory = tmp_path / 'generation'
+    directory.mkdir()
+    command._sip_compile('threed.sip', str(directory))
+    assert calls == [[str(executable), '--no-compile']]
+    assert (directory / 'output/threed/sip.h').is_file()

@@ -285,7 +285,10 @@ protected-is-public=false
             fout.write(toml_text)
 
         # generate the source files for the bindings
-        build_cmd = shutil.which('sip-build')
+        # Direct venv Python invocations need not activate that venv on PATH.
+        build_cmd = os.path.join(get_path('scripts'), 'sip-build')
+        if not os.path.isfile(build_cmd) or not os.access(build_cmd, os.X_OK):
+            build_cmd = shutil.which('sip-build')
         if not build_cmd:
             raise RuntimeError('Could not find sip-build command on PATH')
         subprocess.check_call([build_cmd, '--no-compile'], cwd=sip_builddir)

@@ -1,5 +1,15 @@
 # Task capability and local plotting measurements
 
+## 2026-10-13 Mac client telemetry boundary
+
+The Mac verification completed CLI/RPC/MCP native workflows and actual AF_UNIX
+lost-reply recovery with daemon restart. The available client capabilities do
+not expose per-request model usage or billing records. Actual input, output
+and cached tokens, fees and matched end-to-end savings therefore remain
+unknown. Account usage limits, UTF-8 response bytes and local process timings
+do not fill this gap. These transport checks are runtime/recovery evidence,
+not a real-model cost comparison.
+
 ## 2026-10-13 — saved ManagedPlot AI-entry payload boundary
 
 The agent entry now chooses a summary first for a previously identified
