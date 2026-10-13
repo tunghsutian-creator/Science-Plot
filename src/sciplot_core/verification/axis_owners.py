@@ -17,6 +17,7 @@ GENERIC_AXIS_OWNERS = (
                 "src/sciplot_core/studio_core/veusz_apply.py",
                 "src/sciplot_core/studio_core/veusz_canvas_finish.py",
                 "src/sciplot_core/studio_render/axis_contract.py",
+                "src/sciplot_core/studio_render/axis_extent.py",
                 "src/sciplot_core/studio_render/axis_limits.py",
                 "src/sciplot_core/studio_render/domain_defaults.py",
                 "src/sciplot_core/studio_render/metric_columns.py",
@@ -27,6 +28,7 @@ GENERIC_AXIS_OWNERS = (
         owned_test_paths=frozenset(
             {
                 "tests/test_generic_axis_policy.py",
+                "tests/test_marker_axis_extent.py",
                 "tests/test_registered_single_curve_figure_plan.py",
                 "tests/test_semantic_validation.py",
                 "tests/test_source_recognition_contract.py",
@@ -38,6 +40,7 @@ GENERIC_AXIS_OWNERS = (
             "tests/test_task_control.py",
             "tests/test_plan_preview.py",
             "tests/test_generic_axis_policy.py",
+            "tests/test_marker_axis_extent.py",
             "tests/test_mechanical_rendering_profile_native.py",
             "tests/test_registered_single_curve_figure_plan.py",
             "tests/test_semantic_validation.py",
