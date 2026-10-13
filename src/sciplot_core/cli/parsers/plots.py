@@ -7,7 +7,7 @@ from typing import Any
 def register_plot_commands(subparsers: Any) -> None:
     parser = subparsers.add_parser("plot", help="Edit persistent scientific documents through semantic patches.")
     actions = parser.add_subparsers(dest="plot_action", required=True)
-    for name in ("open", "describe", "create", "patch", "render", "export", "rollback", "decide"):
+    for name in ("open", "describe", "create", "patch", "intent", "render", "export", "rollback", "decide"):
         action = actions.add_parser(name)
         if name == "open":
             action.add_argument("target", type=Path)
@@ -18,7 +18,7 @@ def register_plot_commands(subparsers: Any) -> None:
             action.add_argument("--scope", choices=("summary", "edit"), help="Optional compact ManagedPlot description.")
             action.add_argument("--target-id", help="Stable semantic target ID for --scope edit.")
             action.add_argument("--property", help="Property name for --scope edit.")
-        if name in {"create", "patch", "rollback", "decide"}:
+        if name in {"create", "patch", "intent", "rollback", "decide"}:
             action.add_argument("--request", type=Path, required=True)
         action.add_argument("--json", action="store_true")
         action.add_argument("--socket", type=Path, help="Private local engine socket; defaults to this checkout's engine.")

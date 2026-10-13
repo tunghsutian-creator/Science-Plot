@@ -25,6 +25,12 @@ contract when constructing the existing `plot.patch` request; never guess an
 unadvertised property. Omit `--scope`/`description` for the unchanged full read.
 LegacyPlot keeps its full open response, and scoped edit is unavailable there.
 
+For a ManagedPlot FigureSpec v2 axis label or annotation text, the optional
+[`plot.intent` text-edit route](../../docs/plot_typed_intent.md) accepts a literal
+replacement and an exact stable ID or uniquely matched current label. Its
+read-only plan shows risk and unit/anchor context; explicit apply compiles to the
+same semantic patch transaction below. Other edits continue to use `plot.patch`.
+
 Send `sciplot_plot_patch` with `plot` and this request, substituting the returned
 plot identity, current revision and exact authorized targets:
 

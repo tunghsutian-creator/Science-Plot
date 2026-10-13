@@ -39,6 +39,7 @@ ftir_output/
 !/docs/ARCHITECTURE.md
 !/docs/DESIGN_MANAGED_PLOTS.md
 !/docs/DESIGN_FIGURE_GRAMMAR.md
+!/docs/plot_typed_intent.md
 !/docs/DESIGN_RENDERING_CONTRACT.md
 !/docs/RESEARCH_COMPATIBILITY_PROFILES.md
 !/docs/RHEOLOGY_TTS.md
