@@ -3,7 +3,6 @@
 from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
-
 EXTERNAL_AI_OWNERS = (
     ChangedOwner(
         owner_id="automation_baseline_evidence",
@@ -94,6 +93,7 @@ EXTERNAL_AI_OWNERS = (
                 "src/sciplot_core/studio_core/document_edit_state.py",
                 "src/sciplot_core/veusz_worker/document_edit.py",
                 "src/sciplot_core/veusz_worker/cli.py",
+                "src/sciplot_core/veusz_worker/font_evidence.py",
                 "src/sciplot_core/veusz_worker/operations.py",
                 "src/sciplot_gui/studio_assistant/proposal_application.py",
                 "src/sciplot_gui/studio_assistant/selection.py",
@@ -105,6 +105,7 @@ EXTERNAL_AI_OWNERS = (
                 "tests/test_document_edit_native.py",
                 "tests/test_document_edit_policy.py",
                 "tests/test_native_document_edit.py",
+                "tests/test_native_font_evidence.py",
                 "tests/test_assistant_contract.py",
             }
         ),
@@ -113,6 +114,7 @@ EXTERNAL_AI_OWNERS = (
             "tests/test_document_edit_native.py",
             "tests/test_document_edit_policy.py",
             "tests/test_native_document_edit.py",
+            "tests/test_native_font_evidence.py",
             "tests/test_project_query.py",
             "tests/test_assistant_contract.py",
             *ARCHITECTURE_CORE_TARGETS,

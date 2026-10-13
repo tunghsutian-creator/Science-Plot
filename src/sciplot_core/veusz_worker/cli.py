@@ -5,11 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.veusz_worker.operations import (
-    export_request,
-    export_document,
     audit_documents,
+    export_document,
+    export_request,
     inspect_document_state,
     migrate_unit_labels,
 )
@@ -64,6 +65,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Reopen a VSZ and materialize its widget settings.",
     )
     inspect_state_parser.add_argument("document", type=Path)
+    inspect_state_parser.add_argument(
+        "--font-evidence", action="store_true",
+        help="Include read-only requested-font and Qt screen-match preflight evidence.",
+    )
     preview_parser = subparsers.add_parser(
         "preview-document", help="Render the exact saved first page as a PNG."
     )
@@ -135,7 +140,8 @@ def main(argv: list[str] | None = None) -> int:
             check_presentation=not args.allow_presentation_edits,
         )
     elif args.command == "inspect-document-state":
-        payload = inspect_document_state(args.document)
+        payload = (inspect_document_state(args.document, include_font_evidence=True)
+                   if args.font_evidence else inspect_document_state(args.document))
     elif args.command == "preview-document":
         from sciplot_core.veusz_worker.document_edit import preview_document
 
@@ -168,7 +174,9 @@ def main(argv: list[str] | None = None) -> int:
     if (args.command == "edit-document" and args.audit_spec is not None) or (
         args.command == "edit-annotations" and args.audit_candidate
     ):
-        from sciplot_core.source_coverage.document_audit import _audit_exact_document_data
+        from sciplot_core.source_coverage.document_audit import (
+            _audit_exact_document_data,
+        )
 
         payload["document_audit"], _ = _audit_exact_document_data(
             document_path=args.output_document,
