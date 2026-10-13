@@ -42,7 +42,12 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         return inspect_table_region(Path(arguments["task"]), arguments["query"])
     if name in {"sciplot_comparison_start", "sciplot_comparison_inspect", "sciplot_comparison_resume", "sciplot_comparison_select"}:
-        from sciplot_core.task_comparisons import inspect_comparison, resume_comparison, select_comparison, start_comparison
+        from sciplot_core.task_comparisons import (
+            inspect_comparison,
+            resume_comparison,
+            select_comparison,
+            start_comparison,
+        )
 
         if name == "sciplot_comparison_start":
             return start_comparison(arguments["request"], comparison_dir=Path(arguments["comparison_dir"]))
@@ -58,8 +63,12 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         group = Path(arguments["group"])
         return inspect_group(group) if name == "sciplot_group_inspect" else resume_group(group, arguments.get("responses"))
     if name == "sciplot_capabilities":
-        from sciplot_core.studio_core.project_capabilities import project_control_capabilities
-        from sciplot_core.studio_core.annotation_schema import annotation_operation_capabilities
+        from sciplot_core.studio_core.annotation_schema import (
+            annotation_operation_capabilities,
+        )
+        from sciplot_core.studio_core.project_capabilities import (
+            project_control_capabilities,
+        )
 
         return {
             **project_control_capabilities(),
@@ -92,16 +101,22 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         return preview_project_document(project, figure_id=figure_id, output_dir=_preview_output(arguments))
     if name == "sciplot_annotation_inspect":
-        from sciplot_core.studio_core.annotation_operations import inspect_annotation_state
+        from sciplot_core.studio_core.annotation_operations import (
+            inspect_annotation_state,
+        )
 
         return inspect_annotation_state(project, figure_id=figure_id)
     if name == "sciplot_sample_style_capture":
-        from sciplot_core.studio_core.sample_style_presets import capture_sample_style_preset
+        from sciplot_core.studio_core.sample_style_presets import (
+            capture_sample_style_preset,
+        )
 
         return capture_sample_style_preset(project, figure_id=figure_id,
             samples=arguments.get("samples"), output_dir=_preview_output(arguments))
     if name == "sciplot_edit_preview":
-        from sciplot_core.studio_core.annotation_operations import preview_document_operations
+        from sciplot_core.studio_core.annotation_operations import (
+            preview_document_operations,
+        )
 
         return preview_document_operations(project, arguments["operations"],
             output_dir=_preview_output(arguments), figure_id=figure_id,

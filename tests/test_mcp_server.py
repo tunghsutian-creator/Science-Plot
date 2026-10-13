@@ -17,7 +17,6 @@ from sciplot_core.mcp_server.resources import ResourceStore
 from sciplot_core.mcp_server.schemas import tool_definitions
 from sciplot_core.studio_core.annotation_schema import annotation_operation_capabilities
 
-
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP1sAAAAASUVORK5CYII=")
 
 
