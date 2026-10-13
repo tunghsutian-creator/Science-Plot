@@ -7,7 +7,6 @@ from pathlib import Path
 
 from sciplot_core.verification.owner_model import ChangedOwner
 
-
 ARCHITECTURE_CORE_TARGETS = (
     "tests/test_architecture_boundaries.py::test_ordinary_source_files_stay_within_the_size_boundary",
     "tests/test_architecture_boundaries.py::test_first_party_import_graph_is_acyclic",
@@ -24,6 +23,8 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
             "src/sciplot_core/cli/dispatch/diagnostics.py",
             "src/sciplot_core/doctor/payload.py",
             "src/sciplot_core/doctor/actions.py",
+            "src/sciplot_core/doctor/runtime_checks.py",
+            "src/sciplot_core/doctor/readiness_checks.py",
         }
     ),
     owned_test_paths=frozenset(
@@ -278,11 +279,11 @@ def _configured_additional_mypy_scope() -> tuple[frozenset[str], tuple[str, ...]
     project = tomllib.loads(project_path.read_text(encoding="utf-8"))
     configured_value: object = project["tool"]["mypy"]["files"]
     if not isinstance(configured_value, list):
-        raise ValueError("[tool.mypy].files must be a list of paths")
+        raise TypeError("[tool.mypy].files must be a list of paths")
     configured: list[str] = []
     for value in configured_value:
         if not isinstance(value, str):
-            raise ValueError("[tool.mypy].files must be a list of paths")
+            raise TypeError("[tool.mypy].files must be a list of paths")
         configured.append(value)
     additional_files: set[str] = set()
     additional_prefixes: set[str] = set()
