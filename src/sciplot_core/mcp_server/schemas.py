@@ -22,6 +22,7 @@ def tool_definitions() -> list[Tool]:
         decide_schema,
         rollback_schema,
     )
+    from sciplot_core.plot_engine.typed_intent import intent_schema
     from sciplot_core.task_choice_schema import table_region_schema
     from sciplot_core.task_comparison_contract import (
         comparison_request_schema,
@@ -70,6 +71,8 @@ def tool_definitions() -> list[Tool]:
         {"request": create_schema()}, ["request"], idempotent=True, destructive=True)
     add("plot_patch", "Apply one atomic semantic change batch to exact stable object IDs and base_revision. Local engine classifies risk, checks scientific invariants and compiles/exports. Reuse the identical idempotency_key after a lost reply; never swap data bindings through a presentation patch.",
         {**semantic_plot, "request": patch_schema()}, ["plot", "request"], idempotent=True, destructive=True)
+    add("plot_intent", "Plan or apply one exact FigureSpec v2 axis label or annotation text edit. Select a stable target ID or unique exact current label, supply the literal replacement value, plot ID, revision, and idempotency key. Plan is read-only; apply uses the existing plot patch transaction.",
+        {**semantic_plot, "request": intent_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_render", "Render the current semantic document through its native backend; reuses valid current cache and preserves the saved scientific state.",
         semantic_plot, ["plot"], idempotent=True)
     add("plot_export", "Export the committed semantic revision. A prior export failure resumes export without applying a patch again. Handoff requires ready delivery evidence.",

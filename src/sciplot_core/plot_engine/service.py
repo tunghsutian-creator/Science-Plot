@@ -149,6 +149,43 @@ class PlotService:
         with external_project_session(root):
             return self._patch(root, request)
 
+    def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        """Resolve two explicit FigureSpec text edits into the existing patch owner."""
+        from .typed_intent import compile_intent, validate_intent
+
+        request = validate_intent(request)
+        root = canonical_path(plot)
+        if request["mode"] == "plan":
+            # No session lease, native inspection, journal reservation, preview,
+            # or renderer call: a plan is a read of one current frozen revision.
+            head = load_head(root)
+            _, plan = compile_intent(head["document"], request)
+            require_current(self.backend, head["binding"])
+            pending = active(root)
+            if pending and pending["phase"] not in {"complete", "rejected"}:
+                raise EngineError("document_transaction_pending", "Finish or reject the pending transaction first.",
+                                  action="retry_same_request", idempotency_key=pending["request"]["idempotency_key"])
+            current = load_head(root)["document"]
+            if (current["plot_id"], current["revision"], current["scientific_hash"],
+                    current["presentation_hash"]) != (head["document"]["plot_id"], head["document"]["revision"],
+                                                     head["document"]["scientific_hash"],
+                                                     head["document"]["presentation_hash"]):
+                raise EngineError("document_revision_conflict", "The plot changed while planning this edit.",
+                                  action="plot.describe", current_revision=current["revision"])
+            require_current(self.backend, head["binding"])
+            pending = active(root)
+            if pending and pending["phase"] not in {"complete", "rejected"}:
+                raise EngineError("document_transaction_pending", "An edit began while planning this request.",
+                                  action="retry_same_request", idempotency_key=pending["request"]["idempotency_key"])
+            return {"plot": str(root), **plan}
+        with external_project_session(root):
+            saved = transaction_path(root, request["idempotency_key"])
+            # Recompile a retry against the *original* snapshot. Resolving a
+            # label against the new head would break replay after the first edit.
+            document = read(saved)["before"] if saved.exists() else load_head(root)["document"]
+            patch, _ = compile_intent(document, request)
+            return self._patch(root, patch)
+
     def _patch(self, root: Path, request: dict[str, Any], *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:
         saved = transaction_path(root, request["idempotency_key"])
         if saved.exists():
