@@ -7,6 +7,16 @@ from sciplot_core.verification.owner_model import ChangedOwner
 
 PROJECT_INTEGRITY_OWNERS = (
     ChangedOwner(
+        owner_id="fixture_provenance_evidence",
+        exact_paths=frozenset({
+            "src/sciplot_core/evidence/provenance.py",
+            "src/sciplot_core/evidence/evidence_status.py",
+        }),
+        owned_test_paths=frozenset({"tests/test_evidence_reports.py"}),
+        pytest_targets=("tests/test_evidence_reports.py", "tests/test_rule_certification.py"),
+        release_gates=("acceptance_rules", "full_pytest"),
+    ),
+    ChangedOwner(
         owner_id="native_assistant_dock",
         exact_paths=frozenset({"src/sciplot_gui/studio_assistant/dock.py"}),
         pytest_targets=("tests/test_assistant_contract.py",),

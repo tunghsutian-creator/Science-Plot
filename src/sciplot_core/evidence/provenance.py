@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from sciplot_core._paths import real_world_fixture_root
 
+from sciplot_core._paths import real_world_fixture_root
 from sciplot_core.evidence.json_sources import (
     HASH_PATTERN,
 )
@@ -37,6 +37,32 @@ def _provenance_candidates(
 
 def _expected_fixture_hashes(payload: object) -> dict[str, str]:
     expected: dict[str, str] = {}
+
+    # These older local evidence schemas bind fixture bytes explicitly, using
+    # different field names. A source hash is fixture evidence only when the
+    # provenance declares the fixture to be an exact, unmodified source copy.
+    if isinstance(payload, dict) and payload.get("version") == 1:
+        if payload.get("kind") == "sciplot_digitized_fixture_provenance":
+            output = payload.get("output_csv")
+            digest = payload.get("output_csv_sha256")
+            if (isinstance(output, str) and output.strip() and Path(output).name == output
+                    and isinstance(digest, str) and len(digest) == 64
+                    and HASH_PATTERN.fullmatch(digest)):
+                expected[Path(output).name] = digest.casefold()
+        if (payload.get("kind") == "sciplot_user_authorized_real_fixture_provenance"
+                and payload.get("source_data_status")
+                == "exact_unmodified_user_authorized_instrument_exports"):
+            sources = payload.get("source_files")
+            if isinstance(sources, list):
+                for source in sources:
+                    if not isinstance(source, dict):
+                        continue
+                    name = source.get("source_file")
+                    digest = source.get("source_sha256")
+                    if (isinstance(name, str) and name.strip() and Path(name).name == name
+                            and isinstance(digest, str) and len(digest) == 64
+                            and HASH_PATTERN.fullmatch(digest)):
+                        expected[Path(name).name] = digest.casefold()
 
     def visit(value: object) -> None:
         if isinstance(value, dict):
