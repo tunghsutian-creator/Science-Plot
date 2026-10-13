@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 3832,
-    "nodeids_sha256": "7ee5e671902a9d39bfc9849ae009610c6ce5a7d5221c50f54e803c60b63a6ce1",
-    "test_sources_sha256": "5a2a1144cbdc21dac14120e743493fe109fb3f59f9d6f28118a3eceb34054dda",
-    "test_source_count": 291,
+    "nodeid_count": 3840,
+    "nodeids_sha256": "1c7a07c2d61723413df3921a0b0d9d63726b34374f0cb64cae0577626defae17",
+    "test_sources_sha256": "a47f7886d3ecabe1e91cb0dfbc38d8eaf084e8d35c7cbbaaa7c74db3ec725f22",
+    "test_source_count": 292,
     "candidate_nodeids": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
       "tests/test_delivery_studio_lifecycle.py::test_dsc_public_delivery_continues_project_and_copied_package_exports_independently",
@@ -79,6 +79,13 @@
       "tests/test_plan_preview.py::test_plan_preview_activates_registered_real_tensile_plan",
       "tests/test_plan_preview.py::test_source_only_tensile_directory_uses_same_validated_scientific_plan",
       "tests/test_plan_preview.py::test_temperature_preview_keeps_plan_shape_without_fabricating_transform",
+      "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[bound_nodeid]",
+      "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[escape]",
+      "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[listdir]",
+      "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[outside_namespace]",
+      "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[scan]",
+      "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[symlink_escape]",
+      "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[unbound_open]",
       "tests/test_private_corpus_preflight.py::test_complete_inventory_requires_bound_full_access_evidence[capture_incomplete]",
       "tests/test_private_corpus_preflight.py::test_complete_inventory_requires_bound_full_access_evidence[escape]",
       "tests/test_private_corpus_preflight.py::test_complete_inventory_requires_bound_full_access_evidence[inventory_drift]",
@@ -94,6 +101,7 @@
       "tests/test_private_corpus_preflight.py::test_profile_manifest_members_are_checked_before_native_execution",
       "tests/test_private_corpus_preflight.py::test_provenance_member_names_are_checked_without_private_bytes",
       "tests/test_private_corpus_preflight.py::test_resolved_symlink_cannot_escape_fixture_roots",
+      "tests/test_private_corpus_preflight.py::test_unbound_data_open_remains_blocked_outside_collection_bucket",
       "tests/test_private_corpus_preflight.py::test_unsafe_dependency_identifier_blocks_before_file_access[../outside.csv]",
       "tests/test_private_corpus_preflight.py::test_unsafe_dependency_identifier_blocks_before_file_access[/tmp/outside.csv]",
       "tests/test_private_corpus_preflight.py::test_unsafe_dependency_identifier_blocks_before_file_access[tests/fixtures/real_world/../../outside.csv]",
@@ -332,6 +340,38 @@
       {
         "nodeid": "tests/test_task_mapping_plan.py::test_mapping_source_indicator_checks_original_and_effective_bytes",
         "reason": "The helper is called with default real=False; it writes a synthetic source."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[bound_nodeid]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[escape]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[listdir]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[outside_namespace]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[scan]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[symlink_escape]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[unbound_open]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_unbound_data_open_remains_blocked_outside_collection_bucket",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
       }
     ],
     "review_method": "All collected nodes; AST call/reference graph through test helpers and private root constants, followed by exact per-parameter source review. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling.",
@@ -344,169 +384,1578 @@
     "remaining_proof": "Full-suite bounded Python access capture with native-child propagation, zero capture drops, exact inventory/source/collection bindings, and zero unmapped private reads. Failed native golden branches retain their static profile manifest dependencies."
   },
   "cases": [
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_preflight_binds_the_exact_plan", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_exact_dma_named_recipe_plan_reaches_only_the_bounded_seam", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch0-plan_conflict]", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch1-plan_conflict]", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch2-plan_conflict]", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch3-plan_conflict]", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch4-terminal_evidence_forged]", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch5-axis_visibility_conflict]", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_rejects_forged_task_before_writes", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_rejects_source_drift_before_writes", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_workflow_discards_staging_tree_on_named_recipe_conflict", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_rheology_dma_cannot_consume_an_unbounded_non_dma_plan", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_temperature_scientific_transform.py::test_real_dma_transform_preserves_units_points_empty_tails_and_negative", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_temperature_scientific_transform.py::test_dma_plan_parses_one_domain_snapshot_and_reuses_its_contract", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_temperature_scientific_transform.py::test_dma_preparation_materializes_the_same_resolved_contract", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_temperature_scientific_transform.py::test_resolved_dma_snapshot_materializes_without_a_second_parse", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_temperature_scientific_transform.py::test_dma_execution_facts_reuse_the_same_resolved_transform", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dma_temperature_scientific_transform.py::test_dma_execution_rejects_a_snapshot_from_another_source", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dsc_cycle_workflow.py::test_dsc_analysis_metrics_remain_algorithmic_without_transition_identity", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dtg_analysis.py::test_dtg_peak_temperature_tracks_the_fixture_maximum_response", "dependencies": [{"rule_id": "dtg_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_dtg_analysis.py::test_xrd_peak_positions_track_each_fixture_maximum_intensity", "dependencies": [{"rule_id": "xrd_pattern"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_generic_single_task_plan.py::test_dsc_rule_uses_the_shared_generic_studio_queue", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_generic_single_task_plan.py::test_stress_plan_uses_shared_bundle_and_generic_studio_queue", "dependencies": [{"rule_id": "rheology_stress_relaxation"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_source_facts.py::test_real_mechanical_facts_preserve_every_observation_and_select_by_median[tensile_curve-E0 2MM-9-strength_MPa-values0-E0 2MM_9_1]", "dependencies": [{"rule_id": "tensile_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_source_facts.py::test_real_mechanical_facts_preserve_every_observation_and_select_by_median[compression_curve-Conventional PU foam-6-compressive_strength_MPa-values1-repeat 3]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_source_facts.py::test_real_mechanical_facts_preserve_every_observation_and_select_by_median[flexural_curve-A_HA56-6-flexural_strength_MPa-values2-specimen 2]", "dependencies": [{"rule_id": "flexural_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_source_facts.py::test_mechanical_preparation_is_attested_and_rejects_curve_mean_before_writes", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_source_facts.py::test_mechanical_individual_mode_materializes_every_explicit_curve", "dependencies": [{"rule_id": "flexural_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_prebound_private_mechanical_queue_is_rejected[partial]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_prebound_private_mechanical_queue_is_rejected[all]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_mechanical_figure_set_rejects_a_non_internal_queue_shape[empty]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_mechanical_figure_set_rejects_a_non_internal_queue_shape[tuple]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_mechanical_figure_set_rejects_a_non_internal_queue_shape[non_mapping]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_mechanical_figure_set_rejects_a_non_internal_queue_shape[non_string_key]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_mechanical_figure_set_rejects_a_non_internal_queue_shape[empty_mapping]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_task_options.py::test_summary_tasks_keep_style_without_curve_axis_or_series_options", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_workflow_route.py::test_direct_mechanical_plan_uses_shared_semantic_preparation", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_plan_preview.py::test_plan_preview_activates_registered_real_tensile_plan", "dependencies": [{"rule_id": "tensile_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_plan_preview.py::test_source_only_tensile_directory_uses_same_validated_scientific_plan", "dependencies": [{"rule_id": "tensile_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_plan_preview.py::test_temperature_preview_keeps_plan_shape_without_fabricating_transform", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_single_member_directory_matches_file[dsc_curve]", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_single_member_directory_matches_file[tga_curve]", "dependencies": [{"rule_id": "tga_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_single_member_directory_matches_file[dtg_curve]", "dependencies": [{"rule_id": "dtg_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_single_member_directory_matches_file[uvvis_spectrum]", "dependencies": [{"rule_id": "uvvis_spectrum"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_single_member_directory_matches_file[xrd_pattern]", "dependencies": [{"rule_id": "xrd_pattern"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_directory_requires_exactly_one_supported_file[2]", "dependencies": [{"rule_id": "uvvis_spectrum"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_reads_real_saxs_header_metadata_and_projects_log_y", "dependencies": [{"rule_id": "saxs_profile"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_uvvis_response_identity_is_bound_to_source_evidence", "dependencies": [{"rule_id": "uvvis_spectrum"}, {"path": "tests/fixtures/real_world/uvvis_spectrum/source_provenance.json", "kind": "file"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_xrd_output_identity_is_bound_to_the_official_si_axes", "dependencies": [{"rule_id": "xrd_pattern"}, {"path": "tests/fixtures/real_world/xrd_pattern/source_provenance.json", "kind": "file"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_transform_and_plan_share_one_source_snapshot[dsc_curve]", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_transform_and_plan_share_one_source_snapshot[tga_curve]", "dependencies": [{"rule_id": "tga_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_transform_and_plan_share_one_source_snapshot[dtg_curve]", "dependencies": [{"rule_id": "dtg_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_transform_and_plan_share_one_source_snapshot[uvvis_spectrum]", "dependencies": [{"rule_id": "uvvis_spectrum"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_transform_and_plan_share_one_source_snapshot[xrd_pattern]", "dependencies": [{"rule_id": "xrd_pattern"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[dsc_curve]", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[tga_curve]", "dependencies": [{"rule_id": "tga_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[dtg_curve]", "dependencies": [{"rule_id": "dtg_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[uvvis_spectrum]", "dependencies": [{"rule_id": "uvvis_spectrum"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[xrd_pattern]", "dependencies": [{"rule_id": "xrd_pattern"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[saxs_profile]", "dependencies": [{"rule_id": "saxs_profile"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[dma_frequency_sweep]", "dependencies": [{"rule_id": "dma_frequency_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_dma_frequency_real_source_reuses_one_generic_single_curve_spine", "dependencies": [{"rule_id": "dma_frequency_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_ftir_headerless_source_shares_one_neutral_snapshot_for_plan_and_prepare", "dependencies": [{"rule_id": "ftir_spectrum"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_preparation_materializes_resolved_snapshot_once[dsc_curve]", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_preparation_materializes_resolved_snapshot_once[tga_curve]", "dependencies": [{"rule_id": "tga_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_preparation_materializes_resolved_snapshot_once[dtg_curve]", "dependencies": [{"rule_id": "dtg_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_preparation_materializes_resolved_snapshot_once[uvvis_spectrum]", "dependencies": [{"rule_id": "uvvis_spectrum"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_preparation_materializes_resolved_snapshot_once[xrd_pattern]", "dependencies": [{"rule_id": "xrd_pattern"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_saxs_plan_and_preparation_share_the_same_source_snapshot", "dependencies": [{"rule_id": "saxs_profile"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_registered_single_curve_figure_plan.py::test_gpc_plan_and_preparation_share_source_identity_and_one_parse", "dependencies": [{"rule_id": "gpc_sec_chromatogram"}, {"path": "tests/fixtures/real_world/gpc_sec_chromatogram/source_provenance.json", "kind": "file", "listed_sources": "source_files"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_dma_temperature_plan.py::test_dma_rule_and_registered_fixture_share_one_unit_contract", "dependencies": [{"rule_id": "dma_temperature_sweep"}, {"path": "tests/fixtures/real_world/dma_temperature_sweep/source_provenance.json", "kind": "file"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_dma_temperature_plan.py::test_real_dma_source_facts_preserve_every_point_and_negative_value", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_dma_temperature_plan.py::test_dma_plan_is_one_source_bound_v2_cartesian_task", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_dma_temperature_plan.py::test_dma_plan_rejects_non_point_line_template", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_dma_temperature_plan.py::test_dma_persisted_plan_is_stale_after_source_bytes_change", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_mechanical_figure_plan.py::test_real_mechanical_source_resolves_exact_ordered_v2_tasks[compression_curve]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_mechanical_figure_plan.py::test_real_mechanical_source_resolves_exact_ordered_v2_tasks[flexural_curve]", "dependencies": [{"rule_id": "flexural_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_mechanical_figure_plan.py::test_real_mechanical_source_resolves_exact_ordered_v2_tasks[tensile_curve]", "dependencies": [{"rule_id": "tensile_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_mechanical_figure_plan.py::test_individual_mode_changes_only_curve_series_identity", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_mechanical_figure_plan.py::test_mechanical_primary_template_cannot_override_summary_contract", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_temperature_figure_plan.py::test_default_temperature_plan_binds_exact_two_real_metric_tasks", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_temperature_figure_plan.py::test_temperature_plan_honors_one_explicit_complete_sample_order", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_temperature_figure_plan.py::test_temperature_domain_parses_once_and_plan_reuses_it", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_temperature_figure_plan.py::test_temperature_resolution_rejects_source_drift_during_load", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_resolved_temperature_figure_plan.py::test_temperature_plan_is_registered_in_global_resolution", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_saxs_source_contract.py::test_saxs_rule_matches_official_axes_and_source_headers", "dependencies": [{"rule_id": "saxs_profile"}, {"path": "tests/fixtures/real_world/saxs_profile/source_provenance.json", "kind": "file"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_saxs_source_contract.py::test_saxs_nonpositive_diagnostics_equal_each_source_y_column", "dependencies": [{"rule_id": "saxs_profile"}, {"path": "tests/fixtures/real_world/saxs_profile/source_provenance.json", "kind": "file"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_saxs_source_contract.py::test_saxs_probes_do_not_embed_real_samples_or_tail_count_bounds", "dependencies": [{"path": "tests/fixtures/real_world/saxs_profile/source_provenance.json", "kind": "file"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_hashes_only_archive_for_paired_snapshot[tga_curve]", "dependencies": [{"rule_id": "tga_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_hashes_only_archive_for_paired_snapshot[dsc_curve]", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_scientific_source_pipeline.py::test_studio_dsc_source_binding_uses_the_shared_source_tree_hash", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_without_snapshot_hashes_live_and_archive", "dependencies": [{"rule_id": "tga_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_rejects_drifted_archive_for_paired_snapshot", "dependencies": [{"rule_id": "tga_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_scientific_source_pipeline.py::test_rheology_temperature_snapshot_drives_plan_and_prepare_without_reparse", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_study_model_artifact_binding.py::test_uvvis_recommendation_uses_the_resolved_plan_task_identity", "dependencies": [{"rule_id": "uvvis_spectrum"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_study_model_artifact_binding.py::test_registered_single_curve_plan_replaces_the_generic_study_queue", "dependencies": [{"rule_id": "dma_frequency_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_swelling_single_snapshot.py::test_swelling_prepare_and_terminals_reuse_one_resolved_snapshot", "dependencies": [{"rule_id": "swelling_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_task_mapping_plan.py::test_real_pda_mapping_preserves_selected_sample_measurements", "dependencies": [{"rule_id": "uvvis_spectrum"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_real_temperature_task_sources_keep_default_four_sample_contract", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_bundle_requires_exact_figure_plan_before_materialization", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_bundle_rejects_source_binding_mismatch_before_renderer", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_task_sources_consume_preparation_attestation_without_rediscovery", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_raw_drift_after_prepare_fails_before_renderer[added]", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_raw_drift_after_prepare_fails_before_renderer[modified]", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_prepared_workbook_drift_fails_before_task_materialization", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_frequency_bundle_rejects_injected_private_binding_before_renderer", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_bundle_rejects_pdf_only_renderer_payload", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_bundle_second_renderer_failure_publishes_nothing", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_tga_scientific_transform.py::test_real_single_tga_metrics_keep_legacy_names_and_measured_values", "dependencies": [{"rule_id": "tga_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_tga_scientific_transform.py::test_real_tga_transform_binds_source_columns_units_sample_and_points", "dependencies": [{"rule_id": "tga_curve"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_tga_scientific_transform.py::test_registered_paired_curve_detects_xrd_units_and_preserves_each_grid", "dependencies": [{"rule_id": "xrd_pattern"}], "evidence": "first_observed_failure_and_test_source"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_postcommit_task_source_gc_failure_does_not_report_a_false_failure[enumeration]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_postcommit_task_source_gc_failure_does_not_report_a_false_failure[removal]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_mechanical_workflow_route.py::test_direct_compression_lifecycle_delivers_every_selected_task", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_real_temperature_terminal_workers_render_both_bound_metrics_directly", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_temperature_workflow_repair.py::test_real_temperature_bundle_publishes_exact_two_metric_workers", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_delivery_studio_lifecycle.py::test_dsc_public_delivery_continues_project_and_copied_package_exports_independently", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_dma_temperature_figure_plan_activation.py::test_dma_studio_activates_one_source_bound_task_and_spec", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_dma_temperature_figure_plan_activation.py::test_dma_workflow_delivers_the_same_completed_single_task", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_studio_activates_exact_single_task_registry", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_studio_publication_delivers_exact_single_figure", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_studio_render_failure_rolls_back_request_and_documents", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_workflow_delivers_the_same_completed_single_task_plan", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_workflow_render_failure_restores_existing_managed_output", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_workflow_uses_its_bound_snapshot_after_render", "dependencies": [{"rule_id": "dsc_curve"}, {"path": "tests/fixtures/real_world/dsc_curve/digitization_provenance.json", "kind": "file"}], "evidence": "test_source_inspection_and_observed_access"},
-    {"nodeid": "tests/test_mechanical_figure_plan_activation.py::test_tensile_studio_publishes_the_complete_source_bound_figure_plan", "dependencies": [{"rule_id": "tensile_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_mechanical_figure_plan_activation.py::test_mechanical_workflow_delivers_exact_real_figure_plan[tensile_curve]", "dependencies": [{"rule_id": "tensile_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_mechanical_figure_plan_activation.py::test_mechanical_workflow_delivers_exact_real_figure_plan[compression_curve]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_mechanical_figure_plan_activation.py::test_mechanical_workflow_delivers_exact_real_figure_plan[flexural_curve]", "dependencies": [{"rule_id": "flexural_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_mechanical_figure_plan_activation.py::test_mechanical_studio_secondary_failure_rolls_back_the_whole_plan", "dependencies": [{"rule_id": "tensile_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_temperature_figure_plan_activation.py::test_temperature_studio_activates_exact_two_task_plan_with_one_preparation", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_temperature_figure_plan_activation.py::test_temperature_studio_second_task_failure_rolls_back_both_documents", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_temperature_figure_plan_activation.py::test_temperature_studio_publication_delivers_two_complete_figure_members", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_temperature_figure_plan_activation.py::test_temperature_workflow_delivers_the_same_completed_two_task_plan", "dependencies": [{"rule_id": "rheology_temperature_sweep"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_project_change_ui_native.py::test_real_dsc_source_update_from_native_qt_project_dock", "dependencies": [{"rule_id": "dsc_curve"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_swelling_source_contract.py::test_real_swelling_fixture_matches_its_authorized_labeled_block_dynamically", "dependencies": [{"rule_id": "swelling_curve"}, {"path": "tests/fixtures/real_world/swelling_curve/source_provenance.json", "kind": "file"}], "evidence": "test_source_inspection"},
-    {"nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_auto_and_named_recipe_have_identical_terminal_evidence", "dependencies": [{"rule_id": "dma_temperature_sweep"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_mechanical_rendering_profile_native.py::test_long_category_native_painters_release_and_clipping_still_blocks", "dependencies": [{"path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_mechanical_rendering_profile_native.py::test_long_instrument_category_labels_remain_visible_in_fixed_production_frame", "dependencies": [{"path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_mechanical_rendering_profile_native.py::test_mechanical_delivery_three_way_golden_and_disposable_backend", "dependencies": [{"path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json", "kind": "file", "listed_sources": "profile_files"}, {"path": "tests/fixtures/rendering_profiles/mechanical-v1/sources", "kind": "directory"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_exact_current_mechanical_reuse_rejects_missing_ready_secondary_artifact[document]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_exact_current_mechanical_reuse_rejects_missing_ready_secondary_artifact[spec]", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_mechanical_studio_task_sources.py::test_exact_current_mechanical_studio_reuse_preserves_the_bound_figure_set", "dependencies": [{"rule_id": "compression_curve"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_plan_identity.py::test_real_uvvis_cli_expected_plan_accepts_current_and_rejects_changed_source", "dependencies": [{"rule_id": "uvvis_spectrum"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profile_mechanical.py::test_changed_raw_summary_or_native_golden_is_rejected[accepted.vsz]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json", "kind": "file", "listed_sources": "profile_files"}, {"path": "tests/fixtures/rendering_profiles/mechanical-v1", "kind": "directory"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profile_mechanical.py::test_changed_raw_summary_or_native_golden_is_rejected[raw/E0 2mm.xlsx]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json", "kind": "file", "listed_sources": "profile_files"}, {"path": "tests/fixtures/rendering_profiles/mechanical-v1", "kind": "directory"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profile_mechanical.py::test_changed_raw_summary_or_native_golden_is_rejected[sources/E0-summary.csv]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json", "kind": "file", "listed_sources": "profile_files"}, {"path": "tests/fixtures/rendering_profiles/mechanical-v1", "kind": "directory"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profile_mechanical.py::test_prepared_summary_preserves_historical_values_and_all_replicates", "dependencies": [{"path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_arbitrary_equivalence_and_nontext_paths_rejected", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_equivalence_requires_zero_actual_pixel_differences", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_other_commands_glyphs_and_units_are_never_normalized[\\\\Omega (rad s\\u207b\\xb9)]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_other_commands_glyphs_and_units_are_never_normalized[\\\\unknown (rad s\\u207b\\xb9)]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_other_commands_glyphs_and_units_are_never_normalized[\\u03a9 (rad s\\u207b\\xb9)]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_other_commands_glyphs_and_units_are_never_normalized[\\u03c9 (rad s\\u207b\\xb2)]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_reviewed_spelling_is_equivalent_without_mutating_original", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rheology_family_profiles_native.py::test_historical_rheology_raw_points_and_native_edit_chain[gp]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rheology_family_profiles_native.py::test_historical_rheology_raw_points_and_native_edit_chain[gpp]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gpp.json", "kind": "file", "listed_sources": "profile_files"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rheology_family_profiles_native.py::test_rheology_historical_golden_legacy_managed_rebuild[gp]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json", "kind": "file", "listed_sources": "profile_files"}, {"path": "tests/fixtures/rendering_profiles/rheology-v1/raw", "kind": "directory"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_rheology_family_profiles_native.py::test_rheology_historical_golden_legacy_managed_rebuild[gpp]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gpp.json", "kind": "file", "listed_sources": "profile_files"}, {"path": "tests/fixtures/rendering_profiles/rheology-v1/raw", "kind": "directory"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_task_column_mapping_native.py::test_public_cli_column_choice_exports_real_pda_and_resumes_current_project", "dependencies": [{"rule_id": "uvvis_spectrum"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_task_control.py::test_old_reduced_mechanical_source_reports_missing_metrics_not_rule_question", "dependencies": [{"path": "tests/fixtures/rendering_profiles/mechanical-v1/raw", "kind": "directory"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_task_control.py::test_original_research_directory_selects_production_without_ai_style_request[rheology-v1-rheology_frequency_sweep-FS]", "dependencies": [{"path": "tests/fixtures/rendering_profiles/rheology-v1/raw", "kind": "directory"}], "evidence": "full_collection_static_transitive_source_review"},
-    {"nodeid": "tests/test_tensile_workbook_directory.py::test_real_curated_tensile_source_reaches_metric_gate_without_changing_data", "dependencies": [{"path": "tests/fixtures/rendering_profiles/mechanical-v1/raw", "kind": "directory"}], "evidence": "full_collection_static_transitive_source_review"}
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_preflight_binds_the_exact_plan",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_exact_dma_named_recipe_plan_reaches_only_the_bounded_seam",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch0-plan_conflict]",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch1-plan_conflict]",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch2-plan_conflict]",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch3-plan_conflict]",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch4-terminal_evidence_forged]",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_conflicts_fail_before_semantic_preparation[request_patch5-axis_visibility_conflict]",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_rejects_forged_task_before_writes",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_rejects_source_drift_before_writes",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_workflow_discards_staging_tree_on_named_recipe_conflict",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_rheology_dma_cannot_consume_an_unbounded_non_dma_plan",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_temperature_scientific_transform.py::test_real_dma_transform_preserves_units_points_empty_tails_and_negative",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_temperature_scientific_transform.py::test_dma_plan_parses_one_domain_snapshot_and_reuses_its_contract",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_temperature_scientific_transform.py::test_dma_preparation_materializes_the_same_resolved_contract",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_temperature_scientific_transform.py::test_resolved_dma_snapshot_materializes_without_a_second_parse",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_temperature_scientific_transform.py::test_dma_execution_facts_reuse_the_same_resolved_transform",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dma_temperature_scientific_transform.py::test_dma_execution_rejects_a_snapshot_from_another_source",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dsc_cycle_workflow.py::test_dsc_analysis_metrics_remain_algorithmic_without_transition_identity",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dtg_analysis.py::test_dtg_peak_temperature_tracks_the_fixture_maximum_response",
+      "dependencies": [
+        {
+          "rule_id": "dtg_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_dtg_analysis.py::test_xrd_peak_positions_track_each_fixture_maximum_intensity",
+      "dependencies": [
+        {
+          "rule_id": "xrd_pattern"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_generic_single_task_plan.py::test_dsc_rule_uses_the_shared_generic_studio_queue",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_generic_single_task_plan.py::test_stress_plan_uses_shared_bundle_and_generic_studio_queue",
+      "dependencies": [
+        {
+          "rule_id": "rheology_stress_relaxation"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_source_facts.py::test_real_mechanical_facts_preserve_every_observation_and_select_by_median[tensile_curve-E0 2MM-9-strength_MPa-values0-E0 2MM_9_1]",
+      "dependencies": [
+        {
+          "rule_id": "tensile_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_source_facts.py::test_real_mechanical_facts_preserve_every_observation_and_select_by_median[compression_curve-Conventional PU foam-6-compressive_strength_MPa-values1-repeat 3]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_source_facts.py::test_real_mechanical_facts_preserve_every_observation_and_select_by_median[flexural_curve-A_HA56-6-flexural_strength_MPa-values2-specimen 2]",
+      "dependencies": [
+        {
+          "rule_id": "flexural_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_source_facts.py::test_mechanical_preparation_is_attested_and_rejects_curve_mean_before_writes",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_source_facts.py::test_mechanical_individual_mode_materializes_every_explicit_curve",
+      "dependencies": [
+        {
+          "rule_id": "flexural_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_prebound_private_mechanical_queue_is_rejected[partial]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_prebound_private_mechanical_queue_is_rejected[all]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_mechanical_figure_set_rejects_a_non_internal_queue_shape[empty]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_mechanical_figure_set_rejects_a_non_internal_queue_shape[tuple]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_mechanical_figure_set_rejects_a_non_internal_queue_shape[non_mapping]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_mechanical_figure_set_rejects_a_non_internal_queue_shape[non_string_key]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_mechanical_figure_set_rejects_a_non_internal_queue_shape[empty_mapping]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_task_options.py::test_summary_tasks_keep_style_without_curve_axis_or_series_options",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_workflow_route.py::test_direct_mechanical_plan_uses_shared_semantic_preparation",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_plan_preview.py::test_plan_preview_activates_registered_real_tensile_plan",
+      "dependencies": [
+        {
+          "rule_id": "tensile_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_plan_preview.py::test_source_only_tensile_directory_uses_same_validated_scientific_plan",
+      "dependencies": [
+        {
+          "rule_id": "tensile_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_plan_preview.py::test_temperature_preview_keeps_plan_shape_without_fabricating_transform",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_single_member_directory_matches_file[dsc_curve]",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_single_member_directory_matches_file[tga_curve]",
+      "dependencies": [
+        {
+          "rule_id": "tga_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_single_member_directory_matches_file[dtg_curve]",
+      "dependencies": [
+        {
+          "rule_id": "dtg_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_single_member_directory_matches_file[uvvis_spectrum]",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_single_member_directory_matches_file[xrd_pattern]",
+      "dependencies": [
+        {
+          "rule_id": "xrd_pattern"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_directory_requires_exactly_one_supported_file[2]",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_reads_real_saxs_header_metadata_and_projects_log_y",
+      "dependencies": [
+        {
+          "rule_id": "saxs_profile"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_uvvis_response_identity_is_bound_to_source_evidence",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        },
+        {
+          "path": "tests/fixtures/real_world/uvvis_spectrum/source_provenance.json",
+          "kind": "file"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_xrd_output_identity_is_bound_to_the_official_si_axes",
+      "dependencies": [
+        {
+          "rule_id": "xrd_pattern"
+        },
+        {
+          "path": "tests/fixtures/real_world/xrd_pattern/source_provenance.json",
+          "kind": "file"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_transform_and_plan_share_one_source_snapshot[dsc_curve]",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_transform_and_plan_share_one_source_snapshot[tga_curve]",
+      "dependencies": [
+        {
+          "rule_id": "tga_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_transform_and_plan_share_one_source_snapshot[dtg_curve]",
+      "dependencies": [
+        {
+          "rule_id": "dtg_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_transform_and_plan_share_one_source_snapshot[uvvis_spectrum]",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_transform_and_plan_share_one_source_snapshot[xrd_pattern]",
+      "dependencies": [
+        {
+          "rule_id": "xrd_pattern"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[dsc_curve]",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[tga_curve]",
+      "dependencies": [
+        {
+          "rule_id": "tga_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[dtg_curve]",
+      "dependencies": [
+        {
+          "rule_id": "dtg_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[uvvis_spectrum]",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[xrd_pattern]",
+      "dependencies": [
+        {
+          "rule_id": "xrd_pattern"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[saxs_profile]",
+      "dependencies": [
+        {
+          "rule_id": "saxs_profile"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_uses_the_shared_plan_adapter[dma_frequency_sweep]",
+      "dependencies": [
+        {
+          "rule_id": "dma_frequency_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_dma_frequency_real_source_reuses_one_generic_single_curve_spine",
+      "dependencies": [
+        {
+          "rule_id": "dma_frequency_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_ftir_headerless_source_shares_one_neutral_snapshot_for_plan_and_prepare",
+      "dependencies": [
+        {
+          "rule_id": "ftir_spectrum"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_preparation_materializes_resolved_snapshot_once[dsc_curve]",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_preparation_materializes_resolved_snapshot_once[tga_curve]",
+      "dependencies": [
+        {
+          "rule_id": "tga_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_preparation_materializes_resolved_snapshot_once[dtg_curve]",
+      "dependencies": [
+        {
+          "rule_id": "dtg_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_preparation_materializes_resolved_snapshot_once[uvvis_spectrum]",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_preparation_materializes_resolved_snapshot_once[xrd_pattern]",
+      "dependencies": [
+        {
+          "rule_id": "xrd_pattern"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_saxs_plan_and_preparation_share_the_same_source_snapshot",
+      "dependencies": [
+        {
+          "rule_id": "saxs_profile"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_gpc_plan_and_preparation_share_source_identity_and_one_parse",
+      "dependencies": [
+        {
+          "rule_id": "gpc_sec_chromatogram"
+        },
+        {
+          "path": "tests/fixtures/real_world/gpc_sec_chromatogram/source_provenance.json",
+          "kind": "file",
+          "listed_sources": "source_files"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_dma_temperature_plan.py::test_dma_rule_and_registered_fixture_share_one_unit_contract",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        },
+        {
+          "path": "tests/fixtures/real_world/dma_temperature_sweep/source_provenance.json",
+          "kind": "file"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_dma_temperature_plan.py::test_real_dma_source_facts_preserve_every_point_and_negative_value",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_dma_temperature_plan.py::test_dma_plan_is_one_source_bound_v2_cartesian_task",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_dma_temperature_plan.py::test_dma_plan_rejects_non_point_line_template",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_dma_temperature_plan.py::test_dma_persisted_plan_is_stale_after_source_bytes_change",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_mechanical_figure_plan.py::test_real_mechanical_source_resolves_exact_ordered_v2_tasks[compression_curve]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_mechanical_figure_plan.py::test_real_mechanical_source_resolves_exact_ordered_v2_tasks[flexural_curve]",
+      "dependencies": [
+        {
+          "rule_id": "flexural_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_mechanical_figure_plan.py::test_real_mechanical_source_resolves_exact_ordered_v2_tasks[tensile_curve]",
+      "dependencies": [
+        {
+          "rule_id": "tensile_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_mechanical_figure_plan.py::test_individual_mode_changes_only_curve_series_identity",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_mechanical_figure_plan.py::test_mechanical_primary_template_cannot_override_summary_contract",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_temperature_figure_plan.py::test_default_temperature_plan_binds_exact_two_real_metric_tasks",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_temperature_figure_plan.py::test_temperature_plan_honors_one_explicit_complete_sample_order",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_temperature_figure_plan.py::test_temperature_domain_parses_once_and_plan_reuses_it",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_temperature_figure_plan.py::test_temperature_resolution_rejects_source_drift_during_load",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_resolved_temperature_figure_plan.py::test_temperature_plan_is_registered_in_global_resolution",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_saxs_source_contract.py::test_saxs_rule_matches_official_axes_and_source_headers",
+      "dependencies": [
+        {
+          "rule_id": "saxs_profile"
+        },
+        {
+          "path": "tests/fixtures/real_world/saxs_profile/source_provenance.json",
+          "kind": "file"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_saxs_source_contract.py::test_saxs_nonpositive_diagnostics_equal_each_source_y_column",
+      "dependencies": [
+        {
+          "rule_id": "saxs_profile"
+        },
+        {
+          "path": "tests/fixtures/real_world/saxs_profile/source_provenance.json",
+          "kind": "file"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_saxs_source_contract.py::test_saxs_probes_do_not_embed_real_samples_or_tail_count_bounds",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/real_world/saxs_profile/source_provenance.json",
+          "kind": "file"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_hashes_only_archive_for_paired_snapshot[tga_curve]",
+      "dependencies": [
+        {
+          "rule_id": "tga_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_hashes_only_archive_for_paired_snapshot[dsc_curve]",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_scientific_source_pipeline.py::test_studio_dsc_source_binding_uses_the_shared_source_tree_hash",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_without_snapshot_hashes_live_and_archive",
+      "dependencies": [
+        {
+          "rule_id": "tga_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_rejects_drifted_archive_for_paired_snapshot",
+      "dependencies": [
+        {
+          "rule_id": "tga_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_scientific_source_pipeline.py::test_rheology_temperature_snapshot_drives_plan_and_prepare_without_reparse",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_study_model_artifact_binding.py::test_uvvis_recommendation_uses_the_resolved_plan_task_identity",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_study_model_artifact_binding.py::test_registered_single_curve_plan_replaces_the_generic_study_queue",
+      "dependencies": [
+        {
+          "rule_id": "dma_frequency_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_swelling_single_snapshot.py::test_swelling_prepare_and_terminals_reuse_one_resolved_snapshot",
+      "dependencies": [
+        {
+          "rule_id": "swelling_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_task_mapping_plan.py::test_real_pda_mapping_preserves_selected_sample_measurements",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_real_temperature_task_sources_keep_default_four_sample_contract",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_bundle_requires_exact_figure_plan_before_materialization",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_bundle_rejects_source_binding_mismatch_before_renderer",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_task_sources_consume_preparation_attestation_without_rediscovery",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_raw_drift_after_prepare_fails_before_renderer[added]",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_raw_drift_after_prepare_fails_before_renderer[modified]",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_prepared_workbook_drift_fails_before_task_materialization",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_frequency_bundle_rejects_injected_private_binding_before_renderer",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_bundle_rejects_pdf_only_renderer_payload",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_temperature_bundle_second_renderer_failure_publishes_nothing",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_tga_scientific_transform.py::test_real_single_tga_metrics_keep_legacy_names_and_measured_values",
+      "dependencies": [
+        {
+          "rule_id": "tga_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_tga_scientific_transform.py::test_real_tga_transform_binds_source_columns_units_sample_and_points",
+      "dependencies": [
+        {
+          "rule_id": "tga_curve"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_tga_scientific_transform.py::test_registered_paired_curve_detects_xrd_units_and_preserves_each_grid",
+      "dependencies": [
+        {
+          "rule_id": "xrd_pattern"
+        }
+      ],
+      "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_postcommit_task_source_gc_failure_does_not_report_a_false_failure[enumeration]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_postcommit_task_source_gc_failure_does_not_report_a_false_failure[removal]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_mechanical_workflow_route.py::test_direct_compression_lifecycle_delivers_every_selected_task",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_real_temperature_terminal_workers_render_both_bound_metrics_directly",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_temperature_workflow_repair.py::test_real_temperature_bundle_publishes_exact_two_metric_workers",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_delivery_studio_lifecycle.py::test_dsc_public_delivery_continues_project_and_copied_package_exports_independently",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_dma_temperature_figure_plan_activation.py::test_dma_studio_activates_one_source_bound_task_and_spec",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_dma_temperature_figure_plan_activation.py::test_dma_workflow_delivers_the_same_completed_single_task",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_studio_activates_exact_single_task_registry",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_studio_publication_delivers_exact_single_figure",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_studio_render_failure_rolls_back_request_and_documents",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_workflow_delivers_the_same_completed_single_task_plan",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_workflow_render_failure_restores_existing_managed_output",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_dsc_figure_plan_activation.py::test_dsc_workflow_uses_its_bound_snapshot_after_render",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world/dsc_curve/digitization_provenance.json",
+          "kind": "file"
+        }
+      ],
+      "evidence": "test_source_inspection_and_observed_access"
+    },
+    {
+      "nodeid": "tests/test_mechanical_figure_plan_activation.py::test_tensile_studio_publishes_the_complete_source_bound_figure_plan",
+      "dependencies": [
+        {
+          "rule_id": "tensile_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_mechanical_figure_plan_activation.py::test_mechanical_workflow_delivers_exact_real_figure_plan[tensile_curve]",
+      "dependencies": [
+        {
+          "rule_id": "tensile_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_mechanical_figure_plan_activation.py::test_mechanical_workflow_delivers_exact_real_figure_plan[compression_curve]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_mechanical_figure_plan_activation.py::test_mechanical_workflow_delivers_exact_real_figure_plan[flexural_curve]",
+      "dependencies": [
+        {
+          "rule_id": "flexural_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_mechanical_figure_plan_activation.py::test_mechanical_studio_secondary_failure_rolls_back_the_whole_plan",
+      "dependencies": [
+        {
+          "rule_id": "tensile_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_temperature_figure_plan_activation.py::test_temperature_studio_activates_exact_two_task_plan_with_one_preparation",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_temperature_figure_plan_activation.py::test_temperature_studio_second_task_failure_rolls_back_both_documents",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_temperature_figure_plan_activation.py::test_temperature_studio_publication_delivers_two_complete_figure_members",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_temperature_figure_plan_activation.py::test_temperature_workflow_delivers_the_same_completed_two_task_plan",
+      "dependencies": [
+        {
+          "rule_id": "rheology_temperature_sweep"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_project_change_ui_native.py::test_real_dsc_source_update_from_native_qt_project_dock",
+      "dependencies": [
+        {
+          "rule_id": "dsc_curve"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_swelling_source_contract.py::test_real_swelling_fixture_matches_its_authorized_labeled_block_dynamically",
+      "dependencies": [
+        {
+          "rule_id": "swelling_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world/swelling_curve/source_provenance.json",
+          "kind": "file"
+        }
+      ],
+      "evidence": "test_source_inspection"
+    },
+    {
+      "nodeid": "tests/test_dma_named_recipe_plan_binding.py::test_dma_auto_and_named_recipe_have_identical_terminal_evidence",
+      "dependencies": [
+        {
+          "rule_id": "dma_temperature_sweep"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_mechanical_rendering_profile_native.py::test_long_category_native_painters_release_and_clipping_still_blocks",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_mechanical_rendering_profile_native.py::test_long_instrument_category_labels_remain_visible_in_fixed_production_frame",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_mechanical_rendering_profile_native.py::test_mechanical_delivery_three_way_golden_and_disposable_backend",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        },
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1/sources",
+          "kind": "directory"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_exact_current_mechanical_reuse_rejects_missing_ready_secondary_artifact[document]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_exact_current_mechanical_reuse_rejects_missing_ready_secondary_artifact[spec]",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_mechanical_studio_task_sources.py::test_exact_current_mechanical_studio_reuse_preserves_the_bound_figure_set",
+      "dependencies": [
+        {
+          "rule_id": "compression_curve"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_plan_identity.py::test_real_uvvis_cli_expected_plan_accepts_current_and_rejects_changed_source",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profile_mechanical.py::test_changed_raw_summary_or_native_golden_is_rejected[accepted.vsz]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        },
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1",
+          "kind": "directory"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profile_mechanical.py::test_changed_raw_summary_or_native_golden_is_rejected[raw/E0 2mm.xlsx]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        },
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1",
+          "kind": "directory"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profile_mechanical.py::test_changed_raw_summary_or_native_golden_is_rejected[sources/E0-summary.csv]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        },
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1",
+          "kind": "directory"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profile_mechanical.py::test_prepared_summary_preserves_historical_values_and_all_replicates",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1/manifest.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_arbitrary_equivalence_and_nontext_paths_rejected",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_equivalence_requires_zero_actual_pixel_differences",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_other_commands_glyphs_and_units_are_never_normalized[\\\\Omega (rad s\\u207b\\xb9)]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_other_commands_glyphs_and_units_are_never_normalized[\\\\unknown (rad s\\u207b\\xb9)]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_other_commands_glyphs_and_units_are_never_normalized[\\u03a9 (rad s\\u207b\\xb9)]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_other_commands_glyphs_and_units_are_never_normalized[\\u03c9 (rad s\\u207b\\xb2)]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rendering_profiles_text_equivalence.py::test_reviewed_spelling_is_equivalent_without_mutating_original",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rheology_family_profiles_native.py::test_historical_rheology_raw_points_and_native_edit_chain[gp]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rheology_family_profiles_native.py::test_historical_rheology_raw_points_and_native_edit_chain[gpp]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gpp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rheology_family_profiles_native.py::test_rheology_historical_golden_legacy_managed_rebuild[gp]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        },
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/raw",
+          "kind": "directory"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_rheology_family_profiles_native.py::test_rheology_historical_golden_legacy_managed_rebuild[gpp]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/manifest-gpp.json",
+          "kind": "file",
+          "listed_sources": "profile_files"
+        },
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/raw",
+          "kind": "directory"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_task_column_mapping_native.py::test_public_cli_column_choice_exports_real_pda_and_resumes_current_project",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_task_control.py::test_old_reduced_mechanical_source_reports_missing_metrics_not_rule_question",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1/raw",
+          "kind": "directory"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_task_control.py::test_original_research_directory_selects_production_without_ai_style_request[rheology-v1-rheology_frequency_sweep-FS]",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/rheology-v1/raw",
+          "kind": "directory"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    },
+    {
+      "nodeid": "tests/test_tensile_workbook_directory.py::test_real_curated_tensile_source_reaches_metric_gate_without_changing_data",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/rendering_profiles/mechanical-v1/raw",
+          "kind": "directory"
+        }
+      ],
+      "evidence": "full_collection_static_transitive_source_review"
+    }
   ]
 }

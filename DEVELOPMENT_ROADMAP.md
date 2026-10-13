@@ -51,8 +51,8 @@ with documentary-recovery labels; all 16 raw files and four source-tree hashes
 remain unchanged. Original JSON bytes, upstream originals and unregistered
 metadata were not invented or certified by this recovery.
 
-The full 3,832-node test collection and transitive fixture use were independently
-reviewed: 195 candidates resolve to 164 private cases and 31 synthetic branches.
+The full 3,840-node test collection and transitive fixture use were independently
+reviewed: 203 candidates resolve to 164 private cases and 39 synthetic branches.
 The preflight checks profile manifest members and all four allowed fixture roots.
 Its checked-in completeness flag remains false; a full local access receipt bound
 to the current collection, test/implementation bytes and inventory is required

@@ -42,6 +42,12 @@ original venv and golden files were not changed. Actual Qt module hashes, Arial
 file hashes and platform identity also match. Other platform or glyph-resource
 portability still requires its own evidence.
 
+For an interpreter outside the system Cellar, macOS protected shell entry points
+can clear inherited `DYLD_FRAMEWORK_PATH`. The isolated interpreter wrapper must
+restore its own framework path after entering the shell, before invoking the
+unchanged Python binary. Direct Python golden tests alone do not establish that
+the public CLI and MCP launchers can start; those paths were separately exercised.
+
 ## Observation boundary
 
 The managed render recipe records requested font configuration, but currently
