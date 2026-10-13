@@ -45,6 +45,17 @@ stable edit targets without the full template/schema payload. A subsequent
 `plot describe --scope edit --target-id ID --property NAME` returns that exact
 property's current value and edit contract. Omitting the scope keeps the full
 response; legacy imports keep their existing full open behavior.
+The managed summary also includes `rebuild_explanation`: observed changed input
+reasons, affected descendants from the saved dependency graph, and nodes not
+marked invalid by those observations (first 32 IDs plus the total count). That
+last list is not a verified future cache hit; `verified_reused_nodes` stays empty
+until execution validates reuse.
+The summary reads fingerprints and build receipts but does not run scientific
+transforms, native inspection, compilation, rendering or export. For a changed
+native artifact it defers inspection, retaining the explicit external-mutation
+resolution action; the full description retains its existing inspection behavior.
+An observed renderer-identity mismatch can be a rebuild trigger even while saved
+input status is current and the saved graph marks no node invalid.
 
 The same patch surface covers supported axis limits, legend placement/visibility
 and managed annotations. Template creation separates the format, theme and explicit
