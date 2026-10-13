@@ -95,12 +95,31 @@ Implemented on the local integration branch, not yet published or released:
   and a specifically qualified Qt screen-font match. The painter-used face,
   glyph fallback and resolved font-file bytes remain unobserved, so cross-host
   rendering portability is unestablished. Default inspection, cache/build
-  identities and scientific state remain unchanged; this environment cannot
-  execute the full native Qt path.
+  identities and scientific state remain unchanged. On one actual Linux Figure
+  VSZ, 34 saved Utopia requests matched Qt's screen preflight exactly and 10
+  Arial requests resolved to Liberation Sans instead; the default inspection
+  JSON and VSZ bytes were unchanged. This is not the native-painted font or
+  font-file identity, nor cross-host visual portability evidence.
 
-Verification still open: the current cloud sandbox lacks compiled vendored
-Veusz Qt helpers and denies AF_UNIX sockets, so native workflow/socket tests and
-their new measurements are unverified here. This minimal source checkout also
+The matched Linux PyQt6/Qt6 6.8.x validation worktree built the vendored Veusz
+helpers locally without committing binaries. It exposed a real FigureSpec v2
+publication-QA renderer lifetime bug: a per-instance render wrapper held a
+renderer/painter cycle until later garbage collection, and the first weakref
+repair then expired renderers used inline by Veusz. QA now keeps those instances
+alive only through synchronous painting and releases them in `finally`; a
+no-GC inline/repeated-render regression covers both failure modes. On the exact
+integrated commit, the direct Figure backend suite (4), Figure service source
+refresh (1), managed backend native cases (3), and managed-engine source/
+transform rebuild and external-script invalidation (2) pass. One direct export
+produced a one-page PDF and 1062×659 TIFF, with its TIFF hash unchanged by the
+QA lifetime fix. These 10 tests are targeted Linux native evidence, not a
+complete native, Mac or private-data acceptance.
+
+Verification still open: compiled Veusz helpers are present only in the
+isolated validation worktree, and the cloud sandbox denies AF_UNIX sockets, so
+socket-backed protocol tests and their new measurements are unverified here.
+The isolated direct-native selection above does not cover other workflows.
+This minimal source checkout also
 lacks the separate local original-data corpus referenced by some broad tests;
 resolve the public test-tier boundary or provision the authorized corpus before
 claiming a full source-only CI pass. No clean Mac, independent human or external
