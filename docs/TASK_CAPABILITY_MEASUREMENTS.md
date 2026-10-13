@@ -832,6 +832,16 @@ semantic recompilation are not established by the small fixture. The full report
 raw measurements and reproduction harness are in
 `.tmp_verify/document_migration_20261007/`.
 
+The transport-native regression now distinguishes actual CLI stdout
+UTF-8 bytes from compact JSON re-encodings of decoded MCP/RPC result objects.
+The latter are neither transport-frame nor actual client-visible byte counts;
+they cannot be compared directly with stdout. It retains three individual warm
+`plot.describe` RPC timings and requires identical decoded results across them.
+These local same-operation repeats do not estimate a before/after speedup, model
+tokens, billed cost, or user end-to-end latency. The report is written to
+`.tmp_verify/document_migration_20261007/transport_native_acceptance.json` when
+the native test runs successfully.
+
 
 ## 2026-10-07: semantic transactions with a persistent native worker
 

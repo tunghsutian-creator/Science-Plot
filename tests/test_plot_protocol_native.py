@@ -2,10 +2,10 @@
 
 import json
 import os
-from pathlib import Path
 import signal
 import subprocess
 import tempfile
+from pathlib import Path
 from time import perf_counter
 
 import anyio
@@ -18,6 +18,16 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.plot_protocol.client import _ping, call
 from sciplot_core.plot_protocol.paths import read_owner
+
+
+def _decoded_json_bytes(value):
+    """Measure a decoded result, not a transport frame or client-visible text."""
+    return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+
+
+@pytest.mark.focused
+def test_decoded_result_size_is_compact_utf8_not_an_envelope():
+    assert _decoded_json_bytes({"label": "α"}) == len('{"label":"α"}'.encode())
 
 
 @pytest.mark.comprehensive
@@ -35,9 +45,11 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
         def cli(label, arguments, *, success=True):
             started = perf_counter()
             process = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "plot", *arguments, "--json"],
-                                     env=environment, cwd=REPO_ROOT, capture_output=True, text=True, timeout=180)
+                                     env=environment, cwd=REPO_ROOT, capture_output=True, text=True, timeout=180,
+                                     check=False)
             measurements.append({"case": label, "seconds": round(perf_counter() - started, 6),
-                                 "response_bytes": len(process.stdout.encode()), "exit_code": process.returncode})
+                                 "cli_stdout_utf8_bytes": len(process.stdout.encode("utf-8")),
+                                 "exit_code": process.returncode})
             assert process.returncode == (0 if success else 1), process.stdout + process.stderr
             return json.loads(process.stdout)
 
@@ -75,7 +87,7 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
                     started = perf_counter()
                     result = await mcp.call_tool("sciplot_plot_patch", {"plot": str(plot), "request": request})
                     measurements.append({"case": "mcp_same_key_replay", "seconds": round(perf_counter() - started, 6),
-                        "response_bytes": len(json.dumps(result.structured_content).encode())})
+                        "decoded_result_compact_json_utf8_bytes": _decoded_json_bytes(result.structured_content)})
                     assert not result.is_error, result.content
                     return result.structured_content
 
@@ -83,11 +95,15 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
             assert replay["replayed"] is True and replay["revision"] == 1 and replay["ready_to_use"] is True
             assert {str(path): file_sha256(path) for path in plot.glob("revisions/*.json")} == before_replay
             assert _ping(socket, 3)["pid"] == engine_pid
-            for index in range(2):
+            warm_descriptions = []
+            for index in range(3):
                 started = perf_counter()
                 current = call("plot.describe", {"plot": str(plot)}, socket_path=socket)
-                measurements.append({"case": f"rpc_describe_{index + 1}", "seconds": round(perf_counter() - started, 6)})
+                measurements.append({"case": f"rpc_describe_{index + 1}", "seconds": round(perf_counter() - started, 6),
+                    "decoded_result_compact_json_utf8_bytes": _decoded_json_bytes(current)})
                 assert current["scientific_hash"] == scientific_hash and current["revision"] == 1
+                warm_descriptions.append(current)
+            assert warm_descriptions[1:] == warm_descriptions[:-1]
             unknown = tmp_path / "unclassified.csv"
             unknown.write_text("X,Y\nunit,unit\nE2,E2\n0,1\n1,2\n")
             unknown_request = tmp_path / "unknown.json"
@@ -111,7 +127,7 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
                       "unresolved_science_source_bound": True, "changed_source_answer": "rejected",
                       "question_trigger": "Missing explicit profile requires a source-bound rule choice.",
                       "measurements": measurements,
-                      "measurement_scope": "Local adapter calls; CLI includes interpreter startup, MCP excludes stdio initialization. No external AI latency measured."}
+                      "measurement_scope": "Local adapter observations only. CLI time includes interpreter startup and bytes are actual stdout. MCP time excludes stdio initialization; MCP and RPC byte counts are compact JSON re-encodings of decoded result objects, not wire bytes or client-visible text. The three warm RPC describe samples alone are same-operation repeats. External-client tokens, billed cost, and end-to-end latency are unknown."}
             output = REPO_ROOT / ".tmp_verify/document_migration_20261007/transport_native_acceptance.json"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(json.dumps(report, ensure_ascii=False, indent=2))
