@@ -1,5 +1,6 @@
 """Figure grammar edits use the existing revision transaction, never a second store."""
 
+from collections.abc import Iterator
 from copy import deepcopy
 from typing import Any
 
@@ -8,6 +9,75 @@ from sciplot_core.plot_ir.figure_document import figure_spec, store_spec
 from .errors import EngineError
 
 PROPERTIES = {"theme", "layout", "scale.domain", "axis.ticks", "axis.label", "style", "annotation.text"}
+_PROPERTY_NAMES = {
+    "figure": ("theme", "layout"), "scale": ("scale.domain",),
+    "view": ("style",), "axis": ("style", "axis.label", "axis.ticks"),
+    "layer": ("style",), "mark": ("style",), "legend": ("style",),
+    "annotation": ("style", "annotation.text"),
+}
+
+
+def _figure_targets(spec: dict[str, Any]) -> Iterator[tuple[str, str, str | None]]:
+    """Visit semantic IDs in the same order as the full edit contract."""
+    yield spec["id"], "figure", None
+    for scale in spec["scales"]:
+        yield scale["id"], "scale", None
+    for view in spec["views"]:
+        yield view["id"], "view", None
+        for axis in view["axes"]:
+            yield axis["id"], "axis", None
+        for layer in view["layers"]:
+            yield layer["id"], "layer", None
+            for mark in layer["marks"]:
+                yield mark["id"], "mark", mark["type"]
+    for guide in spec["guides"]:
+        yield guide["id"], "legend", None
+    for annotation in spec["annotations"]:
+        yield annotation["id"], "annotation", None
+
+
+def figure_property_names(spec: dict[str, Any]) -> dict[str, list[str]]:
+    """Advertise Figure edit properties without constructing their value schemas."""
+    return {target: list(_PROPERTY_NAMES[kind]) for target, kind, _ in _figure_targets(spec)}
+
+
+def _figure_edit_descriptor(kind: str, property_name: str, mark_type: str | None) -> dict[str, Any]:
+    """The shared descriptor owner for full and selective Figure reads."""
+    from sciplot_core.plot_grammar.schema import (
+        axis_schema,
+        figure_layout_schema,
+        scale_schema,
+    )
+    from sciplot_core.plot_grammar.styles import scope_schema, style_schema
+    from sciplot_core.plot_ir.figure_document import theme_schema
+
+    if property_name == "theme":
+        schema = theme_schema()
+    elif property_name == "layout":
+        schema = figure_layout_schema()
+    elif property_name == "scale.domain":
+        schema = scale_schema()["properties"]["domain"]
+    elif property_name in {"axis.label", "axis.ticks"}:
+        schema = axis_schema()["properties"][property_name.removeprefix("axis.")]
+    elif property_name == "annotation.text":
+        schema = {"type": "string", "minLength": 1, "maxLength": 500}
+    elif kind == "view":
+        schema = scope_schema()
+    elif kind == "layer":
+        schema = scope_schema(layer=True)
+    else:
+        schema = style_schema(mark_type if kind == "mark" and mark_type is not None else kind)
+    return {"value_schema": schema, "risk": "scientific" if property_name == "scale.domain" else "presentation"}
+
+
+def figure_edit_descriptor(spec: dict[str, Any], target: str, property_name: str) -> dict[str, Any]:
+    """Build one descriptor after the caller checks advertised target/property IDs."""
+    for candidate, kind, mark_type in _figure_targets(spec):
+        if candidate == target:
+            if property_name not in _PROPERTY_NAMES[kind]:
+                raise ValueError("The requested Figure property is not advertised for this target.")
+            return _figure_edit_descriptor(kind, property_name, mark_type)
+    raise ValueError("The requested Figure target does not exist.")
 
 
 def prepare_figure_update(document: dict[str, Any], request: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], str, bool]:
@@ -59,35 +129,8 @@ def prepare_figure_update(document: dict[str, Any], request: dict[str, Any]) -> 
 
 def patch_capabilities(spec: dict[str, Any]) -> dict[str, Any]:
     """Publish exact value schemas and stable target IDs for generic grammar edits."""
-    from sciplot_core.plot_grammar.schema import (
-        axis_schema,
-        figure_layout_schema,
-        scale_schema,
-    )
-    from sciplot_core.plot_grammar.styles import scope_schema, style_schema
-    from sciplot_core.plot_ir.figure_document import theme_schema
-
-    def descriptor(schema: dict[str, Any], risk: str = "presentation") -> dict[str, Any]:
-        return {"value_schema": schema, "risk": risk}
-
-    result = {spec["id"]: {"theme": descriptor(theme_schema()), "layout": descriptor(figure_layout_schema())}}
-    for scale in spec["scales"]:
-        result[scale["id"]] = {"scale.domain": descriptor(scale_schema()["properties"]["domain"], "scientific")}
-    for view in spec["views"]:
-        result[view["id"]] = {"style": descriptor(scope_schema())}
-        for axis in view["axes"]:
-            result[axis["id"]] = {"style": descriptor(style_schema("axis")),
-                **{"axis." + key: descriptor(axis_schema()["properties"][key]) for key in ("label", "ticks")}}
-        for layer in view["layers"]:
-            result[layer["id"]] = {"style": descriptor(scope_schema(layer=True))}
-            for mark in layer["marks"]:
-                result[mark["id"]] = {"style": descriptor(style_schema(mark["type"]))}
-    for guide in spec["guides"]:
-        result[guide["id"]] = {"style": descriptor(style_schema("legend"))}
-    for annotation in spec["annotations"]:
-        result[annotation["id"]] = {"style": descriptor(style_schema("annotation")),
-            "annotation.text": descriptor({"type": "string", "minLength": 1, "maxLength": 500})}
-    return result
+    return {target: {name: _figure_edit_descriptor(kind, name, mark_type) for name in _PROPERTY_NAMES[kind]}
+            for target, kind, mark_type in _figure_targets(spec)}
 
 
 def current_edit_value(spec: dict[str, Any], target: str, property_name: str) -> Any:

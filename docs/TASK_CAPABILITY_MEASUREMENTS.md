@@ -36,6 +36,62 @@ text content block, so they differ from the single JSON-RPC envelope bytes in
 Actual MCP framing, client tool filtering, model context, billed tokens,
 network latency, end-to-end time and human usability were not measured.
 
+### Scoped read assembly, same-day local probe
+
+In the same FigureSpec fixture, 50 warmed, in-process `PlotService.describe`
+calls (median wall time) measured 28.3 ms for full, 13.8 ms for summary,
+and 14.3 ms for one `scale.domain` edit at base commit `b8a6422`.
+After selective assembly, they measured 26.0, 9.05, and 9.00 ms. The
+JSON-RPC response envelopes remained 56,922, 2,243, and 1,438 UTF-8
+bytes respectively at the measured temporary path. Managed-v1 summary
+fell from 0.435 to 0.217 ms on its fixture. These are local process
+measurements, not model tokens, network latency, or user-visible end-to-end
+speed. Results will vary by machine and filesystem.
+
+The profile located two discarded work paths in scoped reads: all-target
+value-schema construction before projection, and dependency build-key
+construction before projection. The selective route now shares the full
+contract's target and descriptor owner, builds only the requested descriptor,
+and still validates the FigureSpec and calculates saved-graph invalidation.
+Native artifact inspection remains deferred for summary as before. At fixed
+fixture paths, the default full, summary, and selected edit JSON-RPC bytes
+matched the base commit exactly; the Managed-v1 and Legacy full/summary
+bytes matched too.
+
+The following block reproduces the current in-process probe using an
+installed SciPlot test venv (shown as `.venv`) and `PYTHONPATH` pointing to
+this checkout. To reproduce the baseline, run the same block at `b8a6422`
+on the same host and venv; compare bytes only at a fixed or equal-length
+temporary path, since absolute plot paths are included in the payload.
+
+```sh
+PYTHONPATH=src:tests .venv/bin/python - <<'PY'
+from pathlib import Path
+from statistics import median
+from tempfile import TemporaryDirectory
+from time import perf_counter_ns
+from pytest import MonkeyPatch
+from test_managed_description_scopes import _service, _wire_size
+
+with TemporaryDirectory() as directory:
+    patch = MonkeyPatch()
+    service, root, _ = _service(Path(directory), patch)
+    for name, description in (
+        ("full", None),
+        ("summary", {"scope": "summary"}),
+        ("edit", {"scope": "edit", "target": "scale:x", "property": "scale.domain"}),
+    ):
+        result = service.describe(root, description=description)
+        samples = []
+        for _ in range(50):
+            start = perf_counter_ns()
+            service.describe(root, description=description)
+            samples.append((perf_counter_ns() - start) / 1_000_000)
+        print(name, round(median(samples), 3), "ms", _wire_size(result), "bytes")
+    patch.undo()
+PY
+```
+
 
 ## 2026-10-07 — bounded protocol failures and local recovery
 

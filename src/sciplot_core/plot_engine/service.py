@@ -130,7 +130,9 @@ class PlotService:
                 "plot": str(root), "plot_id": document["plot_id"], "revision": document["revision"],
                 "scientific_hash": document["scientific_hash"], "presentation_hash": document["presentation_hash"],
                 "objects": document["presentation"]["objects"], "coverage": document["coverage"],
-                "changed_inputs": changed, "dependencies": dependency_state(document, binding, changed),
+                "changed_inputs": changed, "dependencies": ({}
+                    if description is not None and document.get("plot_type") == "ManagedPlot"
+                    else dependency_state(document, binding, changed)),
                 "pending": ({"idempotency_key": pending["request"]["idempotency_key"], "phase": pending["phase"]}
                             if pending and pending["phase"] not in {"complete", "rejected"} else None),
                 "document": str(root / "revisions" / f'{document["revision"]:08d}.json')}
