@@ -36,26 +36,46 @@ real-data creation, native reopen/edit/export, artifact QA and physical-size
 checks. The 137 independently declared private cases pass. The complete focused
 tier also passes. These claims are distinct from the unfiltered release gate.
 
-The immutable historical golden gate remains blocked by environment drift:
-Python/binary and package identities differ from its original recorded
-environment. Current accepted mechanical and both rheology profiles retain
-matching structure and exact raster pixels (zero changed pixels); the strict
-environment assertion still fails. Four golden test nodes remain non-green.
-Do not rewrite golden inputs, loosen environment checks, or call the full suite
-passed. Reproduce the pinned environment or separately review a new versioned
-environment acceptance before closing this release gate.
+The initial historical golden environment drift is recoverable and resolved in
+an isolated Mac environment. The official fixed Python 3.14.7 Tahoe bottle,
+ordinary Homebrew relocation/signing and four existing older packages reproduce
+all six recorded identities. All four unchanged strict golden nodes pass,
+including accepted native capture, legacy replay and Managed rebuild. The system
+Python, original venv, golden files and scientific inputs were not rewritten.
+See `docs/FONT_PORTABILITY.md` for the exact identities and official artifact.
 
-Private source evidence formally verifies 20/24 fixture hashes. Four rule groups
-still lack their original source_provenance.json, although their 16 data files
-match the locally recorded README hashes. The 137-node dependency inventory is
-still preliminary; its preflight intentionally reports BLOCKED. Complete the
-remaining parameter and transitive-source mapping before claiming a complete
-private-corpus gate. Public CI retains the full tiers and cannot substitute for
-this private evidence; no private data is uploaded to make it green.
+Private fixture hashes now formally verify 24/24. Four missing records were
+restored only from the retained README's explicit authorization, exact-copy and
+file-hash fields. These records remain outside the scientific source directories,
+with documentary-recovery labels; all 16 raw files and four source-tree hashes
+remain unchanged. Original JSON bytes, upstream originals and unregistered
+metadata were not invented or certified by this recovery.
+
+The full 3,832-node test collection and transitive fixture use were independently
+reviewed: 195 candidates resolve to 164 private cases and 31 synthetic branches.
+The preflight checks profile manifest members and all four allowed fixture roots.
+Its checked-in completeness flag remains false; a full local access receipt bound
+to the current collection, test/implementation bytes and inventory is required
+before computed completeness can become true. A subset or stale receipt cannot
+close this gate. Python file access and static native fixture dependencies have
+separate recorded scopes. Public CI cannot substitute for local private evidence;
+no private data is uploaded to make it green.
+
+Independent Mac visual review found automatic axes reserved a circle radius for
+diamond/triangle markers, leaving temperature endpoint corners clipped. The
+existing physical-extent owner now uses the actual native path and stroke bounds.
+Circle behavior, raw measurements, explicit scientific domains and existing VSZ
+files are preserved. Explicit insufficient bounds still fail closed. Synthetic
+controls fail the old implementation and pass the repair; independent native
+geometry probes cover all 63 supported shape/size/stroke combinations.
 
 All three 24-rule contact sheets and a delivered 300 dpi Figure TIFF were
-inspected for visible clipping, overlap and legibility. This is agent inspection
-of an uncalibrated display, not independent human or journal acceptance. Mac
+inspected for visible clipping, overlap and legibility. The independent reviewer
+also inspected 41 native TIFFs and 41 PDF pages. Formal preview decisions must
+bind to regenerated outputs after the marker repair. This remains agent inspection
+of an uncalibrated display, not independent human or journal acceptance. The
+synthetic Figure example's explicitly bounded endpoint markers retain Veusz's
+plot-domain clipping behavior; it is not claimed to be free of all clipping. Mac
 record-painter text matches Arial and the example PDF embeds ArialMT; exact
 selected font-file/glyph identities and portability remain incomplete. No real
 client per-request usage/billing interface is available, so input/output/cache

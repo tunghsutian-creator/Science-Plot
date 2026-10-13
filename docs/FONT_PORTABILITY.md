@@ -12,15 +12,17 @@ an embedded Type0 ArialMT font resource. Saved native settings also produced
 Record-device observations and PDF resource names do not prove the system file
 used for every glyph. Resolved whole-font-file and fallback-glyph identities
 remain unobserved. Historical mechanical and both rheology accepted-profile
-captures have matching structure and zero changed raster pixels, but their
-strict environment assertions reject changed Python/binary and package
-identities. Their immutable baselines were retained. This is bounded Mac
-evidence, not established cross-environment font portability.
+captures have matching structure and zero changed raster pixels. Their strict
+environment assertions initially rejected the changed Python/binary and package
+identities below. An isolated environment subsequently reproduced all six
+recorded identities and passed all four unchanged golden test nodes, including
+legacy replay and Managed rebuild. Their immutable baselines were retained.
+This is bounded Mac evidence, not established cross-environment font portability.
 
 The measured environment differences are limited to these fields; platform,
 requested Arial font-file hashes, Qt module hashes and raster pixels match.
 
-| Field | Recorded golden | Current Mac verification |
+| Field | Recorded golden | Initial current Mac verification |
 | --- | --- | --- |
 | `python` | 3.14.7 | 3.14.8 |
 | `python_binary_sha256` | `87d4df53fd91304be5bac391fb204643c36b7df2023c04a0953bcbc7d4fdf634` | `1b5cb11d163e5ba34e2a05fc533c0ed89574d4425f9749a9d89405f651980e0d` |
@@ -28,6 +30,17 @@ requested Arial font-file hashes, Qt module hashes and raster pixels match.
 | `packages/PyMuPDF` | 1.27.2.3 | 1.28.2 |
 | `packages/PyQt6-Qt6` | 6.11.1 | 6.11.2 |
 | `packages/PyQt6-sip` | 13.11.1 | 13.13.0 |
+
+The isolated recovery uses the official Homebrew Python 3.14.7 arm64 Tahoe
+bottle from [the fixed formula revision](https://github.com/Homebrew/homebrew-core/blob/84625c34e39e59cfe3ee17f1c0f562628ef4e88b/Formula/p/python@3.14.rb),
+archive SHA256 `9747ec7c458569bb6c03e5b9e1f5fcb7552f4955794b8164e21d70e6b2839e08`.
+Homebrew's ordinary prefix relocation and ad-hoc signing reproduce the exact
+recorded launcher hash. Python.app, framework and standard library load from
+the task copy; the four older packages remain available in the original local
+environment and were copied into an independent venv. The system installation,
+original venv and golden files were not changed. Actual Qt module hashes, Arial
+file hashes and platform identity also match. Other platform or glyph-resource
+portability still requires its own evidence.
 
 ## Observation boundary
 
