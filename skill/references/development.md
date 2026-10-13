@@ -25,6 +25,23 @@ Runtime readiness, native fidelity, real-client efficiency, human usability and
 journal acceptance are separate claims. Read the advanced guide's test-tier
 section only when the exact commands or owner boundary need clarification.
 
+For local-only scientific fixture diagnostics in a source checkout, run
+`PYTHONPATH=src:tests .venv/bin/python -m sciplot_core.verification.private_corpus --json`.
+The preflight itself does not write fixture data. It uses the existing rule
+fixture locations and checks each declared collected pytest parameter
+independently. It checks the current pytest collection and returns nonzero
+`BLOCKED` with exact relative fixture
+paths when inputs are absent, malformed, unsafe, or unmapped. The checked-in
+node dependency inventory is preliminary; even when all its declared inputs
+exist, the tool remains `BLOCKED` until the inventory is audited as complete.
+It does not run test bodies, deselect collected cases, inspect scientific
+values, or establish private-corpus acceptance. Doctor's optional fixture
+check remains separate from this developer preflight and is not an ordinary-use
+prerequisite. The inventory is source-checkout-only and is not packaged in the
+installed wheel; invoking the module from a wheel reports `BLOCKED` with a
+source-checkout hint.
+Pytest collection imports test modules and may execute their collection hooks.
+
 For every non-trivial development turn, update `DEVELOPMENT_LOG.md` with the
 change, current state, next steps and verification before reporting.
 
