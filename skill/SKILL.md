@@ -42,10 +42,10 @@ it is not another prerequisite for ordinary work.
   response cannot explain the failure. Local preview timeout recovery is bounded.
 - Batch the complete authorized change. Let the local transaction own source,
   native document, scientific audit, QA and publication validation.
-- For saved ordinary figures, prefer the persistent semantic `plot` API described
-  in the saved-figure route. Reuse its plot ID/revision, batch supported edits in
-  one patch and let the engine perform safe review, commit and export locally.
-  `task style` delegates already-imported figures to this same engine.
+- For a known ManagedPlot, start with a compact summary, then read only the
+  chosen edit contract or plan an exact text intent. Reuse its plot ID/revision
+  and batch other edits in one patch. For unknown or LegacyPlot authority, open
+  full; never convert legacy state for this route. `task style` uses this engine.
 - Use `task create` for ordinary raw-data plotting and legacy `task style` for explicit
   sample width/color changes. These entries construct requests and bind current
   state locally; do not precede them with schema/context discovery or JSON files.

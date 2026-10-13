@@ -32,19 +32,22 @@ Once the data and intent are clear, one local task carries the figure through to
 export. If samples, units, or worksheet choices are ambiguous, SciPlot asks for
 clarification before proceeding.
 
-Saved ordinary figures also support a persistent semantic editing engine. Open a
-project once with `sciplot plot open TARGET --json`, then send `plot.patch` using
-the returned plot ID, revision and stable series IDs. A safe width/color/title
+Saved ordinary figures also support a persistent semantic editing engine. For a
+previously identified ManagedPlot, start with `sciplot plot open TARGET --scope
+summary --json`; it returns currentness, revision and stable edit targets without
+the full template/schema payload. Request the chosen target/property's current
+value, exact schema and risk with `plot describe --scope edit --target-id ID
+--property NAME`, then send `plot.patch` with the returned plot ID and revision.
+For an exact FigureSpec v2 axis label or annotation text, `plot.intent` can plan
+the literal edit and then apply it through that same patch transaction. A safe width/color/title
 visibility edit validates, commits and exports in one transaction; the program
 owns native paths and recovery. Repeating its idempotency key resumes the same
 work. Structural changes return a bound preview when needed. CLI and MCP share
 this engine; existing projects retain their native VSZ and explicit partial-import
 coverage. See the [saved-figure route](skill/references/saved-figure-edit.md).
-Managed plots can open with `--scope summary` to read identity, currentness and
-stable edit targets without the full template/schema payload. A subsequent
-`plot describe --scope edit --target-id ID --property NAME` returns that exact
-property's current value and edit contract. Omitting the scope keeps the full
-response; legacy imports keep their existing full open behavior.
+When authority is unknown or the figure is a LegacyPlot, omit the scope for the
+unchanged full open. Reuse that response; legacy imports retain their full open
+behavior and native coverage, with no automatic conversion to ManagedPlot.
 The managed summary also includes `rebuild_explanation`: observed changed input
 reasons, affected descendants from the saved dependency graph, and nodes not
 marked invalid by those observations (first 32 IDs plus the total count). That

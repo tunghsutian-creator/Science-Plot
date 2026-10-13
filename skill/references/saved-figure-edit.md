@@ -7,29 +7,46 @@ architecture, development-log or test reading.
 
 ## Preferred: one semantic transaction
 
-Use `sciplot_project_open` once for an existing project/delivery/registered VSZ, or
-`skill/scripts/sciplot plot open TARGET --json`. Reuse the returned `plot`, stable
-object IDs and `revision` in the session. Do not query native paths or hashes.
+Choose the first read from authority already established for this figure:
 
-For a known ManagedPlot, an optional compact first read is
-`plot open TARGET --scope summary --json` (MCP `sciplot_project_open` with
-`description: {"scope":"summary"}`). It returns the plot identity, revision,
-hashes, currentness/authority warnings and stable `edit_targets` IDs with their
-kind, label and property names. Once the intended pair is known, request its current value and
-exact value schema with `plot describe PLOT --scope edit --target-id ID --property
-NAME --json` (MCP `sciplot_plot_describe` with
-`description: {"scope":"edit","target":"ID","property":"NAME"}`). Scale
-domains and axis ticks also include their scientific unit/scale context; a scale
-domain's returned risk is scientific. Use the current revision and the returned
-contract when constructing the existing `plot.patch` request; never guess an
-unadvertised property. Omit `--scope`/`description` for the unchanged full read.
-LegacyPlot keeps its full open response, and scoped edit is unavailable there.
+- **Known ManagedPlot:** call `skill/scripts/sciplot plot open TARGET --scope
+  summary --json`, or `sciplot_project_open` with `{"target":"/absolute/target",
+  "description":{"scope":"summary"}}`. This returns `plot`, `plot_id`,
+  `revision`, hashes, currentness/authority warnings and `edit_targets` with
+  stable IDs, kind, label and advertised property names, without the full
+  template and schema payload. Reuse it for the current session.
+- **Unknown authority or known LegacyPlot:** call `plot open TARGET --json`, or
+  `sciplot_project_open` without `description`, once. Inspect `plot_type` and
+  `coverage`. Reuse that full result even if it reveals a ManagedPlot; do not
+  immediately read it again as a summary. A LegacyPlot stays under its full
+  description and explicit `legacy_shadow` coverage; scoped edit and typed
+  intent are unavailable. Do not convert it merely to use the compact route.
 
-For a ManagedPlot FigureSpec v2 axis label or annotation text, the optional
-[`plot.intent` text-edit route](../../docs/plot_typed_intent.md) accepts a literal
-replacement and an exact stable ID or uniquely matched current label. Its
-read-only plan shows risk and unit/anchor context; explicit apply compiles to the
-same semantic patch transaction below. Other edits continue to use `plot.patch`.
+Before a new edit, check `status`, `changed_inputs`, `artifact_status`,
+`pending` and `next_step` in the current result. Follow a stale, dirty, changed
+native, or pending continuation first; neither a compact read nor an
+`intent_class` bypasses those guards. Do not query native paths or hashes just
+to repeat current evidence.
+
+For a current ManagedPlot summary, select an exact ID/property from
+`edit_targets`. For edits except the FigureSpec v2 text shortcut below, read
+the chosen current value and schema with `skill/scripts/sciplot plot describe PLOT --scope
+edit --target-id ID --property NAME --json`, or `sciplot_plot_describe` with
+`{"plot":"/absolute/plot","description":{"scope":"edit","target":"ID",
+"property":"NAME"}}`. Scale domains and axis ticks include scientific
+unit/scale context; `scale.domain` has scientific risk. Use the returned
+contract and revision for the existing `plot.patch`; never guess a property,
+target ID, value type or scientific meaning. Request full `plot describe`
+only when the compact result lacks information needed for the authorized edit.
+If the first open was full, use its returned object values and edit contract
+instead of requesting the same information again.
+
+For an exact ManagedPlot FigureSpec v2 `axis.label` or `annotation.text` change,
+use the [typed `plot.intent` route](../../docs/plot_typed_intent.md) after the
+current summary or full description. Its read-only plan supplies the current text, risk, unit/anchor context
+and the exact patch request; a separate scoped edit read is unnecessary. Apply
+with the same identity/revision/key after reviewing the plan. This compiles to
+the same semantic patch transaction below, not a new editing authority.
 
 Send `sciplot_plot_patch` with `plot` and this request, substituting the returned
 plot identity, current revision and exact authorized targets:

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
-
+from tempfile import TemporaryDirectory
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_GUIDANCE = (
@@ -138,3 +139,110 @@ def test_self_use_edit_guidance_keeps_deferred_readiness_and_full_evidence():
     assert "compact stdout is a summary, not an apply file" in guide
     assert "set_sample_style" in guide and "figures[].sample_styles" in guide
     assert "ambiguous labels are rejected" in guide
+
+
+def test_saved_figure_ai_entry_chooses_compact_only_for_known_managed_plots() -> None:
+    skill = _normalized(REPO_ROOT / "skill/SKILL.md")
+    route = _normalized(REPO_ROOT / "skill/references/saved-figure-edit.md")
+    readme = _normalized(REPO_ROOT / "README.md")
+    intent = _normalized(REPO_ROOT / "docs/plot_typed_intent.md")
+
+    assert "For a known ManagedPlot, start with a compact summary" in skill
+    assert "For unknown or LegacyPlot authority, open full" in skill
+    assert "Known ManagedPlot:" in route and "Unknown authority or known LegacyPlot:" in route
+    assert "plot open TARGET --scope summary --json" in route
+    assert '"description":{"scope":"summary"}' in route
+    assert "plot describe PLOT --scope edit --target-id ID --property NAME --json" in route
+    assert '"description":{"scope":"edit","target":"ID", "property":"NAME"}' in route
+    assert "status`, `changed_inputs`, `artifact_status`, `pending` and `next_step" in route
+    assert "A LegacyPlot stays under its full description" in route
+    assert "a separate scoped edit read is unnecessary" in route
+    assert "When authority is unknown or the figure is a LegacyPlot" in readme
+    assert "do not read it again solely to get the summary" in intent
+    assert "do not guess among duplicates" in intent
+
+
+def test_saved_figure_examples_match_public_cli_and_request_contract(tmp_path, monkeypatch, capsys) -> None:
+    from jsonschema import Draft202012Validator
+
+    from sciplot_core import cli
+    from sciplot_core.cli.dispatch import plots as plot_dispatch
+    from sciplot_core.mcp_server.schemas import tool_definitions
+    from sciplot_core.mcp_server.server import INSTRUCTIONS
+    from sciplot_core.plot_document.schema import patch_schema
+    from sciplot_core.plot_engine.typed_intent import intent_schema
+
+    route = _read(REPO_ROOT / "skill/references/saved-figure-edit.md")
+    intent = _read(REPO_ROOT / "docs/plot_typed_intent.md")
+    patch_example = json.loads(re.search(r"```json\n(.*?)\n```", route, re.DOTALL).group(1))
+    intent_example = json.loads(re.search(r"```json\n(.*?)\n```", intent, re.DOTALL).group(1))
+    Draft202012Validator(patch_schema()).validate(patch_example)
+    Draft202012Validator(intent_schema()).validate(intent_example)
+
+    forwarded = []
+    monkeypatch.setattr(plot_dispatch, "call", lambda method, params, **_: forwarded.append((method, params)) or {"status": "ready"})
+    request_path = tmp_path / "intent.json"
+    request_path.write_text(json.dumps(intent_example), encoding="utf-8")
+    target = str(tmp_path.resolve())
+    assert cli.main(["plot", "open", target, "--scope", "summary", "--json", "--direct"]) == 0
+    assert cli.main(["plot", "describe", target, "--scope", "edit", "--target-id", "axis:xb",
+                     "--property", "axis.label", "--json", "--direct"]) == 0
+    assert cli.main(["plot", "intent", target, "--request", str(request_path), "--json", "--direct"]) == 0
+    capsys.readouterr()
+    assert forwarded == [
+        ("project.open", {"target": target, "description": {"scope": "summary"}}),
+        ("plot.describe", {"plot": target, "description": {"scope": "edit", "target": "axis:xb",
+                                                              "property": "axis.label"}}),
+        ("plot.intent", {"plot": target, "request": intent_example}),
+    ]
+    tools = {tool.name: tool for tool in tool_definitions()}
+    assert "scope summary" in INSTRUCTIONS and "unknown or LegacyPlot" in INSTRUCTIONS
+    assert "known ManagedPlot" in tools["sciplot_project_open"].description
+    assert "scope edit" in tools["sciplot_plot_describe"].description
+    assert "Not for LegacyPlot" in tools["sciplot_plot_intent"].description
+
+
+def test_saved_figure_mcp_entry_byte_measurement(tmp_path, monkeypatch) -> None:
+    """Print reproducible fixture transport bytes with -s; these are not tokens."""
+    from test_managed_description_scopes import _service
+
+    from sciplot_core.mcp_server import server
+    from sciplot_core.mcp_server.schemas import tool_definitions
+
+    def encoded_bytes(value) -> int:
+        return len(json.dumps(value, ensure_ascii=False, allow_nan=False,
+                              separators=(",", ":")).encode("utf-8"))
+
+    tool_items = [item.model_dump(mode="json", by_alias=True, exclude_none=True)
+                  for item in tool_definitions()]
+    edit_names = {"sciplot_project_open", "sciplot_plot_describe",
+                  "sciplot_plot_patch", "sciplot_plot_intent"}
+    counts = {
+        "tool_count": len(tool_items),
+        "all_tool_definitions_array_bytes": encoded_bytes(tool_items),
+        "four_edit_tool_definitions_array_bytes": encoded_bytes(
+            [item for item in tool_items if item["name"] in edit_names]),
+        "server_instructions_utf8_bytes": len(server.INSTRUCTIONS.encode("utf-8")),
+    }
+    with TemporaryDirectory() as directory:
+        service, root, _ = _service(Path(directory), monkeypatch)
+        cases = {
+            "full_open": ("sciplot_project_open", {"target": str(root)}, service.open(root)),
+            "managed_summary": ("sciplot_project_open", {"target": str(root),
+                                "description": {"scope": "summary"}},
+                                service.open(root, description={"scope": "summary"})),
+            "axis_label_edit": ("sciplot_plot_describe", {"plot": str(root), "description": {
+                "scope": "edit", "target": "axis:xb", "property": "axis.label"}},
+                service.describe(root, description={"scope": "edit", "target": "axis:xb",
+                                                    "property": "axis.label"})),
+        }
+        for label, (name, arguments, payload) in cases.items():
+            monkeypatch.setattr(server, "invoke_owner", lambda *_args, result=payload: result)
+            result = server.Adapter()._execute(name, arguments)
+            counts[label + "_mcp_call_result_bytes"] = encoded_bytes(
+                result.model_dump(mode="json", by_alias=True, exclude_none=True))
+    counts["summary_plus_edit_mcp_call_result_bytes"] = (
+        counts["managed_summary_mcp_call_result_bytes"] +
+        counts["axis_label_edit_mcp_call_result_bytes"])
+    assert counts["summary_plus_edit_mcp_call_result_bytes"] < counts["full_open_mcp_call_result_bytes"]
+    print(json.dumps(counts, indent=2, sort_keys=True))
