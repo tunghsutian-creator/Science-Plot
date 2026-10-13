@@ -3,7 +3,6 @@
 from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
-
 PLOT_TEST_PATHS = (
     "tests/test_family_style_overrides.py",
     "tests/test_rendering_profiles_helpers.py",
@@ -22,6 +21,7 @@ PLOT_TEST_PATHS = (
     "tests/test_plot_ir.py",
     "tests/test_plot_transforms.py",
     "tests/test_managed_sources.py",
+    "tests/test_managed_description_scopes.py",
     "tests/test_managed_backend.py",
     "tests/test_managed_backend_native.py",
     "tests/test_managed_engine_native.py",

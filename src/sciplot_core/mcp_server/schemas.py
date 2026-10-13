@@ -16,12 +16,22 @@ def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, 
 
 
 def tool_definitions() -> list[Tool]:
-    from sciplot_core.task_control import task_request_schema, task_response_schema
-    from sciplot_core.task_choice_schema import table_region_schema
-    from sciplot_core.task_group_contract import group_request_schema, group_responses_schema
-    from sciplot_core.task_comparison_contract import comparison_request_schema, comparison_selection_schema
     from sciplot_core.plot_document.schema import patch_schema
-    from sciplot_core.plot_engine.contracts import create_schema, rollback_schema, decide_schema
+    from sciplot_core.plot_engine.contracts import (
+        create_schema,
+        decide_schema,
+        rollback_schema,
+    )
+    from sciplot_core.task_choice_schema import table_region_schema
+    from sciplot_core.task_comparison_contract import (
+        comparison_request_schema,
+        comparison_selection_schema,
+    )
+    from sciplot_core.task_control import task_request_schema, task_response_schema
+    from sciplot_core.task_group_contract import (
+        group_request_schema,
+        group_responses_schema,
+    )
 
     string = {"type": "string", "minLength": 1}
     sha = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
@@ -46,11 +56,16 @@ def tool_definitions() -> list[Tool]:
         ))
 
     semantic_path = {**string, "pattern": "^/"}
+    description = {"oneOf": [
+        object_schema({"scope": {"const": "summary"}}, ["scope"]),
+        object_schema({"scope": {"const": "edit"}, "target": string, "property": string},
+                      ["scope", "target", "property"]),
+    ], "description": "Optional ManagedPlot projection. Omit for the unchanged full response. Edit requires an exact stable target ID and property from a summary."}
     semantic_plot = {"plot": {**semantic_path, "description": "Stable absolute local plot document directory returned by project_open or plot_create."}}
     add("project_open", "Open one existing saved figure as a persistent semantic document. Returns stable object IDs, exact revision, current capabilities and legacy coverage. Does not overwrite the native figure.",
-        {"target": semantic_path, "figure_id": string}, ["target"], idempotent=True)
+        {"target": semantic_path, "figure_id": string, "description": description}, ["target"], idempotent=True)
     add("plot_describe", "Read current semantic objects, scientific and presentation hashes, dependency status and the next decision. Reuses the durable document without rebuilding scientific data.",
-        semantic_plot, ["plot"], read_only=True)
+        {**semantic_plot, "description": description}, ["plot"], read_only=True)
     add("plot_create", "Create a source-bound semantic plot from an exact source and explicit optional rule/template/profile. Keep idempotency_key unchanged when retrying; unresolved scientific choices return a decision.",
         {"request": create_schema()}, ["request"], idempotent=True, destructive=True)
     add("plot_patch", "Apply one atomic semantic change batch to exact stable object IDs and base_revision. Local engine classifies risk, checks scientific invariants and compiles/exports. Reuse the identical idempotency_key after a lost reply; never swap data bindings through a presentation patch.",

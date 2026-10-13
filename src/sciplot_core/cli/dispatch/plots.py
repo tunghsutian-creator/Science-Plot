@@ -37,6 +37,9 @@ def dispatch_plot(args: Any) -> int | None:
             params["figure_id"] = args.figure_id
     elif action != "create":
         params["plot"] = str(args.plot.expanduser().resolve())
+    if action in {"open", "describe"} and any(value is not None for value in (args.scope, args.target_id, args.property)):
+        params["description"] = {key: value for key, value in
+            (("scope", args.scope), ("target", args.target_id), ("property", args.property)) if value is not None}
     if action in {"create", "patch", "rollback", "decide"}:
         params["request"] = _request(args.request)
         if action == "create":

@@ -7,9 +7,23 @@ architecture, development-log or test reading.
 
 ## Preferred: one semantic transaction
 
-Use `sciplot_plot_open` once for an existing project/delivery/registered VSZ, or
+Use `sciplot_project_open` once for an existing project/delivery/registered VSZ, or
 `skill/scripts/sciplot plot open TARGET --json`. Reuse the returned `plot`, stable
 object IDs and `revision` in the session. Do not query native paths or hashes.
+
+For a known ManagedPlot, an optional compact first read is
+`plot open TARGET --scope summary --json` (MCP `sciplot_project_open` with
+`description: {"scope":"summary"}`). It returns the plot identity, revision,
+hashes, currentness/authority warnings and stable `edit_targets` IDs with their
+kind, label and property names. Once the intended pair is known, request its current value and
+exact value schema with `plot describe PLOT --scope edit --target-id ID --property
+NAME --json` (MCP `sciplot_plot_describe` with
+`description: {"scope":"edit","target":"ID","property":"NAME"}`). Scale
+domains and axis ticks also include their scientific unit/scale context; a scale
+domain's returned risk is scientific. Use the current revision and the returned
+contract when constructing the existing `plot.patch` request; never guess an
+unadvertised property. Omit `--scope`/`description` for the unchanged full read.
+LegacyPlot keeps its full open response, and scoped edit is unavailable there.
 
 Send `sciplot_plot_patch` with `plot` and this request, substituting the returned
 plot identity, current revision and exact authorized targets:

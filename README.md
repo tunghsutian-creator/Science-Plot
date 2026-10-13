@@ -40,6 +40,11 @@ owns native paths and recovery. Repeating its idempotency key resumes the same
 work. Structural changes return a bound preview when needed. CLI and MCP share
 this engine; existing projects retain their native VSZ and explicit partial-import
 coverage. See the [saved-figure route](skill/references/saved-figure-edit.md).
+Managed plots can open with `--scope summary` to read identity, currentness and
+stable edit targets without the full template/schema payload. A subsequent
+`plot describe --scope edit --target-id ID --property NAME` returns that exact
+property's current value and edit contract. Omitting the scope keeps the full
+response; legacy imports keep their existing full open behavior.
 
 The same patch surface covers supported axis limits, legend placement/visibility
 and managed annotations. Template creation separates the format, theme and explicit

@@ -14,6 +14,10 @@ def register_plot_commands(subparsers: Any) -> None:
             action.add_argument("--figure", dest="figure_id")
         elif name != "create":
             action.add_argument("plot", type=Path)
+        if name in {"open", "describe"}:
+            action.add_argument("--scope", choices=("summary", "edit"), help="Optional compact ManagedPlot description.")
+            action.add_argument("--target-id", help="Stable semantic target ID for --scope edit.")
+            action.add_argument("--property", help="Property name for --scope edit.")
         if name in {"create", "patch", "rollback", "decide"}:
             action.add_argument("--request", type=Path, required=True)
         action.add_argument("--json", action="store_true")

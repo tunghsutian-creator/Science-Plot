@@ -59,7 +59,11 @@ def prepare_figure_update(document: dict[str, Any], request: dict[str, Any]) -> 
 
 def patch_capabilities(spec: dict[str, Any]) -> dict[str, Any]:
     """Publish exact value schemas and stable target IDs for generic grammar edits."""
-    from sciplot_core.plot_grammar.schema import figure_layout_schema, scale_schema, axis_schema
+    from sciplot_core.plot_grammar.schema import (
+        axis_schema,
+        figure_layout_schema,
+        scale_schema,
+    )
     from sciplot_core.plot_grammar.styles import scope_schema, style_schema
     from sciplot_core.plot_ir.figure_document import theme_schema
 
@@ -84,3 +88,18 @@ def patch_capabilities(spec: dict[str, Any]) -> dict[str, Any]:
         result[annotation["id"]] = {"style": descriptor(style_schema("annotation")),
             "annotation.text": descriptor({"type": "string", "minLength": 1, "maxLength": 500})}
     return result
+
+
+def current_edit_value(spec: dict[str, Any], target: str, property_name: str) -> Any:
+    """Read the exact represented value corresponding to a figure patch capability."""
+    field = {"theme": "theme", "layout": "layout", "scale.domain": "domain",
+             "axis.label": "label", "axis.ticks": "ticks", "style": "style",
+             "annotation.text": "text"}[property_name]
+    objects = [spec, *spec["scales"]]
+    for view in spec["views"]:
+        objects.extend([view, *view["axes"]])
+        for layer in view["layers"]:
+            objects.extend([layer, *layer["marks"]])
+    objects.extend(spec["guides"])
+    objects.extend(spec["annotations"])
+    return deepcopy(next(item for item in objects if item["id"] == target)[field])
