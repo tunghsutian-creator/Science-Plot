@@ -35,6 +35,10 @@ Implemented on the local integration branch, not yet published or released:
   recorded separately from the full tool-definition payload, which response
   scoping does not remove; it is not external-client token, cost or end-to-end
   latency evidence.
+- The official MCP stdio client discovery/error-recovery regression now checks
+  the 33 currently advertised tools, including `sciplot_plot_intent`, and
+  passes locally. Its former 32-tool expectation was stale; this check does
+  not exercise native preview/export or an independent AI client.
 - An opt-in `plot.intent` route now resolves only Managed FigureSpec v2 axis
   labels and annotation text from an exact stable ID or unique current label.
   Its plan shows the literal before/after value and unit or anchor context;
@@ -42,6 +46,23 @@ Implemented on the local integration branch, not yet published or released:
   patch transaction. Ambiguous labels fail closed. An axis-label regression
   checks unchanged scientific state; native preview/export is not yet verified
   in this cloud runner.
+- In-process, real-journal fault-injection regressions now check typed-intent
+  candidate-write and head-commit interruption, replay, source/native drift,
+  stale or historical delivery guards, and equivalent stable-ID/label replay.
+  No unsafe replay was reproduced, so this adds no journal protocol or native
+  behavior change. Additional scoped-read regressions check malformed direct
+  Python selectors before import writes, duplicate display labels with exact
+  stable-ID/scientific context, and simultaneous source/native drift without
+  starting native inspection or mutating the source. These tests do not replace
+  native worker or socket acceptance. An aggregate changed-path audit also
+  found and fixed the missing fail-closed owner mapping for the saved rebuild
+  explanation regression.
+- A new plot edit competing with a pending transaction now returns a read-only
+  `plot.describe(scope=summary)` repair with the observed pending phase/key,
+  rather than suggesting that the caller replay a different request. Stale
+  typed revision/identity errors also point to the compact current read.
+  Real-journal and CLI/RPC/MCP adapter regressions cover the structured repair;
+  the transaction, revision and apply paths are unchanged.
 - Managed summary reads now explain observed changed inputs and affected saved
   dependency nodes. They leave future cache reuse, native scientific audit and
   export inventory unverified. A changed-native summary defers native
@@ -49,11 +70,27 @@ Implemented on the local integration branch, not yet published or released:
   original full description still follows its prior inspection path. This is
   an explanation of current evidence, not a second scheduler or a guaranteed
   future execution plan.
+- Scoped Managed reads now assemble only advertised property names or the one
+  selected Figure descriptor, and skip dependency build keys discarded by the
+  compact response. They retain changed-input, pending, authority and saved
+  graph invalidation guards; fixture JSON-RPC responses match the prior bytes.
+  A reproducible 50-call local in-process probe in the task measurement note
+  observed shorter summary/edit wall times. This is not a model-token,
+  external-client latency or cache-reuse claim.
 - The local Doctor now distinguishes missing or unloadable vendored Qt helpers,
   optional source-build tools, unavailable AF_UNIX transport and the separate
   optional private acceptance corpus. It diagnoses this cloud runner's blockers;
   it does not provision dependencies, create substitute data or skip failed
   tests. The ordinary runtime does not require the private corpus.
+- A source-checkout-only, stand-alone private-corpus preflight now checks 116
+  explicitly inventoried collected test/parameter IDs against their declared
+  local fixture structure. Unknown IDs, absent/wrong-type/empty paths, unsafe
+  links, stale collection and incomplete inventory return `BLOCKED` and a
+  nonzero exit. This preliminary inventory starts from the saved 111 first
+  blockers plus five source-inspected comprehensive cases; it is explicitly
+  nonexhaustive and does not establish scientific identity or acceptance. No
+  pytest markers, CI selection, test skips, ordinary runtime or release gate
+  were changed.
 - An opt-in native-document font preflight records saved requested settings
   and a specifically qualified Qt screen-font match. The painter-used face,
   glyph fallback and resolved font-file bytes remain unobserved, so cross-host
@@ -79,21 +116,23 @@ was classified as a product failure. This inventory comes from a pre-final
 commit, not a current-HEAD full-suite pass; blocked cases may expose further
 assertions after prerequisites are met.
 
-Proposed P0 verification repair, **not implemented**: `focused` and
+Proposed P0 validation-tier repair, **not implemented**: `focused` and
 `comprehensive` remain runtime-depth tiers. An explicit private-corpus
 requirement would be an orthogonal marker at individual test or parameter-case
 granularity, not a blanket module exclusion; mixed public/synthetic and
 private-source cases already occur in one test module. Start with the 111 saved
-first blockers, then review the complete fixture dependency inventory before
-marking anything. A public source-checkout regression may exclude only reviewed
-private cases **after** an authorized private runner is operating; a green
+first blockers and the preliminary 116-case preflight inventory, then review
+the complete fixture dependency inventory before marking anything. A public
+source-checkout regression may exclude only reviewed private cases **after**
+an authorized private runner is operating; a green
 public subset is not scientific acceptance. Public CI must still run its full
 public `focused` and `comprehensive` native-backed gates; this is not a Qt
 bypass. On the same commit, the authorized Mac/private/native run must execute
 the full unfiltered suite, with independent
 human acceptance tracked separately. Its missing-corpus preflight must exit
 nonzero with a clear BLOCKED result, never silently skip or replace data. The
-current Doctor's optional fixture-existence check is not that full preflight.
+current Doctor's optional fixture-existence check and the new, explicitly
+incomplete stand-alone preflight are not a full private acceptance gate.
 When implementing, make `verify --changed` show private evidence as pending
 rather than falsely green; coordinate changed-owner selection, smoke and other
 acceptance outside pytest, the advanced guide, and the release `full_pytest`
@@ -122,6 +161,16 @@ owners rather than another grammar, cache or renderer:
    manager](https://matplotlib.org/stable/api/font_manager_api.html) illustrates
    why a family name alone is not portability evidence. Exit only after
    cross-environment visual and resource-identity checks.
+4. MCP discovery optimization is a deferred measurement question. A local
+   official-stdio client re-encoding of `tools/list` with this SDK/code yielded
+   33 tools and 138,628 UTF-8 bytes including result metadata; the eight
+   largest separately encoded tool definitions totalled 119,083 bytes.
+   Neither figure measures imported client context, tokens, cache, billed cost
+   or latency. First gather independent client traces and, where a host actually
+   supports them, evaluate [client-side filtering or deferred tool loading](https://developers.openai.com/api/docs/guides/tools-connectors-mcp).
+   Consider an opt-in scoped server profile only if those traces justify it;
+   keep the current full schema/validation path available. No discovery
+   profile is implemented in this round.
 
 ## Semantic document migration after the verified presentation slice
 
