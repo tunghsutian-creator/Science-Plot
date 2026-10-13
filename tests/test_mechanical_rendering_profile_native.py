@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -19,6 +21,82 @@ from sciplot_core.studio_core.document_edit_state import run_document_worker
 
 
 _FIXTURE = Path(__file__).parent / "fixtures/rendering_profiles/mechanical-v1"
+
+
+@pytest.mark.comprehensive
+def test_long_category_native_painters_release_and_clipping_still_blocks(tmp_path):
+    from sciplot_core.veusz_runtime import veusz_worker_environment
+
+    profile = load_profile(_FIXTURE / "manifest.json")
+    spec = json.loads(profile.files["legacy_spec"].read_text())
+    labels = ["E0 2MM", "6-66 2 ADR", "E3 2MM", "E4 2MM"]
+    spec["axes"]["x"]["category_labels"] = labels
+    for label, group, series in zip(labels, spec["categorical"]["groups"], spec["series"], strict=True):
+        group["label"] = series["label"] = label
+    spec_path = tmp_path / "long-labels.json"
+    spec_path.write_text(json.dumps(spec))
+    script = r'''
+import gc
+import json
+import sys
+from pathlib import Path
+from weakref import ref
+from sciplot_core.studio_core.runtime import _ensure_veusz_on_path
+_ensure_veusz_on_path()
+from PyQt6 import QtWidgets
+from veusz import document, utils
+from sciplot_core.studio_core.veusz_axis_apply import validate_category_display
+from sciplot_core.studio_core.veusz_save import save_veusz_document_from_spec
+
+app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+spec_path, output = map(Path, sys.argv[1:])
+spec = json.loads(spec_path.read_text())
+original = utils.Renderer
+renderer_refs = []
+def tracked(*args, **kwargs):
+    renderer = original(*args, **kwargs)
+    renderer_refs.append(ref(renderer))
+    return renderer
+utils.Renderer = tracked
+was_enabled = gc.isenabled()
+gc.disable()
+try:
+    for index in range(3):
+        native = output / f'long-{index}.vsz'
+        save_veusz_document_from_spec(native, spec, spec_path=spec_path)
+        assert native.is_file() and renderer_refs
+        assert all(renderer_ref() is None for renderer_ref in renderer_refs)
+        loaded = document.Document()
+        loaded.load(str(native))
+        display = list(loaded.data['category_axis_display_labels'].data)
+        validate_category_display(loaded, display, spec['axes']['x']['label'], spec['size_mm'])
+        assert all(renderer_ref() is None for renderer_ref in renderer_refs)
+        for expected, size, message in [(display, [1,1], 'exceeds the fixed page'),
+                                        (display[:-1], spec['size_mm'], 'suppressed text')]:
+            try:
+                validate_category_display(loaded, expected, spec['axes']['x']['label'], size)
+            except ValueError as exc:
+                assert message in str(exc), str(exc)
+            else:
+                raise AssertionError('Native invalid category layout was accepted')
+            assert all(renderer_ref() is None for renderer_ref in renderer_refs)
+    print(json.dumps({'status':'passed', 'native_repetitions':3,
+        'cycle_gc_disabled':True, 'native_renderer_count':len(renderer_refs),
+        'all_native_renderers_released':True, 'clipping_rejections':3,
+        'missing_text_rejections':3}))
+finally:
+    utils.Renderer = original
+    if was_enabled:
+        gc.enable()
+'''
+    process = subprocess.run([sys.executable, "-c", script, str(spec_path), str(tmp_path)],
+                             env=veusz_worker_environment(), capture_output=True, text=True, check=False, timeout=120)
+    assert process.returncode == 0, process.stdout + process.stderr
+    evidence = json.loads(process.stdout)
+    assert evidence["native_repetitions"] == 3 and evidence["all_native_renderers_released"]
+    assert evidence["clipping_rejections"] == evidence["missing_text_rejections"] == 3
+    (tmp_path / "category-painter-lifetime.json").write_text(json.dumps(evidence, indent=2) + "\n")
+    assert load_profile(_FIXTURE / "manifest.json").manifest == profile.manifest
 
 
 @pytest.mark.comprehensive

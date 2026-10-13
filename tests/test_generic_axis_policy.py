@@ -11,6 +11,80 @@ from sciplot_core.studio_render.models import StudioSeries
 _OBSERVED_X = (3.5, 10.0, 41.0)
 
 
+@pytest.mark.parametrize("failure", [None, "paint", "clipped", "missing"])
+def test_category_validation_releases_renderers_without_cycle_gc(monkeypatch, failure) -> None:
+    import gc
+    import sys
+    from types import ModuleType, SimpleNamespace
+    from weakref import ref
+
+    from sciplot_core.studio_core.veusz_axis_apply import validate_category_display
+
+    renderer_refs = []
+
+    class PaintFailed(Exception):
+        pass
+
+    class Renderer:
+        def __init__(self, painter, *_args, **_kwargs):
+            self.painter = painter
+            renderer_refs.append(ref(self))
+
+        def render(self):
+            assert self.painter.widget.path == "/page1/graph1/x"
+            return "painted"
+
+        def getBounds(self):
+            return (10, 20, 1000 if failure == "clipped" else 30, 40)
+
+    utils = SimpleNamespace(Renderer=Renderer)
+
+    class PaintHelper:
+        def __init__(self, _document, _page_size, *, dpi):
+            assert dpi == (150, 150)
+
+    class Document:
+        def pageSize(self, _page, *, dpi, integer):
+            assert dpi == (150, 150) and integer is False
+            return (100, 100)
+
+        def paintTo(self, helper, _page):
+            painter = SimpleNamespace(widget=SimpleNamespace(path="/page1/graph1/x"), helper=helper)
+            renderer = utils.Renderer(painter, None, 0, 0, "Label")
+            assert renderer.render() == "painted"
+            assert renderer.render() == "painted"
+            del renderer
+            if failure != "missing":
+                # The renderer must remain alive when its instance method is
+                # retrieved and called as an inline temporary by Veusz.
+                assert utils.Renderer(painter, None, 0, 0, "Inline").render() == "painted"
+            if failure == "paint":
+                raise PaintFailed
+
+    veusz = ModuleType("veusz")
+    veusz.document = SimpleNamespace(PaintHelper=PaintHelper)
+    veusz.utils = utils
+    monkeypatch.setitem(sys.modules, "veusz", veusz)
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        if failure == "paint":
+            with pytest.raises(PaintFailed):
+                validate_category_display(Document(), ["Label", "Label", "Inline"], "", [60, 55])
+        elif failure in {"clipped", "missing"}:
+            message = "exceeds the fixed page" if failure == "clipped" else "suppressed text"
+            with pytest.raises(ValueError, match=message):
+                validate_category_display(Document(), ["Label", "Label", "Inline"], "", [60, 55])
+        else:
+            validate_category_display(Document(), ["Label", "Label", "Inline"], "", [60, 55])
+        assert utils.Renderer is Renderer
+        assert len(renderer_refs) == (1 if failure == "missing" else 2)
+        assert all(renderer_ref() is None for renderer_ref in renderer_refs)
+    finally:
+        if was_enabled:
+            gc.enable()
+
+
 def test_category_wrapping_uses_native_width_preserving_names_and_frame(monkeypatch) -> None:
     import sciplot_core.studio_core.veusz_axis_apply as axis_apply
 

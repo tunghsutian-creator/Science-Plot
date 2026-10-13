@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from weakref import ref
 from sciplot_core.studio_render.categorical_values import (
     _veusz_axis_label,
 )
@@ -72,16 +73,24 @@ def validate_category_display(document: Any, display: list[str], axis_label: str
 
     expected = Counter([*display, *([_veusz_axis_label(axis_label)] if axis_label else [])])
     original, observed = utils.Renderer, []
+    live_renderers: list[Any] = []
 
     def factory(*args: Any, **kwargs: Any) -> Any:
         renderer = original(*args, **kwargs)
-        render = renderer.render
+        # Inline Renderer(...).render() calls need temporary strong ownership
+        # through painting; the instance override itself must not form a cycle.
+        live_renderers.append(renderer)
+        renderer_ref = ref(renderer)
+        render = type(renderer).render
         widget = getattr(args[0], "widget", None)
 
         def measured() -> Any:
-            result = render()
+            live_renderer = renderer_ref()
+            if live_renderer is None:
+                raise RuntimeError("The native category renderer expired before measurement.")
+            result = render(live_renderer)
             if getattr(widget, "path", "") == "/page1/graph1/x":
-                observed.append((str(args[4]), [float(value) * 25.4 / 150 for value in renderer.getBounds()]))
+                observed.append((str(args[4]), [float(value) * 25.4 / 150 for value in live_renderer.getBounds()]))
             return result
 
         renderer.render = measured
@@ -93,6 +102,9 @@ def validate_category_display(document: Any, display: list[str], axis_label: str
         document.paintTo(helper, 0)
     finally:
         utils.Renderer = original
+        # Release painters while their PaintHelper-owned devices are still live,
+        # including when painting raises. Do not defer native teardown to GC.
+        live_renderers.clear()
     if Counter(text for text, _bounds in observed) != expected:
         raise ValueError("Category label layout suppressed text; the complete original category set must remain visible.")
     if any(left < -.30 or top < -.30 or right > size_mm[0] + .30 or bottom > size_mm[1] + .30
