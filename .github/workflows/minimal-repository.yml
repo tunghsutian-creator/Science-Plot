@@ -145,7 +145,28 @@ jobs:
         # Original generated observer negatives genuinely disable Python hooks.
         # Execute every public comprehensive node in a bound source-only stage;
         # raw/golden private namespaces remain outside its input closure.
-        run: python3 -m sciplot_core.verification.public_stage --profile public-comprehensive --out .tmp_verify/ci_public_comprehensive
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Stream the original generated-only log while preserving the stage's
+          # exit status and its complete source/runtime/selected-body checks.
+          (
+            until [[ -f .tmp_verify/ci_public_comprehensive/command.log ]]; do
+              sleep 1
+            done
+            exec tail -n +1 --follow=name --retry .tmp_verify/ci_public_comprehensive/command.log
+          ) &
+          progress_pid=$!
+          trap 'kill "$progress_pid" 2>/dev/null || true; wait "$progress_pid" 2>/dev/null || true' EXIT
+          stage_status=0
+          python3 -m sciplot_core.verification.public_stage --profile public-comprehensive --out .tmp_verify/ci_public_comprehensive || stage_status=$?
+          kill "$progress_pid" 2>/dev/null || true
+          wait "$progress_pid" 2>/dev/null || true
+          trap - EXIT
+          if [[ "$stage_status" -ne 0 && -f .tmp_verify/ci_public_comprehensive/command.log ]]; then
+            tail -n 120 .tmp_verify/ci_public_comprehensive/command.log
+          fi
+          exit "$stage_status"
       - name: Verify source-checkout wrapper bootstrap
         run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
       - name: Run readiness check

@@ -231,7 +231,7 @@ def run_public_stage(root: Path, output: Path, profile: str) -> dict[str, Any]:
         raise ValueError("Controlled public profiles reject PYTEST_ADDOPTS filters/options.")
     stage, child_environment, before = create_stage(root, output, environment)
     finish = output / "finish.json"
-    command = [sys.executable, "-m", "pytest", "-q", "-p", "sciplot_core.verification.pytest_finish",
+    command = [sys.executable, "-m", "pytest", "-vv", "-p", "sciplot_core.verification.pytest_finish",
                "-p", "sciplot_core.verification.public_stage", "--input-scope", profile]
     child_environment["SCIPLOT_VERIFY_FINISH"] = str(finish)
     child_environment["SCIPLOT_PUBLIC_STAGE_REPORT"] = str(output / "reports.json")
