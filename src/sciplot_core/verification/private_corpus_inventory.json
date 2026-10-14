@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4595,
-    "nodeids_sha256": "0c84142bf7a60435fc5f62ed929ef1eba91ad51273fbb1c901a2670fd0ea0523",
-    "test_sources_sha256": "b158f65c7ac4fec52c5b1d9efecbd982466f60a9a8b5719a76d3615ed85cb3ed",
+    "nodeid_count": 4598,
+    "nodeids_sha256": "35421f522e1147856f8513f30add57e6f3a8731b889d26f368ae99e79f98d585",
+    "test_sources_sha256": "d3e700b484684aeed05ab8dcb094fd41ae6919779f67e46a49f740c0aaaf07f2",
     "test_source_count": 328,
     "candidate_nodeids": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
