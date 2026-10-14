@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 
 import pytest
@@ -15,6 +16,7 @@ from sciplot_core.verification.evidence_identity import (
     PUBLIC_GOLDEN_REASON, PUBLIC_INPUT_POLICY, PUBLIC_RAW_REASON,
     capture_identity, digest, identity_valid,
 )
+from sciplot_core.verification.public_input_guard import configure_environment
 from test_verification_evidence_scope import checkout as _checkout, git, identity, passed
 
 checkout = _checkout
@@ -194,6 +196,93 @@ def test_private_fixture_members_do_not_enter_public_namespace_binding(public_ch
     private.mkdir()
     (private / "unreadable.csv").symlink_to(public_checkout / "missing-private-target")
     assert identity(spec) == before
+
+
+def runtime_with_current_import_roots(root, monkeypatch):
+    original = scope.runtime_inputs
+
+    def actual_shaped_roots(**kwargs):
+        paths, host = original(**kwargs)
+        paths["dependencies"].extend([root / "src", root / "tests"])
+        return paths, host
+
+    monkeypatch.setattr(scope, "runtime_inputs", actual_shaped_roots)
+
+
+def test_actual_guard_capture_keeps_public_config_and_removes_only_covered_import_roots(public_checkout, monkeypatch):
+    root = public_checkout
+    runtime_with_current_import_roots(root, monkeypatch)
+    private = root / "tests/fixtures/rendering_profiles/README.md"
+    private.write_text("Generated private sentinel; never a public identity input.\n")
+    (root / "tests/test_unit.py").write_text('def test_ok(): assert "README.md"\n')
+    git(root, "add", str(private))
+    spec = public_spec(root)
+    assert str(private) not in spec["inputs"]["config"]["paths"]
+    assert str(root / "README.md") in spec["inputs"]["config"]["paths"]
+    assert not {str(root / "src"), str(root / "tests")} & set(spec["inputs"]["dependencies"]["paths"])
+    request = root / ".tmp_verify/capture/request.json"
+    request.parent.mkdir(parents=True)
+    request.write_text(json.dumps({key: value for key, value in spec.items() if key != "environment"}))
+    source = Path(__file__).resolve().parents[1]
+    environment = configure_environment(root, dict(os.environ), bootstrap=source / "src/sciplot_core/verification/public_guard_bootstrap")
+    code = """
+import json,os,sys
+from pathlib import Path
+from sciplot_core.verification.durable_runner import _capture
+from sciplot_core.verification.evidence_identity import identity_valid
+spec=json.loads(Path(sys.argv[1]).read_text())
+assert identity_valid(_capture(spec,dict(os.environ)))
+try:
+    Path(sys.argv[2]).read_bytes()
+except PermissionError:
+    print('CAPTURED WITH GUARD ACTIVE')
+else:
+    raise AssertionError('private sentinel became readable')
+"""
+    result = subprocess.run([sys.executable, "-c", code, str(request), str(private)],
+                            cwd=source, env=environment, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "CAPTURED WITH GUARD ACTIVE"
+
+
+@pytest.mark.parametrize("drift", ("implementation", "external", "alias"))
+def test_covered_import_filter_keeps_implementation_external_bytes_and_aliases(public_checkout, monkeypatch, drift):
+    root = public_checkout
+    runtime_with_current_import_roots(root, monkeypatch)
+    original = scope.runtime_inputs
+    external = root / "runtime/external"
+    external.mkdir()
+    (external / "module.py").write_text("VALUE = 1\n")
+    alias = root / "runtime/external-alias"
+    alias.symlink_to(external, target_is_directory=True)
+
+    def with_external(**kwargs):
+        paths, host = original(**kwargs)
+        paths["dependencies"].extend([external, alias])
+        return paths, host
+
+    monkeypatch.setattr(scope, "runtime_inputs", with_external)
+    spec = public_spec(root)
+    assert {str(external), str(alias)} <= set(spec["inputs"]["dependencies"]["paths"])
+    before = identity(spec)
+    if drift == "alias":
+        replacement = root / "runtime/same-bytes"
+        replacement.mkdir()
+        (replacement / "module.py").write_bytes((external / "module.py").read_bytes())
+        alias.unlink()
+        alias.symlink_to(replacement, target_is_directory=True)
+        with pytest.raises(ValueError, match="discovery"):
+            identity(spec)
+    else:
+        target = root / "src/sciplot_core/implementation.py" if drift == "implementation" else external / "module.py"
+        target.write_text("VALUE = 2\n")
+        if drift == "implementation":
+            with pytest.raises(ValueError, match="discovery inputs"):
+                identity(spec)
+        else:
+            after = identity(spec)
+            receipt = passed(before)
+            assert check_reuse(receipt, after, artifacts=receipt["artifacts"])["status"] == "BLOCKED"
 
 
 @pytest.mark.parametrize("domain", ("python", "inventory", "corpus_policy"))

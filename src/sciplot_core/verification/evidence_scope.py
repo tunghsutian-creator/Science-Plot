@@ -241,6 +241,9 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
         public_tests, public_layout = public_test_members(root)
         public_fixtures = [path for path in public_tests if path.is_relative_to(root / "tests/fixtures")]
         paths["tests"] = public_tests
+        private = [root / "tests/fixtures" / name for name in
+                   ("real_world", "rendering_profiles", "polymer_corpus", "archived_output_raw_data")]
+        paths["config"] = [path for path in paths["config"] if not any(path.is_relative_to(base) for base in private)]
         paths.update(raw=public_fixtures, golden=[],
                      corpus_policy=[inventory, manifest_path, Path(__file__).resolve()], inventory=[inventory, manifest_path])
         reviewed_sources["input_scope"] = check["check_id"].removeprefix("pytest_")
@@ -264,6 +267,11 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
                      corpus_policy=[inventory, Path(__file__).resolve()], inventory=[inventory])
     runtime, host = runtime_inputs(repo_root=root, environment=environment)
     paths.update(runtime)
+    if public_profile:
+        # These exact import roots are already sealed by implementation bytes
+        # and the public test namespace; retaining tests here re-enters private
+        # fixtures. Preserve every other root, including aliases and subroots.
+        paths["dependencies"] = [path for path in paths["dependencies"] if path not in {root / "src", root / "tests"}]
     if module == "git":
         git = shutil.which("git", path=environment.get("PATH"))
         if not git:
