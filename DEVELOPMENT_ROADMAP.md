@@ -1,7 +1,42 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-13. External AI is the task interface. Current behavior belongs
+Status: 2026-10-14. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
+
+## 2026-10-14 development feedback implementation
+
+The separate feedback branch continues the verified Mac `6934322` snapshot;
+the original checkout/main and private scientific inputs remain preserved.
+Committed/staged/unstaged/untracked scope now uses an explicit base and resolved
+HEAD. Owner selection removes only redundant module/class descendant selectors;
+empty work reports `NO_TESTS`, while unknown owners fail closed.
+
+Thirty real-native TTS cases move from focused to comprehensive without removing
+any historical full-suite nodes. The typed-intent leaf has a narrow owner;
+shared backend changes retain broad coverage. Quick smoke runs one actual native
+creation/export/QA/delivery path and lists deferred coverage. Full remains the
+default final milestone; their timings describe different coverage.
+
+Opt-in per-check receipts bind selected bodies/completion and freshly resolved
+code, dependencies, native libraries, fonts, data, golden fixtures and membership.
+Drift in index/document inputs, aliases or newly discovered members blocks reuse.
+Detached verification preserves one original execution through transport loss;
+status reads never manufacture a retry or a pass. Hashing a broad environment
+can cost more than rerunning a cheap leaf. Declared corpus closure remains
+separate from fresh private-access and scientific acceptance evidence.
+
+Existing owners expose shared table, numeric-evidence, source-coverage and text
+validation ports; Doctor checks public lifecycle call contracts and reports
+static availability separately from runtime verification. The 24 sealed legacy
+algorithm entries and mapping-v1 inspection path remain intact. Forty-one unused
+facade aliases and two same-owner leaf files are retired; supported worker/Qt
+ports, the persisted transform reference and the documented TGA wrapper remain.
+
+The final integrated snapshot still requires one unfiltered full run with a
+fresh private-access receipt, full smoke, all 24 ready rules, visual review,
+normal branch push and exact-commit CI inspection. Independent human review,
+second-Mac/font portability and real-client token/fee telemetry remain external
+evidence limits; no byte count is treated as token usage.
 
 ## 2026-10-13 Mac verification and remaining gates
 

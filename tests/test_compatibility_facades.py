@@ -52,9 +52,10 @@ def test_openai_free_text_reuses_typed_provider_contract_with_same_limits() -> N
     import pytest
 
     from sciplot_core.assistant_provider.text_validation import _free_text as typed_free_text
+    from sciplot_core.assistant_provider.text_validation import free_text
     from sciplot_core.openai_provider.validation import _free_text as model_free_text
 
-    assert model_free_text is typed_free_text
+    assert model_free_text is typed_free_text is free_text
     assert model_free_text("  ", "rationale", maximum=0) == ""
     assert model_free_text("  done  ", "rationale", maximum=4) == "done"
     with pytest.raises(ValueError, match="^rationale must be a string.$"):

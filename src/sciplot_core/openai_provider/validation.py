@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import ipaddress
 
-from sciplot_core.assistant_provider.text_validation import _free_text as _free_text
+from sciplot_core.assistant_provider.text_validation import free_text
+
+_free_text = free_text
 
 
 def _required_text(value: object, label: str, *, maximum: int) -> str:
