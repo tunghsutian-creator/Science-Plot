@@ -34,11 +34,11 @@ def _audit_environment(
     from sciplot_core.verification.private_observer import bootstrap_sources
     if any((plugin / filename).read_text(encoding="utf-8") != text for filename, text in bootstrap_sources().items()):
         raise ValueError("The observation bootstrap must match the supported source-owned implementation.")
-    raw = Path(environment.get("SCIPLOT_REFERENCE_DATA", str(root / ".local/reference_data"))).expanduser()
-    raw = (raw if raw.is_absolute() else root / raw).resolve()
-    roots = [(root / "tests/fixtures").resolve(), raw]
+    from sciplot_core.verification.private_process_boundaries import watch_roots
+    roots = [Path(value) for value in watch_roots(root, environment)]
     for dependency in [plugin, root / "src", root / "tests", *roots]:
-        if audit.is_relative_to(dependency) or dependency.is_relative_to(audit):
+        resolved_dependency = dependency.resolve()
+        if audit.is_relative_to(resolved_dependency) or resolved_dependency.is_relative_to(audit):
             raise ValueError("Audit outputs cannot overlap any observation input.")
     if audit == output or audit.is_relative_to(output) or output.is_relative_to(audit):
         raise ValueError("The audit output must be separate from the durable execution directory.")

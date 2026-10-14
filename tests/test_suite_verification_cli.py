@@ -52,7 +52,16 @@ def suite_case(tmp_path, monkeypatch):
     observer_module.bootstrap_sources = lambda: {name: "# read-only test fixture\n" for name in ("sitecustomize.py", "sciplot_closure_audit.py")}
     observer_module.begin_suite_audit = lambda environment: types.SimpleNamespace(
         directory=Path(environment["SCIPLOT_PRIVATE_AUDIT_DIR"]), run=environment["SCIPLOT_PRIVATE_AUDIT_RUN"])
+    observer_module.reserve_child_environment = lambda environment: dict(environment)
     monkeypatch.setitem(sys.modules, observer_module.__name__, observer_module)
+    boundary_module = types.ModuleType("sciplot_core.verification.private_process_boundaries")
+
+    def synthetic_watch_roots(repo, environment):
+        raw = Path(environment.get("SCIPLOT_REFERENCE_DATA", str(repo / ".local/reference_data"))).expanduser()
+        return [str(repo / "tests/fixtures"), str(raw if raw.is_absolute() else repo / raw)]
+
+    boundary_module.watch_roots = synthetic_watch_roots
+    monkeypatch.setitem(sys.modules, boundary_module.__name__, boundary_module)
     return tmp_path, counter, commands
 
 
