@@ -64,22 +64,22 @@ def test_continue_cli_keeps_explicit_copy_and_figure_selection(monkeypatch):
 
 @pytest.mark.parametrize("action", ["inspect", "resume"])
 def test_paper_cli_preserves_exact_execution_path_and_blocked_currentness(monkeypatch, action):
-    from sciplot_core.cli import task_paper
+    from sciplot_core import task_papers
 
     calls = []
-    monkeypatch.setattr(task_paper, action + "_paper", lambda target: calls.append(target) or {"status": "blocked"})
+    monkeypatch.setattr(task_papers, action + "_paper", lambda target: calls.append(target) or {"status": "blocked"})
     args = build_parser().parse_args(["task", "paper", action, "/frozen paper", "--json"])
     assert tasks.dispatch_task(args) == 1 and calls == [Path("/frozen paper")]
 
 
 def test_paper_start_resolves_request_relative_paths_in_domain_owner(tmp_path, monkeypatch):
-    from sciplot_core.cli import task_paper
+    from sciplot_core import task_papers
 
     request = {"version": 1, "out": "relative delivery", "items": []}
     path = tmp_path / "request.json"
     path.write_text(json.dumps(request))
     calls = []
-    monkeypatch.setattr(task_paper, "start_paper", lambda value, **kw: calls.append((value, kw)) or {"status": "complete"})
+    monkeypatch.setattr(task_papers, "start_paper", lambda value, **kw: calls.append((value, kw)) or {"status": "complete"})
     args = build_parser().parse_args(["task", "paper", "start", "--request", str(path), "--paper-dir", "/stable paper", "--json"])
     assert tasks.dispatch_task(args) == 0
     assert calls == [(request, {"paper_dir": Path("/stable paper"), "base_dir": tmp_path})]
