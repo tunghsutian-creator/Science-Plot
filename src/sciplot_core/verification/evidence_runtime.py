@@ -69,7 +69,7 @@ def _expand_loader(path: str, binary: Path, executable: Path) -> Path:
 
 def native_dependencies(files: list[str], *, executable: Path,
                         environment: dict[str, str], bindings: dict[str, str] | None = None,
-                        aliases: dict[str, str] | None = None) -> list[Path]:
+                        aliases: dict[str, str] | None = None, repo_root: Path | None = None) -> list[Path]:
     """Resolve the linked non-system native closure, rejecting unknown loaders."""
     if sys.platform != "darwin":
         raise ValueError("default native evidence currently requires macOS")
@@ -81,6 +81,15 @@ def native_dependencies(files: list[str], *, executable: Path,
     known = {Path(name).resolve() for name in files}
     visited: set[Path] = set()
     found: set[Path] = set()
+    def bind_candidates(candidates: set[Path] | list[Path]) -> None:
+        found.update(candidates)
+        if aliases is not None:
+            for candidate in candidates:
+                aliases[digest(str(candidate.absolute()))] = digest(str(candidate.resolve()) if candidate.exists() else "missing")
+
+    child_root = repo_root if repo_root is not None else Path.cwd()
+    overrides = [Path(value) if Path(value).is_absolute() else child_root / value
+                 for value in environment.get("DYLD_FRAMEWORK_PATH", "").split(os.pathsep) if value]
     # Loader-inherited rpaths may point to other already bound Qt framework dirs.
     framework_roots = {Path(str(path).split(".framework/", 1)[0] + ".framework").parent for path in known
                        if ".framework/Versions/" in str(path) and path.is_file()}
@@ -110,6 +119,15 @@ def native_dependencies(files: list[str], *, executable: Path,
             name = line.strip().split(" (compatibility", 1)[0]
             if name in self_names or not name:
                 continue
+            # dyld tries framework overrides in declared order before the
+            # install name, including existing absolute and system frameworks.
+            framework = re.search(r"(?:^|/)([^/]+)\.framework/(?:Versions/[^/]+/)?\1$", name)
+            preferred = [root / framework.group(0).lstrip("/") for root in overrides] if framework else []
+            bind_candidates(preferred)
+            selected_override = next((path for path in preferred if path.is_file()), None)
+            if selected_override is not None:
+                queue.append(selected_override)
+                continue
             if name.startswith(("/usr/lib/", "/System/Library/")):
                 continue
             if name.startswith("@rpath/"):
@@ -125,10 +143,7 @@ def native_dependencies(files: list[str], *, executable: Path,
             dependency = resolved.pop()
             logical = [path for path in candidates if path.is_file() and path.resolve() == dependency]
             # Missing loader candidates can become preferred without old bytes changing.
-            found.update(candidates)
-            if aliases is not None:
-                for candidate in candidates:
-                    aliases[digest(str(candidate.absolute()))] = digest(str(candidate.resolve()) if candidate.exists() else "missing")
+            bind_candidates(candidates)
             queue.extend(logical)
     return sorted(found)
 

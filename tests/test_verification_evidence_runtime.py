@@ -153,3 +153,68 @@ def test_relative_runtime_environment_binds_real_child_inputs(tmp_path, monkeypa
     module.write_text("VALUE = 2\n")
     assert before != capture_inputs(bindings, repo_root=repo)
     assert subprocess.run(command, cwd=repo, env={**os.environ, **env}, capture_output=True).returncode != 0
+
+
+@pytest.mark.parametrize("install", ["missing_absolute", "existing_absolute", "rpath", "system", "nested"])
+def test_framework_overrides_precede_install_name_in_declared_order(tmp_path, monkeypatch, install):
+    import os
+    main = binary(tmp_path / "python3.14")
+    suffix = "Python.framework/Versions/3.14/Python"
+    original = tmp_path / "old-install" / suffix
+    if install == "existing_absolute":
+        binary(original)
+    name = {"rpath": "@rpath/" + suffix,
+            "system": "/System/Library/Frameworks/" + suffix,
+            "nested": "/old/Outer.framework/Frameworks/" + suffix}.get(install, str(original))
+    first_root, second_root = tmp_path / "first", tmp_path / "second"
+    first = binary(first_root / suffix)
+    second = binary(second_root / suffix)
+    visited = []
+    monkeypatch.setattr(runtime.sys, "platform", "darwin")
+    def otool(command, **kwargs):
+        path = Path(command[-1])
+        visited.append(path)
+        output = f"{path}:\n"
+        if path == main:
+            output += f"\t{name} (compatibility version 1)\n"
+        return SimpleNamespace(stdout=output if command[1] == "-L" else "")
+    monkeypatch.setattr(runtime.subprocess, "run", otool)
+    aliases = {}
+    # A relative first override is interpreted in the child checkout, not cwd.
+    roots = runtime.native_dependencies([str(main)], executable=main, repo_root=tmp_path,
+        environment={"DYLD_FRAMEWORK_PATH": os.pathsep.join(("first", str(second_root)))}, aliases=aliases)
+    assert first in roots and second in roots
+    assert first in visited and second not in visited and original not in visited
+    assert aliases[digest(str(first))] == digest(str(first))
+
+
+def test_missing_earlier_framework_override_invalidates_when_created(tmp_path, monkeypatch):
+    import os
+    main = binary(tmp_path / "python3.14")
+    suffix = "Python.framework/Versions/3.14/Python"
+    earlier, later = tmp_path / "earlier", tmp_path / "later"
+    selected = binary(later / suffix)
+    monkeypatch.setattr(runtime.sys, "platform", "darwin")
+    def otool(command, **kwargs):
+        name = Path(command[-1])
+        dependency = f"\t/old/missing/{suffix} (compatibility version 1)\n" if name == main else ""
+        return SimpleNamespace(stdout=f"{name}:\n{dependency}" if command[1] == "-L" else "")
+    monkeypatch.setattr(runtime.subprocess, "run", otool)
+    aliases = {}
+    roots = runtime.native_dependencies([str(main)], executable=main,
+        environment={"DYLD_FRAMEWORK_PATH": os.pathsep.join((str(earlier), str(later)))}, aliases=aliases)
+    assert selected in roots and earlier / suffix in roots
+    assert aliases[digest(str(earlier / suffix))] == digest("missing")
+    before = discover_files(roots, allow_missing=True)
+    binary(earlier / suffix)
+    assert before != discover_files(roots, allow_missing=True)
+
+
+def test_unresolved_framework_stays_blocked_with_configured_overrides(tmp_path, monkeypatch):
+    main = binary(tmp_path / "python3.14")
+    monkeypatch.setattr(runtime.sys, "platform", "darwin")
+    monkeypatch.setattr(runtime.subprocess, "run", lambda command, **kwargs: SimpleNamespace(
+        stdout=f"{main}:\n\t/absent/Python.framework/Versions/3.14/Python (compatibility version 1)\n" if command[1] == "-L" else ""))
+    with pytest.raises(ValueError, match="unresolved"):
+        runtime.native_dependencies([str(main)], executable=main,
+            environment={"DYLD_FRAMEWORK_PATH": str(tmp_path / "absent-override")})

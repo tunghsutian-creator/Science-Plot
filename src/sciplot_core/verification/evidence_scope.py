@@ -247,7 +247,7 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
     native = native_dependencies(sorted({name for key in ("native", "python", "dependencies", "qt")
                                           for name in discovered[key]}),
                                  executable=Path(sys.executable), environment=environment,
-                                 bindings=discovery_bindings, aliases=aliases)
+                                 bindings=discovery_bindings, aliases=aliases, repo_root=root)
     inputs["native"]["paths"] = sorted(set(inputs["native"]["paths"]) | {str(path) for path in native})
     # Seal additions/alias changes during graph discovery, as well as file bytes.
     for domain, roots in paths.items():
