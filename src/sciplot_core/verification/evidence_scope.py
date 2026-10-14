@@ -73,7 +73,30 @@ def collect_check_tests(command: list[str], *, repo_root: Path,
     return nodes
 
 
-def _corpus_paths(root: Path, environment: dict[str, str], nodes: list[str]) -> tuple[list[Path], Path]:
+def _reviewed_noncandidate_sources(root: Path, environment: dict[str, str], nodes: list[str],
+                                   inventory: dict[str, Any], inventory_path: Path) -> str:
+    """Prove pure siblings against the complete reviewed collection/source set."""
+    from sciplot_core.verification.private_corpus_audit import (
+        nodeids_sha256, test_sources_sha256, validate_access_audit,
+    )
+    review = inventory["collection_audit"]
+    if review.get("test_sources_sha256") != test_sources_sha256(root):
+        raise ValueError("selected case has no reviewed private/synthetic disposition")
+    complete = nodes
+    if len(nodes) != review.get("nodeid_count") or nodeids_sha256(nodes) != review.get("nodeids_sha256"):
+        complete = collect_check_tests([sys.executable, "-m", "pytest", "-q", "-p", _PLUGIN],
+                                       repo_root=root, environment=environment)
+    _, issues = validate_access_audit(inventory=inventory, inventory_path=inventory_path,
+                                     repo_root=root, collected_nodeids=set(complete),
+                                     dependencies={}, access_audit_path=None)
+    if (len(set(complete)) != len(complete) or not set(nodes) <= set(complete)
+            or [issue[0] for issue in issues] != ["access_audit_required"]):
+        raise ValueError("selected case has no reviewed private/synthetic disposition")
+    return review["test_sources_sha256"]
+
+
+def _corpus_paths(root: Path, environment: dict[str, str], nodes: list[str], *,
+                  reviewed_sources: dict[str, str] | None = None) -> tuple[list[Path], Path]:
     inventory_path = root / "src/sciplot_core/verification/private_corpus_inventory.json"
     inventory = load_receipt(inventory_path)
     if not isinstance(inventory, dict) or inventory.get("kind") != "sciplot_private_corpus_dependencies":
@@ -88,9 +111,21 @@ def _corpus_paths(root: Path, environment: dict[str, str], nodes: list[str]) -> 
     declared = {case["nodeid"] for case in cases if isinstance(case, dict) and isinstance(case.get("nodeid"), str)}
     if len(declared) != len(cases) or not all(isinstance(node, str) for node in candidates):
         raise ValueError("scientific fixture dispositions are malformed")
+    synthetic = review.get("synthetic_candidates", [])
+    if not isinstance(synthetic, list) or not all(
+        isinstance(row, dict) and isinstance(row.get("nodeid"), str)
+        and isinstance(row.get("reason"), str) and row["reason"].strip() for row in synthetic
+    ):
+        raise ValueError("scientific fixture dispositions are malformed")
+    excluded = {row["nodeid"] for row in synthetic}
+    if (len(set(candidates)) != len(candidates) or len(excluded) != len(synthetic)
+            or declared & excluded or set(candidates) != declared | excluded):
+        raise ValueError("scientific fixture dispositions are not an exact partition")
     modules = {node.split("::", 1)[0] for node in candidates}
     if any(node.split("::", 1)[0] in modules and node not in candidates for node in nodes):
-        raise ValueError("selected case has no reviewed private/synthetic disposition")
+        reviewed_hash = _reviewed_noncandidate_sources(root, environment, nodes, inventory, inventory_path)
+        if reviewed_sources is not None:
+            reviewed_sources["reviewed_test_sources_sha256"] = reviewed_hash
     selected_private = sorted(declared.intersection(nodes))
     if selected_private:
         from sciplot_core.verification.private_corpus import private_corpus_preflight
@@ -187,7 +222,8 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
     discovery_bindings = {digest(str(path.resolve())): file_sha256(path)
                           for path in {root / node.split("::", 1)[0] for node in nodes} | {Path(__file__).resolve()}}
     paths = _repository_inputs(root, nodes)
-    raw, inventory = _corpus_paths(root, environment, nodes)
+    reviewed_sources = {}
+    raw, inventory = _corpus_paths(root, environment, nodes, reviewed_sources=reviewed_sources)
     paths.update(raw=raw, golden=[root / "tests/fixtures/rendering_profiles"],
                  corpus_policy=[inventory, Path(__file__).resolve()], inventory=[inventory])
     runtime, host = runtime_inputs(repo_root=root, environment=environment)
@@ -220,7 +256,7 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
     layouts["native"] = discover_files([Path(name) for name in inputs["native"]["paths"]], allow_missing=True)[1]
     scope = {"kind": "pytest" if module == "pytest" else "process", "closure_policy": POLICY,
              "check_id": check["check_id"], "host": host, "discovery_bindings": discovery_bindings,
-             "discovery_layouts": layouts, "discovery_aliases": aliases}
+             "discovery_layouts": layouts, "discovery_aliases": aliases, **reviewed_sources}
     if module == "git":
         diff = subprocess.run(["git", "diff", "--binary", *command[3:]], cwd=root,
                               capture_output=True, check=True).stdout

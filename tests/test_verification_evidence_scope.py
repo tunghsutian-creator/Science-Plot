@@ -270,3 +270,75 @@ def test_relative_private_namespace_uses_repo_root_preserving_alias(checkout, mo
 
 def test_fake_checkout_does_not_inherit_private_data_environment(checkout):
     assert "SCIPLOT_REFERENCE_DATA" not in os.environ
+
+
+def reviewed_siblings(root):
+    from sciplot_core.verification.private_corpus_audit import nodeids_sha256, test_sources_sha256
+    (root / "tests/test_unit.py").write_text("def test_ok(): assert True\ndef test_pure(): assert True\n")
+    (root / "tests/support.py").write_text("VALUE = 1\n")
+    nodes = ["tests/test_unit.py::test_ok", "tests/test_unit.py::test_pure"]
+    path = root / "src/sciplot_core/verification/private_corpus_inventory.json"
+    inventory = json.loads(path.read_text())
+    inventory["cases"] = []
+    inventory["collection_audit"] = {"static_review_complete": True, "nodeid_count": len(nodes),
+        "nodeids_sha256": nodeids_sha256(nodes), "test_sources_sha256": test_sources_sha256(root),
+        "candidate_nodeids": nodes[:1], "synthetic_candidates": [{"nodeid": nodes[0], "reason": "synthetic"}]}
+    path.write_text(json.dumps(inventory))
+    return path, inventory, nodes
+
+
+@pytest.mark.parametrize("subset", [False, True])
+def test_reviewed_nonprivate_siblings_use_exact_complete_collection(checkout, monkeypatch, subset):
+    _, _, nodes = reviewed_siblings(checkout)
+    collect = scope.collect_check_tests
+    calls = []
+    def recording_collect(*args, **kwargs):
+        calls.append(args[0])
+        return collect(*args, **kwargs)
+    monkeypatch.setattr(scope, "collect_check_tests", recording_collect)
+    spec = spec_for(checkout, nodes=[nodes[1]] if subset else ["tests/test_unit.py"])
+    assert len(calls) == (2 if subset else 1)
+    assert passed(identity(spec))["status"] == "PASS"
+    assert spec["corpus"]["scientific_acceptance"] is False
+    assert "reviewed_test_sources_sha256" in spec["scope"]
+
+
+@pytest.mark.parametrize("mutation", ["missing", "new_parameter", "duplicate", "source", "partition", "empty_reason"])
+def test_nonprivate_sibling_needs_current_full_source_and_dispositions(checkout, monkeypatch, mutation):
+    path, inventory, nodes = reviewed_siblings(checkout)
+    current = list(nodes)
+    if mutation == "missing":
+        current.pop(0)
+    elif mutation == "new_parameter":
+        current[0] += "[new]"
+    elif mutation == "duplicate":
+        current.append(current[0])
+    elif mutation == "source":
+        (checkout / "tests/support.py").write_text("VALUE = 2\n")
+    elif mutation == "partition":
+        inventory["collection_audit"]["candidate_nodeids"].append(nodes[1])
+    else:
+        inventory["collection_audit"]["synthetic_candidates"][0]["reason"] = ""
+    path.write_text(json.dumps(inventory))
+    monkeypatch.setattr(scope, "collect_check_tests", lambda *args, **kwargs: current)
+    with pytest.raises(ValueError, match="disposition"):
+        scope._corpus_paths(checkout, dict(os.environ), current)
+
+
+@pytest.mark.parametrize("mutation", ["add", "delete", "change"])
+def test_reviewed_source_digest_is_checked_against_captured_bytes(checkout, mutation):
+    reviewed_siblings(checkout)
+    spec = spec_for(checkout)
+    assert passed(identity(spec))["status"] == "PASS"
+    # Isolate the source-review seal from the independent graph/layout seals.
+    spec["scope"].pop("discovery_bindings")
+    spec["scope"].pop("discovery_layouts")
+    helper = checkout / "tests/support.py"
+    if mutation == "add":
+        (checkout / "tests/new_helper.py").write_text("VALUE = 1\n")
+    elif mutation == "delete":
+        helper.unlink()
+    else:
+        helper.write_text("VALUE = 2\n")
+    with pytest.raises(ValueError, match="reviewed test source"):
+        identity(spec)

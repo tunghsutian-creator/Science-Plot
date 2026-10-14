@@ -194,6 +194,19 @@ can survive a documentation-only commit. Scope/selection are never widened.
                                  excluded_domains=scope.get("excluded_domains")),
         "environment_sha256": digest(environment), "corpus": corpus,
     }
+    if "reviewed_test_sources_sha256" in scope:
+        # Reconstruct the review digest from this snapshot's actual bytes, not
+        # subsequently reread files or a discovery-time pin that can be replaced.
+        source_digest = hashlib.sha256()
+        records = payload["inputs"]["tests"]["files"]
+        for path in sorted((repo_root / "tests").rglob("*.py")):
+            record = records.get(digest(str(path.resolve())))
+            if record is None:
+                raise ValueError("reviewed test source membership changed during capture")
+            relative = path.relative_to(repo_root).as_posix()
+            source_digest.update(relative.encode() + b"\0" + record["sha256"].encode() + b"\n")
+        if source_digest.hexdigest() != scope["reviewed_test_sources_sha256"]:
+            raise ValueError("reviewed test source bytes changed before capture")
     layouts = scope.get("discovery_layouts", {})
     if not isinstance(layouts, dict) or any(payload["inputs"].get(key, {}).get("layout_sha256") != value for key, value in layouts.items()):
         raise ValueError("dependency-discovery membership changed before capture")
