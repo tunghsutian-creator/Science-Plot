@@ -32,6 +32,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
             "src/sciplot_core/terminal_source_binding.py",
             "src/sciplot_core/terminal_source_binding_wire.py",
             "src/sciplot_core/veusz_worker/operations.py",
+            "src/sciplot_core/veusz_worker/cli.py",
             "src/sciplot_core/workflow/auto_split.py",
             "src/sciplot_core/workflow/request_rendering.py",
             "src/sciplot_core/workflow/single_task_bundle.py",

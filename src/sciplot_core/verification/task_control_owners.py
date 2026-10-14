@@ -6,6 +6,20 @@ from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
 TASK_CONTROL_OWNERS = (
     ChangedOwner(
+        owner_id="native_font_catalog",
+        exact_paths=frozenset({"src/sciplot_core/native_font_catalog.py",
+                              "src/sciplot_core/veusz_worker/font_catalog.py",
+                              "src/sciplot_core/veusz_worker/cli.py"}),
+        owned_test_paths=frozenset({"tests/test_common_edit_font_boundary.py", "tests/test_common_edit_font_mcp_native.py"}),
+        pytest_targets=("tests/test_common_edit_font_boundary.py", "tests/test_common_edit_font_mcp_native.py",
+                        "tests/test_veusz_worker_thread_boundary.py", "tests/test_native_process.py",
+                        "tests/test_task_common_edits.py",
+                        "tests/test_task_common_edits_native.py::test_native_font_family_applies_to_all_represented_typography",
+                        *ARCHITECTURE_CORE_TARGETS),
+        mypy_required=True, handoff_gates=("doctor",), final_milestone_gates=("smoke",),
+        release_gates=("full_pytest",),
+    ),
+    ChangedOwner(
         owner_id="common_presentation_edit_entry",
         exact_paths=frozenset({"src/sciplot_core/task_common_edits.py",
                               "src/sciplot_core/cli/parsers/common_edits.py",

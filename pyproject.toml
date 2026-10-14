@@ -67,6 +67,8 @@ markers = [
 python_version = "3.11"
 files = [
   "src/sciplot_core/native_process/",
+  "src/sciplot_core/native_font_catalog.py",
+  "src/sciplot_core/veusz_worker/font_catalog.py",
   "src/sciplot_core/veusz_worker/persistent.py",
   "src/sciplot_core/studio_core/annotation_legend.py",
   "src/sciplot_core/plot_document/",

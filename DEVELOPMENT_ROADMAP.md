@@ -30,6 +30,14 @@ Unified changed-owner, strict type, full scientific, ready-rule and native visua
 release checks still determine this branch's final status. Public CI must retain
 and report missing private-input failures rather than uploading those inputs.
 
+The default Mac MCP font-family path now queries Qt in the existing native worker
+main thread, after independent review reproduced a Cocoa background-thread crash.
+Independent default-environment revalidation remains part of the final gate.
+The ten inherited color-only/grayscale publication-QA failures match `ce407ea`
+check values exactly; their original presentation stays intact. They are a
+separate future candidate for explicit sample distinction, not new regressions.
+The rule lifecycle matrix and complete publication-QA status stay separate.
+
 ## 2026-10-14 development feedback implementation
 
 The separate feedback branch continues the verified Mac `6934322` snapshot;

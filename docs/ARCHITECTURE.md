@@ -537,6 +537,9 @@ targets and composes the existing semantic patch or native task transaction.
 An explicit first-call entry path freezes its original request for idempotent
 replay. Pending work cannot be overwritten with a new intent; unknown or
 unrepresented properties reject before mutation. CLI/MCP use this same owner.
+Installed font validation uses the existing native process. The closed internal
+`font-families` command accepts no paths or extra arguments and creates Qt only
+on that process's main thread; an MCP background owner never initializes Qt.
 
 `task_saved_work` and its evidence helper perform bounded explicit-folder
 discovery using existing project/task/document identities. Source hashes filter
