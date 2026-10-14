@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4241,
-    "nodeids_sha256": "acde9e5af1955a58bf5af2d2ff9da5f45dd3b417de6572b2fd34df175d345edc",
-    "test_sources_sha256": "efcadf33fe79bc4f1a8364625991cafa730f4b4d77b7d5b0780d3c1c65c572ef",
-    "test_source_count": 313,
+    "nodeid_count": 4436,
+    "nodeids_sha256": "75ac7c070805fecd70714308438c511c76d215bc4de6f2e39f128dd3698a5f1c",
+    "test_sources_sha256": "be9e0450d17e82261705d76438daf0a36a0c5bb1c9fc637e9b7710198444efad",
+    "test_source_count": 323,
     "candidate_nodeids": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
       "tests/test_delivery_studio_lifecycle.py::test_dsc_public_delivery_continues_project_and_copied_package_exports_independently",
@@ -47,6 +47,7 @@
       "tests/test_dtg_analysis.py::test_xrd_peak_positions_track_each_fixture_maximum_intensity",
       "tests/test_generic_single_task_plan.py::test_dsc_rule_uses_the_shared_generic_studio_queue",
       "tests/test_generic_single_task_plan.py::test_stress_plan_uses_shared_bundle_and_generic_studio_queue",
+      "tests/test_input_scope.py::test_private_presence_can_authorize_bodies_without_claiming_complete_audit",
       "tests/test_mechanical_figure_plan_activation.py::test_mechanical_studio_secondary_failure_rolls_back_the_whole_plan",
       "tests/test_mechanical_figure_plan_activation.py::test_mechanical_workflow_delivers_exact_real_figure_plan[compression_curve]",
       "tests/test_mechanical_figure_plan_activation.py::test_mechanical_workflow_delivers_exact_real_figure_plan[flexural_curve]",
@@ -108,7 +109,22 @@
       "tests/test_private_corpus_preflight.py::test_unsafe_dependency_identifier_blocks_before_file_access[tests/fixtures/real_world/../../outside.csv]",
       "tests/test_private_corpus_preflight.py::test_unverified_or_stale_collection_blocks_even_with_mock_fixture",
       "tests/test_private_corpus_preflight.py::test_wrong_type_and_empty_file_are_blocked",
+      "tests/test_private_observer.py::test_suite_parent_collector_and_supervisor_share_actual_scope",
       "tests/test_project_change_ui_native.py::test_real_dsc_source_update_from_native_qt_project_dock",
+      "tests/test_public_workflow_behavior.py::test_generated_generic_plan_uses_shared_terminal_and_studio_queue[dsc_curve]",
+      "tests/test_public_workflow_behavior.py::test_generated_generic_plan_uses_shared_terminal_and_studio_queue[rheology_stress_relaxation]",
+      "tests/test_public_workflow_behavior.py::test_generated_mechanical_task_style_and_shared_preparation_route[shared_route]",
+      "tests/test_public_workflow_behavior.py::test_generated_mechanical_task_style_and_shared_preparation_route[summary_options]",
+      "tests/test_public_workflow_behavior.py::test_generated_snapshot_archive_hash_boundary[archive_drift]",
+      "tests/test_public_workflow_behavior.py::test_generated_snapshot_archive_hash_boundary[studio_dsc]",
+      "tests/test_public_workflow_behavior.py::test_generated_snapshot_archive_hash_boundary[without_snapshot]",
+      "tests/test_public_workflow_behavior.py::test_generated_snapshot_archive_hash_boundary[workflow_dsc]",
+      "tests/test_public_workflow_behavior.py::test_generated_snapshot_archive_hash_boundary[workflow_tga]",
+      "tests/test_public_workflow_behavior.py::test_generated_study_model_artifacts_bind_exact_selected_plan[dma_frequency_sweep]",
+      "tests/test_public_workflow_behavior.py::test_generated_study_model_artifacts_bind_exact_selected_plan[uvvis_spectrum]",
+      "tests/test_public_workflow_behavior.py::test_generated_swelling_snapshot_reaches_shared_terminal_without_reparse",
+      "tests/test_public_workflow_behavior.py::test_generated_temperature_domain_snapshot_controls[during_load_drift]",
+      "tests/test_public_workflow_behavior.py::test_generated_temperature_domain_snapshot_controls[snapshot]",
       "tests/test_registered_single_curve_figure_plan.py::test_dma_frequency_real_source_reuses_one_generic_single_curve_spine",
       "tests/test_registered_single_curve_figure_plan.py::test_ftir_headerless_source_shares_one_neutral_snapshot_for_plan_and_prepare",
       "tests/test_registered_single_curve_figure_plan.py::test_gpc_plan_and_preparation_share_source_identity_and_one_parse",
@@ -181,9 +197,21 @@
       "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_without_snapshot_hashes_live_and_archive",
       "tests/test_study_model_artifact_binding.py::test_registered_single_curve_plan_replaces_the_generic_study_queue",
       "tests/test_study_model_artifact_binding.py::test_uvvis_recommendation_uses_the_resolved_plan_task_identity",
+      "tests/test_suite_verification_cli.py::test_fixed_suite_rejects_inherited_filter_without_clearing_it[--ignore=tests/test_private.py]",
+      "tests/test_suite_verification_cli.py::test_fixed_suite_rejects_inherited_filter_without_clearing_it[-k only_one_case]",
+      "tests/test_suite_verification_cli.py::test_fixed_suite_rejects_inherited_filter_without_clearing_it[-m focused]",
       "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[None]",
       "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[relative-private-data]",
       "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[~/sciplot-test-private-data]",
+      "tests/test_suite_verification_cli.py::test_invalid_suite_or_output_is_blocked_before_start[input_audit_output]",
+      "tests/test_suite_verification_cli.py::test_invalid_suite_or_output_is_blocked_before_start[outside]",
+      "tests/test_suite_verification_cli.py::test_invalid_suite_or_output_is_blocked_before_start[same_audit_output]",
+      "tests/test_suite_verification_cli.py::test_invalid_suite_or_output_is_blocked_before_start[unknown_suite]",
+      "tests/test_suite_verification_cli.py::test_invalid_suite_or_output_is_blocked_before_start[unpaired_audit]",
+      "tests/test_suite_verification_cli.py::test_suite_profile_selects_only_the_known_command[comprehensive-comprehensive]",
+      "tests/test_suite_verification_cli.py::test_suite_profile_selects_only_the_known_command[focused-focused]",
+      "tests/test_suite_verification_cli.py::test_suite_profile_selects_only_the_known_command[full-None]",
+      "tests/test_suite_verification_cli.py::test_suite_starts_once_and_status_reads_original_proof_without_replay",
       "tests/test_swelling_single_snapshot.py::test_swelling_prepare_and_terminals_reuse_one_resolved_snapshot",
       "tests/test_swelling_source_contract.py::test_real_swelling_fixture_matches_its_authorized_labeled_block_dynamically",
       "tests/test_task_column_mapping_native.py::test_public_cli_column_choice_exports_real_pda_and_resumes_current_project",
@@ -270,6 +298,42 @@
         "reason": "Synthetic unit rule and optional missing temporary fixture; no required retained data."
       },
       {
+        "nodeid": "tests/test_input_scope.py::test_private_presence_can_authorize_bodies_without_claiming_complete_audit",
+        "reason": "Temporary generated fixture and inventory explicitly labelled non-measured; checks presence authorization separately from incomplete scientific access audit."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_checked_in_inventory_is_explicitly_preliminary",
+        "reason": "Reads checked-in public inventory JSON and asserts declared fixture identifiers; no private fixture bytes are opened."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[bound_nodeid]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[escape]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[listdir]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[outside_namespace]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[scan]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[symlink_escape]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[unbound_open]",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
         "nodeid": "tests/test_private_corpus_preflight.py::test_complete_inventory_requires_bound_full_access_evidence[capture_incomplete]",
         "reason": "Uses temporary synthetic files, patched fixture resolution, or public inventory metadata only."
       },
@@ -330,6 +394,10 @@
         "reason": "Uses temporary synthetic files, patched fixture resolution, or public inventory metadata only."
       },
       {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_unbound_data_open_remains_blocked_outside_collection_bucket",
+        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
         "nodeid": "tests/test_private_corpus_preflight.py::test_unsafe_dependency_identifier_blocks_before_file_access[../outside.csv]",
         "reason": "Uses temporary synthetic files, patched fixture resolution, or public inventory metadata only."
       },
@@ -350,8 +418,128 @@
         "reason": "Uses temporary synthetic files, patched fixture resolution, or public inventory metadata only."
       },
       {
+        "nodeid": "tests/test_private_observer.py::test_suite_parent_collector_and_supervisor_share_actual_scope",
+        "reason": "Each control writes generated sentinel and durable identity inputs under tmp_path. Actual child/exec/wrapper processes and deliberately failed observation channels prove the bounded capture contract; no private scientific acceptance is claimed."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_generic_plan_uses_shared_terminal_and_studio_queue[dsc_curve]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_generic_plan_uses_shared_terminal_and_studio_queue[rheology_stress_relaxation]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_mechanical_task_style_and_shared_preparation_route[shared_route]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_mechanical_task_style_and_shared_preparation_route[summary_options]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_snapshot_archive_hash_boundary[archive_drift]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_snapshot_archive_hash_boundary[studio_dsc]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_snapshot_archive_hash_boundary[without_snapshot]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_snapshot_archive_hash_boundary[workflow_dsc]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_snapshot_archive_hash_boundary[workflow_tga]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_study_model_artifacts_bind_exact_selected_plan[dma_frequency_sweep]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_study_model_artifacts_bind_exact_selected_plan[uvvis_spectrum]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_swelling_snapshot_reaches_shared_terminal_without_reparse",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_temperature_domain_snapshot_controls[during_load_drift]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
+        "nodeid": "tests/test_public_workflow_behavior.py::test_generated_temperature_domain_snapshot_controls[snapshot]",
+        "reason": "Generated helper CSVs/workbooks under tmp_path, exact monkeypatched resolver returns those paths. Behavior counterparts preserve terminal hashes/rollback/forgery assertions without real private measurement claims."
+      },
+      {
         "nodeid": "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_directory_requires_exactly_one_supported_file[0]",
         "reason": "Zero-copy branch never calls the real fixture helper."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_fixed_suite_rejects_inherited_filter_without_clearing_it[--ignore=tests/test_private.py]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_fixed_suite_rejects_inherited_filter_without_clearing_it[-k only_one_case]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_fixed_suite_rejects_inherited_filter_without_clearing_it[-m focused]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[None]",
+        "reason": "Temporary suite fixture replaces build_check_spec and mocks start_run; frozen audit files and outputs are synthetic tmp_path files. Configured raw-root identifiers are inspected without reading their source bytes."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[relative-private-data]",
+        "reason": "Temporary suite fixture replaces build_check_spec and mocks start_run; frozen audit files and outputs are synthetic tmp_path files. Configured raw-root identifiers are inspected without reading their source bytes."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[~/sciplot-test-private-data]",
+        "reason": "Temporary suite fixture replaces build_check_spec and mocks start_run; frozen audit files and outputs are synthetic tmp_path files. Configured raw-root identifiers are inspected without reading their source bytes."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_invalid_suite_or_output_is_blocked_before_start[input_audit_output]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_invalid_suite_or_output_is_blocked_before_start[outside]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_invalid_suite_or_output_is_blocked_before_start[same_audit_output]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_invalid_suite_or_output_is_blocked_before_start[unknown_suite]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_invalid_suite_or_output_is_blocked_before_start[unpaired_audit]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_suite_profile_selects_only_the_known_command[comprehensive-comprehensive]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_suite_profile_selects_only_the_known_command[focused-focused]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_suite_profile_selects_only_the_known_command[full-None]",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_suite_starts_once_and_status_reads_original_proof_without_replay",
+        "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
       },
       {
         "nodeid": "tests/test_task_mapping_plan.py::test_mapped_creation_enters_existing_canonical_request_studio_route",
@@ -384,54 +572,6 @@
       {
         "nodeid": "tests/test_task_mapping_plan.py::test_mapping_source_indicator_checks_original_and_effective_bytes",
         "reason": "The helper is called with default real=False; it writes a synthetic source."
-      },
-      {
-        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[bound_nodeid]",
-        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
-      },
-      {
-        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[escape]",
-        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
-      },
-      {
-        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[listdir]",
-        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
-      },
-      {
-        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[outside_namespace]",
-        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
-      },
-      {
-        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[scan]",
-        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
-      },
-      {
-        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[symlink_escape]",
-        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
-      },
-      {
-        "nodeid": "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[unbound_open]",
-        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
-      },
-      {
-        "nodeid": "tests/test_private_corpus_preflight.py::test_unbound_data_open_remains_blocked_outside_collection_bucket",
-        "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
-      },
-      {
-        "nodeid": "tests/test_private_corpus_preflight.py::test_checked_in_inventory_is_explicitly_preliminary",
-        "reason": "Reads checked-in public inventory JSON and asserts declared fixture identifiers; no private fixture bytes are opened."
-      },
-      {
-        "nodeid": "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[None]",
-        "reason": "Temporary suite fixture replaces build_check_spec and mocks start_run; frozen audit files and outputs are synthetic tmp_path files. Configured raw-root identifiers are inspected without reading their source bytes."
-      },
-      {
-        "nodeid": "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[relative-private-data]",
-        "reason": "Temporary suite fixture replaces build_check_spec and mocks start_run; frozen audit files and outputs are synthetic tmp_path files. Configured raw-root identifiers are inspected without reading their source bytes."
-      },
-      {
-        "nodeid": "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[~/sciplot-test-private-data]",
-        "reason": "Temporary suite fixture replaces build_check_spec and mocks start_run; frozen audit files and outputs are synthetic tmp_path files. Configured raw-root identifiers are inspected without reading their source bytes."
       },
       {
         "nodeid": "tests/test_verification_evidence_scope.py::test_command_conflict_unknown_owner_and_unknown_private_node_block",
@@ -546,22 +686,6 @@
         "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
       },
       {
-        "nodeid": "tests/test_verification_evidence_scope.py::test_relative_private_namespace_uses_repo_root_preserving_alias",
-        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
-      },
-      {
-        "nodeid": "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[dependencies]",
-        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
-      },
-      {
-        "nodeid": "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[fonts]",
-        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
-      },
-      {
-        "nodeid": "tests/test_verification_evidence_scope.py::test_unrelated_documentation_commit_reuses_executable_evidence",
-        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
-      },
-      {
         "nodeid": "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[duplicate]",
         "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
       },
@@ -586,6 +710,10 @@
         "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
       },
       {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_relative_private_namespace_uses_repo_root_preserving_alias",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
         "nodeid": "tests/test_verification_evidence_scope.py::test_reviewed_nonprivate_siblings_use_exact_complete_collection[False]",
         "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
       },
@@ -606,8 +734,20 @@
         "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
       },
       {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[dependencies]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[fonts]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
         "nodeid": "tests/test_verification_evidence_scope.py::test_synthetic_collection_preserves_inherited_plugin_path",
         "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_unrelated_documentation_commit_reuses_executable_evidence",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
       }
     ],
     "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling.",
