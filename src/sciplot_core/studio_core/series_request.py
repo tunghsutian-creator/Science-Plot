@@ -124,6 +124,7 @@ def _series_from_request(
             prepare_performance_comparison,
         )
         from sciplot_core.performance_veusz import performance_series_records
+        from sciplot_core.performance_comparison.radar import validate_radar_presentation_size
 
         template_id = _request_template(request)
         try:
@@ -131,6 +132,7 @@ def _series_from_request(
                 source,
                 template_id=template_id,
             )
+            validate_radar_presentation_size(payload, request)
         except PerformanceComparisonError as exc:
             raise StudioPreparationBlocked(exc.reason_code, str(exc)) from exc
         performance_task = validate_performance_payload_task(

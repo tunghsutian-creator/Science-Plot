@@ -29,6 +29,32 @@ from sciplot_core.performance_comparison.layout import (
 )
 
 
+def validate_radar_presentation_size(
+    payload: dict[str, Any], request: dict[str, Any],
+) -> None:
+    """Respect explicit physical constraints before a consumer fills defaults."""
+    if not payload.get("radar_display"):
+        return
+    explicit = request.get("explicit_render_option_keys")
+    if isinstance(explicit, list) and "size" not in explicit:
+        return
+    options = request.get("render_options")
+    requested = options.get("size") if isinstance(options, dict) else None
+    expected_dimensions = tuple(float(value) for value in payload["layout"]["page_size_mm"])
+    expected = "x".join(f"{value:g}" for value in expected_dimensions)
+    try:
+        dimensions = tuple(float(value) for value in str(requested).lower().split("x"))
+    except ValueError:
+        dimensions = ()
+    if requested is not None and dimensions != expected_dimensions:
+        raise PerformanceComparisonError(
+            "performance_radar_presentation_size_conflict",
+            f"Radar interpretation needs the {expected} mm presentation "
+            f"layout; explicit size {requested!r} conflicts. The fixed "
+            "60x55 mm plot panel is unchanged.",
+        )
+
+
 def _normalized_radar_value(value: float, metric: PerformanceMetric) -> float:
     if (
         metric.scale_min is None
@@ -106,11 +132,9 @@ def build_performance_radar_payload(
                 **styles[material.material_id],
             }
         )
-    use_legend_panel = bool(
-        comparison.references
-        or len(comparison.samples) > 3
-        or any(item.citation for item in comparison.materials)
-    )
+    # The existing reserved presentation panel keeps interpretation readable
+    # without changing the physical science frame or normalized coordinates.
+    use_legend_panel = True
     legend_items = _legend_items(comparison, styles)
     legend_column_count = max(
         (int(item["legend_column"]) for item in legend_items),
@@ -137,6 +161,18 @@ def build_performance_radar_payload(
             "higher_formula": "(value - scale_min) / (scale_max - scale_min)",
             "lower_formula": "(scale_max - value) / (scale_max - scale_min)",
             "values_outside_declared_bounds": "fail_closed",
+        },
+        "radar_display": {
+            "version": 1,
+            "notes": [
+                "Radius r: 0–1 (dimensionless)",
+                "↑: r = (v − min) / (max − min)",
+                "↓: r = (max − v) / (max − min)",
+                "Axis ranges: raw min–max; outward is better",
+                "↑ higher / ↓ lower raw value is better",
+                "Endpoints: raw values in axis units",
+                "Polygon area is not an overall score",
+            ],
         },
         "series": series,
         "legend_items": legend_items,

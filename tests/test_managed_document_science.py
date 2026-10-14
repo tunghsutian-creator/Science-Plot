@@ -321,6 +321,8 @@ def test_current_audit_preserves_supported_chart_families(
             "tests/fixtures/performance_comparison/material_performance_long.csv"
         ).resolve()
         context = {"rule_id": "performance_comparison"}
+        if template == "polar_curve":
+            options["size"] = "120x55"
     elif template == "heatmap":
         source.write_text("x,y,z\n0,0,1\n1,0,2\n0,1,3\n1,1,4\n")
         options.update(

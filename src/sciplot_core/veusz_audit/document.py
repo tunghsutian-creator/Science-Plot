@@ -65,6 +65,40 @@ def _audit_document(path: Path) -> dict[str, Any]:
     if performance_document:
         for graph in graphs:
             graph["role"] = "performance_plot"
+            graph_widget = widgets_by_path[str(graph["path"])]
+            children = list(graph_widget.children)
+            ring_widgets = [
+                widget for widget in children
+                if widget.typename == "polygon"
+                and str(widget.name).startswith("performance_radar_ring_")
+            ]
+            rings = {str(widget.name) for widget in ring_widgets}
+            ring_point_counts = {
+                len(widget.settings.xPos) for widget in ring_widgets
+                if len(widget.settings.xPos) == len(widget.settings.yPos)
+                and widget.settings.positioning == "axes"
+            }
+            axis_count = next(iter(ring_point_counts)) - 1 if len(ring_point_counts) == 1 else 0
+            spokes = {
+                str(widget.name) for widget in children if widget.typename == "line"
+                and str(widget.name).startswith("performance_radar_spoke_")
+                and widget.settings.positioning == "axes"
+            }
+            hidden_axes = {
+                str(widget.name) for widget in children if widget.typename == "axis"
+                and not widget.settings.label
+                and all(widget.settings.setdict[group].hide for group in
+                        ("Line", "MajorTicks", "MinorTicks", "Label", "TickLabels"))
+            }
+            # Identify the actual native radar scaffold per graph. A free-text
+            # label or another performance graph cannot select radar margins.
+            radar_graph = (
+                rings == {f"performance_radar_ring_{index}" for index in range(1, 5)}
+                and axis_count >= 3
+                and spokes == {f"performance_radar_spoke_{index}" for index in range(1, axis_count + 1)}
+                and hidden_axes == {"x", "y"}
+            )
+            graph["performance_template"] = "polar_curve" if radar_graph else "scatter"
 
     unit_expression_violations = [
         {

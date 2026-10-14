@@ -48,7 +48,13 @@ class PerformanceMetric:
 
     @property
     def radar_label(self) -> str:
-        return self.display_label
+        unit = _display_unit(self.unit) if self.unit else "unit not declared"
+        direction = "↑" if self.direction == "higher" else "↓"
+        bounds = (
+            f"; {self.scale_min:g}–{self.scale_max:g}"
+            if self.scale_min is not None and self.scale_max is not None else ""
+        )
+        return f"{self.display_label}\n({unit}{bounds}) {direction}"
 
 
 @dataclass(frozen=True)

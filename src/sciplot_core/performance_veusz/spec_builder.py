@@ -10,6 +10,7 @@ from sciplot_core.performance_comparison import (
     PERFORMANCE_RADAR_TEMPLATE_ID,
     PERFORMANCE_SCATTER_TEMPLATE_ID,
 )
+from sciplot_core.performance_comparison.radar import validate_radar_presentation_size
 from sciplot_core.policy import (
     FIXED_PUBLICATION_FRAME_POLICY,
 )
@@ -44,6 +45,7 @@ def build_performance_veusz_spec(
 
     template = str(payload["template"])
     layout = payload["layout"]
+    validate_radar_presentation_size(payload, request)
     margins = layout["graph_margins_mm"]
     style = _style_payload(margins)
     if template == PERFORMANCE_SCATTER_TEMPLATE_ID:

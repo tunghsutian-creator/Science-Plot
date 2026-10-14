@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from typing import Any
+from sciplot_core.performance_comparison.models import PerformanceComparisonError
 from sciplot_core.policy import (
     PERFORMANCE_REFERENCE_PANEL_WIDTH_MM,
     UNIFIED_AXIS_LINEWIDTH_PT,
@@ -116,8 +117,18 @@ def _legend_layout(
             for _, group_items, items_per_row in group_layouts
         )
         slot_count = max(item_row_count + group_count, 1)
-        available = 0.88 - 0.10 - group_gap * max(group_count - 1, 0)
+        minimum_y = 0.44 if payload.get("radar_display") else 0.10
+        available = 0.88 - minimum_y - group_gap * max(group_count - 1, 0)
         row_step = min(0.078, available / float(slot_count))
+        if payload.get("radar_display") and row_step * 55.0 < (
+            UNIFIED_LEGEND_FONT_SIZE_PT * 25.4 / 72.0 * 1.15
+        ):
+            raise PerformanceComparisonError(
+                "performance_radar_legend_space_insufficient",
+                "Radar legend and interpretation notes do not fit the reserved "
+                "panel at the governed font size; use two LegendColumn values "
+                "or explicit grouped LegendIdentity values.",
+            )
         column_offset_mm = PERFORMANCE_REFERENCE_PANEL_WIDTH_MM * float(column - 1)
         heading_x = (
             plot_panel_width + heading_inset_mm + column_offset_mm

@@ -46,7 +46,21 @@ def _fixed_frame_report(
         for graph in graphs:
             graph_expected_margins = dict(expected_margins)
             if graph.get("role") == "performance_plot":
-                from sciplot_core.policy import PERFORMANCE_PANEL_WIDTH_MM
+                from sciplot_core.policy import (
+                    PERFORMANCE_PANEL_WIDTH_MM,
+                    PERFORMANCE_RADAR_LEFT_MARGIN_MM,
+                    PERFORMANCE_RADAR_RIGHT_MARGIN_MM,
+                    PERFORMANCE_RADAR_BOTTOM_MARGIN_MM,
+                    PERFORMANCE_RADAR_TOP_MARGIN_MM,
+                )
+
+                if graph.get("performance_template") == "polar_curve":
+                    graph_expected_margins = {
+                        "left": PERFORMANCE_RADAR_LEFT_MARGIN_MM,
+                        "right": PERFORMANCE_RADAR_RIGHT_MARGIN_MM,
+                        "bottom": PERFORMANCE_RADAR_BOTTOM_MARGIN_MM,
+                        "top": PERFORMANCE_RADAR_TOP_MARGIN_MM,
+                    }
 
                 page = pages.get(int(graph.get("page") or 0))
                 page_size = (
@@ -58,7 +72,7 @@ def _fixed_frame_report(
                     graph_expected_margins["right"] = (
                         float(page_size[0])
                         - PERFORMANCE_PANEL_WIDTH_MM
-                        + expected_margins["right"]
+                        + graph_expected_margins["right"]
                     )
             margins = (
                 graph.get("margins_mm")
