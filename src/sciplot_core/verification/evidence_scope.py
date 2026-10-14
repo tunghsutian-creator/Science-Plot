@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Any
+from typing import Any, cast
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.verification.evidence import load_receipt
@@ -97,7 +97,7 @@ def _reviewed_noncandidate_sources(root: Path, environment: dict[str, str], node
     if (len(set(complete)) != len(complete) or not set(nodes) <= set(complete)
             or [issue[0] for issue in issues] != ["access_audit_required"]):
         raise ValueError("selected case has no reviewed private/synthetic disposition")
-    return review["test_sources_sha256"]
+    return cast(str, review["test_sources_sha256"])
 
 
 def _corpus_paths(root: Path, environment: dict[str, str], nodes: list[str], *,
@@ -270,7 +270,9 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
             raise ValueError("Git executable is unavailable")
         paths["dependencies"].append(Path(git))
         paths["config"].extend(_git_inputs(root))
-    inputs, discovered, layouts = {}, {}, {}
+    inputs: dict[str, dict[str, Any]] = {}
+    discovered: dict[str, list[str]] = {}
+    layouts: dict[str, str] = {}
     for domain, roots in sorted(paths.items()):
         if domain in exclusions:
             inputs[domain] = {"not_applicable": exclusions[domain]}
@@ -283,7 +285,7 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
     system = _validate_external_literals(root, nodes, {Path(name) for files in discovered.values() for name in files})
     discovered["native"].extend(str(path) for path in system)
     inputs["native"]["paths"].extend(str(path) for path in system)
-    aliases = {}
+    aliases: dict[str, str] = {}
     native = native_dependencies(sorted({name for key in ("native", "python", "dependencies", "qt")
                                           for name in discovered[key]}),
                                  executable=Path(sys.executable), environment=environment,
