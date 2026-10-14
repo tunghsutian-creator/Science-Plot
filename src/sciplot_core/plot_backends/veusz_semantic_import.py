@@ -7,6 +7,7 @@ from typing import Any
 from sciplot_core.studio_core.annotation_axes import axis_unit, require_scope
 from sciplot_core.studio_core.annotation_legend import require_native_legend
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError
+from sciplot_core.style_values import normalize_physical_size
 
 
 def axis_properties(obj: dict[str, Any], target: dict[str, Any],
@@ -53,6 +54,21 @@ def legend_properties(obj: dict[str, Any], target: dict[str, Any],
     obj["properties"]["legend.visible"] = legend["show"]
     obj["capabilities"]["legend.visible"] = {"type": "boolean", "risk": "review"}
     target["properties"]["legend.visible"] = {"kind": "legend_visibility", "current_value": legend["show"]}
+    field = next((field for field in widget["editable_fields"]
+                  if field["setting_path"] == target["object_path"] + "/keyLength"
+                  and field.get("editor") == "distance"), None)
+    if field is not None:
+        try:
+            normalize_physical_size(field["current_value"])
+            capability = {"type": "physical_size", "risk": "presentation"}
+        except ValueError:
+            pass  # An unsupported native length remains opaque legacy state.
+        else:
+            obj["properties"]["legend.sample_length"] = field["current_value"]
+            obj["capabilities"]["legend.sample_length"] = capability
+            target["properties"]["legend.sample_length"] = {
+                "kind": "setting", "setting_path": field["setting_path"],
+                "current_value": field["current_value"]}
     names = ("horzPosn", "vertPosn", "horzManual", "vertManual")
     fields = {field["setting_path"] for field in widget["editable_fields"]}
     if any(name not in settings or target["object_path"] + "/" + name not in fields for name in names):

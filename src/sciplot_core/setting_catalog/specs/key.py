@@ -5,6 +5,8 @@ from sciplot_core.setting_catalog.model import COMMON_VISIBILITY, _field
 KEY_INSPECTOR_FIELDS = (
     COMMON_VISIBILITY,
     _field("legend_title", "Legend", "Title", "title", "text"),
+    _field("legend_sample_length", "Legend", "Sample length", "keyLength", "distance",
+           help_text="Positive physical length; the complete native legend must fit its page before saving."),
     _field(
         "legend_columns",
         "Legend",

@@ -20,6 +20,7 @@ PROPERTY_RULES: dict[str, tuple[str, str, set[str]]] = {
     "axis.limits": ("number_pair", "review", {"axis"}),
     "legend.visible": ("boolean", "presentation", {"legend"}),
     "legend.position": ("number_pair", "review", {"legend"}),
+    "legend.sample_length": ("physical_size", "presentation", {"legend"}),
     "annotation.position": ("number_pair", "review", {"annotation"}),
     "annotation.visible": ("boolean", "review", {"annotation"}),
     "annotation.text": ("string", "review", {"annotation"}),
