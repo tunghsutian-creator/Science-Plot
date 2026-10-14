@@ -86,6 +86,8 @@ and requires the original selected bodies and finish evidence. A finite
 source-bound generated-control caller may exercise a genuinely unobserved child;
 ordinary child-startup guards remain closed. This stage is not an OS sandbox or
 a private scientific/access-completeness certificate.
+Normal generated corpus-preflight controls retain the public guard through the
+owned common bootstrap; they do not use the missing-startup control exception.
 
 For controlled local original-data execution use
 `verify --start private-science --out .tmp_verify/private-science --json`.
