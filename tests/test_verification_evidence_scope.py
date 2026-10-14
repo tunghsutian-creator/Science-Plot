@@ -247,3 +247,21 @@ def test_named_suite_profiles_are_exact_not_arbitrary_commands(checkout, monkeyp
     check["command"].append("--last-failed")
     with pytest.raises(ValueError, match="reviewed profile"):
         scope.build_check_spec(plan, check, checkout, environment=dict(os.environ), finish_path=checkout / ".tmp_verify/suite/finish.json")
+
+
+def test_relative_private_namespace_uses_repo_root_preserving_alias(checkout, monkeypatch):
+    actual = checkout / "private-data"
+    actual.mkdir()
+    (actual / "raw.csv").write_text("actual scientific input")
+    alias = checkout / "private-current"
+    alias.symlink_to(actual, target_is_directory=True)
+    monkeypatch.chdir(checkout.parent)
+    paths, _ = scope._corpus_paths(checkout, {"SCIPLOT_REFERENCE_DATA": "private-current"}, [])
+    assert paths[-1] == alias
+    before = discover_files(paths, allow_missing=True)
+    replacement = checkout / "private-replacement"
+    replacement.mkdir()
+    (replacement / "raw.csv").write_text("changed scientific input")
+    alias.unlink()
+    alias.symlink_to(replacement, target_is_directory=True)
+    assert before != discover_files(paths, allow_missing=True)

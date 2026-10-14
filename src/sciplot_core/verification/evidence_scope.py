@@ -103,6 +103,7 @@ def _corpus_paths(root: Path, environment: dict[str, str], nodes: list[str]) -> 
             raise ValueError("selected scientific fixtures are missing, unsafe or unmapped")
     raw = [root / "tests/fixtures"]
     local = Path(environment.get("SCIPLOT_REFERENCE_DATA", str(root / ".local/reference_data"))).expanduser()
+    local = local if local.is_absolute() else root / local
     raw.append(local)
     if not local.exists() and environment.get("SCIPLOT_REFERENCE_DATA"):
         raise ValueError("configured scientific fixture namespace is missing")
