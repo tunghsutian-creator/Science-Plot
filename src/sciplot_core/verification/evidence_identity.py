@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.verification.evidence_environment import binding_valid, semantic_environment
 
 DOMAINS = frozenset({
     "implementation", "tests", "config", "owner_policy", "dependencies", "python",
@@ -266,14 +267,17 @@ can survive a documentation-only commit. Scope/selection are never widened.
     ):
         raise ValueError("audited corpus needs actual raw, inventory and access receipt bytes")
     public_members = public_test_members(repo_root) if _public_scope(scope, corpus) else None
+    semantic, environment_binding = semantic_environment(environment)
     payload: dict[str, Any] = {
         "kind": "sciplot_verification_identity", "version": 1,
         "root_sha256": digest(str(repo_root.resolve())), "command": list(command),
         "scope": scope, "selected_tests": list(selected_tests),
         "inputs": capture_inputs(inputs, repo_root=repo_root,
                                  excluded_domains=scope.get("excluded_domains")),
-        "environment_sha256": digest(environment), "corpus": corpus,
+        "environment_sha256": digest(semantic), "corpus": corpus,
     }
+    if environment_binding is not None:
+        payload["environment_binding"] = environment_binding
     public = _public_binding(scope, corpus, command, selected_tests, payload["inputs"])
     if public is not None:
         from sciplot_core.verification.input_scope import load_manifest
@@ -328,10 +332,12 @@ can survive a documentation-only commit. Scope/selection are never widened.
 def identity_valid(identity: object) -> bool:
     """Validate untrusted snapshot structure without reading its paths or code."""
     try:
-        if not isinstance(identity, dict) or set(identity) != {
+        if not isinstance(identity, dict) or set(identity) - {"environment_binding"} != {
             "kind", "version", "root_sha256", "command", "scope", "selected_tests",
             "inputs", "environment_sha256", "corpus", "sha256",
         }:
+            return False
+        if "environment_binding" in identity and not binding_valid(identity["environment_binding"]):
             return False
         if identity["kind"] != "sciplot_verification_identity" or type(identity["version"]) is not int or identity["version"] != 1:
             return False

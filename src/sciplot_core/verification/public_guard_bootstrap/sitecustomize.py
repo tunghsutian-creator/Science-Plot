@@ -3,6 +3,7 @@ import os
 import hashlib
 import json
 import importlib.util
+from importlib.machinery import PathFinder
 from pathlib import Path
 import sys
 
@@ -16,6 +17,19 @@ try:
             "path": str(actual), "sha256": hashlib.sha256(actual.read_bytes()).hexdigest(),
         })
     if os.environ.get("SCIPLOT_PRIVATE_AUDIT_DIR") and os.environ.get("SCIPLOT_PRIVATE_AUDIT_ROOTS"):
+        # Audit composition needs the observer belonging to this owned startup,
+        # including when a guard control intentionally omits the source path.
+        source = Path(__file__).resolve().parents[3]
+        owner = source / "sciplot_core/__init__.py"
+        locations = [os.curdir, *os.environ.get("PYTHONPATH", "").split(os.pathsep)]
+        explicit = PathFinder.find_spec("sciplot_core", locations)
+        if explicit is not None and explicit.origin is not None and Path(explicit.origin).resolve() != owner:
+            raise ValueError("Public observation has an unknown explicit source owner.")
+        sys.path.insert(0, str(source))
+        import sciplot_core
+
+        if Path(sciplot_core.__file__).resolve() != owner:
+            raise ValueError("Public observation has an unknown loaded source owner.")
         from sciplot_core.verification.private_observer import install as install_observer
 
         install_observer()

@@ -30,7 +30,9 @@ def _controls(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     source = tmp_path / "control source"
     package = source / "sciplot_core"
     package.mkdir(parents=True)
-    (package / "__init__.py").write_text("")
+    # Keep the generated CLI first while allowing an inherited real observer to
+    # import its actual verification owner through the controlled package.
+    (package / "__init__.py").write_text(f"__path__.append({str(REPO_ROOT / 'src/sciplot_core')!r})\n")
     (package / "cli.py").write_text(
         "import json,os,sys\n"
         "print(json.dumps({'frameworks':os.environ.get('DYLD_FRAMEWORK_PATH'),"

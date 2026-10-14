@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import hashlib
 import ast
+from importlib.machinery import PathFinder
 import os
 from pathlib import Path
 import sys
@@ -22,8 +23,19 @@ def _owned_bootstrap(first: Path, child_paths: list[str], child_cwd: Path) -> bo
     """A relocated common shim must retain actual source bytes/import owner."""
     root = Path(__file__).resolve().parents[3]
     sources = [Path(p) if Path(p).is_absolute() else child_cwd / p for p in child_paths]
+    explicit = PathFinder.find_spec("sciplot_core", [str(child_cwd), *(str(path) for path in sources)])
+    if explicit is not None and explicit.origin is not None and Path(explicit.origin).resolve() != root / "src/sciplot_core/__init__.py":
+        return False
     package = next((p for p in sources if (p / "sciplot_core/__init__.py").is_file()), None)
-    if package is None or package.resolve() != root / "src":
+    public = Path(__file__).parent / "public_guard_bootstrap/sitecustomize.py"
+    adjacent = first.parent.parent / "public_input_guard.py"
+    if package is None:
+        # This exact owned startup loads enforcement without a package path;
+        # its audit branch also pins the observer to its adjacent source owner.
+        return (first.absolute() == public.resolve() and not first.is_symlink()
+                and first.read_bytes() == public.read_bytes() and adjacent.resolve() == Path(__file__).resolve()
+                and hashlib.sha256(adjacent.read_bytes()).digest() == hashlib.sha256(Path(__file__).read_bytes()).digest())
+    if package.resolve() != root / "src":
         return False
     source = Path(__file__).with_name("private_observer.py")
     tree = ast.parse(source.read_bytes())
@@ -32,8 +44,6 @@ def _owned_bootstrap(first: Path, child_paths: list[str], child_cwd: Path) -> bo
                      and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)), None)
     if expected is not None and first.read_bytes() == expected.encode():
         return True
-    public = Path(__file__).parent / "public_guard_bootstrap/sitecustomize.py"
-    adjacent = first.parent.parent / "public_input_guard.py"
     return (first.read_bytes() == public.read_bytes() and adjacent.is_file()
             and hashlib.sha256(adjacent.read_bytes()).digest() == hashlib.sha256(Path(__file__).read_bytes()).digest())
 
@@ -124,8 +134,7 @@ def install() -> None:
                     supported = (bootstrap_binding is not None and first is not None
                                  and first.resolve() == Path(binding["path"]).resolve()
                                  and hashlib.sha256(first.read_bytes()).hexdigest() == binding["sha256"]
-                                 and (child_environment.get(BOOTSTRAP_KEY) == bootstrap_binding
-                                      or _owned_bootstrap(first, child_paths, child_cwd)))
+                                 and _owned_bootstrap(first, child_paths, child_cwd))
                 except (TypeError, ValueError, KeyError, OSError):
                     supported = False
                 if not supported:

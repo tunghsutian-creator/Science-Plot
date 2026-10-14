@@ -43,7 +43,7 @@ def frame_digest(value: dict[str, Any]) -> str:
 def source_hashes() -> dict[str, str]:
     names = ["private_observer.py", "private_observer_pytest.py", "private_capture.py", "private_process_boundaries.py",
              "suite_evidence.py", "durable_runner.py", "evidence_identity.py", "private_corpus.py",
-             "native_probe_boundary.py", "evidence_runtime.py"]
+             "native_probe_boundary.py", "evidence_runtime.py", "evidence_environment.py"]
     public = Path(__file__).parent / "public_guard_bootstrap/sitecustomize.py"
     if public.is_file():
         names.append("public_guard_bootstrap/sitecustomize.py")

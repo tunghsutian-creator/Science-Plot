@@ -16,6 +16,8 @@ from sciplot_core.verification.evidence_identity import DOMAINS
 
 @pytest.fixture
 def suite_case(tmp_path, monkeypatch):
+    from sciplot_core.verification.private_observer import reserve_child_environment
+
     inputs = {}
     for domain in DOMAINS:
         path = tmp_path / domain
@@ -52,7 +54,9 @@ def suite_case(tmp_path, monkeypatch):
     observer_module.bootstrap_sources = lambda: {name: "# read-only test fixture\n" for name in ("sitecustomize.py", "sciplot_closure_audit.py")}
     observer_module.begin_suite_audit = lambda environment: types.SimpleNamespace(
         directory=Path(environment["SCIPLOT_PRIVATE_AUDIT_DIR"]), run=environment["SCIPLOT_PRIVATE_AUDIT_RUN"])
-    observer_module.reserve_child_environment = lambda environment: dict(environment)
+    # Preserve actual outer-observer launch routing even though suite activation
+    # and its bootstrap remain synthetic ports in this orchestration fixture.
+    observer_module.reserve_child_environment = reserve_child_environment
     monkeypatch.setitem(sys.modules, observer_module.__name__, observer_module)
     boundary_module = types.ModuleType("sciplot_core.verification.private_process_boundaries")
 
