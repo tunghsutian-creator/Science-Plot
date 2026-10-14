@@ -26,6 +26,7 @@ from sciplot_core.verification.private_corpus_audit import (
     test_sources_sha256 as source_digest,
 )
 from sciplot_core.verification.private_observer import CHILD, CONTINUATION, PARENT, RUN, write_bootstrap
+from sciplot_core.verification.public_input_guard import ENVIRONMENT_KEY, rebind_bootstrap
 from private_observer_support import execute_observed
 
 NODE = "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_directory_requires_exactly_one_supported_file[2]"
@@ -349,10 +350,12 @@ def _review_and_receipt(tmp_path: Path, inventory: Path, *, collection_event: st
                        PYTEST_PLUGINS="sciplot_closure_audit", SCIPLOT_PRIVATE_AUDIT_DIR=str(output),
                        SCIPLOT_PRIVATE_AUDIT_ROOTS=json.dumps([str(tmp_path / "tests/fixtures"), str(fixture.parents[2])]))
     environment[RUN] = uuid4().hex
+    if ENVIRONMENT_KEY in environment:
+        environment = rebind_bootstrap(environment, plugin)
     proof, capture = execute_observed(tmp_path, [sys.executable, "-m", "pytest", "-q", "-p",
                                                "sciplot_core.verification.pytest_finish",
                                                str(source.relative_to(tmp_path))], environment, output,
-                                      [str(tmp_path / "tests/fixtures"), str(fixture.parents[2])], nodes=nodes)
+                                      [str(tmp_path / "tests/fixtures"), str(fixture.parents[2])], nodes=nodes, keep_public_guard=True)
     assert capture["actual_returncode"] == 0, capture["stdout"]
     assert capture["capture_complete"], capture["issues"]
     access = [{"nodeid": frame["nodeid"], "path": FIXTURE.as_posix(), "event": frame["event"]}

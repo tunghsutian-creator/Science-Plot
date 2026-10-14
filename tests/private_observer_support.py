@@ -1,6 +1,7 @@
 """Generated process controls, using the existing genuine execution witness."""
 from __future__ import annotations
 
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -15,7 +16,7 @@ from sciplot_core.verification.public_control_boundary import generated_control
 
 def execute_observed(root: Path, command: list[str], environment: dict[str, str],
                      output: Path, roots: list[str], *, nodes: set[str] | None = None,
-                     timeout: float = 60) -> tuple[dict[str, Any], dict[str, Any]]:
+                     timeout: float = 60, keep_public_guard: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
     inputs = {}
     for domain in DOMAINS:
         path = root / f"generated-identity-{domain}"
@@ -30,9 +31,10 @@ def execute_observed(root: Path, command: list[str], environment: dict[str, str]
             "selected_tests": sorted(nodes) if nodes is not None else ["synthetic:process-observation"],
             "inputs": inputs, "environment": environment,
             "corpus": {"mode": "synthetic", "complete": True, "policy": "generated observer self-test"}}
-    # Preparation does not spawn: bind and validate the private-absent stage
-    # before deriving the guard-free generated-control request.
-    with generated_control(environment, command, root, durable=True, directory=directory) as prepared_environment:
+    # Only missing-startup controls need the private-absent exception. Ordinary
+    # receipt controls keep their full guard declaration and owned bootstrap.
+    with (nullcontext(environment) if keep_public_guard else generated_control(
+            environment, command, root, durable=True, directory=directory)) as prepared_environment:
         directory, original_environment, request_hash = prepare_run(
             directory=directory, spec={**spec, "environment": prepared_environment})
     settings = {key: value for key, value in original_environment.items()
@@ -51,8 +53,9 @@ def execute_observed(root: Path, command: list[str], environment: dict[str, str]
                           if key.startswith("SCIPLOT_PUBLIC_")}}
     # Context exit verifies Git through subprocess; wait before that can reap
     # the discarded supervisor handle via subprocess._cleanup.
-    with generated_control(launch_environment, witness_spec["command"], root, durable=True,
-                           directory=witness) as child_environment:
+    with (nullcontext(launch_environment) if keep_public_guard else generated_control(
+            launch_environment, witness_spec["command"], root, durable=True,
+            directory=witness)) as child_environment:
         start = start_run(directory=witness, spec={**witness_spec, "environment": child_environment})
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
