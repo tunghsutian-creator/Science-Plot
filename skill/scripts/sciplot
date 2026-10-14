@@ -34,6 +34,28 @@ if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v otool >/dev
   fi
 fi
 
+if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v realpath >/dev/null 2>&1; then
+  PYTHON_EXECUTABLE="$PYTHON"
+  if [[ "$PYTHON_EXECUTABLE" != */* ]]; then
+    PYTHON_EXECUTABLE="$(command -v "$PYTHON_EXECUTABLE" || true)"
+  fi
+  PYTHON_REAL_PATH="$(realpath -- "$PYTHON_EXECUTABLE" 2>/dev/null || true)"
+  case "$PYTHON_REAL_PATH" in
+    */Python.framework/Versions/*/bin/python*)
+      PYTHON_FRAMEWORK_ROOT="${PYTHON_REAL_PATH%%/Python.framework/Versions/*}"
+      PYTHON_FRAMEWORK_LIBRARY="${PYTHON_REAL_PATH%/bin/python*}/Python"
+      if [[ -d "$PYTHON_FRAMEWORK_ROOT" && -f "$PYTHON_FRAMEWORK_LIBRARY" ]]; then
+        # Protected macOS shell entry points clear inherited DYLD variables.
+        # Restore the selected interpreter's actual framework after that entry.
+        case ":${DYLD_FRAMEWORK_PATH:-}:" in
+          *":$PYTHON_FRAMEWORK_ROOT:"*) ;;
+          *) export DYLD_FRAMEWORK_PATH="$PYTHON_FRAMEWORK_ROOT${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}" ;;
+        esac
+      fi
+      ;;
+  esac
+fi
+
 if [[ -d "$SOURCE_ROOT" ]]; then
   export PYTHONPATH="$SOURCE_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 fi
