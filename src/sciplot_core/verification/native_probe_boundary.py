@@ -11,7 +11,7 @@ import subprocess
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.verification.evidence_identity import digest
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.verification.private_process_boundaries import owned_caller, owner_identity
 
 _TOOL = Path('/Library/Developer/CommandLineTools/usr/bin/otool')
@@ -54,11 +54,11 @@ def _boundary(mode: str, target: Path) -> dict[str, Any]:
     tool = inspector_path()
     return {'kind': 'owned_native_macho_inspection', 'mode': mode,
             'owner': owner_identity('evidence_runtime.py', 'native_dependencies'),
-            'tool_path_sha256': digest(str(tool)), 'tool_sha256': file_sha256(tool),
-            'target_path_sha256': digest(str(target)), 'target_sha256': file_sha256(target),
+            'tool_path_sha256': canonical_json_sha256(str(tool), allow_nan=False), 'tool_sha256': file_sha256(tool),
+            'target_path_sha256': canonical_json_sha256(str(target), allow_nan=False), 'target_sha256': file_sha256(target),
             'argv_sha256': hashlib.sha256(json.dumps({'argv': [str(tool), mode, str(target)]},
                 sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest(),
-            'environment_sha256': digest(probe_environment()), 'system_sha256': file_sha256(_SYSTEM)}
+            'environment_sha256': canonical_json_sha256(probe_environment(), allow_nan=False), 'system_sha256': file_sha256(_SYSTEM)}
 
 
 def native_probe_call(bound: inspect.BoundArguments) -> dict[str, Any] | None:
@@ -95,12 +95,12 @@ def native_probe_bound(value: Any, records: dict[str, Any], attempt: dict[str, A
                 and value['argv_sha256'] == attempt.get('argv_sha256')
                 and value['tool_sha256'] == attempt.get('expected_executable_sha256')
                 and value['owner'] == owner_identity('evidence_runtime.py', 'native_dependencies')
-                and value['environment_sha256'] == digest(probe_environment())
-                and value['tool_path_sha256'] == digest(str(tool))
+                and value['environment_sha256'] == canonical_json_sha256(probe_environment(), allow_nan=False)
+                and value['tool_path_sha256'] == canonical_json_sha256(str(tool), allow_nan=False)
                 and value['tool_sha256'] == file_sha256(tool)
-                and records.get(digest(str(tool)), {}).get('sha256') == value['tool_sha256']
+                and records.get(canonical_json_sha256(str(tool), allow_nan=False), {}).get('sha256') == value['tool_sha256']
                 and records.get(value['target_path_sha256'], {}).get('sha256') == value['target_sha256']
                 and value['system_sha256'] == file_sha256(_SYSTEM)
-                and records.get(digest(str(_SYSTEM)), {}).get('sha256') == value['system_sha256'])
+                and records.get(canonical_json_sha256(str(_SYSTEM), allow_nan=False), {}).get('sha256') == value['system_sha256'])
     except (OSError, ValueError, TypeError):
         return False
