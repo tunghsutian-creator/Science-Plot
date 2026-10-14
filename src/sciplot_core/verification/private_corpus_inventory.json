@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4537,
-    "nodeids_sha256": "6b8c3b4d80c808f6abbb8ce19eff4c7cc38dd723ea1971b8b0c9199dc631f439",
-    "test_sources_sha256": "025bd29e9e6a23b018148392550c2673ad4efe7a93f53a0e727ec876535f08d4",
-    "test_source_count": 326,
+    "nodeid_count": 4567,
+    "nodeids_sha256": "c81b84983a75205329008b72c5c45ace6b038678e1e79ea7837c161f6701e21d",
+    "test_sources_sha256": "8402be89b48bd82662267ead4e592c9c567502dcd06bb5de081b3b3644f68da6",
+    "test_source_count": 327,
     "candidate_nodeids": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
       "tests/test_delivery_studio_lifecycle.py::test_dsc_public_delivery_continues_project_and_copied_package_exports_independently",
@@ -135,7 +135,11 @@
       "tests/test_public_stage.py::test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_binding[stage_head]",
       "tests/test_public_stage.py::test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_binding[stage_source]",
       "tests/test_public_stage.py::test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_binding[wrong_environment]",
+      "tests/test_public_verification_identity.py::test_actual_guard_capture_keeps_public_config_and_removes_only_covered_import_roots",
       "tests/test_public_verification_identity.py::test_actual_manifest_drift_keeps_old_snapshot_historic_and_blocks_fresh_capture",
+      "tests/test_public_verification_identity.py::test_covered_import_filter_keeps_implementation_external_bytes_and_aliases[alias]",
+      "tests/test_public_verification_identity.py::test_covered_import_filter_keeps_implementation_external_bytes_and_aliases[external]",
+      "tests/test_public_verification_identity.py::test_covered_import_filter_keeps_implementation_external_bytes_and_aliases[implementation]",
       "tests/test_public_verification_identity.py::test_fresh_public_capture_checks_actual_manifest_membership_even_with_new_selection_hash",
       "tests/test_public_verification_identity.py::test_generated_only_public_skips_empty_domains_before_discovery_and_binds_policy",
       "tests/test_public_verification_identity.py::test_generated_public_exclusion_does_not_weaken_real_raw_modes[audited]",
@@ -568,7 +572,23 @@
         "reason": "Explicit temporary generated source repositories and synthetic runtime bindings validate exact public source-stage identity, unavailable private namespaces, caller/report boundaries and drift. No private measurement or original golden is consumed."
       },
       {
+        "nodeid": "tests/test_public_verification_identity.py::test_actual_guard_capture_keeps_public_config_and_removes_only_covered_import_roots",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
         "nodeid": "tests/test_public_verification_identity.py::test_actual_manifest_drift_keeps_old_snapshot_historic_and_blocks_fresh_capture",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_covered_import_filter_keeps_implementation_external_bytes_and_aliases[alias]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_covered_import_filter_keeps_implementation_external_bytes_and_aliases[external]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_covered_import_filter_keeps_implementation_external_bytes_and_aliases[implementation]",
         "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
       },
       {
