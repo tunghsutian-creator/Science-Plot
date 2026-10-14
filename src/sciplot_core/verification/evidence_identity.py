@@ -1,0 +1,204 @@
+"""Content identities for explicitly bounded, local development verification.
+
+The caller owns dependency closure. Unknown closure is deliberately not reusable.
+Paths are used locally to read bytes; snapshots expose only opaque path digests.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import stat
+from pathlib import Path
+from typing import Any
+
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
+
+DOMAINS = frozenset({
+    "implementation", "tests", "config", "owner_policy", "dependencies", "python",
+    "qt", "native", "fonts", "golden", "raw", "corpus_policy",
+})
+REQUIRED_FILES = frozenset({
+    "implementation", "tests", "config", "owner_policy", "dependencies", "python",
+    "corpus_policy",
+})
+
+
+def digest(value: Any) -> str:
+    return canonical_json_sha256(value, allow_nan=False)
+
+
+def _stable_file(path: Path) -> dict[str, Any]:
+    content = hashlib.sha256()
+    with path.open("rb") as stream:
+        before = os.fstat(stream.fileno())
+        if not stat.S_ISREG(before.st_mode):
+            raise ValueError("identity input is not a regular file")
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            content.update(chunk)
+        after = os.fstat(stream.fileno())
+    current = path.stat()
+    fields = ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns", "st_ctime_ns")
+    if any(getattr(before, key) != getattr(after, key) or getattr(before, key) != getattr(current, key)
+           for key in fields):
+        raise ValueError("identity input changed during hashing")
+    return {"sha256": content.hexdigest(), "size": after.st_size, "mode": stat.S_IMODE(after.st_mode)}
+
+
+def _members(path: Path) -> list[Path]:
+    if path.is_file():
+        return [path]
+    if not path.is_dir():
+        raise ValueError("identity input is missing")
+    result = [path]
+    for parent, dirs, files in os.walk(path, followlinks=False):
+        dirs[:] = sorted(name for name in dirs if name != "__pycache__")
+        if any((Path(parent) / name).is_symlink() for name in dirs):
+            raise ValueError("identity trees cannot contain directory symlinks; bind resolved roots")
+        result.extend(Path(parent) / name for name in dirs)
+        result.extend(Path(parent) / name for name in sorted(files)
+                      if not name.endswith((".pyc", ".pyo")))
+    return sorted(result)
+
+
+def capture_inputs(inputs: dict[str, Any], *, repo_root: Path,
+                   excluded_domains: dict[str, str] | None = None) -> dict[str, Any]:
+    """Hash every declared file and directory membership, without storing paths."""
+    if not isinstance(inputs, dict) or not DOMAINS <= inputs.keys():
+        raise ValueError("all verification identity domains must be declared")
+    result = {}
+    for domain, binding in sorted(inputs.items()):
+        if not isinstance(binding, dict):
+            raise ValueError("invalid identity binding")
+        if set(binding) == {"not_applicable"}:
+            if domain in REQUIRED_FILES or not isinstance(binding["not_applicable"], str) or not binding["not_applicable"].strip():
+                raise ValueError("required domain cannot be omitted")
+            if (excluded_domains or {}).get(domain) != binding["not_applicable"]:
+                raise ValueError("domain exclusion must be explicitly bound to scope policy")
+            result[domain] = dict(binding)
+            continue
+        if set(binding) != {"paths"} or not isinstance(binding["paths"], list) or not binding["paths"]:
+            raise ValueError("identity binding needs nonempty paths")
+        records = {}
+        for name in binding["paths"]:
+            if not isinstance(name, str) or not name:
+                raise ValueError("invalid identity path")
+            path = Path(name).expanduser()
+            path = path if path.is_absolute() else repo_root / path
+            path = path.resolve(strict=True)
+            members = _members(path)
+            if not members:
+                raise ValueError("empty identity tree")
+            for member in members:
+                if member.is_symlink():
+                    raise ValueError("identity tree file symlinks need explicit resolved binding")
+                key = digest(str(member))
+                records[key] = ({"sha256": digest("directory"), "size": 0,
+                                 "mode": stat.S_IMODE(member.stat().st_mode)}
+                                if member.is_dir() else _stable_file(member))
+            if members != _members(path):
+                raise ValueError("identity tree membership changed during hashing")
+        result[domain] = {"files": records, "sha256": digest(records)}
+    return result
+
+
+def capture_identity(*, repo_root: Path, command: list[str], scope: dict[str, Any],
+                     selected_tests: list[str], inputs: dict[str, Any],
+                     environment: dict[str, str], corpus: dict[str, Any]) -> dict[str, Any]:
+    """Capture a declared closure, exact command/scope and effective environment.
+
+``scope`` must include nonempty ``kind`` and ``closure_policy``. Git commit
+metadata belongs in receipt provenance, not here: identical executable content
+can survive a documentation-only commit. Scope/selection are never widened.
+    ``corpus`` is synthetic, declared, or audited. Declared mode is a caller-owned
+    static closure for this command and explicitly disclaims fresh access audit
+    and scientific acceptance. Audited mode also binds the access receipt bytes.
+    Neither mode infers complete closure from a preliminary inventory.
+"""
+    if not command or not all(isinstance(arg, str) and arg for arg in command):
+        raise ValueError("command must be an exact nonempty argument vector")
+    if not isinstance(scope, dict) or any(not isinstance(scope.get(key), str) or not scope[key].strip()
+                                         for key in ("kind", "closure_policy")):
+        raise ValueError("scope and reviewed closure policy are required")
+    if not isinstance(selected_tests, list) or any(not isinstance(node, str) or not node for node in selected_tests) or len(set(selected_tests)) != len(selected_tests):
+        raise ValueError("selected tests must be unique exact identifiers")
+    if not isinstance(environment, dict) or not environment or not all(isinstance(k, str) and isinstance(v, str) for k, v in environment.items()):
+        raise ValueError("effective execution environment must be bound")
+    if not isinstance(corpus, dict) or corpus.get("complete") is not True or corpus.get("mode") not in {"synthetic", "declared", "audited"} or not corpus.get("policy"):
+        raise ValueError("unknown or preliminary corpus closure")
+    if corpus["mode"] == "declared" and (
+        any(corpus.get(key) is not False for key in ("fresh_access_audit", "scientific_acceptance"))
+        or any("paths" not in inputs.get(key, {}) for key in ("raw", "inventory"))
+    ):
+        raise ValueError("declared closure needs inventory/raw bytes and explicit acceptance exclusions")
+    if corpus["mode"] == "audited" and (
+        not {"inventory", "access_receipt"} <= inputs.keys()
+        or any("paths" not in inputs.get(key, {}) for key in ("raw", "inventory", "access_receipt"))
+    ):
+        raise ValueError("audited corpus needs actual raw, inventory and access receipt bytes")
+    payload = {
+        "kind": "sciplot_verification_identity", "version": 1,
+        "root_sha256": digest(str(repo_root.resolve())), "command": list(command),
+        "scope": scope, "selected_tests": list(selected_tests),
+        "inputs": capture_inputs(inputs, repo_root=repo_root,
+                                 excluded_domains=scope.get("excluded_domains")),
+        "environment_sha256": digest(environment), "corpus": corpus,
+    }
+    # Freeze caller-owned mappings so subsequent plan construction cannot mutate
+    # the already captured before-state through an alias.
+    payload = json.loads(json.dumps(payload, allow_nan=False))
+    return {**payload, "sha256": digest(payload)}
+
+
+def identity_valid(identity: object) -> bool:
+    """Validate untrusted snapshot structure without reading its paths or code."""
+    try:
+        if not isinstance(identity, dict) or set(identity) != {
+            "kind", "version", "root_sha256", "command", "scope", "selected_tests",
+            "inputs", "environment_sha256", "corpus", "sha256",
+        }:
+            return False
+        if identity["kind"] != "sciplot_verification_identity" or type(identity["version"]) is not int or identity["version"] != 1:
+            return False
+        if not DOMAINS <= identity["inputs"].keys():
+            return False
+        if any(not isinstance(identity.get(key), str) or not re.fullmatch("[0-9a-f]{64}", identity[key])
+               for key in ("root_sha256", "environment_sha256", "sha256")):
+            return False
+        if not isinstance(identity["command"], list) or not identity["command"] or not all(
+            isinstance(arg, str) and arg for arg in identity["command"]
+        ):
+            return False
+        scope, corpus, selection = identity["scope"], identity["corpus"], identity["selected_tests"]
+        if not isinstance(scope, dict) or any(not isinstance(scope.get(key), str) or not scope[key].strip()
+                                             for key in ("kind", "closure_policy")):
+            return False
+        if not isinstance(corpus, dict) or corpus.get("complete") is not True or corpus.get("mode") not in {"synthetic", "declared", "audited"} or not corpus.get("policy"):
+            return False
+        if not isinstance(selection, list) or not all(isinstance(node, str) and node for node in selection) or len(set(selection)) != len(selection):
+            return False
+        for domain, binding in identity["inputs"].items():
+            if set(binding) == {"not_applicable"}:
+                if domain in REQUIRED_FILES or not binding["not_applicable"] or scope.get("excluded_domains", {}).get(domain) != binding["not_applicable"]:
+                    return False
+            elif set(binding) == {"files", "sha256"}:
+                if not isinstance(binding["files"], dict) or not binding["files"] or digest(binding["files"]) != binding["sha256"]:
+                    return False
+                for key, record in binding["files"].items():
+                    if not re.fullmatch("[0-9a-f]{64}", key) or set(record) != {"sha256", "size", "mode"}:
+                        return False
+                    if not re.fullmatch("[0-9a-f]{64}", record["sha256"]) or type(record["size"]) is not int or record["size"] < 0 or type(record["mode"]) is not int:
+                        return False
+            else:
+                return False
+        if corpus["mode"] == "audited" and any("files" not in identity["inputs"].get(key, {}) for key in ("raw", "inventory", "access_receipt")):
+            return False
+        if corpus["mode"] == "declared" and (
+            any(corpus.get(key) is not False for key in ("fresh_access_audit", "scientific_acceptance"))
+            or any("files" not in identity["inputs"].get(key, {}) for key in ("raw", "inventory"))
+        ):
+            return False
+        return identity["sha256"] == digest({key: value for key, value in identity.items() if key != "sha256"})
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return False
