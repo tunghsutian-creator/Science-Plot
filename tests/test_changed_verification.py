@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tomllib
@@ -209,6 +210,8 @@ def test_changed_snapshot_merges_tracked_and_untracked_once() -> None:
     ) -> subprocess.CompletedProcess[str]:
         assert cwd == REPO_ROOT
         calls.append(list(command))
+        if list(command[:2]) == ["git", "rev-parse"]:
+            return _completed(command, stdout="a" * 40 + "\n")
         if list(command[:2]) == ["git", "diff"]:
             return _completed(
                 command,
@@ -237,7 +240,9 @@ def test_changed_snapshot_merges_tracked_and_untracked_once() -> None:
         "tests/test_changed_verification.py",
     ]
     assert calls == [
-        ["git", "diff", "--name-only", "--no-renames", "-z", "HEAD", "--"],
+        ["git", "rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"],
+        ["git", "diff", "--name-only", "--no-renames", "-z", "--cached", "a" * 40, "--"],
+        ["git", "diff", "--name-only", "--no-renames", "-z", "--"],
         ["git", "ls-files", "--others", "--exclude-standard", "-z"],
     ]
 
@@ -989,7 +994,7 @@ def test_deleted_owned_source_selects_owner_evidence_but_not_ruff() -> None:
     ]
 
 
-def test_no_changes_passes_without_running_an_empty_focused_tier() -> None:
+def test_no_changes_reports_no_tests_without_running_an_empty_focused_tier() -> None:
     calls: list[list[str]] = []
 
     result = run_changed_verification(
@@ -1000,8 +1005,9 @@ def test_no_changes_passes_without_running_an_empty_focused_tier() -> None:
         ),
     )
 
-    assert result["status"] == "passed"
+    assert result["status"] == "NO_TESTS"
     assert result["checks"] == []
+    assert result["checks_executed"] == 0
     assert calls == []
 
 
@@ -1057,3 +1063,212 @@ def test_check_failure_is_projected_without_retry_or_gate_expansion() -> None:
     assert len(pytest_calls) == 1
     assert pytest_calls[0].count("tests/test_changed_verification.py") == 1
     assert "tests/test_skill_wrapper_cwd.py" not in pytest_calls[0]
+
+
+def _scope_git(repo: Path, *args: str) -> str:
+    return subprocess.check_output(
+        ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", *args],
+        cwd=repo, text=True,
+    ).strip()
+
+
+@pytest.fixture
+def scope_repo(tmp_path: Path) -> tuple[Path, str, str, str]:
+    repo = tmp_path / "verification-repo"
+    repo.mkdir()
+    _scope_git(repo, "init", "-q")
+    _scope_git(repo, "config", "user.name", "Verification Test")
+    _scope_git(repo, "config", "user.email", "verification@example.invalid")
+    (repo / "README.md").write_text("base\n")
+    _scope_git(repo, "add", "README.md")
+    _scope_git(repo, "commit", "-qm", "base")
+    base = _scope_git(repo, "rev-parse", "HEAD")
+    (repo / "README.md").write_text("changed\n")
+    source = repo / "src/sciplot_core/foundation/file_hashing.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("VALUE = 1\n")
+    _scope_git(repo, "add", ".")
+    _scope_git(repo, "commit", "-qm", "shared interface")
+    middle = _scope_git(repo, "rev-parse", "HEAD")
+    (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
+    _scope_git(repo, "add", "pyproject.toml")
+    _scope_git(repo, "commit", "-qm", "configuration")
+    return repo, base, middle, _scope_git(repo, "rev-parse", "HEAD")
+
+
+def test_clean_committed_delta_requires_a_base_and_records_resolved_commits(scope_repo) -> None:
+    repo, base, _middle, head = scope_repo
+    empty = run_changed_verification(repo_root=repo, plan_only=True)
+    assert empty["status"] == "NO_TESTS" and empty["checks"] == []
+    assert empty["comparison"]["resolved_base"] == head
+    assert "committed" not in empty["comparison"]["includes"]
+    calls: list[list[str]] = []
+
+    def git_only(command, cwd):
+        calls.append(list(command))
+        assert command[0] == "git", "Plan-only executed a non-Git verification gate"
+        return subprocess.run(command, cwd=cwd, capture_output=True, text=True)
+
+    plan = run_changed_verification(
+        repo_root=repo, base="HEAD~2", plan_only=True, command_runner=git_only,
+    )
+    assert plan["status"] == "planned" and plan["checks_executed"] == 0
+    assert plan["changed_paths"] == [
+        "README.md", "pyproject.toml", "src/sciplot_core/foundation/file_hashing.py",
+    ]
+    assert plan["comparison"] == {
+        "base": "HEAD~2", "resolved_base": base, "resolved_head": head,
+        "includes": ["committed", "staged", "unstaged", "untracked"], "source": "git",
+    }
+    assert all(check["status"] == "planned" for check in plan["checks"])
+    assert sum(check["check_id"] == "mypy_owned_scope" for check in plan["checks"]) == 1
+    assert {"documentation_contract", "typed_core_contracts", "verification_policy", "mypy_scope_configuration"} <= {
+        owner["owner_id"] for owner in plan["owners"]
+    }
+    whitespace = next(check for check in plan["checks"] if check["check_id"] == "diff_whitespace")
+    assert whitespace["command"] == ["git", "diff", "--check", base, "--"]
+    assert ["git", "diff", "--name-only", "--no-renames", "-z", base, head, "--"] in calls
+
+
+def test_different_bases_select_their_distinct_committed_paths(scope_repo) -> None:
+    repo, base, middle, _head = scope_repo
+    assert collect_changed_paths(repo, base=middle) == ["pyproject.toml"]
+    assert collect_changed_paths(repo, base=base) == [
+        "README.md", "pyproject.toml", "src/sciplot_core/foundation/file_hashing.py",
+    ]
+
+
+def test_base_execution_runs_each_planned_gate_once_with_the_resolved_scope(scope_repo) -> None:
+    repo, _base, middle, head = scope_repo
+    executed = []
+
+    def runner(command, cwd):
+        if command[0] == "git" and "--check" not in command:
+            return subprocess.run(command, cwd=cwd, capture_output=True, text=True)
+        executed.append(list(command))
+        return _completed(command)
+
+    result = run_changed_verification(repo_root=repo, base=middle, command_runner=runner)
+    assert result["status"] == "passed"
+    assert result["changed_paths"] == ["pyproject.toml"]
+    assert result["comparison"]["resolved_head"] == head
+    assert result["comparison"]["resolved_base"] == middle
+    assert result["checks_executed"] == len(executed) == 3
+    assert [item["command"] for item in result["checks"]] == executed
+    assert sum("pytest" in command for command in executed) == 1
+    assert executed[-1] == ["git", "diff", "--check", middle, "--"]
+
+
+def test_base_scope_unions_staged_unstaged_and_untracked_even_if_net_diff_cancels(scope_repo) -> None:
+    repo, _base, _middle, head = scope_repo
+    readme = repo / "README.md"
+    readme.write_text("staged change\n")
+    _scope_git(repo, "add", "README.md")
+    readme.write_text("changed\n")  # Worktree matches HEAD; index still differs.
+    (repo / "src/sciplot_core/foundation/file_hashing.py").write_text("VALUE = 2\n")
+    name = "docs/ leading \n验证.md "
+    untracked = repo / name
+    untracked.parent.mkdir()
+    untracked.write_text("untracked\n")
+    assert collect_changed_paths(repo, base=head) == [
+        "README.md", name, "src/sciplot_core/foundation/file_hashing.py",
+    ]
+    assert collect_changed_paths(repo) == [
+        "README.md", name, "src/sciplot_core/foundation/file_hashing.py",
+    ]
+
+
+@pytest.mark.parametrize("registered", [True, False])
+def test_committed_rename_and_delete_keep_both_owner_endpoints(scope_repo, registered) -> None:
+    repo, _base, _middle, head = scope_repo
+    old = "src/sciplot_core/foundation/file_hashing.py"
+    new = "src/sciplot_core/foundation/new_values.py" if registered else "src/sciplot_core/unowned.py"
+    _scope_git(repo, "mv", old, new)
+    _scope_git(repo, "rm", "README.md")
+    _scope_git(repo, "commit", "-qm", "rename and delete")
+    plan = run_changed_verification(repo_root=repo, base=head, plan_only=True)
+    assert plan["changed_paths"] == sorted(["README.md", old, new])
+    if registered:
+        assert plan["status"] == "planned"
+        ruff = next(check for check in plan["checks"] if check["check_id"] == "ruff_changed_python")
+        assert new in ruff["command"] and old not in ruff["command"]
+    else:
+        assert plan["status"] == "failed" and plan["unowned_paths"] == [new]
+        assert plan["checks"] == [] and plan["checks_executed"] == 0
+
+
+@pytest.mark.parametrize("revision", ["missing-ref", "--all", "", "HEAD:README.md"])
+def test_invalid_base_fails_before_any_verification_gate(scope_repo, revision) -> None:
+    repo, _base, _middle, _head = scope_repo
+    calls: list[list[str]] = []
+
+    def git_only(command, cwd):
+        calls.append(list(command))
+        assert command[:2] == ["git", "rev-parse"]
+        return subprocess.run(command, cwd=cwd, capture_output=True, text=True)
+
+    result = run_changed_verification(repo_root=repo, base=revision, command_runner=git_only)
+    assert result["status"] == "failed" and result["checks"] == []
+    assert result["checks_executed"] == 0
+    assert result["error"]["reason_code"] == "invalid_verification_scope"
+    assert all("--end-of-options" in call for call in calls)
+
+
+def test_git_collection_failure_is_not_an_empty_success() -> None:
+    calls = []
+
+    def runner(command, _cwd):
+        calls.append(list(command))
+        if command[1] == "rev-parse":
+            return _completed(command, stdout="a" * 40)
+        assert command[:2] == ["git", "diff"]
+        return _completed(command, returncode=1)
+
+    result = run_changed_verification(repo_root=REPO_ROOT, command_runner=runner)
+    assert result["status"] == "failed" and result["checks"] == []
+    assert result["error"]["reason_code"] == "invalid_verification_scope"
+    assert len(calls) == 2 and result["checks_executed"] == 0
+
+
+@pytest.mark.parametrize("paths", [[], ["DEVELOPMENT_LOG.md"]])
+def test_empty_or_ignored_scope_is_not_pass_evidence_in_plan_or_execution(paths) -> None:
+    for plan_only in (False, True):
+        result = run_changed_verification(
+            repo_root=REPO_ROOT, changed_paths=paths, plan_only=plan_only,
+            command_runner=lambda *_args: pytest.fail("Empty scope executed a gate"),
+        )
+        assert result["status"] == "NO_TESTS" and result["checks"] == []
+        assert result["checks_executed"] == 0
+
+
+def test_explicit_path_scope_cannot_misrepresent_an_unresolved_git_base() -> None:
+    result = run_changed_verification(
+        repo_root=REPO_ROOT, changed_paths=["README.md"], base="HEAD~1",
+        command_runner=lambda *_args: pytest.fail("Invalid scope executed a gate"),
+    )
+    assert result["status"] == "failed" and result["checks"] == []
+    assert result["error"]["reason_code"] == "invalid_verification_scope"
+
+
+@pytest.mark.parametrize("status,plan_only,expected_exit", [
+    ("NO_TESTS", False, 2), ("NO_TESTS", True, 2),
+    ("planned", True, 0), ("failed", True, 1),
+])
+def test_verify_cli_projects_plan_and_empty_scope_without_pass(status, plan_only, expected_exit, monkeypatch, capsys):
+    from sciplot_core import cli, verification
+
+    payload = build_changed_verification_plan([], repo_root=REPO_ROOT)
+    payload["status"] = status
+    calls = []
+
+    def verify(**kwargs):
+        calls.append(kwargs)
+        return payload
+
+    monkeypatch.setattr(verification, "run_changed_verification", verify)
+    arguments = ["verify", "--changed", "--base", "HEAD~2", "--json"]
+    if plan_only:
+        arguments.append("--plan-only")
+    assert cli.main(arguments) == expected_exit
+    assert json.loads(capsys.readouterr().out) == payload
+    assert calls == [{"base": "HEAD~2", **({"plan_only": True} if plan_only else {})}]

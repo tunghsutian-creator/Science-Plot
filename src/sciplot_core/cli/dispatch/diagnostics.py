@@ -82,13 +82,23 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
     if args.command == "verify":
         from sciplot_core.verification import run_changed_verification
 
-        payload = run_changed_verification()
+        options: dict[str, Any] = {}
+        if args.base is not None:
+            options["base"] = args.base
+        if args.plan_only:
+            options["plan_only"] = True
+        payload = run_changed_verification(**options)
         if args.json:
             _print_json(payload)
         else:
             print(f"SciPlot changed verification: {payload['status']}")
             owner_ids = [owner["owner_id"] for owner in payload["owners"]]
             print("Owners: " + (", ".join(owner_ids) if owner_ids else "none"))
+            print(f"Checks: {len(payload['checks'])}; base: {payload['comparison']['base']}")
+            if payload["status"] == "NO_TESTS":
+                print("No checks selected; this is not new verification evidence.")
+            if payload.get("error"):
+                print(payload["error"]["message"])
             for check in payload["checks"]:
                 print(f"{check['check_id']}: {check['status']}")
                 if check["status"] == "failed":
@@ -100,7 +110,9 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
             for scope, gates in payload["required_later"].items():
                 if gates:
                     print(f"{scope}: {', '.join(gates)}")
-        return 0 if payload["status"] == "passed" else 1
+        if payload["status"] == "NO_TESTS":
+            return 2
+        return 0 if payload["status"] == "passed" or (args.plan_only and payload["status"] == "planned") else 1
 
     if args.command == "readiness":
         from sciplot_core.foundation.file_hashing import file_sha256

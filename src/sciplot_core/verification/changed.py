@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -22,36 +22,63 @@ CommandRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]
 def collect_changed_paths(
     repo_root: Path,
     *,
+    base: str | None = None,
     command_runner: CommandRunner | None = None,
 ) -> list[str]:
-    """Collect staged, unstaged, and untracked paths against HEAD once."""
+    """Collect the worktree and optionally committed changes from one base."""
 
     runner = command_runner or _run_command
-    tracked = runner(
-        ["git", "diff", "--name-only", "--no-renames", "-z", "HEAD", "--"],
+    paths, _comparison = _collect_scope(repo_root, base, runner)
+    return paths
+
+
+def _resolve_commit(repo_root: Path, revision: str, runner: CommandRunner) -> str:
+    if not isinstance(revision, str) or not revision.strip():
+        raise ValueError("The verification base must name a Git commit.")
+    result = runner(
+        ["git", "rev-parse", "--verify", "--end-of-options", f"{revision}^{{commit}}"],
         repo_root,
     )
-    if tracked.returncode != 0:
-        raise RuntimeError(tracked.stderr.strip() or "git diff HEAD failed")
-    untracked = runner(
-        ["git", "ls-files", "--others", "--exclude-standard", "-z"],
-        repo_root,
-    )
-    if untracked.returncode != 0:
-        raise RuntimeError(untracked.stderr.strip() or "git ls-files failed")
-    return sorted(
-        {
-            normalized
-            for line in [*tracked.stdout.split("\0"), *untracked.stdout.split("\0")]
-            if (normalized := _normalize_path(line))
-        }
-    )
+    commit = result.stdout.strip()
+    if result.returncode or len(commit) not in (40, 64) or any(
+        character not in "0123456789abcdef" for character in commit
+    ):
+        raise ValueError(f"Cannot resolve verification revision `{revision}` to a commit.")
+    return commit
+
+
+def _collect_scope(
+    repo_root: Path, base: str | None, runner: CommandRunner,
+) -> tuple[list[str], dict[str, Any]]:
+    head = _resolve_commit(repo_root, "HEAD", runner)
+    resolved_base = head if base is None or base == "HEAD" else _resolve_commit(repo_root, base, runner)
+    commands = [
+        ["git", "diff", "--name-only", "--no-renames", "-z", "--cached", head, "--"],
+        ["git", "diff", "--name-only", "--no-renames", "-z", "--"],
+    ]
+    if base is not None:
+        commands.insert(0, ["git", "diff", "--name-only", "--no-renames", "-z", resolved_base, head, "--"])
+    commands.append(["git", "ls-files", "--others", "--exclude-standard", "-z"])
+    paths: set[str] = set()
+    for command in commands:
+        result = runner(command, repo_root)
+        if result.returncode:
+            raise RuntimeError(f"Git verification scope collection failed ({command[1]}).")
+        paths.update(_normalize_path(path) for path in result.stdout.split("\0") if path)
+    return sorted(paths), {
+        "base": "HEAD" if base is None else base,
+        "resolved_base": resolved_base,
+        "resolved_head": head,
+        "includes": (["committed"] if base is not None else []) + ["staged", "unstaged", "untracked"],
+        "source": "git",
+    }
 
 
 def build_changed_verification_plan(
     changed_paths: Iterable[str],
     *,
     repo_root: Path,
+    comparison: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Map one changed snapshot to explicit focused checks and later gates."""
 
@@ -82,15 +109,17 @@ def build_changed_verification_plan(
         python_paths=python_paths,
         pytest_targets=sorted(pytest_targets),
         mypy_required=any(owner.mypy_required for owner in matched_owners),
-        has_changes=bool(paths),
+        has_changes=bool(matched_owners),
+        diff_base=str(comparison["resolved_base"]) if comparison else "HEAD",
     )
     return {
         "kind": "sciplot_changed_verification",
         "version": 1,
-        "status": "failed" if unowned_paths else "planned",
-        "comparison": {
+        "status": "failed" if unowned_paths else "planned" if checks else "NO_TESTS",
+        "comparison": dict(comparison) if comparison else {
             "base": "HEAD",
             "includes": ["staged", "unstaged", "untracked"],
+            "source": "explicit_paths",
         },
         "changed_paths": paths,
         "owners": [
@@ -118,18 +147,31 @@ def run_changed_verification(
     repo_root: Path | None = None,
     changed_paths: Iterable[str] | None = None,
     command_runner: CommandRunner | None = None,
+    base: str | None = None,
+    plan_only: bool = False,
 ) -> dict[str, Any]:
     """Run every planned focused check once, without broad-gate fallback."""
 
     root = (repo_root or _default_repo_root()).expanduser().resolve()
     runner = command_runner or _run_command
-    selected_paths = (
-        collect_changed_paths(root, command_runner=runner)
-        if changed_paths is None
-        else list(changed_paths)
-    )
-    payload = build_changed_verification_plan(selected_paths, repo_root=root)
-    if payload["unowned_paths"]:
+    try:
+        if changed_paths is not None:
+            if base is not None:
+                raise ValueError("An explicit path list cannot also claim a Git base comparison.")
+            selected_paths, comparison = list(changed_paths), None
+        else:
+            selected_paths, comparison = _collect_scope(root, base, runner)
+    except (OSError, RuntimeError, ValueError) as exc:
+        payload = build_changed_verification_plan([], repo_root=root)
+        payload.update(
+            status="failed", comparison={"base": "HEAD" if base is None else base},
+            error={"reason_code": "invalid_verification_scope", "message": str(exc)},
+            plan_only=plan_only, checks_executed=0,
+        )
+        return payload
+    payload = build_changed_verification_plan(selected_paths, repo_root=root, comparison=comparison)
+    payload.update(plan_only=plan_only, checks_executed=0)
+    if payload["unowned_paths"] or payload["status"] == "NO_TESTS" or plan_only:
         return payload
 
     results: list[dict[str, Any]] = []
@@ -145,6 +187,7 @@ def run_changed_verification(
             }
         )
     payload["checks"] = results
+    payload["checks_executed"] = len(results)
     payload["status"] = (
         "passed"
         if all(result["status"] == "passed" for result in results)
@@ -159,6 +202,7 @@ def _planned_checks(
     pytest_targets: list[str],
     mypy_required: bool,
     has_changes: bool,
+    diff_base: str = "HEAD",
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     if python_paths:
@@ -197,7 +241,7 @@ def _planned_checks(
         checks.append(
             {
                 "check_id": "diff_whitespace",
-                "command": ["git", "diff", "--check", "HEAD", "--"],
+                "command": ["git", "diff", "--check", diff_base, "--"],
                 "status": "planned",
             }
         )

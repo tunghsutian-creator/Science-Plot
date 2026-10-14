@@ -69,6 +69,15 @@ def register_diagnostics_commands(subparsers: Any) -> None:
         "--json", action="store_true", help="Emit machine-readable JSON."
     )
 
+    verify_parser.add_argument(
+        "--base", metavar="REV",
+        help="Include committed changes from REV to HEAD, plus the current worktree.",
+    )
+    verify_parser.add_argument(
+        "--plan-only", action="store_true",
+        help="Resolve the changed scope and list checks without executing them.",
+    )
+
     readiness_parser = subparsers.add_parser(
         "readiness",
         help="Inspect or certify deterministic ready-rule validation envelopes.",
