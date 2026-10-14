@@ -14,7 +14,7 @@ import time
 from typing import Any, NoReturn
 from uuid import uuid4
 
-from sciplot_core.verification.private_process_boundaries import diagnostic_owner, executable_hash, owned_caller, root_scope, runtime_identity, uname_call, wrapper_call
+from sciplot_core.verification.private_process_boundaries import diagnostic_owner, executable_hash, owned_caller, root_scope, runtime_identity, uname_call, wrapper_call, wrapper_inputs
 
 VERSION = 2
 DIRECTORY = "SCIPLOT_PRIVATE_AUDIT_DIR"
@@ -72,6 +72,7 @@ class Observer:
         self.root_scope = root_scope(roots)
         self.roots = tuple(Path(p) for group in self.root_scope.values() for p in group)
         self.run = environment.get(RUN) or uuid4().hex
+        self.wrapper_environment = dict(environment)
         self.epoch = uuid4().hex
         self.nodeid: str | None = None
         self.sequence, self.lost, self.head = 0, 0, ZERO
@@ -94,6 +95,7 @@ class Observer:
                      "observer_sources_sha256": source_hashes(),
                      "root_scope": self.root_scope,
                      "python_runtime": runtime_identity(),
+                     "wrapper_inputs": wrapper_inputs(environment),
                      "bootstrap_sha256": executable_hash(bootstrap) if bootstrap else None,
                      "activation": activation,
                      "no_site": bool(sys.flags.no_site), "isolated": bool(sys.flags.isolated),
@@ -236,7 +238,7 @@ def _install_process_ports(observer: Observer) -> None:
         # Evaluate the finite boundary against original invocation inputs, before
         # inserting any audit propagation environment into the launch.
         bound.arguments["env"] = explicit
-        input_boundary = uname_call(bound, target_hash) or wrapper_call(bound, environment)
+        input_boundary = uname_call(bound, target_hash) or wrapper_call(bound, environment, observer.wrapper_environment)
         bound.arguments["env"] = environment
         if input_boundary and input_boundary.get("kind") == "owned_sciplot_python_exec":
             target_hash = input_boundary["expected_python_sha256"]

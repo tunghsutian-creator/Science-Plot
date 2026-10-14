@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections import Counter
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 from typing import Any
@@ -12,7 +13,7 @@ from sciplot_core.verification.durable_runner import run_status
 from sciplot_core.verification.evidence_identity import digest, identity_valid
 from sciplot_core.verification.private_observer import VERSION, ZERO, bootstrap_hashes, frame_digest, source_hashes
 
-from sciplot_core.verification.private_process_boundaries import executable_hash, owner_identity, root_scope, runtime_identity, uname_boundary, wrapper_boundary
+from sciplot_core.verification.private_process_boundaries import executable_hash, owner_identity, root_scope, runtime_identity, uname_boundary, wrapper_boundary, wrapper_inputs
 
 _HEX = re.compile(r"[0-9a-f]{32}")
 
@@ -43,6 +44,7 @@ def capture_proof(directory: Path, *, primary_pid: int, root_pid: int | None = N
             "durable_directory": str(durable_directory.resolve()) if durable_directory else None,
             "expected_root_scope": root_scope(expected_roots),
             "python_runtime": runtime_identity(),
+            "wrapper_inputs": wrapper_inputs(dict(os.environ)),
             "stream_sha256": _streams(directory), "observer_sources_sha256": observer_source_hashes()}
 
 
@@ -168,6 +170,9 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
             raise ValueError("observer module or actual interpreter startup identity differs")
         if proof.get("python_runtime") != runtime_identity():
             raise ValueError("bound actual Python core or stdlib source bytes changed")
+        if (proof.get("wrapper_inputs") != wrapper_inputs(dict(os.environ))
+                or any(start.get("wrapper_inputs") != proof["wrapper_inputs"] for start in starts)):
+            raise ValueError("wrapper helper, native runtime input or output boundary changed")
         scope = proof.get("expected_root_scope")
         if (not isinstance(scope, dict) or set(scope) != {"lexical", "canonical"}
                 or scope != root_scope(scope["lexical"]) or any(s.get("root_scope") != scope for s in starts)):

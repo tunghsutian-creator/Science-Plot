@@ -142,7 +142,38 @@ def wrapper_boundary() -> dict[str, str]:
             "expected_python_sha256": str(executable_hash(sys.executable))}
 
 
-def wrapper_call(bound: inspect.BoundArguments, environment: dict[str, str]) -> dict[str, str] | None:
+_WRAPPER_HELPERS = {"bash": "/bin/bash", "dirname": "/usr/bin/dirname", "uname": "/usr/bin/uname",
+                    "otool": "/usr/bin/otool", "awk": "/usr/bin/awk", "realpath": "/bin/realpath", "mkdir": "/bin/mkdir"}
+
+
+def wrapper_inputs(environment: dict[str, str]) -> dict[str, Any]:
+    root = Path(__file__).parents[3]
+    runtime = Path(environment.get("SCIPLOT_RUNTIME_REPO", str(root))).resolve()
+    veusz = Path(environment.get("SCIPLOT_VEUSZ_ROOT", str(runtime / "third_party/veusz"))).resolve()
+    output = Path(environment.get("MPLCONFIGDIR", str(Path(environment.get("TMPDIR", "/tmp")) / "sciplot-mpl")))
+    if not output.is_absolute():
+        raise ValueError("Relative wrapper configuration output has no fixed input boundary.")
+    return {"runtime_root_sha256": hashlib.sha256(str(runtime).encode()).hexdigest(),
+            "veusz_root_sha256": hashlib.sha256(str(veusz).encode()).hexdigest(),
+            "configuration_output_sha256": hashlib.sha256(str(output.resolve()).encode()).hexdigest(),
+            "helpers_sha256": {name: executable_hash(path) for name, path in _WRAPPER_HELPERS.items()},
+            "qtloops_sha256": {hashlib.sha256(str(path.resolve()).encode()).hexdigest(): executable_hash(path)
+                               for path in sorted((veusz / "veusz/helpers").glob("qtloops*.so")) if path.is_file()}}
+
+
+def _wrapper_path_bound(environment: dict[str, str]) -> bool:
+    for name, expected in _WRAPPER_HELPERS.items():
+        actual = shutil.which(name, path=environment.get("PATH", os.defpath))
+        if Path(expected).is_file():
+            if actual is None or Path(actual).resolve() != Path(expected).resolve():
+                return False
+        elif actual is not None:
+            return False
+    return True
+
+
+def wrapper_call(bound: inspect.BoundArguments, environment: dict[str, str],
+                 baseline: dict[str, str]) -> dict[str, str] | None:
     root = Path(__file__).parents[3]
     command = bound.arguments.get("args")
     cwd = bound.arguments.get("cwd")
@@ -151,14 +182,24 @@ def wrapper_call(bound: inspect.BoundArguments, environment: dict[str, str]) -> 
             or (cwd is not None and (Path(cwd).absolute() != root or Path(cwd).resolve() != root))
             or not isinstance(command[0], (str, bytes, os.PathLike))
             or Path(os.fsdecode(command[0])).resolve() != root / "skill/scripts/sciplot"
-            or any(environment.get(key) for key in ("BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "PS4"))
-            or any(key.startswith("BASH_FUNC_") for key in environment)):
+            or any(environment.get(key) for key in ("BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "PS4", "IFS", "CDPATH",
+                                                      "GLOBIGNORE", "DEVELOPER_DIR", "SDKROOT", "TOOLCHAINS"))
+            or any(key.startswith("BASH_") for key in environment)
+            or any(environment.get(key) for key in environment if key.startswith(("DYLD_", "LD_")) and key != "DYLD_FRAMEWORK_PATH")
+            or any(environment.get(key) for key in ("PYTHONHOME", "PYTHONUSERBASE"))
+            or environment.get("DYLD_FRAMEWORK_PATH", "") != baseline.get("DYLD_FRAMEWORK_PATH", "")
+            or any(environment.get(key, "") != baseline.get(key, "") for key in ("LANG", "LC_ALL", "LC_COLLATE"))
+            or not _wrapper_path_bound(environment)):
         return None
     selected = environment.get("SCIPLOT_PYTHON", str(Path(environment.get("SCIPLOT_RUNTIME_REPO", str(root))) / ".venv/bin/python"))
+    selected_path = selected if os.path.dirname(selected) else shutil.which(selected, path=environment.get("PATH", os.defpath))
     if (Path(environment.get("SCIPLOT_REPO", str(root))).resolve() != root
             or Path(environment.get("SCIPLOT_SOURCE_ROOT", str(root / "src"))).resolve() != root / "src"
             or executable_hash(selected, environment=environment) != executable_hash(sys.executable)
-            or executable_hash("bash", environment=environment) != executable_hash("/bin/bash")):
+            or selected_path is None or not os.access(selected_path, os.X_OK)
+            or Path(selected_path).resolve() != Path(sys.executable).resolve()
+            or executable_hash("bash", environment=environment) != executable_hash("/bin/bash")
+            or wrapper_inputs(environment) != wrapper_inputs(baseline)):
         return None
     return wrapper_boundary()
 

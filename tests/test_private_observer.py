@@ -89,6 +89,67 @@ def test_only_owned_wrapper_has_bound_python_exec_bridge(tmp_path: Path, mode: s
                    for row in result["frames"] if row.get("input_boundary"))
 
 
+@pytest.mark.parametrize("helper", ["bash", "dirname", "uname", "otool", "awk", "realpath", "mkdir"])
+def test_wrapper_path_helper_shadow_cannot_hide_native_private_read(tmp_path: Path, helper: str) -> None:
+    native_marker = tmp_path / "native-read-proof.txt"
+    sentinel = tmp_path / "watched/input.txt"
+    folder = tmp_path / "shadow-bin"
+    folder.mkdir()
+    originals = {"bash": "/bin/bash", "dirname": "/usr/bin/dirname", "uname": "/usr/bin/uname",
+                 "otool": "/usr/bin/otool", "awk": "/usr/bin/awk", "realpath": "/bin/realpath", "mkdir": "/bin/mkdir"}
+    shadow = folder / helper
+    shadow.write_text(f"#!/bin/sh\n/bin/cat '{sentinel}' > '{native_marker}'\nexec '{originals[helper]}' \"$@\"\n")
+    shadow.chmod(0o755)
+    code = f"env=dict(os.environ,SCIPLOT_REPO={str(ROOT)!r},SCIPLOT_SOURCE_ROOT={str(ROOT / 'src')!r},SCIPLOT_PYTHON=sys.executable)\n"
+    code += f"env['PATH']={str(folder)!r}+os.pathsep+env['PATH']\n"
+    code += f"subprocess.run([{str(ROOT / 'skill/scripts/sciplot')!r},'--help'],env=env,check=True)\n"
+    _, result = observed(tmp_path, code)
+    assert result["status"] == "BLOCKED"
+    assert any("child executable differs" in issue for issue in result["issues"])
+    if native_marker.exists():
+        assert native_marker.read_bytes() == sentinel.read_bytes()
+    if helper == "uname":
+        assert native_marker.is_file()  # The exact original A4 native read occurred.
+        assert not any(frame["event"] == "open" and frame.get("resolved_path") == str(sentinel)
+                       for frame in result["frames"])
+
+
+@pytest.mark.parametrize("mode", ["veusz_root", "qtloops_input", "runtime_root", "configuration_output", "framework_loader", "developer_toolchain"])
+def test_wrapper_native_inputs_and_environment_cannot_drift(tmp_path: Path, mode: str) -> None:
+    code = f"env=dict(os.environ,SCIPLOT_REPO={str(ROOT)!r},SCIPLOT_SOURCE_ROOT={str(ROOT / 'src')!r},SCIPLOT_PYTHON=sys.executable)\n"
+    key = {"veusz_root": "SCIPLOT_VEUSZ_ROOT", "qtloops_input": "SCIPLOT_VEUSZ_ROOT", "runtime_root": "SCIPLOT_RUNTIME_REPO", "configuration_output": "MPLCONFIGDIR",
+           "framework_loader": "DYLD_FRAMEWORK_PATH", "developer_toolchain": "DEVELOPER_DIR"}[mode]
+    replacement = tmp_path / "watched/generated-wrapper-input"
+    code += f"Path({str(replacement)!r}).mkdir(parents=True)\n"
+    if mode == "qtloops_input":
+        code += f"helpers=Path({str(replacement)!r})/'veusz/helpers';helpers.mkdir(parents=True);(helpers/'qtloops.so').symlink_to(WATCH)\n"
+    code += f"env[{key!r}]={str(replacement)!r}\n"
+    code += f"subprocess.run([{str(ROOT / 'skill/scripts/sciplot')!r},'--help'],env=env,check=True)\n"
+    _, result = observed(tmp_path, code)
+    assert result["status"] == "BLOCKED", result
+    if mode == "qtloops_input":
+        assert any(frame["event"] == "open" and frame.get("resolved_path") == str(tmp_path / "watched/input.txt")
+                   for frame in result["frames"])
+
+
+def test_wrapper_nonexecutable_python_cannot_open_shadow_fallback(tmp_path: Path) -> None:
+    selected = tmp_path / "nonexecutable-python"
+    selected.write_bytes(Path(sys.executable).read_bytes())
+    selected.chmod(0o644)
+    folder = tmp_path / "shadow-bin"
+    folder.mkdir()
+    sentinel, marker = tmp_path / "watched/input.txt", tmp_path / "fallback-native-read.txt"
+    fallback = folder / "python3"
+    fallback.write_text(f"#!/bin/sh\n/bin/cat '{sentinel}' > '{marker}'\nexec '{sys.executable}' \"$@\"\n")
+    fallback.chmod(0o755)
+    code = f"env=dict(os.environ,SCIPLOT_PYTHON={str(selected)!r},SCIPLOT_REPO={str(ROOT)!r},SCIPLOT_SOURCE_ROOT={str(ROOT / 'src')!r})\n"
+    code += f"env['PATH']={str(folder)!r}+os.pathsep+env['PATH']\n"
+    code += f"subprocess.run([{str(ROOT / 'skill/scripts/sciplot')!r},'--help'],env=env,check=True)\n"
+    _, result = observed(tmp_path, code)
+    assert marker.read_bytes() == sentinel.read_bytes()
+    assert result["status"] == "BLOCKED"
+
+
 def observed(tmp_path: Path, code: str, *, prefix: str = "") -> tuple[dict[str, Any], dict[str, Any]]:
     plugin = tmp_path / "bootstrap"
     write_bootstrap(plugin)
