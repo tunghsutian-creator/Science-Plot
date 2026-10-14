@@ -125,7 +125,7 @@ def test_unknown_caller_cannot_authorize_an_unguarded_generated_child(monkeypatc
             pytest.fail("unknown caller entered generated control")
 
 
-@pytest.mark.parametrize("mutation", ("healthy", "private_member", "stage_source", "origin_source", "receipt_alias", "helper_bytes", "wrong_environment", "stage_head"))
+@pytest.mark.parametrize("mutation", ("healthy", "private_member", "stage_source", "origin_source", "receipt_alias", "helper_bytes", "wrong_environment", "stage_head", "ignored_source"))
 def test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_binding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str) -> None:
     root = _origin(tmp_path)
 
@@ -157,6 +157,9 @@ def test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_
         environment["SCIPLOT_SOURCE_ROOT"] = str(root / "src")
     elif mutation == "stage_head":
         _git(stage, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "Different independent identity")
+    elif mutation == "ignored_source":
+        (stage / ".git/info/exclude").write_text("src/unreviewed.py\n")
+        (stage / "src/unreviewed.py").write_text("VALUE='unreviewed executable input'\n")
     if mutation == "healthy":
         assert public_stage.validate_stage(stage, environment)["source_bytes"] == public_stage.source_binding(stage)
     else:

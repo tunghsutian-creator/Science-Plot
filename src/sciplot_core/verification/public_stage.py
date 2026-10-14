@@ -33,7 +33,11 @@ def _hash(path: Path) -> str:
 
 
 def _git(root: Path, *arguments: str) -> str:
-    return subprocess.run(["git", *arguments], cwd=root, text=True, capture_output=True, check=True).stdout
+    if any(os.environ.get(key) for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_TEMPLATE_DIR", "GIT_CONFIG_COUNT")):
+        raise ValueError("Controlled source inventory rejects inherited Git namespace overrides.")
+    environment = dict(os.environ, GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
+    return subprocess.run(["git", "-c", f"core.hooksPath={os.devnull}", "-c", "core.fsmonitor=false", *arguments],
+                          cwd=root, env=environment, text=True, capture_output=True, check=True).stdout
 
 
 def private_namespace_paths(root: Path) -> list[Path]:
@@ -66,6 +70,26 @@ def source_binding(root: Path) -> dict[str, str]:
     if _git(root, "status", "--porcelain", "--untracked-files=all", "--", ".", *exclusions, ":(exclude).local").strip():
         raise ValueError("Controlled public source must have a clean independent Git inventory.")
     paths = [name for name in _git(root, "ls-files", "-z").split("\0") if name]
+    # Git ignore/index flags cannot hide a new executable source from closure.
+    known = set(paths)
+    ignored = {".git", ".tmp_verify", ".venv", ".local", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "build", "dist"}
+    for directory, names, files in os.walk(root, followlinks=False):
+        parent = Path(directory)
+        for name in list(names):
+            path = parent / name
+            private = any(path == root / "tests/fixtures" / part for part in PRIVATE_NAMES)
+            if private:
+                names.remove(name)
+                continue
+            if path.is_symlink() and not (parent == root and name in {".local", ".venv"}):
+                raise ValueError("Public source directory contains an alias.")
+            if name in ignored:
+                names.remove(name)
+        for name in files:
+            path = parent / name
+            relative = str(path.relative_to(root))
+            if path.suffix in {".py", ".json", ".toml", ".sh"} and relative not in known:
+                raise ValueError("Public source membership contains an untracked executable/config input.")
     result = {}
     for name in paths:
         if name == ".local" or name.startswith(".local/") or any(name.startswith(f"tests/fixtures/{part}/") for part in PRIVATE_NAMES):
