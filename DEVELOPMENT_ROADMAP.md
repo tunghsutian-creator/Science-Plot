@@ -3,6 +3,38 @@
 Status: 2026-10-14. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
+## 2026-10-14 validation and publication closure
+
+Public runtime validation now uses reviewed exact-node input scopes independently
+of focused/comprehensive depth. The original cases and real scientific assertions
+remain in unfiltered full. Generated public controls cover the 111 inherited
+missing-input responsibilities; they do not claim original measured values.
+Unknown/stale scope and missing/unsafe private inputs block before test bodies.
+An authorized local Mac supplies controlled private execution. No remote private
+runner, private data transfer or credentials are configured by this change.
+
+Supported access capture computes closure from original raw process streams and
+durable exit evidence. Normal native EOF close/recycle and same-PID Qt exec
+continuation have explicit evidence; intentional interruption, loss and missing
+startup/terminal remain BLOCKED. Historical incomplete capture is preserved.
+Full scientific PASS and child-inclusive access completeness are separate gates.
+
+The explicitly authorized 13 legacy figures now have non-color line distinction.
+Actual vector inspection additionally found truncated SAXS/torque legend samples;
+an inspected Legacy sample-length edit and native pre-save page-bound check repair
+those keys without changing colors, markers, fonts, anchors, frames or science.
+The new selected paper package passes all 13 original strict publication profiles,
+with 59 series preserved. The other 11 rendered figures remain identical after
+the two legend refinements. Old house-style defaults and goldens remain intact.
+The copied projects' separate committed/export-pending diagnostics are retained;
+selected-artifact package completion does not claim managed-project relocation.
+
+Required final records are the frozen integration's changed/type/lint checks,
+unfiltered Mac full, Doctor, native lifecycle and exact pushed-commit public CI.
+Independent human/print/journal acceptance, second-Mac/font consistency and real
+external-client token/billing telemetry remain open. Tokens and fees stay unknown
+without actual client counters; local output bytes are not tokens.
+
 ## 2026-10-14 approved product round
 
 The separately approved product branch adds a bounded common edit entry,
@@ -39,8 +71,9 @@ The separately bound native evidence passes full smoke 36/36 and all 24 rule
 lifecycles. Independent review inspected 41 TIFFs, 41 PDF pages and three contact
 sheets. Subsequent dispatch/test-control repairs leave the renderer and scientific
 bodies unchanged. All 127 retained private files and 70 golden files preserve
-their bytes and membership. Public CI must report exact-commit missing-input
-failures; private inputs remain local.
+their bytes and membership. At that historical snapshot, public CI reports
+exact-commit missing-input failures; the closure round above supplies reviewed
+public input scopes while the private inputs remain local.
 
 The fresh instrumented full passes all 165 private cases and observes 4,858
 mapped private accesses with no observed unmapped access. Child-inclusive capture
@@ -55,9 +88,10 @@ The default Mac MCP font-family path now queries Qt in the existing native worke
 main thread, after independent review reproduced a Cocoa background-thread crash.
 Independent default-environment MCP revalidation passes, preserving science,
 zero-mutation rejection, reply-loss replay and continued use of the same client.
-The ten inherited color-only/grayscale publication-QA failures match `ce407ea`
-check values exactly; their original presentation stays intact. They are a
-separate future candidate for explicit sample distinction, not new regressions.
+At that historical snapshot, the ten inherited color-only/grayscale
+publication-QA failures match `ce407ea` check values exactly. Their original
+presentation and reports stay intact; the closure round above repairs separate
+authorized copies with explicit sample distinction.
 The rule lifecycle matrix and complete publication-QA status stay separate.
 
 ## 2026-10-14 development feedback implementation
@@ -349,29 +383,15 @@ subsequently rerun and passed in the bounded selection above; the missing
 private-data and socket cases may still expose later assertions once their
 prerequisites are available.
 
-Proposed P0 validation-tier repair, **not implemented**: `focused` and
-`comprehensive` remain runtime-depth tiers. An explicit private-corpus
-requirement would be an orthogonal marker at individual test or parameter-case
-granularity, not a blanket module exclusion; mixed public/synthetic and
-private-source cases already occur in one test module. Start with the 111 saved
-first blockers and the preliminary 116-case preflight inventory, then review
-the complete fixture dependency inventory before marking anything. A public
-source-checkout regression may exclude only reviewed private cases **after**
-an authorized private runner is operating; a green
-public subset is not scientific acceptance. Public CI must still run its full
-public `focused` and `comprehensive` native-backed gates; this is not a Qt
-bypass. On the same commit, the authorized Mac/private/native run must execute
-the full unfiltered suite, with independent
-human acceptance tracked separately. Its missing-corpus preflight must exit
-nonzero with a clear BLOCKED result, never silently skip or replace data. The
-current Doctor's optional fixture-existence check and the new, explicitly
-incomplete stand-alone preflight are not a full private acceptance gate.
-When implementing, make `verify --changed` show private evidence as pending
-rather than falsely green; coordinate changed-owner selection, smoke and other
-acceptance outside pytest, the advanced guide, and the release `full_pytest`
-gate so private and public evidence cannot be conflated. The private release
-gate remains blocked until real execution exists. Keep existing CI/markers
-unchanged until that gate can be validated end to end.
+This earlier P0 proposal is implemented by exact public/private input profiles
+in the closure round above. `focused` and `comprehensive` retain their original
+runtime-depth meaning. Mixed modules are partitioned by reviewed node/parameter,
+with no blanket test-module exclusion. Public CI keeps both native-backed public
+tiers; the authorized local Mac keeps unfiltered full and real private cases.
+A public subset is not scientific acceptance. Missing-corpus preflight exits
+nonzero BLOCKED; Doctor's optional fixture check is not a private release gate.
+Changed-owner evidence, smoke, ready-rule lifecycle, human inspection and full
+release evidence remain separate claims with original artifacts retained.
 
 Remaining acceptance and candidate next slices. The first two have a bounded
 local implementation above; their broader native/client evidence gates remain

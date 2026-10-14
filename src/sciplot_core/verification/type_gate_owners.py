@@ -26,6 +26,9 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
             "src/sciplot_core/doctor/runtime_checks.py",
             "src/sciplot_core/doctor/readiness_checks.py",
             "src/sciplot_core/studio_core/lifecycle_contract.py",
+            "tests/public_curve_inputs.py",
+            "tests/public_multitask_inputs.py",
+            "tests/private_observer_support.py",
         }
     ),
     owned_test_paths=frozenset(
@@ -44,6 +47,11 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
             "tests/test_changed_scope_selectors.py",
             "tests/test_changed_verification_evidence.py",
             "tests/test_suite_verification_cli.py",
+            "tests/test_input_scope.py",
+            "tests/test_public_source_behavior.py",
+            "tests/test_public_workflow_behavior.py",
+            "tests/test_private_observer.py",
+            "tests/test_private_observer_native.py",
         }
     ),
     pytest_targets=(
@@ -60,6 +68,11 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
         "tests/test_changed_scope_selectors.py",
         "tests/test_changed_verification_evidence.py",
         "tests/test_suite_verification_cli.py",
+        "tests/test_input_scope.py",
+        "tests/test_public_source_behavior.py",
+        "tests/test_public_workflow_behavior.py",
+        "tests/test_private_observer.py",
+        "tests/test_private_observer_native.py",
         "tests/test_architecture_boundaries.py::test_non_probe_source_has_no_exact_duplicate_function_implementations",
         "tests/test_architecture_boundaries.py::test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint",
         *ARCHITECTURE_CORE_TARGETS,

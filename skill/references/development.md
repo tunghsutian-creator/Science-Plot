@@ -60,8 +60,32 @@ starts one durable original execution; `verify --status .tmp_verify/final-full
 --json` reads its state after a lost transport reply. The directory must be new;
 status does not rerun tests or prove evidence reuse. Focused/comprehensive are
 also explicit start profiles. `--audit-plugin-dir` and `--audit-out` optionally
-bind a frozen local observation plugin and a separate fresh private-audit output;
-that observation still requires independent closure review.
+bind the source-owned supported observation bootstrap and a separate fresh
+private-audit output. Generate a new bootstrap with
+`sciplot_core.verification.private_observer.write_bootstrap(Path(...))`;
+arbitrary or historical observation plugins cannot establish supported closure.
+Review the original raw streams, process ownership and durable completion;
+never supply a self-asserted `capture_complete` flag as evidence.
+
+Input scope is independent of lifecycle depth. For a public source checkout use
+`pytest -q --input-scope public-focused` and
+`pytest -q --input-scope public-comprehensive`, or the corresponding
+`verify --start` profiles. `public-all` combines those public cases.
+The checked-in exact-node manifest must match fresh full collection and both
+original tiers; unknown, stale, duplicate or omitted nodes block before bodies.
+Public scopes enforce CPython private-path and child-startup guards and use
+generated behavior inputs. Clean public CI has no local private corpus;
+neither condition certifies native filesystem observation or real science.
+
+For controlled local original-data execution use
+`verify --start private-science --out .tmp_verify/private-science --json`.
+Availability validates declared inputs before creating a run: absent, unsafe,
+drifted or unmapped inputs return BLOCKED with zero test bodies. All original
+private cases remain in default/full pytest. Public PASS, private scientific
+execution, input availability and access-capture completeness are separate
+results. Release verification still requires unfiltered full on the frozen
+snapshot with real authorized inputs; do not replace it with public profiles.
+Keep private inputs, audit streams and plot packages local and ignored.
 
 Build wheel validation from a temporary copy of the complete public `src` and
 `pyproject.toml`; setuptools must not mutate the inputs being validated. Native
@@ -70,6 +94,13 @@ source path. A missing worker finish leaves its terminal counters unknown.
 An expected signal shutdown or zero recorded private events does not by itself
 prove child-inclusive capture complete. Keep scientific test PASS and limited
 access-audit BLOCKED separate when independent input-boundary evidence is absent.
+Normal native worker close and budget recycle use bounded stdin EOF and wait;
+transport faults retain bounded abort. Supported capture requires real start,
+terminal, loss, sequence, source/root identities, successful exec continuation
+and original exit evidence. Missing, truncated, interrupted, shadowed or lost
+observation remains BLOCKED even when a test intentionally triggers that path.
+The prior 108 unclosed historical epochs are retained as limited evidence;
+new normal-operation receipts do not retroactively complete them.
 
 Runtime readiness, native fidelity, real-client efficiency, human usability and
 journal acceptance are separate claims. Read the advanced guide's test-tier

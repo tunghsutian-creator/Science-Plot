@@ -440,6 +440,15 @@ Real-native TTS render/edit/style/error cases explicitly enter comprehensive;
 pure validation, request/compile and publication-fault checks remain focused.
 Every historical node remains in full regardless of its tier.
 
+Input requirements form a separate exact-node partition. `public-focused` and
+`public-comprehensive` execute reviewed public behavior, including generated
+native controls; `private-science` requires the authorized local corpus. Use
+`--input-scope PROFILE` on pytest or the durable start command. Unknown/stale
+membership and missing/unsafe private inputs block before bodies. Unfiltered
+full retains all public and original private cases; public execution does not
+establish the real scientific values. The two public tiers are the clean-source
+CI gate, while authorized Mac full is the scientific release gate.
+
 Run the tier that matches the changed boundary:
 
 ```bash
@@ -493,13 +502,18 @@ skill/scripts/sciplot verify --start full --out .tmp_verify/final-full --json
 skill/scripts/sciplot verify --status .tmp_verify/final-full --json
 ```
 
-The start profiles are exactly `focused`, `comprehensive` and unfiltered `full`.
+The depth profiles are `focused`, `comprehensive` and unfiltered `full`; the
+named input scopes above are separate explicitly selected profiles.
 Starting requires a new ignored directory and no `PYTEST_ADDOPTS` filtering.
 The detached supervisor seals its request, exit, completion and original logs;
 status reads that execution without a retry, re-collection or reuse claim.
 `RUNNING` is not a pass. Optional paired `--audit-plugin-dir` and `--audit-out`
-bind frozen local Python observation helpers and a fresh separate output. Their
-private-access receipt still needs closure review and scientific acceptance.
+bind the source-owned bootstrap from `private_observer.write_bootstrap` and a
+fresh separate output. Closure is computed from actual startup, stream, terminal,
+exec handoff and original durable exit evidence. Normal native EOF/recycle is
+observed; interrupted, lost, truncated or unobserved epochs remain BLOCKED.
+Legacy arbitrary helpers provide diagnostics, not a completeness certificate.
+Access closure and scientific acceptance remain separate claims.
 
 ### Local checkpoints
 

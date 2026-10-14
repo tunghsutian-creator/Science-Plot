@@ -43,6 +43,8 @@ PLOT_TEST_PATHS = (
     "tests/test_native_process.py",
     "tests/test_native_process_native.py",
     "tests/test_plot_document.py",
+    "tests/test_legacy_line_pattern.py",
+    "tests/test_legacy_line_pattern_native.py",
     "tests/test_plot_cache.py",
     "tests/test_plot_content_store.py",
     "tests/test_plot_backend.py",

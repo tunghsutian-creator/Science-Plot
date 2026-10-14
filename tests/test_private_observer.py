@@ -20,6 +20,7 @@ from sciplot_core.verification.durable_runner import run_status
 from sciplot_core.verification.evidence_identity import DOMAINS
 
 ROOT = Path(__file__).resolve().parents[1]
+pytestmark = pytest.mark.comprehensive
 
 
 def test_suite_parent_collector_and_supervisor_share_actual_scope(tmp_path: Path) -> None:
