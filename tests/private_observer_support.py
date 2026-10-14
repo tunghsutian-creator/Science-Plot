@@ -70,8 +70,13 @@ def execute_observed(root: Path, command: list[str], environment: dict[str, str]
         _, status = os.waitpid(start["supervisor_pid"], 0)
         supervisor_exit = os.waitstatus_to_exitcode(status)
     execution = run_status(directory)
-    if "child_pid" not in state:
-        raise AssertionError((state, (directory / "supervisor.log").read_text()))
+    if "child_pid" not in state or not (directory / "state.json").is_file():
+        raise AssertionError({"actual_outer_state": state,
+            "actual_outer_completion": json.loads((witness / "completion.json").read_bytes())
+                if (witness / "completion.json").is_file() else None,
+            "actual_outer_command_log": (witness / "command.log").read_text()
+                if (witness / "command.log").is_file() else None,
+            "actual_outer_supervisor_log": (witness / "supervisor.log").read_text()})
     inner_state = json.loads((directory / "state.json").read_bytes())
     proof = capture_proof(output, primary_pid=inner_state["child_pid"], root_pid=state["child_pid"],
                           expected_roots=roots, durable_directory=directory, root_execution_directory=witness)

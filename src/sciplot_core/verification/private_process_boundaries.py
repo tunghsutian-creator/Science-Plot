@@ -7,6 +7,7 @@ import inspect
 import os
 from pathlib import Path
 import shutil
+import stat
 import sys
 import sysconfig
 from types import CodeType
@@ -15,9 +16,51 @@ from typing import Any
 _PLATFORM_SOURCE = Path(sysconfig.get_path("stdlib")) / "platform.py"
 
 
+def _linux_core_hashes(addresses: list[int], mappings: str) -> list[str]:
+    """Hash the actual executable mapping owning the finite CPython C APIs."""
+    if len(addresses) != 3 or any(type(address) is not int or address <= 0 for address in addresses):
+        raise ValueError("Three actual CPython API addresses are required.")
+    owners = []
+    for address in addresses:
+        matches = []
+        for line in mappings.splitlines():
+            fields = line.split(maxsplit=5)
+            if len(fields) < 5:
+                raise ValueError("Actual CPython mapping fields are malformed.")
+            start, end = (int(value, 16) for value in fields[0].split("-"))
+            if start <= address < end:
+                matches.append(fields)
+        if len(matches) != 1:
+            raise ValueError("CPython API address has no unique actual mapping.")
+        fields = matches[0]
+        if (len(fields) != 6 or "x" not in fields[1] or not fields[5].startswith("/")
+                or fields[5].endswith(" (deleted)")):
+            raise ValueError("CPython API mapping is not an executable backed file.")
+        major, minor = (int(value, 16) for value in fields[3].split(":"))
+        owners.append((Path(fields[5]).resolve(strict=True), major, minor, int(fields[4])))
+    if len(addresses) != 3 or len(set(owners)) != 1:
+        raise ValueError("Finite CPython APIs do not share one actual core mapping.")
+    path, major, minor, inode = owners[0]
+    with path.open("rb") as stream:
+        before = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(before.st_mode) or os.major(before.st_dev) != major
+                or os.minor(before.st_dev) != minor or before.st_ino != inode):
+            raise ValueError("CPython mapped device/inode differs from its actual open file.")
+        content = hashlib.sha256()
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            content.update(chunk)
+        after, current = os.fstat(stream.fileno()), path.stat()
+    stable = ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns", "st_ctime_ns")
+    if any(getattr(before, key) != getattr(after, key) or getattr(before, key) != getattr(current, key)
+           for key in stable):
+        raise ValueError("CPython mapped core changed while hashing actual bytes.")
+    return [content.hexdigest()]
+
+
 def runtime_identity() -> dict[str, Any]:
     """Bind the loaded CPython core and the finite observation stdlib owners."""
     cores: set[Path] = set()
+    linux_hashes: list[str] | None = None
     if sys.platform == "darwin":
         loader = ctypes.CDLL(None)
         count, name = loader._dyld_image_count, loader._dyld_get_image_name
@@ -30,16 +73,18 @@ def runtime_identity() -> dict[str, Any]:
                 if path.name == "Python" and "Python.framework" in str(path):
                     cores.add(path.resolve(strict=True))
     elif sys.platform.startswith("linux"):
-        for line in Path("/proc/self/maps").read_text().splitlines():
-            value = line.split(maxsplit=5)[-1]
-            if value.startswith("/") and Path(value).name.startswith("libpython"):
-                cores.add(Path(value).resolve(strict=True))
-    if not cores and not sysconfig.get_config_var("Py_ENABLE_SHARED"):
+        addresses = [ctypes.cast(getattr(ctypes.pythonapi, name), ctypes.c_void_p).value
+                     for name in ("Py_GetVersion", "PyObject_Call", "PyErr_Occurred")]
+        if any(address is None for address in addresses):
+            raise ValueError("Actual CPython API addresses are unavailable.")
+        linux_hashes = _linux_core_hashes([int(address) for address in addresses if address is not None],
+                                          Path("/proc/self/maps").read_text())
+    if not cores and linux_hashes is None and not sysconfig.get_config_var("Py_ENABLE_SHARED"):
         cores.add(Path(sys.executable).resolve(strict=True))
-    if not cores:
+    if not cores and linux_hashes is None:
         raise ValueError("Actual loaded CPython core is unavailable for observation binding.")
     stdlib = Path(sysconfig.get_path("stdlib"))
-    core_hashes = [executable_hash(path) for path in cores]
+    core_hashes = linux_hashes if linux_hashes is not None else [executable_hash(path) for path in cores]
     sources = {name: executable_hash(stdlib / name) for name in ("os.py", "subprocess.py", "threading.py", "platform.py")}
     if any(value is None for value in [*core_hashes, *sources.values()]):
         raise ValueError("Python observation runtime bytes are unreadable.")
