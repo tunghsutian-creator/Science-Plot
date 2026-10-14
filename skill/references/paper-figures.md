@@ -25,6 +25,13 @@ figures by their actual ID; export snapshots are not original projects.
    labels, ordering and exact source/document versions. Source, spec, figure ID,
    saved VSZ or sealed stage changes require inspection and a new selection.
 
+Inspection preserves the historical task receipt and frozen selected versions.
+It offers delivery only while both the complete package inventory and those
+source versions remain current. Changed package bytes or members return a blocked
+preserve-and-new-selection repair, with no overwrite. Changed original sources or
+semantic/native revisions leave an intact package labelled historical and require
+reviewing the changes before starting a new selection in a new output.
+
 The package uses existing `figures/`, `project/` and `data/` delivery directories.
 It contains one PDF, one `_300dpi.tiff` and one editable VSZ per selection,
 selected plotted-data CSVs, `data/figure_sources.json`, a CSV source/version
@@ -64,9 +71,9 @@ dispatch branch. MCP uses the same `task_papers` functions: `paper_capabilities`
 `start_paper`, `inspect_paper`, `resume_paper`. The closed JSON request schema is
 owned by `task_paper_contract.paper_request_schema`.
 
-Before shared composition, the same adapter runs with
-`.venv/bin/python -m sciplot_core.cli.task_paper paper capabilities --json`.
-The root product task owns shared CLI/MCP integration.
+The root product task owns shared CLI/MCP integration. The module's `main` is a
+development adapter; ordinary user instructions use the shared `sciplot task paper`
+entry above.
 
 ## Verification ownership proposal
 

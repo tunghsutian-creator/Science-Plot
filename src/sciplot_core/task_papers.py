@@ -229,13 +229,44 @@ def inspect_paper(paper: Path) -> dict[str, Any]:
             except (OSError, ValueError) as exc:
                 current.append({"project": selection["project"], "figure_id": selection["figure_id"], "current": False, "message": str(exc)})
         summary = _summary(state)
+        summary["recorded_status"] = state["status"]
+        summary["selection_scope"] = "frozen_selected_versions"
+        summary["result_scope"] = "historical_frozen_delivery"
         summary["current_selections"] = current
+        summary["source_versions_current"] = all(item["current"] for item in current)
+        summary["delivery_current"] = None
         if state.get("delivery_files"):
             try:
                 _verify_delivery(state)
                 summary["delivery_current"] = True
             except (OSError, ValueError):
                 summary["delivery_current"] = False
+        summary["ready_to_use"] = bool(state["status"] == "complete"
+                                       and summary["source_versions_current"]
+                                       and summary["delivery_current"] is True)
+        summary["readiness_evaluated"] = True
+        summary["readiness_scope"] = "Frozen package and selected source byte identities; no fresh native audit."
+        if summary["delivery_current"] is False:
+            summary.update(status="blocked", blocker={
+                "reason_code": "paper_delivery_changed",
+                "message": "The published paper package differs from its frozen inventory. Preserve the changed package and choose a new output for a new selection.",
+            }, repair={"action": "preserve_changed_package_and_start_new_selection",
+                       "output": state["request"]["out"], "new_output_required": True,
+                       "automatic_overwrite": False},
+                next_step={"action": "preserve_changed_package_and_start_new_selection", "paper_dir": str(root)})
+        elif not summary["source_versions_current"]:
+            summary.update(status="blocked", blocker={
+                "reason_code": "paper_selection_changed",
+                "message": "The package retains the frozen selected versions; its original projects or sources have changed. Review those changes and start a new current selection.",
+            }, repair={"action": "review_changed_sources_and_start_new_selection",
+                       "new_output_required": True, "automatic_overwrite": False},
+                next_step={"action": "review_changed_sources_and_start_new_selection", "paper_dir": str(root)})
+        elif state["status"] == "complete" and summary["delivery_current"] is not True:
+            summary.update(status="blocked", blocker={
+                "reason_code": "paper_delivery_unverified",
+                "message": "The completed receipt has no verifiable frozen package inventory. Preserve it and inspect its evidence.",
+            }, repair={"action": "inspect_paper_delivery_evidence", "automatic_overwrite": False},
+                next_step={"action": "inspect_paper_delivery_evidence", "paper_dir": str(root)})
         return summary
 
 

@@ -154,14 +154,82 @@ def test_request_order_and_label_cannot_change_after_checkpoint(case):
     assert caught.value.reason_code == "paper_already_exists"
 
 
-def test_inspection_is_read_only_and_reports_current_evidence_separately(case):
+@pytest.mark.parametrize("drift", ["raw", "native", "semantic_spec", "semantic_request"])
+def test_inspection_preserves_frozen_selection_and_requires_review_of_changed_sources(case, drift):
     tmp, request, projects, sealed, _ = case
-    paper.start_paper(request, paper_dir=tmp / "task")
+    completed = paper.start_paper(request, paper_dir=tmp / "task")
     record = (tmp / "task/paper.json").read_bytes()
-    (projects[0] / "studio/document.vsz").write_text("later save")
+    if drift == "raw":
+        (tmp / "raw0.csv").write_text("x,y\n1,9\n")
+    elif drift == "native":
+        (projects[0] / "studio/document.vsz").write_text("later manual frame save")
+    else:
+        path = projects[0] / ("studio/spec.json" if drift == "semantic_spec" else "plot_request.json")
+        changed = json.loads(path.read_text())
+        changed["revision"] = "new_semantic_revision"
+        path.write_text(json.dumps(changed))
+    originals = {p: file_inventory(p) for p in [*projects, tmp / "raw0.csv", tmp / "raw1.csv"]}
+    package = file_inventory(Path(request["out"]))
     inspected = paper.inspect_paper(tmp / "task")
-    assert inspected["status"] == "complete"
+    assert inspected["status"] == "blocked"
+    assert inspected["recorded_status"] == "complete"
+    assert inspected["ready_to_use"] is False
+    assert inspected["selection_scope"] == "frozen_selected_versions"
+    assert inspected["result_scope"] == "historical_frozen_delivery"
+    assert inspected["blocker"]["reason_code"] == "paper_selection_changed"
+    assert inspected["next_step"]["action"] == "review_changed_sources_and_start_new_selection"
+    assert inspected["repair"]["new_output_required"] is True
+    assert inspected["repair"]["automatic_overwrite"] is False
     assert [i["current"] for i in inspected["current_selections"]] == [False, True]
     assert inspected["delivery_current"] is True
+    assert inspected["items"] == completed["items"]
+    assert inspected["result"] == completed["result"]
     assert (tmp / "task/paper.json").read_bytes() == record
+    assert all(file_inventory(p) == before for p, before in originals.items())
+    assert file_inventory(Path(request["out"])) == package
     assert sealed == ["001_Fig1", "002_Fig2"]
+
+
+@pytest.mark.parametrize("drift", ["bytes", "extra_member", "missing_member"])
+def test_completed_paper_inspection_blocks_changed_delivery_without_overwrite_or_receipt_mutation(case, drift):
+    tmp, request, projects, sealed, _ = case
+    completed = paper.start_paper(request, paper_dir=tmp / "task")
+    record = (tmp / "task/paper.json").read_bytes()
+    out = Path(request["out"])
+    if drift == "bytes":
+        (out / "selected").write_text("owner changed delivered frame")
+    elif drift == "extra_member":
+        (out / "foreign_figure").write_text("unselected figure")
+    else:
+        (out / "selected").unlink()
+    package = {str(p.relative_to(out)): p.read_bytes() for p in out.rglob("*") if p.is_file()}
+    originals = {p: file_inventory(p) for p in [*projects, tmp / "raw0.csv", tmp / "raw1.csv"]}
+    inspected = paper.inspect_paper(tmp / "task")
+    assert inspected["status"] == "blocked"
+    assert inspected["recorded_status"] == "complete"
+    assert inspected["ready_to_use"] is False
+    assert inspected["delivery_current"] is False
+    assert inspected["source_versions_current"] is True
+    assert inspected["blocker"]["reason_code"] == "paper_delivery_changed"
+    assert inspected["next_step"]["action"] == "preserve_changed_package_and_start_new_selection"
+    assert inspected["repair"]["new_output_required"] is True
+    assert inspected["repair"]["automatic_overwrite"] is False
+    assert inspected["items"] == completed["items"]
+    assert inspected["result"] == completed["result"]
+    assert (tmp / "task/paper.json").read_bytes() == record
+    assert all(file_inventory(p) == before for p, before in originals.items())
+    assert {str(p.relative_to(out)): p.read_bytes() for p in out.rglob("*") if p.is_file()} == package
+    assert sealed == ["001_Fig1", "002_Fig2"]
+
+
+def test_completed_unchanged_paper_inspection_can_offer_current_frozen_delivery(case):
+    tmp, request, _, _, _ = case
+    completed = paper.start_paper(request, paper_dir=tmp / "task")
+    record = (tmp / "task/paper.json").read_bytes()
+    inspected = paper.inspect_paper(tmp / "task")
+    assert inspected["status"] == inspected["recorded_status"] == "complete"
+    assert inspected["ready_to_use"] is True
+    assert inspected["source_versions_current"] is inspected["delivery_current"] is True
+    assert inspected["items"] == completed["items"]
+    assert inspected["next_step"]["action"] == "review_selected_exports_and_deliver"
+    assert (tmp / "task/paper.json").read_bytes() == record
