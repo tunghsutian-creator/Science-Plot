@@ -51,7 +51,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             build-essential qt6-base-dev qt6-image-formats-plugins python3-dev python3-venv zsh \
-            python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev pyqt6-dev-tools
+            python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev pyqt6-dev-tools \
+            fonts-noto-cjk
           # Ubuntu's PyQt6 and qmake use the same distribution Qt libraries.
           # A PyPI PyQt6 wheel carries a separate Qt runtime, so keep the
           # distribution interpreter and expose its bindings to this venv.
@@ -108,6 +109,20 @@ jobs:
               "py_enable_shared_build_flag": sysconfig.get_config_var("Py_ENABLE_SHARED"),
           }, sort_keys=True))
           PY
+      - name: Verify Chinese glyph fallback in the system Qt runtime
+        run: |
+          python3 - <<'PYFONT'
+          from PyQt6.QtGui import QFont, QGuiApplication, QTextLayout
+          app = QGuiApplication([])
+          text = "\u4f4e\u6e29\u6297\u51b2\u51fb\u80fd\u529b"
+          layout = QTextLayout(text, QFont("Arial", 8))
+          layout.beginLayout()
+          line = layout.createLine()
+          layout.endLayout()
+          runs = layout.glyphRuns()
+          assert runs and all(index != 0 for run in runs for index in run.glyphIndexes()), "Missing Chinese glyph fallback"
+          print({"text": text, "fallback_families": [run.rawFont().familyName() for run in runs]})
+          PYFONT
       - name: Run lint gate
         run: python3 -m ruff check src tests
       - name: Run scoped static type gate
@@ -138,9 +153,27 @@ jobs:
           python3 -m pytest -q --tb=long \
             -p sciplot_core.verification.public_stage \
             --input-scope public-comprehensive \
+            --basetemp=.tmp_verify/ci_linux_native_diagnostic/pytest \
             --junitxml=.tmp_verify/ci_linux_native_diagnostic/junit.xml \
             -k 'test_ready_performance_studio_review_preserves_lineage or test_template_creation_has_exactly_one_native_export_and_no_repeated_preparation or test_native_radar_long_mixed_units_and_incomplete_negative_reference' \
             2>&1 | tee .tmp_verify/ci_linux_native_diagnostic/command.log
+      - name: Summarize generated-only publication QA details
+        if: always()
+        run: |
+          python3 - <<'PYQA'
+          import json
+          from pathlib import Path
+          root = Path(".tmp_verify/ci_linux_native_diagnostic")
+          root.mkdir(parents=True, exist_ok=True)
+          details = []
+          for path in sorted((root / "pytest").rglob("publication_qa.json")):
+              payload = json.loads(path.read_text())
+              details.append({"path": str(path), "status": payload.get("status"),
+                              "blocking_check_ids": payload.get("blocking_check_ids"),
+                              "failed_checks": [check for check in payload.get("checks", []) if check.get("status") == "failed"]})
+          (root / "qa-details.json").write_text(json.dumps(details, ensure_ascii=True, indent=2))
+          print(json.dumps(details, ensure_ascii=True, indent=2))
+          PYQA
       - name: Preserve generated-only native diagnostic reports and command log
         if: always()
         uses: actions/upload-artifact@v4
@@ -150,5 +183,6 @@ jobs:
             .tmp_verify/ci_linux_native_diagnostic/command.log
             .tmp_verify/ci_linux_native_diagnostic/reports.json
             .tmp_verify/ci_linux_native_diagnostic/junit.xml
+            .tmp_verify/ci_linux_native_diagnostic/qa-details.json
           include-hidden-files: true
           if-no-files-found: warn
