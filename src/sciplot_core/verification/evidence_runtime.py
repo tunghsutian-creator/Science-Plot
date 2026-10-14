@@ -139,8 +139,8 @@ def runtime_inputs(*, repo_root: Path, environment: dict[str, str]) -> tuple[dic
         raise ValueError("QML loader overrides have no reviewed closure policy")
     if environment.get("PYTHONHOME") or environment.get("PYTHONUSERBASE"):
         raise ValueError("custom Python runtime roots have no reviewed closure policy")
-    def child_path(value: str) -> Path:
-        path = Path(value).expanduser()
+    def child_path(value: str, *, expand_user: bool = True) -> Path:
+        path = Path(value).expanduser() if expand_user else Path(value)
         return path if path.is_absolute() else repo_root / path
 
     runtime_root = child_path(environment.get("SCIPLOT_RUNTIME_REPO", str(repo_root)))
@@ -154,7 +154,7 @@ def runtime_inputs(*, repo_root: Path, environment: dict[str, str]) -> tuple[dic
     # Parent import paths describe this interpreter; explicit child PYTHONPATH
     # entries are interpreted after subprocess cwd changes to repo_root.
     search = [Path(path).absolute() for path in sys.path if path]
-    search.extend(child_path(path) for path in environment.get("PYTHONPATH", "").split(os.pathsep) if path)
+    search.extend(child_path(path, expand_user=False) for path in environment.get("PYTHONPATH", "").split(os.pathsep) if path)
     for path in search:
         if path.resolve() == repo_root:
             continue  # cwd is covered by trusted repository domains, not .git/outputs.

@@ -21,6 +21,7 @@ def git(root, *args):
 
 @pytest.fixture
 def checkout(tmp_path, monkeypatch):
+    monkeypatch.delenv("SCIPLOT_REFERENCE_DATA", raising=False)
     contents = {
         "pyproject.toml": "[tool.pytest.ini_options]\n",
         ".gitignore": ".tmp_verify/\n__pycache__/\n.pytest_cache/\n",
@@ -265,3 +266,7 @@ def test_relative_private_namespace_uses_repo_root_preserving_alias(checkout, mo
     alias.unlink()
     alias.symlink_to(replacement, target_is_directory=True)
     assert before != discover_files(paths, allow_missing=True)
+
+
+def test_fake_checkout_does_not_inherit_private_data_environment(checkout):
+    assert "SCIPLOT_REFERENCE_DATA" not in os.environ
