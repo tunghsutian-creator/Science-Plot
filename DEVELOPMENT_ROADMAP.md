@@ -12,9 +12,16 @@ missing-input responsibilities; they do not claim original measured values.
 Unknown/stale scope and missing/unsafe private inputs block before test bodies.
 An authorized local Mac supplies controlled private execution. No remote private
 runner, private data transfer or credentials are configured by this change.
+Public comprehensive CI runs the same selected profile in a derived source-only
+checkout with independent Git identity and exact source/runtime before/after
+bindings. Excluding private namespaces changes that temporary copy only. The
+bounded generated-control exception preserves genuine missing-startup negatives;
+it does not authorize arbitrary bootstrap removal or claim filesystem isolation.
 
 Supported access capture computes closure from original raw process streams and
-durable exit evidence. Normal native EOF close/recycle and same-PID Qt exec
+durable exit evidence, including a command/source-bound external wait for the
+actual audited root. Missing root witness and root failure remain BLOCKED even
+when an inner supervisor exits zero. Normal native EOF close/recycle and same-PID Qt exec
 continuation have explicit evidence; intentional interruption, loss and missing
 startup/terminal remain BLOCKED. Historical incomplete capture is preserved.
 Full scientific PASS and child-inclusive access completeness are separate gates.

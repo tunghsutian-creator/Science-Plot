@@ -443,7 +443,17 @@ Every historical node remains in full regardless of its tier.
 Input requirements form a separate exact-node partition. `public-focused` and
 `public-comprehensive` execute reviewed public behavior, including generated
 native controls; `private-science` requires the authorized local corpus. Use
-`--input-scope PROFILE` on pytest or the durable start command. Unknown/stale
+`--input-scope PROFILE` on pytest or the durable start command for diagnostics.
+The comprehensive public CI entry is
+`python -m sciplot_core.verification.public_stage --profile public-comprehensive
+--out .tmp_verify/public-comprehensive` with a fresh output directory. It runs
+the entire selected profile in a source-only temporary checkout, retains the
+original tests and assertion rewriting, records its own Git identity and checks
+both origin and copied source/runtime bytes. Private fixture namespaces and
+`.local` are excluded from the copy; original files remain untouched. Inherited
+private roots, aliases and unknown generated-control callers fail closed.
+This bounded composition is not an OS sandbox or a private-access certificate.
+Unknown/stale
 membership and missing/unsafe private inputs block before bodies. Unfiltered
 full retains all public and original private cases; public execution does not
 establish the real scientific values. The two public tiers are the clean-source

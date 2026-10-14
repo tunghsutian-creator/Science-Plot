@@ -68,14 +68,24 @@ Review the original raw streams, process ownership and durable completion;
 never supply a self-asserted `capture_complete` flag as evidence.
 
 Input scope is independent of lifecycle depth. For a public source checkout use
-`pytest -q --input-scope public-focused` and
-`pytest -q --input-scope public-comprehensive`, or the corresponding
-`verify --start` profiles. `public-all` combines those public cases.
+`pytest -q --input-scope public-focused`. The public comprehensive CI entry is
+`python -m sciplot_core.verification.public_stage --profile public-comprehensive
+--out .tmp_verify/public-comprehensive`; use a fresh output directory.
+Direct pytest and durable input-scope profiles remain available for diagnostics.
+`public-all` combines those public cases.
 The checked-in exact-node manifest must match fresh full collection and both
 original tiers; unknown, stale, duplicate or omitted nodes block before bodies.
 Public scopes enforce CPython private-path and child-startup guards and use
 generated behavior inputs. Clean public CI has no local private corpus;
 neither condition certifies native filesystem observation or real science.
+The comprehensive entry derives a source-only checkout with its own Git identity,
+excluding the four private fixture namespaces and `.local` from the copy only.
+It binds original and copied source, configuration and native runtime bytes
+before/after execution, rejects inherited private roots and namespace members,
+and requires the original selected bodies and finish evidence. A finite
+source-bound generated-control caller may exercise a genuinely unobserved child;
+ordinary child-startup guards remain closed. This stage is not an OS sandbox or
+a private scientific/access-completeness certificate.
 
 For controlled local original-data execution use
 `verify --start private-science --out .tmp_verify/private-science --json`.
@@ -97,7 +107,10 @@ access-audit BLOCKED separate when independent input-boundary evidence is absent
 Normal native worker close and budget recycle use bounded stdin EOF and wait;
 transport faults retain bounded abort. Supported capture requires real start,
 terminal, loss, sequence, source/root identities, successful exec continuation
-and original exit evidence. Missing, truncated, interrupted, shadowed or lost
+and original exit evidence, including an external durable wait for the actual
+audited root. That witness must match its PID, command, executable and source;
+an inner supervisor's success cannot substitute for a root exit. Ordinary
+capture without this witness stays BLOCKED. Missing, truncated, interrupted, shadowed or lost
 observation remains BLOCKED even when a test intentionally triggers that path.
 The prior 108 unclosed historical epochs are retained as limited evidence;
 new normal-operation receipts do not retroactively complete them.
