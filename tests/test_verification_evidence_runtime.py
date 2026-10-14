@@ -135,7 +135,9 @@ def test_relative_runtime_environment_binds_real_child_inputs(tmp_path, monkeypa
     monkeypatch.setattr(runtime.sysconfig, "get_path", lambda name: str(tmp_path / "stdlib"))
     monkeypatch.setattr(runtime.sys, "path", [*sys.path, "parent-extra"])
     env = {"PYTHONPATH": os.pathsep.join(("../external:import-current:~/extras", os.environ.get("PYTHONPATH", ""))), "SCIPLOT_RUNTIME_REPO": "runtime",
-           "QT_PLUGIN_PATH": "plugins", "DYLD_FRAMEWORK_PATH": "frameworks", "QT_QPA_FONTDIR": "fonts"}
+           "QT_PLUGIN_PATH": "plugins",
+           "DYLD_FRAMEWORK_PATH": os.pathsep.join(("frameworks", os.environ.get("DYLD_FRAMEWORK_PATH", ""))),
+           "QT_QPA_FONTDIR": "fonts"}
     domains, _ = runtime.runtime_inputs(repo_root=repo, environment=env)
     assert repo / "../external" in domains["dependencies"]
     assert alias in domains["dependencies"]
