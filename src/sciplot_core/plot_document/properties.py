@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from sciplot_core.style_values import normalize_physical_size
-from sciplot_core.policy import DEFAULT_LINE_STYLE_SEQUENCE
+from sciplot_core.policy.frame_export import DEFAULT_LINE_STYLE_SEQUENCE
 
 from .errors import fail
 

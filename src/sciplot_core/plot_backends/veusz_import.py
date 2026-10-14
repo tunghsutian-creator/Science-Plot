@@ -10,7 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.policy import DEFAULT_LINE_STYLE_SEQUENCE
+from sciplot_core.policy.frame_export import DEFAULT_LINE_STYLE_SEQUENCE
 from sciplot_core.plot_document import DocumentError, seal_document
 from sciplot_core.plot_backends.veusz_identity import changed_error, require_current
 from sciplot_core.plot_backends.veusz_semantic_import import axis_properties, legend_properties, managed_annotation
