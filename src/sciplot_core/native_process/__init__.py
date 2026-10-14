@@ -11,11 +11,12 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 
-def run_worker(command: list[str], *, cold_runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+def run_worker(command: list[str], *, cold_runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
                **kwargs: Any) -> subprocess.CompletedProcess[str]:
     worker = active_worker()
     if worker is None:
-        return cold_runner(command, **kwargs)
+        runner = subprocess.run if cold_runner is None else cold_runner
+        return runner(command, **kwargs)
     return worker.run(command, timeout=kwargs.get("timeout", 120), check=kwargs.get("check", False))
 
 

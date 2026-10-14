@@ -130,6 +130,55 @@ def test_legacy_path_preserves_exact_subprocess_arguments_without_a_session():
     assert calls == [((command(),), kwargs)]
 
 
+def test_default_cold_runner_observes_subprocess_patch_after_import(tmp_path, monkeypatch):
+    script = tmp_path / "generated.py"
+    script.write_text('print("generated cold response")\n')
+    argv = [sys.executable, str(script)]
+    calls = []
+    actual_run = subprocess.run
+
+    def measured_run(*args, **kwargs):
+        calls.append((args, kwargs))
+        return actual_run(*args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", measured_run)
+    kwargs = {"text": True, "capture_output": True, "check": True, "timeout": 10}
+    result = run_worker(argv, **kwargs)
+    assert result.returncode == 0 and result.stdout == "generated cold response\n"
+    assert calls == [((argv,), kwargs)]
+
+
+def test_explicit_cold_runner_remains_authoritative_after_subprocess_patch(monkeypatch):
+    calls = []
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("The explicit cold runner must own this dispatch.")
+
+    def explicit(*args, **kwargs):
+        calls.append((args, kwargs))
+        return subprocess.CompletedProcess(args[0], 7, "explicit output", "explicit error")
+
+    monkeypatch.setattr(subprocess, "run", unexpected)
+    kwargs = {"text": True, "capture_output": True, "check": False, "timeout": 3}
+    result = run_worker(command(), cold_runner=explicit, **kwargs)
+    assert (result.returncode, result.stdout, result.stderr) == (7, "explicit output", "explicit error")
+    assert calls == [((command(),), kwargs)]
+
+
+def test_active_worker_never_dispatches_to_default_or_explicit_cold_runner(worker, monkeypatch):
+    def unexpected(*args, **kwargs):
+        pytest.fail("An active worker must own this dispatch.")
+
+    monkeypatch.setattr(subprocess, "run", unexpected)
+    with worker.activate():
+        first = run_worker(command("default"), check=True, timeout=10)
+        second = run_worker(command("explicit"), cold_runner=unexpected, check=True, timeout=10)
+    assert json.loads(first.stdout)["mode"] == "default"
+    assert json.loads(second.stdout)["mode"] == "explicit"
+    assert json.loads(first.stdout)["pid"] == json.loads(second.stdout)["pid"] == worker.last_pid
+    assert worker.starts == 1
+
+
 @pytest.mark.parametrize("raw", [b'{"id":"a","id":"b","argv":[]}', b'{"id":NaN,"argv":[]}', b'[]'])
 def test_duplicate_and_nonfinite_protocol_values_are_rejected(raw):
     with pytest.raises(ValueError):
