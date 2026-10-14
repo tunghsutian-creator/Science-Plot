@@ -105,6 +105,8 @@ def test_template_create_two_sources_through_one_public_command_each(tmp_path):
 @pytest.mark.comprehensive
 @pytest.mark.parametrize("style_change", [True, False])
 def test_template_creation_has_exactly_one_native_export_and_no_repeated_preparation(tmp_path, monkeypatch, style_change):
+    # This test measures the cold worker budget on every supported platform.
+    monkeypatch.setattr("sciplot_core.veusz_runtime.needs_veusz_worker_process", lambda: True)
     source = tmp_path / "UVvis.csv"
     source.write_text("Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\nE2,E2,E4,E4\n"
                       "400,1,400,2\n450,2,450,3\n500,3,500,4\n")
