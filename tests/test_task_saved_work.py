@@ -98,6 +98,39 @@ def test_renamed_or_copied_source_is_candidate_evidence_without_rebinding(manage
     assert inventory(tmp_path) == {path: value for path, value in before.items() if path != str(source)}
 
 
+@pytest.mark.parametrize("change", ["bytes", "missing", "symlink"])
+def test_managed_search_source_race_after_final_document_read_fails_closed(managed, tmp_path, monkeypatch, change):
+    root, source, _ = managed
+    copied = tmp_path / "renamed-source.csv"
+    shutil.copy2(source, copied)
+    original_hash, authority_before = file_sha256(source), inventory(root)
+    read_document = work.document_evidence
+    reads = []
+
+    def change_after_owner_read(target):
+        current = read_document(target)
+        assert current["current"]
+        reads.append(target)
+        if change == "bytes":
+            copied.write_bytes(copied.read_bytes().replace(b"2", b"9"))
+        else:
+            copied.unlink()
+            if change == "symlink":
+                copied.symlink_to(source)
+        return current
+
+    # Only the final continuation owner is patched. Discovery reads the real
+    # managed document through its own owner, before the external mutation.
+    monkeypatch.setattr(work, "document_evidence", change_after_owner_read)
+    result = work.continue_saved_work(copied, search_roots=[root], target=root)
+    assert reads == [root]
+    assert result["status"] == "blocked", result
+    assert result["reason_code"] == "source_changed_during_continuation"
+    assert result["next_step"]["action"] == "find_saved_work_again"
+    assert "current" not in result
+    assert file_sha256(source) == original_hash and inventory(root) == authority_before
+
+
 def test_same_name_different_bytes_never_match(managed, tmp_path):
     root, source, _ = managed
     other = tmp_path / "elsewhere" / source.name

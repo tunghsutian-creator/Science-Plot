@@ -304,11 +304,25 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             next_step = {"action": "fill_operations_then_start", "arguments": {"request": request},
                          "style_arguments": {"target": str(selected), "figure_id": identity},
                          "message": "Fill operations with the requested batch and use task.start, or use task.style with these current target arguments. The saved VSZ remains the visual authority."}
+        # The search source may be a copied/renamed file outside the selected
+        # authority's input closure. Check it after the final owner read, too.
+        try:
+            source_sha = _tree_hash(Path(found["source"]))
+        except (OSError, ValueError) as exc:
+            raise TaskControlError("source_changed_during_continuation",
+                                   "The search source changed or became unreadable during continuation; find saved work again.") from exc
+        if source_sha != found["source_sha256"]:
+            raise TaskControlError("source_changed_during_continuation",
+                                   "The search source changed during continuation; find saved work again.")
         return {**base, "status": "current", "selected": match, "current": current, "next_step": next_step}
     except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
-        return {**base, "status": "blocked", "reason_code": getattr(exc, "reason_code", "saved_authority_changed"),
+        code = getattr(exc, "reason_code", "saved_authority_changed")
+        return {**base, "status": "blocked", "reason_code": code,
                 "message": str(exc), "selected": match,
-                "next_step": {"action": "inspect_selected_conflict", "target": str(selected)}}
+                "next_step": ({"action": "find_saved_work_again", "arguments": {
+                    "source": found["source"], "search_roots": found["search_roots"]}}
+                    if code == "source_changed_during_continuation" else
+                    {"action": "inspect_selected_conflict", "target": str(selected)})}
 
 
 __all__ = ["find_saved_work", "continue_saved_work"]

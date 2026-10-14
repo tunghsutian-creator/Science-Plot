@@ -8,10 +8,12 @@ import pytest
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.studio_core.document_edit_state import audit_edited_document
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.task_control import resume_task, start_task
 from sciplot_core.task_saved_work import continue_saved_work, find_saved_work
+from sciplot_core import task_saved_work as work
 
 
 @pytest.mark.comprehensive
@@ -88,3 +90,49 @@ def test_copied_source_discovery_returns_native_editable_original_and_explicit_s
                  "before_sha256": old_document, "source_sha256": file_sha256(copied_source)},
         "ambiguous_status": ambiguous["status"], "missing_source": missing,
         "source_revision_status": revision["status"], "changed_source_review_status": source_review["status"]}, indent=2))
+
+
+@pytest.mark.comprehensive
+@pytest.mark.parametrize("source_kind", ["file", "directory"])
+def test_legacy_search_source_race_after_final_project_owner_read_fails_closed(tmp_path, monkeypatch, source_kind):
+    raw = tmp_path / "UVvis.csv"
+    raw.write_text("Wavelength,Absorbance\nnm,a.u.\nE3,E3\n400,1\n425,2\n450,4\n475,2\n500,1\n")
+    source = raw
+    if source_kind == "directory":
+        source = tmp_path / "UVvis"
+        source.mkdir()
+        raw.rename(source / raw.name)
+    creation = tmp_path / "creation"
+    created = start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=creation)
+    assert created["status"] == "complete", created
+    project = Path(created["project"])
+    copied = tmp_path / ("renamed.csv" if source_kind == "file" else "renamed-data")
+    if source_kind == "file":
+        shutil.copy2(source, copied)
+    else:
+        shutil.copytree(source, copied)
+    source_before = source_tree_sha256(source)
+    authority_before = {str(path): file_sha256(path) for path in project.rglob("*") if path.is_file()}
+    read_project = work.project_evidence
+    reads = []
+
+    def change_after_final_owner_read(*args, **kwargs):
+        current = read_project(*args, **kwargs)
+        assert current["continuation_available"]
+        reads.append(current["target"])
+        if len(reads) == 2:  # After native inspection/audit and the final project query.
+            if source_kind == "file":
+                copied.write_bytes(copied.read_bytes().replace(b"450,4", b"450,9"))
+            else:
+                (copied / "later.csv").write_text("new source member\n")
+        return current
+
+    monkeypatch.setattr(work, "project_evidence", change_after_final_owner_read)
+    result = work.continue_saved_work(copied, search_roots=[project], tasks_root=creation, target=project)
+    assert reads == [str(project), str(project)]
+    assert result["status"] == "blocked", result
+    assert result["reason_code"] == "source_changed_during_continuation"
+    assert result["next_step"]["action"] == "find_saved_work_again"
+    assert "current" not in result
+    assert source_tree_sha256(source) == source_before
+    assert {str(path): file_sha256(path) for path in project.rglob("*") if path.is_file()} == authority_before
