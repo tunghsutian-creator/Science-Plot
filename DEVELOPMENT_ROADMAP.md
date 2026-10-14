@@ -32,11 +32,27 @@ algorithm entries and mapping-v1 inspection path remain intact. Forty-one unused
 facade aliases and two same-owner leaf files are retired; supported worker/Qt
 ports, the persisted transform reference and the documented TGA wrapper remain.
 
-The final integrated snapshot still requires one unfiltered full run with a
-fresh private-access receipt, full smoke, all 24 ready rules, visual review,
-normal branch push and exact-commit CI inspection. Independent human review,
-second-Mac/font portability and real-client token/fee telemetry remain external
-evidence limits; no byte count is treated as token usage.
+At frozen `74fcec2`, the unfiltered Mac suite passes all 4,058 nodes with zero
+failures, errors or skips. It includes both focused and comprehensive coverage;
+the original completed receipt has unchanged before/after input identities.
+The independently reviewed fresh access capture binds all 165 private cases in
+the exact collection, with zero unmapped accesses or lost observations. Its
+completeness diagnosis is separate from the scientific test result. The public
+inventory flag remains preliminary; a subset or stale receipt cannot close it.
+
+Doctor is ready, full smoke passes 36/36 and all 24 ready rules pass. Independent
+agent review inspected 41 native TIFFs, 41 PDF pages and three contact sheets.
+All 127 retained private files and 70 golden files have unchanged membership and
+bytes. The selected Darwin Python framework is preserved through the source
+launcher; the two final verification-control failures were repaired without
+changing test markers, negative assertions, scientific inputs or golden files.
+
+Public Linux CI remains a separate gate because private scientific inputs are
+unavailable there; its exact-commit result must accompany local private evidence.
+No private data is uploaded or coverage removed to make that gate green.
+Independent human review, second-Mac/font portability and real-client token/fee
+telemetry remain external evidence limits; no byte count is treated as token
+usage. Further product work requires a separately approved next-round proposal.
 
 ## 2026-10-13 Mac verification and remaining gates
 
