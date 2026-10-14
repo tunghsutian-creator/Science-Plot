@@ -149,12 +149,16 @@ def run_changed_verification(
     command_runner: CommandRunner | None = None,
     base: str | None = None,
     plan_only: bool = False,
+    record: Path | None = None,
+    reuse: Path | None = None,
 ) -> dict[str, Any]:
     """Run every planned focused check once, without broad-gate fallback."""
 
     root = (repo_root or _default_repo_root()).expanduser().resolve()
     runner = command_runner or _run_command
     try:
+        if (record is not None and reuse is not None) or (plan_only and (record is not None or reuse is not None)):
+            raise ValueError("Plan-only, record and reuse are mutually exclusive verification modes.")
         if changed_paths is not None:
             if base is not None:
                 raise ValueError("An explicit path list cannot also claim a Git base comparison.")
@@ -170,9 +174,15 @@ def run_changed_verification(
         )
         return payload
     payload = build_changed_verification_plan(selected_paths, repo_root=root, comparison=comparison)
-    payload.update(plan_only=plan_only, checks_executed=0)
+    payload.update(plan_only=plan_only, checks_executed=0, execution_target="current_worktree")
     if payload["unowned_paths"] or payload["status"] == "NO_TESTS" or plan_only:
         return payload
+    evidence_directory = record if record is not None else reuse
+    if evidence_directory is not None:
+        from sciplot_core.verification.changed_evidence import run_evidence_checks
+
+        return run_evidence_checks(payload, repo_root=root, directory=evidence_directory,
+                                   reuse=reuse is not None)
 
     results: list[dict[str, Any]] = []
     for check in payload["checks"]:
@@ -224,7 +234,7 @@ def _planned_checks(
                     "-q",
                     "-m",
                     "focused",
-                    *pytest_targets,
+                    *_deduplicated_targets(pytest_targets),
                 ],
                 "status": "planned",
             }
@@ -246,6 +256,20 @@ def _planned_checks(
             }
         )
     return checks
+
+
+def _deduplicated_targets(targets: list[str]) -> list[str]:
+    """Remove only literal pytest ancestors, preserving option-like arguments."""
+    selectors = {target for target in targets if not target.startswith("-")
+                 and target.split("::", 1)[0].endswith(".py")}
+    result: list[str] = []
+    for target in targets:
+        if target in selectors and (target in result or any(
+            target.startswith(ancestor + "::") for ancestor in selectors if ancestor != target
+        )):
+            continue
+        result.append(target)
+    return result
 
 
 def _unique_gates(groups: Iterable[tuple[str, ...]]) -> list[str]:

@@ -80,13 +80,58 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
         return 0 if payload["status"] == "ready" else 1
 
     if args.command == "verify":
+        if args.start is not None or args.status is not None:
+            from sciplot_core.verification.suite_evidence import (
+                start_suite_verification,
+                suite_verification_status,
+            )
+
+            invalid = args.base is not None or args.plan_only or args.record is not None or args.reuse is not None
+            invalid = invalid or (args.start is None and any(
+                value is not None for value in (args.out, args.audit_plugin_dir, args.audit_out)
+            )) or (args.start is not None and args.out is None)
+            if invalid:
+                payload = {"status": "BLOCKED", "reused": False, "scientific_acceptance": False,
+                           "error": {"reason_code": "invalid_verification_mode",
+                                     "message": "Suite start requires --out; base/plan/record/reuse apply only to --changed."}}
+            elif args.start is not None:
+                payload = start_suite_verification(args.start, directory=args.out,
+                    audit_plugin_dir=args.audit_plugin_dir, audit_out=args.audit_out)
+            else:
+                payload = suite_verification_status(args.status)
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot durable verification: {payload['status']}")
+                print("Claim: " + payload.get("claim", "no completion proven"))
+                if payload.get("directory"):
+                    print("Directory: " + payload["directory"])
+                if payload.get("error"):
+                    print(payload["error"]["message"])
+            if payload["status"] == "NO_TESTS":
+                return 2
+            return 0 if payload["status"] in ("RUNNING", "PASS") else 1
+
         from sciplot_core.verification import run_changed_verification
 
+        if any(value is not None for value in (args.out, args.audit_plugin_dir, args.audit_out)):
+            payload = {"status": "BLOCKED", "reused": False, "scientific_acceptance": False,
+                       "error": {"reason_code": "invalid_verification_mode",
+                                 "message": "Output and audit attachment options require --start."}}
+            if args.json:
+                _print_json(payload)
+            else:
+                print(payload["error"]["message"])
+            return 1
         options: dict[str, Any] = {}
         if args.base is not None:
             options["base"] = args.base
         if args.plan_only:
             options["plan_only"] = True
+        if args.record is not None:
+            options["record"] = args.record
+        if args.reuse is not None:
+            options["reuse"] = args.reuse
         payload = run_changed_verification(**options)
         if args.json:
             _print_json(payload)
@@ -101,6 +146,8 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
                 print(payload["error"]["message"])
             for check in payload["checks"]:
                 print(f"{check['check_id']}: {check['status']}")
+                if check.get("reason"):
+                    print(f"  {check['reason']}")
                 if check["status"] == "failed":
                     detail = str(check.get("stderr") or check.get("stdout") or "").strip()
                     if detail:

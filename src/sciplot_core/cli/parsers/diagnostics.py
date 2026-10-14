@@ -55,14 +55,34 @@ def register_diagnostics_commands(subparsers: Any) -> None:
 
     verify_parser = subparsers.add_parser(
         "verify",
-        help="Run one changed-owner focused verification pass.",
+        help="Verify a changed scope or start and inspect a durable test suite.",
     )
 
-    verify_parser.add_argument(
+    verify_scope = verify_parser.add_mutually_exclusive_group(required=True)
+    verify_scope.add_argument(
         "--changed",
         action="store_true",
-        required=True,
         help="Verify the staged, unstaged, and untracked HEAD worktree.",
+    )
+    verify_scope.add_argument(
+        "--start", choices=("focused", "comprehensive", "full"),
+        help="Start one durable suite execution; return before the suite finishes.",
+    )
+    verify_scope.add_argument(
+        "--status", type=Path, metavar="DIR",
+        help="Read the original durable execution without collecting or rerunning tests.",
+    )
+    verify_parser.add_argument(
+        "--out", type=Path, metavar="DIR",
+        help="Fresh named directory under .tmp_verify, required with --start.",
+    )
+    verify_parser.add_argument(
+        "--audit-plugin-dir", type=Path, metavar="DIR",
+        help="Frozen local access-observation plugin directory, only with --start.",
+    )
+    verify_parser.add_argument(
+        "--audit-out", type=Path, metavar="DIR",
+        help="Fresh separate local audit output, paired with --audit-plugin-dir.",
     )
 
     verify_parser.add_argument(
@@ -73,9 +93,18 @@ def register_diagnostics_commands(subparsers: Any) -> None:
         "--base", metavar="REV",
         help="Include committed changes from REV to HEAD, plus the current worktree.",
     )
-    verify_parser.add_argument(
+    verify_mode = verify_parser.add_mutually_exclusive_group()
+    verify_mode.add_argument(
         "--plan-only", action="store_true",
         help="Resolve the changed scope and list checks without executing them.",
+    )
+    verify_mode.add_argument(
+        "--record", type=Path, metavar="DIR",
+        help="Execute each check once with durable local evidence under .tmp_verify.",
+    )
+    verify_mode.add_argument(
+        "--reuse", type=Path, metavar="DIR",
+        help="Validate matching local check receipts without rerunning verification gates.",
     )
 
     readiness_parser = subparsers.add_parser(
