@@ -154,11 +154,7 @@ from sciplot_core.studio_render.axis_contract import (
     _veusz_axis_contract as _veusz_axis_contract,
 )
 from sciplot_core.studio_core.registry_state import (
-    _studio_document_state as _studio_document_state,
     _veusz_spec_path as _veusz_spec_path,
-)
-from sciplot_core.studio_core.document_archive import (
-    _archive_manual_document_if_needed as _archive_manual_document_if_needed,
 )
 from sciplot_core.studio_render.style_contract import (
     _veusz_style_contract as _veusz_style_contract,
