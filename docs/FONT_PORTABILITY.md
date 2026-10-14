@@ -116,3 +116,41 @@ scientific values and publication QA limits are unchanged. A successful glyph
 probe establishes glyph availability in that runtime; it does not identify the
 font-file bytes selected by the PDF device or establish cross-platform pixel
 equality. The final native PDF assertions remain the export check.
+
+## 2026-10-14 Ubuntu superscript-minus blocker
+
+The original performance-lineage native test remains blocked by its strict
+`font_families` check on Ubuntu. Its generated PDF embeds Liberation Sans for
+ordinary text and DejaVu Serif for two 7 pt U+207B superscript-minus glyphs.
+DejaVu Serif is outside the unchanged Arial/Helvetica/Liberation Sans policy.
+Public Liberation Sans 1.07.3 and 2.1.5, and the inspected historical public
+Arial core-font files, do not supply that glyph. Availability of a family name
+alone is therefore insufficient to close the failure.
+
+Two isolated diagnostic experiments tested a narrowly guarded decomposition of
+U+207B to an elevated U+2212 mathematical minus, using the same face and size.
+The actual PDF paint device gives the 7 pt original slot 3.6875 units of advance
+but the replacement 4.0 units of ink width. At 6 pt, the slot is 3.15625 units
+while the replacement still occupies 4.0. The ink would collide with the next
+superscript digit. The candidate consequently leaves the original PDF renderer
+in place; original and candidate PDF rasterizations are pixel-identical and
+both retain the original font failure. The higher-resolution TIFF device has
+different metrics, permits the replacement and changes local pixels. That
+device-dependent result does not establish a portable repair.
+
+The [last bounded diagnostic](https://github.com/tunghsutian-creator/Science-Plot/actions/runs/38633894152)
+retains the original four native cases plus two actual daemon-termination
+controls: five pass and the performance font case fails. Its generated-only
+artifact `11927981996` retains PDF/TIFF, extracted text, embedded-font details,
+whole-page images, magnified glyph crops, actual device geometry and source
+bindings. Both PDFs retain extractable superscript units. Neither diagnostic
+workflow nor experimental renderer is part of the release implementation.
+
+The existing Mac Arial request also uses Qt fallback for U+207B; its observed
+Helvetica fallback is already permitted. Bounded Mac original-path comparisons
+remain unchanged. This does not prove the requested Arial face supplies every
+glyph or establish cross-platform resource identity. Closing the Ubuntu gate
+requires an authorized font resource that supplies the glyph within the
+existing policy, or a separate reviewed design decision. No font-policy waiver,
+font relabeling, outlined text, character scaling or neighbor movement is used
+to report a pass.
