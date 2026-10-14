@@ -73,7 +73,7 @@ def test_experiment_group_native_creation_style_review_and_resume(tmp_path, tran
 
         async def scenario():
             parameters = StdioServerParameters(command=sys.executable, args=['-m', 'sciplot_core.mcp_server'],
-                cwd=REPO_ROOT, env={**os.environ, 'PYTHONPATH': str(REPO_ROOT / 'src')})
+                cwd=REPO_ROOT, env={**os.environ, 'PYTHONPATH': os.pathsep.join(filter(None, (str(REPO_ROOT / 'src'), os.environ.get('PYTHONPATH', ''))))})
             async with Client(parameters, read_timeout_seconds=240) as client:
                 response = await client.call_tool('sciplot_group_start', {'request': request, 'group_dir': str(group)})
                 assert not response.is_error, response.content

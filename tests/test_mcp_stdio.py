@@ -22,7 +22,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 def _parameters(*, cli=False):
     return StdioServerParameters(command=str(REPO_ROOT / "skill/scripts/sciplot") if cli else sys.executable,
         args=["mcp"] if cli else ["-m", "sciplot_core.mcp_server"], cwd=REPO_ROOT,
-        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")})
+        env={**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, (str(REPO_ROOT / "src"), os.environ.get("PYTHONPATH", ""))))})
 
 
 async def _call(client, name, arguments):

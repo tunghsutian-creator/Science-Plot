@@ -66,7 +66,7 @@ def test_compare_native_alternatives_from_one_baseline_then_select_only_one(tmp_
 
         async def scenario():
             parameters = StdioServerParameters(command=sys.executable, args=['-m', 'sciplot_core.mcp_server'],
-                cwd=REPO_ROOT, env={**os.environ, 'PYTHONPATH': str(REPO_ROOT / 'src')})
+                cwd=REPO_ROOT, env={**os.environ, 'PYTHONPATH': os.pathsep.join(filter(None, (str(REPO_ROOT / 'src'), os.environ.get('PYTHONPATH', ''))))})
             async with Client(parameters, read_timeout_seconds=240) as client:
                 response = await client.call_tool('sciplot_comparison_start', {'request': request, 'comparison_dir': str(root)})
                 assert not response.is_error, response.content
