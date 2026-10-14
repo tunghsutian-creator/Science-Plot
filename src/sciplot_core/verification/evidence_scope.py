@@ -17,7 +17,10 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.verification.evidence import load_receipt
-from sciplot_core.verification.evidence_identity import capture_identity, digest, discover_files
+from sciplot_core.verification.evidence_identity import (
+    PUBLIC_GOLDEN_REASON, PUBLIC_INPUT_POLICY, PUBLIC_RAW_REASON,
+    capture_identity, digest, discover_files, public_test_members,
+)
 from sciplot_core.verification.evidence_runtime import QT_MODULES, native_dependencies, qt_import_bindings, runtime_inputs
 from sciplot_core.verification.input_scope import MANIFEST, PROFILES, load_manifest
 
@@ -225,27 +228,35 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
                           for path in {root / node.split("::", 1)[0] for node in nodes} | {Path(__file__).resolve()}}
     paths = _repository_inputs(root, nodes)
     reviewed_sources = {}
+    exclusions = {}
     public_profile = check["check_id"].removeprefix("pytest_").startswith("public-")
     if public_profile:
-        manifest = load_manifest(root / MANIFEST.relative_to(Path(__file__).parents[3]))
+        manifest_path = root / MANIFEST.relative_to(Path(__file__).parents[3])
+        manifest = load_manifest(manifest_path)
         if not set(nodes).issubset(manifest["scopes"]["public"]):
             raise ValueError("Public suite selected a private or unknown test body.")
         inventory = root / "src/sciplot_core/verification/private_corpus_inventory.json"
-        # The public closure binds tracked public inputs only. Ignored private
-        # bytes and their absence cannot influence a public behavior receipt.
-        listing = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "tests"], cwd=root,
-                                 capture_output=True, text=True, check=True).stdout
-        private_roots = ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")
-        public_tests = [root / name for name in listing.split("\0") if name and not any(
-            name.startswith(f"tests/fixtures/{part}/") for part in private_roots)]
-        public_tests.extend(root / node.split("::", 1)[0] for node in nodes)
-        paths["tests"] = sorted(set(public_tests))
-        paths.update(raw=[path for path in public_tests if path.is_relative_to(root / "tests/fixtures")], golden=[],
-                     corpus_policy=[inventory, MANIFEST, Path(__file__).resolve()], inventory=[inventory, MANIFEST])
+        # Include importable/generated public helpers while never entering the
+        # four private namespaces. Capture rechecks this membership every time.
+        public_tests, public_layout = public_test_members(root)
+        public_fixtures = [path for path in public_tests if path.is_relative_to(root / "tests/fixtures")]
+        paths["tests"] = public_tests
+        paths.update(raw=public_fixtures, golden=[],
+                     corpus_policy=[inventory, manifest_path, Path(__file__).resolve()], inventory=[inventory, manifest_path])
         reviewed_sources["input_scope"] = check["check_id"].removeprefix("pytest_")
         reviewed_sources["excluded_input_domains"] = {
             "private_raw": "not_applicable: exact public node partition, generated/public behavior only",
             "private_goldens": "not_applicable: real scientific/native golden nodes retained in private/full",
+        }
+        exclusions["golden"] = PUBLIC_GOLDEN_REASON
+        if not paths["raw"]:
+            exclusions["raw"] = PUBLIC_RAW_REASON
+        reviewed_sources["public_inputs"] = {
+            "policy": PUBLIC_INPUT_POLICY, "profile": reviewed_sources["input_scope"],
+            "manifest_path_sha256": digest(str(manifest_path.resolve())), "manifest_sha256": file_sha256(manifest_path),
+            "selected_tests_sha256": digest(sorted(nodes)),
+            "tests_layout_sha256": public_layout,
+            "raw": "not_applicable" if "raw" in exclusions else "bound_public_files",
         }
     else:
         raw, inventory = _corpus_paths(root, environment, nodes, reviewed_sources=reviewed_sources)
@@ -261,6 +272,10 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
         paths["config"].extend(_git_inputs(root))
     inputs, discovered, layouts = {}, {}, {}
     for domain, roots in sorted(paths.items()):
+        if domain in exclusions:
+            inputs[domain] = {"not_applicable": exclusions[domain]}
+            discovered[domain] = []
+            continue
         files, layouts[domain] = discover_files(roots, allow_missing=True)
         inputs[domain] = {"paths": [str(path) for path in roots], "symlinks": "resolve", "allow_missing": True}
         discovered[domain] = files
@@ -276,23 +291,25 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
     inputs["native"]["paths"] = sorted(set(inputs["native"]["paths"]) | {str(path) for path in native})
     # Seal additions/alias changes during graph discovery, as well as file bytes.
     for domain, roots in paths.items():
+        if domain in exclusions:
+            continue
         if discover_files(roots, allow_missing=True)[1] != layouts[domain]:
             raise ValueError("dependency-discovery membership changed")
     layouts["native"] = discover_files([Path(name) for name in inputs["native"]["paths"]], allow_missing=True)[1]
-    scope = {"kind": "pytest" if module == "pytest" else "process", "closure_policy": POLICY,
+    scope = {"kind": "pytest" if module == "pytest" else "process",
+             "closure_policy": PUBLIC_INPUT_POLICY if public_profile else POLICY,
              "check_id": check["check_id"], "host": host, "discovery_bindings": discovery_bindings,
              "discovery_layouts": layouts, "discovery_aliases": aliases, **reviewed_sources}
-    if public_profile:
-        reason = "Public behavior scope has no real scientific native golden input; private/full retain those exact nodes."
-        inputs["golden"] = {"not_applicable": reason}
-        scope["excluded_domains"] = {"golden": reason}
+    if exclusions:
+        scope["excluded_domains"] = exclusions
     if module == "git":
         diff = subprocess.run(["git", "diff", "--binary", *command[3:]], cwd=root,
                               capture_output=True, check=True).stdout
         scope["git_diff_sha256"] = digest(diff.hex())
     return {"repo_root": str(root), "command": command, "scope": scope,
             "selected_tests": nodes, "inputs": inputs, "environment": environment,
-            "corpus": {"mode": "declared", "complete": True, "policy": POLICY,
+            "corpus": {"mode": "synthetic" if "raw" in exclusions else "declared", "complete": True,
+                       "policy": PUBLIC_INPUT_POLICY if public_profile else POLICY,
                        "fresh_access_audit": False, "scientific_acceptance": False}}
 
 

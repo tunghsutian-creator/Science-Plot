@@ -23,10 +23,89 @@ REQUIRED_FILES = frozenset({
     "implementation", "tests", "config", "owner_policy", "dependencies", "python",
     "corpus_policy",
 })
+PUBLIC_INPUT_POLICY = "public-generated-behavior-closure-v1"
+PUBLIC_RAW_REASON = "No pre-existing public raw fixture bytes; selected behavior generates its inputs. Real raw science remains private/full."
+PUBLIC_GOLDEN_REASON = "Public behavior has no scientific native golden input; exact real golden nodes remain private/full."
 
 
 def digest(value: Any) -> str:
     return canonical_json_sha256(value, allow_nan=False)
+
+
+def public_test_members(root: Path) -> tuple[list[Path], str]:
+    """Bind public test/helper membership without entering private fixture roots."""
+    fixture = root / "tests/fixtures"
+    tests = root / "tests"
+    private = {"real_world", "rendering_profiles", "polymer_corpus", "archived_output_raw_data"}
+    caches = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".git"}
+    files: list[Path] = []
+    layout = {}
+
+    def visit(path: Path) -> None:
+        if path.is_symlink():
+            raise ValueError("Public test/input aliases are not supported.")
+        relative = path.relative_to(root).as_posix()
+        if path.is_dir():
+            layout[relative] = "directory"
+            for entry in sorted(path.iterdir()):
+                if (entry.name not in caches and not entry.name.endswith((".pyc", ".pyo"))
+                        and not (path == fixture and entry.name in private)):
+                    visit(entry)
+        elif path.is_file():
+            layout[relative] = "file"
+            files.append(path)
+        else:
+            raise ValueError("Public test/input member is missing or unsupported.")
+
+    if tests.exists() or tests.is_symlink():
+        visit(tests)
+    else:
+        layout["tests"] = "missing"
+    return files, digest(layout)
+
+
+def _public_scope(scope: dict[str, Any], corpus: dict[str, Any]) -> bool:
+    return (str(scope.get("input_scope", "")).startswith("public-")
+            or str(scope.get("check_id", "")).startswith("pytest_public-") or "public_inputs" in scope
+            or scope.get("closure_policy") == PUBLIC_INPUT_POLICY or corpus.get("policy") == PUBLIC_INPUT_POLICY)
+
+
+def _public_binding(scope: dict[str, Any], corpus: dict[str, Any], command: list[str],
+                    selection: list[str], inputs: dict[str, Any]) -> dict[str, Any] | None:
+    """Validate the source-owned public exception against actual input records."""
+    if not _public_scope(scope, corpus):
+        return None
+    binding = scope.get("public_inputs")
+    if not isinstance(binding, dict) or set(binding) != {
+        "policy", "profile", "manifest_path_sha256", "manifest_sha256", "selected_tests_sha256", "raw", "tests_layout_sha256",
+    } or any(not isinstance(value, str) for value in binding.values()):
+        raise ValueError("Public input closure needs its exact manifest/profile binding.")
+    profile = binding["profile"]
+    if (profile not in {"public-focused", "public-comprehensive", "public-all"}
+            or scope.get("kind") != "pytest" or scope.get("input_scope") != profile
+            or scope.get("check_id") != f"pytest_{profile}" or scope.get("closure_policy") != PUBLIC_INPUT_POLICY
+            or binding["policy"] != PUBLIC_INPUT_POLICY
+            or corpus.get("policy") != PUBLIC_INPUT_POLICY
+            or any(corpus.get(key) is not False for key in ("fresh_access_audit", "scientific_acceptance"))
+            or command[1:] != ["-m", "pytest", "-p", "sciplot_core.verification.pytest_finish", "-q", "--input-scope", profile]
+            or not selection or binding["selected_tests_sha256"] != digest(sorted(selection))):
+        raise ValueError("Public input closure profile/command/selection policy mismatch.")
+    for domain in ("inventory", "corpus_policy"):
+        record = inputs.get(domain, {}).get("files", {}).get(binding["manifest_path_sha256"], {})
+        if record.get("sha256") != binding["manifest_sha256"]:
+            raise ValueError("Public manifest must be present in captured inventory/policy bytes.")
+    exclusions = scope.get("excluded_domains", {})
+    if (inputs.get("golden") != {"not_applicable": PUBLIC_GOLDEN_REASON}
+            or exclusions.get("golden") != PUBLIC_GOLDEN_REASON):
+        raise ValueError("Public golden exclusion lacks the exact source-owned policy.")
+    if binding["raw"] == "not_applicable":
+        if (corpus.get("mode") != "synthetic" or inputs.get("raw") != {"not_applicable": PUBLIC_RAW_REASON}
+                or exclusions.get("raw") != PUBLIC_RAW_REASON):
+            raise ValueError("Generated-only public inputs need the exact raw exclusion policy.")
+    elif (binding["raw"] != "bound_public_files" or corpus.get("mode") != "declared"
+          or not inputs.get("raw", {}).get("files") or "raw" in exclusions):
+        raise ValueError("Public raw fixtures require actual declared bytes.")
+    return binding
 
 
 def _stable_file(path: Path) -> dict[str, Any]:
@@ -186,7 +265,8 @@ can survive a documentation-only commit. Scope/selection are never widened.
         or any("paths" not in inputs.get(key, {}) for key in ("raw", "inventory", "access_receipt"))
     ):
         raise ValueError("audited corpus needs actual raw, inventory and access receipt bytes")
-    payload = {
+    public_members = public_test_members(repo_root) if _public_scope(scope, corpus) else None
+    payload: dict[str, Any] = {
         "kind": "sciplot_verification_identity", "version": 1,
         "root_sha256": digest(str(repo_root.resolve())), "command": list(command),
         "scope": scope, "selected_tests": list(selected_tests),
@@ -194,6 +274,26 @@ can survive a documentation-only commit. Scope/selection are never widened.
                                  excluded_domains=scope.get("excluded_domains")),
         "environment_sha256": digest(environment), "corpus": corpus,
     }
+    public = _public_binding(scope, corpus, command, selected_tests, payload["inputs"])
+    if public is not None:
+        from sciplot_core.verification.input_scope import load_manifest
+
+        path = repo_root / "src/sciplot_core/verification/input_scope_manifest.json"
+        if public_members is None or public_members != public_test_members(repo_root) or public["tests_layout_sha256"] != public_members[1]:
+            raise ValueError("Public test/input namespace membership changed before capture.")
+        public_raw = {digest(str(member.resolve())) for member in public_members[0]
+                      if member.is_relative_to(repo_root / "tests/fixtures")}
+        if (set(payload["inputs"]["tests"]["files"]) != {digest(str(member.resolve())) for member in public_members[0]}
+                or (public["raw"] == "not_applicable" and public_raw)
+                or (public["raw"] == "bound_public_files" and set(payload["inputs"]["raw"]["files"]) != public_raw)):
+            raise ValueError("Public test/input namespace files differ from captured bytes.")
+        manifest = load_manifest(path)
+        expected_nodes = set(manifest["scopes"]["public"])
+        if public["profile"] != "public-all":
+            expected_nodes.intersection_update(manifest["tiers"][public["profile"].removeprefix("public-")])
+        if (set(selected_tests) != expected_nodes or digest(str(path.resolve())) != public["manifest_path_sha256"]
+                or _stable_file(path)["sha256"] != public["manifest_sha256"]):
+            raise ValueError("Public selection differs from its actual source-owned manifest.")
     if "reviewed_test_sources_sha256" in scope:
         # Reconstruct the review digest from this snapshot's actual bytes, not
         # subsequently reread files or a discovery-time pin that can be replaced.
@@ -281,6 +381,7 @@ def identity_valid(identity: object) -> bool:
             or any("files" not in identity["inputs"].get(key, {}) for key in ("raw", "inventory"))
         ):
             return False
-        return identity["sha256"] == digest({key: value for key, value in identity.items() if key != "sha256"})
+        _public_binding(scope, corpus, identity["command"], selection, identity["inputs"])
+        return bool(identity["sha256"] == digest({key: value for key, value in identity.items() if key != "sha256"}))
     except (KeyError, TypeError, ValueError, AttributeError):
         return False
