@@ -141,10 +141,151 @@ jobs:
           python3 -m pip wheel . --no-deps --no-build-isolation \
             --wheel-dir /tmp/sciplot-wheel
           python3 tests/test_wheel_surface.py /tmp/sciplot-wheel/*.whl
+      - name: Preserve the original performance font failure as a generated baseline
+        shell: bash
+        env:
+          SCIPLOT_PUBLIC_STAGE_REPORT: .tmp_verify/ci_linux_native_diagnostic/baseline-reports.json
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp_verify/ci_linux_native_diagnostic
+          set +e
+          python3 -m pytest -q --tb=long -p sciplot_core.verification.public_stage \
+            --input-scope public-comprehensive \
+            --basetemp=.tmp_verify/ci_linux_native_diagnostic/baseline \
+            -k test_ready_performance_studio_review_preserves_lineage \
+            2>&1 | tee .tmp_verify/ci_linux_native_diagnostic/baseline-command.log
+          baseline_exit=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$baseline_exit" > .tmp_verify/ci_linux_native_diagnostic/baseline-exit.txt
+          test "$baseline_exit" -eq 1
+          python3 - <<'PYBASE'
+          import json
+          from pathlib import Path
+          reports = list(Path('.tmp_verify/ci_linux_native_diagnostic/baseline').rglob('publication_qa.json'))
+          assert len(reports) == 1, reports
+          qa = json.loads(reports[0].read_text())
+          assert qa['blocking_check_ids'] == ['font_families'], qa['blocking_check_ids']
+          print('Original unmodified performance baseline reproduced only its font-family rejection')
+          PYBASE
+      - name: Apply diagnostic-only bounded native superscript-minus prototype
+        run: |
+          python3 - <<'PYPROTOTYPE'
+          from pathlib import Path
+          import hashlib
+          import json
+          root = Path('.tmp_verify/ci_linux_native_diagnostic')
+          root.mkdir(parents=True, exist_ok=True)
+          compat = Path('src/sciplot_core/studio_core/qt_compat.py')
+          vendored = Path('third_party/veusz/veusz/utils/textrender.py')
+          policy = Path('src/sciplot_core/policy/frame_export.py')
+          before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in (compat, vendored, policy)}
+          candidate = r'''"""Diagnostic-only runtime experiment; not source or a release gate."""
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          _PATTERN = re.compile("\u207b(?=[\u2070\u00b9\u00b2\u00b3\u2074-\u2079])")
+
+
+          def _record(event):
+              destination = os.environ.get("SCIPLOT_MINUS_PROTOTYPE_OUT")
+              if destination:
+                  with Path(destination).open("a") as stream:
+                      stream.write(json.dumps(event, ensure_ascii=True) + "\n")
+
+
+          def install():
+              from PyQt6.QtCore import QPointF
+              from PyQt6.QtGui import QRawFont
+              from veusz.utils import textrender
+
+              original = textrender.PartText.render
+              if getattr(original, "_sciplot_minus_prototype", False):
+                  return
+
+              def render(part, state):
+                  text = part.text
+                  positions = [match.start() for match in _PATTERN.finditer(text)]
+                  if not positions or not state.actually_render:
+                      return original(part, state)
+                  raw = QRawFont.fromFont(state.font)
+                  if raw.isValid() and raw.supportsCharacter(0x207B):
+                      return original(part, state)
+                  if raw.familyName().casefold().replace(" ", "") != "liberationsans":
+                      return original(part, state)
+                  painter = state.painter
+                  observed = painter.fontInfo()
+                  event = {"text": text, "primary_family": raw.familyName(),
+                           "painter_family": observed.family(), "size_pt": state.font.pointSizeF(),
+                           "paint_device": type(painter.device()).__name__,
+                           "primary_has_superscript_minus": raw.supportsCharacter(0x207B) if raw.isValid() else None}
+                  families_match = raw.familyName().casefold().replace(" ", "") == observed.family().casefold().replace(" ", "")
+                  if not raw.isValid() or not families_match or painter.font() != state.font or not raw.supportsCharacter(0x2212):
+                      _record({**event, "status": "blocked_unknown_primary_or_minus"})
+                      return original(part, state)
+                  metrics = state.fontMetrics()
+                  start_x = state.x
+                  full_advance = metrics.horizontalAdvance(text)
+                  candidates = []
+                  for index in positions:
+                      digit = text[index + 1]
+                      if not raw.supportsCharacter(ord(digit)):
+                          _record({**event, "status": "blocked_primary_missing_adjacent_digit"})
+                          return original(part, state)
+                      slot_left = start_x + metrics.horizontalAdvance(text[:index])
+                      slot_right = start_x + metrics.horizontalAdvance(text[:index + 1])
+                      minus = metrics.tightBoundingRect("\u2212")
+                      digit_ink = metrics.tightBoundingRect(digit)
+                      baseline_delta = digit_ink.center().y() - minus.center().y()
+                      ink_offset = ((slot_right - slot_left) - minus.width()) / 2.0 - minus.left()
+                      minus_x = slot_left + ink_offset
+                      minus.translate(minus_x, state.y + baseline_delta)
+                      digit_ink.translate(slot_right, state.y)
+                      fits = (minus.left() >= slot_left and minus.right() <= slot_right
+                              and not minus.intersects(digit_ink))
+                      row = {"slot": [slot_left, slot_right], "minus_ink": [minus.left(), minus.top(), minus.right(), minus.bottom()],
+                             "digit_ink": [digit_ink.left(), digit_ink.top(), digit_ink.right(), digit_ink.bottom()],
+                             "baseline_delta": baseline_delta, "fits": fits}
+                      candidates.append((index, minus_x, baseline_delta, row))
+                      if not fits:
+                          _record({**event, "status": "blocked_ink_outside_original_slot", "geometry": row})
+                          return original(part, state)
+                  previous = 0
+                  for index, x, delta, row in candidates:
+                      if index > previous:
+                          painter.drawText(QPointF(start_x + metrics.horizontalAdvance(text[:previous]), state.y), text[previous:index])
+                      painter.drawText(QPointF(x, state.y + delta), "\u2212")
+                      previous = index + 1
+                  if previous < len(text):
+                      painter.drawText(QPointF(start_x + metrics.horizontalAdvance(text[:previous]), state.y), text[previous:])
+                  state.x = start_x + full_advance
+                  _record({**event, "status": "applied", "full_advance_preserved": full_advance,
+                           "geometry": [row for _index, _x, _delta, row in candidates]})
+
+              render._sciplot_minus_prototype = True
+              textrender.PartText.render = render
+          '''
+          module = Path('src/sciplot_core/studio_core/_diagnostic_superscript_minus.py')
+          assert not module.exists()
+          module.write_text(candidate)
+          needle = '    ensure_veusz_numeric_precision()\n'
+          source = compat.read_text()
+          assert source.count(needle) == 1
+          source = source.replace(needle, '    from sciplot_core.studio_core._diagnostic_superscript_minus import install\n    install()\n' + needle)
+          compat.write_text(source)
+          after = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in (compat, vendored, policy, module)}
+          assert before[str(vendored)] == after[str(vendored)]
+          assert before[str(policy)] == after[str(policy)]
+          (root / 'prototype-source.py').write_text(candidate)
+          (root / 'prototype-mutation.json').write_text(json.dumps({'kind':'diagnostic_runtime_prototype_not_release_validation','before':before,'after':after}, indent=2))
+          print(json.dumps({'kind':'diagnostic_runtime_prototype_not_release_validation','before':before,'after':after}, indent=2))
+          PYPROTOTYPE
       - name: Diagnose original Linux native failures under public guard
         shell: bash
         env:
           SCIPLOT_PUBLIC_STAGE_REPORT: .tmp_verify/ci_linux_native_diagnostic/reports.json
+          SCIPLOT_MINUS_PROTOTYPE_OUT: ${{ github.workspace }}/.tmp_verify/ci_linux_native_diagnostic/minus-events.jsonl
         run: |
           set -euo pipefail
           mkdir -p .tmp_verify/ci_linux_native_diagnostic
@@ -155,7 +296,7 @@ jobs:
             --input-scope public-comprehensive \
             --basetemp=.tmp_verify/ci_linux_native_diagnostic/pytest \
             --junitxml=.tmp_verify/ci_linux_native_diagnostic/junit.xml \
-            -k 'test_ready_performance_studio_review_preserves_lineage or test_template_creation_has_exactly_one_native_export_and_no_repeated_preparation or test_native_radar_long_mixed_units_and_incomplete_negative_reference' \
+            -k 'test_ready_performance_studio_review_preserves_lineage or test_template_creation_has_exactly_one_native_export_and_no_repeated_preparation or test_native_radar_long_mixed_units_and_incomplete_negative_reference or test_daemon_normal_termination_closes_native_worker_and_hardkill_stays_unsealed' \
             2>&1 | tee .tmp_verify/ci_linux_native_diagnostic/command.log
       - name: Summarize generated-only publication QA details
         if: always()
@@ -182,6 +323,66 @@ jobs:
           (root / "qa-details.json").write_text(json.dumps(details, ensure_ascii=True, indent=2))
           print(json.dumps(details, ensure_ascii=True, indent=2))
           PYQA
+      - name: Preserve generated native prototype visual and geometry evidence
+        if: always()
+        run: |
+          python3 - <<'PYVISUAL'
+          import json
+          import shutil
+          from pathlib import Path
+          import pymupdf
+          from PIL import Image
+          root = Path('.tmp_verify/ci_linux_native_diagnostic').resolve()
+          visual = root / 'visual'
+          visual.mkdir(exist_ok=True)
+          records = []
+          for phase in ('baseline', 'pytest'):
+              for manifest in sorted((root / phase).rglob('manifest.json')):
+                  payload = json.loads(manifest.read_text())
+                  qa = payload.get('qa') or {}
+                  pdfs = qa.get('pdfs', [])
+                  tiffs = qa.get('tiffs', [])
+                  for index, item in enumerate([*pdfs, *tiffs]):
+                      source = Path(item['path']).resolve()
+                      if not source.is_relative_to(root / phase) or not source.is_file():
+                          continue
+                      name = f'{phase}-{len(records)}-{source.name}'
+                      target = visual / name
+                      shutil.copy2(source, target)
+                      record = {'phase': phase, 'source': str(source.relative_to(root)), 'artifact': str(target.relative_to(root))}
+                      if source.suffix.lower() == '.pdf':
+                          with pymupdf.open(source) as document:
+                              page = document[0]
+                              page.get_pixmap(matrix=pymupdf.Matrix(4,4)).save(str(target.with_suffix('.png')))
+                              spans = [span for block in page.get_text('dict')['blocks'] if 'lines' in block for line in block['lines'] for span in line['spans']]
+                              record['minus_spans'] = [{key: span.get(key) for key in ('text','font','size','bbox','origin')} for span in spans if any(char in span['text'] for char in ('\u207b','\u2212'))]
+                              for count, span in enumerate(record['minus_spans']):
+                                  clip = pymupdf.Rect(span['bbox']) + (-14,-10,18,12)
+                                  clip &= page.rect
+                                  page.get_pixmap(matrix=pymupdf.Matrix(12,12), clip=clip).save(str(visual / f'{name}-minus-{count}.png'))
+                      else:
+                          with Image.open(source) as image:
+                              image.save(target.with_suffix('.png'))
+                      records.append(record)
+              for index, source in enumerate(sorted((root / phase).glob('test_native_radar_long_mixed_u*/native/**/*.pdf'))):
+                  target = visual / f'{phase}-radar-{index}.pdf'
+                  shutil.copy2(source, target)
+                  with pymupdf.open(source) as document:
+                      document[0].get_pixmap(matrix=pymupdf.Matrix(4,4)).save(str(target.with_suffix('.png')))
+                  records.append({'phase':phase,'source':str(source.relative_to(root)),'artifact':str(target.relative_to(root))})
+              for index, source in enumerate(sorted((root / phase).glob('test_native_radar_long_mixed_u*/native/**/*.tiff'))):
+                  target = visual / f'{phase}-radar-{index}.tiff'
+                  shutil.copy2(source, target)
+                  with Image.open(source) as image:
+                      image.save(target.with_suffix('.png'))
+                  records.append({'phase':phase,'source':str(source.relative_to(root)),'artifact':str(target.relative_to(root))})
+          (root / 'visual-inventory.json').write_text(json.dumps(records, ensure_ascii=True, indent=2))
+          print(json.dumps(records, ensure_ascii=True, indent=2))
+          events = root / 'minus-events.jsonl'
+          if events.is_file():
+              print('ACTUAL_NATIVE_MINUS_PROTOTYPE_EVENTS')
+              print(events.read_text())
+          PYVISUAL
       - name: Preserve generated-only native diagnostic reports and command log
         if: always()
         uses: actions/upload-artifact@v4
@@ -192,5 +393,13 @@ jobs:
             .tmp_verify/ci_linux_native_diagnostic/reports.json
             .tmp_verify/ci_linux_native_diagnostic/junit.xml
             .tmp_verify/ci_linux_native_diagnostic/qa-details.json
+            .tmp_verify/ci_linux_native_diagnostic/baseline-command.log
+            .tmp_verify/ci_linux_native_diagnostic/baseline-reports.json
+            .tmp_verify/ci_linux_native_diagnostic/baseline-exit.txt
+            .tmp_verify/ci_linux_native_diagnostic/minus-events.jsonl
+            .tmp_verify/ci_linux_native_diagnostic/prototype-source.py
+            .tmp_verify/ci_linux_native_diagnostic/prototype-mutation.json
+            .tmp_verify/ci_linux_native_diagnostic/visual-inventory.json
+            .tmp_verify/ci_linux_native_diagnostic/visual/
           include-hidden-files: true
           if-no-files-found: warn
