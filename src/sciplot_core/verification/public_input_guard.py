@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import ast
 import os
 from pathlib import Path
 import sys
@@ -15,6 +16,26 @@ from typing import Any
 ENVIRONMENT_KEY = "SCIPLOT_PUBLIC_INPUT_GUARD"
 BOOTSTRAP_KEY = "SCIPLOT_PUBLIC_GUARD_BOOTSTRAP"
 _installed: tuple[Path, ...] | None = None
+
+
+def _owned_bootstrap(first: Path, child_paths: list[str], child_cwd: Path) -> bool:
+    """A relocated common shim must retain actual source bytes/import owner."""
+    root = Path(__file__).resolve().parents[3]
+    sources = [Path(p) if Path(p).is_absolute() else child_cwd / p for p in child_paths]
+    package = next((p for p in sources if (p / "sciplot_core/__init__.py").is_file()), None)
+    if package is None or package.resolve() != root / "src":
+        return False
+    source = Path(__file__).with_name("private_observer.py")
+    tree = ast.parse(source.read_bytes())
+    expected = next((node.value.value for node in tree.body if isinstance(node, ast.Assign)
+                     and any(isinstance(target, ast.Name) and target.id == "_SITE" for target in node.targets)
+                     and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)), None)
+    if expected is not None and first.read_bytes() == expected.encode():
+        return True
+    public = Path(__file__).parent / "public_guard_bootstrap/sitecustomize.py"
+    adjacent = first.parent.parent / "public_input_guard.py"
+    return (first.read_bytes() == public.read_bytes() and adjacent.is_file()
+            and hashlib.sha256(adjacent.read_bytes()).digest() == hashlib.sha256(Path(__file__).read_bytes()).digest())
 
 
 def forbidden_roots(root: Path, environment: dict[str, str] | None = None) -> list[Path]:
@@ -65,6 +86,9 @@ def install() -> None:
             arguments = list(argv) if isinstance(argv, (list, tuple)) else [argv]
             if any(forbidden(value) for value in [executable, *arguments]):
                 raise PermissionError("Public input scope forbids a private child source argument.")
+            from sciplot_core.verification.public_control_boundary import generated_launch_allowed
+            if generated_launch_allowed(executable, arguments, _cwd, environment):
+                return
             executable_path = Path(os.fsdecode(executable))
             if executable_path.name.startswith("python") or executable_path.resolve().name.startswith("python"):
                 index = 1
@@ -97,9 +121,11 @@ def install() -> None:
                         raise PermissionError("A public Python script cannot use an unbound startup shadow.")
                 try:
                     binding = json.loads(child_environment.get(BOOTSTRAP_KEY, "null"))
-                    supported = (bootstrap_binding is not None and child_environment.get(BOOTSTRAP_KEY) == bootstrap_binding
-                                 and first is not None and first.resolve() == Path(binding["path"]).resolve()
-                                 and hashlib.sha256(first.read_bytes()).hexdigest() == binding["sha256"])
+                    supported = (bootstrap_binding is not None and first is not None
+                                 and first.resolve() == Path(binding["path"]).resolve()
+                                 and hashlib.sha256(first.read_bytes()).hexdigest() == binding["sha256"]
+                                 and (child_environment.get(BOOTSTRAP_KEY) == bootstrap_binding
+                                      or _owned_bootstrap(first, child_paths, child_cwd)))
                 except (TypeError, ValueError, KeyError, OSError):
                     supported = False
                 if not supported:
