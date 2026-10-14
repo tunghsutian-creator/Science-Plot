@@ -49,21 +49,23 @@ def execute_observed(root: Path, command: list[str], environment: dict[str, str]
                     "selected_tests": ["synthetic:observer-root-actual-exit"]}
     launch_environment = {**outer_environment, **{key: value for key, value in environment.items()
                           if key.startswith("SCIPLOT_PUBLIC_")}}
+    # Context exit verifies Git through subprocess; wait before that can reap
+    # the discarded supervisor handle via subprocess._cleanup.
     with generated_control(launch_environment, witness_spec["command"], root, durable=True,
                            directory=witness) as child_environment:
         start = start_run(directory=witness, spec={**witness_spec, "environment": child_environment})
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        state_path = witness / "state.json"
-        state = json.loads(state_path.read_bytes()) if state_path.is_file() else {}
-        if state.get("phase") in {"completed", "blocked"}:
-            break
-        time.sleep(0.02)
-    else:
-        raise AssertionError("generated observer witness did not complete")
-    # This test is the actual OS parent of the supervisor, not a declared exit.
-    _, status = os.waitpid(start["supervisor_pid"], 0)
-    supervisor_exit = os.waitstatus_to_exitcode(status)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            state_path = witness / "state.json"
+            state = json.loads(state_path.read_bytes()) if state_path.is_file() else {}
+            if state.get("phase") in {"completed", "blocked"}:
+                break
+            time.sleep(0.02)
+        else:
+            raise AssertionError("generated observer witness did not complete")
+        # This test is the actual OS parent of the supervisor, not a declared exit.
+        _, status = os.waitpid(start["supervisor_pid"], 0)
+        supervisor_exit = os.waitstatus_to_exitcode(status)
     execution = run_status(directory)
     if "child_pid" not in state:
         raise AssertionError((state, (directory / "supervisor.log").read_text()))
@@ -88,22 +90,23 @@ def launch_generated_suite(command: list[str], environment: dict[str, str], cwd:
     implementation = Path(__file__).parents[1] / "src/sciplot_core/verification/durable_runner.py"
     inputs["implementation"]["paths"].append(str(implementation))
     witness = cwd / ".tmp_verify/suite-root-witness"
+    # Keep the genuine wait inside the grant, before exit-time Git verification.
     with generated_control(environment, command, cwd, durable=True, directory=witness) as child_environment:
         start = start_run(directory=witness, spec={
             "repo_root": str(cwd), "command": command, "environment": child_environment,
             "scope": {"kind": "process", "closure_policy": "actual OS wait for generated suite caller"},
             "selected_tests": ["synthetic:suite-root-actual-exit"], "inputs": inputs,
             "corpus": {"mode": "synthetic", "complete": True, "policy": "generated caller control"}})
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        state_path = witness / "state.json"
-        state = json.loads(state_path.read_bytes()) if state_path.is_file() else {}
-        if state.get("phase") in {"completed", "blocked"}:
-            break
-        time.sleep(.02)
-    else:
-        raise AssertionError("actual suite caller witness did not complete")
-    os.waitpid(start["supervisor_pid"], 0)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            state_path = witness / "state.json"
+            state = json.loads(state_path.read_bytes()) if state_path.is_file() else {}
+            if state.get("phase") in {"completed", "blocked"}:
+                break
+            time.sleep(.02)
+        else:
+            raise AssertionError("actual suite caller witness did not complete")
+        os.waitpid(start["supervisor_pid"], 0)
     if run_status(witness)["status"] not in {"PASS", "FAIL"}:
         raise AssertionError((state, (witness / "supervisor.log").read_text()))
     completion = json.loads((witness / "completion.json").read_bytes())
