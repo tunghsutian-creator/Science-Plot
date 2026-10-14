@@ -97,3 +97,22 @@ then compare those resources with native pixels and PDF resources. The restored 
 environment passes all four immutable native golden nodes with matching local
 Arial observations. Those passes establish the pinned Mac comparison; selected
 font-file/glyph identity across other target environments remains unverified.
+
+## 2026-10-14 Ubuntu CJK dependency
+
+The matching Ubuntu 24.04 system Python 3.12 / Qt 6 runtime requires the
+public `fonts-noto-cjk` package for the mixed Chinese/English radar labels.
+Without a CJK fallback, the original native PDF test extracted NUL characters
+for its Chinese label. Installing that package produced nonzero Chinese glyph
+indices in an Arial-requested `QTextLayout`; the observed fallback family was
+`Noto Sans CJK JP`. The unchanged
+`test_native_radar_long_mixed_units_and_incomplete_negative_reference` then
+passed its PDF text, minimum size, page bounds, scientific audit and negative
+controls in the [bounded Ubuntu diagnostic](https://github.com/tunghsutian-creator/Science-Plot/actions/runs/38629176235).
+
+CI installs this public font dependency and checks that Qt can shape the same
+Chinese text before native tests. The original Arial request, rendering path,
+scientific values and publication QA limits are unchanged. A successful glyph
+probe establishes glyph availability in that runtime; it does not identify the
+font-file bytes selected by the PDF device or establish cross-platform pixel
+equality. The final native PDF assertions remain the export check.
