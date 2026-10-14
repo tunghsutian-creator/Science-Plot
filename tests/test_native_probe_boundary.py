@@ -28,7 +28,9 @@ def inputs(tmp_path, monkeypatch):
 def invocation(tool, target, **changes):
     kwargs = dict(stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=policy.probe_environment())
     kwargs.update(changes)
-    return inspect.signature(subprocess.Popen.__init__).bind(None, [str(tool), '-L', str(target)], **kwargs)
+    # Model the original bound fields, independent of an active observer port.
+    return inspect.BoundArguments(inspect.Signature(),
+        dict(self=None, args=[str(tool), '-L', str(target)], **kwargs))
 
 
 def attempt_for(value):
