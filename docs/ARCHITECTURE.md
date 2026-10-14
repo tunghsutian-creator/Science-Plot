@@ -214,6 +214,15 @@ loss carries the original request identity and never silently resends a mutation
 Files are verified when a request uses them; there is no background source
 recomputation or claim of a general live filesystem watcher.
 
+While `serve()` owns the main thread, a temporary SIGTERM handler requests a
+normal stop after the current bounded request. The existing service `finally`
+closes the native worker through EOF and an actual wait, then removes the owned
+socket; the previous signal handler is restored. Thread-hosted servers retain
+their caller's signal policy. SIGKILL, abrupt exits and worker timeouts do not
+acquire normal termination evidence. CLI auto-start still detaches the daemon;
+later clients are not its OS parent, so socket removal or a daemon terminal
+frame cannot substitute for that parent's actual wait ledger.
+
 The `task style` compatibility facade routes already-imported figures through the
 semantic engine; unimported projects and other retained task operations continue
 through their existing owners. Native preparation, audit and publication are shared,

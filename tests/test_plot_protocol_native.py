@@ -177,7 +177,8 @@ def test_native_mutation_lost_reply_and_daemon_restart_replay_once(tmp_path):
             assert len(canonical_paths) == 3  # Head plus revisions zero and one.
             canonical_before = {str(path): file_sha256(path) for path in canonical_paths}
             first_pid = engine_pid
-            os.kill(first_pid, signal.SIGTERM)
+            # Replay must survive abrupt death as well as a lost response.
+            os.kill(first_pid, signal.SIGKILL)
             deadline = time.monotonic() + 5
             while True:
                 with socket_module.socket(socket_module.AF_UNIX, socket_module.SOCK_STREAM) as connection:

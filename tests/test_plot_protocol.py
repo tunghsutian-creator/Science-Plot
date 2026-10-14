@@ -228,7 +228,8 @@ def test_simultaneous_client_start_and_crash_reconnect_keep_owned_socket() -> No
             live_pid = first["pid"]
             assert live_pid != os.getpid()
             assert client._ping(path, 3)["pid"] == live_pid
-            os.kill(live_pid, signal.SIGTERM)
+            # Exercise abrupt death; SIGTERM now owns graceful daemon cleanup.
+            os.kill(live_pid, signal.SIGKILL)
             time.sleep(0.2)
             client.ensure_server(path)
             replacement = read_owner(path)
