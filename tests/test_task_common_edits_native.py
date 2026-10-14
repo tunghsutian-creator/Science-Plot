@@ -131,6 +131,11 @@ def test_native_legacy_legend_edit_keeps_vsz_and_shadow_science_authoritative(tm
         source_bytes = source.read_bytes()
         result = edit_task(root, intent="隐藏图例", task_dir=tmp_path / "legacy-entry", service=service)
         assert result["status"] == "needs_review"
+        pending_head = load_head(root)
+        blocked = edit_task(root, legend_font_size="7pt", task_dir=tmp_path / "unallocated-new-edit", service=service)
+        assert blocked["status"] == "blocked" and blocked["reason_code"] == "document_transaction_pending"
+        assert blocked["preview"] == result["preview"] and blocked["next_step"] == result["next_step"]
+        assert not (tmp_path / "unallocated-new-edit").exists() and load_head(root) == pending_head
         result = service.decide(root, result["next_step"]["request"])
         assert result["ready_to_use"] and result["scientific_hash"] == before["document"]["scientific_hash"]
         after = load_head(root)

@@ -212,7 +212,6 @@ def test_export_pending_replays_committed_revision_without_reapplying(tmp_path, 
 @pytest.mark.parametrize("description", [
     {"status": "stale", "changed_inputs": ["native"]},
     {"status": "dirty", "artifact_status": "missing"},
-    {"status": "current", "pending": {"phase": "awaiting_decision"}},
 ])
 def test_currentness_and_pending_continuation_do_not_reserve_a_new_edit(tmp_path, monkeypatch, ready, description):
     class Reader:
@@ -222,7 +221,7 @@ def test_currentness_and_pending_continuation_do_not_reserve_a_new_edit(tmp_path
             pytest.fail("mutated unavailable current state")
     entry = tmp_path / "unallocated"
     result = edit_task(tmp_path / "target", task_dir=entry, font_size="9pt", service=Reader())
-    assert result["status"] == description["status"]
+    assert result["status"] == "blocked" and result["current_status"] == description["status"]
     assert not entry.exists()
 
 

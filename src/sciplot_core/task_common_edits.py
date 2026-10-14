@@ -17,7 +17,7 @@ from sciplot_core.plot_document.patch import validate_patch
 from sciplot_core.plot_document.schema import closed
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.service import PlotService
-from sciplot_core.plot_engine.storage import digest, load_head, read, write
+from sciplot_core.plot_engine.storage import active, digest, load_head, read, write
 from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
 from sciplot_core.policy.contract_loader import load_plot_contract
 from sciplot_core.studio_core.project_query_paths import canonical_path
@@ -304,8 +304,20 @@ def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None 
         scope = ({"scope": "summary"} if (resolved_target / "head.json").is_file() and
                  load_head(resolved_target)["document"].get("plot_type") == "ManagedPlot" else None)
         description = owner.open(resolved_target, figure_id=figure_id, description=scope)
-        if description["status"] != "current" or description.get("pending"):
-            return {**description, "doctor": doctor}
+        if description["status"] != "current":
+            return {**description, "current_status": description["status"], "status": "blocked",
+                    "reason_code": "common_edit_currentness_required", "doctor": doctor,
+                    "next_step": description.get("next_step", {"action": "plot.describe", "plot": description.get("plot")})}
+        if description.get("pending"):
+            from sciplot_core.plot_engine.receipts import receipt
+
+            pending = active(Path(description["plot"]))
+            continuation = receipt(Path(description["plot"]), pending) if pending is not None else {}
+            return {**description, "status": "blocked", "reason_code": "document_transaction_pending",
+                    "doctor": doctor, "request_executed": False,
+                    "message": "Continue the original pending edit before this new intent; its preview does not represent the requested new edit.",
+                    **{field: continuation[field] for field in ("preview", "scientific_audit", "evidence", "decision_id") if field in continuation},
+                    "next_step": continuation.get("next_step", {"action": "plot.describe", "plot": description["plot"]})}
         root = Path(description["plot"])
         head = load_head(root)
         document = head["document"]
