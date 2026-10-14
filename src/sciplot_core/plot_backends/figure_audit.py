@@ -5,7 +5,7 @@ from typing import Any
 
 from sciplot_core.plot_backends.native_primitives import native_datasets, native_name
 from sciplot_core.plot_backends.figure_marks import graph_path, scale_name, mark_path, mark_geometry
-from sciplot_core.veusz_worker.numeric_evidence import _dataset_evidence
+from sciplot_core.veusz_worker.numeric_evidence import dataset_evidence
 
 
 def _same(actual: Any, expected: Any) -> bool:
@@ -30,8 +30,8 @@ def scientific_audit(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
             raise ValueError("Managed Figure datasets must be plain numeric arrays without native expressions or links.")
         if any(getattr(dataset, field, None) is not None for field in ("serr", "nerr", "perr")):
             raise ValueError("Managed Figure native datasets must not contain hidden uncertainty channels.")
-    dataset_evidence = [_dataset_evidence(loaded, dataset_name=name, expected_values=values, dimensions=1)
-                        for name, values in arrays.items()]
+    datasets = [dataset_evidence(loaded, dataset_name=name, expected_values=values, dimensions=1)
+                for name, values in arrays.items()]
     scale_records = {item["id"]: item for item in ir["scales"]}
     layers = []
     for view in ir["views"]:
@@ -69,5 +69,5 @@ def scientific_audit(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
                            "marks": marks})
     return {"kind": "sciplot_managed_native_audit", "status": "passed", "schema_version": 2,
             "scientific_hash": ir["scientific_hash"], "ir_hash": ir["ir_hash"],
-            "datasets": dataset_evidence, "layers": layers, "scales": list(scale_records.values()),
+            "datasets": datasets, "layers": layers, "scales": list(scale_records.values()),
             "view_ids": [view["id"] for view in ir["views"]]}

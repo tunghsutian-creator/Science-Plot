@@ -78,10 +78,10 @@ def require_legacy_semantics(binding: dict[str, Any]) -> dict[str, Any]:
 
 def axis_flow(axis: dict[str, Any], scale: dict[str, Any], resolver: StyleResolver, *, explicit_labels: bool = False) -> None:
     # Shared old semantic tick preparation, independent of native paths/widgets.
-    from sciplot_core.studio_render.value_parsing import _log_minor_ticks
+    from sciplot_core.rendering_contract.legacy_algorithms import log_minor_ticks
     axis.update(text_layout="axis-metric-flow", tick_notation=axis["style"].get(
         "tick_notation", "power10" if scale["transform"] == "log" else "general"),
-        minor_ticks=_log_minor_ticks(*scale["domain"], scale=scale["transform"], major_ticks=tuple(axis["ticks"])))
+        minor_ticks=log_minor_ticks(*scale["domain"], scale=scale["transform"], major_ticks=tuple(axis["ticks"])))
     if explicit_labels:
         axis["tick_notation"] = "labels"
         resolver.trace[axis["id"] + ":tick_labels"] = {"value": axis["tick_labels"], "source": "object override"}

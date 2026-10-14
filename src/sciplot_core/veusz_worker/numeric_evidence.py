@@ -52,11 +52,12 @@ def _numeric_payload(
     ]
 
 
-def _numeric_digest(
+def numeric_digest(
     value: object,
     *,
     expected_persisted: bool = False,
 ) -> str:
+    """Hash exact actual values or the declared legacy expected persistence tokens."""
     payload = json.dumps(
         _numeric_payload(value, expected_persisted=expected_persisted),
         ensure_ascii=True,
@@ -65,13 +66,14 @@ def _numeric_digest(
     return hashlib.sha256(payload).hexdigest()
 
 
-def _dataset_evidence(
+def dataset_evidence(
     loaded_document: Any,
     *,
     dataset_name: str,
     expected_values: object,
     dimensions: int,
 ) -> dict[str, Any]:
+    """Verify native dimensions, exact values and rectangular shape against a spec."""
     dataset = loaded_document.data.get(dataset_name)
     if dataset is None:
         raise ValueError(
@@ -82,11 +84,11 @@ def _dataset_evidence(
             f"Veusz dataset {dataset_name!r} has the wrong dimensionality."
         )
     actual_values = getattr(dataset, "data", None)
-    expected_hash = _numeric_digest(
+    expected_hash = numeric_digest(
         expected_values,
         expected_persisted=not (dimensions == 1 and getattr(loaded_document, "_sciplot_exact_1d", False)),
     )
-    actual_hash = _numeric_digest(actual_values)
+    actual_hash = numeric_digest(actual_values)
     if actual_hash != expected_hash:
         raise ValueError(
             f"Veusz dataset {dataset_name!r} differs from the rendered specification."
@@ -113,6 +115,11 @@ def _dataset_evidence(
         "shape": shape,
         "value_sha256": actual_hash,
     }
+
+
+# Existing facade/tests retain these names; the focused evidence ports are public.
+_numeric_digest = numeric_digest
+_dataset_evidence = dataset_evidence
 
 
 def _text_dataset_values(

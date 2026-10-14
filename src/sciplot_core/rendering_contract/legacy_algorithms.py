@@ -17,8 +17,20 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.studio_render.legend_placement import (
+    _auto_inside_legend_placement as auto_inside_legend_placement,
+    manual_anchor_fraction,
+)
+from sciplot_core.studio_render.models import StudioSeries
+from sciplot_core.studio_render.value_parsing import _log_minor_ticks as log_minor_ticks
+
 from .extraction import HOUSE_CONTRACT_ID, content_hash, seal_contract
 from .registry import contract_binding, require_binding
+
+# Named compatibility ports bind the exact sealed implementations; no algorithm
+# wrapper, source rewrite, or historical manifest rebaseline is involved.
+__all__ = ["StudioSeries", "auto_inside_legend_placement", "extract_algorithm_binding",
+           "log_minor_ticks", "manual_anchor_fraction", "require_legacy_algorithms"]
 
 ALGORITHM_ID = "sciplot-legacy-layout-algorithms-v1"
 _PINNED_MANIFEST_HASH = "2e9d099a3643b86cdb86239b52395356e1b8660d1ecc7dc719e3e889ad0ff279"

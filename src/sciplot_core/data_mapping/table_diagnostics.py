@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from sciplot_core.data_mapping.table_choice import _read, select_table
+from sciplot_core.data_mapping.table_choice import read_original_table, select_table
 
 
 def table_diagnostics(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -14,7 +14,7 @@ def table_diagnostics(snapshot: dict[str, Any]) -> dict[str, Any]:
     tables = []
     source = Path(snapshot["source"])
     for table in snapshot["tables"][:8]:
-        frame = _read(source, table["sheet"], snapshot["file_sha256"])
+        frame = read_original_table(source, table["sheet"], snapshot["file_sha256"])
         columns = []
         for index in range(min(frame.shape[1], 24)):
             values = pd.to_numeric(frame.iloc[:, index], errors="coerce").to_numpy(dtype=float)

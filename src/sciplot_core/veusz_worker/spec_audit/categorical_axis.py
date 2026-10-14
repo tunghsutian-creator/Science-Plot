@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from sciplot_core.veusz_worker.numeric_evidence import (
-    _dataset_evidence,
+    dataset_evidence,
     _text_dataset_values,
 )
 from sciplot_core.veusz_worker.spec_audit.model import SpecAuditInventory
@@ -49,13 +49,13 @@ def audit_categorical_axis(
             validate_category_display(loaded_document, display, str(x_axis["label"]), spec["size_mm"])
         elif "category_axis_display_labels" in loaded_document.data:
             raise ValueError("Categorical display dataset is not required by the exact fixed-frame layout.")
-        _dataset_evidence(
+        dataset_evidence(
             loaded_document,
             dataset_name="category_axis_x",
             expected_values=category_positions,
             dimensions=1,
         )
-        _dataset_evidence(
+        dataset_evidence(
             loaded_document,
             dataset_name="category_axis_y",
             expected_values=[0.0 for _position in category_positions]

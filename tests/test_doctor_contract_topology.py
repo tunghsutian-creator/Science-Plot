@@ -52,7 +52,7 @@ def test_doctor_requires_a_regular_executable_skill_wrapper(
     assert (wrapper.stat().st_mode if wrapper.exists() else None) == original_mode
 
 
-def test_doctor_finds_lifecycle_symbols_through_package_facades() -> None:
+def test_doctor_finds_public_lifecycle_call_contracts() -> None:
     assert _vsz_lifecycle_available()
 
 

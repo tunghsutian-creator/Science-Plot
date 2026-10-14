@@ -11,7 +11,7 @@ from typing import Any
 
 from sciplot_core.plot_document import seal_document, validate_document
 from sciplot_core.plot_document.validation import finite_json
-from sciplot_core.source_coverage.file_snapshots import _stable_file_snapshot
+from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot as _stable_file_snapshot
 from sciplot_core.studio_core.project_query_paths import canonical_path
 
 from .errors import EngineError

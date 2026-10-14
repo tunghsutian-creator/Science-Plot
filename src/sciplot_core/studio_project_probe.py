@@ -172,7 +172,7 @@ def _rebase_copied_render_metadata(
     preserve_stale_registry_paths: bool,
 ) -> None:
     from sciplot_core.foundation.source_tree import source_tree_sha256
-    from sciplot_core.source_coverage.managed_documents import _source_records
+    from sciplot_core.source_coverage.managed_documents import source_records
 
     for name in ("raw", "source"):
         original = source_project / name
@@ -187,7 +187,7 @@ def _rebase_copied_render_metadata(
     for path in sorted((copied_project / "studio").rglob("*.json")):
         payload = _read_json_object(path)
         if payload.get("kind") == "sciplot_veusz_plot_spec":
-            for original, digest in _source_records(payload).items():
+            for original, digest in source_records(payload).items():
                 try:
                     relative = original.relative_to(source_project)
                 except ValueError as exc:

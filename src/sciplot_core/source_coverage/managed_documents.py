@@ -103,7 +103,8 @@ def verify_managed_document_sources(
     return payload
 
 
-def _source_records(spec: dict[str, Any]) -> dict[Path, str]:
+def source_records(spec: dict[str, Any]) -> dict[Path, str]:
+    """Return the exact declared source inventory, rejecting missing/conflicting evidence."""
     units = list(spec.get("series") or [])
     if isinstance(spec.get("scalar_field"), dict):
         units.append(spec["scalar_field"])
@@ -129,6 +130,10 @@ def _source_records(spec: dict[str, Any]) -> dict[Path, str]:
     if not records:
         raise ValueError("Managed scientific data have no prepared source inventory.")
     return records
+
+
+# Retained for source-coverage callers and documented test monkeypatches.
+_source_records = source_records
 
 
 def _verify_prepared_data(

@@ -16,7 +16,7 @@ from sciplot_core.studio_render.models import (
     IMPACT_POINT_LINE_SUMMARY_KIND,
 )
 from sciplot_core.veusz_worker.axis_matchers import _axis_record_matches_spec
-from sciplot_core.veusz_worker.numeric_evidence import _dataset_evidence
+from sciplot_core.veusz_worker.numeric_evidence import dataset_evidence
 from sciplot_core.veusz_worker.spec_audit.model import SpecAuditInventory
 from sciplot_core.veusz_worker.spec_audit.bar_error import audit_bar_error_consumer
 from sciplot_core.veusz_worker.spec_audit.series_encoding import (
@@ -223,13 +223,13 @@ def audit_axes_and_series(
             )
         )
         datasets = [
-            _dataset_evidence(
+            dataset_evidence(
                 loaded_document,
                 dataset_name=x_name,
                 expected_values=raw_series.get("x_values"),
                 dimensions=1,
             ),
-            _dataset_evidence(
+            dataset_evidence(
                 loaded_document,
                 dataset_name=y_name,
                 expected_values=raw_series.get("y_values"),

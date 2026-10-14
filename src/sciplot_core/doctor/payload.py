@@ -22,7 +22,7 @@ from sciplot_core.doctor.runtime_checks import (
     _publication_foundation_available,
     _qt_build_prerequisite_status,
     _veusz_qt_runtime_status,
-    _vsz_lifecycle_available,
+    lifecycle_capability_status,
 )
 from sciplot_core.materials_rules import iter_rules
 from sciplot_core.publication import (
@@ -42,6 +42,7 @@ def doctor_payload() -> dict[str, Any]:
     socket_ok, socket_detail = _local_socket_status()
     envelope_ok, envelope_detail, envelope_payload = _validated_envelope_summary()
     style_audit = audit_style_template_contract()
+    lifecycle = lifecycle_capability_status()
 
     checks = [
         _check(
@@ -86,8 +87,8 @@ def doctor_payload() -> dict[str, Any]:
         _check(
             "vsz_lifecycle",
             "VSZ authority, history, exact export, and delivery hash gate",
-            _vsz_lifecycle_available(),
-            detail="studio/document.vsz -> Veusz -> exact edited export",
+            lifecycle["static_available"],
+            detail="Public lifecycle call contracts are statically available; native lifecycle execution is not verified by Doctor.",
         ),
         _check(
             "publication_foundation",
@@ -242,6 +243,7 @@ def doctor_payload() -> dict[str, Any]:
             "internal_models": ["one_step"],
         },
         "vsz_lifecycle": {
+            "capability_contract": lifecycle,
             "canonical_artifact": "studio/document.vsz",
             "editor": "live_editor",
             "native_editor": "veusz_mainwindow",

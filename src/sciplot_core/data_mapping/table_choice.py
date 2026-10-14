@@ -21,10 +21,15 @@ from sciplot_core.source_tables.raw_readers import read_sheet_names
 from sciplot_core.source_tables.read_session import read_table_once
 
 
-def _read(source: Path, sheet: str | None, digest: str) -> pd.DataFrame:
+def read_original_table(source: Path, sheet: str | None, digest: str) -> pd.DataFrame:
+    """Read original cells; callers retain source-snapshot and digest validation."""
     return _read_raw_table(DataSourceReference(
         "source", source.name, digest, sheet=sheet, header_row=None,
     ), source, preserve_cells=True).frame
+
+
+# Retained first-party compatibility name; new consumers use the original-table port.
+_read = read_original_table
 
 
 def _rows(frame: pd.DataFrame, indices: list[int]) -> list[dict[str, Any]]:

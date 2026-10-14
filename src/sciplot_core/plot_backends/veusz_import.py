@@ -13,7 +13,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_document import DocumentError, seal_document
 from sciplot_core.plot_backends.veusz_identity import changed_error, require_current
 from sciplot_core.plot_backends.veusz_semantic_import import axis_properties, legend_properties, managed_annotation
-from sciplot_core.source_coverage.managed_documents import _source_records
+from sciplot_core.source_coverage.managed_documents import source_records as _source_records
 from sciplot_core.studio_core.annotation_operations import require_edit_source_current
 from sciplot_core.studio_core.document_edit_state import audit_edited_document
 from sciplot_core.studio_core.project_query import inspect_project

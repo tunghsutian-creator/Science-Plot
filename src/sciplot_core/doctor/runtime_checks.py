@@ -14,7 +14,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from sciplot_core._paths import REPO_ROOT, VEUSZ_ROOT
+from sciplot_core._paths import PACKAGE_ROOT, REPO_ROOT, VEUSZ_ROOT
+from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.studio_core.lifecycle_contract import (
+    LifecyclePort, VSZ_LIFECYCLE_CONTRACT_ID, VSZ_LIFECYCLE_PORTS,
+)
 from sciplot_core.publication import (
     get_publication_profile,
 )
@@ -166,20 +170,68 @@ def _top_level_symbols(path: Path) -> set[str]:
     return symbols
 
 
-def _vsz_lifecycle_available() -> bool:
-    studio_symbols = _top_level_symbols(
-        REPO_ROOT / "src" / "sciplot_core" / "studio.py"
+def _port_interface_matches(node: ast.FunctionDef, port: LifecyclePort) -> bool:
+    """Check a supported call contract, not incidental private implementation names."""
+    positional = [arg.arg for arg in (*node.args.posonlyargs, *node.args.args)]
+    required_positional = len(positional) - len(node.args.defaults)
+    keywords = {arg.arg for arg in node.args.kwonlyargs}
+    required_keywords = {
+        arg.arg for arg, default in zip(node.args.kwonlyargs, node.args.kw_defaults, strict=True)
+        if default is None
+    }
+    return (
+        positional[:len(port.positional)] == list(port.positional)
+        and required_positional <= len(port.positional)
+        and required_keywords == set(port.required_keywords)
+        and set(port.required_keywords + port.optional_keywords) <= keywords
+        and node.returns is not None
     )
-    delivery_symbols = _top_level_symbols(
-        REPO_ROOT / "src" / "sciplot_core" / "delivery"
-    )
+
+
+def lifecycle_capability_status(*, source_root: Path | None = None) -> dict[str, Any]:
+    """Verify public source interfaces without importing any native owner.
+
+    Reading the running package supports installed wheels and development trees;
+    a separate runtime repo need not have the same facade or implementation.
+    No document is opened, edited, regenerated, or exported by this check.
+    """
+    root = source_root if source_root is not None else PACKAGE_ROOT
+    evidence = []
+    issues = []
+    for port in VSZ_LIFECYCLE_PORTS:
+        path = root / (port.module.replace(".", "/") + ".py")
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                         and node.name == port.function]
+            available = len(functions) == 1 and _port_interface_matches(functions[0], port)
+            digest = file_sha256(path)
+        except (OSError, UnicodeError, SyntaxError):
+            available, digest = False, None
+        evidence.append({
+            "capability": port.capability, "authority": port.authority,
+            "public_port": f"sciplot_core.{port.module}.{port.function}",
+            "call_contract": {"positional": list(port.positional),
+                              "required_keywords": list(port.required_keywords),
+                              "optional_keywords": list(port.optional_keywords)},
+            "source_sha256": digest, "interface_available": available,
+        })
+        if not available:
+            issues.append({"capability": port.capability, "reason_code": "lifecycle_interface_unavailable"})
     return {
-        "prepare_studio_document",
-        "export_studio_document",
-        "publish_studio_export_run",
-        "_studio_document_state",
-        "_archive_manual_document_if_needed",
-    }.issubset(studio_symbols) and "build_delivery_package" in delivery_symbols
+        "kind": "sciplot_vsz_lifecycle_capabilities", "schema_version": 1,
+        "contract_id": VSZ_LIFECYCLE_CONTRACT_ID,
+        "static_available": not issues,
+        "runtime_verified": False,
+        "verification_scope": "public_source_interfaces_only",
+        "runtime_verification": "not_run",
+        "ports": evidence, "issues": issues,
+    }
+
+
+def _vsz_lifecycle_available() -> bool:
+    """Historical boolean seam; runtime execution is separately verified."""
+    return bool(lifecycle_capability_status()["static_available"])
 
 
 def _publication_foundation_available() -> bool:

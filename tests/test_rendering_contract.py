@@ -129,6 +129,18 @@ def test_shared_legacy_algorithms_have_a_separate_package_relative_compiler_pin(
     assert "studio_render/value_parsing.py" in manifest["sources"]
 
 
+def test_public_compatibility_ports_bind_the_same_sealed_algorithm_objects() -> None:
+    from sciplot_core.studio_render.legend_placement import _auto_inside_legend_placement, manual_anchor_fraction
+    from sciplot_core.studio_render.models import StudioSeries
+    from sciplot_core.studio_render.value_parsing import _log_minor_ticks
+
+    assert legacy_algorithms.log_minor_ticks is _log_minor_ticks
+    assert legacy_algorithms.auto_inside_legend_placement is _auto_inside_legend_placement
+    assert legacy_algorithms.manual_anchor_fraction is manual_anchor_fraction
+    assert legacy_algorithms.StudioSeries is StudioSeries
+    assert legacy_algorithms.require_legacy_algorithms(contract_binding())["algorithm_id"] == "sciplot-legacy-layout-algorithms-v1"
+
+
 def test_axis_notation_override_is_honored_and_derived_tick_policy_is_traced() -> None:
     from sciplot_core.plot_grammar.house import StyleResolver, axis_flow
 

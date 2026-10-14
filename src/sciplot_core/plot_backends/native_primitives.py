@@ -18,9 +18,9 @@ def number_unit(value: float, unit: str) -> str:
 
 def _text(value: str) -> str:
     # Literal labels, never Veusz expression/format instructions.
-    from sciplot_core.studio_core.series_request import _veusz_literal_text
+    from sciplot_core.studio_core.series_request import veusz_literal_text
 
-    return _veusz_literal_text(value)
+    return veusz_literal_text(value)
 
 
 def native_datasets(ir: dict[str, Any]) -> dict[str, list[float]]:

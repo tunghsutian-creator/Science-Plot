@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 import math
 
-from sciplot_core.data_mapping.table_choice import _read, select_table, source_table_snapshot
+from sciplot_core.data_mapping.table_choice import read_original_table, select_table, source_table_snapshot
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.plot_transforms import ordered_nodes
@@ -30,7 +30,7 @@ def load_sources(document: dict[str, Any], rule_id: str) -> dict[str, dict[str, 
             raise EngineError("managed_source_unsupported", "This source format does not support explicit original-table binding.")
         selected = select_table(snapshot, source["table_selection"], source.get("metadata_confirmations"))
         selection = selected["table_selection"]
-        frame = _read(path, selection["sheet"], source["sha256"])
+        frame = read_original_table(path, selection["sheet"], source["sha256"])
         start, end = selection["data_start_row"], selection["data_end_row"]
         columns: dict[str, Any] = {}
         for column in selected["columns"]:

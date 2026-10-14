@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from sciplot_core.veusz_worker.numeric_evidence import _dataset_evidence
+from sciplot_core.veusz_worker.numeric_evidence import dataset_evidence
 from sciplot_core.veusz_worker.spec_audit.model import SpecAuditInventory
 from sciplot_core.veusz_worker.widget_bindings import (
     _numeric_setting_equal,
@@ -127,7 +127,7 @@ def build_spec_audit_inventory(
                 dataset_name = f"category_bar_component_{group_index}_{component_index}"
                 expected_lengths.append(dataset_name)
                 group_datasets.append(
-                    _dataset_evidence(
+                    dataset_evidence(
                         loaded_document,
                         dataset_name=dataset_name,
                         expected_values=[
@@ -140,7 +140,7 @@ def build_spec_audit_inventory(
                     )
                 )
             component_bar_datasets_by_y[str(group.get("y_name") or "")] = group_datasets
-        _dataset_evidence(
+        dataset_evidence(
             loaded_document,
             dataset_name="category_bar_positions",
             expected_values=[float(group["position"]) for group in groups],

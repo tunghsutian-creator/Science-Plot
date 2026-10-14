@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.data_mapping.table_choice import _proposal_contents, _read, select_table
+from sciplot_core.data_mapping.table_choice import _proposal_contents, read_original_table, select_table
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.semantic_sources.paired_curve_table_metadata import axis_match, explicit_header_unit
@@ -57,7 +57,7 @@ def wide_table_candidates(snapshot: dict[str, Any], diagnostics: dict[str, Any])
     for table, numeric in zip(snapshot['tables'][:8], diagnostics['tables'], strict=True):
         if not 2 <= table['column_count'] <= 33:
             continue
-        frame = _read(source, table['sheet'], snapshot['file_sha256'])
+        frame = read_original_table(source, table['sheet'], snapshot['file_sha256'])
         # A complete single header row followed by the entire numeric region.
         if len(frame) < 3:
             continue
