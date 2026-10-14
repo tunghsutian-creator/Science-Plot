@@ -36,6 +36,24 @@ exact launch arguments and successful waits; host discovery needs no external
 unsupported native ports still require actual closure evidence; a successful
 unit control or preparation-only collection cannot certify the full audit.
 
+Actual audited execution exposed six environment/fixture composition failures.
+The repair retains the original tests and full launch environment ledger, while
+excluding only source-bound active-observer routing nonces from semantic reuse.
+Public startup now checks the actual source owner even for an unchanged shim
+binding. The original six and related controls pass together under the fixed
+Mac Python 3.14.7 observer; this is a prerequisite for the new frozen full gate.
+
+Normal main-thread daemon SIGTERM now completes the current request and follows
+the existing service/worker EOF and owned-socket cleanup. A directly owned real
+daemon and worker both exit zero; the hard-kill control remains unsealed. Original
+CLI cold/autostart tests are retained, and intentional crash injections still use
+actual abrupt death. Detached clients cannot manufacture their former parent's
+OS wait, so that access-capture limitation remains open. The retained failed full
+also contains multiple Git operations and independent fault-control captures;
+their real native/configuration inputs and unknown counters are not waived.
+Frozen execution, original audit classifications and exact remote CI outcomes
+are recorded in the local ignored `.tmp_verify/closure/final-evidence-index.json`.
+
 The explicitly authorized 13 legacy figures now have non-color line distinction.
 Actual vector inspection additionally found truncated SAXS/torque legend samples;
 an inspected Legacy sample-length edit and native pre-save page-bound check repair
