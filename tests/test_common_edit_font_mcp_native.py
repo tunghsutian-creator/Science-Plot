@@ -30,7 +30,7 @@ def test_official_mcp_font_edit_keeps_default_mac_server_alive_and_rejects_unava
         "text": "N", "visible": True, "style": {"font_size_pt": 6., "color": "#123456"}}]
     source = tmp_path / "figure.csv"
     original_source = source.read_bytes()
-    environment = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src"),
+    environment = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, (str(REPO_ROOT / "src"), os.environ.get("PYTHONPATH", "")))),
                    "SCIPLOT_REPO": str(REPO_ROOT), "SCIPLOT_SOURCE_ROOT": str(REPO_ROOT / "src")}
     if sys.platform == "darwin":
         # The MCP server uses default Cocoa; its native children retain their
