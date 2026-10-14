@@ -164,7 +164,7 @@ jobs:
           wait "$progress_pid" 2>/dev/null || true
           trap - EXIT
           if [[ "$stage_status" -ne 0 && -f .tmp_verify/ci_public_comprehensive/command.log ]]; then
-            tail -n 120 .tmp_verify/ci_public_comprehensive/command.log
+            tail -n 120 .tmp_verify/ci_public_comprehensive/command.log || true
           fi
           exit "$stage_status"
       - name: Verify source-checkout wrapper bootstrap
