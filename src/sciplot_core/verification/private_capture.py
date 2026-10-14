@@ -35,13 +35,14 @@ def _streams(directory: Path) -> dict[str, str]:
 
 def capture_proof(directory: Path, *, primary_pid: int, root_pid: int | None = None,
                   expected_roots: list[str], interpreter: Path | None = None,
-                  durable_directory: Path | None = None) -> dict[str, Any]:
+                  durable_directory: Path | None = None, root_execution_directory: Path | None = None) -> dict[str, Any]:
     """Snapshot original streams. Completeness is calculated when read back."""
     import sys
 
     return {"version": VERSION, "directory": str(directory.resolve()), "primary_pid": primary_pid,
             "root_pid": root_pid or primary_pid, "interpreter_sha256": executable_hash(interpreter or sys.executable),
             "durable_directory": str(durable_directory.resolve()) if durable_directory else None,
+            "root_execution_directory": str(root_execution_directory.resolve()) if root_execution_directory else None,
             "expected_root_scope": root_scope(expected_roots),
             "python_runtime": runtime_identity(),
             "wrapper_inputs": wrapper_inputs(dict(os.environ)),
@@ -84,8 +85,8 @@ def _read_epochs(directory: Path) -> dict[str, list[dict[str, Any]]]:
     return epochs
 
 
-def _durable_context(proof: dict[str, Any]) -> dict[str, Any] | None:
-    name = proof.get("durable_directory")
+def _durable_context(proof: dict[str, Any], *, root: bool = False) -> dict[str, Any] | None:
+    name = proof.get("root_execution_directory" if root else "durable_directory")
     if name is None:
         return None
     directory = Path(name)
@@ -95,10 +96,15 @@ def _durable_context(proof: dict[str, Any]) -> dict[str, Any] | None:
     receipt = json.loads((directory / "receipt.json").read_bytes())
     request_bytes = (directory / "request.json").read_bytes()
     request = json.loads(request_bytes)
-    if (state["child_pid"] != proof["primary_pid"] or not identity_valid(receipt["before"])
+    if (state["child_pid"] != proof["root_pid" if root else "primary_pid"] or not identity_valid(receipt["before"])
             or not identity_valid(receipt["after"]) or receipt["before"]["sha256"] != receipt["after"]["sha256"]):
         raise ValueError("durable process or input identity differs")
-    return {"state": state, "exit_code": receipt["exit_code"], "request_sha256": hashlib.sha256(request_bytes).hexdigest(),
+    source = Path(__file__).with_name("durable_runner.py").resolve()
+    if receipt["before"]["inputs"]["implementation"].get("files", {}).get(digest(str(source)), {}).get("sha256") != source_hashes()["durable_runner.py"]:
+        raise ValueError("original execution witness does not bind its actual supervisor implementation")
+    return {"state": state, "exit_code": receipt["exit_code"], "command_sha256": frame_digest({"arguments": receipt["before"]["command"][1:]}),
+            "command_executable_sha256": executable_hash(receipt["before"]["command"][0]),
+            "request_sha256": hashlib.sha256(request_bytes).hexdigest(),
             "directory_sha256": frame_digest({"directory": str(directory.resolve())}),
             "records": {key: record for domain in receipt["before"]["inputs"].values()
                         for key, record in domain.get("files", {}).items()},
@@ -129,6 +135,7 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
     epochs: dict[str, list[dict[str, Any]]] = {}
     closed_finishes: set[str] = set()
     closed_execs: set[str] = set()
+    root_exit: int | None = None
     try:
         if proof.get("version") != VERSION or proof.get("observer_sources_sha256") != observer_source_hashes():
             raise ValueError("observer version or source bytes differ")
@@ -164,6 +171,16 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
         roots = [s for s in starts if not s.get("parent_epoch") and s.get("continuation") is None]
         if len(roots) != 1 or roots[0]["pid"] != proof.get("root_pid"):
             raise ValueError("unregistered startup or expected root process missing")
+        caller = _durable_context(proof, root=True)
+        if caller is None:
+            issues.append("original root/caller external wait witness is absent")
+        else:
+            root_exit = caller["exit_code"]
+            if (caller["command_sha256"] != roots[0].get("command_sha256")
+                    or caller["command_executable_sha256"] != roots[0].get("executable_sha256")):
+                issues.append("original root/caller command differs from actual first startup")
+            if root_exit != 0:
+                issues.append("original root/caller actual external wait did not exit successfully")
         if any(s.get("observer_sources_sha256") != proof["observer_sources_sha256"]
                or s.get("executable_sha256") != proof.get("interpreter_sha256")
                or s.get("python_runtime") != proof.get("python_runtime") for s in starts):
@@ -261,7 +278,7 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
                 elif child_starts[0]["monotonic_ns"] <= attempt["monotonic_ns"]:
                     issues.append(f"child startup precedes successful launch attempt:{epoch}:{token}")
                 exits = [r for r in records if r["event"] == "child_exit" and r.get("child_token") == token]
-                if (not exits and not transferred) or len(exits) > 1 or any(type(r.get("returncode")) is not int or r["returncode"] < 0 or r["returncode"] in {78, 79} or r.get("child_pid") != outcome.get("child_pid") for r in exits):
+                if not exits or len(exits) > 1 or any(type(r.get("returncode")) is not int or r["returncode"] < 0 or r["returncode"] in {78, 79} or r.get("child_pid") != outcome.get("child_pid") for r in exits):
                     issues.append(f"child signalled or exit ledger invalid:{epoch}:{token}")
                 elif auxiliary and exits[0]["returncode"] != 0:
                     issues.append(f"native auxiliary query did not complete successfully:{epoch}:{token}")
@@ -299,6 +316,8 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
                        and not r["nodeid"] and _diagnostic_bound(r, durable, actors)]
         fatal_pids = {frame["child_pid"] for frame in frames if frame["event"] == "child_exit"
                       and frame.get("returncode") in {78, 79}}
+        if root_exit != 0:
+            fatal_pids.add(proof["root_pid"])
         closed_finishes.difference_update(epoch for epoch, records in epochs.items() if records[0]["pid"] in fatal_pids)
         closed_execs.difference_update(epoch for epoch, records in epochs.items() if records[0]["pid"] in fatal_pids)
     except (OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
@@ -308,4 +327,5 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
             "bounded_auxiliary": bounded_auxiliary,
             "diagnostic_observations": diagnostics,
             "raw_terminal_frame_count": sum(record["event"] == "process_finish" for record in frames),
+            "root_actual_exit": root_exit,
             "genuine_finish_count": len(closed_finishes), "exec_seal_count": len(closed_execs)}

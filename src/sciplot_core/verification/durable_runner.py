@@ -32,8 +32,8 @@ def _capture(spec: dict[str, Any], environment: dict[str, str]) -> dict[str, Any
                                "repo_root": Path(spec["repo_root"])})
 
 
-def start_run(*, directory: Path, spec: dict[str, Any]) -> dict[str, Any]:
-    """Reserve a fresh directory and launch a transport-independent supervisor.
+def prepare_run(*, directory: Path, spec: dict[str, Any]) -> tuple[Path, dict[str, str], str]:
+    """Reserve an immutable original request; no process is launched here.
 
 ``spec`` is exactly capture_identity's keyword arguments (repo_root a string).
 For pytest, command must explicitly load ``sciplot_core.verification.pytest_finish``
@@ -70,6 +70,13 @@ complete effective child environment; this function adds its bound finish path.
     directory.mkdir(parents=True, exist_ok=False, mode=0o700)
     atomic_json(directory / "request.json", spec)
     request_hash = file_sha256(directory / "request.json")
+    return directory, environment, request_hash
+
+
+def start_run(*, directory: Path, spec: dict[str, Any]) -> dict[str, Any]:
+    """Prepare and launch one transport-independent original supervisor."""
+    directory, environment, request_hash = prepare_run(directory=directory, spec=spec)
+    root = Path(spec["repo_root"]).expanduser().resolve()
     with (directory / "supervisor.log").open("xb") as stream:
         child = subprocess.Popen(
             [sys.executable, "-m", __name__, str(directory), request_hash], cwd=root,
@@ -170,6 +177,8 @@ def supervise(directory: Path, expected_request_hash: str) -> int:
             atomic_json(directory / "finish.json", {"complete": True, "exit_code": code,
                                                    "selected_tests": spec["selected_tests"]})
         finish = load_receipt(directory / "finish.json")
+        if finish is not None and not isinstance(finish, dict):
+            raise ValueError("session finish is malformed")
         if finish is None:
             atomic_json(directory / "finish.json", {"complete": False})
         wall = time.monotonic() - started

@@ -95,6 +95,7 @@ class Observer:
                      "observer_sources_sha256": source_hashes(),
                      "root_scope": self.root_scope,
                      "python_runtime": runtime_identity(),
+                     "command_sha256": frame_digest({"arguments": sys.orig_argv[1:]}),
                      "wrapper_inputs": wrapper_inputs(environment),
                      "bootstrap_sha256": executable_hash(bootstrap) if bootstrap else None,
                      "activation": activation,

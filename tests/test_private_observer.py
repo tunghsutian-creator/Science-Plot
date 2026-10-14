@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 import time
 from typing import Any
@@ -15,7 +14,7 @@ import pytest
 
 from sciplot_core.verification.private_capture import capture_proof, review_capture
 from sciplot_core.verification.private_observer import CHILD, CONTINUATION, PARENT, RUN, frame_digest, write_bootstrap
-from private_observer_support import execute_observed
+from private_observer_support import execute_observed, launch_generated_suite
 from sciplot_core.verification.durable_runner import run_status
 from sciplot_core.verification.evidence_identity import DOMAINS
 
@@ -23,7 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.comprehensive
 
 
-def test_suite_parent_collector_and_supervisor_share_actual_scope(tmp_path: Path) -> None:
+@pytest.mark.parametrize("late_fault", [False, True])
+def test_suite_parent_collector_and_supervisor_share_actual_scope(tmp_path: Path, late_fault: bool) -> None:
     plugin = tmp_path / ".tmp_verify/bootstrap"
     plugin.parent.mkdir()
     write_bootstrap(plugin)
@@ -36,10 +36,11 @@ def test_suite_parent_collector_and_supervisor_share_actual_scope(tmp_path: Path
         path = tmp_path / f"generated-{domain}"
         path.write_text("generated observation identity")
         inputs[domain] = {"paths": [str(path)]}
+    inputs["implementation"]["paths"].append(str(ROOT / "src/sciplot_core/verification/durable_runner.py"))
     environment = dict(os.environ, PYTHONPATH=os.pathsep.join((str(ROOT / "src"), os.environ.get("PYTHONPATH", ""))))
     for key in ("SCIPLOT_PRIVATE_AUDIT_DIR", "SCIPLOT_PRIVATE_AUDIT_ROOTS", RUN, PARENT, CHILD, CONTINUATION, "PYTEST_CURRENT_TEST"):
         environment.pop(key, None)
-    code = ("import json,sys,subprocess;from pathlib import Path;"
+    code = ("import json,os,sys,subprocess;from pathlib import Path;"
             "from sciplot_core.verification.suite_evidence import _audit_environment;"
             "from sciplot_core.verification.durable_runner import start_run;"
             f"env,audit=_audit_environment(Path({str(tmp_path)!r}),Path({str(durable)!r}),Path({str(plugin)!r}),Path({str(audit)!r}));"
@@ -47,11 +48,15 @@ def test_suite_parent_collector_and_supervisor_share_actual_scope(tmp_path: Path
             f"spec=dict(repo_root={str(tmp_path)!r},command=[sys.executable,'-c','pass'],"
             "scope=dict(kind='process',closure_policy='generated suite-observation contract'),selected_tests=['synthetic:scope'],"
             f"inputs={inputs!r},environment=env,corpus=dict(mode='synthetic',complete=True,policy='generated controls'));"
-            f"start_run(directory=Path({str(durable)!r}),spec=spec)")
-    process = subprocess.Popen([sys.executable, "-c", code], env=environment, cwd=tmp_path,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    _, stderr = process.communicate(timeout=30)
-    assert process.returncode == 0, stderr.decode()
+            f"launched=start_run(directory=Path({str(durable)!r}),spec=spec);os.waitpid(launched['supervisor_pid'],0)")
+    if late_fault:
+        code += (";from sciplot_core.verification.private_observer import current_observer;"
+                 "o=current_observer();o.finish();"
+                 "fail=lambda *a:(_ for _ in ()).throw(OSError('generated combined channel failure'));"
+                 "o._mark_pending=fail;o.writer=fail;"
+                 f"Path({str(tmp_path / 'tests/fixtures/generated-canary')!r}).read_bytes()")
+    pid, returncode, stderr, witness = launch_generated_suite([sys.executable, "-c", code], environment, tmp_path)
+    assert returncode == (79 if late_fault else 0), stderr.decode()
     deadline = time.monotonic() + 20
     while time.monotonic() < deadline:
         if run_status(durable)["status"] != "RUNNING" and not list(audit.glob("*.pending")):
@@ -59,11 +64,16 @@ def test_suite_parent_collector_and_supervisor_share_actual_scope(tmp_path: Path
         time.sleep(.02)
     assert run_status(durable)["status"] == "PASS"
     state = json.loads((durable / "state.json").read_bytes())
-    proof = capture_proof(audit, root_pid=process.pid, primary_pid=state["child_pid"], durable_directory=durable,
+    proof = capture_proof(audit, root_pid=pid, primary_pid=state["child_pid"], durable_directory=durable,
+                          root_execution_directory=witness,
                           expected_roots=[str(tmp_path / "tests/fixtures"), str(tmp_path / ".local/reference_data")])
     result = review_capture(proof)
-    assert result["status"] == "COMPLETE", result["issues"]
-    assert result["genuine_finish_count"] == result["epoch_count"] == 4
+    assert result["root_actual_exit"] == returncode
+    if late_fault:
+        assert result["status"] == "BLOCKED" and result["genuine_finish_count"] == 3, result["issues"]
+    else:
+        assert result["status"] == "COMPLETE", result["issues"]
+        assert result["genuine_finish_count"] == result["epoch_count"] == 4
 
 
 @pytest.mark.parametrize("mode", ["owned", "owned_cwd", "wrong_cwd", "shell_environment", "wrong_python", "shadow_source"])
@@ -173,11 +183,14 @@ def observed(tmp_path: Path, code: str, *, prefix: str = "") -> tuple[dict[str, 
 
 
 def test_real_parent_child_access_and_genuine_finish_complete(tmp_path: Path) -> None:
-    _, result = observed(tmp_path, "subprocess.run([sys.executable,'-c','from pathlib import Path;Path('+repr(WATCH)+').read_bytes()'],check=True)\n")
+    proof, result = observed(tmp_path, "subprocess.run([sys.executable,'-c','from pathlib import Path;Path('+repr(WATCH)+').read_bytes()'],check=True)\n")
     assert result["status"] == "COMPLETE", result["issues"]
     assert result["genuine_finish_count"] == result["epoch_count"] == 3
     assert len([frame for frame in result["frames"] if frame["event"] == "open"]) == 1
     assert any(frame["event"] == "child_exit" and frame["returncode"] == 0 for frame in result["frames"])
+    unbound = review_capture({**proof, "root_execution_directory": None, "root_actual_exit": 0})
+    assert unbound["status"] == "BLOCKED" and unbound["root_actual_exit"] is None
+    assert any("external wait witness is absent" in issue for issue in unbound["issues"])
 
 
 @pytest.mark.parametrize("mode", ["normal", "failed"])
