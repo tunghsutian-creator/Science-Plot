@@ -171,6 +171,14 @@ jobs:
               details.append({"path": str(path), "status": payload.get("status"),
                               "blocking_check_ids": payload.get("blocking_check_ids"),
                               "failed_checks": [check for check in payload.get("checks", []) if check.get("status") == "failed"]})
+          for path in sorted((root / "pytest").rglob("manifest.json")):
+              payload = json.loads(path.read_text())
+              qa = payload.get("qa") or {}
+              spans = [{"text": span.get("text"), "font": span.get("font"), "size": span.get("size")}
+                       for pdf in qa.get("pdfs", []) for span in pdf.get("text_objects", {}).get("visible_spans", [])
+                       if "dejavu" in str(span.get("font")).lower()]
+              if spans:
+                  details.append({"manifest": str(path), "unexpected_dejavu_spans": spans})
           (root / "qa-details.json").write_text(json.dumps(details, ensure_ascii=True, indent=2))
           print(json.dumps(details, ensure_ascii=True, indent=2))
           PYQA
