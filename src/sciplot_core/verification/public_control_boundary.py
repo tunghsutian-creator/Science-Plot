@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
+import ast
 import inspect
 import json
 import os
@@ -40,6 +41,24 @@ def _owned_caller(root: Path, filename: str, function: str) -> bool:
     return False
 
 
+def _test_codes(path: Path) -> dict[str, list[str]]:
+    from sciplot_core.verification.private_process_boundaries import _code_hash
+    from _pytest.assertion.rewrite import rewrite_asserts
+
+    source = path.read_bytes()
+    tree = ast.parse(source, filename=str(path))
+    rewrite_asserts(tree, source, str(path))
+    modules = [compile(source, str(path), "exec", dont_inherit=True, optimize=sys.flags.optimize),
+               compile(tree, str(path), "exec", dont_inherit=True, optimize=sys.flags.optimize)]
+    owned: dict[str, list[str]] = {code.co_name: [] for module in modules for code in module.co_consts
+                                 if isinstance(code, CodeType) and code.co_name.startswith("test_")}
+    for module in modules:
+        for code in module.co_consts:
+            if isinstance(code, CodeType) and code.co_name in owned:
+                owned[code.co_name].append(_code_hash(code))
+    return owned
+
+
 def _generated_test_caller(root: Path) -> bool:
     from sciplot_core.verification.private_process_boundaries import _code_hash
 
@@ -47,12 +66,11 @@ def _generated_test_caller(root: Path) -> bool:
     try:
         for filename in ("tests/test_private_observer.py", "tests/test_private_observer_native.py"):
             path = root / filename
-            module = compile(path.read_bytes(), str(path), "exec", dont_inherit=True, optimize=sys.flags.optimize)
-            owned = {code.co_name: code for code in module.co_consts if isinstance(code, CodeType) and code.co_name.startswith("test_")}
+            owned = _test_codes(path)
             current = frame
             while current is not None:
-                code = owned.get(current.f_code.co_name)
-                if code is not None and Path(current.f_code.co_filename).resolve() == path and _code_hash(code) == _code_hash(current.f_code):
+                hashes = owned.get(current.f_code.co_name)
+                if hashes is not None and Path(current.f_code.co_filename).resolve() == path and _code_hash(current.f_code) in hashes:
                     return True
                 current = current.f_back
     finally:

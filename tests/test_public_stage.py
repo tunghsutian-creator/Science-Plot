@@ -125,6 +125,17 @@ def test_unknown_caller_cannot_authorize_an_unguarded_generated_child(monkeypatc
             pytest.fail("unknown caller entered generated control")
 
 
+def test_owned_test_identity_matches_actual_pytest_assertion_rewrite() -> None:
+    import importlib
+    from sciplot_core.verification.public_control_boundary import _test_codes
+    from sciplot_core.verification.private_process_boundaries import _code_hash
+
+    module = importlib.import_module("test_private_observer")
+    actual = module.test_real_parent_child_access_and_genuine_finish_complete
+    source = Path(module.__file__)
+    assert _code_hash(actual.__code__) in _test_codes(source)[actual.__name__]
+
+
 @pytest.mark.parametrize("mutation", ("healthy", "private_member", "stage_source", "origin_source", "receipt_alias", "helper_bytes", "wrong_environment", "stage_head", "ignored_source"))
 def test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_binding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str) -> None:
     root = _origin(tmp_path)

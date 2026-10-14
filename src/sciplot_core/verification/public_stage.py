@@ -116,13 +116,17 @@ def _helper_paths(root: Path, environment: dict[str, str]) -> dict[str, Path]:
 
 def runtime_binding(root: Path, environment: dict[str, str]) -> dict[str, Any]:
     from PyQt6 import QtCore
+    import pytest
+    from _pytest.assertion import rewrite
     from sciplot_core.verification.private_process_boundaries import runtime_identity
 
     return {"python_executable": str(Path(sys.executable).resolve()), "python_sha256": _hash(Path(sys.executable)),
             "python_core_and_stdlib": runtime_identity(), "qt_binding_sha256": _hash(Path(QtCore.__file__)),
             "qt_version": QtCore.qVersion(), "pyqt_version": QtCore.PYQT_VERSION_STR,
+            "pytest_version": pytest.__version__, "pytest_entry_sha256": _hash(Path(pytest.__file__)),
+            "pytest_rewrite_sha256": _hash(Path(rewrite.__file__)),
             "helpers": {name: _hash(path) for name, path in _helper_paths(root, environment).items()},
-            "claim": "actual Python core/owned stdlib, QtCore binding and five helper bytes; not all native dependencies"}
+            "claim": "actual Python core/owned stdlib, pytest entry/rewrite, QtCore binding and five helper bytes; not all native dependencies"}
 
 
 def validate_stage(root: Path, environment: dict[str, str]) -> dict[str, Any]:
@@ -226,7 +230,7 @@ def run_public_stage(root: Path, output: Path, profile: str) -> dict[str, Any]:
                                  stdout=log, stderr=subprocess.STDOUT, close_fds=True, check=False)
     issues = []
     checks: dict[str, bool | None] = dict.fromkeys(("private_namespace_absent", "stage_source_equal", "origin_source_equal",
-                                                "stage_head_equal", "origin_head_equal", "runtime_equal"))
+                                                "stage_head_equal", "origin_head_equal", "runtime_equal", "stage_runtime_equal"))
     try:
         assert_private_absent(stage, child_environment)
         checks["private_namespace_absent"] = True
@@ -235,6 +239,7 @@ def run_public_stage(root: Path, output: Path, profile: str) -> dict[str, Any]:
         checks["stage_head_equal"] = _git(stage, "rev-parse", "HEAD").strip() == before["stage_head"]
         checks["origin_head_equal"] = _git(root, "rev-parse", "HEAD").strip() == before["origin_head"]
         checks["runtime_equal"] = runtime_binding(root, environment) == before["runtime"]
+        checks["stage_runtime_equal"] = runtime_binding(stage, child_environment) == before["runtime"]
         if not all(checks.values()):
             raise ValueError("Actual source/stage/runtime closure drift after execution.")
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
