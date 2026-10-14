@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -233,3 +234,63 @@ def test_completed_unchanged_paper_inspection_can_offer_current_frozen_delivery(
     assert inspected["items"] == completed["items"]
     assert inspected["next_step"]["action"] == "review_selected_exports_and_deliver"
     assert (tmp / "task/paper.json").read_bytes() == record
+
+
+@pytest.mark.parametrize("entry", ["start", "resume"])
+@pytest.mark.parametrize("drift", ["source", "native", "delivery"])
+def test_completed_paper_replay_blocks_drift_with_the_same_read_only_inspection(case, monkeypatch, entry, drift):
+    tmp, request, projects, sealed, _ = case
+    completed = paper.start_paper(request, paper_dir=tmp / "task")
+    record = (tmp / "task/paper.json").read_bytes()
+    target = {"source": tmp / "raw0.csv", "native": projects[0] / "studio/document.vsz",
+              "delivery": Path(request["out"]) / "selected"}[drift]
+    target.write_text("later owner revision")
+    protected = [*projects, tmp / "raw0.csv", tmp / "raw1.csv", Path(request["out"])]
+    before = {path: file_inventory(path) for path in protected}
+    expected = paper.inspect_paper(tmp / "task")
+    lease_depth = 0
+
+    @contextmanager
+    def existing_lease(root):
+        nonlocal lease_depth
+        lease_depth += 1
+        assert lease_depth == 1, "A currentness projection cannot acquire a nested lease."
+        try:
+            yield
+        finally:
+            lease_depth -= 1
+
+    monkeypatch.setattr(paper, "external_project_session", existing_lease)
+    monkeypatch.setattr(paper, "_run", lambda *args: pytest.fail("A completed replay cannot execute or write."))
+    replay = (paper.start_paper(request, paper_dir=tmp / "task") if entry == "start"
+              else paper.resume_paper(tmp / "task"))
+    assert replay == expected
+    assert replay["status"] == "blocked" and replay["ready_to_use"] is False
+    assert replay["recorded_status"] == "complete"
+    assert replay["blocker"]["reason_code"] == ("paper_delivery_changed" if drift == "delivery" else "paper_selection_changed")
+    assert replay["next_step"]["action"] != "review_selected_exports_and_deliver"
+    assert replay["repair"]["automatic_overwrite"] is False
+    assert replay["items"] == completed["items"] and replay["result"] == completed["result"]
+    assert (tmp / "task/paper.json").read_bytes() == record
+    assert all(file_inventory(path) == inventory for path, inventory in before.items())
+    assert sealed == ["001_Fig1", "002_Fig2"] and lease_depth == 0
+
+
+@pytest.mark.parametrize("entry", ["start", "resume"])
+def test_completed_paper_lost_reply_replay_returns_current_delivery_without_execution_or_write(case, monkeypatch, entry):
+    tmp, request, projects, sealed, _ = case
+    completed = paper.start_paper(request, paper_dir=tmp / "task")
+    record = (tmp / "task/paper.json").read_bytes()
+    protected = [*projects, tmp / "raw0.csv", tmp / "raw1.csv", Path(request["out"])]
+    before = {path: file_inventory(path) for path in protected}
+    expected = paper.inspect_paper(tmp / "task")
+    monkeypatch.setattr(paper, "_run", lambda *args: pytest.fail("A completed replay cannot execute or write."))
+    replay = (paper.start_paper(request, paper_dir=tmp / "task") if entry == "start"
+              else paper.resume_paper(tmp / "task"))
+    assert replay == expected
+    assert replay["status"] == "complete" and replay["ready_to_use"] is True
+    assert replay["items"] == completed["items"] and replay["result"] == completed["result"]
+    assert replay["next_step"]["action"] == "review_selected_exports_and_deliver"
+    assert (tmp / "task/paper.json").read_bytes() == record
+    assert all(file_inventory(path) == inventory for path, inventory in before.items())
+    assert sealed == ["001_Fig1", "002_Fig2"]
