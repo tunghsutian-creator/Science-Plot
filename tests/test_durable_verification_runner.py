@@ -164,3 +164,19 @@ def test_status_between_launch_and_first_state_is_running_only(tmp_path, monkeyp
     assert result["status"] == "RUNNING" and result["reused"] is False
     request.write_text("changed")
     assert durable_runner.run_status(tmp_path)["status"] == "BLOCKED"
+
+
+@pytest.mark.parametrize("field", ["child_pid", "supervisor_pid"])
+def test_progress_pid_cannot_replace_sealed_original_wait(run_spec, field):
+    directory = Path(run_spec["repo_root"]) / ".tmp_verify/sealed-wait"
+    launched = start_run(directory=directory, spec=run_spec)
+    assert await_completion(directory)["status"] == "PASS"
+    original = (directory / "completion.json").read_bytes()
+    completion = json.loads(original)
+    assert completion["supervisor_pid"] == launched["supervisor_pid"]
+    state = json.loads((directory / "state.json").read_bytes())
+    assert all(state[key] == completion[key] for key in ("child_pid", "supervisor_pid"))
+    state[field] += 1
+    (directory / "state.json").write_text(json.dumps(state))
+    assert (directory / "completion.json").read_bytes() == original
+    assert run_status(directory)["status"] == "BLOCKED"

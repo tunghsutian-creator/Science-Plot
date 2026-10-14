@@ -94,9 +94,13 @@ def _durable_context(proof: dict[str, Any], *, root: bool = False) -> dict[str, 
         raise ValueError("bound durable execution has no validated completion")
     state = json.loads((directory / "state.json").read_bytes())
     receipt = json.loads((directory / "receipt.json").read_bytes())
+    completion = json.loads((directory / "completion.json").read_bytes())
     request_bytes = (directory / "request.json").read_bytes()
     request = json.loads(request_bytes)
-    if (state["child_pid"] != proof["root_pid" if root else "primary_pid"] or not identity_valid(receipt["before"])
+    if any(type(completion.get(key)) is not int or completion[key] <= 0
+           or completion[key] != state.get(key) for key in ("child_pid", "supervisor_pid")):
+        raise ValueError("original wait completion lacks sealed actual child/supervisor PID agreement")
+    if (completion["child_pid"] != proof["root_pid" if root else "primary_pid"] or not identity_valid(receipt["before"])
             or not identity_valid(receipt["after"]) or receipt["before"]["sha256"] != receipt["after"]["sha256"]):
         raise ValueError("durable process or input identity differs")
     source = Path(__file__).with_name("durable_runner.py").resolve()

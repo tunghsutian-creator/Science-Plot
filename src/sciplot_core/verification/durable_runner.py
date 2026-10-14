@@ -119,6 +119,15 @@ def run_status(directory: Path) -> dict[str, Any]:
             )})
             if receipt != rebuilt:
                 raise ValueError("receipt malformed")
+            completion = load_receipt(directory / "completion.json")
+            if not isinstance(completion, dict) or completion.get("exit_code") != receipt["exit_code"]:
+                raise ValueError("original wait completion differs from receipt")
+            # Legacy receipts remain readable, but supported capture separately
+            # requires both actual PIDs sealed by the immutable artifact hash.
+            if {"child_pid", "supervisor_pid"} & completion.keys() and any(
+                    type(completion.get(key)) is not int or completion[key] <= 0
+                    or completion[key] != state.get(key) for key in ("child_pid", "supervisor_pid")):
+                raise ValueError("mutable progress PID differs from original wait completion")
             return {"status": receipt["status"], "reused": False, "reason": receipt["reason"],
                     "wall_seconds": receipt["wall_seconds"], "claim": "original_execution_only",
                     "scope": receipt["before"]["scope"],
@@ -188,7 +197,8 @@ def supervise(directory: Path, expected_request_hash: str) -> int:
         # Completion is immutable and precedes receipt; state is deliberately
         # excluded from the receipt to avoid circular hashes.
         atomic_json(directory / "completion.json", {
-            "exit_code": code, "before_sha256": before["sha256"],
+            "exit_code": code, "child_pid": child.pid, "supervisor_pid": os.getpid(),
+            "before_sha256": before["sha256"],
             "after_sha256": after["sha256"], "wall_seconds": wall, "timings": timings,
         })
         receipt = make_receipt(before=before, after=after, exit_code=code,
