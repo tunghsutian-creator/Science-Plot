@@ -5,13 +5,17 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
+from uuid import uuid4
 from typing import Any
 
 from sciplot_core.verification.changed_evidence import _closed_directory
 from sciplot_core.verification.durable_runner import run_status, start_run
 
 
-SUITES = ("focused", "comprehensive", "full")
+from sciplot_core.verification.input_scope import PROFILES
+
+SUITES = ("focused", "comprehensive", "full", *PROFILES)
 
 
 def _audit_environment(
@@ -27,6 +31,9 @@ def _audit_environment(
     if not all((plugin / filename).is_file() and not (plugin / filename).is_symlink()
                for filename in ("sciplot_closure_audit.py", "sitecustomize.py")):
         raise ValueError("The frozen audit directory must contain both observation plugins.")
+    from sciplot_core.verification.private_observer import bootstrap_sources
+    if any((plugin / filename).read_text(encoding="utf-8") != text for filename, text in bootstrap_sources().items()):
+        raise ValueError("The observation bootstrap must match the supported source-owned implementation.")
     raw = Path(environment.get("SCIPLOT_REFERENCE_DATA", str(root / ".local/reference_data"))).expanduser()
     raw = (raw if raw.is_absolute() else root / raw).resolve()
     roots = [(root / "tests/fixtures").resolve(), raw]
@@ -42,9 +49,14 @@ def _audit_environment(
     environment["PYTEST_PLUGINS"] = ",".join(dict.fromkeys(filter(None, [*plugins, "sciplot_closure_audit"])))
     environment["SCIPLOT_PRIVATE_AUDIT_DIR"] = str(audit)
     environment["SCIPLOT_PRIVATE_AUDIT_ROOTS"] = json.dumps([str(path) for path in roots])
+    environment["SCIPLOT_PRIVATE_AUDIT_RUN"] = uuid4().hex
     # Collection uses the same observation plugin as execution. Preserve its
     # original local output even if collection or closure discovery blocks.
     audit.mkdir(parents=True, exist_ok=False, mode=0o700)
+    from sciplot_core.verification.private_observer import begin_suite_audit
+    observer = begin_suite_audit(environment)
+    if observer.directory != audit or observer.run != environment["SCIPLOT_PRIVATE_AUDIT_RUN"]:
+        raise ValueError("The audit parent is already bound to another operation.")
     return environment, audit
 
 
@@ -62,9 +74,34 @@ def start_suite_verification(
         output = _closed_directory(root, directory)
         if output.exists():
             raise ValueError("The run directory already exists; use verify --status to inspect it.")
+        if suite == "private-science":
+            from sciplot_core.verification.input_scope import load_manifest
+            from sciplot_core.verification.private_corpus import _collect_nodeids, declared_input_availability
+            inventory_path = root / "src/sciplot_core/verification/private_corpus_inventory.json"
+            manifest = load_manifest(root / "src/sciplot_core/verification/input_scope_manifest.json")
+            collected = _collect_nodeids(root, inventory_path)
+            availability = declared_input_availability(repo_root=root, inventory_path=inventory_path,
+                                                      selected_nodeids=manifest["scopes"]["private"], collected_nodeids=collected)
+            if availability["status"] == "BLOCKED":
+                return {"kind": "sciplot_suite_verification", "status": "BLOCKED", "suite": suite,
+                        "scientific_acceptance": False, "access_audit_complete": False,
+                        "selected_test_count": availability["selected_count"], "executed_test_count": 0,
+                        "error": {"reason_code": "private_inputs_unavailable", "message": "Declared private inputs are missing, unsafe or unmapped; no test bodies ran."},
+                        "issues": availability["issues"]}
         environment, audit = _audit_environment(root, output, audit_plugin_dir, audit_out)
+        if suite.startswith("public-"):
+            from sciplot_core.verification.public_input_guard import configure_environment
+            if audit_plugin_dir is not None:
+                bootstrap = _closed_directory(root, audit_plugin_dir)
+                # _audit_environment has already checked the common bootstrap's
+                # complete bytes; it installs the observer before public guard.
+            else:
+                bootstrap = root / "src/sciplot_core/verification/public_guard_bootstrap"
+            environment = configure_environment(root, environment, bootstrap=bootstrap)
         command = [sys.executable, "-m", "pytest", "-q"]
-        if suite != "full":
+        if suite in PROFILES:
+            command.extend(["--input-scope", suite])
+        elif suite != "full":
             command.extend(["-m", suite])
         check = {"check_id": f"pytest_{suite}", "command": command, "status": "planned"}
         plan = {"kind": "sciplot_suite_verification", "version": 1,
@@ -84,8 +121,10 @@ def start_suite_verification(
         return {**result, "kind": "sciplot_suite_verification", "suite": suite,
                 "claim": "execution_started_only", "execution_target": "current_worktree",
                 "selected_test_count": len(spec["selected_tests"]),
-                "scientific_acceptance": False, "audit_output": str(audit) if audit else None}
-    except (ImportError, OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
+                "scientific_acceptance": False, "audit_output": str(audit) if audit else None,
+                "audit_root_pid": os.getpid() if audit else None,
+                "audit_run_id": environment.get("SCIPLOT_PRIVATE_AUDIT_RUN") if audit else None}
+    except (ImportError, OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
         return {"kind": "sciplot_suite_verification", "status": "BLOCKED", "suite": suite,
                 "reused": False, "scientific_acceptance": False,
                 "error": {"reason_code": "verification_suite_unavailable", "message": str(exc)}}

@@ -32,7 +32,9 @@ def evidence_case(tmp_path, monkeypatch):
 
     def prepare(current_plan, root, directory):
         assert current_plan is plan and root == tmp_path
-        environment = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1] / "src"),
+        environment = dict(os.environ, PYTHONPATH=os.pathsep.join(filter(None, [
+                               str(Path(__file__).resolve().parents[1] / "src"), os.environ.get("PYTHONPATH", ""),
+                           ])),
                            SCIPLOT_VERIFY_FINISH=str(directory / "synthetic_gate/finish.json"))
         return [{"repo_root": str(tmp_path), "command": list(command),
                  "scope": {"kind": "process", "closure_policy": "explicit glue synthetic negative controls"},

@@ -112,10 +112,10 @@ jobs:
           python3 -m pip wheel . --no-deps --no-build-isolation \
             --wheel-dir /tmp/sciplot-wheel
           python3 tests/test_wheel_surface.py /tmp/sciplot-wheel/*.whl
-      - name: Run focused tests
-        run: python3 -m pytest -q -m focused
-      - name: Run comprehensive tests
-        run: python3 -m pytest -q -m comprehensive
+      - name: Run reviewed public focused behavior
+        run: python3 -m pytest -q --input-scope public-focused
+      - name: Run reviewed public comprehensive behavior
+        run: python3 -m pytest -q --input-scope public-comprehensive
       - name: Verify source-checkout wrapper bootstrap
         run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
       - name: Run readiness check

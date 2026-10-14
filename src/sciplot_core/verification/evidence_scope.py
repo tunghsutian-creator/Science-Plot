@@ -19,11 +19,12 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.verification.evidence import load_receipt
 from sciplot_core.verification.evidence_identity import capture_identity, digest, discover_files
 from sciplot_core.verification.evidence_runtime import QT_MODULES, native_dependencies, qt_import_bindings, runtime_inputs
+from sciplot_core.verification.input_scope import MANIFEST, PROFILES, load_manifest
 
 POLICY = "changed-owner-repository-runtime-closure-v1"
 _CHECKS = {"pytest_changed_owners": "pytest", "ruff_changed_python": "ruff",
            "mypy_owned_scope": "mypy", "diff_whitespace": "git",
-           **{f"pytest_{tier}": "pytest" for tier in ("focused", "comprehensive", "full")}}
+           **{f"pytest_{tier}": "pytest" for tier in ("focused", "comprehensive", "full", *PROFILES)}}
 _PLUGIN = "sciplot_core.verification.pytest_finish"
 
 
@@ -45,9 +46,10 @@ def _validate_check(plan: dict[str, Any], check: dict[str, Any], root: Path) -> 
             raise ValueError("unexpected Git check scope")
     elif command[:3] != [sys.executable, "-m", module]:
         raise ValueError("planned command does not use the current checked runtime")
-    if check_id in {"pytest_focused", "pytest_comprehensive", "pytest_full"}:
+    if check_id in {f"pytest_{tier}" for tier in ("focused", "comprehensive", "full", *PROFILES)}:
         tier = check_id.removeprefix("pytest_")
-        expected = [sys.executable, "-m", "pytest", "-q", *(["-m", tier] if tier != "full" else [])]
+        selector = ["--input-scope", tier] if tier in PROFILES else (["-m", tier] if tier != "full" else [])
+        expected = [sys.executable, "-m", "pytest", "-q", *selector]
         if command != expected:
             raise ValueError("suite command does not match its reviewed profile")
     if not root.is_dir():
@@ -223,9 +225,32 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
                           for path in {root / node.split("::", 1)[0] for node in nodes} | {Path(__file__).resolve()}}
     paths = _repository_inputs(root, nodes)
     reviewed_sources = {}
-    raw, inventory = _corpus_paths(root, environment, nodes, reviewed_sources=reviewed_sources)
-    paths.update(raw=raw, golden=[root / "tests/fixtures/rendering_profiles"],
-                 corpus_policy=[inventory, Path(__file__).resolve()], inventory=[inventory])
+    public_profile = check["check_id"].removeprefix("pytest_").startswith("public-")
+    if public_profile:
+        manifest = load_manifest(root / MANIFEST.relative_to(Path(__file__).parents[3]))
+        if not set(nodes).issubset(manifest["scopes"]["public"]):
+            raise ValueError("Public suite selected a private or unknown test body.")
+        inventory = root / "src/sciplot_core/verification/private_corpus_inventory.json"
+        # The public closure binds tracked public inputs only. Ignored private
+        # bytes and their absence cannot influence a public behavior receipt.
+        listing = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "tests"], cwd=root,
+                                 capture_output=True, text=True, check=True).stdout
+        private_roots = ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")
+        public_tests = [root / name for name in listing.split("\0") if name and not any(
+            name.startswith(f"tests/fixtures/{part}/") for part in private_roots)]
+        public_tests.extend(root / node.split("::", 1)[0] for node in nodes)
+        paths["tests"] = sorted(set(public_tests))
+        paths.update(raw=[path for path in public_tests if path.is_relative_to(root / "tests/fixtures")], golden=[],
+                     corpus_policy=[inventory, MANIFEST, Path(__file__).resolve()], inventory=[inventory, MANIFEST])
+        reviewed_sources["input_scope"] = check["check_id"].removeprefix("pytest_")
+        reviewed_sources["excluded_input_domains"] = {
+            "private_raw": "not_applicable: exact public node partition, generated/public behavior only",
+            "private_goldens": "not_applicable: real scientific/native golden nodes retained in private/full",
+        }
+    else:
+        raw, inventory = _corpus_paths(root, environment, nodes, reviewed_sources=reviewed_sources)
+        paths.update(raw=raw, golden=[root / "tests/fixtures/rendering_profiles"],
+                     corpus_policy=[inventory, Path(__file__).resolve()], inventory=[inventory])
     runtime, host = runtime_inputs(repo_root=root, environment=environment)
     paths.update(runtime)
     if module == "git":
@@ -257,6 +282,10 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
     scope = {"kind": "pytest" if module == "pytest" else "process", "closure_policy": POLICY,
              "check_id": check["check_id"], "host": host, "discovery_bindings": discovery_bindings,
              "discovery_layouts": layouts, "discovery_aliases": aliases, **reviewed_sources}
+    if public_profile:
+        reason = "Public behavior scope has no real scientific native golden input; private/full retain those exact nodes."
+        inputs["golden"] = {"not_applicable": reason}
+        scope["excluded_domains"] = {"golden": reason}
     if module == "git":
         diff = subprocess.run(["git", "diff", "--binary", *command[3:]], cwd=root,
                               capture_output=True, check=True).stdout

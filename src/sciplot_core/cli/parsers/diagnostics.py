@@ -65,7 +65,7 @@ def register_diagnostics_commands(subparsers: Any) -> None:
         help="Verify the staged, unstaged, and untracked HEAD worktree.",
     )
     verify_scope.add_argument(
-        "--start", choices=("focused", "comprehensive", "full"),
+        "--start", choices=("focused", "comprehensive", "full", "public-focused", "public-comprehensive", "public-all", "private-science"),
         help="Start one durable suite execution; return before the suite finishes.",
     )
     verify_scope.add_argument(

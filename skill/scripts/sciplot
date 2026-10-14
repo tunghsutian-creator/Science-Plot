@@ -60,6 +60,15 @@ if [[ -d "$SOURCE_ROOT" ]]; then
   export PYTHONPATH="$SOURCE_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 fi
 
+if [[ -n "${SCIPLOT_PUBLIC_INPUT_GUARD:-}" ]]; then
+  # Opt-in verification startup remains active after bootstrap controls clear
+  # PYTHONPATH. This owned shim composes supported observation before enforcement.
+  GUARD_BOOTSTRAP="$REPO/src/sciplot_core/verification/public_guard_bootstrap"
+  export PYTHONPATH="$GUARD_BOOTSTRAP${PYTHONPATH:+:$PYTHONPATH}"
+  # The shim validates and binds itself using only the standard library.
+  export SCIPLOT_PUBLIC_GUARD_WRAPPER_BOOTSTRAP="$GUARD_BOOTSTRAP/sitecustomize.py"
+fi
+
 export SCIPLOT_REPO="$REPO"
 export SCIPLOT_RUNTIME_REPO="$RUNTIME_REPO"
 export SCIPLOT_SOURCE_ROOT="$SOURCE_ROOT"

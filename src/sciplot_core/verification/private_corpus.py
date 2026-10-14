@@ -211,12 +211,11 @@ def _listed_source_issues(path: Path, identifier: Path, repo_root: Path,
     return issues
 
 
-def private_corpus_preflight(*, repo_root: Path,
-                             inventory_path: Path = INVENTORY,
-                             selected_nodeids: list[str] | None = None,
-                             collected_nodeids: set[str] | None = None,
-                             access_audit_path: Path | None = None) -> dict[str, Any]:
-    """Diagnose declared case inputs without claiming complete private acceptance."""
+def _declared_input_check(*, repo_root: Path, inventory_path: Path,
+                          selected_nodeids: list[str] | None,
+                          collected_nodeids: set[str] | None) -> tuple[
+                              dict[str, Any], list[str], list[dict[str, Any]],
+                              list[dict[str, str]], dict[str, list[tuple[str, str]]]]:
     issues: list[dict[str, str]] = []
     try:
         inventory = _load_inventory(inventory_path)
@@ -288,6 +287,39 @@ def private_corpus_preflight(*, repo_root: Path,
                 event_dependencies[nodeid].extend((member, "file") for member in members)
         rows.append({"nodeid": nodeid, "evidence": case["evidence"],
                      "dependencies": checked})
+    return inventory, selected, rows, issues, event_dependencies
+
+
+def declared_input_availability(*, repo_root: Path,
+                                inventory_path: Path = INVENTORY,
+                                selected_nodeids: list[str] | None = None,
+                                collected_nodeids: set[str] | None = None) -> dict[str, Any]:
+    """Authorize test execution on declared presence, never scientific acceptance.
+
+    Complete child access capture is a separate gate. This port deliberately
+    cannot upgrade the conservative private-corpus preflight or its receipt.
+    """
+    _, selected, rows, issues, _ = _declared_input_check(
+        repo_root=repo_root, inventory_path=inventory_path,
+        selected_nodeids=selected_nodeids, collected_nodeids=collected_nodeids,
+    )
+    return {"kind": "sciplot_declared_private_input_availability", "version": 1,
+            "status": "BLOCKED" if issues else "READY_FOR_SELECTED_TESTS",
+            "collection_verified": collected_nodeids is not None,
+            "scientific_acceptance": False, "access_audit_complete": False,
+            "selected_count": len(selected), "cases": rows, "issues": issues}
+
+
+def private_corpus_preflight(*, repo_root: Path,
+                             inventory_path: Path = INVENTORY,
+                             selected_nodeids: list[str] | None = None,
+                             collected_nodeids: set[str] | None = None,
+                             access_audit_path: Path | None = None) -> dict[str, Any]:
+    """Diagnose declared case inputs without claiming complete private acceptance."""
+    inventory, selected, rows, issues, event_dependencies = _declared_input_check(
+        repo_root=repo_root, inventory_path=inventory_path,
+        selected_nodeids=selected_nodeids, collected_nodeids=collected_nodeids,
+    )
     declared_present = not issues
     complete = inventory["inventory_complete"]
     if inventory.get("collection_audit") is not None or access_audit_path is not None:

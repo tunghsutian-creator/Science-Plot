@@ -46,6 +46,13 @@ def suite_case(tmp_path, monkeypatch):
     module = types.ModuleType("sciplot_core.verification.evidence_scope")
     module.build_check_spec = builder
     monkeypatch.setitem(sys.modules, module.__name__, module)
+    # These tests isolate suite orchestration; supported observer instrumentation
+    # has its own actual-capture tests and is not claimed by this synthetic port.
+    observer_module = types.ModuleType("sciplot_core.verification.private_observer")
+    observer_module.bootstrap_sources = lambda: {name: "# read-only test fixture\n" for name in ("sitecustomize.py", "sciplot_closure_audit.py")}
+    observer_module.begin_suite_audit = lambda environment: types.SimpleNamespace(
+        directory=Path(environment["SCIPLOT_PRIVATE_AUDIT_DIR"]), run=environment["SCIPLOT_PRIVATE_AUDIT_RUN"])
+    monkeypatch.setitem(sys.modules, observer_module.__name__, observer_module)
     return tmp_path, counter, commands
 
 
@@ -102,6 +109,9 @@ def test_frozen_audit_attachment_binds_plugins_and_separate_outputs(suite_case, 
     assert str(plugin) in environment["PYTHONPATH"].split(os.pathsep)
     assert "sciplot_closure_audit" in environment["PYTEST_PLUGINS"].split(",")
     assert environment["SCIPLOT_PRIVATE_AUDIT_DIR"] == str(audit)
+    assert result["audit_root_pid"] == os.getpid()
+    assert result["audit_run_id"] == environment["SCIPLOT_PRIVATE_AUDIT_RUN"]
+    assert len(result["audit_run_id"]) == 32
     raw = Path(configured_raw).expanduser() if configured_raw else root / ".local/reference_data"
     raw = (raw if raw.is_absolute() else root / raw).resolve()
     assert json.loads(environment["SCIPLOT_PRIVATE_AUDIT_ROOTS"]) == [str(root / "tests/fixtures"), str(raw)]
