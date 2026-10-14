@@ -249,3 +249,35 @@ else:
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == ("OWNED GUARDED" if mode == "owned_common" else "FAKE BLOCKED")
     assert BOOTSTRAP_KEY in environment
+
+
+@pytest.mark.parametrize("mode", ("owned_common", "token_only"))
+def test_editable_source_common_bootstrap_preserves_guard_without_explicit_source_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
+    import venv
+
+    root = Path(__file__).resolve().parents[1]
+    runtime = tmp_path / "generated-editable-runtime"
+    venv.EnvBuilder(with_pip=False).create(runtime)
+    site_packages = next((runtime / "lib").glob("python*/site-packages"))
+    (site_packages / "generated-sciplot-source.pth").write_text(
+        str(root / "src") + "\n" + str(Path(pytest.__file__).parents[1]) + "\n")
+    # Match CI's editable import: the package is available through .pth while
+    # the inherited startup path names only the owned guard bootstrap.
+    monkeypatch.setenv("PYTHONPATH", str(root / "src/sciplot_core/verification/public_guard_bootstrap"))
+    monkeypatch.setattr(sys, "executable", str(runtime / "bin/python"))
+    test_actual_common_bootstrap_relocation_preserves_guard_and_rejects_fake_shim(tmp_path, mode)
+
+
+def test_common_bootstrap_rebind_retains_exact_roots_and_earlier_import_owner(tmp_path: Path) -> None:
+    from sciplot_core.verification.private_observer import write_bootstrap
+    from sciplot_core.verification.public_input_guard import rebind_bootstrap
+
+    plugin = tmp_path / "common"
+    write_bootstrap(plugin)
+    earlier = tmp_path / "earlier-explicit-source"
+    environment = {ENVIRONMENT_KEY: json.dumps([str(tmp_path / "protected")]),
+                   "SCIPLOT_REFERENCE_DATA": str(tmp_path / "generated-reference"), "PYTHONPATH": str(earlier)}
+    actual = rebind_bootstrap(environment, plugin)
+    assert actual[ENVIRONMENT_KEY] == environment[ENVIRONMENT_KEY]
+    assert actual["SCIPLOT_REFERENCE_DATA"] == environment["SCIPLOT_REFERENCE_DATA"]
+    assert actual["PYTHONPATH"].split(os.pathsep) == [str(plugin), str(earlier), str(Path(__file__).resolve().parents[1] / "src")]

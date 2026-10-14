@@ -143,6 +143,21 @@ def install() -> None:
     _installed = roots
 
 
+def rebind_bootstrap(environment: dict[str, str], bootstrap: Path) -> dict[str, str]:
+    """Bind a new startup path while retaining the exact existing guard roots.
+
+    Editable installations can import our package through a .pth file without
+    naming it in PYTHONPATH. Declare that actual source owner for child startup
+    validation; earlier explicit package paths retain their order and checks.
+    """
+    result = dict(environment)
+    file = bootstrap / "sitecustomize.py"
+    result[BOOTSTRAP_KEY] = json.dumps({"path": str(file.resolve()), "sha256": hashlib.sha256(file.read_bytes()).hexdigest()})
+    source = Path(__file__).resolve().parents[3] / "src"
+    result["PYTHONPATH"] = os.pathsep.join(filter(None, [str(bootstrap), result.get("PYTHONPATH", ""), str(source)]))
+    return result
+
+
 def configure_environment(root: Path, environment: dict[str, str], *, bootstrap: Path | None = None) -> dict[str, str]:
     result = dict(environment)
     inherited = json.loads(environment.get(ENVIRONMENT_KEY, "[]"))
@@ -150,7 +165,5 @@ def configure_environment(root: Path, environment: dict[str, str], *, bootstrap:
         raise ValueError("Malformed inherited public input guard.")
     result[ENVIRONMENT_KEY] = json.dumps(list(dict.fromkeys([*inherited, *(str(p) for p in forbidden_roots(root, environment))])))
     if bootstrap is not None:
-        file = bootstrap / "sitecustomize.py"
-        result[BOOTSTRAP_KEY] = json.dumps({"path": str(file.resolve()), "sha256": hashlib.sha256(file.read_bytes()).hexdigest()})
-        result["PYTHONPATH"] = os.pathsep.join(filter(None, [str(bootstrap), result.get("PYTHONPATH", "")]))
+        result = rebind_bootstrap(result, bootstrap)
     return result
