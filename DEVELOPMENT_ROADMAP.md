@@ -26,13 +26,35 @@ does not demonstrate faster execution. No actual external-client token or billed
 fee interface is available; both remain unknown. Independent human usability,
 second-Mac/font consistency and journal acceptance remain open.
 
-Unified changed-owner, strict type, full scientific, ready-rule and native visual
-release checks still determine this branch's final status. Public CI must retain
-and report missing private-input failures rather than uploading those inputs.
+At frozen `1902d69`, the unfiltered Mac suite passes all 4,241 nodes with zero
+failures, errors or skips. Its original runner receipt is PASS with identical
+before/after input identities. The final repair change gate passes all four
+checks, including 1,350 focused tests and the configured 326-file strict type
+scope. Doctor is ready. The first product full's 4,239 PASS / 2 FAIL and blocked
+after-capture remain intact; lazy paper dispatch fixes public help bootstrap,
+and wheel validation now builds a complete public source copy in a temporary
+checkout without mutating its original inputs.
+
+The separately bound native evidence passes full smoke 36/36 and all 24 rule
+lifecycles. Independent review inspected 41 TIFFs, 41 PDF pages and three contact
+sheets. Subsequent dispatch/test-control repairs leave the renderer and scientific
+bodies unchanged. All 127 retained private files and 70 golden files preserve
+their bytes and membership. Public CI must report exact-commit missing-input
+failures; private inputs remain local.
+
+The fresh instrumented full passes all 165 private cases and observes 4,858
+mapped private accesses with no observed unmapped access. Child-inclusive capture
+completeness remains BLOCKED: 108 process epochs lack a genuine finish record
+and terminal counters (33 Qt exec replacements and 75 controlled shutdowns).
+Source lifecycle evidence explains termination but does not prove that an
+unrecorded access is absent. A candidate receipt accepted by the schema validator
+does not establish that claim. The public inventory flag stays preliminary;
+the scientific full PASS and the audit completeness limit remain separate.
 
 The default Mac MCP font-family path now queries Qt in the existing native worker
 main thread, after independent review reproduced a Cocoa background-thread crash.
-Independent default-environment revalidation remains part of the final gate.
+Independent default-environment MCP revalidation passes, preserving science,
+zero-mutation rejection, reply-loss replay and continued use of the same client.
 The ten inherited color-only/grayscale publication-QA failures match `ce407ea`
 check values exactly; their original presentation stays intact. They are a
 separate future candidate for explicit sample distinction, not new regressions.

@@ -63,6 +63,14 @@ also explicit start profiles. `--audit-plugin-dir` and `--audit-out` optionally
 bind a frozen local observation plugin and a separate fresh private-audit output;
 that observation still requires independent closure review.
 
+Build wheel validation from a temporary copy of the complete public `src` and
+`pyproject.toml`; setuptools must not mutate the inputs being validated. Native
+SDK/CLI test helpers retain inherited instrumentation paths after the current
+source path. A missing worker finish leaves its terminal counters unknown.
+An expected signal shutdown or zero recorded private events does not by itself
+prove child-inclusive capture complete. Keep scientific test PASS and limited
+access-audit BLOCKED separate when independent input-boundary evidence is absent.
+
 Runtime readiness, native fidelity, real-client efficiency, human usability and
 journal acceptance are separate claims. Read the advanced guide's test-tier
 section only when the exact commands or owner boundary need clarification.
