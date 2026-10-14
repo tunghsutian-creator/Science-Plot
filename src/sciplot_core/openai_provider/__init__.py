@@ -49,8 +49,6 @@ from sciplot_core.openai_provider.model_output import (  # noqa: F401
 )
 from sciplot_core.openai_provider.provider import (  # noqa: F401
     OpenAIResponsesProvider,
-)
-from sciplot_core.openai_provider.environment import (  # noqa: F401
     load_openai_provider_from_environment,
 )
 

@@ -8,7 +8,7 @@ from typing import Any
 
 from sciplot_core.materials_rules.models import SemanticRule
 from sciplot_core.materials_rules.catalog import resolve_rule_template
-from sciplot_core.style_contract.template_validation import (
+from sciplot_core.style_contract.template_contracts import (
     validate_veusz_template_id,
 )
 
