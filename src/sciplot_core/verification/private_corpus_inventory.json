@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4034,
-    "nodeids_sha256": "e2adb76923868fef376eba42d4c7049ba00006138e6c059cb48eb80e7de9e605",
-    "test_sources_sha256": "d1ae170715aa0709b71c8879a59672b4c50b6c2a49d8a8ac4ab4ddab5be33ec7",
+    "nodeid_count": 4046,
+    "nodeids_sha256": "8a7a6fabe91c2ade6ff130f61c471fc26147c04514f4ff9e4ee765300ff2e409",
+    "test_sources_sha256": "377521b1d8870d3902c19040e77c9802b880e7c3f00d03e5e2d6a5062ea38cfc",
     "test_source_count": 300,
     "candidate_nodeids": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -247,9 +247,21 @@
       "tests/test_verification_evidence_scope.py::test_native_discovery_binding_cannot_be_paired_with_new_bytes",
       "tests/test_verification_evidence_scope.py::test_new_raw_member_and_symlink_target_are_rechecked_in_same_spec",
       "tests/test_verification_evidence_scope.py::test_new_source_after_graph_discovery_is_rejected",
+      "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[duplicate]",
+      "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[empty_reason]",
+      "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[missing]",
+      "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[new_parameter]",
+      "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[partition]",
+      "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[source]",
       "tests/test_verification_evidence_scope.py::test_relative_private_namespace_uses_repo_root_preserving_alias",
+      "tests/test_verification_evidence_scope.py::test_reviewed_nonprivate_siblings_use_exact_complete_collection[False]",
+      "tests/test_verification_evidence_scope.py::test_reviewed_nonprivate_siblings_use_exact_complete_collection[True]",
+      "tests/test_verification_evidence_scope.py::test_reviewed_source_digest_is_checked_against_captured_bytes[add]",
+      "tests/test_verification_evidence_scope.py::test_reviewed_source_digest_is_checked_against_captured_bytes[change]",
+      "tests/test_verification_evidence_scope.py::test_reviewed_source_digest_is_checked_against_captured_bytes[delete]",
       "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[dependencies]",
       "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[fonts]",
+      "tests/test_verification_evidence_scope.py::test_synthetic_collection_preserves_inherited_plugin_path",
       "tests/test_verification_evidence_scope.py::test_unrelated_documentation_commit_reuses_executable_evidence"
     ],
     "synthetic_candidates": [
@@ -548,6 +560,54 @@
       {
         "nodeid": "tests/test_verification_evidence_scope.py::test_unrelated_documentation_commit_reuses_executable_evidence",
         "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[duplicate]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[empty_reason]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[missing]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[new_parameter]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[partition]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_nonprivate_sibling_needs_current_full_source_and_dispositions[source]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_reviewed_nonprivate_siblings_use_exact_complete_collection[False]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_reviewed_nonprivate_siblings_use_exact_complete_collection[True]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_reviewed_source_digest_is_checked_against_captured_bytes[add]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_reviewed_source_digest_is_checked_against_captured_bytes[change]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_reviewed_source_digest_is_checked_against_captured_bytes[delete]",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_synthetic_collection_preserves_inherited_plugin_path",
+        "reason": "Temporary checkout clears inherited private-data environment; reviewed_siblings writes mock inventory and tiny temporary test/helper sources. Guard/source-drift cases collect or mutate only this synthetic checkout; inherited-plugin probe writes its own temporary marker. No retained scientific corpus is accessed."
       }
     ],
     "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling.",
