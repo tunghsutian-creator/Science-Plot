@@ -136,8 +136,8 @@ def create_stage(root: Path, output: Path, environment: dict[str, str]) -> tuple
     output = Path(os.path.abspath(output.expanduser()))
     if "SCIPLOT_REFERENCE_DATA" in environment:
         raise ValueError("Controlled public stages reject inherited reference-data configuration.")
-    for key, expected in (("SCIPLOT_REPO", root), ("SCIPLOT_SOURCE_ROOT", root / "src")):
-        if key in environment and environment[key] != str(expected):
+    for key, expected_root in (("SCIPLOT_REPO", root), ("SCIPLOT_SOURCE_ROOT", root / "src")):
+        if key in environment and environment[key] != str(expected_root):
             raise ValueError("Stage origin environment does not bind the actual source owner.")
     if output.exists() or output.is_symlink() or not output.is_relative_to(root / ".tmp_verify"):
         raise ValueError("Public stage output must be a fresh ignored directory.")
