@@ -67,7 +67,7 @@ class PersistentWorker:
         if self._closed:
             raise NativeWorkerDisconnected("The native worker session has been closed.")
         if self._process is not None and (self._process.poll() is not None or self._completed >= self.max_requests):
-            self._stop()
+            self._stop(graceful=True)
         if self._process is None:
             self._runtime_identity = self.require_current_runtime()
             self._stderr = tempfile.TemporaryFile()
@@ -84,18 +84,25 @@ class PersistentWorker:
         self._stderr.seek(0)
         return self._stderr.read(65536).decode(errors="replace")
 
-    def _stop(self) -> None:
+    def _stop(self, *, graceful: bool = False) -> None:
         process, self._process = self._process, None
         if process is not None:
             if process.poll() is None:
-                process.terminate()
+                if graceful and process.stdin is not None:
+                    process.stdin.close()
+                    try:
+                        process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        pass
+                if process.poll() is None:
+                    process.terminate()
                 try:
                     process.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=2)
             for pipe in (process.stdin, process.stdout):
-                if pipe is not None:
+                if pipe is not None and not pipe.closed:
                     pipe.close()
         if self._stderr is not None:
             self._stderr.close()
@@ -104,11 +111,11 @@ class PersistentWorker:
     def close(self) -> None:
         with self._lock:
             self._closed = True
-            self._stop()
+            self._stop(graceful=True)
 
     def __del__(self) -> None:
         if hasattr(self, "_process"):
-            self._stop()
+            self._stop(graceful=True)
 
     def run(self, command: list[str], *, timeout: float = 120, check: bool = False) -> subprocess.CompletedProcess[str]:
         if command[:3] != [sys.executable, "-m", "sciplot_core.veusz_worker"]:

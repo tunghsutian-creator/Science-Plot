@@ -55,8 +55,11 @@ complete effective child environment; this function adds its bound finish path.
                 raise ValueError("execution artifacts overlap identity inputs")
     spec = json.loads(json.dumps(spec, allow_nan=False))
     spec["repo_root"] = str(root)
+    from sciplot_core.verification.private_observer import reserve_child_environment
+
     environment = spec.pop("environment")
     environment["SCIPLOT_VERIFY_FINISH"] = str(directory / "finish.json")
+    environment = reserve_child_environment(environment)
     spec["environment_sha256"] = digest(environment)
     if spec["scope"]["kind"] == "pytest":
         command = spec["command"]
@@ -142,6 +145,9 @@ def supervise(directory: Path, expected_request_hash: str) -> int:
         environment = dict(os.environ)
         if digest(environment) != spec["environment_sha256"]:
             raise ValueError("supervisor environment differs from requested environment")
+        from sciplot_core.verification.private_observer import reserve_child_environment
+
+        environment = reserve_child_environment(environment)
         capture_started = time.monotonic()
         before = _capture(spec, environment)
         command_started = time.monotonic()
@@ -150,7 +156,8 @@ def supervise(directory: Path, expected_request_hash: str) -> int:
                                      env=environment, stdin=subprocess.DEVNULL,
                                      stdout=stream, stderr=subprocess.STDOUT,
                                      close_fds=True, start_new_session=True)
-            atomic_json(directory / "state.json", {**state, "child_pid": child.pid})
+            state["child_pid"] = child.pid
+            atomic_json(directory / "state.json", state)
             code = child.wait()
             stream.flush()
             os.fsync(stream.fileno())

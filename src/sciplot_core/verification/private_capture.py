@@ -1,0 +1,306 @@
+"""Strict closure of supported raw observer streams; assertions are not proof."""
+from __future__ import annotations
+
+from collections import Counter
+import hashlib
+import json
+from pathlib import Path
+import re
+from typing import Any
+
+from sciplot_core.verification.durable_runner import run_status
+from sciplot_core.verification.evidence_identity import digest, identity_valid
+from sciplot_core.verification.private_observer import VERSION, ZERO, bootstrap_hashes, frame_digest, source_hashes
+
+from sciplot_core.verification.private_process_boundaries import executable_hash, owner_identity, root_scope, runtime_identity, uname_boundary, wrapper_boundary
+
+_HEX = re.compile(r"[0-9a-f]{32}")
+
+
+def observer_source_hashes() -> dict[str, str]:
+    return source_hashes()
+
+
+def _streams(directory: Path) -> dict[str, str]:
+    result = {}
+    for path in sorted(directory.glob("*.jsonl")):
+        if path.is_symlink() or not path.is_file() or not _HEX.fullmatch(path.stem):
+            raise ValueError("unsupported or aliased observer stream")
+        result[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    if not result:
+        raise ValueError("observer streams are absent")
+    return result
+
+
+def capture_proof(directory: Path, *, primary_pid: int, root_pid: int | None = None,
+                  expected_roots: list[str], interpreter: Path | None = None,
+                  durable_directory: Path | None = None) -> dict[str, Any]:
+    """Snapshot original streams. Completeness is calculated when read back."""
+    import sys
+
+    return {"version": VERSION, "directory": str(directory.resolve()), "primary_pid": primary_pid,
+            "root_pid": root_pid or primary_pid, "interpreter_sha256": executable_hash(interpreter or sys.executable),
+            "durable_directory": str(durable_directory.resolve()) if durable_directory else None,
+            "expected_root_scope": root_scope(expected_roots),
+            "python_runtime": runtime_identity(),
+            "stream_sha256": _streams(directory), "observer_sources_sha256": observer_source_hashes()}
+
+
+def _read_epochs(directory: Path) -> dict[str, list[dict[str, Any]]]:
+    epochs = {}
+    for path in sorted(directory.glob("*.jsonl")):
+        data = path.read_bytes()
+        if not data.endswith(b"\n"):
+            raise ValueError("observer stream is truncated")
+        records = []
+        head = ZERO
+        for sequence, raw in enumerate(data.splitlines()):
+            value = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError("malformed observer frame")
+            content = dict(value)
+            observed = content.pop("sha256", None)
+            if (observed != frame_digest(content) or value.get("sequence") != sequence
+                    or type(value.get("sequence")) is not int or value.get("previous_sha256") != head
+                    or value.get("version") != VERSION or value.get("epoch") != path.stem
+                    or type(value.get("pid")) is not int or value["pid"] < 1
+                    or type(value.get("parent_pid")) is not int or value["parent_pid"] < 1
+                    or type(value.get("monotonic_ns")) is not int
+                    or type(value.get("lost_events_before")) is not int or value["lost_events_before"] != 0):
+                raise ValueError("observer sequence, hash, identity or loss is invalid")
+            head = observed
+            records.append(value)
+        if not records or records[0].get("event") != "process_start":
+            raise ValueError("observer startup is absent")
+        first = records[0]
+        if (sum(record.get("event") == "process_start" for record in records) != 1
+                or not isinstance(first.get("run_id"), str) or not _HEX.fullmatch(first["run_id"])
+                or any(record["pid"] != first["pid"] or record["run_id"] != first["run_id"] for record in records)
+                or any(a["monotonic_ns"] > b["monotonic_ns"] for a, b in zip(records, records[1:], strict=False))):
+            raise ValueError("observer epoch identity changes")
+        epochs[path.stem] = records
+    return epochs
+
+
+def _durable_context(proof: dict[str, Any]) -> dict[str, Any] | None:
+    name = proof.get("durable_directory")
+    if name is None:
+        return None
+    directory = Path(name)
+    if not directory.is_absolute() or directory.is_symlink() or run_status(directory)["status"] not in {"PASS", "FAIL"}:
+        raise ValueError("bound durable execution has no validated completion")
+    state = json.loads((directory / "state.json").read_bytes())
+    receipt = json.loads((directory / "receipt.json").read_bytes())
+    request_bytes = (directory / "request.json").read_bytes()
+    request = json.loads(request_bytes)
+    if (state["child_pid"] != proof["primary_pid"] or not identity_valid(receipt["before"])
+            or not identity_valid(receipt["after"]) or receipt["before"]["sha256"] != receipt["after"]["sha256"]):
+        raise ValueError("durable process or input identity differs")
+    return {"state": state, "exit_code": receipt["exit_code"], "request_sha256": hashlib.sha256(request_bytes).hexdigest(),
+            "directory_sha256": frame_digest({"directory": str(directory.resolve())}),
+            "records": {key: record for domain in receipt["before"]["inputs"].values()
+                        for key, record in domain.get("files", {}).items()},
+            "declared_paths": [Path(path).resolve() for domain in request["inputs"].values()
+                               for path in domain.get("paths", [])]}
+
+
+def _diagnostic_bound(frame: dict[str, Any], context: dict[str, Any] | None, actors: set[int]) -> bool:
+    owner = frame.get("diagnostic_owner")
+    if context is None or frame["pid"] not in actors or not isinstance(owner, dict):
+        return False
+    if owner != owner_identity(owner.get("owner", ""), owner.get("function", "")):
+        return False
+    path = Path(frame["resolved_path"])
+    if frame["event"] == "open":
+        record = context["records"].get(digest(str(path)))
+        return bool(record and path.is_file() and record["sha256"] == hashlib.sha256(path.read_bytes()).hexdigest())
+    return bool(path.is_dir() and any(path == bound or path.is_relative_to(bound) or bound.is_relative_to(path)
+                                     for bound in context["declared_paths"]))
+
+
+def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None = None) -> dict[str, Any]:
+    """A missing/abrupt process, successor, event or sensor remains BLOCKED."""
+    issues: list[str] = []
+    bounded_auxiliary: list[dict[str, Any]] = []
+    diagnostics: list[dict[str, Any]] = []
+    frames: list[dict[str, Any]] = []
+    epochs: dict[str, list[dict[str, Any]]] = {}
+    closed_finishes: set[str] = set()
+    closed_execs: set[str] = set()
+    try:
+        if proof.get("version") != VERSION or proof.get("observer_sources_sha256") != observer_source_hashes():
+            raise ValueError("observer version or source bytes differ")
+        directory = Path(proof["directory"])
+        if not directory.is_absolute() or not directory.is_dir() or directory.is_symlink():
+            raise ValueError("observer output directory is absent or aliased")
+        if proof.get("stream_sha256") != _streams(directory):
+            raise ValueError("observer stream bytes or membership changed")
+        epochs = _read_epochs(directory)
+        frames = [frame for records in epochs.values() for frame in records]
+        pending = {path.stem for path in directory.glob("*.pending")}
+        if any(not _HEX.fullmatch(name) or name not in epochs for name in pending):
+            issues.append("orphan or malformed incomplete observer state")
+        if pending:
+            issues.append("observer terminal synchronization is incomplete:" + ",".join(sorted(pending)))
+        if len({records[0]["run_id"] for records in epochs.values()}) != 1:
+            raise ValueError("observer run identity differs")
+        primary = proof.get("primary_pid")
+        if type(primary) is not int or not any(records[0]["pid"] == primary for records in epochs.values()):
+            raise ValueError("actual primary process startup is absent")
+        starts = [records[0] for records in epochs.values()]
+        durable = _durable_context(proof)
+        if durable is None:
+            issues.append("original durable primary execution witness is absent")
+        elif durable["exit_code"] not in {0, 1}:
+            issues.append("primary process has a non-normal or sensor-fatal actual exit")
+        if durable:
+            actual_exits = [frame for frame in frames if frame["event"] == "child_exit"
+                            and frame["pid"] == durable["state"]["supervisor_pid"]
+                            and frame.get("child_pid") == primary]
+            if len(actual_exits) != 1 or actual_exits[0].get("returncode") != durable["exit_code"]:
+                issues.append("durable primary exit differs from actual supervisor wait ledger")
+        roots = [s for s in starts if not s.get("parent_epoch") and s.get("continuation") is None]
+        if len(roots) != 1 or roots[0]["pid"] != proof.get("root_pid"):
+            raise ValueError("unregistered startup or expected root process missing")
+        if any(s.get("observer_sources_sha256") != proof["observer_sources_sha256"]
+               or s.get("executable_sha256") != proof.get("interpreter_sha256")
+               or s.get("python_runtime") != proof.get("python_runtime") for s in starts):
+            raise ValueError("observer module or actual interpreter startup identity differs")
+        if proof.get("python_runtime") != runtime_identity():
+            raise ValueError("bound actual Python core or stdlib source bytes changed")
+        scope = proof.get("expected_root_scope")
+        if (not isinstance(scope, dict) or set(scope) != {"lexical", "canonical"}
+                or scope != root_scope(scope["lexical"]) or any(s.get("root_scope") != scope for s in starts)):
+            raise ValueError("frozen observed root scope differs from expected input boundary")
+        if any(s.get("no_site") is not False or s.get("isolated") is not False
+               or (s.get("bootstrap_sha256") not in {value for name, value in bootstrap_hashes().items() if name.endswith("sitecustomize.py")}
+                   and not (s is roots[0] and s.get("activation") == owner_identity("suite_evidence.py", "_audit_environment"))) for s in starts):
+            issues.append("supported observer was not installed by the bound startup bootstrap")
+        successors: dict[str, list[dict[str, Any]]] = {}
+        for start in starts:
+            continuation = start.get("continuation")
+            if continuation is not None:
+                if not isinstance(continuation, dict):
+                    raise ValueError("malformed exec continuation")
+                successors.setdefault(continuation.get("epoch", ""), []).append(start)
+        for epoch, records in epochs.items():
+            last = records[-1]
+            if any(record["event"] in {"unsupported_spawn", "unsupported_exec"} for record in records):
+                issues.append(f"unsupported process boundary:{epoch}")
+            terminals = [r for r in records if r["event"] == "process_finish"]
+            if terminals:
+                if (len(terminals) != 1 or terminals[0] != last or last.get("recorded_events") != len(records) - 1
+                        or type(last.get("recorded_events")) is not int or last.get("lost_events") != 0
+                        or type(last.get("lost_events")) is not int):
+                    issues.append(f"invalid terminal counter or late event:{epoch}")
+                elif epoch not in pending:
+                    closed_finishes.add(epoch)
+            elif last["event"] == "exec_seal":
+                next_starts = successors.get(epoch, [])
+                expected = {"epoch": epoch, "sha256": last["sha256"], "sequence": last["sequence"],
+                            "successor_token": last.get("successor_token")}
+                if (len(next_starts) != 1 or next_starts[0].get("continuation") != expected
+                        or next_starts[0]["pid"] != last["pid"]
+                        or next_starts[0].get("executable_sha256") != last.get("expected_executable_sha256")
+                        or next_starts[0]["monotonic_ns"] <= last["monotonic_ns"]
+                        or last.get("recorded_events") != len(records) - 1 or last.get("lost_events") != 0):
+                    issues.append(f"exec successor or seal counter missing:{epoch}")
+                elif epoch not in pending:
+                    closed_execs.add(epoch)
+            else:
+                issues.append(f"genuine terminal is absent:{epoch}")
+            for start in successors.get(epoch, []):
+                if last["event"] != "exec_seal" or start["pid"] != records[0]["pid"]:
+                    issues.append(f"exec continuation has no final matching seal:{epoch}")
+            for index, record in enumerate(records):
+                if record["event"] == "exec_seal" and index != len(records) - 1:
+                    following = records[index + 1:]
+                    if not any(r["event"] == "exec_failed" and r.get("successor_token") == record.get("successor_token") for r in following):
+                        issues.append(f"exec seal is followed by unsealed activity:{epoch}")
+            attempts = [r for r in records if r["event"] == "spawn_attempt"]
+            if len({r.get("child_token") for r in attempts}) != len(attempts):
+                issues.append(f"duplicate successful-spawn token:{epoch}")
+            for record in records:
+                if record["event"] in {"child_spawn", "spawn_failed", "child_exit"}:
+                    parents = [a for a in attempts if a.get("child_token") == record.get("child_token") and a["sequence"] < record["sequence"]]
+                    if len(parents) != 1:
+                        issues.append(f"child ledger has no unique preceding attempt:{epoch}")
+            for attempt in attempts:
+                token = attempt.get("child_token")
+                outcomes = [r for r in records if r["event"] in {"child_spawn", "spawn_failed"} and r.get("child_token") == token]
+                if not isinstance(token, str) or not _HEX.fullmatch(token) or len(outcomes) != 1:
+                    issues.append(f"spawn outcome missing or ambiguous:{epoch}")
+                    continue
+                outcome = outcomes[0]
+                if outcome["event"] == "spawn_failed":
+                    continue
+                child_starts = [s for s in starts if s.get("parent_epoch") == epoch and s.get("child_token") == token and s.get("continuation") is None]
+                transferred = bool(durable and attempt.get("durable_transfer_owner") == owner_identity("durable_runner.py", "start_run")
+                    and attempt.get("request_sha256") == durable["request_sha256"]
+                    and attempt.get("directory_sha256") == durable["directory_sha256"]
+                    and outcome.get("child_pid") == durable["state"]["supervisor_pid"])
+                auxiliary = attempt.get("input_boundary") == uname_boundary()
+                if (attempt.get("input_boundary") is not None and not auxiliary
+                        and attempt["input_boundary"] != wrapper_boundary()):
+                    issues.append(f"unsupported process input boundary:{epoch}:{token}")
+                if auxiliary:
+                    bounded_auxiliary.append({"parent_epoch": epoch, "child_pid": outcome["child_pid"],
+                                              "input_boundary": attempt["input_boundary"],
+                                              "terminal_counters": "not_observed_non_python_kernel_query"})
+                    if child_starts:
+                        issues.append(f"native auxiliary boundary unexpectedly starts Python:{epoch}:{token}")
+                elif len(child_starts) != 1 or child_starts[0]["pid"] != outcome.get("child_pid") or (child_starts[0]["parent_pid"] != records[0]["pid"] and not transferred):
+                    issues.append(f"successful child startup missing or mismatched:{epoch}:{token}")
+                elif child_starts[0].get("executable_sha256") != attempt.get("expected_executable_sha256"):
+                    issues.append(f"child executable differs from successful launch:{epoch}:{token}")
+                elif child_starts[0]["monotonic_ns"] <= attempt["monotonic_ns"]:
+                    issues.append(f"child startup precedes successful launch attempt:{epoch}:{token}")
+                exits = [r for r in records if r["event"] == "child_exit" and r.get("child_token") == token]
+                if (not exits and not transferred) or len(exits) > 1 or any(type(r.get("returncode")) is not int or r["returncode"] < 0 or r["returncode"] in {78, 79} or r.get("child_pid") != outcome.get("child_pid") for r in exits):
+                    issues.append(f"child signalled or exit ledger invalid:{epoch}:{token}")
+                elif auxiliary and exits[0]["returncode"] != 0:
+                    issues.append(f"native auxiliary query did not complete successfully:{epoch}:{token}")
+        for start in starts:
+            if start.get("continuation") is not None:
+                if start["continuation"].get("epoch") not in epochs:
+                    issues.append(f"exec predecessor is absent:{start['epoch']}")
+            elif start.get("parent_epoch"):
+                parent = epochs.get(start["parent_epoch"], [])
+                if not any(r["event"] == "child_spawn" and r.get("child_token") == start.get("child_token") and r.get("child_pid") == start["pid"] for r in parent):
+                    issues.append(f"child has no successful parent spawn:{start['epoch']}")
+        if expected_nodeids is not None:
+            observed = [r for r in frames if r["pid"] == primary]
+            collections = [r for r in observed if r["event"] == "pytest_collection"]
+            sessions = [r for r in observed if r["event"] == "pytest_session_finish"]
+            reports = [r for r in observed if r["event"] == "pytest_report"]
+            expected_phases = Counter({(node, phase): 1 for node in expected_nodeids for phase in ("setup", "call", "teardown")})
+            actual = Counter((r.get("test_nodeid"), r.get("phase")) for r in reports)
+            if (len(collections) != 1 or collections[0].get("nodeids") is None
+                    or len(collections[0]["nodeids"]) != len(expected_nodeids)
+                    or set(collections[0]["nodeids"]) != expected_nodeids or len(sessions) != 1
+                    or sessions[0].get("exitstatus") not in {0, 1} or actual != expected_phases
+                    or any(r.get("outcome") not in {"passed", "failed"} for r in reports)):
+                issues.append("complete primary collection/report/session evidence is absent")
+        actors = {proof["root_pid"]}
+        if durable:
+            actors.add(durable["state"]["supervisor_pid"])
+        for records in epochs.values():
+            collections = [r for r in records if r["event"] == "pytest_collection"]
+            if (expected_nodeids is not None and len(collections) == 1
+                    and set(collections[0]["nodeids"]) == expected_nodeids
+                    and not any(r["event"] == "pytest_report" for r in records)):
+                actors.add(records[0]["pid"])
+        diagnostics = [r for r in frames if r["event"] in {"open", "os.scandir", "os.listdir"}
+                       and not r["nodeid"] and _diagnostic_bound(r, durable, actors)]
+        fatal_pids = {frame["child_pid"] for frame in frames if frame["event"] == "child_exit"
+                      and frame.get("returncode") in {78, 79}}
+        closed_finishes.difference_update(epoch for epoch, records in epochs.items() if records[0]["pid"] in fatal_pids)
+        closed_execs.difference_update(epoch for epoch, records in epochs.items() if records[0]["pid"] in fatal_pids)
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
+        issues.append(str(exc))
+    return {"status": "BLOCKED" if issues else "COMPLETE", "capture_complete": not issues,
+            "issues": issues, "frames": frames, "epoch_count": len(epochs),
+            "bounded_auxiliary": bounded_auxiliary,
+            "diagnostic_observations": diagnostics,
+            "raw_terminal_frame_count": sum(record["event"] == "process_finish" for record in frames),
+            "genuine_finish_count": len(closed_finishes), "exec_seal_count": len(closed_execs)}

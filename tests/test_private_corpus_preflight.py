@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
+import sys
+from uuid import uuid4
 
 import pytest
 
@@ -22,6 +25,8 @@ from sciplot_core.verification.private_corpus_audit import (
     nodeids_sha256,
     test_sources_sha256 as source_digest,
 )
+from sciplot_core.verification.private_observer import CHILD, CONTINUATION, PARENT, RUN, write_bootstrap
+from private_observer_support import execute_observed
 
 NODE = "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_directory_requires_exactly_one_supported_file[2]"
 PUBLIC_SIBLING = NODE.removesuffix("[2]") + "[0]"
@@ -316,8 +321,47 @@ def test_preflight_files_have_changed_owner_and_focused_target() -> None:
         assert "tests/test_private_corpus_preflight.py" in selected
 
 
-def _review_and_receipt(tmp_path: Path, inventory: Path) -> Path:
+def _review_and_receipt(tmp_path: Path, inventory: Path, *, collection_event: str = "os.scandir") -> Path:
     nodes = {NODE, PUBLIC_SIBLING}
+    source = tmp_path / "tests" / NODE.split("::")[0].removeprefix("tests/")
+    source.parent.mkdir(exist_ok=True)
+    fixture = tmp_path / "reference" / "real_world" / "uvvis_spectrum" / FIXTURE.name
+    name = NODE.split("::")[1].split("[")[0]
+    source.write_text("import pytest\nfrom pathlib import Path\n"
+                      "@pytest.mark.parametrize('count', [0, 2])\n"
+                      f"def {name}(count):\n"
+                      f"    if count == 2: Path({str(fixture)!r}).read_bytes()\n")
+    conftest = tmp_path / "tests/conftest.py"
+    action = "listdir" if collection_event == "os.listdir" else "scandir"
+    conftest.write_text("import os\n"
+                       "def pytest_collection_finish(session):\n"
+                       f"    value = os.{action}({str(fixture.parents[1])!r})\n"
+                       "    if hasattr(value, 'close'): value.close()\n")
+    plugin = tmp_path / "observer-bootstrap"
+    write_bootstrap(plugin)
+    output = tmp_path / "observer-raw"
+    output.mkdir()
+    root = Path(__file__).resolve().parents[1]
+    environment = dict(os.environ)
+    for key in (RUN, PARENT, CHILD, CONTINUATION, "PYTEST_CURRENT_TEST", "PYTEST_ADDOPTS"):
+        environment.pop(key, None)
+    environment.update(PYTHONPATH=os.pathsep.join((str(plugin), str(root / "src"), environment.get("PYTHONPATH", ""))),
+                       PYTEST_PLUGINS="sciplot_closure_audit", SCIPLOT_PRIVATE_AUDIT_DIR=str(output),
+                       SCIPLOT_PRIVATE_AUDIT_ROOTS=json.dumps([str(tmp_path / "tests/fixtures"), str(fixture.parents[2])]))
+    environment[RUN] = uuid4().hex
+    proof, capture = execute_observed(tmp_path, [sys.executable, "-m", "pytest", "-q", "-p",
+                                               "sciplot_core.verification.pytest_finish",
+                                               str(source.relative_to(tmp_path))], environment, output,
+                                      [str(tmp_path / "tests/fixtures"), str(fixture.parents[2])], nodes=nodes)
+    assert capture["actual_returncode"] == 0, capture["stdout"]
+    assert capture["capture_complete"], capture["issues"]
+    access = [{"nodeid": frame["nodeid"], "path": FIXTURE.as_posix(), "event": frame["event"]}
+              for frame in capture["frames"] if frame["event"] == "open" and frame["resolved_path"] == str(fixture)]
+    for event in access:
+        event["nodeid"] = event["nodeid"].removesuffix(" (call)")
+    collection = [{"classification": "collector-directory-enumeration", "nodeid": "",
+                   "path": "tests/fixtures/real_world", "event": frame["event"]}
+                  for frame in capture["frames"] if frame["event"] in {"os.scandir", "os.listdir"}]
     payload = json.loads(inventory.read_text())
     payload["collection_audit"] = {
         "static_review_complete": True, "nodeid_count": len(nodes),
@@ -328,14 +372,14 @@ def _review_and_receipt(tmp_path: Path, inventory: Path) -> Path:
     inventory.write_text(json.dumps(payload))
     path = tmp_path / "access-audit.json"
     path.write_text(json.dumps({
-        "kind": "sciplot_private_corpus_access_audit", "version": 1,
+        "kind": "sciplot_private_corpus_access_audit", "version": 2,
         "inventory_sha256": hashlib.sha256(inventory.read_bytes()).hexdigest(),
         "test_sources_sha256": source_digest(tmp_path),
         "implementation_sources_sha256": implementation_sources_sha256(tmp_path),
         "capture_complete": True,
         "capture_scope": ["python.open", "python.os.scandir", "python.os.listdir", "static.fixture_dependencies"],
         "collected_nodeids": sorted(nodes), "executed_nodeids": sorted(nodes),
-        "events": [{"nodeid": NODE, "path": FIXTURE.as_posix(), "event": "open"}],
+        "events": access, "collection_events": collection, "capture_proof": proof,
     }))
     return path
 
@@ -403,7 +447,7 @@ def test_collection_directory_events_are_bounded_and_never_allow_data_open(
     source.parent.mkdir(parents=True)
     source.write_bytes(b"mock structural input only")
     inventory = _inventory(tmp_path, complete=False, dependencies=[{"rule_id": "uvvis_spectrum"}])
-    receipt_path = _review_and_receipt(tmp_path, inventory)
+    receipt_path = _review_and_receipt(tmp_path, inventory, collection_event="os.listdir" if mutation == "listdir" else "os.scandir")
     receipt = json.loads(receipt_path.read_text())
     event = {"classification": "collector-directory-enumeration", "nodeid": "",
              "event": "os.listdir" if mutation == "listdir" else "os.scandir",

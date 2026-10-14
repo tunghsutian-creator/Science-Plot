@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
+import re
 from typing import Any
 
 from sciplot_core._paths import local_reference_root, resolve_fixture_path
+from sciplot_core.verification.private_capture import review_capture
 
 
 def nodeids_sha256(nodeids: set[str] | list[str]) -> str:
@@ -63,6 +66,53 @@ def _validate_collection_events(
             raise ValueError("collector directory is missing or resolves outside its fixture namespace")
 
 
+def _validate_supported_streams(receipt: dict[str, Any], *, repo_root: Path,
+                                nodeids: set[str], fixture_roots: dict[Path, str | None] | None) -> None:
+    proof = receipt.get("capture_proof")
+    if not isinstance(proof, dict):
+        raise ValueError("supported raw capture proof is absent")
+    from sciplot_core.verification.private_process_boundaries import root_scope, watch_roots
+
+    if proof.get("expected_root_scope") != root_scope(watch_roots(repo_root, dict(os.environ))):
+        raise ValueError("raw capture roots do not cover the current fixture and reference namespaces")
+    result = review_capture(proof, expected_nodeids=nodeids)
+    if not result["capture_complete"]:
+        raise ValueError("supported raw capture is incomplete: " + "; ".join(result["issues"][:3]))
+    aliases = []
+    for prefix, local_name in (fixture_roots or {}).items():
+        aliases.append(((repo_root / prefix).resolve(), prefix))
+        if local_name is not None:
+            aliases.append(((local_reference_root(repo_root=repo_root) / local_name).resolve(), prefix))
+    raw_events = []
+    raw_collection = []
+    diagnostics = {(row["epoch"], row["sequence"]) for row in result["diagnostic_observations"]}
+    for frame in result["frames"]:
+        if frame["event"] not in {"open", "os.scandir", "os.listdir"}:
+            continue
+        actual = Path(frame["path"])
+        resolved = Path(frame["resolved_path"])
+        if actual.resolve() != resolved:
+            raise ValueError("observed private path alias changed")
+        identifier = next((prefix / resolved.relative_to(root) for root, prefix in aliases
+                           if resolved.is_relative_to(root)), None)
+        if identifier is None:
+            continue  # Public fixtures lie outside the declared private namespaces.
+        if (frame["epoch"], frame["sequence"]) in diagnostics:
+            continue  # Actual source-owned identity/probe reads are bound to durable inputs.
+        nodeid = re.sub(r" \((setup|call|teardown)\)$", "", frame["nodeid"])
+        row = {"event": frame["event"], "path": identifier.as_posix(), "nodeid": nodeid}
+        if not nodeid and row["event"] in {"os.scandir", "os.listdir"}:
+            raw_collection.append({**row, "classification": "collector-directory-enumeration"})
+        else:
+            raw_events.append(row)
+    def normalize(rows: list[dict[str, Any]]) -> list[str]:
+        return sorted(json.dumps({key: row[key] for key in ("event", "path", "nodeid")}, sort_keys=True)
+                      for row in rows)
+    if (normalize(raw_events) != normalize(receipt.get("events", []))
+            or normalize(raw_collection) != normalize(receipt.get("collection_events", []))):
+        raise ValueError("receipt access or collection events differ from original raw streams")
+
+
 def validate_access_audit(
     *, inventory: dict[str, Any], inventory_path: Path, repo_root: Path,
     collected_nodeids: set[str] | None,
@@ -97,8 +147,10 @@ def validate_access_audit(
         receipt = json.loads(access_audit_path.read_text(encoding="utf-8"))
         if (not isinstance(receipt, dict)
                 or receipt.get("kind") != "sciplot_private_corpus_access_audit"
-                or receipt.get("version") != 1):
+                or receipt.get("version") not in {1, 2}):
             raise ValueError("unknown private-access receipt schema")
+        if receipt["version"] == 1:
+            raise ValueError("legacy access receipt is diagnostic only; supported raw capture proof is required")
         if (receipt.get("inventory_sha256") != hashlib.sha256(inventory_path.read_bytes()).hexdigest()
                 or receipt.get("test_sources_sha256") != review["test_sources_sha256"]
                 or receipt.get("implementation_sources_sha256") != implementation_sources_sha256(repo_root)):
@@ -138,6 +190,9 @@ def validate_access_audit(
                 for identifier, kind in dependencies.get(nodeid, [])
             ):
                 issues.append(("unmapped_private_access", f"undeclared private access: {path.as_posix()}", nodeid))
+        if not issues:
+            _validate_supported_streams(receipt, repo_root=repo_root, nodeids=collected_nodeids,
+                                        fixture_roots=fixture_roots)
     except (OSError, UnicodeError, ValueError, TypeError, KeyError) as exc:
         issues.append(("invalid_access_audit", str(exc), None))
     return not issues, issues
