@@ -208,7 +208,12 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
         maybe_reexec_with_qt_runtime(original_argv)
         from sciplot_core.smoke import run_runtime_smoke
 
-        payload = run_runtime_smoke(output_root=args.out)
+        profile = getattr(args, "profile", "full")
+        payload = (
+            run_runtime_smoke(output_root=args.out, profile="quick")
+            if profile == "quick"
+            else run_runtime_smoke(output_root=args.out)
+        )
         if args.json:
             _print_json(payload)
         else:

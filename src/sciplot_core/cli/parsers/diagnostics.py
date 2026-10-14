@@ -130,6 +130,11 @@ def register_diagnostics_commands(subparsers: Any) -> None:
     )
 
     smoke_parser.add_argument(
+        "--profile", choices=("full", "quick"), default="full",
+        help="Full lifecycle gate (default), or bounded native/export/QA feedback.",
+    )
+
+    smoke_parser.add_argument(
         "--json", action="store_true", help="Emit machine-readable JSON."
     )
 
