@@ -61,7 +61,8 @@ def spec_for(root, *, module="pytest", nodes=None):
     check_id, command = checks[module]
     check = {"check_id": check_id, "command": command}
     plan = {"status": "planned", "unowned_paths": [], "checks": [check], "changed_paths": ["src/sciplot_core/implementation.py"]}
-    environment = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
+    source = str(Path(__file__).resolve().parents[1] / "src")
+    environment = {**os.environ, "PYTHONPATH": os.pathsep.join((source, os.environ.get("PYTHONPATH", "")))}
     return scope.build_check_spec(plan, check, root, environment=environment,
                                   finish_path=root / ".tmp_verify/run/finish.json")
 
@@ -342,3 +343,18 @@ def test_reviewed_source_digest_is_checked_against_captured_bytes(checkout, muta
         helper.write_text("VALUE = 2\n")
     with pytest.raises(ValueError, match="reviewed test source"):
         identity(spec)
+
+
+def test_synthetic_collection_preserves_inherited_plugin_path(checkout, monkeypatch):
+    plugin_dir = checkout.parent / (checkout.name + "-plugins")
+    plugin_dir.mkdir()
+    marker = checkout / ".tmp_verify/inherited-plugin-observed"
+    (plugin_dir / "sciplot_inherited_probe.py").write_text(
+        "from pathlib import Path\n"
+        f"def pytest_configure(config):\n    Path({str(marker)!r}).write_text('observed')\n"
+    )
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join((str(plugin_dir), os.environ.get("PYTHONPATH", ""))))
+    plugins = [name for name in os.environ.get("PYTEST_PLUGINS", "").split(",") if name]
+    monkeypatch.setenv("PYTEST_PLUGINS", ",".join([*plugins, "sciplot_inherited_probe"]))
+    spec_for(checkout)
+    assert marker.read_text() == "observed"

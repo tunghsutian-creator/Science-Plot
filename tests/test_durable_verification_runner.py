@@ -24,7 +24,8 @@ def run_spec(tmp_path):
         path.write_text(domain)
         inputs[domain] = {"paths": [str(path)]}
     source = Path(__file__).resolve().parents[1] / "src"
-    env = dict(os.environ, PYTHONPATH=str(source), SCIPLOT_TEST_SECRET="not-to-persist")
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join((str(source), os.environ.get("PYTHONPATH", ""))),
+               SCIPLOT_TEST_SECRET="not-to-persist")
     return dict(repo_root=str(tmp_path), command=[sys.executable, "-c", "print('completed gate')"],
                 scope={"kind": "process", "closure_policy": "synthetic runner self-test"},
                 selected_tests=["synthetic:process-completion"], inputs=inputs, environment=env,
