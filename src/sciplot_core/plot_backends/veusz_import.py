@@ -10,12 +10,14 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.policy import DEFAULT_LINE_STYLE_SEQUENCE
 from sciplot_core.plot_document import DocumentError, seal_document
 from sciplot_core.plot_backends.veusz_identity import changed_error, require_current
 from sciplot_core.plot_backends.veusz_semantic_import import axis_properties, legend_properties, managed_annotation
 from sciplot_core.source_coverage.managed_documents import source_records as _source_records
 from sciplot_core.studio_core.annotation_operations import require_edit_source_current
 from sciplot_core.studio_core.document_edit_state import audit_edited_document
+from sciplot_core.studio_core.document_edit_policy import ordinary_curve_paths
 from sciplot_core.studio_core.project_query import inspect_project
 
 
@@ -41,6 +43,22 @@ def _setting(obj: dict[str, Any], target: dict[str, Any], fields: dict[str, Any]
                                   "current_value": field["current_value"]}
 
 
+def _line_pattern(obj: dict[str, Any], target: dict[str, Any],
+                  fields: dict[str, Any], path: str) -> None:
+    """Expose only inspected, visible patterns; preserve unfamiliar legacy state opaquely."""
+    setting = path + "/PlotLine/style"
+    field = fields.get(setting)
+    if field is None or field.get("editor") != "choice":
+        return
+    choices = [pattern for pattern in DEFAULT_LINE_STYLE_SEQUENCE
+               if pattern in field.get("choices", [])]
+    if field.get("current_value") not in choices:
+        return
+    prop = "style.line.pattern"
+    _setting(obj, target, fields, prop, setting, "enum")
+    obj["capabilities"][prop]["enum"] = choices
+
+
 def _presentation(selected: dict[str, Any], spec: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     widgets = selected["objects"]
     objects: dict[str, Any] = {}
@@ -48,6 +66,7 @@ def _presentation(selected: dict[str, Any], spec: dict[str, Any]) -> tuple[dict[
     labels = Counter(str(item.get("label", "")) for item in spec.get("series", []))
     seen: Counter[str] = Counter()
     managed = {item["id"]: item for item in selected.get("annotations", [])}
+    ordinary = ordinary_curve_paths(spec)
     for series in spec.get("series", []):
         path = f"/page1/graph1/{series['name']}"
         widget = widgets.get(path)
@@ -62,6 +81,8 @@ def _presentation(selected: dict[str, Any], spec: dict[str, Any]) -> tuple[dict[
         fields = {field["setting_path"]: field for field in widget["editable_fields"]}
         _setting(obj, target, fields, "style.line.width", path + "/PlotLine/width", "physical_size")
         _setting(obj, target, fields, "style.line.color", path + "/PlotLine/color", "color")
+        if path in ordinary:
+            _line_pattern(obj, target, fields, path)
         if obj["properties"]:
             objects[identifier], targets[identifier] = obj, target
     for path, widget in widgets.items():

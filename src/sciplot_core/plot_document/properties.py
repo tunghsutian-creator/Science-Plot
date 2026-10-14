@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from sciplot_core.style_values import normalize_physical_size
+from sciplot_core.policy import DEFAULT_LINE_STYLE_SEQUENCE
 
 from .errors import fail
 
@@ -12,6 +13,7 @@ from .errors import fail
 PROPERTY_RULES: dict[str, tuple[str, str, set[str]]] = {
     "style.line.width": ("physical_size", "presentation", {"series"}),
     "style.line.color": ("color", "presentation", {"series"}),
+    "style.line.pattern": ("enum", "presentation", {"series"}),
     "font.size": ("physical_size", "presentation", {"title", "axis", "legend", "annotation", "figure"}),
     "title.visible": ("boolean", "presentation", {"title"}),
     "title.text": ("string", "review", {"title"}),
@@ -40,6 +42,12 @@ def validate_capability(obj: dict[str, Any], prop: str, capability: dict[str, An
     if RISK_ORDER[capability["risk"]] < RISK_ORDER[minimum_risk]:
         fail("document_invalid_capability", "A property capability cannot lower its registered risk.",
              path + "/risk", "minimum_risk", minimum=minimum_risk)
+    if prop == "style.line.pattern" and (
+        not capability.get("enum")
+        or any(value not in DEFAULT_LINE_STYLE_SEQUENCE for value in capability["enum"])
+    ):
+        fail("document_invalid_capability", "Line patterns must use the bounded visible pattern contract.",
+             path, "visible_line_pattern", allowed=list(DEFAULT_LINE_STYLE_SEQUENCE))
     if set(capability) & {"min_length", "max_length", "non_blank"} and (
             value_type != "string" or capability.get("min_length", 0) > capability.get("max_length", 4096)):
         fail("document_invalid_capability", "String bounds must match the property type and be ordered.",
