@@ -358,6 +358,11 @@ def test_cli_parser_builder_is_owned_with_the_diagnostics_surface() -> None:
 
 
 def test_skill_wrapper_defers_runtime_gates_without_selecting_comprehensive() -> None:
+    from sciplot_core.verification.owners import CHANGED_OWNERS
+
+    wrapper_owner = next(owner for owner in CHANGED_OWNERS if owner.owner_id == "skill_wrapper")
+    assert "tests/test_skill_wrapper_cwd.py" in wrapper_owner.exact_paths
+    assert "tests/test_skill_wrapper_cwd.py" in wrapper_owner.owned_test_paths
     payload = build_changed_verification_plan(
         ["skill/scripts/sciplot"],
         repo_root=REPO_ROOT,
@@ -368,7 +373,7 @@ def test_skill_wrapper_defers_runtime_gates_without_selecting_comprehensive() ->
         {
             "owner_id": "skill_wrapper",
             "changed_paths": ["skill/scripts/sciplot"],
-            "pytest_targets": ["tests/test_skill_wrapper_contract.py"],
+            "pytest_targets": ["tests/test_skill_wrapper_contract.py", "tests/test_skill_wrapper_framework.py"],
         }
     ]
     pytest_check = next(
@@ -377,6 +382,8 @@ def test_skill_wrapper_defers_runtime_gates_without_selecting_comprehensive() ->
         if check["check_id"] == "pytest_changed_owners"
     )
     assert "tests/test_skill_wrapper_contract.py" in pytest_check["command"]
+    assert "tests/test_skill_wrapper_framework.py" in pytest_check["command"]
+    assert ["-m", "focused"] == pytest_check["command"][4:6]
     assert "tests/test_skill_wrapper_cwd.py" not in pytest_check["command"]
     assert payload["required_later"] == {
         "handoff": ["doctor"],

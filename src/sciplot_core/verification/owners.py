@@ -64,7 +64,7 @@ CHANGED_OWNERS = (
             {"skill/scripts/sciplot", "tests/test_skill_wrapper_cwd.py", "tests/test_skill_wrapper_framework.py"}
         ),
         owned_test_paths=frozenset({"tests/test_skill_wrapper_contract.py", "tests/test_skill_wrapper_cwd.py", "tests/test_skill_wrapper_framework.py"}),
-        pytest_targets=("tests/test_skill_wrapper_contract.py", "tests/test_skill_wrapper_cwd.py", "tests/test_skill_wrapper_framework.py"),
+        pytest_targets=("tests/test_skill_wrapper_contract.py", "tests/test_skill_wrapper_framework.py"),
         handoff_gates=("doctor",),
         final_milestone_gates=("smoke",),
         release_gates=("full_pytest",),
