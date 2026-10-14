@@ -30,6 +30,11 @@ when an inner supervisor exits zero. Normal native EOF close/recycle and same-PI
 continuation have explicit evidence; intentional interruption, loss and missing
 startup/terminal remain BLOCKED. Historical incomplete capture is preserved.
 Full scientific PASS and child-inclusive access completeness are separate gates.
+The finite Mac dependency inspector now binds direct CLT/tool/target/OS bytes,
+exact launch arguments and successful waits; host discovery needs no external
+`file` probe. This is bounded diagnostic evidence. Ambient Git configuration and
+unsupported native ports still require actual closure evidence; a successful
+unit control or preparation-only collection cannot certify the full audit.
 
 The explicitly authorized 13 legacy figures now have non-color line distinction.
 Actual vector inspection additionally found truncated SAXS/torque legend samples;

@@ -411,7 +411,7 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
     )
 
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS
-    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 145
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 146
     assert "src/sciplot_core/task_edit_context.py" in SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert "src/sciplot_core/task_shortcuts.py" in SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert {
@@ -426,6 +426,7 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
         "src/sciplot_core/verification/private_observer_pytest.py",
         "src/sciplot_core/verification/private_capture.py",
         "src/sciplot_core/verification/private_process_boundaries.py",
+        "src/sciplot_core/verification/native_probe_boundary.py",
         "src/sciplot_core/setting_catalog/specs/key.py",
         "src/sciplot_core/studio_core/control_results.py",
         "src/sciplot_core/studio_core/sample_style.py",
@@ -811,7 +812,7 @@ def test_explicit_type_gate_scopes_are_pairwise_disjoint() -> None:
         STUDIO_FIGURE_SET_EXECUTION_TYPE_PATHS,
     )
 
-    assert tuple(map(len, scopes)) == (145, 4, 7, 10, 5, 5)
+    assert tuple(map(len, scopes)) == (146, 4, 7, 10, 5, 5)
     assert all(
         scope.isdisjoint(other)
         for index, scope in enumerate(scopes)

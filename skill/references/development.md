@@ -125,6 +125,13 @@ capture without this witness stays BLOCKED. Missing, truncated, interrupted, sha
 observation remains BLOCKED even when a test intentionally triggers that path.
 The prior 108 unclosed historical epochs are retained as limited evidence;
 new normal-operation receipts do not retroactively complete them.
+On macOS, dependency discovery calls the installed CLT Mach-O inspector directly
+with only fixed locale/search settings. Its finite boundary binds the source
+caller, exact argument and executable identities, target/tool/OS native bytes
+and actual successful wait. Host metadata comes from the bound system plist and
+kernel fields. This closes those diagnostic inputs only; their Python event
+counters remain unknown. Ambient Git configuration and other unsupported native
+ports still block complete capture rather than inheriting this exception.
 
 Runtime readiness, native fidelity, real-client efficiency, human usability and
 journal acceptance are separate claims. Read the advanced guide's test-tier

@@ -24,6 +24,7 @@ PLATFORM_SKIPS = {
     "tests/test_verification_evidence_runtime.py::test_runtime_keeps_logical_roots_and_missing_enabled_usersite": ("setup", "Skipped: default runtime policy binds the actual macOS build"),
     "tests/test_verification_evidence_runtime.py::test_relative_runtime_environment_binds_real_child_inputs": ("setup", "Skipped: default runtime policy binds the actual macOS build"),
     "tests/test_private_observer_native.py::test_actual_mac_qt_reexec_is_sealed_and_continued": ("call", "Skipped: The actual Qt framework reexec path belongs to macOS."),
+    "tests/test_native_probe_boundary.py::test_actual_clt_inspector_uses_closed_environment_and_bound_native_target": ("setup", "Skipped: finite CLT inspector is macOS-specific"),
 }
 _reports: list[dict[str, Any]] = []
 

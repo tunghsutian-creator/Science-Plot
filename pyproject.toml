@@ -77,6 +77,7 @@ files = [
   "src/sciplot_core/verification/private_observer_pytest.py",
   "src/sciplot_core/verification/private_capture.py",
   "src/sciplot_core/verification/private_process_boundaries.py",
+  "src/sciplot_core/verification/native_probe_boundary.py",
   "src/sciplot_core/setting_catalog/specs/key.py",
   "src/sciplot_core/native_process/",
   "src/sciplot_core/native_font_catalog.py",
