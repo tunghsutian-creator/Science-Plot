@@ -7,8 +7,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.task_papers import paper_capabilities, start_paper, inspect_paper, resume_paper
-
 
 def register_paper_commands(task_actions: Any) -> None:
     parser = task_actions.add_parser("paper", help="Package exact selected figures across saved projects in paper order.")
@@ -27,6 +25,8 @@ def register_paper_commands(task_actions: Any) -> None:
 
 
 def dispatch_paper(args: Any) -> int:
+    from sciplot_core.task_papers import paper_capabilities, start_paper, inspect_paper, resume_paper
+
     if args.paper_action == "capabilities":
         result = paper_capabilities(project=args.project, figure_id=args.figure)
     elif args.paper_action == "start":
