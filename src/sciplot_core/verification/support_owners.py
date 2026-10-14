@@ -2,6 +2,13 @@
 
 from sciplot_core.verification.owner_model import ChangedOwner
 
+WHEEL_DISTRIBUTION_OWNER = ChangedOwner(
+    owner_id="wheel_distribution",
+    owned_test_paths=frozenset({"tests/test_wheel_surface.py"}),
+    pytest_targets=("tests/test_wheel_surface.py",),
+    release_gates=("full_pytest",),
+)
+
 VEUSZ_NATIVE_BUILD_OWNER = ChangedOwner(
     owner_id="veusz_native_build",
     exact_paths=frozenset({"third_party/veusz/pyqt_setuptools.py"}),
