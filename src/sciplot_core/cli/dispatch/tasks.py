@@ -45,7 +45,20 @@ def _resume_response(args: Any) -> dict[str, Any]:
 def dispatch_task(args: Any) -> int:
     action = args.task_action
     result: dict[str, Any]
-    if action == "compare":
+    if action == "edit":
+        from sciplot_core.cli.dispatch.common_edits import dispatch_common_edit
+
+        return dispatch_common_edit(args)
+    if action == "paper":
+        from sciplot_core.cli.task_paper import dispatch_paper
+
+        return dispatch_paper(args)
+    if action == "continue":
+        from sciplot_core.task_saved_work import continue_saved_work
+
+        result = continue_saved_work(args.source, search_roots=args.search_root, tasks_root=args.tasks_root,
+                                     target=args.target, figure_id=args.figure)
+    elif action == "compare":
         from sciplot_core.task_comparisons import inspect_comparison, resume_comparison, select_comparison, start_comparison
         from sciplot_core.task_comparison_contract import comparison_request_schema, comparison_selection_schema
 
@@ -86,7 +99,12 @@ def dispatch_task(args: Any) -> int:
 
         result = inspect_table_region(args.target, _object(args.query))
     elif action == "find":
-        result = find_tasks(args.source, tasks_root=args.tasks_root, limit=args.limit)
+        if args.search_root:
+            from sciplot_core.task_saved_work import find_saved_work
+
+            result = find_saved_work(args.source, search_roots=args.search_root, tasks_root=args.tasks_root, limit=args.limit)
+        else:
+            result = find_tasks(args.source, tasks_root=args.tasks_root, limit=args.limit)
     elif action == "start":
         result = start_task(_object(args.request), task_dir=args.task_dir)
     elif action == "create":

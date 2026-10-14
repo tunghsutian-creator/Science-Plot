@@ -25,7 +25,8 @@ figures by their actual ID; export snapshots are not original projects.
    labels, ordering and exact source/document versions. Source, spec, figure ID,
    saved VSZ or sealed stage changes require inspection and a new selection.
 
-Inspection preserves the historical task receipt and frozen selected versions.
+Completed start replay, inspection and resume preserve the historical task
+receipt and frozen selected versions.
 It offers delivery only while both the complete package inventory and those
 source versions remain current. Changed package bytes or members return a blocked
 preserve-and-new-selection repair, with no overwrite. Changed original sources or
@@ -71,19 +72,14 @@ dispatch branch. MCP uses the same `task_papers` functions: `paper_capabilities`
 `start_paper`, `inspect_paper`, `resume_paper`. The closed JSON request schema is
 owned by `task_paper_contract.paper_request_schema`.
 
-The root product task owns shared CLI/MCP integration. The module's `main` is a
-development adapter; ordinary user instructions use the shared `sciplot task paper`
-entry above.
+CLI and MCP use these owners directly. Ordinary user instructions use the
+shared `sciplot task paper` entry above.
 
-## Verification ownership proposal
+## Development verification
 
-The narrow paper owner includes `src/sciplot_core/task_paper*.py`,
-`src/sciplot_core/task_papers.py`, `src/sciplot_core/cli/task_paper.py`,
-this reference and its JSON example, `tests/test_task_papers.py` and
-`tests/test_task_papers_native.py`, selecting both tests plus existing architecture
-controls. `delivery/install.py` and `tests/test_delivery_install.py` belong with
-delivery integrity. The retained `workflow/rheology_tts_creation.py` change keeps
-its existing prepared-creation owner and
-`tests/test_rheology_tts_creation_repair.py` controls. New tests read no private
-data; real private-source acceptance is separate ignored evidence, not a pytest
-case.
+The registered local-task owner includes the paper modules and public adapter,
+`tests/test_task_papers.py` and `tests/test_task_papers_native.py`. Generic
+`delivery/install.py` retains delivery-integrity coverage, and the old
+`workflow/rheology_tts_creation.py` seam retains prepared-creation recovery
+controls. Synthetic native cases use the supported shared CLI. Real private-source
+acceptance remains separate ignored evidence; no private inputs are committed.

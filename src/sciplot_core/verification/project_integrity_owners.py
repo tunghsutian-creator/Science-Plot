@@ -73,6 +73,7 @@ PROJECT_INTEGRITY_OWNERS = (
         ),
         owned_test_paths=frozenset(
             {
+                "tests/test_delivery_install.py",
                 "tests/test_delivery_project_documents.py",
                 "tests/test_delivery_editor_launcher.py",
                 "tests/test_delivery_project_continuation.py",
@@ -81,6 +82,7 @@ PROJECT_INTEGRITY_OWNERS = (
             }
         ),
         pytest_targets=(
+            "tests/test_delivery_install.py",
             "tests/test_delivery_project_documents.py",
             "tests/test_delivery_editor_launcher.py",
             "tests/test_delivery_project_continuation.py",

@@ -29,6 +29,8 @@ def tool_definitions() -> list[Tool]:
         comparison_selection_schema,
     )
     from sciplot_core.task_control import task_request_schema, task_response_schema
+    from sciplot_core.task_common_edits import common_edit_schema
+    from sciplot_core.task_paper_contract import paper_request_schema
     from sciplot_core.task_group_contract import (
         group_request_schema,
         group_responses_schema,
@@ -83,16 +85,31 @@ def tool_definitions() -> list[Tool]:
         {**semantic_plot, "request": decide_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("capabilities", "Read the versioned local control contract. No model or provider is started.", {}, [], read_only=True)
     add("task_capabilities", "Read a small task capability index or one exact schema. Pass its contract_sha256 as expected_contract_sha256 when fetching sections; server validation remains complete.",
-        {"section": {"enum": ["request", "response", "operations", "table_region"]}, "name": string,
+        {"section": {"enum": ["request", "response", "operations", "table_region", "common_edit", "paper_request"]}, "name": string,
          "expected_contract_sha256": sha, "full": {"type": "boolean"}}, [], read_only=True)
     add("task_start", "Start one authorized local create/edit/export/update_source task. Answer source-bound column questions; inspect all returned source-update or edit candidate PNGs before resuming.",
         {"request": task_request_schema(), "task_dir": string, "full": full}, ["request"])
+    common_schema = common_edit_schema()
+    add("task_edit", "Execute exact common palette, typography or supported legend clauses through the existing plot transaction. Preserve data/scientific state. For recovery after a lost first reply, choose a stable task_dir before the first call and reuse it with identical intent. Existing pending/review/export continuations remain authoritative; unavailable properties are rejected.",
+        common_schema["properties"], common_schema["required"], destructive=True)
+    add("task_continue", "Read current saved originals within explicit bounded search_roots, distinguish export snapshots and return existing guarded edit/recovery arguments. Exact source hashes only filter candidates; copies/versions need explicit target selection. No rebinding, edit or regeneration occurs.",
+        {"source": string, "search_roots": {"type": "array", "minItems": 1, "maxItems": 20, "items": string},
+         "tasks_root": string, "target": string, "figure_id": string}, ["source"], read_only=True)
+    add("paper_capabilities", "Read the closed paper-selection schema; with exact project and figure_id, obtain current source/native version guards. No exports or source changes.",
+        {"project": string, "figure_id": string}, [], read_only=True)
+    add("paper_start", "Package an ordered list of exact selected figures across projects as PDF/TIFF, portable editable VSZ and sealed source-version evidence. Original projects stay unchanged; existing destinations are rejected. Reuse paper_dir with the identical request after an uncertain reply.",
+        {"request": paper_request_schema(), "paper_dir": string}, ["request", "paper_dir"], idempotent=True, destructive=True)
+    add("paper_inspect", "Inspect the original paper execution and current selected-source/delivery evidence. Historical completion is separate from currentness; no export or retry occurs.",
+        {"paper": string}, ["paper"], read_only=True)
+    add("paper_resume", "Resume only unfinished exact selected-figure exports or publication in the original paper_dir. Sealed items are rechecked and reused; changed sources or destination contents are blocked. Does not select new versions or overwrite an existing unrelated package.",
+        {"paper": string}, ["paper"], idempotent=True, destructive=True)
     add("task_inspect", "Resume context from a saved task. This does not rerun or certify its historical result.",
         {"task": string, "full": full}, ["task"], read_only=True)
     add("task_table_region", "Read up to 128 original rows by 64 columns, bound to the current table question and source bytes. Does not change the question or select cells.",
         {"task": string, "query": table_region_schema()}, ["task", "query"], read_only=True)
     add("task_find", "Find creation receipts by exact original source path in the source-adjacent task history or an explicit tasks_root. Returns candidates and source currentness; inspect the selected task/project before continuing. Does not create or choose a project.",
-        {"source": string, "tasks_root": string, "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
+        {"source": string, "tasks_root": string, "search_roots": {"type": "array", "minItems": 1, "maxItems": 20, "items": string},
+         "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
         ["source"], read_only=True)
     add("task_resume", "Continue a saved task. Column answers require expected_question_id; source-update decisions require expected_revision_id. Style previews use expected_operation_id and blocked preview corrections use expected_preview_revision. Existing user intent authorizes the requested work.",
         {"task": string, "response": task_response_schema(), "full": full}, ["task", "response"])

@@ -5,9 +5,8 @@ description: Create, edit, export and continue source-bound scientific figures t
 
 # SciPlot Materials Analysis
 
-External AI interprets original data and user intent; SciPlot validates and plots
-locally without calling a model. Use `skill/scripts/sciplot` and its public
-contracts. Keep ordinary plotting work within that interface.
+External AI interprets original data and user intent; SciPlot validates and plots locally without calling a model. Use `skill/scripts/sciplot` and its public contracts.
+Keep ordinary plotting work within that interface.
 
 ## Select one route
 
@@ -18,15 +17,16 @@ source code, development history or architecture for a routine plotting request.
 | User intent | Route |
 | --- | --- |
 | Change or export an existing ordinary saved figure | [Saved figure](references/saved-figure-edit.md) |
+| Find and continue an original after source/project movement or copying | [Saved work](references/saved-work-continuation.md) |
+| Package selected final figures across projects in manuscript order | [Paper figures](references/paper-figures.md) |
+| Read performance radar units, normalization and direction | [Radar interpretation](references/performance-radar.md) |
 | Plot original data as a new ordinary task | [Create](references/ordinary-create.md) |
 | Explicit AI-prepared HDPE/LDPE UDC rheology/TTS suite | [Prepared rheology](references/rheology-prepared.md) |
 | Change or debug this project's implementation | [Development](references/development.md) |
 
-For source revisions, groups/comparisons or legacy diagnostics, read only the
-relevant section of [advanced workflows](references/advanced-workflows.md).
+For source revisions, groups/comparisons or legacy diagnostics, read only the relevant section of [advanced workflows](references/advanced-workflows.md).
 [External control](references/external-control.md) supplies operation examples
-and recovery detail when the live response and chosen route leave a specific gap;
-it is not another prerequisite for ordinary work.
+and recovery detail only when the live response and chosen route leave a specific gap.
 
 ## Minimize the agent loop
 
@@ -48,8 +48,11 @@ it is not another prerequisite for ordinary work.
   full; never convert legacy state for this route. `task style` uses this engine.
 - Use `task create` for ordinary raw-data plotting and legacy `task style` for explicit
   sample width/color changes. These entries construct requests and bind current
-  state locally; do not precede them with schema/context discovery or JSON files.
-  Use the returned continuation arguments after reviewing a pending preview.
+  state locally; use returned continuation arguments after reviewing a pending preview.
+  No schema/context discovery or JSON file is needed.
+- Use `task edit` for a closed common palette/typography/supported legend intent.
+  Keep a stable first-call `--task-dir` for reply-loss recovery; retain pending intents.
+  Current semantic/native coverage determines supported edits.
 - Let a local task command finish within the tool's normal initial wait. For
   `exec_command`, use 10–30 seconds instead of routinely yielding after one second;
   premature backgrounding adds an AI round just to wait for a short native call.
@@ -65,10 +68,10 @@ it is not another prerequisite for ordinary work.
 ## Shared scientific and delivery boundaries
 
 Preserve raw cells, per-curve order/counts, identities, units and provenance.
-Never invent measurements, average silently, pad/truncate ragged curves or
-interpolate missing references. Unit conversion requires its scientific contract.
-Merged metadata expansion is explicit and applies only above data. Do not turn
-scientific ambiguity into an automatic mapping or a different experiment.
+Never invent measurements, average silently, pad/truncate ragged curves or interpolate
+missing references. Unit conversion requires its scientific contract.
+Merged metadata expansion is explicit and applies only above data; scientific ambiguity
+cannot become an automatic mapping or a different experiment.
 
 For legacy figures, the saved `studio/document.vsz` remains the complete visual
 baseline. An imported SciPlotDocument owns only its explicitly covered semantic
@@ -79,10 +82,9 @@ or silently promote an incomplete import to full semantic authority.
 
 Managed Template/Binding/Theme creation uses document authority. FigureTemplate v2 composes Views/Scales/Layers/Marks in physical mm; `plot.describe` returns its typed edit contract. Retain raw inputs and `.sciplot_documents`; rebuild disposable artifacts with `plot.export`. Source/transform/executor or scale-domain edits need scientific intent. Reject unknown native state; source-only `task create` remains compatibility.
 
-For raw-input plotting, omit `--out` by default. Deliveries belong beside the
-original source in `SOURCE_SciPlot/`; hidden `.sciplot/` holds internal evidence.
-Do not put user plotting deliveries inside the SciPlot repository or its
-`outputs/`. Development evidence belongs under ignored `.tmp_verify/`.
+For raw-input plotting, omit `--out` by default. Deliveries belong beside the original source in `SOURCE_SciPlot/`; hidden `.sciplot/` holds internal evidence.
+Do not put user plotting deliveries inside the SciPlot repository or its `outputs/`.
+Development evidence belongs under ignored `.tmp_verify/`.
 Require Doctor `status=ready` before artifact handoff; reuse current readiness.
 Deliver plotting CSVs, PDF/TIFF, editable VSZ and the returned manual-edit launcher.
 
@@ -95,6 +97,4 @@ Deliver plotting CSVs, PDF/TIFF, editable VSZ and the returned manual-edit launc
 - `DEVELOPMENT_ROADMAP.md` lists unfinished priorities.
 - Development logs and Git are historical evidence, not current instructions.
 
-Runtime readiness, native fidelity, real-client efficiency, human usability and
-journal acceptance are separate claims. Local timings and output bytes do not
-measure external AI tokens or end-to-end waiting.
+Runtime readiness, native fidelity, real-client efficiency, human usability and journal acceptance are separate claims. Local timings and output bytes do not measure external AI tokens or end-to-end waiting.

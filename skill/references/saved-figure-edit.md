@@ -85,6 +85,36 @@ colors, fonts, managed titles/annotations and advertised axis/legend properties 
 other changes use the compatibility route below. Scientific mapping/normalization/
 fitting need their explicit scientific owner and cannot be presentation patches.
 
+## Common palette, typography and legend edits
+
+For an authorized common edit, call the bounded entry directly:
+
+```bash
+skill/scripts/sciplot task edit TARGET --intent '换配色 tol_bright；统一字号 9pt；图例字号 7pt' --task-dir STABLE_EDIT_DIRECTORY --json
+```
+
+English exact clauses (`palette tol_bright; font size 9pt; legend font size 7pt`)
+and explicit `--palette`, `--font-size`, `--font-family`, `--legend-font-size`,
+`--hide-legend`/`--show-legend` or `--legend-position X,Y` are also supported.
+Read `task capabilities --section common_edit --json` only when the exact syntax
+or authority coverage is missing. Unknown clauses reject the whole intent;
+do not silently omit them or infer scientific changes. Palette capacity must
+cover all selected series without cycling colors.
+
+Managed FigureSpec v2 typography covers its represented theme, axes, legends,
+annotations and text marks; an exact font family must be installed. Other
+authority types expose their existing coverage. A LegacyPlot retains the complete
+current VSZ; unsupported font or legend properties fail closed. Non-target
+presentation and scientific state remain intact.
+
+Supply a stable `--task-dir` on the first call, and retain the returned
+`edit_replay` arguments and idempotency key. Without that first stable path, a
+lost reply cannot identify the unique original edit entry. Identical replay uses
+the frozen original request and revision; pending work retains its original
+continuation. Review a returned preview and follow its exact `next_step`.
+Export retry resumes export without applying the edit again. The entry makes no
+model calls; output bytes and local timing do not measure external AI tokens or fees.
+
 ## Compatibility: sample width or color
 
 For explicit width/color changes, call the typed entry directly:

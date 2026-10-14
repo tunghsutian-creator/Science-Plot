@@ -11,8 +11,12 @@ from sciplot_core.task_schema_compaction import compact_schema
 
 
 def _schemas() -> dict[str, Any]:
+    from sciplot_core.task_common_edits import common_edit_schema
+    from sciplot_core.task_paper_contract import paper_request_schema
+
     return {"request": task_request_schema(), "response": task_response_schema(),
             "table_region": table_region_schema(),
+            "common_edit": common_edit_schema(), "paper_request": paper_request_schema(),
             "operations": annotation_operation_capabilities()["operations_schema"]}
 
 
@@ -47,10 +51,12 @@ def task_capabilities(*, section: str | None = None, name: str | None = None,
     if full:
         return {**base, "request_schema": compact_schema(schemas["request"]),
                 "response_schema": compact_schema(schemas["response"]),
-                "table_region_query_schema": schemas["table_region"]}
+                "table_region_query_schema": schemas["table_region"],
+                "common_edit_schema": compact_schema(schemas["common_edit"]),
+                "paper_request_schema": compact_schema(schemas["paper_request"])}
     if section is not None:
         if section not in schemas:
-            raise TaskControlError("unknown_capability_section", "选择 request、response、operations 或 table_region。")
+            raise TaskControlError("unknown_capability_section", "选择 request、response、operations、table_region、common_edit 或 paper_request。")
         schema = deepcopy(schemas[section])
         if name is not None:
             if section == "request":
@@ -67,11 +73,18 @@ def task_capabilities(*, section: str | None = None, name: str | None = None,
                 schema["items"] = {"oneOf": variants}
             else:
                 schema = variants[0] if len(variants) == 1 else {"oneOf": variants}
-        return {**base, "section": section, "name": name, "schema": compact_schema(schema)}
+        response = {**base, "section": section, "name": name, "schema": compact_schema(schema)}
+        if section == "common_edit":
+            from sciplot_core.task_common_edits import common_edit_capabilities
+
+            response["capabilities"] = common_edit_capabilities()
+        return response
     return {**base, "sections": {
         "request": [item["properties"]["action"]["const"] for item in schemas["request"]["oneOf"]],
         "response": list(dict.fromkeys(key for item in schemas["response"]["oneOf"] for key in item["required"] if not key.startswith("expected_"))),
         "operations": [item["properties"]["op"]["const"] for item in schemas["operations"]["items"]["oneOf"]],
+        "common_edit": "Bounded presentation intents; coverage-specific.",
+        "paper_request": "Ordered selected figures and version guards.",
         "table_region": "Original cells, up to 128 rows by 64 columns, current question required."},
         "read_schema": {"cli": "task capabilities --section SECTION --name NAME --expected-contract SHA --json",
                         "mcp": "sciplot_task_capabilities", "name_optional": True,
@@ -80,12 +93,15 @@ def task_capabilities(*, section: str | None = None, name: str | None = None,
             "cli": "task edit-context TASK_OR_PROJECT --operation NAME [--operation NAME ...] [--figure FIGURE_ID] --json",
             "scope": "Read runtime, current saved targets and selected edit schemas once; no task or project mutation."},
         "typed_entries": {
+            "edit": "task edit TARGET --intent EXACT --task-dir STABLE_PATH --json",
+            "continue": "task continue SOURCE [--search-root ROOT --target EXACT] --json",
+            "paper": "task paper capabilities [--project PROJECT --figure ID] --json",
             "create": "task create SOURCE [--rule RULE --template TEMPLATE --profile PATH --out PATH] --json",
             "style": "task style TARGET (--all-samples | --sample EXACT ...) [--width WIDTH] [--color COLOR] [--figure FIGURE_ID] --json",
             "accept_preview": "task resume TASK --accept-preview --expected-operation-id CURRENT_ID --json",
             "retry": "task resume TASK --retry --json",
-            "scope": "Create/style include runtime readiness and use existing task contracts. Style returns a preview for review; scientific choices and revision guards remain unchanged."},
+            "scope": "Entries reuse existing runtime/transaction guards; inspect pending previews."},
         "specialized_routes": {"rheology_tts": {
             "cli": "rheology capabilities --json",
             "scope": "AI-prepared source-bound TTS plotting, exact saved export and revision-bound native style restoration; analysis is a legacy compatibility route."}},
-        "validation": "Each returned schema is standalone. Complete server validation and task/document/question/review revision guards remain required."}
+        "validation": "Standalone schemas retain complete server and revision validation."}

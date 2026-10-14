@@ -66,6 +66,40 @@ data binding, then produces one final export. A saved native-only change can ret
 one audited reimport preview; source or mapping changes still require their
 scientific workflow. The local service reuses its native worker between operations.
 
+For a common presentation change, use one bounded local entry:
+
+```bash
+sciplot task edit TARGET --intent '换配色 tol_bright；统一字号 9pt；图例字号 7pt' --task-dir STABLE_EDIT_DIRECTORY --json
+```
+
+The clauses and palette names are exact. Font family and legend controls depend
+on the saved figure's advertised authority; unsupported changes are rejected
+before applying any part of the request. Keep `--task-dir` stable from the first
+call to recover an uncertain reply. A pending preview still needs its returned
+revision-bound continuation. Raw values and scientific hashes remain unchanged.
+See [common saved edits](skill/references/saved-figure-edit.md).
+
+If a source or project moved, `task continue SOURCE --search-root KNOWN_FOLDER
+--json` finds exact source matches in a bounded folder search. Identical copies
+remain separate choices; select the returned exact `--target`. It checks the
+current editing authority without rebinding sources or modifying old receipts.
+Export snapshots remain explicitly distinct from their original project.
+See [find and continue](skill/references/saved-work-continuation.md).
+
+For a manuscript, [selected paper figures](skill/references/paper-figures.md)
+packages one explicitly selected figure per item across saved projects, in the
+requested order, with PDF, TIFF, portable editable VSZ and source-version
+evidence. Originals stay unchanged. Existing output directories, changed sources
+and changed package contents block publication or reuse; an exact retry resumes
+unfinished work. Historical completion alone does not certify a current package.
+
+[Performance radar figures](skill/references/performance-radar.md) now show units,
+raw axis ranges, improvement direction and the declared normalization formulas.
+Radius is dimensionless, and polygon area is not an overall score. The fixed
+60 × 55 mm scientific plot panel keeps its coordinates; a new one-column radar
+uses a 120 × 55 mm page with a reserved interpretation panel. Conflicting explicit
+page dimensions are rejected. Existing saved VSZs retain their visual authority.
+
 Template-based `plot.create` now creates a **ManagedPlot** by default for the
 supported Cartesian and FigureSpec v2 contracts. Its SciPlotDocument is authoritative:
 resolved PlotIR compiles into disposable VSZ, previews and PDF/TIFF. Keeping raw

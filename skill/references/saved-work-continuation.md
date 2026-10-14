@@ -31,7 +31,10 @@ raw and prepared sources; it does not replace them with the file used to search.
 When an exact historical source path has different bytes, the search reports a
 source revision rather than treating the older saved plot as that new data.
 
-`task continue` reads the selected current authority again. For a LegacyPlot it
+`task continue` reads the selected current authority again and rechecks the
+search source after the final authority read. If that input changes, disappears
+or becomes a symlink, `source_changed_during_continuation` requires a fresh find;
+it returns no obsolete editing arguments. For a LegacyPlot it
 uses the saved VSZ, actual native inspection and the existing native scientific
 audit. It returns a current `task.start` edit request template and `task.style`
 target arguments. Fill the template's operations with the authorized edit; the

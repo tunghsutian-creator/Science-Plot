@@ -13,6 +13,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
             "src/sciplot_core/render/panel_render.py",
             "src/sciplot_core/render/public_api.py",
             "src/sciplot_core/render/target_paths.py",
+            "src/sciplot_core/veusz_worker/__main__.py",
             "src/sciplot_core/studio_core/prepare_generated.py",
             "src/sciplot_core/studio_core/publish_finalize.py",
             "src/sciplot_core/studio_core/publish_inventory.py",
@@ -41,6 +42,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
     ),
     owned_test_paths=frozenset(
         {
+            "tests/test_render_worker_rejection.py",
             "tests/test_generic_prepared_terminal_source.py",
             "tests/test_generic_single_task_plan.py",
             "tests/test_preparation_source_attestation.py",
@@ -57,6 +59,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
         }
     ),
     pytest_targets=(
+        "tests/test_render_worker_rejection.py",
         "tests/test_generic_prepared_terminal_source.py",
         "tests/test_artifact_raster_visibility.py",
         "tests/test_generic_single_task_plan.py",

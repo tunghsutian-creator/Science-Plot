@@ -3,6 +3,33 @@
 Status: 2026-10-14. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
+## 2026-10-14 approved product round
+
+The separately approved product branch adds a bounded common edit entry,
+exact-source saved-work continuation, ordered cross-project selected-figure
+packages and readable radar interpretation. Existing transaction, project
+identity, native export and scientific owners remain authoritative. Independent
+review found and repaired final search-source drift and completed paper replay
+currentness gaps; no tests or scientific assertions were removed.
+
+Private two-project paper acceptance produced exactly two PDF/TIFF/VSZ sets,
+reopened and re-exported after relocation, and preserved 115 source/project files.
+Actual private radar before/after values, normalized radii, data signatures and
+native plot bounds match. New one-column pages reserve interpretation space at
+120 × 55 mm; the 60 × 55 mm scientific panel is unchanged. Old radar publication
+QA contained a Cartesian-margin false positive despite its ready summary; those
+old reports remain intact, and strict structural radar QA fixes new verification.
+
+Local matched common-edit evidence reduces two public plotting calls to one,
+but measured 1.479 s baseline versus 2.779 s typed entry (including readiness)
+does not demonstrate faster execution. No actual external-client token or billed
+fee interface is available; both remain unknown. Independent human usability,
+second-Mac/font consistency and journal acceptance remain open.
+
+Unified changed-owner, strict type, full scientific, ready-rule and native visual
+release checks still determine this branch's final status. Public CI must retain
+and report missing private-input failures rather than uploading those inputs.
+
 ## 2026-10-14 development feedback implementation
 
 The separate feedback branch continues the verified Mac `6934322` snapshot;
@@ -52,7 +79,8 @@ unavailable there; its exact-commit result must accompany local private evidence
 No private data is uploaded or coverage removed to make that gate green.
 Independent human review, second-Mac/font portability and real-client token/fee
 telemetry remain external evidence limits; no byte count is treated as token
-usage. Further product work requires a separately approved next-round proposal.
+usage. The separately approved product round is recorded above; further scope
+requires another concrete proposal.
 
 ## 2026-10-13 Mac verification and remaining gates
 

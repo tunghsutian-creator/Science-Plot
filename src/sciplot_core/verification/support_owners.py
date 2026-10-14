@@ -29,6 +29,10 @@ DOCUMENTATION_OWNER = ChangedOwner(
             "skill/references/advanced-workflows.md",
             "skill/references/saved-figure-edit.md",
             "skill/references/ordinary-create.md",
+            "skill/references/saved-work-continuation.md",
+            "skill/references/paper-figures.md",
+            "skill/references/paper-figures.json",
+            "skill/references/performance-radar.md",
             "skill/references/rheology-prepared.md",
         }
     ),

@@ -7,9 +7,14 @@ from typing import Any
 def register_task_commands(subparsers: Any) -> None:
     parser = subparsers.add_parser("task", help="Run and resume complete local plotting tasks.")
     actions = parser.add_subparsers(dest="task_action", required=True)
+    from sciplot_core.cli.parsers.common_edits import register_common_edit_command
+    from sciplot_core.cli.task_paper import register_paper_commands
+
+    register_common_edit_command(actions)
+    register_paper_commands(actions)
     capabilities = actions.add_parser("capabilities", help="Read the small task capability index, or a requested schema.")
     capabilities.add_argument("--json", action="store_true")
-    capabilities.add_argument("--section", choices=("request", "response", "operations", "table_region"))
+    capabilities.add_argument("--section", choices=("request", "response", "operations", "table_region", "common_edit", "paper_request"))
     capabilities.add_argument("--name", help="One action, response field or operation from the capability index.")
     capabilities.add_argument("--expected-contract", help="Reject schemas from a different capability fingerprint.")
     capabilities.add_argument("--full", action="store_true", help="Read all task schemas with repeated definitions factored out.")
@@ -26,7 +31,15 @@ def register_task_commands(subparsers: Any) -> None:
     find.add_argument("source", type=Path)
     find.add_argument("--tasks-root", type=Path, help="Task-history directory; default is SOURCE_PARENT/.sciplot/tasks.")
     find.add_argument("--limit", type=int, default=20)
+    find.add_argument("--search-root", type=Path, action="append", help="Search saved work within this bounded folder; repeat for explicit scopes.")
     find.add_argument("--json", action="store_true")
+    continuation = actions.add_parser("continue", help="Find a current editable original and return safe existing edit/recovery arguments; read-only.")
+    continuation.add_argument("source", type=Path)
+    continuation.add_argument("--search-root", type=Path, action="append")
+    continuation.add_argument("--tasks-root", type=Path)
+    continuation.add_argument("--target", type=Path, help="Explicit exact discovered target when copies or versions are ambiguous.")
+    continuation.add_argument("--figure", help="Exact registered figure identity.")
+    continuation.add_argument("--json", action="store_true")
     start = actions.add_parser("start", help="Execute a complete structured request locally.")
     start.add_argument("--request", type=Path, required=True)
     start.add_argument("--task-dir", type=Path)

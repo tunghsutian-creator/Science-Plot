@@ -20,9 +20,9 @@ from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
 def _public(*args):
-    result = subprocess.run([sys.executable, "-m", "sciplot_core.cli.task_paper", "paper", *map(str, args), "--json"],
+    result = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "task", "paper", *map(str, args), "--json"],
                             capture_output=True, text=True, timeout=240,
-                            env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")})
+                            env={**os.environ, "SCIPLOT_PYTHON": sys.executable, "PYTHONPATH": str(REPO_ROOT / "src")})
     assert result.returncode == 0, result.stdout + result.stderr
     return json.loads(result.stdout)
 

@@ -78,8 +78,8 @@ def _parse_text(text: str) -> dict[str, Any]:
         ("legend_position", r"(?:legend position|图例位置)\s+(.+)"),
     )
     value: Any
-    for clause in re.split(r"[;；]", text):
-        clause = clause.strip()
+    for raw_clause in re.split(r"[;；]", text):
+        clause = raw_clause.strip()
         if not clause:
             raise _invalid("Empty clauses are not a supported common-edit intent.")
         if clause.lower() in {"hide legend", "show legend", "隐藏图例", "显示图例"}:

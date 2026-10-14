@@ -532,6 +532,35 @@ all-samples inventory. Changed or unrecorded intent conflicts; it cannot authori
 the old preview. Whitespace in a valid physical size may be normalized, never its
 value or unit.
 
+`task_common_edits` parses closed presentation clauses, binds only represented
+targets and composes the existing semantic patch or native task transaction.
+An explicit first-call entry path freezes its original request for idempotent
+replay. Pending work cannot be overwritten with a new intent; unknown or
+unrepresented properties reject before mutation. CLI/MCP use this same owner.
+
+`task_saved_work` and its evidence helper perform bounded explicit-folder
+discovery using existing project/task/document identities. Source hashes filter
+candidates; final native/semantic/source/delivery checks, including a final
+search-source rehash, decide whether continuation arguments are current. Copies
+remain separate, snapshots remain non-original, and no catalog or path rebinding
+is introduced. Current editing authority does not imply ready delivery.
+
+`task_papers` packages an ordered selection of registered project figures using
+the existing native export/audit ports. Version guards and source closure bind
+each selection. Native Save converts consumed linked inputs to portable copies;
+it never patches VSZ text. Sealed staging supports exact partial retries and the
+generic exclusive directory installer rejects all existing targets. Completed
+start replay, inspect and resume share a read-only currentness projection;
+historical frozen delivery stays distinct from present source/package validity.
+
+Radar interpretation is presentation of existing scientific values and declared
+normalization. A reserved panel expands new page width without changing the
+physical scientific frame or polar coordinates. Fixed-frame QA identifies the
+native radar scaffold structurally (rings, spokes and hidden carrier axes);
+Cartesian frames retain their contract. Explicit conflicting dimensions fail
+before consumer defaults. A closed worker rejection envelope preserves that
+domain reason through the public render adapter; unexpected crashes stay errors.
+
 `source_tables/read_session` owns a bounded 32 MiB, operation-local parse cache.
 Every hit rehashes actual source bytes; misses hash before and after parsing, and
 callers receive independent frames. Explicitly byte/format/options-only parsers
