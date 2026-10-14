@@ -15,7 +15,7 @@ from sciplot_core.style_values import normalize_physical_size, validate_physical
 @pytest.mark.parametrize("arguments,constraint,detail", [
     (["task", "style", "/saved", "--width", "0.7pt"], "one_of_required", {"options": ["--all-samples", "--sample"]}),
     (["task", "start"], "required", {"missing": ["--request"]}),
-    (["task", "capabilities", "--section", "unknown"], "choice", {"argument": "--section", "allowed": ["request", "response", "operations", "table_region"]}),
+    (["task", "capabilities", "--section", "unknown"], "choice", {"argument": "--section", "allowed": ["request", "response", "operations", "table_region", "common_edit", "paper_request"]}),
     (["task", "find", "/source", "--limit", "many"], "type", {"argument": "--limit", "expected": "int"}),
     (["task", "style", "/saved", "--all-samples", "--sample", "A"], "mutually_exclusive", {"argument": "--sample", "options": ["--all-samples", "--sample"]}),
     (["task", "style", "/saved", "--all-samples", "--width"], "value_required", {"argument": "--width"}),

@@ -411,7 +411,7 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
     )
 
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS
-    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 116
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 131
     assert "src/sciplot_core/task_edit_context.py" in SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert "src/sciplot_core/task_shortcuts.py" in SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert {
@@ -420,6 +420,21 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
         "src/sciplot_core/data_mapping/curve_support.py",
         "src/sciplot_core/data_mapping/table_diagnostics.py",
         "src/sciplot_core/data_mapping/table_candidates.py",
+        "src/sciplot_core/task_common_edits.py",
+        "src/sciplot_core/cli/parsers/common_edits.py",
+        "src/sciplot_core/cli/dispatch/common_edits.py",
+        "src/sciplot_core/task_saved_work.py",
+        "src/sciplot_core/task_saved_work_evidence.py",
+        "src/sciplot_core/task_papers.py",
+        "src/sciplot_core/task_paper_contract.py",
+        "src/sciplot_core/task_paper_delivery.py",
+        "src/sciplot_core/task_paper_native.py",
+        "src/sciplot_core/task_paper_sources.py",
+        "src/sciplot_core/cli/task_paper.py",
+        "src/sciplot_core/delivery/install.py",
+        "src/sciplot_core/render/target_paths.py",
+        "src/sciplot_core/veusz_worker/__main__.py",
+        "src/sciplot_core/task_capabilities.py",
         "src/sciplot_core/task_repair.py",
         "src/sciplot_core/task_error_feedback.py",
         "src/sciplot_core/task_recovery_policy.py",
@@ -782,7 +797,7 @@ def test_explicit_type_gate_scopes_are_pairwise_disjoint() -> None:
         STUDIO_FIGURE_SET_EXECUTION_TYPE_PATHS,
     )
 
-    assert tuple(map(len, scopes)) == (116, 4, 7, 10, 5, 5)
+    assert tuple(map(len, scopes)) == (131, 4, 7, 10, 5, 5)
     assert all(
         scope.isdisjoint(other)
         for index, scope in enumerate(scopes)
