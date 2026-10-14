@@ -146,7 +146,10 @@ def test_sample_length_rejects_bad_physical_grammar(value):
 
 
 @pytest.mark.parametrize("bounds", [(0, 0, 100, 20), (-1, 2, 15, 20), (2, -1, 15, 20),
-                                     (2, 2, 15, 100), (float("nan"), 2, 15, 20)])
+                                     (2, 2, 15, 100), (float("nan"), 2, 15, 20),
+                                     (0, 0, 30.01 / 25.4 * 72, 20),
+                                     (0, 0, 30.04 / 25.4 * 72, 20),
+                                     (-0.01 / 25.4 * 72, 2, 15, 20)])
 def test_native_key_bounds_reject_overflow_negative_and_nonfinite_before_save(monkeypatch, bounds):
     from sciplot_core.veusz_worker import document_edit
     from sciplot_core.veusz_audit import pages

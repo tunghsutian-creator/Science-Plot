@@ -212,8 +212,10 @@ def _check_legend_sample_bounds(loaded: Any, actual: list[dict[str, Any]]) -> No
                 raise ValueError("The edited legend needs finite, positive native page bounds.")
             if (not all(math.isfinite(value) for value in bounds)
                     or width <= 0 or height <= 0
-                    or any(bounds[index] < page_bounds[index] - 0.05 for index in (0, 1))
-                    or any(bounds[index] > page_bounds[index] + 0.05 for index in (2, 3))):
+                    # Page bounds are rounded to 0.001 mm by the shared audit;
+                    # raw ControlKey bounds need only its rounding tolerance.
+                    or any(bounds[index] < page_bounds[index] - 0.001 for index in (0, 1))
+                    or any(bounds[index] > page_bounds[index] + 0.001 for index in (2, 3))):
                 raise ValueError("The complete native legend must fit inside its physical page.")
     finally:
         # Painting has finished; release recorded device/control state within
