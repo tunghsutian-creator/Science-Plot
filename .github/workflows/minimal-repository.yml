@@ -64,6 +64,8 @@ jobs:
           import subprocess
           import shutil
           import sys
+          import json
+          import sysconfig
           import tempfile
           from pathlib import Path
           import PyQt6
@@ -93,6 +95,16 @@ jobs:
               assert not reopened.isNull() and (reopened.width(), reopened.height()) == (1, 1)
               assert reopened.pixelColor(0, 0) == image.pixelColor(0, 0)
           print(f"Python {sys.version.split()[0]}; PyQt {QtCore.PYQT_VERSION_STR}; Qt build/runtime {runtime}; {binding}")
+          from sciplot_core.verification.private_process_boundaries import executable_hash, runtime_identity
+          observation_runtime = runtime_identity()
+          executable_sha256 = executable_hash(sys.executable)
+          assert executable_sha256 is not None
+          print(json.dumps({
+              "observation_runtime": observation_runtime,
+              "python_executable_sha256": executable_sha256,
+              "executable_owns_observation_core": executable_sha256 in observation_runtime["loaded_core_sha256"],
+              "py_enable_shared_build_flag": sysconfig.get_config_var("Py_ENABLE_SHARED"),
+          }, sort_keys=True))
           PY
       - name: Run lint gate
         run: python3 -m ruff check src tests

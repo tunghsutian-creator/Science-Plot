@@ -411,10 +411,12 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
     )
 
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS
-    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 143
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 145
     assert "src/sciplot_core/task_edit_context.py" in SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert "src/sciplot_core/task_shortcuts.py" in SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert {
+        "src/sciplot_core/verification/evidence_identity.py",
+        "src/sciplot_core/verification/evidence_scope.py",
         "src/sciplot_core/verification/input_scope.py",
         "src/sciplot_core/verification/public_input_guard.py",
         "src/sciplot_core/verification/public_stage.py",
