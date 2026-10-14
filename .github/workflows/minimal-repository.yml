@@ -1,8 +1,10 @@
-name: Minimal repository policy
+# Diagnostic branch only: do not merge this reduced selection into release gates.
+name: Linux native failure diagnostic
 
 on:
   push:
-  pull_request:
+    branches:
+      - codex/sciplot-linux-native-diagnostic-20261014
 
 jobs:
   runtime-integrity:
@@ -124,16 +126,29 @@ jobs:
           python3 -m pip wheel . --no-deps --no-build-isolation \
             --wheel-dir /tmp/sciplot-wheel
           python3 tests/test_wheel_surface.py /tmp/sciplot-wheel/*.whl
-      - name: Run reviewed public focused behavior
-        run: python3 -m pytest -q --input-scope public-focused
-      - name: Run reviewed public comprehensive behavior
-        # Original generated observer negatives genuinely disable Python hooks.
-        # Execute every public comprehensive node in a bound source-only stage;
-        # raw/golden private namespaces remain outside its input closure.
-        run: python3 -m sciplot_core.verification.public_stage --profile public-comprehensive --out .tmp_verify/ci_public_comprehensive
-      - name: Verify source-checkout wrapper bootstrap
-        run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
-      - name: Run readiness check
-        run: skill/scripts/sciplot doctor --json
-      - name: Run fixture-free lifecycle smoke
-        run: skill/scripts/sciplot smoke --out .tmp_verify/ci_runtime_smoke --json
+      - name: Diagnose original Linux native failures under public guard
+        shell: bash
+        env:
+          SCIPLOT_PUBLIC_STAGE_REPORT: .tmp_verify/ci_linux_native_diagnostic/reports.json
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp_verify/ci_linux_native_diagnostic
+          # Collect the complete suite before input-scope and keyword selection.
+          # This is a bounded diagnostic, never a release or full-suite PASS.
+          python3 -m pytest -q --tb=long \
+            -p sciplot_core.verification.public_stage \
+            --input-scope public-comprehensive \
+            --junitxml=.tmp_verify/ci_linux_native_diagnostic/junit.xml \
+            -k 'test_ready_performance_studio_review_preserves_lineage or test_template_creation_has_exactly_one_native_export_and_no_repeated_preparation or test_native_radar_long_mixed_units_and_incomplete_negative_reference' \
+            2>&1 | tee .tmp_verify/ci_linux_native_diagnostic/command.log
+      - name: Preserve generated-only native diagnostic reports and command log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-native-failure-diagnostic
+          path: |
+            .tmp_verify/ci_linux_native_diagnostic/command.log
+            .tmp_verify/ci_linux_native_diagnostic/reports.json
+            .tmp_verify/ci_linux_native_diagnostic/junit.xml
+          include-hidden-files: true
+          if-no-files-found: warn
