@@ -85,7 +85,17 @@ def run_status(directory: Path) -> dict[str, Any]:
     """Read status only; disconnection never launches or repeats a command."""
     state = load_receipt(directory / "state.json")
     if not isinstance(state, dict):
-        return {"status": "BLOCKED", "reused": False, "reason": "completion_unavailable"}
+        launch = load_receipt(directory / "launch.json")
+        try:
+            if not isinstance(launch, dict) or set(launch) != {"supervisor_pid", "request_sha256"} or type(launch["supervisor_pid"]) is not int or launch["supervisor_pid"] <= 0:
+                raise ValueError("invalid launch")
+            if (directory / "request.json").is_symlink() or file_sha256(directory / "request.json") != launch["request_sha256"]:
+                raise ValueError("request drift")
+            os.kill(launch["supervisor_pid"], 0)
+            return {"status": "RUNNING", "reused": False, "reason": "supervisor_starting",
+                    "supervisor_pid": launch["supervisor_pid"]}
+        except (OSError, KeyError, TypeError, ValueError, OverflowError):
+            return {"status": "BLOCKED", "reused": False, "reason": "completion_unavailable"}
     if state.get("phase") == "completed":
         receipt = load_receipt(directory / "receipt.json")
         if not isinstance(receipt, dict) or digest(receipt) != state.get("receipt_digest"):

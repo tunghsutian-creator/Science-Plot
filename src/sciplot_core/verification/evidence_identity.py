@@ -62,12 +62,43 @@ def _members(path: Path) -> list[Path]:
     return sorted(result)
 
 
+def discover_files(paths: list[Path], *, allow_missing: bool = False) -> tuple[list[str], str]:
+    """Resolve links and bind logical membership, including empty/missing dirs."""
+    files: set[str] = set()
+    layout: dict[str, str] = {}
+    caches = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".git"}
+
+    def visit(path: Path, ancestors: frozenset[Path]) -> None:
+        if allow_missing and not path.exists() and not path.is_symlink():
+            layout[digest(str(path.absolute()))] = digest("missing")
+            return
+        resolved = path.resolve(strict=True)
+        layout[digest(str(path.absolute()))] = digest(str(resolved))
+        if resolved.is_dir():
+            if resolved in ancestors:
+                raise ValueError("identity input contains a directory cycle")
+            for entry in sorted(path.iterdir()):
+                if entry.name not in caches and not entry.name.endswith((".pyc", ".pyo")):
+                    visit(entry, ancestors | {resolved})
+        elif resolved.is_file():
+            files.add(str(resolved))
+        else:
+            raise ValueError("identity input is not a regular file/directory")
+
+    for path in sorted(set(paths)):
+        visit(path, frozenset())
+    if not files:
+        raise ValueError("identity input domain has no files")
+    return sorted(files), digest(layout)
+
+
 def capture_inputs(inputs: dict[str, Any], *, repo_root: Path,
                    excluded_domains: dict[str, str] | None = None) -> dict[str, Any]:
     """Hash every declared file and directory membership, without storing paths."""
     if not isinstance(inputs, dict) or not DOMAINS <= inputs.keys():
         raise ValueError("all verification identity domains must be declared")
     result = {}
+    captured_files: dict[Path, dict[str, Any]] = {}
     for domain, binding in sorted(inputs.items()):
         if not isinstance(binding, dict):
             raise ValueError("invalid identity binding")
@@ -78,8 +109,24 @@ def capture_inputs(inputs: dict[str, Any], *, repo_root: Path,
                 raise ValueError("domain exclusion must be explicitly bound to scope policy")
             result[domain] = dict(binding)
             continue
-        if set(binding) != {"paths"} or not isinstance(binding["paths"], list) or not binding["paths"]:
+        resolving = set(binding) == {"paths", "symlinks", "allow_missing"} and binding["symlinks"] == "resolve" and type(binding["allow_missing"]) is bool
+        if (set(binding) != {"paths"} and not resolving) or not isinstance(binding["paths"], list) or not binding["paths"]:
             raise ValueError("identity binding needs nonempty paths")
+        if resolving:
+            roots = [Path(name).expanduser() if Path(name).is_absolute() else repo_root / name
+                     for name in binding["paths"]]
+            names, layout = discover_files(roots, allow_missing=binding["allow_missing"])
+            for name in names:
+                path = Path(name)
+                if path not in captured_files:
+                    captured_files[path] = _stable_file(path)
+            records = {digest(name): captured_files[Path(name)] for name in names}
+            if (names, layout) != discover_files(roots, allow_missing=binding["allow_missing"]):
+                raise ValueError("identity tree membership changed during hashing")
+            targets = {digest(str(path.absolute())): digest(str(path.resolve()) if path.exists() else "missing") for path in roots}
+            payload = {"files": records, "layout_sha256": layout, "root_targets": targets}
+            result[domain] = {**payload, "sha256": digest(payload)}
+            continue
         records = {}
         for name in binding["paths"]:
             if not isinstance(name, str) or not name:
@@ -94,9 +141,11 @@ def capture_inputs(inputs: dict[str, Any], *, repo_root: Path,
                 if member.is_symlink():
                     raise ValueError("identity tree file symlinks need explicit resolved binding")
                 key = digest(str(member))
-                records[key] = ({"sha256": digest("directory"), "size": 0,
-                                 "mode": stat.S_IMODE(member.stat().st_mode)}
-                                if member.is_dir() else _stable_file(member))
+                if member not in captured_files:
+                    captured_files[member] = ({"sha256": digest("directory"), "size": 0,
+                                               "mode": stat.S_IMODE(member.stat().st_mode)}
+                                              if member.is_dir() else _stable_file(member))
+                records[key] = captured_files[member]
             if members != _members(path):
                 raise ValueError("identity tree membership changed during hashing")
         result[domain] = {"files": records, "sha256": digest(records)}
@@ -145,6 +194,18 @@ can survive a documentation-only commit. Scope/selection are never widened.
                                  excluded_domains=scope.get("excluded_domains")),
         "environment_sha256": digest(environment), "corpus": corpus,
     }
+    layouts = scope.get("discovery_layouts", {})
+    if not isinstance(layouts, dict) or any(payload["inputs"].get(key, {}).get("layout_sha256") != value for key, value in layouts.items()):
+        raise ValueError("dependency-discovery membership changed before capture")
+    aliases = scope.get("discovery_aliases", {})
+    actual_aliases = {key: value for binding in payload["inputs"].values() for key, value in binding.get("root_targets", {}).items()}
+    if not isinstance(aliases, dict) or any(actual_aliases.get(key) != value for key, value in aliases.items()):
+        raise ValueError("dependency-discovery loader aliases changed before capture")
+    expected = scope.get("discovery_bindings", {})
+    actual = {key: record["sha256"] for binding in payload["inputs"].values()
+              for key, record in binding.get("files", {}).items()}
+    if not isinstance(expected, dict) or any(actual.get(key) != value for key, value in expected.items()):
+        raise ValueError("dependency-discovery inputs changed before capture")
     # Freeze caller-owned mappings so subsequent plan construction cannot mutate
     # the already captured before-state through an alias.
     payload = json.loads(json.dumps(payload, allow_nan=False))
@@ -182,8 +243,16 @@ def identity_valid(identity: object) -> bool:
             if set(binding) == {"not_applicable"}:
                 if domain in REQUIRED_FILES or not binding["not_applicable"] or scope.get("excluded_domains", {}).get(domain) != binding["not_applicable"]:
                     return False
-            elif set(binding) == {"files", "sha256"}:
-                if not isinstance(binding["files"], dict) or not binding["files"] or digest(binding["files"]) != binding["sha256"]:
+            elif set(binding) in ({"files", "sha256"}, {"files", "layout_sha256", "root_targets", "sha256"}):
+                payload = ({key: value for key, value in binding.items() if key != "sha256"}
+                           if "layout_sha256" in binding else binding["files"])
+                if not isinstance(binding["files"], dict) or not binding["files"] or digest(payload) != binding["sha256"]:
+                    return False
+                if "layout_sha256" in binding and (
+                    not re.fullmatch("[0-9a-f]{64}", binding["layout_sha256"])
+                    or not isinstance(binding["root_targets"], dict)
+                    or any(not re.fullmatch("[0-9a-f]{64}", key) or not re.fullmatch("[0-9a-f]{64}", value) for key, value in binding["root_targets"].items())
+                ):
                     return False
                 for key, record in binding["files"].items():
                     if not re.fullmatch("[0-9a-f]{64}", key) or set(record) != {"sha256", "size", "mode"}:

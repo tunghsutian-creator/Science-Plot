@@ -149,3 +149,17 @@ def test_supervisor_environment_drift_blocks_before_command(run_spec, monkeypatc
     assert supervise(directory, file_sha256(directory / "request.json")) == 1
     assert run_status(directory)["status"] == "BLOCKED"
     assert not (directory / "command.log").exists()
+
+
+def test_status_between_launch_and_first_state_is_running_only(tmp_path, monkeypatch):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.verification.evidence import atomic_json
+    from sciplot_core.verification import durable_runner
+    request = tmp_path / "request.json"
+    request.write_text("{}")
+    atomic_json(tmp_path / "launch.json", {"supervisor_pid": 123, "request_sha256": file_sha256(request)})
+    monkeypatch.setattr(durable_runner.os, "kill", lambda *args: None)
+    result = durable_runner.run_status(tmp_path)
+    assert result["status"] == "RUNNING" and result["reused"] is False
+    request.write_text("changed")
+    assert durable_runner.run_status(tmp_path)["status"] == "BLOCKED"
