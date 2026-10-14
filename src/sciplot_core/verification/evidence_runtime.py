@@ -9,7 +9,6 @@ from __future__ import annotations
 import ast
 import os
 from pathlib import Path
-import platform
 import re
 import site
 import subprocess
@@ -19,6 +18,7 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.verification.evidence_identity import digest
+from sciplot_core.verification.native_probe_boundary import inspector_path, probe_environment, system_identity
 
 QT_MODULES = frozenset({"QtCore", "QtGui", "QtWidgets", "QtPrintSupport", "QtSvg", "QtSvgWidgets", "sip", "uic"})
 QT_PLUGIN_KINDS = frozenset({"platforms", "imageformats", "iconengines", "printsupport", "styles", "platforminputcontexts"})
@@ -31,12 +31,12 @@ def qt_import_bindings(roots: list[Path]) -> dict[str, str]:
         for path in root.rglob("*.py"):
             bindings[digest(str(path.resolve()))] = file_sha256(path)
             tree = ast.parse(path.read_text(encoding="utf-8"))
-            names = []
+            names: list[str] = []
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom) and node.module == "PyQt6":
                     names.extend(alias.name for alias in node.names)
                 elif isinstance(node, ast.ImportFrom) and (node.module or "").startswith("PyQt6."):
-                    names.append(node.module.split(".")[1])
+                    names.append((node.module or "").split(".")[1])
                 elif isinstance(node, ast.Import):
                     names.extend(alias.name.split(".")[1] for alias in node.names if alias.name.startswith("PyQt6."))
                 elif isinstance(node, ast.Call) and node.args and (
@@ -77,10 +77,11 @@ def native_dependencies(files: list[str], *, executable: Path,
            if key.startswith(("DYLD_", "LD_")) and key != "DYLD_FRAMEWORK_PATH"):
         raise ValueError("native loader overrides have no reviewed closure policy")
     queue = [Path(name) for name in files if _native_entrypoint(name)]
-    queue.append(executable.resolve())
+    tool = inspector_path()
+    queue.extend((executable.resolve(), tool))
     known = {Path(name).resolve() for name in files}
     visited: set[Path] = set()
-    found: set[Path] = set()
+    found: set[Path] = {tool}
     def bind_candidates(candidates: set[Path] | list[Path]) -> None:
         found.update(candidates)
         if aliases is not None:
@@ -102,11 +103,12 @@ def native_dependencies(files: list[str], *, executable: Path,
             magic = stream.read(4)
         if magic not in {b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca"}:
             continue
+        found.add(binary)
         before = file_sha256(binary)
-        output = subprocess.run(["/usr/bin/otool", "-L", str(binary)],
-                                capture_output=True, text=True, check=True).stdout
-        loads = subprocess.run(["/usr/bin/otool", "-l", str(binary)],
-                               capture_output=True, text=True, check=True).stdout
+        output = subprocess.run([str(tool), "-L", str(binary)],
+                                capture_output=True, text=True, check=True, env=probe_environment()).stdout
+        loads = subprocess.run([str(tool), "-l", str(binary)],
+                               capture_output=True, text=True, check=True, env=probe_environment()).stdout
         rpaths = re.findall(r"cmd LC_RPATH\s+cmdsize \d+\s+path (.*?) \(offset", loads)
         self_names = set(re.findall(r"cmd LC_ID_DYLIB\s+cmdsize \d+\s+name (.*?) \(offset", loads))
         if before != file_sha256(binary):
@@ -194,6 +196,6 @@ def runtime_inputs(*, repo_root: Path, environment: dict[str, str]) -> tuple[dic
     if not system.is_file():
         raise ValueError("sealed system build identity is unavailable")
     domains = {"python": python, "dependencies": dependencies, "qt": qt,
-               "native": [veusz, system, Path("/usr/bin/otool"), *frameworks, *plugins], "fonts": fonts}
-    return domains, {"system": platform.platform(), "machine": platform.machine(),
-                     "python_version": sys.version, "system_native_policy": "apple-sealed-os-build-v1"}
+               "native": [veusz, system, inspector_path(), *frameworks, *plugins], "fonts": fonts}
+    return domains, {**system_identity(system), "python_version": sys.version,
+                     "system_native_policy": "apple-sealed-os-build-v1"}

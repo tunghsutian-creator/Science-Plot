@@ -251,7 +251,7 @@ def wrapper_call(bound: inspect.BoundArguments, environment: dict[str, str],
     return wrapper_boundary()
 
 
-_OWNERS = {"suite_evidence.py": {"_audit_environment"}, "durable_runner.py": {"start_run"},
+_OWNERS = {"evidence_runtime.py": {"native_dependencies"}, "suite_evidence.py": {"_audit_environment"}, "durable_runner.py": {"start_run"},
            "evidence_identity.py": {"_stable_file", "_members"},
            "private_corpus.py": {"_readable_nonempty_file", "_listed_source_issues", "_case_dependencies"}}
 

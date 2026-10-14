@@ -15,6 +15,8 @@ from sciplot_core.verification.private_observer import VERSION, ZERO, bootstrap_
 
 from sciplot_core.verification.private_process_boundaries import executable_hash, owner_identity, root_scope, runtime_identity, uname_boundary, wrapper_boundary, wrapper_inputs
 
+from sciplot_core.verification.native_probe_boundary import native_probe_bound
+
 _HEX = re.compile(r"[0-9a-f]{32}")
 
 
@@ -110,6 +112,7 @@ def _durable_context(proof: dict[str, Any], *, root: bool = False) -> dict[str, 
             "command_executable_sha256": executable_hash(receipt["before"]["command"][0]),
             "request_sha256": hashlib.sha256(request_bytes).hexdigest(),
             "directory_sha256": frame_digest({"directory": str(directory.resolve())}),
+            "native_records": receipt["before"]["inputs"].get("native", {}).get("files", {}),
             "records": {key: record for domain in receipt["before"]["inputs"].values()
                         for key, record in domain.get("files", {}).items()},
             "declared_paths": [Path(path).resolve() for domain in request["inputs"].values()
@@ -265,14 +268,15 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
                     and attempt.get("request_sha256") == durable["request_sha256"]
                     and attempt.get("directory_sha256") == durable["directory_sha256"]
                     and outcome.get("child_pid") == durable["state"]["supervisor_pid"])
-                auxiliary = attempt.get("input_boundary") == uname_boundary()
+                native_probe = bool(durable and native_probe_bound(attempt.get("input_boundary"), durable["native_records"], attempt))
+                auxiliary = attempt.get("input_boundary") == uname_boundary() or native_probe
                 if (attempt.get("input_boundary") is not None and not auxiliary
                         and attempt["input_boundary"] != wrapper_boundary()):
                     issues.append(f"unsupported process input boundary:{epoch}:{token}")
                 if auxiliary:
                     bounded_auxiliary.append({"parent_epoch": epoch, "child_pid": outcome["child_pid"],
                                               "input_boundary": attempt["input_boundary"],
-                                              "terminal_counters": "not_observed_non_python_kernel_query"})
+                                              "terminal_counters": "not_observed_non_python_macho_inspector" if native_probe else "not_observed_non_python_kernel_query"})
                     if child_starts:
                         issues.append(f"native auxiliary boundary unexpectedly starts Python:{epoch}:{token}")
                 elif len(child_starts) != 1 or child_starts[0]["pid"] != outcome.get("child_pid") or (child_starts[0]["parent_pid"] != records[0]["pid"] and not transferred):

@@ -16,6 +16,8 @@ from uuid import uuid4
 
 from sciplot_core.verification.private_process_boundaries import diagnostic_owner, executable_hash, owned_caller, root_scope, runtime_identity, uname_call, wrapper_call, wrapper_inputs
 
+from sciplot_core.verification.native_probe_boundary import native_probe_call
+
 VERSION = 2
 DIRECTORY = "SCIPLOT_PRIVATE_AUDIT_DIR"
 ROOTS = "SCIPLOT_PRIVATE_AUDIT_ROOTS"
@@ -40,7 +42,8 @@ def frame_digest(value: dict[str, Any]) -> str:
 
 def source_hashes() -> dict[str, str]:
     names = ["private_observer.py", "private_observer_pytest.py", "private_capture.py", "private_process_boundaries.py",
-             "suite_evidence.py", "durable_runner.py", "evidence_identity.py", "private_corpus.py"]
+             "suite_evidence.py", "durable_runner.py", "evidence_identity.py", "private_corpus.py",
+             "native_probe_boundary.py", "evidence_runtime.py"]
     public = Path(__file__).parent / "public_guard_bootstrap/sitecustomize.py"
     if public.is_file():
         names.append("public_guard_bootstrap/sitecustomize.py")
@@ -239,7 +242,8 @@ def _install_process_ports(observer: Observer) -> None:
         # Evaluate the finite boundary against original invocation inputs, before
         # inserting any audit propagation environment into the launch.
         bound.arguments["env"] = explicit
-        input_boundary = uname_call(bound, target_hash) or wrapper_call(bound, environment, observer.wrapper_environment)
+        input_boundary = (uname_call(bound, target_hash) or wrapper_call(bound, environment, observer.wrapper_environment)
+                          or native_probe_call(bound))
         bound.arguments["env"] = environment
         if input_boundary and input_boundary.get("kind") == "owned_sciplot_python_exec":
             target_hash = input_boundary["expected_python_sha256"]

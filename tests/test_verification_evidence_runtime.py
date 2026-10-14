@@ -9,6 +9,13 @@ from sciplot_core.verification import evidence_runtime as runtime
 from sciplot_core.verification.evidence_identity import digest, discover_files
 
 
+@pytest.fixture(autouse=True)
+def synthetic_inspector(tmp_path, monkeypatch):
+    # Discovery unit tests mock subprocess output; bind their generated tool too.
+    tool = binary(tmp_path / "inspector")
+    monkeypatch.setattr(runtime, "inspector_path", lambda: tool)
+
+
 def binary(path):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"\xcf\xfa\xed\xfe" + b"test native bytes")
