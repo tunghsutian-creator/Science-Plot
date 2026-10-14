@@ -59,9 +59,9 @@ def _linux_core_hashes(addresses: list[int], mappings: str) -> list[str]:
 
 def runtime_identity() -> dict[str, Any]:
     """Bind the loaded CPython core and the finite observation stdlib owners."""
-    cores: set[Path] = set()
-    linux_hashes: list[str] | None = None
+    core_hashes: list[str | None] = []
     if sys.platform == "darwin":
+        cores: set[Path] = set()
         loader = ctypes.CDLL(None)
         count, name = loader._dyld_image_count, loader._dyld_get_image_name
         count.restype, name.restype = ctypes.c_uint32, ctypes.c_char_p
@@ -72,19 +72,21 @@ def runtime_identity() -> dict[str, Any]:
                 path = Path(os.fsdecode(value))
                 if path.name == "Python" and "Python.framework" in str(path):
                     cores.add(path.resolve(strict=True))
+        if not cores and not sysconfig.get_config_var("Py_ENABLE_SHARED"):
+            cores.add(Path(sys.executable).resolve(strict=True))
+        core_hashes.extend(executable_hash(path) for path in cores)
     elif sys.platform.startswith("linux"):
         addresses = [ctypes.cast(getattr(ctypes.pythonapi, name), ctypes.c_void_p).value
                      for name in ("Py_GetVersion", "PyObject_Call", "PyErr_Occurred")]
         if any(address is None for address in addresses):
             raise ValueError("Actual CPython API addresses are unavailable.")
-        linux_hashes = _linux_core_hashes([int(address) for address in addresses if address is not None],
-                                          Path("/proc/self/maps").read_text())
-    if not cores and linux_hashes is None and not sysconfig.get_config_var("Py_ENABLE_SHARED"):
-        cores.add(Path(sys.executable).resolve(strict=True))
-    if not cores and linux_hashes is None:
+        core_hashes.extend(_linux_core_hashes([int(address) for address in addresses if address is not None],
+                                              Path("/proc/self/maps").read_text()))
+    elif not sysconfig.get_config_var("Py_ENABLE_SHARED"):
+        core_hashes.append(executable_hash(Path(sys.executable).resolve(strict=True)))
+    if not core_hashes:
         raise ValueError("Actual loaded CPython core is unavailable for observation binding.")
     stdlib = Path(sysconfig.get_path("stdlib"))
-    core_hashes = linux_hashes if linux_hashes is not None else [executable_hash(path) for path in cores]
     sources = {name: executable_hash(stdlib / name) for name in ("os.py", "subprocess.py", "threading.py", "platform.py")}
     if any(value is None for value in [*core_hashes, *sources.values()]):
         raise ValueError("Python observation runtime bytes are unreadable.")
