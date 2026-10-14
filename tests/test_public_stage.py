@@ -136,7 +136,7 @@ def test_owned_test_identity_matches_actual_pytest_assertion_rewrite() -> None:
     assert _code_hash(actual.__code__) in _test_codes(source)[actual.__name__]
 
 
-@pytest.mark.parametrize("mutation", ("healthy", "private_member", "stage_source", "origin_source", "receipt_alias", "helper_bytes", "wrong_environment", "stage_head", "ignored_source"))
+@pytest.mark.parametrize("mutation", ("healthy", "private_member", "stage_source", "origin_source", "receipt_alias", "helper_bytes", "helper_alias", "wrong_environment", "stage_head", "ignored_source"))
 def test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_binding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str) -> None:
     root = _origin(tmp_path)
 
@@ -164,6 +164,12 @@ def test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_
         receipt.symlink_to(copy)
     elif mutation == "helper_bytes":
         next(iter(public_stage._helper_paths(stage, environment).values())).write_bytes(b"changed helper")
+    elif mutation == "helper_alias":
+        helper = next(iter(public_stage._helper_paths(stage, environment).values()))
+        external = tmp_path / "same-helper.so"
+        external.write_bytes(helper.read_bytes())
+        helper.unlink()
+        helper.symlink_to(external)
     elif mutation == "wrong_environment":
         environment["SCIPLOT_SOURCE_ROOT"] = str(root / "src")
     elif mutation == "stage_head":
@@ -178,7 +184,7 @@ def test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_
             public_stage.validate_stage(stage, environment)
 
 
-@pytest.mark.parametrize("mutation", ("healthy", "missing_body", "unreviewed_skip", "failure", "duplicate_call", "unexpected_node"))
+@pytest.mark.parametrize("mutation", ("healthy", "missing_body", "unreviewed_skip", "failure", "duplicate_call", "unexpected_node", "unexpected_phase"))
 def test_stage_completion_requires_actual_complete_reports(mutation: str) -> None:
     node = "tests/test_generated.py::test_generated"
     marker = {"complete": True, "exit_code": 0, "selected_tests": [node], "executed_tests": [node]}
@@ -196,6 +202,8 @@ def test_stage_completion_requires_actual_complete_reports(mutation: str) -> Non
         rows.insert(1, dict(rows[1]))
     elif mutation == "unexpected_node":
         rows[1]["nodeid"] = "tests/test_unreviewed.py::test_unknown"
+    elif mutation == "unexpected_phase":
+        rows.append({"nodeid": node, "when": "invented", "outcome": "passed", "skip_reason": None})
     reports = {"exit_code": 0, "selected_tests": [node], "reports": rows}
     assert bool(public_stage.review_stage_reports(marker, reports, platform="darwin")) is (mutation != "healthy")
 

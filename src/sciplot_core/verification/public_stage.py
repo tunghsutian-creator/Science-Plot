@@ -129,6 +129,14 @@ def runtime_binding(root: Path, environment: dict[str, str]) -> dict[str, Any]:
             "claim": "actual Python core/owned stdlib, pytest entry/rewrite, QtCore binding and five helper bytes; not all native dependencies"}
 
 
+def assert_stage_helpers(root: Path, environment: dict[str, str]) -> None:
+    """Copied stage binaries cannot become external aliases with equal bytes."""
+    directory = root / "third_party/veusz/veusz/helpers"
+    _no_alias(directory, root)
+    for path in _helper_paths(root, environment).values():
+        _no_alias(path, root)
+
+
 def validate_stage(root: Path, environment: dict[str, str]) -> dict[str, Any]:
     """Validate the actual stage; a caller flag or missing corpus is insufficient."""
     root = root.absolute()
@@ -146,6 +154,7 @@ def validate_stage(root: Path, environment: dict[str, str]) -> dict[str, Any]:
         raise ValueError("Unknown controlled public source receipt.")
     if source_binding(root) != receipt.get("source_bytes") or _git(root, "rev-parse", "HEAD").strip() != receipt.get("stage_head"):
         raise ValueError("Public stage source/config or independent Git identity drift.")
+    assert_stage_helpers(root, environment)
     if runtime_binding(root, environment) != receipt.get("runtime"):
         raise ValueError("Public stage actual runtime bytes drift.")
     origin = Path(receipt["origin_root"])
@@ -239,6 +248,7 @@ def run_public_stage(root: Path, output: Path, profile: str) -> dict[str, Any]:
         checks["stage_head_equal"] = _git(stage, "rev-parse", "HEAD").strip() == before["stage_head"]
         checks["origin_head_equal"] = _git(root, "rev-parse", "HEAD").strip() == before["origin_head"]
         checks["runtime_equal"] = runtime_binding(root, environment) == before["runtime"]
+        assert_stage_helpers(stage, child_environment)
         checks["stage_runtime_equal"] = runtime_binding(stage, child_environment) == before["runtime"]
         if not all(checks.values()):
             raise ValueError("Actual source/stage/runtime closure drift after execution.")
@@ -274,7 +284,8 @@ def review_stage_reports(marker: dict[str, Any], reports: dict[str, Any], *, pla
             or reports.get("exit_code") != 0):
         return ["Actual public stage session finish is absent, incomplete or mismatched."]
     rows = reports.get("reports")
-    if not isinstance(rows, list) or any(not isinstance(row, dict) or row.get("nodeid") not in selected for row in rows):
+    if not isinstance(rows, list) or any(not isinstance(row, dict) or row.get("nodeid") not in selected
+                                         or row.get("when") not in {"setup", "call", "teardown"} for row in rows):
         return ["Unknown public stage report scope."]
     passed = [row["nodeid"] for row in rows if row.get("when") == "call" and row.get("outcome") == "passed"]
     if passed != marker.get("executed_tests") or len(passed) != len(set(passed)):
