@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4053,
-    "nodeids_sha256": "bb4aa3a174e3648f553d7b16e3f7ab5354f332e53e147cb351ac8efb5a9d8937",
-    "test_sources_sha256": "45a79615b803fe2f589866427bc5b102d322e57bea60e693b10c503ce74c553f",
-    "test_source_count": 300,
+    "nodeid_count": 4058,
+    "nodeids_sha256": "fc13ffc5a1e5a2d9eca62bc0766da4b93d2b056bd1e3d5e784bed87852b5f16f",
+    "test_sources_sha256": "8239dd8fc5fa8274c11c2262752cf1101617ebd6a80c5db3f6383d4b0dba2f8c",
+    "test_source_count": 301,
     "candidate_nodeids": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
       "tests/test_delivery_studio_lifecycle.py::test_dsc_public_delivery_continues_project_and_copied_package_exports_independently",
