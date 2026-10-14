@@ -9,7 +9,7 @@ MAX_STDERR_BYTES = 1024 * 1024
 MAX_RESPONSE_BYTES = 20 * 1024 * 1024
 ALLOWED_COMMANDS = frozenset({"inspect-document-state", "audit-documents", "audit-spec-data",
                               "preview-document", "edit-document", "edit-annotations", "export-document",
-                              "compile-plot-ir", "inspect-plot-ir"})
+                              "compile-plot-ir", "inspect-plot-ir", "font-families"})
 
 
 def decode(raw: bytes) -> dict[str, Any]:
@@ -42,6 +42,8 @@ def validate_request(value: dict[str, Any]) -> tuple[str, list[str]]:
             or not all(isinstance(arg, str) and len(arg) <= 8192 and "\x00" not in arg for arg in argv)
             or argv[0] not in ALLOWED_COMMANDS):
         raise ValueError("Unsupported internal native command or argument shape.")
+    if argv[0] == "font-families" and len(argv) != 1:
+        raise ValueError("The native font catalog command accepts no arguments.")
     return value["id"], argv
 
 

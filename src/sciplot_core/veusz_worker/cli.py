@@ -30,6 +30,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Internal SciPlot Veusz export worker."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("font-families", help="Read the installed native font catalog; no document or file arguments.")
     export_parser = subparsers.add_parser(
         "export", help="Generate and export a Veusz document from a request."
     )
@@ -114,7 +115,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    if args.command == "compile-plot-ir":
+    if args.command == "font-families":
+        from sciplot_core.veusz_worker.font_catalog import font_families
+
+        payload = font_families()
+    elif args.command == "compile-plot-ir":
         from sciplot_core.veusz_worker.managed import compile_plot_ir
 
         payload = compile_plot_ir(args.ir, args.document, args.preview)

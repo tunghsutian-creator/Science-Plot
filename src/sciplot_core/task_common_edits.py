@@ -151,13 +151,9 @@ def normalize_common_edit(*, intent: str | None = None, **options: Any) -> dict[
 
 def _installed_font(name: str) -> None:
     """Use the existing native font catalog; never accept silent font substitution."""
-    from PyQt6.QtGui import QGuiApplication
-    from sciplot_core.native_settings import _font_families
+    from sciplot_core.native_font_catalog import installed_font_families
 
-    application = QGuiApplication.instance()
-    if application is None:
-        application = QGuiApplication([])
-    available = _font_families()
+    available = installed_font_families()
     if name not in available:
         raise _invalid("Choose an exact installed native font family.", font_family=name,
                        fonts=available[:32], font_count=len(available), omitted_font_count=max(0, len(available) - 32))
