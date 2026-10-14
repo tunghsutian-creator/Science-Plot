@@ -167,18 +167,23 @@ jobs:
           assert qa['blocking_check_ids'] == ['font_families'], qa['blocking_check_ids']
           print('Original unmodified performance baseline reproduced only its font-family rejection')
           PYBASE
-      - name: Apply diagnostic-only bounded native superscript-minus prototype
+      - name: Prepare a bound source-only diagnostic candidate without mutating checkout
         run: |
           python3 - <<'PYPROTOTYPE'
           from pathlib import Path
           import hashlib
           import json
-          root = Path('.tmp_verify/ci_linux_native_diagnostic')
-          root.mkdir(parents=True, exist_ok=True)
-          compat = Path('src/sciplot_core/studio_core/qt_compat.py')
-          vendored = Path('third_party/veusz/veusz/utils/textrender.py')
-          policy = Path('src/sciplot_core/policy/frame_export.py')
-          before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in (compat, vendored, policy)}
+          import os
+          from sciplot_core.verification.public_stage import create_stage, source_binding, _git
+          root = Path.cwd().resolve()
+          output = root / '.tmp_verify/ci_linux_native_diagnostic'
+          before = source_binding(root)
+          original_head = _git(root, 'rev-parse', 'HEAD').strip()
+          origin, origin_environment, original_copy = create_stage(root, output / 'prototype-origin', dict(os.environ))
+          compat = origin / 'src/sciplot_core/studio_core/qt_compat.py'
+          vendored = origin / 'third_party/veusz/veusz/utils/textrender.py'
+          policy = origin / 'src/sciplot_core/policy/frame_export.py'
+          pre = {str(path.relative_to(origin)): hashlib.sha256(path.read_bytes()).hexdigest() for path in (compat,vendored,policy)}
           candidate = r'''"""Diagnostic-only runtime experiment; not source or a release gate."""
           import json
           import os
@@ -242,8 +247,8 @@ jobs:
                       minus_x = slot_left + ink_offset
                       minus.translate(minus_x, state.y + baseline_delta)
                       digit_ink.translate(slot_right, state.y)
-                      fits = (minus.left() >= slot_left and minus.right() <= slot_right
-                              and not minus.intersects(digit_ink))
+                      fits = bool(minus.left() >= slot_left and minus.right() <= slot_right
+                                  and not minus.intersects(digit_ink))
                       row = {"slot": [slot_left, slot_right], "minus_ink": [minus.left(), minus.top(), minus.right(), minus.bottom()],
                              "digit_ink": [digit_ink.left(), digit_ink.top(), digit_ink.right(), digit_ink.bottom()],
                              "baseline_delta": baseline_delta, "fits": fits}
@@ -266,38 +271,63 @@ jobs:
               render._sciplot_minus_prototype = True
               textrender.PartText.render = render
           '''
-          module = Path('src/sciplot_core/studio_core/_diagnostic_superscript_minus.py')
+          module = origin / 'src/sciplot_core/studio_core/_diagnostic_superscript_minus.py'
           assert not module.exists()
           module.write_text(candidate)
           needle = '    ensure_veusz_numeric_precision()\n'
           source = compat.read_text()
           assert source.count(needle) == 1
-          source = source.replace(needle, '    from sciplot_core.studio_core._diagnostic_superscript_minus import install\n    install()\n' + needle)
-          compat.write_text(source)
-          after = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in (compat, vendored, policy, module)}
-          assert before[str(vendored)] == after[str(vendored)]
-          assert before[str(policy)] == after[str(policy)]
-          (root / 'prototype-source.py').write_text(candidate)
-          (root / 'prototype-mutation.json').write_text(json.dumps({'kind':'diagnostic_runtime_prototype_not_release_validation','before':before,'after':after}, indent=2))
-          print(json.dumps({'kind':'diagnostic_runtime_prototype_not_release_validation','before':before,'after':after}, indent=2))
+          compat.write_text(source.replace(needle, '    from sciplot_core.studio_core._diagnostic_superscript_minus import install\n    install()\n' + needle))
+          post = {str(path.relative_to(origin)): hashlib.sha256(path.read_bytes()).hexdigest() for path in (compat,vendored,policy,module)}
+          assert pre[str(vendored.relative_to(origin))] == post[str(vendored.relative_to(origin))]
+          assert pre[str(policy.relative_to(origin))] == post[str(policy.relative_to(origin))]
+          _git(origin, 'add', 'src/sciplot_core/studio_core/qt_compat.py', 'src/sciplot_core/studio_core/_diagnostic_superscript_minus.py')
+          _git(origin, '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Diagnostic-only bounded native text experiment')
+          stage, environment, receipt = create_stage(origin, origin / '.tmp_verify/final-stage', origin_environment)
+          assert source_binding(root) == before and _git(root, 'rev-parse', 'HEAD').strip() == original_head
+          (output / 'prototype-source.py').write_text(candidate)
+          mutation = {'kind':'diagnostic_runtime_prototype_not_release_validation', 'original_source_binding':before,
+                      'original_head':original_head,'prototype_origin':str(origin),'stage_root':str(stage),
+                      'generated_candidate_head':receipt['origin_head'],'generated_stage_head':receipt['stage_head'],
+                      'before':pre,'after':post,'original_source_unchanged':True}
+          (output / 'prototype-mutation.json').write_text(json.dumps(mutation,indent=2))
+          print(json.dumps({key:value for key,value in mutation.items() if key != 'original_source_binding'},indent=2))
           PYPROTOTYPE
-      - name: Diagnose original Linux native failures under public guard
-        shell: bash
-        env:
-          SCIPLOT_PUBLIC_STAGE_REPORT: .tmp_verify/ci_linux_native_diagnostic/reports.json
-          SCIPLOT_MINUS_PROTOTYPE_OUT: ${{ github.workspace }}/.tmp_verify/ci_linux_native_diagnostic/minus-events.jsonl
+      - name: Diagnose original four and daemon controls in the bound candidate stage
         run: |
-          set -euo pipefail
-          mkdir -p .tmp_verify/ci_linux_native_diagnostic
-          # Collect the complete suite before input-scope and keyword selection.
-          # This is a bounded diagnostic, never a release or full-suite PASS.
-          python3 -m pytest -q --tb=long \
-            -p sciplot_core.verification.public_stage \
-            --input-scope public-comprehensive \
-            --basetemp=.tmp_verify/ci_linux_native_diagnostic/pytest \
-            --junitxml=.tmp_verify/ci_linux_native_diagnostic/junit.xml \
-            -k 'test_ready_performance_studio_review_preserves_lineage or test_template_creation_has_exactly_one_native_export_and_no_repeated_preparation or test_native_radar_long_mixed_units_and_incomplete_negative_reference or test_daemon_normal_termination_closes_native_worker_and_hardkill_stays_unsealed' \
-            2>&1 | tee .tmp_verify/ci_linux_native_diagnostic/command.log
+          python3 - <<'PYRUN'
+          from pathlib import Path
+          import json
+          import os
+          import subprocess
+          import sys
+          from sciplot_core.verification.public_stage import source_binding, _git
+          root=Path.cwd().resolve()
+          output=root / '.tmp_verify/ci_linux_native_diagnostic'
+          configuration=json.loads((output / 'prototype-mutation.json').read_text())
+          stage=Path(configuration['stage_root'])
+          environment=dict(os.environ, SCIPLOT_REPO=str(stage), SCIPLOT_SOURCE_ROOT=str(stage/'src'),
+                           SCIPLOT_RUNTIME_REPO=str(stage), SCIPLOT_VEUSZ_ROOT=str(stage/'third_party/veusz'),
+                           SCIPLOT_PYTHON=sys.executable, PYTHONPATH=os.pathsep.join((str(stage/'src'),str(stage/'tests'))),
+                           SCIPLOT_PUBLIC_STAGE_REPORT=str(output/'reports.json'),
+                           SCIPLOT_MINUS_PROTOTYPE_OUT=str(output/'minus-events.jsonl'))
+          for key in ('SCIPLOT_PUBLIC_INPUT_GUARD','SCIPLOT_PUBLIC_GUARD_BOOTSTRAP','SCIPLOT_PUBLIC_GUARD_WRAPPER_BOOTSTRAP'):
+              environment.pop(key,None)
+          selection=('test_ready_performance_studio_review_preserves_lineage or '
+                     'test_template_creation_has_exactly_one_native_export_and_no_repeated_preparation or '
+                     'test_native_radar_long_mixed_units_and_incomplete_negative_reference or '
+                     'test_daemon_normal_termination_closes_native_worker_and_hardkill_stays_unsealed')
+          command=[sys.executable,'-m','pytest','-q','--tb=long','-p','sciplot_core.verification.public_stage',
+                   '--input-scope','public-comprehensive','--basetemp='+str(output/'pytest'),
+                   '--junitxml='+str(output/'junit.xml'),'-k',selection]
+          print(json.dumps({'kind':'bounded_native_prototype_six_node_diagnostic_not_release','command':command,'stage_root':str(stage)}),flush=True)
+          with (output/'command.log').open('xb') as log:
+              process=subprocess.run(command,cwd=stage,env=environment,stdin=subprocess.DEVNULL,stdout=log,stderr=subprocess.STDOUT,check=False)
+          print((output/'command.log').read_text())
+          assert source_binding(root) == configuration['original_source_binding']
+          assert _git(root,'rev-parse','HEAD').strip() == configuration['original_head']
+          sys.exit(process.returncode)
+          PYRUN
       - name: Summarize generated-only publication QA details
         if: always()
         run: |
