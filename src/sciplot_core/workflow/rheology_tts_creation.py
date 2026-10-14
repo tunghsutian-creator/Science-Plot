@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 from copy import deepcopy
-import ctypes
 import hashlib
 import html
 import json
-import os
 from pathlib import Path
 import re
-import sys
 from uuid import uuid4
 from urllib.parse import quote
 
@@ -137,25 +134,10 @@ def _known_workspace(workspace: Path, checkpoint: dict) -> None:
 
 
 def _install_delivery(candidate: Path, delivery: Path) -> None:
-    """Atomically rename a new directory without replacing even an empty target."""
-    reject_symlink_path(candidate)
-    reject_symlink_path(delivery)
-    library = ctypes.CDLL(None, use_errno=True)
-    if sys.platform == "darwin" and hasattr(library, "renamex_np"):
-        rename = library.renamex_np
-        rename.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
-        rename.restype = ctypes.c_int
-        result = rename(os.fsencode(candidate), os.fsencode(delivery), 0x00000004)  # RENAME_EXCL
-    elif sys.platform.startswith("linux") and hasattr(library, "renameat2"):
-        rename = library.renameat2
-        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
-        rename.restype = ctypes.c_int
-        result = rename(-100, os.fsencode(candidate), -100, os.fsencode(delivery), 1)  # RENAME_NOREPLACE
-    else:
-        raise RuntimeError("Atomic non-replacing directory installation is unavailable on this platform.")
-    if result:
-        code = ctypes.get_errno()
-        raise OSError(code, os.strerror(code), str(delivery))
+    """Retain the prepared-creation seam while sharing exclusive installation."""
+    from sciplot_core.delivery.install import install_new_delivery
+
+    install_new_delivery(candidate, delivery)
 
 
 def _result(manifest: dict, *, resumed: bool) -> dict:
