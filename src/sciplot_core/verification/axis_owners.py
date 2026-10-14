@@ -11,6 +11,8 @@ GENERIC_AXIS_OWNERS = (
         exact_paths=frozenset(
             {
                 "src/sciplot_core/source_inspection/intent_recognition.py",
+                "src/sciplot_core/source_inspection/header_matching.py",
+                "src/sciplot_core/source_tables/parsing.py",
                 "src/sciplot_core/render/inspection.py",
                 "src/sciplot_core/studio_core/request_overrides.py",
                 "src/sciplot_core/studio_core/veusz_axis_apply.py",
@@ -28,6 +30,9 @@ GENERIC_AXIS_OWNERS = (
         owned_test_paths=frozenset(
             {
                 "tests/test_generic_axis_policy.py",
+                "tests/test_compatibility_facades.py",
+                "tests/test_legacy_core_migration.py",
+                "tests/test_replicate_distribution_contract.py",
                 "tests/test_marker_axis_extent.py",
                 "tests/test_registered_single_curve_figure_plan.py",
                 "tests/test_semantic_validation.py",
@@ -38,6 +43,9 @@ GENERIC_AXIS_OWNERS = (
         ),
         pytest_targets=(
             "tests/test_task_control.py",
+            "tests/test_compatibility_facades.py",
+            "tests/test_legacy_core_migration.py",
+            "tests/test_replicate_distribution_contract.py",
             "tests/test_plan_preview.py",
             "tests/test_generic_axis_policy.py",
             "tests/test_marker_axis_extent.py",

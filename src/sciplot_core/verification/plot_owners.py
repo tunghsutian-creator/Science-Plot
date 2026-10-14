@@ -74,8 +74,34 @@ PLOT_OWNER = ChangedOwner(
                           "tests/rendering_profiles_helpers.py", "tests/rendering_profiles_native.py",
                           "tests/rendering_profile_mechanical.py", "tests/rendering_profile_mechanical_projection.py",
                           "tests/rheology_profile_helpers.py"}),
+    excluded_paths=frozenset({"src/sciplot_core/plot_engine/typed_intent.py",
+                              "tests/test_plot_typed_intent.py", "tests/test_plot_typed_intent_recovery.py"}),
     owned_test_paths=frozenset(PLOT_TEST_PATHS),
     pytest_targets=(*PLOT_TEST_PATHS, *ARCHITECTURE_CORE_TARGETS),
+    mypy_required=True,
+    handoff_gates=("doctor",),
+    final_milestone_gates=("smoke",),
+    release_gates=("full_pytest",),
+)
+
+
+# This facade resolves axis/annotation text to an existing FigureSpec patch.
+# Keep its selectors on that contract and its transaction/recovery consumers;
+# backend lowering, unrelated marks/transforms and native cold paths stay in the
+# broad engine owner and the required full release gate.
+TYPED_INTENT_OWNER = ChangedOwner(
+    owner_id="typed_plot_intent",
+    exact_paths=frozenset({"src/sciplot_core/plot_engine/typed_intent.py"}),
+    owned_test_paths=frozenset({"tests/test_plot_typed_intent.py",
+                              "tests/test_plot_typed_intent_recovery.py"}),
+    pytest_targets=(
+        "tests/test_plot_typed_intent.py",
+        "tests/test_plot_typed_intent_recovery.py",
+        "tests/test_figure_document.py",
+        "tests/test_plot_document.py::test_presentation_intent_cannot_change_scientific_binding",
+        "tests/test_plot_engine.py::test_safe_patch_automatically_commits_and_exports_once_with_science_preserved",
+        *ARCHITECTURE_CORE_TARGETS,
+    ),
     mypy_required=True,
     handoff_gates=("doctor",),
     final_milestone_gates=("smoke",),

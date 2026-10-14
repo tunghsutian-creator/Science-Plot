@@ -113,6 +113,7 @@ def test_compiled_styles_and_bar_baseline_preserve_explicit_meaning() -> None:
     assert bars["axes"]["x"]["max"] > 1.3
 
 
+@pytest.mark.comprehensive
 def test_native_suite_round_trip_and_exact_export(tmp_path: Path) -> None:
     result = render_tts_figures(_spec(), tmp_path)
     figure = result["figures"][0]
@@ -136,6 +137,7 @@ def test_native_suite_round_trip_and_exact_export(tmp_path: Path) -> None:
     assert file_sha256(doc) == before
 
 
+@pytest.mark.comprehensive
 def test_standard_single_panel_keeps_program_frame_margins(tmp_path: Path) -> None:
     spec = _spec()
     fig = spec["figures"][0]
@@ -185,6 +187,7 @@ print(json.dumps({setting:interface.Get(setting) for setting in reads}))
     return json.loads(result.stdout)
 
 
+@pytest.mark.comprehensive
 def test_strict_presentation_rejects_invisible_or_misstyled_series_with_identical_data(
     tmp_path,
 ):
@@ -223,6 +226,7 @@ def test_strict_presentation_rejects_invisible_or_misstyled_series_with_identica
         audit_tts_document(target, compiled, check_presentation=True)
 
 
+@pytest.mark.comprehensive
 def test_native_presentation_edits_survive_ordinary_exact_reexport(tmp_path):
     result = render_tts_figures(_spec(), tmp_path / "generated")["figures"][0]
     path = Path(result["document"])
@@ -245,6 +249,7 @@ def test_native_presentation_edits_survive_ordinary_exact_reexport(tmp_path):
     }
 
 
+@pytest.mark.comprehensive
 def test_restyle_candidate_preserves_unrelated_native_settings_and_original_bytes(
     tmp_path,
 ):
@@ -283,6 +288,7 @@ def test_restyle_candidate_preserves_unrelated_native_settings_and_original_byte
     )
 
 
+@pytest.mark.comprehensive
 def test_restyle_rejects_stale_revision_target_conflicts_and_changed_arrays(tmp_path):
     from sciplot_core.rheology_tts_render import restyle_tts_document
 
@@ -309,6 +315,7 @@ def test_restyle_rejects_stale_revision_target_conflicts_and_changed_arrays(tmp_
     assert file_sha256(path) == edited_sha
 
 
+@pytest.mark.comprehensive
 def test_restyle_bar_color_preserves_unrelated_native_group_spacing(tmp_path):
     from sciplot_core.rheology_tts_render import restyle_tts_document
 
@@ -463,6 +470,7 @@ def test_batch_preaudits_all_and_rejects_cross_document_drift(tmp_path, monkeypa
         assert all(path.read_bytes() == value for path, value in before.items())
 
 
+@pytest.mark.comprehensive
 def test_native_batch_matches_separate_exact_exports_and_keeps_saved_edits(tmp_path, monkeypatch):
     from PIL import Image
     from sciplot_core import rheology_tts_render as render

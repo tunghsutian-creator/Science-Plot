@@ -6,7 +6,7 @@ from sciplot_core.verification.axis_owners import GENERIC_AXIS_OWNERS
 from sciplot_core.verification.external_ai_owners import EXTERNAL_AI_OWNERS
 from sciplot_core.verification.live_editor_owner import LIVE_EDITOR_OWNER
 from sciplot_core.verification.owner_model import ChangedOwner
-from sciplot_core.verification.plot_owners import PLOT_OWNER
+from sciplot_core.verification.plot_owners import PLOT_OWNER, TYPED_INTENT_OWNER
 from sciplot_core.verification.project_integrity_owners import PROJECT_INTEGRITY_OWNERS
 from sciplot_core.verification.project_revision_owners import PROJECT_REVISION_OWNERS
 from sciplot_core.verification.rheology_tts_owner import RHEOLOGY_TTS_OWNER
@@ -32,6 +32,7 @@ CHANGED_OWNERS = (
     RHEOLOGY_TTS_OWNER,
     LIVE_EDITOR_OWNER,
     PLOT_OWNER,
+    TYPED_INTENT_OWNER,
     DOCUMENTATION_OWNER,
     ChangedOwner(
         owner_id="validated_readiness_registry",

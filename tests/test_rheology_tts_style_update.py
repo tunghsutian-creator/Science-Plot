@@ -45,6 +45,7 @@ def _saved_legacy_style(tmp_path):
     return workspace, delivery, source, manifest
 
 
+@pytest.mark.comprehensive
 def test_preview_preserves_delivery_apply_updates_only_styles_and_retries_once(tmp_path):
     workspace, delivery, source, manifest = _saved_legacy_style(tmp_path)
     original = snapshot([source, delivery / "data/analysis.json", workspace / "analysis.json"])
@@ -72,6 +73,7 @@ def test_preview_preserves_delivery_apply_updates_only_styles_and_retries_once(t
 
 
 @pytest.mark.parametrize("target", ["source", "candidate", "receipt", "hidden_analysis", "visible_analysis"])
+@pytest.mark.comprehensive
 def test_stale_or_modified_preview_is_rejected_without_delivery_changes(tmp_path, target):
     workspace, delivery, source, manifest = _saved_legacy_style(tmp_path)
     preview = preview_suite_style(workspace)
@@ -143,6 +145,7 @@ def test_candidate_change_during_staging_cannot_publish_unreviewed_bytes(tmp_pat
     assert snapshot([target]) == before
 
 
+@pytest.mark.comprehensive
 def test_caller_supplies_display_labels_without_changing_numeric_science(tmp_path):
     from sciplot_core.rheology_tts_render import audit_tts_document
     from sciplot_core.rheology_tts_style import upgrade_tts_presentation
@@ -165,6 +168,7 @@ def test_caller_supplies_display_labels_without_changing_numeric_science(tmp_pat
     assert snapshot([Path(p) for p in protected]) == protected
 
 
+@pytest.mark.comprehensive
 def test_prepared_suite_display_update_without_analysis_preserves_science(tmp_path, monkeypatch):
     from sciplot_core.rheology_tts_render import audit_tts_document
     from sciplot_core.semantic_sources import rheology_tts
@@ -233,6 +237,7 @@ def test_prepared_suite_display_update_without_analysis_preserves_science(tmp_pa
 
 
 @pytest.mark.parametrize("change", ["coordinates", "ledger", "stale_plan"])
+@pytest.mark.comprehensive
 def test_presentation_plan_cannot_change_science_or_drift_after_preview(tmp_path, change):
     from sciplot_core.rheology_tts_style import upgrade_tts_presentation
 

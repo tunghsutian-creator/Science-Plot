@@ -140,6 +140,7 @@ def native_errors(tmp_path):
     ]
 
 
+@pytest.mark.comprehensive
 def test_curve_and_grouped_bars_retain_exact_supplied_errors(native_errors, tmp_path):
     path, figure = native_errors
     for panel in figure["panels"]:
@@ -187,6 +188,7 @@ def test_curve_and_grouped_bars_retain_exact_supplied_errors(native_errors, tmp_
         ("b_s1_y", {"symerr": [1.23456789012345, 0], "poserr": [1, 1]}),
     ],
 )
+@pytest.mark.comprehensive
 def test_native_error_channel_tampering_rejected(native_errors, name, update):
     path, figure = native_errors
     _dataset(path, name, update=update)
@@ -194,6 +196,7 @@ def test_native_error_channel_tampering_rejected(native_errors, name, update):
         audit_tts_document(path, figure)
 
 
+@pytest.mark.comprehensive
 def test_hidden_native_errors_fail_strict_audit_but_saved_reexport_preserves_edit(
     native_errors, tmp_path
 ):

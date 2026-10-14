@@ -25,6 +25,7 @@ def native_figure(tmp_path):
     )
 
 
+@pytest.mark.comprehensive
 def test_legend_labels_positions_and_empty_keys_use_native_candidate(
     native_figure, tmp_path
 ):
@@ -73,6 +74,7 @@ def test_legend_labels_positions_and_empty_keys_use_native_candidate(
 
 
 @pytest.mark.parametrize("target", ["label", "position"])
+@pytest.mark.comprehensive
 def test_native_legend_target_conflicts_preserve_document(
     native_figure, tmp_path, target
 ):
@@ -93,6 +95,7 @@ def test_native_legend_target_conflicts_preserve_document(
     assert file_sha256(source) == current_sha
 
 
+@pytest.mark.comprehensive
 def test_label_only_edit_preserves_manual_legend_and_exact_reexport(
     native_figure, tmp_path
 ):
@@ -123,6 +126,7 @@ def test_label_only_edit_preserves_manual_legend_and_exact_reexport(
     assert {"key", "horzPosn"} <= {item["field"] for item in differences}
 
 
+@pytest.mark.comprehensive
 def test_restyle_rejects_nonlegend_layout_and_legend_inventory_changes(
     native_figure, tmp_path
 ):

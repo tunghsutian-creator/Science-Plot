@@ -5,6 +5,38 @@ from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
 EXTERNAL_AI_OWNERS = (
     ChangedOwner(
+        owner_id="openai_assistant_provider",
+        path_prefixes=("src/sciplot_core/openai_provider/", "src/sciplot_core/assistant_provider/"),
+        exact_paths=frozenset({"src/sciplot_core/openai_provider_probe.py"}),
+        owned_test_paths=frozenset({"tests/test_compatibility_facades.py"}),
+        pytest_targets=(
+            "tests/test_compatibility_facades.py",
+            "tests/test_assistant_contract.py",
+            "tests/test_automation_baseline.py::test_external_model_call_guard_counts_and_blocks_the_production_adapter",
+            *ARCHITECTURE_CORE_TARGETS,
+        ),
+        handoff_gates=("doctor",),
+        final_milestone_gates=("smoke",),
+        release_gates=("full_pytest",),
+    ),
+    ChangedOwner(
+        owner_id="presentation_style_contract",
+        path_prefixes=("src/sciplot_core/style_contract/",),
+        exact_paths=frozenset({"src/sciplot_core/presentation_identity.py"}),
+        owned_test_paths=frozenset({"tests/test_compatibility_facades.py"}),
+        pytest_targets=(
+            "tests/test_compatibility_facades.py",
+            "tests/test_style_template_contract.py",
+            "tests/test_unified_style_contract.py",
+            "tests/test_palette_authority.py",
+            "tests/test_studio_presentation_identity.py",
+            *ARCHITECTURE_CORE_TARGETS,
+        ),
+        handoff_gates=("doctor",),
+        final_milestone_gates=("smoke",),
+        release_gates=("acceptance_rules", "full_pytest"),
+    ),
+    ChangedOwner(
         owner_id="automation_baseline_evidence",
         exact_paths=frozenset(
             {

@@ -6,8 +6,9 @@ import copy
 import json
 import os
 import tempfile
+from time import perf_counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
@@ -73,9 +74,15 @@ def _run_hash_failure_probe(
     }
 
 
-def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
-    """Run a fixture-free end-to-end Studio lifecycle and delivery failure probe."""
+def run_runtime_smoke(
+    *, output_root: Path, profile: Literal["full", "quick"] = "full",
+) -> dict[str, Any]:
+    """Run full lifecycle coverage by default, or one bounded native quick check."""
 
+    if profile == "quick":
+        return _run_quick_runtime_smoke(output_root=output_root)
+    if profile != "full":
+        raise ValueError(f"Unknown runtime smoke profile: {profile!r}")
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     resolved_output = output_root.expanduser().resolve()
     resolved_output.mkdir(parents=True, exist_ok=True)
@@ -771,4 +778,106 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    return payload
+
+
+def _run_quick_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
+    """Create/export/publish one synthetic FTIR; full remains the release gate."""
+    started = perf_counter()
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    resolved_output = output_root.expanduser().resolve()
+    resolved_output.mkdir(parents=True, exist_ok=True)
+    run_root = Path(tempfile.mkdtemp(prefix="runtime_smoke_quick_", dir=resolved_output))
+    summary_path = run_root / "runtime_smoke.json"
+    checks: list[dict[str, Any]] = []
+    fixture: dict[str, Any] | None = None
+    project_dir: Path | None = None
+    manifest_path: Path | None = None
+    error: dict[str, str] | None = None
+    try:
+        from sciplot_core.doctor import doctor_payload
+        from sciplot_core.studio import (
+            export_studio_document, prepare_studio_document, publish_studio_export_run,
+        )
+        from sciplot_core.studio_core.registry_state import _veusz_spec_path
+
+        doctor = doctor_payload()
+        checks.append(_check("runtime_ready", "Required runtime dependencies are ready",
+                             doctor.get("status") == "ready", detail={"status": doctor.get("status")}))
+        if doctor.get("status") != "ready":
+            raise RuntimeError("Quick smoke requires Doctor status=ready.")
+        source = run_root / "fixture" / "ftir_runtime_smoke.csv"
+        fixture = _write_synthetic_ftir(source)
+        prepared = prepare_studio_document(source, output_root=run_root / "projects",
+                                           project_name="Synthetic FTIR quick smoke")
+        project_dir = Path(str(prepared["project_dir"]))
+        document = Path(str(prepared["document"]))
+        document_sha = file_sha256(document)
+        exported = export_studio_document(document, formats=["pdf", "tiff_300"],
+                                          audit_spec_path=_veusz_spec_path(document))
+        exports = exported["exports"]
+        published = publish_studio_export_run(
+            project_dir=project_dir, request_path=Path(str(prepared["request"])),
+            document_path=document, exports=exports,
+            export_document_sha256=str(exported["document_sha256"]),
+            primary_native_audit=exported["document_audit"],
+        )
+        manifest_path = Path(str(published["manifest"]))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        delivery = manifest.get("delivery_package") or {}
+        editable = delivery.get("editable_vsz") or {}
+        checks.extend([
+            _check("semantic_rule_selected", "Synthetic FTIR selects its expected rule",
+                   (manifest.get("semantic") or {}).get("rule_id") == EXPECTED_RULE_ID),
+            _check("source_preserved", "The original synthetic coordinates remain byte-identical",
+                   file_sha256(source) == fixture["sha256"], detail=fixture),
+            _check("native_create_exact_export", "One native VSZ exports PDF/TIFF with an actual numerical audit",
+                   int(prepared.get("series_count") or 0) > 0
+                   and exported["document_audit"].get("status") == "passed"
+                   and {item["format"] for item in exports} == {"pdf", "tiff_300"}
+                   and all(Path(item["path"]).is_file() and Path(item["path"]).stat().st_size > 0
+                           and file_sha256(Path(item["path"])) == item["sha256"] for item in exports),
+                   detail={"document": str(document), "exports": exports,
+                           "document_audit": exported["document_audit"]}),
+            _check("exact_current_vsz_hash", "Export and editable delivery retain the current native bytes",
+                   file_sha256(document) == document_sha == exported["document_sha256"]
+                   == manifest.get("exported_document_hash")
+                   and editable.get("hash_matches_export") is True),
+            _check("qa_and_delivery_hashes", "Artifact QA and delivery byte checks pass",
+                   (manifest.get("qa") or {}).get("status") == "passed"
+                   and _delivery_artifact(delivery, "qa_artifact_hashes_match_delivery").get("exists") is True
+                   and delivery.get("complete") is True,
+                   detail={"qa": manifest.get("qa"), "delivery_complete": delivery.get("complete")}),
+        ])
+    except Exception as exc:
+        error = {"type": type(exc).__name__, "message": str(exc)}
+        checks.append(_check("runtime_exception", "The bounded native smoke completed", False, detail=error))
+    passed = bool(checks) and all(check["status"] == "passed" for check in checks)
+    payload = {
+        "kind": "sciplot_runtime_smoke", "version": RUNTIME_SMOKE_VERSION,
+        "profile": "quick", "generated_at": utc_now_iso(),
+        "status": "passed" if passed else "failed",
+        "state": "ready" if passed else "needs_rule_repair",
+        "elapsed_seconds": perf_counter() - started, "fixture": fixture, "checks": checks,
+        "summary": {"check_count": len(checks),
+                    "passed_count": sum(check["status"] == "passed" for check in checks),
+                    "failed_ids": [check["id"] for check in checks if check["status"] != "passed"]},
+        "artifacts": {"run_root": str(run_root), "summary": str(summary_path),
+                      "project_dir": str(project_dir) if project_dir else None,
+                      "manifest": str(manifest_path) if manifest_path else None},
+        "error": error,
+        "coverage": {
+            "included": ["doctor", "synthetic_ftir_native_creation", "native_numerical_audit",
+                         "exact_current_pdf_tiff_export", "source_document_artifact_hashes", "artifact_qa_delivery"],
+            "deferred_to_full": ["mapping_and_scientific_contract_matrices", "ready_rule_envelopes",
+                                 "scalar_field_visual_attacks", "gui_project_assistant_figure_set",
+                                 "provider_wire_contract", "manual_edit_preservation",
+                                 "project_and_relocated_delivery_launchers", "standalone_export",
+                                 "delivery_hash_failure_recovery"],
+        },
+        "limitations": ["Generated synthetic FTIR is not real-data acceptance.",
+                        "Quick smoke does not satisfy the full lifecycle milestone or release gate.",
+                        "Artifact QA does not establish journal compliance or human usability."],
+    }
+    summary_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
     return payload

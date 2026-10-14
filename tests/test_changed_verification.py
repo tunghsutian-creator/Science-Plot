@@ -54,10 +54,14 @@ def test_semantic_plot_sources_and_tests_select_transaction_and_native_evidence(
     assert payload["unowned_paths"] == []
     checks = {check["check_id"]: check["command"] for check in payload["checks"]}
     assert checks["mypy_owned_scope"] == [sys.executable, "-m", "mypy"]
-    assert {"tests/test_plot_document.py", "tests/test_plot_backend.py", "tests/test_plot_backend_native.py", "tests/test_plot_protocol.py",
-            "tests/test_plot_typed_intent_recovery.py",
-            "tests/test_managed_rebuild_explanation.py",
-            "tests/test_plot_engine.py", "tests/test_plot_engine_native.py"} <= set(checks["pytest_changed_owners"])
+    if path == "tests/test_plot_typed_intent_recovery.py":
+        assert {"tests/test_plot_typed_intent.py", "tests/test_plot_typed_intent_recovery.py",
+                "tests/test_figure_document.py"} <= set(checks["pytest_changed_owners"])
+    else:
+        assert {"tests/test_plot_document.py", "tests/test_plot_backend.py", "tests/test_plot_backend_native.py", "tests/test_plot_protocol.py",
+                "tests/test_plot_typed_intent_recovery.py",
+                "tests/test_managed_rebuild_explanation.py",
+                "tests/test_plot_engine.py", "tests/test_plot_engine_native.py"} <= set(checks["pytest_changed_owners"])
     assert payload["required_later"]["handoff"] == ["doctor"]
     assert payload["required_later"]["final_milestone"] == ["smoke"]
 
@@ -1272,3 +1276,139 @@ def test_verify_cli_projects_plan_and_empty_scope_without_pass(status, plan_only
     assert cli.main(arguments) == expected_exit
     assert json.loads(capsys.readouterr().out) == payload
     assert calls == [{"base": "HEAD~2", **({"plan_only": True} if plan_only else {})}]
+
+
+@pytest.mark.parametrize("path", ["src/sciplot_core/plot_engine/typed_intent.py",
+                                  "tests/test_plot_typed_intent.py",
+                                  "tests/test_plot_typed_intent_recovery.py"])
+def test_typed_intent_leaf_selects_its_contract_and_preserves_later_gates(path):
+    plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+    assert plan["unowned_paths"] == []
+    owner_ids = {owner["owner_id"] for owner in plan["owners"]}
+    assert "typed_plot_intent" in owner_ids and "semantic_plot_engine" not in owner_ids
+    command = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
+    assert {"tests/test_plot_typed_intent.py", "tests/test_plot_typed_intent_recovery.py",
+            "tests/test_figure_document.py",
+            "tests/test_plot_document.py::test_presentation_intent_cannot_change_scientific_binding",
+            "tests/test_plot_engine.py::test_safe_patch_automatically_commits_and_exports_once_with_science_preserved",
+            *ARCHITECTURE_CORE_TARGETS} <= set(command)
+    assert "tests/test_plot_transforms.py" not in command
+    assert plan["required_later"] == {"handoff": ["doctor"],
+                                      "final_milestone": ["smoke"], "release": ["full_pytest"]}
+    assert any(check["check_id"] == "mypy_owned_scope" for check in plan["checks"])
+
+
+def test_mixed_leaf_and_backend_changes_keep_broad_native_evidence():
+    from sciplot_core.verification.plot_owners import PLOT_OWNER
+
+    assert not PLOT_OWNER.matches("src/sciplot_core/plot_engine/typed_intent.py")
+    assert PLOT_OWNER.matches("src/sciplot_core/plot_engine/future_contract.py")
+    plan = build_changed_verification_plan(["src/sciplot_core/plot_engine/typed_intent.py",
+                                            "src/sciplot_core/plot_backends/veusz.py"], repo_root=REPO_ROOT)
+    assert {"semantic_plot_engine", "typed_plot_intent"} <= {owner["owner_id"] for owner in plan["owners"]}
+    command = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
+    assert "tests/test_plot_backend_native.py" in command
+    assert "tests/test_plot_transforms.py" in command
+
+
+def test_quick_smoke_dispatch_keeps_full_default_and_rejects_unknown_profile(tmp_path, monkeypatch):
+    from sciplot_core.smoke import runtime
+
+    assert runtime.run_runtime_smoke.__kwdefaults__["profile"] == "full"
+    monkeypatch.setattr(runtime, "_run_quick_runtime_smoke", lambda *, output_root: {"profile": "quick"})
+    assert runtime.run_runtime_smoke(output_root=tmp_path, profile="quick") == {"profile": "quick"}
+    with pytest.raises(ValueError, match="Unknown runtime smoke profile"):
+        runtime.run_runtime_smoke(output_root=tmp_path, profile="unknown")
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("fault", ["ready", "doctor", "source", "document", "export", "qa"])
+def test_quick_smoke_fails_closed_on_native_and_artifact_evidence(tmp_path, monkeypatch, fault):
+    import json
+    from sciplot_core import studio
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.smoke import runtime
+
+    calls = []
+    monkeypatch.setattr("sciplot_core.doctor.doctor_payload",
+                        lambda: {"status": "blocked" if fault == "doctor" else "ready"})
+
+    def prepare(source, *, output_root, project_name):
+        calls.append("prepare")
+        output_root.mkdir()
+        document = output_root / "document.vsz"
+        document.write_bytes(b"native fixture")
+        if fault == "source":
+            source.write_bytes(b"changed coordinates")
+        return {"project_dir": str(output_root), "document": str(document),
+                "request": str(output_root / "request.json"), "series_count": 1}
+
+    def export(document, *, formats, audit_spec_path):
+        calls.append("export")
+        assert formats == ["pdf", "tiff_300"] and audit_spec_path
+        exports = []
+        for fmt in formats:
+            path = document.parent / fmt
+            path.write_bytes(b"exported artifact")
+            exports.append({"path": str(path), "format": fmt, "sha256": file_sha256(path)})
+        return {"exports": exports, "document_sha256": file_sha256(document),
+                "document_audit": {"status": "passed"}}
+
+    def publish(**kwargs):
+        calls.append("publish")
+        assert kwargs["primary_native_audit"] == {"status": "passed"}
+        document = kwargs["document_path"]
+        if fault == "document":
+            document.write_bytes(b"changed native bytes")
+        if fault == "export":
+            Path(kwargs["exports"][0]["path"]).write_bytes(b"changed artifact")
+        manifest = document.parent / "manifest.json"
+        manifest.write_text(json.dumps({"semantic": {"rule_id": "ftir_spectrum"},
+            "exported_document_hash": kwargs["export_document_sha256"],
+            "qa": {"status": "failed" if fault == "qa" else "passed"},
+            "delivery_package": {"complete": True, "editable_vsz": {"hash_matches_export": True},
+                                 "artifacts": [{"id": "qa_artifact_hashes_match_delivery", "exists": True}]}}))
+        return {"manifest": str(manifest)}
+
+    monkeypatch.setattr(studio, "prepare_studio_document", prepare)
+    monkeypatch.setattr(studio, "export_studio_document", export)
+    monkeypatch.setattr(studio, "publish_studio_export_run", publish)
+    monkeypatch.setattr(runtime, "_scalar_field_render_probe", lambda *_: pytest.fail("quick invoked full scalar matrix"))
+    result = runtime.run_runtime_smoke(output_root=tmp_path, profile="quick")
+    assert result["status"] == ("passed" if fault == "ready" else "failed")
+    assert result["profile"] == "quick" and result["elapsed_seconds"] >= 0
+    assert result["coverage"]["deferred_to_full"]
+    assert Path(result["artifacts"]["summary"]).is_file()
+    assert calls == ([] if fault == "doctor" else ["prepare", "export", "publish"])
+
+
+@pytest.mark.parametrize("path,owner,target", [
+    ("src/sciplot_core/source_inspection/header_matching.py", "generic_axis_policy", "tests/test_source_recognition_contract.py"),
+    ("src/sciplot_core/source_tables/parsing.py", "generic_axis_policy", "tests/test_legacy_core_migration.py"),
+    ("src/sciplot_core/openai_provider/provider.py", "openai_assistant_provider", "tests/test_assistant_contract.py"),
+    ("src/sciplot_core/openai_provider/environment.py", "openai_assistant_provider", "tests/test_assistant_contract.py"),
+    ("src/sciplot_core/assistant_provider/text_validation.py", "openai_assistant_provider", "tests/test_assistant_contract.py"),
+    ("src/sciplot_core/style_contract/template_contracts.py", "presentation_style_contract", "tests/test_style_template_contract.py"),
+    ("src/sciplot_core/style_contract/template_validation.py", "presentation_style_contract", "tests/test_style_template_contract.py"),
+    ("src/sciplot_core/presentation_identity.py", "presentation_style_contract", "tests/test_studio_presentation_identity.py"),
+])
+def test_consolidated_contract_owners_bind_current_and_removed_paths(path, owner, target):
+    plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+    assert plan["unowned_paths"] == []
+    assert owner in {item["owner_id"] for item in plan["owners"]}
+    command = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
+    assert target in command
+    assert "full_pytest" in plan["required_later"]["release"]
+    if owner != "generic_axis_policy":
+        assert plan["required_later"]["handoff"] == ["doctor"]
+        assert plan["required_later"]["final_milestone"] == ["smoke"]
+
+
+def test_compatibility_facades_select_every_consolidated_contract():
+    plan = build_changed_verification_plan(["tests/test_compatibility_facades.py"], repo_root=REPO_ROOT)
+    assert plan["unowned_paths"] == []
+    assert {"generic_axis_policy", "openai_assistant_provider", "presentation_style_contract"} <= {
+        owner["owner_id"] for owner in plan["owners"]}
+    command = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
+    assert "tests/test_compatibility_facades.py" in command
+    assert {"acceptance_rules", "full_pytest"} <= set(plan["required_later"]["release"])
