@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4493,
-    "nodeids_sha256": "52b56f7b0dbb7c83ac5c166086c8314fad9dbdf18bf877e9a9afb66dc49717f7",
-    "test_sources_sha256": "d2dc6e41eb0372b40f19e84cf9bd15530c62834a567afcebc079139a35d3ef83",
-    "test_source_count": 324,
+    "nodeid_count": 4537,
+    "nodeids_sha256": "6b8c3b4d80c808f6abbb8ce19eff4c7cc38dd723ea1971b8b0c9199dc631f439",
+    "test_sources_sha256": "006f893d3190529dd6964ec25c0ad69a7c3bf62c55f517e02298b901efba03a3",
+    "test_source_count": 326,
     "candidate_nodeids": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
       "tests/test_delivery_studio_lifecycle.py::test_dsc_public_delivery_continues_project_and_copied_package_exports_independently",
@@ -135,6 +135,32 @@
       "tests/test_public_stage.py::test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_binding[stage_head]",
       "tests/test_public_stage.py::test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_binding[stage_source]",
       "tests/test_public_stage.py::test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_binding[wrong_environment]",
+      "tests/test_public_verification_identity.py::test_actual_manifest_drift_keeps_old_snapshot_historic_and_blocks_fresh_capture",
+      "tests/test_public_verification_identity.py::test_fresh_public_capture_checks_actual_manifest_membership_even_with_new_selection_hash",
+      "tests/test_public_verification_identity.py::test_generated_only_public_skips_empty_domains_before_discovery_and_binds_policy",
+      "tests/test_public_verification_identity.py::test_generated_public_exclusion_does_not_weaken_real_raw_modes[audited]",
+      "tests/test_public_verification_identity.py::test_generated_public_exclusion_does_not_weaken_real_raw_modes[declared]",
+      "tests/test_public_verification_identity.py::test_private_fixture_members_do_not_enter_public_namespace_binding",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[command_filter]",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[missing_binding]",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[missing_inventory_manifest]",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[missing_labels]",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[science_claim]",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[unbound_selection]",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[wrong_closure_policy]",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[wrong_golden_reason]",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[wrong_manifest_hash]",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[wrong_profile]",
+      "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[wrong_raw_reason]",
+      "tests/test_public_verification_identity.py::test_public_fixture_bytes_remain_declared_and_drift_blocks_reuse",
+      "tests/test_public_verification_identity.py::test_public_membership_is_rechecked_without_reading_private_bytes[delete_public]",
+      "tests/test_public_verification_identity.py::test_public_membership_is_rechecked_without_reading_private_bytes[helper_alias]",
+      "tests/test_public_verification_identity.py::test_public_membership_is_rechecked_without_reading_private_bytes[new_helper]",
+      "tests/test_public_verification_identity.py::test_public_membership_is_rechecked_without_reading_private_bytes[new_public]",
+      "tests/test_public_verification_identity.py::test_public_membership_is_rechecked_without_reading_private_bytes[same_byte_alias]",
+      "tests/test_public_verification_identity.py::test_public_policy_cannot_omit_required_real_identity_domains[corpus_policy]",
+      "tests/test_public_verification_identity.py::test_public_policy_cannot_omit_required_real_identity_domains[inventory]",
+      "tests/test_public_verification_identity.py::test_public_policy_cannot_omit_required_real_identity_domains[python]",
       "tests/test_public_workflow_behavior.py::test_generated_generic_plan_uses_shared_terminal_and_studio_queue[dsc_curve]",
       "tests/test_public_workflow_behavior.py::test_generated_generic_plan_uses_shared_terminal_and_studio_queue[rheology_stress_relaxation]",
       "tests/test_public_workflow_behavior.py::test_generated_mechanical_task_style_and_shared_preparation_route[shared_route]",
@@ -540,6 +566,110 @@
       {
         "nodeid": "tests/test_public_stage.py::test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_binding[wrong_environment]",
         "reason": "Explicit temporary generated source repositories and synthetic runtime bindings validate exact public source-stage identity, unavailable private namespaces, caller/report boundaries and drift. No private measurement or original golden is consumed."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_actual_manifest_drift_keeps_old_snapshot_historic_and_blocks_fresh_capture",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_fresh_public_capture_checks_actual_manifest_membership_even_with_new_selection_hash",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_generated_only_public_skips_empty_domains_before_discovery_and_binds_policy",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_generated_public_exclusion_does_not_weaken_real_raw_modes[audited]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_generated_public_exclusion_does_not_weaken_real_raw_modes[declared]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_private_fixture_members_do_not_enter_public_namespace_binding",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[command_filter]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[missing_binding]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[missing_inventory_manifest]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[missing_labels]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[science_claim]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[unbound_selection]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[wrong_closure_policy]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[wrong_golden_reason]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[wrong_manifest_hash]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[wrong_profile]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_exclusion_cannot_be_resealed_without_exact_scope_binding[wrong_raw_reason]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_fixture_bytes_remain_declared_and_drift_blocks_reuse",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_membership_is_rechecked_without_reading_private_bytes[delete_public]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_membership_is_rechecked_without_reading_private_bytes[helper_alias]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_membership_is_rechecked_without_reading_private_bytes[new_helper]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_membership_is_rechecked_without_reading_private_bytes[new_public]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_membership_is_rechecked_without_reading_private_bytes[same_byte_alias]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_policy_cannot_omit_required_real_identity_domains[corpus_policy]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_policy_cannot_omit_required_real_identity_domains[inventory]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
+      },
+      {
+        "nodeid": "tests/test_public_verification_identity.py::test_public_policy_cannot_omit_required_real_identity_domains[python]",
+        "reason": "Explicit generated public tests/fixtures and mock runtime bindings exercise raw/golden N/A, current public membership/alias drift, exact policy/manifest/profile binding and original raw-data preservation. The four private scientific namespaces are never read."
       },
       {
         "nodeid": "tests/test_public_workflow_behavior.py::test_generated_generic_plan_uses_shared_terminal_and_studio_queue[dsc_curve]",

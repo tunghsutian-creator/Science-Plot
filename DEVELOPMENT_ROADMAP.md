@@ -17,6 +17,11 @@ checkout with independent Git identity and exact source/runtime before/after
 bindings. Excluding private namespaces changes that temporary copy only. The
 bounded generated-control exception preserves genuine missing-startup negatives;
 it does not authorize arbitrary bootstrap removal or claim filesystem isolation.
+Generated-only public durable checks now mark absent raw/golden domains as
+explicitly not applicable before discovery and seal current public helper and
+fixture membership. Actual public raw inputs keep their byte binding; private
+and full inputs retain their original requirements. Linux core observation uses
+actual CPython C API executable mappings; its CI result remains a separate gate.
 
 Supported access capture computes closure from original raw process streams and
 durable exit evidence, including a command/source-bound external wait for the

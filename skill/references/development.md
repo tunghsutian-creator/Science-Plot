@@ -78,6 +78,11 @@ original tiers; unknown, stale, duplicate or omitted nodes block before bodies.
 Public scopes enforce CPython private-path and child-startup guards and use
 generated behavior inputs. Clean public CI has no local private corpus;
 neither condition certifies native filesystem observation or real science.
+Generated-only public durable checks explicitly bind raw and golden as not
+applicable before discovery; actual public raw fixtures retain declared byte
+bindings. The manifest, exact profile/command/selection and public tests/helper
+membership are recaptured, including alias refusal, without reading private
+fixture subtrees. Private/full checks still require actual raw/golden inputs.
 The comprehensive entry derives a source-only checkout with its own Git identity,
 excluding the four private fixture namespaces and `.local` from the copy only.
 It binds original and copied source, configuration and native runtime bytes
@@ -88,6 +93,10 @@ ordinary child-startup guards remain closed. This stage is not an OS sandbox or
 a private scientific/access-completeness certificate.
 Normal generated corpus-preflight controls retain the public guard through the
 owned common bootstrap; they do not use the missing-startup control exception.
+Linux observation binds the executable file mappings containing three actual
+CPython C API addresses. A shared-build flag or a binary name alone cannot prove
+the loaded core. Missing inner startup state reports the original outer exit
+and traceback; only actual Linux execution establishes platform success.
 
 For controlled local original-data execution use
 `verify --start private-science --out .tmp_verify/private-science --json`.
