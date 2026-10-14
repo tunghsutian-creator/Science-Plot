@@ -139,33 +139,40 @@ def runtime_inputs(*, repo_root: Path, environment: dict[str, str]) -> tuple[dic
         raise ValueError("QML loader overrides have no reviewed closure policy")
     if environment.get("PYTHONHOME") or environment.get("PYTHONUSERBASE"):
         raise ValueError("custom Python runtime roots have no reviewed closure policy")
-    runtime_root = Path(environment.get("SCIPLOT_RUNTIME_REPO", str(repo_root))).expanduser()
-    veusz = Path(environment.get("SCIPLOT_VEUSZ_ROOT", str(runtime_root / "third_party/veusz"))).expanduser()
+    def child_path(value: str) -> Path:
+        path = Path(value).expanduser()
+        return path if path.is_absolute() else repo_root / path
+
+    runtime_root = child_path(environment.get("SCIPLOT_RUNTIME_REPO", str(repo_root)))
+    veusz = child_path(environment.get("SCIPLOT_VEUSZ_ROOT", str(runtime_root / "third_party/veusz")))
     python = [Path(sys.executable), Path(sysconfig.get_path("stdlib")),
               Path(sys.base_prefix) / "Python", Path(sys.prefix) / "pyvenv.cfg"]
     dependencies = [Path(path) for path in site.getsitepackages()]
     if site.ENABLE_USER_SITE:
         dependencies.append(Path(site.getusersitepackages()))
     # Bind editable-install .pth additions and any explicitly configured imports.
-    search = [Path(path).absolute() for path in [*sys.path, *environment.get("PYTHONPATH", "").split(os.pathsep)] if path]
+    # Parent import paths describe this interpreter; explicit child PYTHONPATH
+    # entries are interpreted after subprocess cwd changes to repo_root.
+    search = [Path(path).absolute() for path in sys.path if path]
+    search.extend(child_path(path) for path in environment.get("PYTHONPATH", "").split(os.pathsep) if path)
     for path in search:
         if path.resolve() == repo_root:
             continue  # cwd is covered by trusted repository domains, not .git/outputs.
         if not any(path == root or path.is_relative_to(root) for root in [*python, *dependencies]):
             dependencies.append(path)
     qt = [path / "PyQt6" for path in dependencies if (path / "PyQt6").is_dir()]
-    plugins = [Path(value).expanduser() for value in environment.get("QT_PLUGIN_PATH", "").split(os.pathsep) if value]
+    plugins = [child_path(value) for value in environment.get("QT_PLUGIN_PATH", "").split(os.pathsep) if value]
     if any(not path.is_dir() for path in plugins):
         raise ValueError("configured Qt plugin search root is unavailable")
     qt.extend(plugins)
     if not qt or not veusz.is_dir():
         raise ValueError("real Qt/Veusz runtime is unavailable")
-    frameworks = [Path(value).expanduser() for value in environment.get("DYLD_FRAMEWORK_PATH", "").split(os.pathsep) if value]
+    frameworks = [child_path(value) for value in environment.get("DYLD_FRAMEWORK_PATH", "").split(os.pathsep) if value]
     if any(not path.is_dir() for path in frameworks):
         raise ValueError("configured framework search root is unavailable")
     fonts = [Path("/System/Library/Fonts"), Path("/Library/Fonts"), Path.home() / "Library/Fonts"]
     for key in ("QT_QPA_FONTDIR", "FONTCONFIG_PATH", "FONTCONFIG_FILE"):
-        fonts.extend(Path(path).expanduser() for path in environment.get(key, "").split(os.pathsep) if path)
+        fonts.extend(child_path(path) for path in environment.get(key, "").split(os.pathsep) if path)
     if not any(path.exists() for path in fonts):
         raise ValueError("actual font search roots are unavailable")
     system = Path("/System/Library/CoreServices/SystemVersion.plist")
