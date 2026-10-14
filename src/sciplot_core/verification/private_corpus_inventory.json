@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 3840,
-    "nodeids_sha256": "1c7a07c2d61723413df3921a0b0d9d63726b34374f0cb64cae0577626defae17",
-    "test_sources_sha256": "a47f7886d3ecabe1e91cb0dfbc38d8eaf084e8d35c7cbbaaa7c74db3ec725f22",
-    "test_source_count": 292,
+    "nodeid_count": 4034,
+    "nodeids_sha256": "e2adb76923868fef376eba42d4c7049ba00006138e6c059cb48eb80e7de9e605",
+    "test_sources_sha256": "d1ae170715aa0709b71c8879a59672b4c50b6c2a49d8a8ac4ab4ddab5be33ec7",
+    "test_source_count": 300,
     "candidate_nodeids": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
       "tests/test_delivery_studio_lifecycle.py::test_dsc_public_delivery_continues_project_and_copied_package_exports_independently",
@@ -79,6 +79,7 @@
       "tests/test_plan_preview.py::test_plan_preview_activates_registered_real_tensile_plan",
       "tests/test_plan_preview.py::test_source_only_tensile_directory_uses_same_validated_scientific_plan",
       "tests/test_plan_preview.py::test_temperature_preview_keeps_plan_shape_without_fabricating_transform",
+      "tests/test_private_corpus_preflight.py::test_checked_in_inventory_is_explicitly_preliminary",
       "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[bound_nodeid]",
       "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[escape]",
       "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[listdir]",
@@ -180,6 +181,9 @@
       "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_without_snapshot_hashes_live_and_archive",
       "tests/test_study_model_artifact_binding.py::test_registered_single_curve_plan_replaces_the_generic_study_queue",
       "tests/test_study_model_artifact_binding.py::test_uvvis_recommendation_uses_the_resolved_plan_task_identity",
+      "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[None]",
+      "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[relative-private-data]",
+      "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[~/sciplot-test-private-data]",
       "tests/test_swelling_single_snapshot.py::test_swelling_prepare_and_terminals_reuse_one_resolved_snapshot",
       "tests/test_swelling_source_contract.py::test_real_swelling_fixture_matches_its_authorized_labeled_block_dynamically",
       "tests/test_task_column_mapping_native.py::test_public_cli_column_choice_exports_real_pda_and_resumes_current_project",
@@ -214,7 +218,39 @@
       "tests/test_tensile_workbook_directory.py::test_real_curated_tensile_source_reaches_metric_gate_without_changing_data",
       "tests/test_tga_scientific_transform.py::test_real_single_tga_metrics_keep_legacy_names_and_measured_values",
       "tests/test_tga_scientific_transform.py::test_real_tga_transform_binds_source_columns_units_sample_and_points",
-      "tests/test_tga_scientific_transform.py::test_registered_paired_curve_detects_xrd_units_and_preserves_each_grid"
+      "tests/test_tga_scientific_transform.py::test_registered_paired_curve_detects_xrd_units_and_preserves_each_grid",
+      "tests/test_verification_evidence_scope.py::test_command_conflict_unknown_owner_and_unknown_private_node_block",
+      "tests/test_verification_evidence_scope.py::test_default_collects_exact_nodes_and_disallows_domain_omissions",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[pyproject.toml]",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[runtime/dependencies/bytes]",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[runtime/fonts/bytes]",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[runtime/native/bytes]",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[runtime/python/bytes]",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[runtime/qt/bytes]",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[skill/references/development.md]",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[src/sciplot_core/implementation.py]",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[tests/fixtures/raw.csv]",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[tests/fixtures/rendering_profiles/golden.json]",
+      "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[tests/test_unit.py]",
+      "tests/test_verification_evidence_scope.py::test_directory_cycle_and_broken_symlink_fail_closed",
+      "tests/test_verification_evidence_scope.py::test_document_inspecting_scope_binds_prose",
+      "tests/test_verification_evidence_scope.py::test_external_real_literal_is_not_silently_synthetic",
+      "tests/test_verification_evidence_scope.py::test_fake_checkout_does_not_inherit_private_data_environment",
+      "tests/test_verification_evidence_scope.py::test_git_binds_all_tracked_inputs_and_index_and_head[head]",
+      "tests/test_verification_evidence_scope.py::test_git_binds_all_tracked_inputs_and_index_and_head[index]",
+      "tests/test_verification_evidence_scope.py::test_git_binds_all_tracked_inputs_and_index_and_head[third_party]",
+      "tests/test_verification_evidence_scope.py::test_git_document_and_index_drift_block_original_receipt",
+      "tests/test_verification_evidence_scope.py::test_missing_optional_root_creation_is_a_change",
+      "tests/test_verification_evidence_scope.py::test_named_suite_profiles_are_exact_not_arbitrary_commands[comprehensive]",
+      "tests/test_verification_evidence_scope.py::test_named_suite_profiles_are_exact_not_arbitrary_commands[focused]",
+      "tests/test_verification_evidence_scope.py::test_named_suite_profiles_are_exact_not_arbitrary_commands[full]",
+      "tests/test_verification_evidence_scope.py::test_native_discovery_binding_cannot_be_paired_with_new_bytes",
+      "tests/test_verification_evidence_scope.py::test_new_raw_member_and_symlink_target_are_rechecked_in_same_spec",
+      "tests/test_verification_evidence_scope.py::test_new_source_after_graph_discovery_is_rejected",
+      "tests/test_verification_evidence_scope.py::test_relative_private_namespace_uses_repo_root_preserving_alias",
+      "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[dependencies]",
+      "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[fonts]",
+      "tests/test_verification_evidence_scope.py::test_unrelated_documentation_commit_reuses_executable_evidence"
     ],
     "synthetic_candidates": [
       {
@@ -368,9 +404,153 @@
       {
         "nodeid": "tests/test_private_corpus_preflight.py::test_unbound_data_open_remains_blocked_outside_collection_bucket",
         "reason": "Synthetic temporary structural inputs and mocked inventory/receipt mutations; no original private corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_private_corpus_preflight.py::test_checked_in_inventory_is_explicitly_preliminary",
+        "reason": "Reads checked-in public inventory JSON and asserts declared fixture identifiers; no private fixture bytes are opened."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[None]",
+        "reason": "Temporary suite fixture replaces build_check_spec and mocks start_run; frozen audit files and outputs are synthetic tmp_path files. Configured raw-root identifiers are inspected without reading their source bytes."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[relative-private-data]",
+        "reason": "Temporary suite fixture replaces build_check_spec and mocks start_run; frozen audit files and outputs are synthetic tmp_path files. Configured raw-root identifiers are inspected without reading their source bytes."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_frozen_audit_attachment_binds_plugins_and_separate_outputs[~/sciplot-test-private-data]",
+        "reason": "Temporary suite fixture replaces build_check_spec and mocks start_run; frozen audit files and outputs are synthetic tmp_path files. Configured raw-root identifiers are inspected without reading their source bytes."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_command_conflict_unknown_owner_and_unknown_private_node_block",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_collects_exact_nodes_and_disallows_domain_omissions",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[pyproject.toml]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[runtime/dependencies/bytes]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[runtime/fonts/bytes]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[runtime/native/bytes]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[runtime/python/bytes]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[runtime/qt/bytes]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[skill/references/development.md]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[src/sciplot_core/implementation.py]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[tests/fixtures/raw.csv]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[tests/fixtures/rendering_profiles/golden.json]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_default_rejects_each_real_input_drift[tests/test_unit.py]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_directory_cycle_and_broken_symlink_fail_closed",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_document_inspecting_scope_binds_prose",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_external_real_literal_is_not_silently_synthetic",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_fake_checkout_does_not_inherit_private_data_environment",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_git_binds_all_tracked_inputs_and_index_and_head[head]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_git_binds_all_tracked_inputs_and_index_and_head[index]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_git_binds_all_tracked_inputs_and_index_and_head[third_party]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_git_document_and_index_drift_block_original_receipt",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_missing_optional_root_creation_is_a_change",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_named_suite_profiles_are_exact_not_arbitrary_commands[comprehensive]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_named_suite_profiles_are_exact_not_arbitrary_commands[focused]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_named_suite_profiles_are_exact_not_arbitrary_commands[full]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_native_discovery_binding_cannot_be_paired_with_new_bytes",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_new_raw_member_and_symlink_target_are_rechecked_in_same_spec",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_new_source_after_graph_discovery_is_rejected",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_relative_private_namespace_uses_repo_root_preserving_alias",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[dependencies]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[fonts]",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_unrelated_documentation_commit_reuses_executable_evidence",
+        "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
       }
     ],
-    "review_method": "All collected nodes; AST call/reference graph through test helpers and private root constants, followed by exact per-parameter source review. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling.",
+    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling.",
     "scope": [
       "real_world",
       "polymer_corpus",
