@@ -47,6 +47,17 @@ closure, drift, skips or interruption cannot mint a reusable pass. Evidence
 is local and unsigned; keep all requests, logs and private inputs under ignored
 storage. Environment values are hashed, not persisted as credentials.
 
+With a supported active observer, semantic identity excludes only its two
+per-launch parent/child routing nonces. A finite binding retains the exact audit
+scope, owned startup bytes and observer source bytes. Other environment values,
+unknown audit keys, different roots and unsupported startup still prevent reuse.
+The original durable launch keeps its full environment hash and actual process
+reservation/wait ledger; semantic reuse never substitutes for a fresh access audit.
+Public child launches validate the actual source owner even when they retain the
+same startup path and binding; package, module and archive shadows cannot inherit
+that binding. The exact owned public startup can load its adjacent observer when
+a source path was intentionally omitted, while retaining all input guard roots.
+
 An executable check can survive a documentation-only SHA change when its actual
 inputs and scope match; documentation checks and Git whitespace/index checks
 still validate their own changed inputs and may prevent a whole-plan reused
