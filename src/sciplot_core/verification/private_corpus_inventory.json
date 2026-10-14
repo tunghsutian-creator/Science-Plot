@@ -9,7 +9,7 @@
     "static_review_complete": true,
     "nodeid_count": 4537,
     "nodeids_sha256": "6b8c3b4d80c808f6abbb8ce19eff4c7cc38dd723ea1971b8b0c9199dc631f439",
-    "test_sources_sha256": "006f893d3190529dd6964ec25c0ad69a7c3bf62c55f517e02298b901efba03a3",
+    "test_sources_sha256": "025bd29e9e6a23b018148392550c2673ad4efe7a93f53a0e727ec876535f08d4",
     "test_source_count": 326,
     "candidate_nodeids": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
