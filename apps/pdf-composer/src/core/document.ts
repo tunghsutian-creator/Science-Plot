@@ -26,7 +26,7 @@ function text(value: unknown, maximum: number): value is string {
 
 function encodedBytes(value: unknown): number {
   if (typeof value !== 'string' || value.length === 0 || value.length > MAX_SOURCE_BYTES * 4 / 3 + 4
-      || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+      || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
     throw new Error('Missing, oversized or invalid source bytes.');
   }
   return value.length / 4 * 3 - (value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0);
