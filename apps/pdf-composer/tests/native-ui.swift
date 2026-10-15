@@ -19,11 +19,13 @@ enum UITestError: Error { case failed(String) }
 @MainActor
 final class NativeUIRun {
     let app: AssemblyApplication
+    let bridge: NativeBridge
     let dialogs: UITestDialogs
     let output: URL
     var assertions: [String] = []
-    init(app: AssemblyApplication, dialogs: UITestDialogs, output: URL) {
-        self.app = app; self.dialogs = dialogs; self.output = output
+    private var heldCleanState: (() -> Void)?
+    init(app: AssemblyApplication, bridge: NativeBridge, dialogs: UITestDialogs, output: URL) {
+        self.app = app; self.bridge = bridge; self.dialogs = dialogs; self.output = output
     }
 
     func run() async throws {
@@ -76,8 +78,24 @@ final class NativeUIRun {
 
         let project = output.appendingPathComponent("Native integration.figureassembly")
         dialogs.saving = project
+        holdNextCleanState()
         try menu("save")
         try await wait("document.body.innerText.includes('Project saved')")
+        try await waitNative("the native saved-state callback", diagnostics: { self.saveDiagnostics(project) }) {
+            self.heldCleanState != nil
+        }
+        try check(FileManager.default.fileExists(atPath: project.path) && app.window.isDocumentEdited,
+                  "save notice can precede the deliberately delayed native clean callback")
+        let cleanState = heldCleanState
+        heldCleanState = nil
+        let cleanStateRelease = Task { @MainActor in
+            try await Task.sleep(for: .milliseconds(300))
+            cleanState?()
+        }
+        try await waitNative("the saved file and native clean flag", diagnostics: { self.saveDiagnostics(project) }) {
+            FileManager.default.fileExists(atPath: project.path) && !self.app.window.isDocumentEdited
+        }
+        try await cleanStateRelease.value
         try check(FileManager.default.fileExists(atPath: project.path) && !app.window.isDocumentEdited,
                   "real native Save writes portable project and marks clean")
         try await click(".labels-button")
@@ -93,6 +111,9 @@ final class NativeUIRun {
         dialogs.saving = recovered
         try menu("saveAs")
         try await wait("document.body.innerText.includes('Project saved') && !document.body.innerText.includes('changed outside')")
+        try await waitNative("the Save As file and native clean flag", diagnostics: { self.saveDiagnostics(recovered) }) {
+            FileManager.default.fileExists(atPath: recovered.path) && !self.app.window.isDocumentEdited
+        }
         try check(FileManager.default.fileExists(atPath: recovered.path), "native Save As recovers after conflict")
 
         try menu("new")
@@ -143,6 +164,27 @@ final class NativeUIRun {
         }
         let body = (try? await evaluate("document.body.innerText")) ?? "No document"
         throw UITestError.failed("Timed out: \(script)\n\(body)")
+    }
+    func waitNative(_ description: String, diagnostics: () -> String, predicate: () -> Bool) async throws {
+        for _ in 0..<100 {
+            if predicate() { return }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        throw UITestError.failed("Timed out waiting for \(description): \(diagnostics())")
+    }
+    private func saveDiagnostics(_ path: URL) -> String {
+        "fileExists=\(FileManager.default.fileExists(atPath: path.path)), nativeDirty=\(app.window.isDocumentEdited), windowVisible=\(app.window.isVisible), heldCleanCallback=\(heldCleanState != nil), file=\(path.path)"
+    }
+    private func holdNextCleanState() {
+        // Deliberately reproduce React's notice rendering before the asynchronous native
+        // setDocumentState callback. Only this test's callback is gated; production is unchanged.
+        let forward = bridge.documentState
+        bridge.documentState = { [weak self] title, dirty in
+            guard let self else { return }
+            if dirty { forward?(title, dirty); return }
+            self.bridge.documentState = forward
+            self.heldCleanState = { forward?(title, dirty) }
+        }
     }
     func click(_ selector: String) async throws {
         let data = try JSONSerialization.data(withJSONObject: selector, options: [.fragmentsAllowed])
@@ -214,10 +256,11 @@ struct NativeUITest {
             try? FileManager.default.removeItem(at: output.appendingPathComponent(name))
         }
         let dialogs = UITestDialogs()
-        let delegate = AssemblyApplication(bundledWebRoot: resources, bridge: NativeBridge(dialogs: dialogs))
+        let bridge = NativeBridge(dialogs: dialogs)
+        let delegate = AssemblyApplication(bundledWebRoot: resources, bridge: bridge)
         let app = NSApplication.shared; app.setActivationPolicy(.regular); app.delegate = delegate
         Task { @MainActor in
-            do { try await NativeUIRun(app: delegate, dialogs: dialogs, output: output).run(); exit(0) }
+            do { try await NativeUIRun(app: delegate, bridge: bridge, dialogs: dialogs, output: output).run(); exit(0) }
             catch {
                 let report = "FAIL \(error)\n"
                 try? Data(report.utf8).write(to: output.appendingPathComponent("native-ui-error.txt"))
