@@ -154,3 +154,28 @@ requires an authorized font resource that supplies the glyph within the
 existing policy, or a separate reviewed design decision. No font-policy waiver,
 font relabeling, outlined text, character scaling or neighbor movement is used
 to report a pass.
+
+## 2026-10-15 bounded native negative-exponent typesetting
+
+The authorized repair uses Veusz's existing native superscript layout instead
+of fitting a replacement into the missing Unicode character's old slot. It
+applies only to a complete negative integer superscript run in ordinary text
+whose effective font is at least 7 pt, when the actual Liberation Sans face
+lacks U+207B and directly supplies the mathematical minus and required digits.
+Native parts measure and paint the same run, raise its baseline and advance
+following text together. Saved VSZ/spec strings, units and measurements remain
+unchanged. No font alias, outline substitution or QA exception is introduced.
+
+The native 0.6 script scale is nominally 4.2 pt at a 7 pt parent. Actual PDF
+device quantization is checked independently; the observed Mac script is 4 pt,
+within the existing mathematical-script minimum. Fonts below 7 pt retain the
+original renderer, including the radar's strict 6 pt text contract. Arial,
+Helvetica, already covered glyphs, ordinary minus signs, existing TeX scripts,
+positive superscripts, subscripts and ambiguous adjacent superscript characters
+retain their original paths. Repeated installation is idempotent.
+
+Focused boundary tests and actual PDF font/text/position checks are separate
+evidence. Publication still requires the original scientific-unit, semantic
+inventory, font-family, size and bounds checks to pass in the target runtime.
+This narrow repair does not establish whole-font-file identity, arbitrary
+small-font support, second-Mac portability or cross-platform pixel equality.
