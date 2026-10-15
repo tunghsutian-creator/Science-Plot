@@ -76,6 +76,7 @@ files = [
   "src/sciplot_core/panel_assembly/service.py",
   "src/sciplot_core/panel_assembly/sources.py",
   "src/sciplot_core/panel_assembly/native.py",
+  "src/sciplot_core/panel_assembly/native_styles.py",
   "src/sciplot_core/panel_assembly/export.py",
   "src/sciplot_core/panel_assembly/preview.py",
   "src/sciplot_core/cli/parsers/composition.py",

@@ -39,7 +39,10 @@ storage. Supported simple native Cartesian panels reflow at the allocated mm
 size and retain data, axis ranges and point typography. Unsupported geometry,
 layout-relative typography, impossible margins, clipped scientific text or legends stop export. Resize the
 layout or repair that source through its existing editing route. Never stretch
-a scientific PDF to make it fit. A source preview is display-only and may show
+a scientific PDF to make it fit. A relative physical-style refusal identifies the
+exact panel and native setting/value. In the original plot change that font or
+stroke size to fixed pt, Save, then choose the current source version (or
+explicitly replace the reference) and retry export. SciPlot does not rewrite it. A source preview is display-only and may show
 a figure whose requested export size fails native QA.
 
 The new export directory contains PDF/TIFF, saved layout, manifest, source copies
