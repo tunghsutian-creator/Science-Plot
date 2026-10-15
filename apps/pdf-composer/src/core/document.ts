@@ -80,11 +80,12 @@ export function validateDocument(value: unknown): asserts value is AssemblyDocum
     }
     for (let index = 0; index < asset.pages.length; index++) {
       const page = asset.pages[index];
-      record(page, ['index', 'widthPt', 'heightPt', 'pixelWidth', 'pixelHeight', 'dpi']);
+      record(page, ['index', 'widthPt', 'heightPt', 'pixelWidth', 'pixelHeight', 'dpi', 'dpiAssumed']);
       if (page.index !== index || !finite(page.widthPt, 0.01, 144000) || !finite(page.heightPt, 0.01, 144000)
           || (page.pixelWidth !== undefined && !integer(page.pixelWidth, 1, 100000))
           || (page.pixelHeight !== undefined && !integer(page.pixelHeight, 1, 100000))
-          || (page.dpi !== undefined && !finite(page.dpi, 1, 9600))) {
+          || (page.dpi !== undefined && !finite(page.dpi, 1, 9600))
+          || (page.dpiAssumed !== undefined && typeof page.dpiAssumed !== 'boolean')) {
         throw new Error('Invalid source page geometry.');
       }
     }

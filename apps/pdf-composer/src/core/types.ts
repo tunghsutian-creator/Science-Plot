@@ -8,6 +8,7 @@ export interface SourcePage {
   pixelWidth?: number;
   pixelHeight?: number;
   dpi?: number;
+  dpiAssumed?: boolean;
 }
 
 export interface SourceAsset {
