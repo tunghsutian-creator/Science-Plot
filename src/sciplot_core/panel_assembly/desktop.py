@@ -20,7 +20,7 @@ class AssemblyWindow(QtWidgets.QMainWindow):
 
     def __init__(self, layout_path=None, parent=None):
         super().__init__(parent)
-        self.path = Path(layout_path).expanduser().resolve() if layout_path else None
+        self.path = Path(layout_path).expanduser().absolute() if layout_path else None
         document = model.load_document(self.path) if self.path else model.new_document()
         self.history = AssemblyHistory(document)
         self._saved_document = document
@@ -92,6 +92,7 @@ class AssemblyWindow(QtWidgets.QMainWindow):
         self.statusBar().addWidget(self.status, 1)
         self.status.setText("Drag whole panels to move or swap. Images keep their aspect ratio.")
         self.library.message.connect(self._message)
+        self.library.busyChanged.connect(self._render)
         self.library.sourceRequested.connect(self.add_source)
         self.layout_controls.operationsRequested.connect(self.apply)
         self.panel_controls.operationsRequested.connect(self.apply)
@@ -261,7 +262,7 @@ class AssemblyWindow(QtWidgets.QMainWindow):
         return self._start(check, complete, "Checking selected source versions…")
 
     def save_layout(self, path):
-        target = Path(path).expanduser().resolve()
+        target = Path(path).expanduser().absolute()
         expected = self._saved_revision if target == self.path else None
         try:
             model.save_document(self.document, target, expected_revision=expected)
@@ -292,7 +293,7 @@ class AssemblyWindow(QtWidgets.QMainWindow):
 
     def load_layout(self, path):
         document = model.load_document(path)
-        self.path = Path(path).expanduser().resolve()
+        self.path = Path(path).expanduser().absolute()
         self.history = AssemblyHistory(document)
         self._saved_document, self._saved_revision = document, document["revision"]
         self.selected, self.conflicts = "", {}

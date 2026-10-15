@@ -131,9 +131,10 @@ class AssemblyCanvas(QtWidgets.QWidget):
         font.setPointSize(12)
         painter.setFont(font)
         scale = self.page_rect().width() / self.document["layout"]["width_mm"]
-        x, y = resolved["label_mm"]
-        painter.drawText(QtCore.QPointF(self.page_rect().x() + x * scale,
-                                       self.page_rect().y() + y * scale + painter.fontMetrics().ascent()), resolved["label"])
+        if resolved["label_mm"] is not None:
+            x, y = resolved["label_mm"]
+            painter.drawText(QtCore.QPointF(self.page_rect().x() + x * scale,
+                                           self.page_rect().y() + y * scale + painter.fontMetrics().ascent()), resolved["label"])
         color = "#c83d3d" if panel["id"] in self.conflicts else "#2176ae" if panel["id"] == self.selected else "#afbdc8"
         painter.setPen(QtGui.QPen(QtGui.QColor(color), 2 if panel["id"] == self.selected else 1))
         painter.drawRect(rectangle)

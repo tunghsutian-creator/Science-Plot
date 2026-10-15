@@ -39,6 +39,7 @@ def source_reference(source):
 class SourceLibrary(QtWidgets.QWidget):
     sourceRequested = QtCore.pyqtSignal(object)
     message = QtCore.pyqtSignal(str)
+    busyChanged = QtCore.pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -98,12 +99,14 @@ class SourceLibrary(QtWidgets.QWidget):
         self._job.succeeded.connect(self.add_choices)
         self._job.failed.connect(self.message)
         self._job.finished.connect(self._finished)
+        self.busyChanged.emit(True)
         self._job.start()
         return True
 
     def _finished(self):
         self._job.deleteLater()
         self._job = None
+        self.busyChanged.emit(False)
 
     def _request(self):
         reference = self.reference()

@@ -103,6 +103,7 @@ def test_actual_qt_drag_swap_gap_span_labels_and_undo(workbench, qt, tmp_path, m
     assert window.document["layout"]["gap_y_mm"] == 4.5
     window.select_panel(first)
     window.panel_controls.row_span.setValue(2)
+    window.panel_controls.automatic_label.setChecked(False)
     window.panel_controls.label.setText("B")
     qt[2].QTest.mouseClick(window.panel_controls.apply_button, qt[1].Qt.MouseButton.LeftButton)
     panel = next(p for p in window.document["panels"] if p["id"] == first)

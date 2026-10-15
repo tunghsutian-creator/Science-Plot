@@ -67,7 +67,11 @@ class PanelControls(QtWidgets.QWidget):
         self.label = QtWidgets.QLineEdit()
         self.label.setObjectName("panelLabel")
         self.label.setMaxLength(16)
-        self.label.setPlaceholderText("Automatic a, b, c…")
+        self.label.setPlaceholderText("Empty hides the panel letter")
+        self.automatic_label = QtWidgets.QCheckBox("Automatic panel letter")
+        self.automatic_label.setObjectName("automaticPanelLabel")
+        self.automatic_label.toggled.connect(lambda automatic: self.label.setEnabled(not automatic))
+        form.addRow(self.automatic_label)
         form.addRow("Panel letter", self.label)
         self.apply_button = QtWidgets.QPushButton("Apply panel settings")
         self.apply_button.setObjectName("applyPanel")
@@ -106,7 +110,8 @@ class PanelControls(QtWidgets.QWidget):
     def _apply(self):
         self.operationsRequested.emit([
             {"op": "set_span", "id": self.identifier, "row_span": self.row_span.value(), "column_span": self.column_span.value()},
-            {"op": "set_label", "id": self.identifier, "label": self.label.text() or None}])
+            {"op": "set_label", "id": self.identifier,
+             "label": None if self.automatic_label.isChecked() else self.label.text()}])
 
     def _crop(self, crop):
         self.operationsRequested.emit([{"op": "set_crop", "id": self.identifier, "crop": crop}])
@@ -121,7 +126,9 @@ class PanelControls(QtWidgets.QWidget):
         self.title.setText(title)
         self.row_span.setValue(panel["row_span"])
         self.column_span.setValue(panel["column_span"])
+        self.automatic_label.setChecked(panel["label"] is None)
         self.label.setText(panel.get("label") or "")
+        self.label.setEnabled(panel["label"] is not None)
         image = panel["source"]["kind"] == "image"
         self.crop_mode.setEnabled(image)
         if not image:
