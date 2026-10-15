@@ -50,7 +50,9 @@ def _scientific(source: dict[str, Any], folder: Path, width: float, height: floa
             error = None
         if (isinstance(error, dict) and isinstance(error.get("code"), str)
                 and error["code"].startswith("assembly_") and isinstance(error.get("message"), str)):
-            raise AssemblyError(error["code"], error["message"])
+            raw_issues = error.get("issues", [])
+            issues = raw_issues if isinstance(raw_issues, list) and all(isinstance(item, dict) for item in raw_issues) else []
+            raise AssemblyError(error["code"], error["message"], issues=issues)
         raise AssemblyError("assembly_native_export_failed", f"Native physical panel export failed: {result.stderr[-3000:]}")
     try:
         decoded = json.loads(result.stdout)
@@ -246,8 +248,12 @@ def export_document(document: dict[str, Any], out: str | Path, *, dpi: int = 300
                     evidence = _place_image(page, panel, source, snapshot["bytes"])
                     _assert_snapshot_current(snapshot, label="assembly image composition")
                 else:
-                    evidence = _scientific(source, folder / "native", *panel["content_mm"][2:])
-                    evidence["physical_size"] = _place_scientific(page, folder / "native/panel.pdf", panel["content_mm"], panel["cell_mm"])
+                    try:
+                        evidence = _scientific(source, folder / "native", *panel["content_mm"][2:])
+                        evidence["physical_size"] = _place_scientific(page, folder / "native/panel.pdf", panel["content_mm"], panel["cell_mm"])
+                    except AssemblyError as exc:
+                        issues = [{**issue, "panel_id": panel["id"], "panel_label": panel["label"]} for issue in exc.issues]
+                        raise AssemblyError(exc.code, f"Panel {panel['label'] or panel['id']} ({panel['id']}): {exc}", issues=issues) from exc
                 records = _source_package(source, folder / "sources")
                 evidence["panel_label"] = _label(page, panel["label"], panel["label_mm"], panel["cell_mm"], panel["content_mm"])
                 assert_source_current(source)

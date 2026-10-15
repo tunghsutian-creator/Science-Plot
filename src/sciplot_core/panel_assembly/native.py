@@ -19,6 +19,7 @@ from sciplot_core.task_paper_native import save_portable_copy
 from sciplot_core.veusz_worker.document_edit import loaded_native_document
 
 from .errors import AssemblyError
+from .native_styles import require_physical_styles
 
 
 def _nonvisual_payload(loaded: Any) -> str:
@@ -62,6 +63,7 @@ def _legacy_shape(loaded: Any) -> tuple[Any, list[Any]]:
         value = graph.settings.get(side + "Margin").get()
         if not isinstance(value, str) or not re.fullmatch(r"[+]?\d+(?:\.\d+)?(?:mm|cm|pt|in)", value):
             raise AssemblyError("assembly_reflow_unsupported", "Legacy graph margins must use explicit physical units.")
+    require_physical_styles(loaded)
     return graph, [child for child in graph.children if child.typename == "axis"]
 
 
@@ -303,7 +305,8 @@ def main() -> int:
         error_stderr = getattr(exc, "stderr", None)
         if error_stderr:
             message += "\n" + str(error_stderr)[-2000:]
-        print(json.dumps({"status": "failed", "error": {"code": code, "message": message[-3000:]}}))
+        issues = exc.issues if isinstance(exc, AssemblyError) else []
+        print(json.dumps({"status": "failed", "error": {"code": code, "message": message[-3000:], "issues": issues}}))
         return 2
     result["pdf_sha256"] = file_sha256(output / "panel.pdf")
     print(json.dumps(result, ensure_ascii=False, allow_nan=False))
