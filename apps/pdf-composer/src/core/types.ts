@@ -19,6 +19,7 @@ export interface SourceAsset {
   pages: SourcePage[];
   /** Lossless native decoding of TIFF for PDF embedding; original bytes remain above. */
   normalizedPngBase64?: string;
+  normalizedPngSha256?: string;
 }
 
 export interface Panel {
