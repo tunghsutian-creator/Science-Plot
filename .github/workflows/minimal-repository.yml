@@ -1,5 +1,5 @@
 # Diagnostic branch only. Never merge this reduced selection into release gates.
-name: Current performance failure diagnostic
+name: Related native scientific text verification
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: d0e5aa3e1a00c4811391c9791f2a7bfce32aec36
+          ref: 4caed1c94abd5056f5f823e5d4217687781f4c84
       - name: Enforce minimal runtime distribution
         shell: bash
         run: |
@@ -115,6 +115,15 @@ jobs:
         run: |
           python3 - <<'PYFONT'
           from PyQt6.QtGui import QFont, QGuiApplication, QTextLayout
+          native_tiffs = []
+          seen_tiffs = {}
+          for path in sorted(base.rglob('*.tiff')):
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              if digest not in seen_tiffs:
+                  retained = f'native-{len(seen_tiffs)}.tiff'
+                  shutil.copy2(path, out / retained)
+                  seen_tiffs[digest] = retained
+              native_tiffs.append({'source': str(path), 'retained': seen_tiffs[digest], 'sha256': digest, 'bytes': path.stat().st_size})
           app = QGuiApplication([])
           text = "\u4f4e\u6e29\u6297\u51b2\u51fb\u80fd\u529b"
           layout = QTextLayout(text, QFont("Arial", 8))
@@ -152,13 +161,13 @@ jobs:
           from sciplot_core.verification.public_stage import source_binding
           root = Path.cwd()
           head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-          assert head == 'd0e5aa3e1a00c4811391c9791f2a7bfce32aec36', head
+          assert head == '4caed1c94abd5056f5f823e5d4217687781f4c84', head
           subprocess.run(['git', 'diff', '--exit-code'], check=True)
           before = source_binding(root)
           Path('.tmp_verify/ci_performance_baseline/before.json').write_text(json.dumps(before, sort_keys=True))
-          print({'head': head, 'scope': 'One original public comprehensive node; diagnostic only; no product mutation or prototype'})
+          print({'head': head, 'scope': 'Four original public comprehensive nodes; scoped verification only; no in-job product mutation or prototype'})
           PYBIND
-      - name: Execute only the original failed performance node
+      - name: Execute related original native contracts
         shell: bash
         env:
           SCIPLOT_PUBLIC_STAGE_REPORT: .tmp_verify/ci_performance_baseline/reports.json
@@ -171,7 +180,7 @@ jobs:
             -p sciplot_core.verification.public_stage \
             --input-scope public-comprehensive \
             --basetemp=/tmp/sciplot-current-performance-diagnostic \
-            -k test_ready_performance_studio_review_preserves_lineage \
+            -k 'test_ready_performance_studio_review_preserves_lineage or test_performance_direct_render_passes_exact_native_qa or test_native_radar_long_mixed_units_and_incomplete_negative_reference' \
             2>&1 | tee .tmp_verify/ci_performance_baseline/command.log
           test_exit=${PIPESTATUS[0]}
           printf '%s\n' "$test_exit" > .tmp_verify/ci_performance_baseline/exit.txt
@@ -184,6 +193,7 @@ jobs:
           from pathlib import Path
           import fitz
           from PyQt6.QtGui import QFont, QGuiApplication, QRawFont, QTextLayout
+          from sciplot_core.qa.pdf_text import _text_object_info
           from sciplot_core.verification.public_stage import source_binding
           root = Path.cwd()
           out = root / '.tmp_verify/ci_performance_baseline'
@@ -202,16 +212,26 @@ jobs:
           fonts = []
           for index, path in enumerate(sorted(base.rglob('*.pdf'))):
               document = fitz.open(path)
+              text_objects = _text_object_info(document)
               spans = [s for page in document for b in page.get_text('dict')['blocks'] if 'lines' in b for line in b['lines'] for s in line['spans']]
-              fonts.append({'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'pdf_fonts': sorted({font[3] for page in document for font in page.get_fonts()}), 'superscript_minus_spans': [{k:s[k] for k in ('text','font','size','bbox','origin')} for s in spans if '\u207b' in s['text']]})
+              fonts.append({'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'pdf_fonts': sorted({font[3] for page in document for font in page.get_fonts()}), 'ordinary_minimum_size_pt': text_objects['ordinary_minimum_size_pt'], 'math_script_minimum_size_pt': text_objects['math_script_minimum_size_pt'], 'math_script_spans': [item for item in text_objects['visible_spans'] if item['role']=='math_script'], 'superscript_minus_spans': [{k:s[k] for k in ('text','font','size','bbox','origin')} for s in spans if '\u207b' in s['text']]})
               document.close()
               shutil.copy2(path, out / f'native-{index}.pdf')
+          native_tiffs = []
+          seen_tiffs = {}
+          for path in sorted(base.rglob('*.tiff')):
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              if digest not in seen_tiffs:
+                  retained = f'native-{len(seen_tiffs)}.tiff'
+                  shutil.copy2(path, out / retained)
+                  seen_tiffs[digest] = retained
+              native_tiffs.append({'source': str(path), 'retained': seen_tiffs[digest], 'sha256': digest, 'bytes': path.stat().st_size})
           app = QGuiApplication([])
           font = QFont('Arial', 7)
           raw = QRawFont.fromFont(font)
           layout = QTextLayout('Specific impact strength (kJ m\u207b\u00b2)', font)
           layout.beginLayout(); layout.createLine(); layout.endLayout()
-          payload = {'kind': 'unmodified_current_performance_diagnostic', 'head': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(), 'source_unchanged': source_unchanged, 'qa': rows, 'pdf': fonts, 'qt_primary_font': raw.familyName(), 'qt_primary_has_u207b': raw.supportsCharacter(0x207B), 'qt_actual_glyph_families': [r.rawFont().familyName() for r in layout.glyphRuns()], 'release_validation': False, 'font_prototype_or_product_change': False}
+          payload = {'kind': 'current_native_typesetting_verification', 'head': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(), 'source_unchanged': source_unchanged, 'qa': rows, 'pdf': fonts, 'native_tiffs': native_tiffs, 'qt_primary_font': raw.familyName(), 'qt_primary_has_u207b': raw.supportsCharacter(0x207B), 'qt_actual_glyph_families': [r.rawFont().familyName() for r in layout.glyphRuns()], 'release_validation': False, 'in_job_product_mutation_or_prototype': False, 'qt_probe_scope': 'Unmodified QTextLayout availability; inspect native PDF for the Veusz script result'}
           (out / 'qa-details.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2))
           print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
           assert before is not None and source_unchanged is True, 'Original release source changed or was not captured'
@@ -220,6 +240,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: current-performance-baseline-d0e5aa3
+          name: current-native-typesetting-4caed1c
           path: .tmp_verify/ci_performance_baseline/
           if-no-files-found: error
