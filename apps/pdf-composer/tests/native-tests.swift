@@ -125,7 +125,13 @@ struct NativeTests {
         try (oriented as Data).write(to: jpeg)
         try failure("image_orientation") { _ = try NativeRendering.importFile(jpeg) }
         try failure("anisotropic_dpi") { _ = try NativeRendering.imageDPI([kCGImagePropertyDPIWidth: 300, kCGImagePropertyDPIHeight: 150]) }
-        try check(try NativeRendering.imageDPI([:]) == nil, "unknown DPI omitted for explicit frontend fallback")
+        let unknownDPI = directory.appendingPathComponent("no-resolution.tiff")
+        try makeTIFFWithoutResolution().write(to: unknownDPI)
+        let unknownSource = CGImageSourceCreateWithURL(unknownDPI as CFURL, nil)!
+        let unknownProperties = CGImageSourceCopyPropertiesAtIndex(unknownSource, 0, nil)! as NSDictionary
+        try check(unknownProperties[kCGImagePropertyDPIWidth] == nil && unknownProperties[kCGImagePropertyDPIHeight] == nil
+                  && (try NativeRendering.importFile(unknownDPI))["dpi"] == nil,
+                  "actual TIFF without resolution tags stays unknown through ImageIO and native import")
 
         try failure("invalid_params") {
             let request = try BridgeRequest(["id": "a", "method": "previewPdf", "params": ["pageIndex": true]])
@@ -201,6 +207,21 @@ struct NativeTests {
                                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         context.setFillColor(CGColor(red: 0.8, green: 0.1, blue: 0.4, alpha: 1)); context.fill(CGRect(x: 0, y: 0, width: 24, height: 12))
         return context.makeImage()!
+    }
+
+    static func makeTIFFWithoutResolution() -> Data {
+        // A complete uncompressed RGB8 image; no X/YResolution or ResolutionUnit tags.
+        var bytes = Data([0x49, 0x49, 42, 0, 8, 0, 0, 0])
+        func uint16(_ value: Int) { bytes.append(contentsOf: [UInt8(value & 255), UInt8((value >> 8) & 255)]) }
+        func uint32(_ value: Int) { bytes.append(contentsOf: (0..<4).map { UInt8((value >> ($0 * 8)) & 255) }) }
+        let fields = [(256, 4, 1, 2), (257, 4, 1, 2), (258, 3, 3, 134), (259, 3, 1, 1),
+                      (262, 3, 1, 2), (273, 4, 1, 140), (277, 3, 1, 3), (278, 4, 1, 2),
+                      (279, 4, 1, 12), (284, 3, 1, 1)]
+        uint16(fields.count)
+        for (tag, type, count, value) in fields { uint16(tag); uint16(type); uint32(count); uint32(value) }
+        uint32(0); uint16(8); uint16(8); uint16(8)
+        bytes.append(contentsOf: [255, 0, 0, 255, 0, 0, 255, 0, 0, 255, 0, 0])
+        return bytes
     }
 
     static func rgba(_ image: CGImage) -> Data {
