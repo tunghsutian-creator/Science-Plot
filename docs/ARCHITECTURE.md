@@ -128,7 +128,8 @@ prescribed frame. Historical unbound revisions retain their previous compiler
 interpretation and are not automatically restyled.
 
 `panel_assembly/` composes existing figures and images through that physical
-solver, with explicit sparse cells and row/column spans. `model`, `operations`,
+solver, with explicit sparse cells and row/column spans. The pure `document`
+leaf, public `model`, `operations`,
 `history` and `storage` own a closed versioned placement document, local undo/redo
 and atomic writer-lease saves. Session-bound original bytes refuse stale saves,
 including independent readers of the same revision; a noncooperative external

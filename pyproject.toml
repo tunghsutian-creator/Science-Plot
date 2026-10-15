@@ -70,6 +70,7 @@ files = [
   "src/sciplot_core/panel_assembly/errors.py",
   "src/sciplot_core/panel_assembly/schema.py",
   "src/sciplot_core/panel_assembly/model.py",
+  "src/sciplot_core/panel_assembly/document.py",
   "src/sciplot_core/panel_assembly/history.py",
   "src/sciplot_core/panel_assembly/storage.py",
   "src/sciplot_core/panel_assembly/operations.py",

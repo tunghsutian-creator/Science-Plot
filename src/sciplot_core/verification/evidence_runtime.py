@@ -20,7 +20,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.verification.evidence_identity import digest
 from sciplot_core.verification.native_probe_boundary import inspector_path, probe_environment, system_identity
 
-QT_MODULES = frozenset({"QtCore", "QtGui", "QtWidgets", "QtPrintSupport", "QtSvg", "QtSvgWidgets", "sip", "uic"})
+QT_MODULES = frozenset({"QtCore", "QtGui", "QtWidgets", "QtPrintSupport", "QtSvg", "QtSvgWidgets", "QtTest", "sip", "uic"})
 QT_PLUGIN_KINDS = frozenset({"platforms", "imageformats", "iconengines", "printsupport", "styles", "platforminputcontexts"})
 
 

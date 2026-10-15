@@ -227,3 +227,14 @@ def test_unresolved_framework_stays_blocked_with_configured_overrides(tmp_path, 
     with pytest.raises(ValueError, match="unresolved"):
         runtime.native_dependencies([str(main)], executable=main,
             environment={"DYLD_FRAMEWORK_PATH": str(tmp_path / "absent-override")})
+
+
+def test_reviewed_qt_test_events_bind_bytes_and_native_extension(tmp_path):
+    source = tmp_path / "native_events.py"
+    source.write_text("from PyQt6 import QtTest\n")
+    bindings = runtime.qt_import_bindings([tmp_path])
+    assert bindings == {digest(str(source.resolve())): runtime.file_sha256(source)}
+    assert runtime._native_entrypoint("/site/PyQt6/QtTest.abi3.so")
+    source.write_text("from PyQt6 import QtQuick\n")
+    with pytest.raises(ValueError, match="Qt imports"):
+        runtime.qt_import_bindings([tmp_path])

@@ -32,4 +32,3 @@ def register_composition_commands(subparsers: Any) -> None:
     export.add_argument("--json", action="store_true")
     open_parser = actions.add_parser("open", help="Open the native local panel workbench.")
     open_parser.add_argument("layout", type=Path, nargs="?")
-

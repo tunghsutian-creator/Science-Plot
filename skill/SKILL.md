@@ -86,8 +86,7 @@ Managed Template/Binding/Theme creation uses document authority. FigureTemplate 
 For raw-input plotting, omit `--out` by default. Deliveries belong beside the original source in `SOURCE_SciPlot/`; hidden `.sciplot/` holds internal evidence.
 Do not put user plotting deliveries inside the SciPlot repository or its `outputs/`.
 Development evidence belongs under ignored `.tmp_verify/`.
-Require Doctor `status=ready` before artifact handoff; reuse current readiness.
-Deliver plotting CSVs, PDF/TIFF, editable VSZ and the returned manual-edit launcher.
+Require Doctor `status=ready` before artifact handoff; reuse current readiness. Deliver plotting CSVs, PDF/TIFF, editable VSZ and the returned manual-edit launcher.
 
 ## Authority
 
