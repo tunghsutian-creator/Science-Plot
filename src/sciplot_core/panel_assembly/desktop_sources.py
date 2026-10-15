@@ -2,20 +2,16 @@
 
 from pathlib import Path
 
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtCore, QtWidgets
 
 from .desktop_jobs import AssemblyJob
 
 
 def project_choices(project):
-    """Use the saved-project read owner; never prepare or import a figure."""
-    from sciplot_core.studio_core.project_query_paths import project_snapshot, resolve_project_path
+    """Source owner selects current native or canonical managed authority."""
+    from .sources import project_references
 
-    root = resolve_project_path(Path(project))
-    _, _, figures = project_snapshot(root)
-    return [(f"{root.name} / {item['title']} ({item['figure_id']})",
-             {"kind": "project", "project": str(root), "figure_id": item["figure_id"]})
-            for item in figures]
+    return project_references(Path(project))
 
 
 def managed_choice(project):
@@ -38,39 +34,6 @@ def source_title(source):
 
 def source_reference(source):
     return {key: value for key, value in source.items() if key != "binding"}
-
-
-def thumbnail(source):
-    """A display-only thumbnail; physical native reflow belongs to export."""
-    path = None
-    if source["kind"] == "image":
-        path = Path(source["path"])
-    elif source["kind"] == "project":
-        selected = source.get("binding", {}).get("selection", {})
-        document = selected.get("document")
-        if document:
-            native = Path(document)
-            path = next((p for p in (native.with_suffix(".pdf"), native.with_suffix(".png"),
-                                    native.with_suffix(".tiff")) if p.is_file()), None)
-    if path is None:
-        return QtGui.QPixmap()
-    if path.suffix.lower() == ".pdf":
-        try:
-            import fitz
-
-            with fitz.open(path) as pdf:
-                pixels = pdf[0].get_pixmap(matrix=fitz.Matrix(1, 1), alpha=False)
-                image = QtGui.QImage(pixels.samples, pixels.width, pixels.height,
-                                     pixels.stride, QtGui.QImage.Format.Format_RGB888).copy()
-                return QtGui.QPixmap.fromImage(image)
-        except (OSError, ValueError, RuntimeError):
-            return QtGui.QPixmap()
-    reader = QtGui.QImageReader(str(path))
-    reader.setAutoTransform(True)
-    size = reader.size()
-    if size.isValid():
-        reader.setScaledSize(size.scaled(1000, 1000, QtCore.Qt.AspectRatioMode.KeepAspectRatio))
-    return QtGui.QPixmap.fromImage(reader.read())
 
 
 class SourceLibrary(QtWidgets.QWidget):

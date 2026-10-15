@@ -3,7 +3,7 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from . import model
-from .desktop_sources import source_title, thumbnail
+from .desktop_sources import source_title
 
 
 class AssemblyCanvas(QtWidgets.QWidget):
@@ -14,8 +14,9 @@ class AssemblyCanvas(QtWidgets.QWidget):
     redoRequested = QtCore.pyqtSignal()
     removeRequested = QtCore.pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, previews, parent=None):
         super().__init__(parent)
+        self.previews = previews
         self.setObjectName("assemblyCanvas")
         self.setMinimumSize(380, 320)
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
@@ -24,7 +25,6 @@ class AssemblyCanvas(QtWidgets.QWidget):
         self.selected = ""
         self.crop_mode = False
         self.conflicts = {}
-        self._thumbnails = {}
         self._press = None
         self._drag_position = None
         self._crop_start = None
@@ -35,9 +35,6 @@ class AssemblyCanvas(QtWidgets.QWidget):
         self.selected = selected
         self.resolved = model.resolve_document(document)
         self.update()
-
-    def clear_preview(self, identifier):
-        self._thumbnails.pop(identifier, None)
 
     def page_rect(self):
         available = QtCore.QRectF(self.rect()).adjusted(32, 38, -32, -38)
@@ -96,6 +93,11 @@ class AssemblyCanvas(QtWidgets.QWidget):
         for resolved in self.resolved["panels"]:
             panel = next(p for p in self.document["panels"] if p["id"] == resolved["id"])
             self._paint_panel(painter, panel, resolved)
+        painter.setPen(QtGui.QColor("#607080"))
+        painter.setFont(self.font())
+        painter.drawText(QtCore.QRectF(page.x(), page.bottom() + 8, page.width(), 24),
+                         QtCore.Qt.AlignmentFlag.AlignCenter,
+                         "Placement preview · export checks the target physical size")
         if self._crop_start is not None and self._crop_end is not None:
             painter.setPen(QtGui.QPen(QtGui.QColor("#e99a20"), 2))
             painter.drawRect(QtCore.QRectF(self._crop_start, self._crop_end).normalized())
@@ -110,9 +112,7 @@ class AssemblyCanvas(QtWidgets.QWidget):
         rectangle = self.physical_rect(resolved["cell_mm"])
         content = self.physical_rect(resolved["content_mm"])
         painter.fillRect(rectangle.adjusted(1, 1, -1, -1), QtCore.Qt.GlobalColor.white)
-        if panel["id"] not in self._thumbnails:
-            self._thumbnails[panel["id"]] = thumbnail(panel["source"])
-        image = self._thumbnails[panel["id"]]
+        image = self.previews.get(panel["source"])
         if not image.isNull():
             crop = panel.get("crop") or [0, 0, 1, 1]
             image = image.copy(QtCore.QRect(int(crop[0] * image.width()), int(crop[1] * image.height()),
@@ -121,9 +121,10 @@ class AssemblyCanvas(QtWidgets.QWidget):
             painter.drawPixmap(self.image_rect(panel["id"], image).toRect(), image)
         else:
             painter.setPen(QtGui.QColor("#536577"))
+            detail = "Preview unavailable · check source" if self.previews.error(panel["source"]) else "Loading current source preview…"
             painter.drawText(content.adjusted(10, 10, -10, -10),
                              QtCore.Qt.AlignmentFlag.AlignCenter | QtCore.Qt.TextFlag.TextWordWrap,
-                             source_title(panel["source"]) + "\nNative source · reflows at export")
+                             source_title(panel["source"]) + "\n" + detail)
         painter.setPen(QtGui.QColor("#152b40"))
         font = painter.font()
         font.setBold(True)
@@ -145,7 +146,7 @@ class AssemblyCanvas(QtWidgets.QWidget):
         resolved = next(p for p in self.resolved["panels"] if p["id"] == identifier)
         content = self.physical_rect(resolved["content_mm"])
         if image is None:
-            image = self._thumbnails.get(identifier, QtGui.QPixmap())
+            image = self.previews.get(panel["source"])
             if not image.isNull():
                 crop = panel.get("crop") or [0, 0, 1, 1]
                 size = QtCore.QSizeF(image.width() * (crop[2] - crop[0]), image.height() * (crop[3] - crop[1]))
@@ -168,7 +169,7 @@ class AssemblyCanvas(QtWidgets.QWidget):
         self.panelSelected.emit(self.selected)
         self._press = event.position()
         if self.crop_mode and panel["source"]["kind"] == "image":
-            if self.image_rect(self.selected).contains(event.position()):
+            if not self.previews.get(panel["source"]).isNull() and self.image_rect(self.selected).contains(event.position()):
                 self._crop_start = event.position()
         self.update()
 

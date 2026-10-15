@@ -36,7 +36,7 @@ def workbench(qt):
 
 def settle(window, qt, *, timeout=10):
     deadline = time.monotonic() + timeout
-    while window.busy:
+    while window.busy or (hasattr(window, "previews") and window.previews.busy):
         assert time.monotonic() < deadline, "Native UI worker did not finish"
         qt[2].QTest.qWait(10)
     qt[0].processEvents()
@@ -68,7 +68,7 @@ def drag(qt, canvas, start, end):
 
 def test_actual_qt_drag_swap_gap_span_labels_and_undo(workbench, qt, tmp_path, monkeypatch):
     from PyQt6 import QtGui
-    from sciplot_core.panel_assembly import sources
+    from sciplot_core.panel_assembly import preview, sources
 
     window = workbench
     first = add_image(window, qt, image(tmp_path))
@@ -80,6 +80,7 @@ def test_actual_qt_drag_swap_gap_span_labels_and_undo(workbench, qt, tmp_path, m
 
     monkeypatch.setattr(sources, "capture_source", no_source_call)
     monkeypatch.setattr(sources, "assert_source_current", no_source_call)
+    monkeypatch.setattr(preview, "render_preview", no_source_call)
     drag(qt, window.canvas, window.canvas.panel_rect(first).center(), window.canvas.panel_rect(second).center())
     by_id = {p["id"]: p for p in window.document["panels"]}
     assert by_id[first]["column"] == 1 and by_id[second]["column"] == 0
@@ -276,6 +277,7 @@ def test_qt_selects_two_projects_and_managed_plot_then_exports_native_mix(workbe
     qt[2].QTest.mouseClick(window.library.add_button, qt[1].Qt.MouseButton.LeftButton)
     settle(window, qt)
     assert [panel["source"]["kind"] for panel in window.document["panels"]] == ["project", "project", "managed", "image"]
+    assert all(not window.previews.get(panel["source"]).isNull() for panel in window.document["panels"])
     for box, value in zip(window.panel_controls.crop_values, [.1, .1, .9, .9], strict=True):
         box.setValue(value)
     qt[2].QTest.mouseClick(window.panel_controls.crop_apply, qt[1].Qt.MouseButton.LeftButton)

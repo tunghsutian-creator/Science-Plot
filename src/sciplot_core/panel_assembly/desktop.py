@@ -10,6 +10,7 @@ from .desktop_canvas import AssemblyCanvas
 from .desktop_controls import LayoutControls, PanelControls
 from .desktop_jobs import AssemblyJob
 from .desktop_messages import display_message
+from .desktop_previews import SourcePreviews, preview_key
 from .desktop_sources import SourceLibrary, source_reference, source_title
 from .history import AssemblyHistory
 
@@ -47,7 +48,10 @@ class AssemblyWindow(QtWidgets.QMainWindow):
         return self._job is not None or self.library.busy
 
     def _build(self):
-        self.canvas = AssemblyCanvas(self)
+        self.previews = SourcePreviews(self)
+        self.canvas = AssemblyCanvas(self.previews, self)
+        self.previews.updated.connect(lambda _key: self.canvas.update())
+        self.previews.failed.connect(self._preview_failed)
         self.setCentralWidget(self.canvas)
         self.library = SourceLibrary(self)
         self._dock("Sources", self.library, QtCore.Qt.DockWidgetArea.LeftDockWidgetArea)
@@ -115,6 +119,10 @@ class AssemblyWindow(QtWidgets.QMainWindow):
         self.status.setToolTip(message)
         self.status.setText(display_message(message))
 
+    def _preview_failed(self, key, message):
+        if any(preview_key(panel["source"]) == key for panel in self.document["panels"]):
+            self._message("Preview unavailable: " + message)
+
     def _render(self):
         document = self.document
         ids = {panel["id"] for panel in document["panels"]}
@@ -123,6 +131,7 @@ class AssemblyWindow(QtWidgets.QMainWindow):
             self.selected = ""
         self.canvas.conflicts = self.conflicts
         self.canvas.set_document(document, self.selected)
+        self.previews.request_document(document)
         self.layout_controls.set_document(document)
         panel = next((item for item in document["panels"] if item["id"] == self.selected), None)
         self.panel_controls.set_panel(panel, source_title(panel["source"]) if panel else "")
@@ -156,13 +165,11 @@ class AssemblyWindow(QtWidgets.QMainWindow):
     def undo(self):
         if not self.busy and self.history.can_undo:
             self.history.undo()
-            self.canvas._thumbnails.clear()
             self._render()
 
     def redo(self):
         if not self.busy and self.history.can_redo:
             self.history.redo()
-            self.canvas._thumbnails.clear()
             self._render()
 
     def _start(self, operation, callback, message):
@@ -220,8 +227,8 @@ class AssemblyWindow(QtWidgets.QMainWindow):
 
         def complete(source):
             self.history.apply([{"op": "replace_panel", "id": identifier, "source": source}])
+            self.previews.retry(source)
             self.conflicts.pop(identifier, None)
-            self.canvas.clear_preview(identifier)
             self._message("Panel source replaced. Its position, span and letter are retained.")
 
         return self._start(lambda: capture_source(reference), complete, "Reading replacement source version…")
@@ -273,7 +280,7 @@ class AssemblyWindow(QtWidgets.QMainWindow):
         return self.save_layout(path) if path else False
 
     def _discard_guard(self):
-        if self.busy:
+        if self.busy or self.previews.busy:
             self._message("Wait for the current source or export operation to finish.")
             return False
         if not self.dirty:
@@ -289,7 +296,6 @@ class AssemblyWindow(QtWidgets.QMainWindow):
         self.history = AssemblyHistory(document)
         self._saved_document, self._saved_revision = document, document["revision"]
         self.selected, self.conflicts = "", {}
-        self.canvas._thumbnails.clear()
         self._render()
         self.check_sources()
 

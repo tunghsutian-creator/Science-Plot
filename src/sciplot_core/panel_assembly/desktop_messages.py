@@ -3,6 +3,7 @@
 
 def display_message(message):
     for code, text in (
+        ("assembly_preview_failed", "The current source preview is unavailable. Check the source or try again."),
         ("assembly_native_qa_failed", "A panel would clip at this size. Adjust its source or choose a supported layout before exporting."),
         ("assembly_reflow_unsupported", "This source cannot use the selected panel layout. Choose another source or layout."),
         ("assembly_source_stale", "A source has changed. Check sources and choose the current source version before exporting."),
