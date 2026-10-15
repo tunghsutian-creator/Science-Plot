@@ -106,6 +106,7 @@ class AssemblyCanvas(QtWidgets.QWidget):
         painter.end()
 
     def _paint_panel(self, painter, panel, resolved):
+        painter.setFont(self.font())
         rectangle = self.physical_rect(resolved["cell_mm"])
         content = self.physical_rect(resolved["content_mm"])
         painter.fillRect(rectangle.adjusted(1, 1, -1, -1), QtCore.Qt.GlobalColor.white)
@@ -137,7 +138,7 @@ class AssemblyCanvas(QtWidgets.QWidget):
         painter.drawRect(rectangle)
         if panel["id"] in self.conflicts:
             painter.drawText(rectangle.adjusted(6, 6, -6, -6), QtCore.Qt.AlignmentFlag.AlignBottom,
-                             "Source changed · refresh explicitly")
+                             "Source changed · choose current version")
 
     def image_rect(self, identifier, image=None):
         panel = next(p for p in self.document["panels"] if p["id"] == identifier)

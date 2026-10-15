@@ -29,7 +29,7 @@ class LayoutControls(QtWidgets.QWidget):
                            ("Page height (mm)", self.height), ("Horizontal gap (mm)", self.gap_x),
                            ("Vertical gap (mm)", self.gap_y)):
             form.addRow(label, box)
-        self.apply_button = QtWidgets.QPushButton("Apply page & grid")
+        self.apply_button = QtWidgets.QPushButton("Apply page and grid")
         self.apply_button.setObjectName("applyLayout")
         form.addRow(self.apply_button)
         self.apply_button.clicked.connect(self._apply)
@@ -88,7 +88,7 @@ class PanelControls(QtWidgets.QWidget):
         form.addRow(self.crop_reset)
         self.replace_button = QtWidgets.QPushButton("Replace with selected library source")
         self.replace_button.setObjectName("replacePanel")
-        self.refresh_button = QtWidgets.QPushButton("Refresh source binding explicitly")
+        self.refresh_button = QtWidgets.QPushButton("Use current source version")
         self.refresh_button.setObjectName("refreshSource")
         self.remove_button = QtWidgets.QPushButton("Remove panel")
         self.remove_button.setObjectName("removePanel")

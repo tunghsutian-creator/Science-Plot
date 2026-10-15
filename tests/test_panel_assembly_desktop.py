@@ -34,8 +34,8 @@ def workbench(qt):
     qt[0].processEvents()
 
 
-def settle(window, qt):
-    deadline = time.monotonic() + 10
+def settle(window, qt, *, timeout=10):
+    deadline = time.monotonic() + timeout
     while window.busy:
         assert time.monotonic() < deadline, "Native UI worker did not finish"
         qt[2].QTest.qWait(10)
@@ -239,3 +239,89 @@ def test_source_library_actual_catalogues_across_projects(qt, tmp_path):
     finally:
         library.close()
         library.deleteLater()
+
+
+@pytest.mark.comprehensive
+def test_qt_selects_two_projects_and_managed_plot_then_exports_native_mix(workbench, qt, tmp_path, monkeypatch):
+    import pymupdf
+    from test_panel_assembly_export import managed_source
+    from test_task_papers_native import _projects
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.plot_engine.storage import load_head
+
+    window = workbench
+    raw, projects = _projects(tmp_path)
+    managed, _bound = managed_source(tmp_path)
+    photo = image(tmp_path, "micrograph.png", "#87aaba")
+    protected = [*raw, photo, *(project / "studio/document.vsz" for project in projects),
+                 *(project / "studio/spec.json" for project in projects)]
+    originals = {path: file_sha256(path) for path in protected}
+    canonical = load_head(managed)
+    controls = window.layout_controls
+    controls.width.setValue(230)
+    controls.height.setValue(200)
+    qt[2].QTest.mouseClick(controls.apply_button, qt[1].Qt.MouseButton.LeftButton)
+
+    for project in projects:
+        assert window.library.load_project(project)
+        settle(window, qt, timeout=30)
+        qt[2].QTest.mouseClick(window.library.add_button, qt[1].Qt.MouseButton.LeftButton)
+        settle(window, qt, timeout=30)
+    assert window.library.load_project(managed, managed=True)
+    settle(window, qt)
+    assert window.library.reference()["plot_id"] == canonical["document"]["plot_id"]
+    qt[2].QTest.mouseClick(window.library.add_button, qt[1].Qt.MouseButton.LeftButton)
+    settle(window, qt, timeout=30)
+    window.library.add_choices([(photo.name, {"kind": "image", "path": str(photo)})])
+    qt[2].QTest.mouseClick(window.library.add_button, qt[1].Qt.MouseButton.LeftButton)
+    settle(window, qt)
+    assert [panel["source"]["kind"] for panel in window.document["panels"]] == ["project", "project", "managed", "image"]
+    for box, value in zip(window.panel_controls.crop_values, [.1, .1, .9, .9], strict=True):
+        box.setValue(value)
+    qt[2].QTest.mouseClick(window.panel_controls.crop_apply, qt[1].Qt.MouseButton.LeftButton)
+
+    layout = tmp_path / "saved-layout.json"
+    out = tmp_path / "gui-native-package"
+    monkeypatch.setattr(qt[3].QFileDialog, "getSaveFileName", lambda _parent, title, *_args:
+                        (str(out if title.startswith("New export") else layout), ""))
+    toolbar = window.findChild(qt[3].QToolBar)
+    qt[2].QTest.mouseClick(toolbar.widgetForAction(window.actions["save"]), qt[1].Qt.MouseButton.LeftButton)
+    assert layout.is_file() and not window.dirty
+    results = []
+    window.exportFinished.connect(results.append)
+    qt[2].QTest.mouseClick(toolbar.widgetForAction(window.actions["export"]), qt[1].Qt.MouseButton.LeftButton)
+    settle(window, qt, timeout=45)
+    # The FTIR source has a data-anchored inline label at its lower axis bound.
+    # Refuse actual target-size clipping; preserve all source bytes and the
+    # destination until the user explicitly removes that unsupported panel.
+    assert not results
+    assert "clip" in window.status.text()
+    assert "assembly_native_qa_failed" in window.status.toolTip()
+    assert not out.exists()
+    screenshot(window, "native-bounds-refusal.png")
+    rejected = window.document["panels"][1]["id"]
+    qt[2].QTest.mouseClick(window.canvas, qt[1].Qt.MouseButton.LeftButton,
+                         pos=window.canvas.panel_rect(rejected).center().toPoint())
+    qt[2].QTest.mouseClick(window.panel_controls.remove_button, qt[1].Qt.MouseButton.LeftButton)
+    qt[2].QTest.mouseClick(toolbar.widgetForAction(window.actions["save"]), qt[1].Qt.MouseButton.LeftButton)
+    qt[2].QTest.mouseClick(toolbar.widgetForAction(window.actions["export"]), qt[1].Qt.MouseButton.LeftButton)
+    settle(window, qt, timeout=45)
+    assert results, window.status.text()
+    result = results[0]
+    assert result["status"] == "complete"
+    assert result["source_currentness"] == "passed"
+    assert all(Path(result[key]).is_file() for key in ("pdf", "tiff", "layout", "manifest"))
+    scientific = [panel for panel in result["panels"] if panel["evidence"]["authority"] != "image_bytes"]
+    assert len(scientific) == 2
+    for panel in scientific:
+        assert panel["evidence"]["physical_size"]["scale"] == 1
+        assert panel["evidence"]["publication_qa"]["native_text_checked"]
+        assert panel["evidence"]["publication_qa"]["status"] == "passed"
+    assert load_head(managed) == canonical
+    assert not Path(canonical["binding"]["document"]).exists()
+    assert {path: file_sha256(path) for path in protected} == originals
+    with pymupdf.open(result["pdf"]) as pdf:
+        assert pdf[0].rect.width * 25.4 / 72 == pytest.approx(230, abs=.001)
+        assert pdf[0].rect.height * 25.4 / 72 == pytest.approx(200, abs=.001)
+        assert "Wavelength" in pdf[0].get_text()
+    screenshot(window, "native-project-managed-mix.png")

@@ -9,6 +9,7 @@ from . import model
 from .desktop_canvas import AssemblyCanvas
 from .desktop_controls import LayoutControls, PanelControls
 from .desktop_jobs import AssemblyJob
+from .desktop_messages import display_message
 from .desktop_sources import SourceLibrary, source_reference, source_title
 from .history import AssemblyHistory
 
@@ -111,7 +112,8 @@ class AssemblyWindow(QtWidgets.QMainWindow):
         self.addDockWidget(area, dock)
 
     def _message(self, message):
-        self.status.setText(message)
+        self.status.setToolTip(message)
+        self.status.setText(display_message(message))
 
     def _render(self):
         document = self.document
@@ -204,9 +206,9 @@ class AssemblyWindow(QtWidgets.QMainWindow):
                                 "row": cell[0], "column": cell[1], "row_span": 1, "column_span": 1,
                                 "label": None, "crop": None}}])
             self.selected = identifier
-            self._message("Panel added with a frozen source binding.")
+            self._message("Panel added from the selected source version.")
 
-        return self._start(lambda: capture_source(reference), complete, "Capturing selected source…")
+        return self._start(lambda: capture_source(reference), complete, "Reading selected source version…")
 
     def _replace(self, reference):
         from .sources import capture_source
@@ -220,9 +222,9 @@ class AssemblyWindow(QtWidgets.QMainWindow):
             self.history.apply([{"op": "replace_panel", "id": identifier, "source": source}])
             self.conflicts.pop(identifier, None)
             self.canvas.clear_preview(identifier)
-            self._message("Source binding replaced; panel position, span and label are retained.")
+            self._message("Panel source replaced. Its position, span and letter are retained.")
 
-        return self._start(lambda: capture_source(reference), complete, "Capturing replacement source…")
+        return self._start(lambda: capture_source(reference), complete, "Reading replacement source version…")
 
     def replace_selected(self):
         return self._replace(self.library.reference())
@@ -247,9 +249,9 @@ class AssemblyWindow(QtWidgets.QMainWindow):
 
         def complete(conflicts):
             self.conflicts = conflicts
-            self._message("Source conflicts: " + "; ".join(conflicts.values()) if conflicts else "All source bindings are current.")
+            self._message("Source conflicts: " + "; ".join(conflicts.values()) if conflicts else "All selected source versions are current.")
 
-        return self._start(check, complete, "Checking frozen source bindings…")
+        return self._start(check, complete, "Checking selected source versions…")
 
     def save_layout(self, path):
         target = Path(path).expanduser().resolve()

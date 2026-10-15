@@ -33,7 +33,7 @@ def source_title(source):
     if source["kind"] == "image":
         return Path(source["path"]).name
     identifier = source.get("figure_id") or source.get("plot_id")
-    return f"{Path(source['project']).name} / {identifier}"
+    return f"{Path(source['project']).name}\n{identifier.replace('_', ' ')}"
 
 
 def source_reference(source):
