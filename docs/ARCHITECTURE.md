@@ -127,6 +127,24 @@ solver rejects impossible constraints; native text fitting never resizes the
 prescribed frame. Historical unbound revisions retain their previous compiler
 interpretation and are not automatically restyled.
 
+`panel_assembly/` composes existing figures and images through that physical
+solver, with explicit sparse cells and row/column spans. `model`, `operations`,
+`history` and `storage` own a closed versioned placement document, local undo/redo
+and atomic writer-lease saves. Session-bound original bytes refuse stale saves,
+including independent readers of the same revision; a noncooperative external
+writer after the final check is not a kernel compare-and-swap guarantee.
+`sources` captures exact Legacy VSZ or canonical Managed authority and rejects
+source drift. `native` reflows supported native pages at target mm and compares
+opaque payload/science before and after portable Save. `export` places those PDF
+pages at physical 1:1 with image-only nondestructive crops and measured outer
+letters. Real native text/legend bounds gate publication before clipping.
+`preview` renders current frozen sources in temporary storage without Save;
+`desktop_previews` caches bounded PNG bytes off the UI thread and constructs Qt
+pixmaps on the UI thread. Painting and local spacing do no source I/O or AI work.
+`desktop*` is the native workbench adapter; `service` is the shared compact
+CLI/MCP new/inspect/apply/export port. Saved placement references do not replace
+scientific authority. See [panel assembly design](DESIGN_PANEL_ASSEMBLY.md).
+
 Metric-flow axes and simple legends carry complete typography, physical padding,
 frame and explicit legend membership into PlotIR. Native text metrics are measured
 by QA; metric flow does not retain ignored hand-positioned text coordinates.

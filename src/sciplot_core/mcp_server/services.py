@@ -22,6 +22,10 @@ def _preview_output(arguments: dict[str, Any]) -> Path:
 
 
 def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if name in {"sciplot_compose", "sciplot_compose_capabilities"}:
+        from sciplot_core.panel_assembly.service import compose, composition_capabilities
+
+        return composition_capabilities() if name == "sciplot_compose_capabilities" else compose(arguments["request"])
     semantic_methods = {
         "sciplot_project_open": "project.open", "sciplot_plot_describe": "plot.describe",
         "sciplot_plot_create": "plot.create", "sciplot_plot_patch": "plot.patch",

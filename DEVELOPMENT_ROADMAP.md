@@ -1,7 +1,26 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-14. External AI is the task interface. Current behavior belongs
+Status: 2026-10-15. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
+
+## 2026-10-15 local panel assembly acceptance
+
+The approved light workbench adds whole-panel selection, physical grid placement,
+spans, gaps, letters, image crops, undo/redo, saved layouts and mixed vector/raster
+export. It reuses existing scientific authority, native compilation and layout
+contracts. Compact typed CLI/MCP intents and local Qt edits share one owner.
+Scientific previews come from frozen current authority in temporary storage;
+preview visibility does not establish publication readiness at a new size.
+
+Targeted native acceptance includes Legacy and Managed panels, portable editable
+sources and a measured FTIR annotation that must refuse an undersized target.
+Reopening and concurrent-save refusal have discriminating controls. Integrated
+frozen checks and exact-commit CI still determine this round's final status.
+Native reflow deliberately rejects unsupported geometry; source-root relocation,
+second-Mac font consistency, independent human usability and print/journal
+acceptance remain separate work. The existing Ubuntu superscript-minus font gate,
+access-capture closure and incomplete private corpus inventory are not resolved
+by this feature. No external AI token or billed-fee counters are available.
 
 ## 2026-10-14 validation and publication closure
 

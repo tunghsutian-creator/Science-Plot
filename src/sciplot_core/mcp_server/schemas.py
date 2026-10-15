@@ -84,6 +84,11 @@ def tool_definitions() -> list[Tool]:
     add("plot_decide", "Answer the specific current local decision. A review uses decision_id and base_revision; a creation question carries its existing source-bound response. Never invent scientific choices.",
         {**semantic_plot, "request": decide_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("capabilities", "Read the versioned local control contract. No model or provider is started.", {}, [], read_only=True)
+    from sciplot_core.panel_assembly.service import composition_request_schema
+
+    add("compose_capabilities", "Read the compact local panel assembly intent contract. Placement never calls a model or changes scientific state.", {}, [], read_only=True)
+    add("compose", "Create, inspect, arrange or export a local panel layout. Add/replace binds exact existing figures/images locally; apply requires expected_revision. Export reflows supported native panels at target mm, preserves text sizes and rejects source drift. Dragging and spacing use the same deterministic local owner.",
+        {"request": composition_request_schema()}, ["request"], destructive=True)
     add("task_capabilities", "Read a small task capability index or one exact schema. Pass its contract_sha256 as expected_contract_sha256 when fetching sections; server validation remains complete.",
         {"section": {"enum": ["request", "response", "operations", "table_region", "common_edit", "paper_request"]}, "name": string,
          "expected_contract_sha256": sha, "full": {"type": "boolean"}}, [], read_only=True)

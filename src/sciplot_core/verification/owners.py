@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sciplot_core.verification.axis_owners import GENERIC_AXIS_OWNERS
+from sciplot_core.verification.assembly_owners import PANEL_ASSEMBLY_OWNER
 from sciplot_core.verification.external_ai_owners import EXTERNAL_AI_OWNERS
 from sciplot_core.verification.live_editor_owner import LIVE_EDITOR_OWNER
 from sciplot_core.verification.owner_model import ChangedOwner
@@ -28,6 +29,7 @@ from sciplot_core.verification.type_gate_owners import (
 )
 
 CHANGED_OWNERS = (
+    PANEL_ASSEMBLY_OWNER,
     WHEEL_DISTRIBUTION_OWNER,
     VEUSZ_NATIVE_BUILD_OWNER,
     RHEOLOGY_TTS_OWNER,

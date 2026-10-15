@@ -93,6 +93,19 @@ evidence. Originals stay unchanged. Existing output directories, changed sources
 and changed package contents block publication or reuse; an exact retry resumes
 unfinished work. Historical completion alone does not certify a current package.
 
+A local panel workbench brings saved figures and microscopy images or diagrams
+onto one physical page. Run `sciplot compose open` to select figures across
+projects, drag whole panels, set grid spans and millimetre gaps, edit panel
+letters, crop images, and undo or redo changes. Save the layout to reopen it.
+Supported scientific panels reflow through native Veusz at the target size;
+PDF text and scientific graphics retain physical size. Export produces a vector
+PDF, TIFF and editable layout/native sources. Source drift, unsupported native
+geometry and actual text clipping block export with a reason. Preview images
+show selected sources and do not certify target-size export readiness.
+AI clients can send one short typed layout batch through CLI or MCP;
+subsequent local dragging and spacing need no AI calls. See the
+[panel assembly route](skill/references/panel-assembly.md) for commands and limits.
+
 [Performance radar figures](skill/references/performance-radar.md) now show units,
 raw axis ranges, improvement direction and the declared normalization formulas.
 Radius is dimensionless, and polygon area is not an overall score. The fixed

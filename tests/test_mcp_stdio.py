@@ -32,11 +32,49 @@ async def _call(client, name, arguments):
 
 
 @pytest.mark.comprehensive
+def test_stdio_composition_intents_reopen_and_preserve_generated_image(tmp_path):
+    from PIL import Image
+
+    image = tmp_path / "generated micrograph.png"
+    Image.new("RGB", (60, 40), "#8ba6a6").save(image)
+    original = image.read_bytes()
+    layout = tmp_path / "figure layout.json"
+
+    async def scenario():
+        async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
+            capabilities = await _call(client, "sciplot_compose_capabilities", {})
+            assert capabilities["authority"]["legacy"] == "exact saved VSZ"
+            created = await _call(client, "sciplot_compose", {"request": {"action": "new", "layout": str(layout)}})
+            assert created["revision"] == 0
+            selected = await _call(client, "sciplot_compose", {"request": {
+                "action": "apply", "layout": str(layout), "expected_revision": 0,
+                "operations": [{"op": "add_panel", "panel": {"id": "panel:a", "row": 0, "column": 0,
+                                "source": {"kind": "image", "path": str(image)}}}]}})
+            assert selected["revision"] == 1 and selected["panels"][0]["source_kind"] == "image"
+            spaced = await _call(client, "sciplot_compose", {"request": {
+                "action": "apply", "layout": str(layout), "expected_revision": 1,
+                "operations": [{"op": "set_spacing", "gap_x_mm": 7, "gap_y_mm": 8}]}})
+            assert spaced["revision"] == 2 and spaced["layout"]["gap_y_mm"] == 8
+            stale = await client.call_tool("sciplot_compose", {"request": {
+                "action": "apply", "layout": str(layout), "expected_revision": 1,
+                "operations": [{"op": "set_label", "id": "panel:a", "label": "OLD"}]}})
+            assert stale.is_error and stale.structured_content["error"]["code"] == "assembly_revision_conflict"
+        async with Client(_parameters(), read_timeout_seconds=60) as client:
+            reopened = await _call(client, "sciplot_compose", {"request": {
+                "action": "inspect", "layout": str(layout), "check_sources": True}})
+            assert reopened["revision"] == 2 and reopened["source_validation"] == "current"
+            assert reopened["panels"][0]["label"] is None
+
+    anyio.run(scenario)
+    assert image.read_bytes() == original
+
+
+@pytest.mark.comprehensive
 def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 39
+            assert len(tools.tools) == 41
             assert "sciplot_plot_intent" in {tool.name for tool in tools.tools}
             caps = await _call(client, "sciplot_capabilities", {})
             assert caps["transport"] == "mcp_stdio"

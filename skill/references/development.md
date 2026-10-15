@@ -6,6 +6,15 @@ guessing: record cause, replacement contract, verification and limitations.
 Use `.venv/bin/python` and `skill/scripts/sciplot`. Development evidence belongs
 under ignored `.tmp_verify/`; preserve user data and exact-current VSZ authority.
 
+For work with independent module boundaries, implement in multiple isolated
+worktrees in parallel with explicit file ownership and integration order. Keep
+the integration worktree responsible for the final combined review. During
+iteration, select unit/contract, type/lint and local native checks from the actual
+change impact. Do not run full after every small feature. Reserve full for an
+integrated or critical milestone that requires it; reuse unchanged evidence only
+when its exact content and scope bindings remain valid. This workflow changes
+feedback cost, never scientific assertions or acceptance requirements.
+
 Run the smallest relevant tests while iterating, then:
 
 ```bash
