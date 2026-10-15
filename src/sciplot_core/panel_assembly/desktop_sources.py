@@ -1,0 +1,164 @@
+"""Explicit source selection and disposable thumbnails for assembly."""
+
+from pathlib import Path
+
+from PyQt6 import QtCore, QtGui, QtWidgets
+
+from .desktop_jobs import AssemblyJob
+
+
+def project_choices(project):
+    """Use the saved-project read owner; never prepare or import a figure."""
+    from sciplot_core.studio_core.project_query_paths import project_snapshot, resolve_project_path
+
+    root = resolve_project_path(Path(project))
+    _, _, figures = project_snapshot(root)
+    return [(f"{root.name} / {item['title']} ({item['figure_id']})",
+             {"kind": "project", "project": str(root), "figure_id": item["figure_id"]})
+            for item in figures]
+
+
+def managed_choice(project):
+    from sciplot_core.plot_engine.storage import load_head
+
+    root = Path(project).expanduser().resolve()
+    document = load_head(root)["document"]
+    if document.get("plot_type") != "ManagedPlot":
+        raise ValueError("Choose a canonical ManagedPlot directory containing head.json.")
+    identifier = document["plot_id"]
+    return [(f"Managed / {identifier}", {"kind": "managed", "project": str(root), "plot_id": identifier})]
+
+
+def source_title(source):
+    if source["kind"] == "image":
+        return Path(source["path"]).name
+    identifier = source.get("figure_id") or source.get("plot_id")
+    return f"{Path(source['project']).name} / {identifier}"
+
+
+def source_reference(source):
+    return {key: value for key, value in source.items() if key != "binding"}
+
+
+def thumbnail(source):
+    """A display-only thumbnail; physical native reflow belongs to export."""
+    path = None
+    if source["kind"] == "image":
+        path = Path(source["path"])
+    elif source["kind"] == "project":
+        selected = source.get("binding", {}).get("selection", {})
+        document = selected.get("document")
+        if document:
+            native = Path(document)
+            path = next((p for p in (native.with_suffix(".pdf"), native.with_suffix(".png"),
+                                    native.with_suffix(".tiff")) if p.is_file()), None)
+    if path is None:
+        return QtGui.QPixmap()
+    if path.suffix.lower() == ".pdf":
+        try:
+            import fitz
+
+            with fitz.open(path) as pdf:
+                pixels = pdf[0].get_pixmap(matrix=fitz.Matrix(1, 1), alpha=False)
+                image = QtGui.QImage(pixels.samples, pixels.width, pixels.height,
+                                     pixels.stride, QtGui.QImage.Format.Format_RGB888).copy()
+                return QtGui.QPixmap.fromImage(image)
+        except (OSError, ValueError, RuntimeError):
+            return QtGui.QPixmap()
+    reader = QtGui.QImageReader(str(path))
+    reader.setAutoTransform(True)
+    size = reader.size()
+    if size.isValid():
+        reader.setScaledSize(size.scaled(1000, 1000, QtCore.Qt.AspectRatioMode.KeepAspectRatio))
+    return QtGui.QPixmap.fromImage(reader.read())
+
+
+class SourceLibrary(QtWidgets.QWidget):
+    sourceRequested = QtCore.pyqtSignal(object)
+    message = QtCore.pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._job = None
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(QtWidgets.QLabel("SOURCE LIBRARY"))
+        hint = QtWidgets.QLabel("Select saved figures from several projects, or add an image / diagram.")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        self.project_button = QtWidgets.QPushButton("Add project…")
+        self.project_button.setObjectName("addProject")
+        self.managed_button = QtWidgets.QPushButton("Add managed plot…")
+        self.image_button = QtWidgets.QPushButton("Add image / diagram…")
+        self.image_button.setObjectName("addImage")
+        for button in (self.project_button, self.managed_button, self.image_button):
+            layout.addWidget(button)
+        self.items = QtWidgets.QListWidget()
+        self.items.setObjectName("sourceLibrary")
+        self.items.setWordWrap(True)
+        layout.addWidget(self.items, 1)
+        self.add_button = QtWidgets.QPushButton("Add selected panel")
+        self.add_button.setObjectName("addSelectedPanel")
+        self.add_button.setEnabled(False)
+        layout.addWidget(self.add_button)
+        self.project_button.clicked.connect(self._project_dialog)
+        self.managed_button.clicked.connect(self._managed_dialog)
+        self.image_button.clicked.connect(self._image_dialog)
+        self.items.itemSelectionChanged.connect(lambda: self.add_button.setEnabled(self.reference() is not None))
+        self.items.itemDoubleClicked.connect(lambda _item: self._request())
+        self.add_button.clicked.connect(self._request)
+
+    @property
+    def busy(self):
+        return self._job is not None
+
+    def reference(self):
+        item = self.items.currentItem()
+        return item.data(QtCore.Qt.ItemDataRole.UserRole) if item else None
+
+    def add_choices(self, choices):
+        existing = [self.items.item(i).data(QtCore.Qt.ItemDataRole.UserRole) for i in range(self.items.count())]
+        for title, reference in choices:
+            if reference in existing:
+                continue
+            item = QtWidgets.QListWidgetItem(title)
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, reference)
+            item.setToolTip(str(reference.get("path") or reference.get("project")))
+            self.items.addItem(item)
+            existing.append(reference)
+            self.items.setCurrentItem(item)
+
+    def load_project(self, path, *, managed=False):
+        if self.busy:
+            return False
+        self.message.emit("Reading saved figure catalogue…")
+        self._job = AssemblyJob(lambda: managed_choice(path) if managed else project_choices(path), self)
+        self._job.succeeded.connect(self.add_choices)
+        self._job.failed.connect(self.message)
+        self._job.finished.connect(self._finished)
+        self._job.start()
+        return True
+
+    def _finished(self):
+        self._job.deleteLater()
+        self._job = None
+
+    def _request(self):
+        reference = self.reference()
+        if reference is not None:
+            self.sourceRequested.emit(reference)
+
+    def _project_dialog(self):
+        path = QtWidgets.QFileDialog.getExistingDirectory(self, "Select saved SciPlot project")
+        if path:
+            self.load_project(path)
+
+    def _managed_dialog(self):
+        path = QtWidgets.QFileDialog.getExistingDirectory(self, "Select managed document directory (head.json)")
+        if path:
+            self.load_project(path, managed=True)
+
+    def _image_dialog(self):
+        paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self, "Add SEM image, photograph or diagram", "",
+            "Images and diagrams (*.png *.jpg *.jpeg *.tif *.tiff *.pdf);;All files (*)")
+        self.add_choices([(Path(path).name, {"kind": "image", "path": path}) for path in paths])
