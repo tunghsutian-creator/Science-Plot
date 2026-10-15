@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from importlib import import_module
+import io
 import json
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,21 @@ from sciplot_core.task_paper_native import save_portable_copy
 from sciplot_core.veusz_worker.document_edit import loaded_native_document
 
 from .errors import AssemblyError
+
+
+def _nonvisual_payload(loaded: Any) -> str:
+    """Close serializer/import parameters and compatibility beyond widget values."""
+    definitions = io.StringIO()
+    loaded.evaluate.saveCustomDefinitions(definitions)
+    datasets = {}
+    for name, dataset in sorted(loaded.data.items()):
+        saved = io.StringIO()
+        dataset.saveToFile(saved, name)
+        linked = getattr(dataset, "linked", None)
+        datasets[name] = {"serialized": saved.getvalue(),
+                          "linked_parameters": vars(linked.params) if linked is not None else None}
+    return canonical_json_sha256({"definitions": definitions.getvalue(), "datasets": datasets,
+                                 "compatlevel": loaded.compatlevel}, allow_nan=False)
 
 
 def _legacy_shape(loaded: Any) -> tuple[Any, list[Any]]:
@@ -154,6 +170,7 @@ def reflow_legacy(source: dict[str, Any], output: Path, width_mm: float, height_
         _legacy_shape(loaded)
         _, ranges_before = _legacy_qa(loaded)
         expected = native_state(loaded)
+        payload_hash = _nonvisual_payload(loaded)
         page = loaded.getPage(0)
         for widget in (loaded.basewidget, page):
             for field, value in (("width", width_mm), ("height", height_mm)):
@@ -182,6 +199,8 @@ def reflow_legacy(source: dict[str, Any], output: Path, width_mm: float, height_
     with loaded_native_document(target) as reopened:
         if content_hash(native_state(reopened)) != state_hash:
             raise ValueError("Native Save changed reflowed scientific or opaque state.")
+        if _nonvisual_payload(reopened) != payload_hash:
+            raise ValueError("Native Save changed dataset serialization, import parameters or opaque compatibility state.")
         qa, reopened_ranges = _legacy_qa(reopened)
         if qa["status"] != "passed" or reopened_ranges != ranges_before:
             raise ValueError("Reopened target-size native QA failed.")
@@ -194,7 +213,8 @@ def reflow_legacy(source: dict[str, Any], output: Path, width_mm: float, height_
                       "native_state_sha256": state_hash, "reopened_native_state_sha256": state_hash,
                       "imports": copied["imports"], "reflow_input_sha256": copied["original_sha256"]}
     return {"status": "passed", "authority": "saved_vsz", "scientific_hash": science,
-            "native_state_hash": state_hash, "axis_ranges": ranges_before, "publication_qa": qa,
+            "native_state_hash": state_hash, "nonvisual_payload_sha256": payload_hash,
+            "axis_ranges": ranges_before, "publication_qa": qa,
             "portable_original": portable, "portable_reflowed": final_portable,
             "pdf": "panel.pdf", "original": "original/document.vsz", "reflowed": "reflowed/document.vsz"}
 
