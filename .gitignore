@@ -41,6 +41,10 @@ ftir_output/
 !/docs/ARCHITECTURE.md
 !/docs/DESIGN_MANAGED_PLOTS.md
 !/docs/DESIGN_FIGURE_GRAMMAR.md
+!/docs/DESIGN_PANEL_ASSEMBLY.md
+!/docs/licenses/
+/docs/licenses/*
+!/docs/licenses/POLISH_SCI_FIGURES_MIT.txt
 !/docs/plot_typed_intent.md
 !/docs/DESIGN_RENDERING_CONTRACT.md
 !/docs/RESEARCH_COMPATIBILITY_PROFILES.md
