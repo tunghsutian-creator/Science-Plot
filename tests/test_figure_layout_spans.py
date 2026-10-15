@@ -15,6 +15,15 @@ def subset(layout, views, axes, ids):
     return layout, [view for view in views if view["id"] in ids], [axis for axis in axes if axis["view_id"] in ids]
 
 
+def test_public_solver_retains_omitted_unit_span_defaults_without_mutating_input():
+    layout, views, axes = grid(1, 1)
+    expected = solve_layout(layout, views, axes)
+    del layout["cells"][0]["row_span"]
+    del layout["cells"][0]["column_span"]
+    assert solve_layout(layout, views, axes) == expected
+    assert "row_span" not in layout["cells"][0] and "column_span" not in layout["cells"][0]
+
+
 def test_sparse_empty_tracks_preserve_physical_grid_and_require_opt_in():
     layout, views, axes = subset(*grid(3, 3), {"view:11"})
     with pytest.raises(DocumentError) as captured:

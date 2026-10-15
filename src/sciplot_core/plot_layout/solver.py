@@ -46,6 +46,9 @@ def solve_layout(layout: dict[str, Any], views: list[dict[str, Any]], axes: list
                  panel_margins_mm: dict[str, float] | None = None) -> dict[str, Any]:
     """Resolve millimetres, top-left origin; no native coordinates are accepted."""
     del annotations  # Annotation scientific anchors are resolved by the semantic compiler.
+    # The public solver historically defaults omitted spans to one. Closed
+    # FigureSpec/assembly wire schemas still require their explicit fields.
+    layout = {**layout, "cells": [{"row_span": 1, "column_span": 1, **cell} for cell in layout["cells"]]}
     _validate_grid(layout, views)
     rows, columns = layout["rows"], layout["columns"]
     hidden = suppression(layout, axes)

@@ -21,7 +21,13 @@ class _Snapshot:
     digest: str
 
 
-_OBSERVED: dict[Path, _Snapshot] = {}
+_OBSERVED: dict[tuple[Path, str], _Snapshot] = {}
+
+
+def _session_key(target: Path, document: dict[str, Any]) -> tuple[Path, str] | None:
+    from .model import _AssemblyDocument
+
+    return (target, document._session_token) if isinstance(document, _AssemblyDocument) else None
 
 
 def _identity(stat: os.stat_result) -> tuple[int, ...]:
@@ -55,7 +61,9 @@ def _read(path: Path) -> tuple[dict[str, Any], _Snapshot]:
 def load(path: Path) -> dict[str, Any]:
     target = _target(path)
     document, snapshot = _read(target)
-    _OBSERVED[target] = snapshot
+    key = _session_key(target, document)
+    assert key is not None
+    _OBSERVED[key] = snapshot
     return document
 
 
@@ -66,8 +74,11 @@ def _check_existing(target: Path, document: dict[str, Any], expected_revision: i
         return None
     if expected_revision is None:
         raise AssemblyError("assembly_file_conflict", "Replacing a layout requires its expected saved revision.")
+    key = _session_key(target, document)
+    if key is None or key not in _OBSERVED:
+        raise AssemblyError("assembly_file_conflict", "Reopen the layout to bind this editing session before saving.")
     current, snapshot = _read(target)
-    if current["revision"] != expected_revision or (target in _OBSERVED and _OBSERVED[target] != snapshot):
+    if current["revision"] != expected_revision or _OBSERVED[key] != snapshot:
         raise AssemblyError("assembly_file_conflict", "The saved layout changed; reopen it before saving.")
     if document["revision"] <= current["revision"] and document != current:
         raise AssemblyError("assembly_file_conflict", "A changed layout must advance the saved revision.")
@@ -101,7 +112,9 @@ def save(document: dict[str, Any], path: Path, *, expected_revision: int | None)
                     raise AssemblyError("assembly_file_conflict", "The layout changed while the save was prepared.")
                 os.replace(staged, target)
         _current, snapshot = _read(target)
-        _OBSERVED[target] = snapshot
+        key = _session_key(target, document)
+        if key is not None:
+            _OBSERVED[key] = snapshot
         return target
     except OSError as exc:
         raise AssemblyError("assembly_file_write", "The layout save could not complete.") from exc

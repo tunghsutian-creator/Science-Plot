@@ -9,7 +9,8 @@ import pytest
 
 from sciplot_core.panel_assembly import AssemblyError
 from sciplot_core.panel_assembly import storage
-from sciplot_core.panel_assembly.model import apply_operations, load_document, new_document, save_document
+from sciplot_core.panel_assembly.history import AssemblyHistory
+from sciplot_core.panel_assembly.model import apply_operations, load_document, new_document, save_document, validate_document
 
 
 def changed(document, width=190):
@@ -54,6 +55,82 @@ def test_same_revision_foreign_file_edit_is_not_overwritten(tmp_path):
     with pytest.raises(AssemblyError, match="reopen"):
         save_document(changed(observed), target, expected_revision=0)
     assert target.read_bytes() == before
+
+
+def test_second_reader_cannot_refresh_an_earlier_readers_file_baseline(tmp_path):
+    target = tmp_path / "figure.json"
+    save_document(new_document(), target)
+    first = load_document(target)
+    foreign = dict(first)
+    foreign["layout"] = {**foreign["layout"], "width_mm": 250}
+    target.write_text(json.dumps(foreign))
+    second = load_document(target)
+    before = target.read_bytes()
+    with pytest.raises(AssemblyError) as captured:
+        save_document(changed(first), target, expected_revision=0)
+    assert captured.value.code == "assembly_file_conflict"
+    assert target.read_bytes() == before
+    save_document(changed(second, 260), target, expected_revision=0)
+    assert load_document(target)["layout"]["width_mm"] == 260
+
+
+@pytest.mark.parametrize("rebuild", [dict, lambda value: json.loads(json.dumps(value)),
+                                   lambda value: validate_document(json.loads(json.dumps(value)))])
+def test_plain_or_revalidated_json_cannot_replace_a_file_using_only_its_revision(tmp_path, rebuild):
+    target = tmp_path / "figure.json"
+    document = new_document()
+    save_document(document, target)
+    unbound = rebuild(load_document(target))
+    before = target.read_bytes()
+    with pytest.raises(AssemblyError, match="editing session"):
+        save_document(changed(unbound), target, expected_revision=0)
+    assert target.read_bytes() == before
+
+
+def test_deepcopy_and_validation_preserve_a_loaded_session_without_serializing_it(tmp_path):
+    target = tmp_path / "figure.json"
+    save_document(new_document(), target)
+    loaded = load_document(target)
+    copied = validate_document(deepcopy(loaded))
+    first = changed(copied)
+    save_document(first, target, expected_revision=0)
+    second = changed(first, 210)
+    save_document(second, target, expected_revision=1)
+    assert load_document(target) == second
+    assert set(json.loads(target.read_text())) == {"kind", "version", "revision", "layout", "panels"}
+    assert json.loads(json.dumps(second)) == dict(second)
+
+
+def test_new_document_history_keeps_its_session_across_save_undo_save_redo_save(tmp_path):
+    target = tmp_path / "figure.json"
+    document = new_document()
+    history = AssemblyHistory(document)
+    save_document(document, target)
+    history.apply([{"op": "set_page", "width_mm": 200, "height_mm": 140}])
+    save_document(history.document, target, expected_revision=0)
+    undone = history.undo()
+    save_document(undone, target, expected_revision=1)
+    assert load_document(target)["layout"]["width_mm"] == 180
+    redone = history.redo()
+    save_document(redone, target, expected_revision=2)
+    assert load_document(target)["layout"]["width_mm"] == 200
+    assert redone["revision"] == 3
+
+
+def test_save_as_and_reopen_have_independent_path_and_session_baselines(tmp_path):
+    original, alternate = tmp_path / "original.json", tmp_path / "alternate.json"
+    document = new_document()
+    save_document(document, original)
+    first = changed(load_document(original))
+    save_document(first, alternate)
+    second = changed(first, 210)
+    save_document(second, alternate, expected_revision=1)
+    assert load_document(original)["layout"]["width_mm"] == 180
+    save_document(second, original, expected_revision=0)
+    reopened = load_document(alternate)
+    save_document(changed(reopened, 220), alternate, expected_revision=2)
+    assert load_document(original)["layout"]["width_mm"] == 210
+    assert load_document(alternate)["layout"]["width_mm"] == 220
 
 
 def test_nonadvancing_changed_revision_cannot_replace_valid_file(tmp_path):

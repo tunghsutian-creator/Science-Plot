@@ -5,13 +5,23 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from sciplot_core.plot_document.errors import DocumentError
 from sciplot_core.plot_document.validation import validate_wire
 from sciplot_core.plot_layout import solve_layout
+from sciplot_core.rendering_contract import COMPOSITION_CONTRACT_ID, contract_binding, contract_value
 
 from .errors import AssemblyError
 from .schema import document_schema, operations_schema
+
+
+class _AssemblyDocument(dict[str, Any]):
+    """JSON-compatible state with a private save session, retained by deepcopy."""
+
+    def __init__(self, value: dict[str, Any]) -> None:
+        super().__init__(value)
+        self._session_token = uuid4().hex
 
 
 def _validate(value: Any, schema: dict[str, Any]) -> None:
@@ -28,9 +38,11 @@ def operation_capabilities() -> dict[str, Any]:
 
 def new_document(*, rows: int = 2, columns: int = 2, width_mm: float = 180,
                  height_mm: float = 140) -> dict[str, Any]:
+    composition = contract_binding(COMPOSITION_CONTRACT_ID)
     return validate_document({"kind": "sciplot_panel_assembly", "version": 1, "revision": 0,
         "layout": {"rows": rows, "columns": columns, "width_mm": width_mm, "height_mm": height_mm,
-                   "gap_x_mm": 4.0, "gap_y_mm": 4.0}, "panels": []})
+                   "gap_x_mm": contract_value("gap_x_mm", composition),
+                   "gap_y_mm": contract_value("gap_y_mm", composition)}, "panels": []})
 
 
 def _label(index: int) -> str:
@@ -67,8 +79,8 @@ def _resolve(document: dict[str, Any]) -> dict[str, Any]:
 
 def validate_document(document: Any) -> dict[str, Any]:
     """Validate all represented state and physical constraints without reading sources."""
-    _validate(document, document_schema())
-    result: dict[str, Any] = deepcopy(document)
+    _validate(dict(document) if isinstance(document, _AssemblyDocument) else document, document_schema())
+    result = deepcopy(document) if isinstance(document, _AssemblyDocument) else _AssemblyDocument(deepcopy(document))
     integers = [result["version"], result["revision"], result["layout"]["rows"], result["layout"]["columns"]]
     integers += [panel[key] for panel in result["panels"] for key in ("row", "column", "row_span", "column_span")]
     if any(type(value) is not int for value in integers):

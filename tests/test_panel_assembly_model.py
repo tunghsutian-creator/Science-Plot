@@ -9,6 +9,7 @@ from sciplot_core.panel_assembly.history import AssemblyHistory
 from sciplot_core.panel_assembly.model import (
     apply_operations, new_document, operation_capabilities, resolve_document, validate_document,
 )
+from sciplot_core.rendering_contract import COMPOSITION_CONTRACT_ID, contract_binding, contract_value
 
 
 def source(kind="image", name="one"):
@@ -36,6 +37,13 @@ def test_sparse_empty_document_resolves_without_source_reads():
     assert document["layout"]["rows"] == 3
 
 
+def test_new_assembly_spacing_uses_the_existing_composition_contract():
+    binding = contract_binding(COMPOSITION_CONTRACT_ID)
+    layout = new_document()["layout"]
+    assert layout["gap_x_mm"] == contract_value("gap_x_mm", binding) == 6
+    assert layout["gap_y_mm"] == contract_value("gap_y_mm", binding) == 6
+
+
 def test_reading_order_labels_custom_case_and_physical_spans_are_deterministic():
     document = add(panel("panel:b", 1, 0, column_span=2, label="BETA"), panel("panel:a"))
     result = resolve_document(document)
@@ -43,10 +51,10 @@ def test_reading_order_labels_custom_case_and_physical_spans_are_deterministic()
     assert [item["id"] for item in result["panels"]] == ["panel:a", "panel:b"]
     first, second = result["panels"]
     assert [first["label"], second["label"]] == ["a", "BETA"]
-    assert first["cell_mm"] == [0, 0, 88, 68]
-    assert first["content_mm"] == [2, 8, 84, 58]
+    assert first["cell_mm"] == [0, 0, 87, 67]
+    assert first["content_mm"] == [2, 8, 83, 57]
     assert first["label_mm"] == [1, 3]
-    assert second["cell_mm"] == [0, 72, 180, 68]
+    assert second["cell_mm"] == [0, 73, 180, 67]
     assert second["content_mm"][2] == 176
     blank = apply_operations(document, [{"op": "set_label", "id": "panel:a", "label": ""}])
     assert resolve_document(blank)["panels"][0]["label_mm"] is None
@@ -56,6 +64,20 @@ def test_automatic_labels_extend_beyond_the_alphabet():
     document = add(*(panel(f"panel:{index}", index // 7, index % 7) for index in range(28)),
                    document=new_document(rows=4, columns=7, width_mm=300, height_mm=200))
     assert [item["label"] for item in resolve_document(document)["panels"]][-3:] == ["z", "aa", "ab"]
+
+
+@pytest.mark.parametrize("label", ["é", "中", "A\n", "\n", "\t", "\x7f", "A" * 17])
+def test_outer_panel_labels_reject_nonprintable_and_nonascii_text_before_resolution(label):
+    document = add(panel())
+    with pytest.raises(AssemblyError):
+        apply_operations(document, [{"op": "set_label", "id": "panel:a", "label": label}])
+    with pytest.raises(AssemblyError):
+        add(panel(label=label))
+
+
+def test_outer_panel_labels_preserve_printable_ascii_punctuation_and_case():
+    document = add(panel(label=" (A)-1 "))
+    assert resolve_document(document)["panels"][0]["label"] == " (A)-1 "
 
 
 def test_whole_batch_can_pass_through_overlap_then_swap_without_mutating_input():
