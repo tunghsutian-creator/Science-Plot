@@ -3,17 +3,47 @@
 from __future__ import annotations
 
 import io
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_engine.managed_state import input_files, require_inputs
-from sciplot_core.plot_engine.storage import digest, load_head, read
+from sciplot_core.plot_engine.storage import digest, document_root, load_head, read
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_paper_sources import assert_selection_current, capture_selection
 
 from .errors import AssemblyError
+
+
+def project_reference(project: str | Path, figure_id: str) -> dict[str, Any]:
+    """Select existing canonical authority without creating or adopting a plot."""
+    project = canonical_path(Path(project))
+    root = document_root(project, figure_id)
+    if (root / "head.json").exists():
+        document = load_head(root)["document"]
+        if document.get("plot_type") == "ManagedPlot":
+            return {"kind": "managed", "project": str(root), "plot_id": document["plot_id"]}
+    return {"kind": "project", "project": str(project), "figure_id": figure_id}
+
+
+def project_references(project: str | Path) -> list[tuple[str, dict[str, Any]]]:
+    """Read catalogue titles with authority-correct references for selection UIs."""
+    from sciplot_core.studio_core.project_query_paths import project_snapshot, resolve_project_path
+
+    root = resolve_project_path(Path(project))
+    _, _, figures = project_snapshot(root)
+    return [(f"{root.name} / {item['title']} ({item['figure_id']})", project_reference(root, item["figure_id"]))
+            for item in figures]
+
+
+def _require_legacy_authority(project: Path, figure_id: str) -> None:
+    reference = project_reference(project, figure_id)
+    if reference["kind"] == "managed":
+        raise AssemblyError("assembly_managed_reference_required",
+                            "This figure has ManagedPlot authority. Explicitly select its managed document reference.",
+                            issues=[{"code": "use_managed_reference", "reference": reference}])
 
 
 def file_binding(path: Path) -> dict[str, Any]:
@@ -25,7 +55,7 @@ def file_binding(path: Path) -> dict[str, Any]:
 def _image(path: Path) -> dict[str, Any]:
     snapshot = stable_file_snapshot(path, label="assembly image")
     if path.suffix.lower() == ".pdf":
-        import pymupdf
+        pymupdf: Any = import_module("pymupdf")
 
         with pymupdf.open(stream=snapshot["bytes"], filetype="pdf") as pdf:
             if pdf.is_encrypted or len(pdf) != 1 or pdf[0].rect.is_empty:
@@ -90,6 +120,7 @@ def capture_source(reference: dict[str, Any]) -> dict[str, Any]:
         result[path_key] = str(canonical_path(Path(reference[path_key])))
         path = Path(result[path_key])
         if kind == "project":
+            _require_legacy_authority(path, reference["figure_id"])
             selection = capture_selection(path, reference["figure_id"])
             files = [Path(selection[key]) for key in ("document", "spec")]
             files.append(path / "plot_request.json")
@@ -118,6 +149,7 @@ def assert_source_current(source: dict[str, Any]) -> None:
         if kind not in expected or set(source) != expected[kind]:
             raise ValueError("Invalid frozen source fields.")
         if kind == "project":
+            _require_legacy_authority(Path(source["project"]), source["figure_id"])
             if set(binding) != {"selection", "files"}:
                 raise ValueError("Invalid project binding.")
             selection = binding["selection"]
@@ -137,6 +169,6 @@ def assert_source_current(source: dict[str, Any]) -> None:
         elif _image(canonical_path(Path(source["path"]))) != binding:
             raise ValueError("The selected image version changed.")
     except Exception as exc:
-        if isinstance(exc, AssemblyError) and exc.code == "assembly_source_stale":
+        if isinstance(exc, AssemblyError) and exc.code in {"assembly_source_stale", "assembly_managed_reference_required"}:
             raise
         raise AssemblyError("assembly_source_stale", f"Selected source is stale or unverifiable: {exc}") from exc

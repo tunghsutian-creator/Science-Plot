@@ -70,7 +70,7 @@ def _legacy_qa(loaded: Any) -> tuple[dict[str, Any], dict[str, list[float]]]:
     from sciplot_core.plot_layout import native_publication_qa
 
     graph, axes = _legacy_shape(loaded)
-    utils = import_module("veusz.utils")
+    utils: Any = import_module("veusz.utils")
     original = utils.Renderer
     observations: list[dict[str, Any]] = []
     renderers: list[Any] = []
@@ -181,10 +181,10 @@ def reflow_legacy(source: dict[str, Any], output: Path, width_mm: float, height_
         # Their resolved values follow that native setting while the original
         # reference bindings themselves remain part of the equality guard.
         for field in ("width", "height"):
-            path = "StyleSheet/page/" + field
+            setting_path = "StyleSheet/page/" + field
             setting = loaded.basewidget.settings.get("StyleSheet").get("page").get(field)
             if setting.isReference() and setting.getReference().getPaths() == ["/" + field]:
-                expected["widgets"]["/"]["settings"][path] = after["widgets"]["/"]["settings"][path]
+                expected["widgets"]["/"]["settings"][setting_path] = after["widgets"]["/"]["settings"][setting_path]
         if expected != after:
             raise ValueError("Native resize changed state outside the physical page dimensions.")
         qa, ranges_after = _legacy_qa(loaded)
@@ -300,8 +300,9 @@ def main() -> int:
     except Exception as exc:
         code = exc.code if isinstance(exc, AssemblyError) else "assembly_native_export_failed"
         message = str(exc)
-        if getattr(exc, "stderr", None):
-            message += "\n" + str(exc.stderr)[-2000:]
+        error_stderr = getattr(exc, "stderr", None)
+        if error_stderr:
+            message += "\n" + str(error_stderr)[-2000:]
         print(json.dumps({"status": "failed", "error": {"code": code, "message": message[-3000:]}}))
         return 2
     result["pdf_sha256"] = file_sha256(output / "panel.pdf")

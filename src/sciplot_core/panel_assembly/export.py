@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from importlib import import_module
 import json
 import math
 from pathlib import Path
@@ -52,7 +53,10 @@ def _scientific(source: dict[str, Any], folder: Path, width: float, height: floa
             raise AssemblyError(error["code"], error["message"])
         raise AssemblyError("assembly_native_export_failed", f"Native physical panel export failed: {result.stderr[-3000:]}")
     try:
-        evidence = json.loads(result.stdout)
+        decoded = json.loads(result.stdout)
+        if not isinstance(decoded, dict):
+            raise ValueError("Native panel evidence must be an object.")
+        evidence: dict[str, Any] = decoded
         if evidence["status"] != "passed" or evidence["publication_qa"]["status"] != "passed":
             raise ValueError("Target-size native evidence did not pass.")
     except (ValueError, KeyError) as exc:
@@ -104,14 +108,14 @@ def _fit(rectangle: list[float], width: float, height: float) -> list[float]:
 
 
 def _rect(rectangle: list[float]) -> Any:
-    import pymupdf
+    pymupdf: Any = import_module("pymupdf")
 
     x, y, width, height = rectangle
     return pymupdf.Rect(x, y, x + width, y + height) * POINTS_PER_MM
 
 
 def _place_image(page: Any, panel: dict[str, Any], source: dict[str, Any], raw: bytes) -> dict[str, Any]:
-    import pymupdf
+    pymupdf: Any = import_module("pymupdf")
 
     crop = panel["crop"] or [0., 0., 1., 1.]
     if source["binding"]["media_type"] == "application/pdf":
@@ -140,7 +144,7 @@ def _place_image(page: Any, panel: dict[str, Any], source: dict[str, Any], raw: 
 
 
 def _place_scientific(page: Any, pdf_path: Path, content: list[float], cell: list[float]) -> dict[str, Any]:
-    import pymupdf
+    pymupdf: Any = import_module("pymupdf")
 
     with pymupdf.open(pdf_path) as native:
         if len(native) != 1:
@@ -166,7 +170,7 @@ def _place_scientific(page: Any, pdf_path: Path, content: list[float], cell: lis
 
 
 def _label(page: Any, label: str, position: list[float] | None, cell: list[float], content: list[float]) -> dict[str, Any]:
-    import pymupdf
+    pymupdf: Any = import_module("pymupdf")
     from sciplot_core.rendering_contract import contract_value
 
     if not label:
@@ -219,7 +223,7 @@ def export_document(document: dict[str, Any], out: str | Path, *, dpi: int = 300
     destination.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix=f".{destination.name}.assembly-", dir=destination.parent))
     try:
-        import pymupdf
+        pymupdf: Any = import_module("pymupdf")
         from PIL import Image
 
         receipts = []
