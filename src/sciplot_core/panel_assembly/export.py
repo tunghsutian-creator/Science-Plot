@@ -66,10 +66,13 @@ def _source_package(source: dict[str, Any], folder: Path) -> list[dict[str, Any]
     """Retain original byte snapshots as well as portable native imports."""
     if source["kind"] == "image":
         files = [Path(source["path"])]
+        expected = {source["path"]: source["binding"]["snapshot"]["sha256"]}
     elif source["kind"] == "project":
         selection = source["binding"]["selection"]
         files = [Path(path) for path in selection["source_files"]]
         files += [Path(selection["project"]) / "plot_request.json"]
+        expected = {**selection["source_files"],
+                    str(Path(selection["project"]) / "plot_request.json"): selection["version"]["request_sha256"]}
     else:
         # Include frozen canonical history/content and actual raw inputs/scripts.
         # Executable runtimes remain external byte-pinned dependencies.
@@ -78,10 +81,13 @@ def _source_package(source: dict[str, Any], folder: Path) -> list[dict[str, Any]
         head = managed_head(Path(source["project"]), source["plot_id"])
         executables = {item["executable"] for item in head["document"]["scientific"]["provenance"]["managed"].get("executors", {}).values()}
         files = [Path(item["path"]) for item in source["binding"]["files"] if item["path"] not in executables]
+        expected = {item["path"]: item["sha256"] for item in source["binding"]["files"]}
     folder.mkdir()
     records = []
     for index, path in enumerate(sorted(set(files)), 1):
         snapshot = stable_file_snapshot(path, label="assembly package source")
+        if snapshot["sha256"] != expected[str(path)]:
+            raise AssemblyError("assembly_source_stale", "A packaged source differs from the frozen selected bytes.")
         name = f"{index:03d}_{snapshot['sha256'][:16]}{path.suffix.lower()}"
         target = folder / name
         target.write_bytes(snapshot["bytes"])
@@ -159,18 +165,42 @@ def _place_scientific(page: Any, pdf_path: Path, content: list[float], cell: lis
             "actual_page_within_content": True, "actual_page_within_cell": True}
 
 
-def _label(page: Any, label: str, position: list[float], cell: list[float]) -> None:
+def _label(page: Any, label: str, position: list[float] | None, cell: list[float], content: list[float]) -> dict[str, Any]:
     import pymupdf
+    from sciplot_core.rendering_contract import contract_value
 
-    font = pymupdf.Font("hebo")
-    size = 10.0
+    if not label:
+        return {"visible": False, "text": ""}
+    if position is None or any(not 32 <= ord(character) <= 126 for character in label):
+        raise AssemblyError("assembly_label_unsupported", "Outer panel labels require printable ASCII characters.")
+    family = contract_value("font.family")
+    size = float(contract_value("panel_label.font_size_pt"))
+    weight = contract_value("panel_label.weight")
+    fontname = "hebo" if weight == "bold" else "helv"
+    font = pymupdf.Font(fontname)
     width = font.text_length(label, fontsize=size)
     x, y = (value * POINTS_PER_MM for value in position)
     if width > (cell[0] + cell[2] - position[0]) * POINTS_PER_MM:
         raise AssemblyError("assembly_label_clipping", "Panel label exceeds its reserved physical cell width.")
-    if any(ord(character) > 255 for character in label):
-        raise AssemblyError("assembly_label_unsupported", "Panel labels currently require Latin-1 characters.")
-    page.insert_text((x, y + size), label, fontname="hebo", fontsize=size, color=(0, 0, 0))
+    # The solver anchor is the vertical center of the six-mm label band.
+    baseline = y + (font.ascender + font.descender) * size / 2
+    page.insert_text((x, baseline), label, fontname=fontname, fontsize=size, color=(0, 0, 0))
+    spans = [span for block in page.get_text("dict")["blocks"] if "lines" in block
+             for line in block["lines"] for span in line["spans"]
+             if span["text"] == label and abs(span["size"] - size) < 1e-4
+             and abs(span["origin"][0] - x) < 1e-3 and abs(span["origin"][1] - baseline) < 1e-3]
+    if len(spans) != 1:
+        raise AssemblyError("assembly_label_qa_failed", "The exported panel label has no unique measured PDF text bounds.")
+    bounds = [float(value) / POINTS_PER_MM for value in spans[0]["bbox"]]
+    band = [cell[0], cell[1], cell[2], min(2 * (position[1] - cell[1]), content[1] - cell[1])]
+    if (bounds[0] < band[0] - 1e-4 or bounds[1] < band[1] - 1e-4
+            or bounds[2] > band[0] + band[2] + 1e-4 or bounds[3] > band[1] + band[3] + 1e-4):
+        raise AssemblyError("assembly_label_clipping", "The measured PDF panel label exceeds its reserved physical band.")
+    return {"visible": True, "text": label, "font_size_pt": size, "font_weight": weight,
+            "requested_font_family": family, "actual_font": spans[0]["font"],
+            "font_policy": "Explicit PDF Base14 Helvetica fallback for outer labels only.",
+            "bounds_mm": [bounds[0], bounds[1], bounds[2] - bounds[0], bounds[3] - bounds[1]],
+            "allowed_band_mm": band, "anchor_mm": position, "native_text_scaled": False}
 
 
 def export_document(document: dict[str, Any], out: str | Path, *, dpi: int = 300) -> dict[str, Any]:
@@ -206,13 +236,16 @@ def export_document(document: dict[str, Any], out: str | Path, *, dpi: int = 300
                 folder.mkdir()
                 assert_source_current(source)
                 if source["kind"] == "image":
-                    raw = Path(source["path"]).read_bytes()
-                    evidence = _place_image(page, panel, source, raw)
+                    snapshot = stable_file_snapshot(Path(source["path"]), label="assembly image composition")
+                    if snapshot["sha256"] != source["binding"]["snapshot"]["sha256"]:
+                        raise AssemblyError("assembly_source_stale", "The image changed before composition.")
+                    evidence = _place_image(page, panel, source, snapshot["bytes"])
+                    _assert_snapshot_current(snapshot, label="assembly image composition")
                 else:
                     evidence = _scientific(source, folder / "native", *panel["content_mm"][2:])
                     evidence["physical_size"] = _place_scientific(page, folder / "native/panel.pdf", panel["content_mm"], panel["cell_mm"])
                 records = _source_package(source, folder / "sources")
-                _label(page, panel["label"], panel["label_mm"], panel["cell_mm"])
+                evidence["panel_label"] = _label(page, panel["label"], panel["label_mm"], panel["cell_mm"], panel["content_mm"])
                 assert_source_current(source)
                 receipts.append({"id": panel["id"], "label": panel["label"], "cell_mm": panel["cell_mm"],
                                  "content_mm": panel["content_mm"], "package_path": f"panels/{index:03d}",

@@ -12,6 +12,7 @@ from weakref import ref
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.plot_backends.managed_audit import content_hash, native_state
+from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 from sciplot_core.studio_core.persistence import atomic_save_veusz_document
 from sciplot_core.task_paper_native import save_portable_copy
 from sciplot_core.veusz_worker.document_edit import loaded_native_document
@@ -135,11 +136,18 @@ def reflow_legacy(source: dict[str, Any], output: Path, width_mm: float, height_
 
     selection = source["binding"]["selection"]
     selected, spec = Path(selection["document"]), Path(selection["spec"])
+    for key, path, name in (("document_sha256", selected, "source.vsz"), ("spec_sha256", spec, "source.spec.json")):
+        snapshot = stable_file_snapshot(path, label="assembly legacy authority")
+        if snapshot["sha256"] != selection["version"][key]:
+            raise AssemblyError("assembly_source_stale", "The native authority changed before it could be frozen for export.")
+        (output / name).write_bytes(snapshot["bytes"])
+        _assert_snapshot_current(snapshot, label="assembly legacy authority")
+    spec = output / "source.spec.json"
     before_audit = audit_spec_data(selected, spec, check_presentation=False)
     original = output / "original/document.vsz"
     portable = save_portable_copy(selected, original, imports=output / "original/imports")
-    (output / "source.vsz").write_bytes(selected.read_bytes())
-    (output / "source.spec.json").write_bytes(spec.read_bytes())
+    if portable["original_sha256"] != selection["version"]["document_sha256"]:
+        raise AssemblyError("assembly_source_stale", "Portable Save read a different selected native version.")
     target = output / "reflowed/document.vsz"
     copied = save_portable_copy(original, target, imports=output / "reflowed/imports")
     with loaded_native_document(target) as loaded:
@@ -182,9 +190,12 @@ def reflow_legacy(source: dict[str, Any], output: Path, width_mm: float, height_
     science = canonical_json_sha256(before_audit["units"], allow_nan=False)
     if canonical_json_sha256(after_audit["units"], allow_nan=False) != science:
         raise ValueError("Native physical reflow changed scientific dataset evidence.")
+    final_portable = {"status": "passed", "portable_sha256": file_sha256(target),
+                      "native_state_sha256": state_hash, "reopened_native_state_sha256": state_hash,
+                      "imports": copied["imports"], "reflow_input_sha256": copied["original_sha256"]}
     return {"status": "passed", "authority": "saved_vsz", "scientific_hash": science,
             "native_state_hash": state_hash, "axis_ranges": ranges_before, "publication_qa": qa,
-            "portable_original": portable, "portable_reflowed": copied,
+            "portable_original": portable, "portable_reflowed": final_portable,
             "pdf": "panel.pdf", "original": "original/document.vsz", "reflowed": "reflowed/document.vsz"}
 
 
