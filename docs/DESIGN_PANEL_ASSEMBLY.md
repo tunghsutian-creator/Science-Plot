@@ -93,6 +93,10 @@ their original font/text contract. Native PDF canvas rounding may underfill its
 allocated box by less than one point; the manifest records actual mm and scale
 1.0. No scientific page or glyph is rescaled to fill that rounding remainder.
 
+Legacy layout-relative typography is outside the reflow contract: native settings
+that would change prescribed physical font or stroke sizes on canvas resize
+are rejected rather than rewritten.
+
 Versioned source references need original roots for later layout re-export.
 Copied original/reflowed native files and imports remain manually editable when
 relocated. File leases and session-bound original bytes refuse stale writers;

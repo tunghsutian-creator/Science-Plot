@@ -37,7 +37,7 @@ Legacy VSZ remains the visual authority. Managed semantic documents, sources and
 transforms remain authoritative; absent native caches are rebuilt in temporary
 storage. Supported simple native Cartesian panels reflow at the allocated mm
 size and retain data, axis ranges and point typography. Unsupported geometry,
-impossible margins, clipped scientific text or legends stop export. Resize the
+layout-relative typography, impossible margins, clipped scientific text or legends stop export. Resize the
 layout or repair that source through its existing editing route. Never stretch
 a scientific PDF to make it fit. A source preview is display-only and may show
 a figure whose requested export size fails native QA.

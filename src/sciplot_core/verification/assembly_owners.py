@@ -10,6 +10,7 @@ ASSEMBLY_TESTS = (
     "tests/test_panel_assembly_preview.py",
     "tests/test_panel_assembly_desktop_previews.py",
     "tests/test_panel_assembly_desktop.py",
+    "tests/test_panel_assembly_desktop_review.py",
     "tests/test_panel_assembly_entries.py",
     "tests/test_figure_layout_spans.py",
     "tests/test_figure_grammar_spans.py",
