@@ -15,7 +15,8 @@ function PagePicker({ asset, onPlace, onClose }: { asset: SourceAsset; onPlace: 
   return <Modal title="Choose a page" onClose={onClose} wide>
     <p className="dialog-description">{asset.name} · {asset.pages.length} pages. Each page stays intact.</p>
     <div className="page-picker-grid">{asset.pages.slice(batch, batch + 9).map((page) => <button key={page.index}
-      className={`page-choice${index === page.index ? ' is-selected' : ''}`} aria-pressed={index === page.index} onClick={() => setIndex(page.index)}>
+      className={`page-choice${index === page.index ? ' is-selected' : ''}`} aria-label={`Page ${page.index + 1}, ${(page.widthPt / PT_PER_MM).toFixed(1)} by ${(page.heightPt / PT_PER_MM).toFixed(1)} millimetres`}
+      aria-pressed={index === page.index} onClick={() => setIndex(page.index)}>
       <span className="page-choice-image"><PagePreview asset={asset} pageIndex={page.index} maxPixels={280} label={false} /></span>
       <strong>Page {page.index + 1}</strong><span>{(page.widthPt / PT_PER_MM).toFixed(1)} × {(page.heightPt / PT_PER_MM).toFixed(1)} mm</span>
     </button>)}</div>
@@ -75,7 +76,7 @@ function MoveDialog({ composer }: { composer: Composer }) {
   const originId = composer.modal.panelId;
   return <Modal title="Move or swap figure" onClose={() => composer.setModal(null)}>
     <p className="dialog-description">Choose a destination. If it contains a figure, the two sources swap while keeping their explicit scales.</p>
-    <label className="select-field">Destination<select value={targetId} onChange={(event) => setTargetId(event.target.value)} autoFocus>
+    <label className="select-field">Destination<select aria-label="Destination" value={targetId} onChange={(event) => setTargetId(event.target.value)} autoFocus>
       <option value="">Choose a panel…</option>{orderedPanels(composer.document).filter((panel) => panel.id !== originId).map((panel) => {
         const asset = composer.document.assets.find((item) => item.id === panel.assetId);
         return <option key={panel.id} value={panel.id}>Row {panel.row + 1}, column {panel.column + 1} · {asset?.name ?? 'Empty'}</option>;
@@ -95,9 +96,9 @@ function ExportDialog({ composer, onExport }: { composer: Composer; onExport: (f
   const width = composer.document.grid.columns * 60, height = composer.document.grid.rows * 55;
   return <Modal title="Export figure" onClose={() => composer.setModal(null)}>
     <p className="dialog-description">PDF preserves original text, vectors and source resources. PNG and TIFF render the assembled page at your chosen DPI.</p>
-    <div className="export-form"><label>Format<select value={format} onChange={(event) => setFormat(event.target.value as typeof format)}>
+    <div className="export-form"><label>Format<select aria-label="Format" value={format} onChange={(event) => setFormat(event.target.value as typeof format)}>
       <option value="pdf">PDF · vector</option><option value="png">PNG · raster</option><option value="tiff">TIFF · raster</option></select></label>
-      <label>Raster DPI<select value={dpi} disabled={format === 'pdf'} onChange={(event) => setDpi(Number(event.target.value))}>
+      <label>Raster DPI<select aria-label="Raster DPI" value={dpi} disabled={format === 'pdf'} onChange={(event) => setDpi(Number(event.target.value))}>
         {[150, 300, 600, 1200].map((value) => <option key={value} value={value}>{value} dpi</option>)}</select></label></div>
     <p className="dimension-readout">{width} × {height} mm{format === 'pdf' ? '' : ` · ${Math.round(width / 25.4 * dpi)} × ${Math.round(height / 25.4 * dpi)} px`}</p>
     {rasterPanels.length > 0 ? <div className="resolution-list"><h3>Source resolution</h3>{rasterPanels.map((item, index) => <p key={`${item.name}:${index}`}

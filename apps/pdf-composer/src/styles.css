@@ -35,7 +35,7 @@ button{user-select:none}
 .export-options{border-top-left-radius:0;border-bottom-left-radius:0;border-left-color:#ffffff40;padding:7px 7px}
 .document-strip{min-height:29px;display:flex;align-items:center;justify-content:center;gap:7px;color:#505560;font-size:12px;border-bottom:1px solid var(--border);background:#eff0f3}
 .document-separator{color:#8c9099}
-.editor-body{display:flex;flex:1;min-height:0}
+.editor-body{display:flex;flex:1;min-height:0;position:relative}
 .source-rail{width:214px;min-width:214px;display:flex;flex-direction:column;border-right:1px solid var(--border);background:#f1f2f5}
 .rail-heading{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 8px 16px}
 .rail-heading h2{margin:0;font-size:13px;font-weight:600}
@@ -74,7 +74,7 @@ button{user-select:none}
 .source-thumbnail .preview-unavailable span{font-size:9px;line-height:12px}
 .empty-panel-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:7px;color:#9bA1ad;opacity:0;font-size:11px;white-space:nowrap}
 .figure-panel.is-selected .empty-panel-hint,.figure-panel:hover .empty-panel-hint,.figure-panel:focus-visible .empty-panel-hint{opacity:1}
-.panel-letter{position:absolute;display:block;line-height:1;font-family:AssemblyLetter,sans-serif;font-weight:400;pointer-events:none}
+.panel-letter{position:absolute;display:block;line-height:normal;font-family:AssemblyLetter,sans-serif;font-weight:400;pointer-events:none}
 .selection-corners{position:absolute;inset:0;pointer-events:none}
 .selection-corners i{position:absolute;width:6px;height:6px;background:white;border:1.5px solid #1682ff;transform:translate(-50%,-50%)}
 .selection-corners i:nth-child(1){left:0;top:0}
@@ -178,8 +178,9 @@ input[type=number]{width:100%;font-variant-numeric:tabular-nums}
 }
 
 @media(max-width:560px){.app-name{display:none}
+.toolbar{height:auto;min-height:84px;flex-wrap:wrap;align-content:center}
 .rail-toggle{display:inline-flex}
-.source-rail{position:absolute;top:83px;bottom:31px;left:0;z-index:6;box-shadow:3px 0 15px #1520391a;width:180px;min-width:180px}
+.source-rail{position:absolute;top:0;bottom:0;left:0;z-index:6;box-shadow:3px 0 15px #1520391a;width:180px;min-width:180px}
 .selection-bar{left:50%;width:max-content}
 .selection-bar button:nth-last-child(2){display:none}
 .toolbar .button{font-size:12px}

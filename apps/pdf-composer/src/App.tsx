@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { bridge } from './bridge';
 import type { NativeMenuAction } from './core/types';
 import { PT_PER_MM } from './core/document';
@@ -45,26 +45,29 @@ export default function App() {
     }
   }
 
+  const events = useRef({ action, modal: composer.modal !== null, busy: composer.busy });
+  useLayoutEffect(() => { events.current = { action, modal: composer.modal !== null, busy: composer.busy }; });
+
   useEffect(() => { void bridge.setDocumentState(title, composer.dirty).catch(() => undefined); }, [title, composer.dirty]);
   useEffect(() => {
     const menu = (event: Event) => {
       const name = (event as CustomEvent<NativeMenuAction>).detail;
       const editing = document.activeElement?.closest('input,textarea,[contenteditable="true"]');
       if ((name === 'undo' || name === 'redo') && editing) { document.execCommand(name); return; }
-      if (!composer.modal) action(name);
+      if (!events.current.modal) events.current.action(name);
     };
     const shortcut = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest('input,textarea,select,[contenteditable="true"]') || composer.modal || composer.busy) return;
+      if (target?.closest('input,textarea,select,[contenteditable="true"]') || events.current.modal || events.current.busy) return;
       const key = event.key.toLowerCase(), command = event.metaKey || event.ctrlKey;
       const name = command ? ({ i: 'import', o: 'open', n: 'new', s: event.shiftKey ? 'saveAs' : 'save',
         e: 'export', z: event.shiftKey ? 'redo' : 'undo' } as Record<string, string>)[key]
         : event.key === 'Delete' || event.key === 'Backspace' ? 'clear' : null;
-      if (name) { event.preventDefault(); action(name); }
+      if (name) { event.preventDefault(); events.current.action(name); }
     };
     window.addEventListener('assembly-menu', menu); window.addEventListener('keydown', shortcut);
     return () => { window.removeEventListener('assembly-menu', menu); window.removeEventListener('keydown', shortcut); };
-  });
+  }, []);
 
   return <div className="app-shell" aria-busy={composer.busy}>
     <style>{`@font-face{font-family:AssemblyLetter;src:url('${labelFontData}') format('truetype');font-display:swap}`}</style>
