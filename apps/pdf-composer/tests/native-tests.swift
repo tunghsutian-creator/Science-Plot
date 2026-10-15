@@ -26,7 +26,7 @@ struct NativeTests {
         var passed = 0
         func check(_ condition: Bool, _ name: String) throws {
             guard condition else { throw TestFailure.assertion(name) }
-            passed += 1; print("PASS \(name)")
+            passed += 1; FileHandle.standardOutput.write(Data("PASS \(name)\n".utf8))
         }
         func failure(_ code: String, _ body: () throws -> Void) throws {
             do { try body(); throw TestFailure.assertion("expected \(code)") }
@@ -72,6 +72,18 @@ struct NativeTests {
         try failure("pdf_page") { _ = try NativeRendering.preview(pdf, pageIndex: 1, maxPixels: 100) }
         try failure("raster_too_large") { _ = try NativeRendering.rasterPage(makePDF(size: 100000), pageIndex: 0, dpi: 1200) }
         try failure("export_pages") { _ = try NativeRendering.export(makePDF(pages: 2), format: "png", dpi: 144) }
+        let fractional = makeMarkedPDF()
+        let markedPage = try NativeRendering.pdf(fractional).page(at: 1)!
+        let mapped = CGPoint(x: 20, y: 30).applying(try NativeRendering.rasterTransform(markedPage, scale: 2))
+        try check(abs(mapped.x - 20) < 0.000001 && abs(mapped.y - 140.5) < 0.000001,
+                  "fractional crop/media intersection and rotation preserve exact requested scale")
+        let marked = try NativeRendering.rasterPage(fractional, pageIndex: 0, dpi: 144)
+        try check(marked.width == 101 && marked.height == 161, "fractional physical raster rounds only bitmap extent")
+        let bounds = redBounds(marked)
+        // Exact geometry maps to x=[20,40], y=[120.5,140.5]. In the 161-row image,
+        // full-red samples occupy rows 21...39; the two half-covered edge rows antialias.
+        try check(bounds == CGRect(x: 20, y: 21, width: 20, height: 19),
+                  "actual marked PDF pixels retain exact DPI and fractional antialiased edges")
 
         let image = makeImage()
         let tiff = directory.appendingPathComponent("source.tiff")
@@ -92,6 +104,9 @@ struct NativeTests {
         let bluePNG = try NativeRendering.encode(blueContext.makeImage()!, type: .png, dpi: nil)
         try failure("tiff_pixels_mismatch") { try NativeRendering.verifyTIFF(original, normalizedPNG: bluePNG) }
         try check(abs((imported["dpi"] as! Double) - 300) < 0.01, "TIFF physical DPI preserved")
+        let profiled = image.copy(colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!)!
+        try NativeRendering.encode(profiled, type: .tiff, dpi: 300).write(to: tiff)
+        try failure("tiff_profile") { _ = try NativeRendering.importFile(tiff) }
         let multi = NSMutableData()
         let destination = CGImageDestinationCreateWithData(multi, UTType.tiff.identifier as CFString, 2, nil)!
         CGImageDestinationAddImage(destination, image, nil); CGImageDestinationAddImage(destination, image, nil)
@@ -151,6 +166,34 @@ struct NativeTests {
         for offset in offsets.dropFirst() { text += String(format: "%010d 00000 n \n", offset) }
         text += "trailer\n<< /Size \(offsets.count) /Root 1 0 R >>\nstartxref\n\(xref)\n%%EOF\n"
         return Data(text.utf8)
+    }
+
+    static func makeMarkedPDF() -> Data {
+        let original = String(data: makePDF(), encoding: .utf8)!
+        // Rebuild offsets after changing the page dictionary and stream, never patch xrefs.
+        let objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                       "<< /Type /Page /Parent 2 0 R /MediaBox [10 20 110.5 70.25] /CropBox [-5 10 90.25 100] /Rotate 90 /Contents 4 0 R /Resources << >> >>"]
+        let stream = "1 0 0 rg 20 30 10 10 re f"
+        var text = String(original.prefix(9)), offsets = [0]
+        for (index, object) in (objects + ["<< /Length \(stream.utf8.count) >>\nstream\n\(stream)\nendstream"]).enumerated() {
+            offsets.append(text.utf8.count); text += "\(index + 1) 0 obj\n\(object)\nendobj\n"
+        }
+        let xref = text.utf8.count
+        text += "xref\n0 \(offsets.count)\n0000000000 65535 f \n"
+        for offset in offsets.dropFirst() { text += String(format: "%010d 00000 n \n", offset) }
+        text += "trailer\n<< /Size \(offsets.count) /Root 1 0 R >>\nstartxref\n\(xref)\n%%EOF\n"
+        return Data(text.utf8)
+    }
+
+    static func redBounds(_ image: CGImage) -> CGRect {
+        let bytes = rgba(image)
+        var xs: [Int] = [], ys: [Int] = []
+        for y in 0..<image.height { for x in 0..<image.width {
+            let offset = (y * image.width + x) * 4
+            if bytes[offset] > 220 && bytes[offset + 1] < 30 && bytes[offset + 2] < 30 { xs.append(x); ys.append(y) }
+        } }
+        guard let left = xs.min(), let right = xs.max(), let top = ys.min(), let bottom = ys.max() else { return .null }
+        return CGRect(x: left, y: top, width: right - left + 1, height: bottom - top + 1)
     }
 
     static func makeImage() -> CGImage {

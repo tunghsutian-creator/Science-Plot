@@ -147,6 +147,15 @@ enum NativeRendering {
             ? CGSize(width: bounds.height, height: bounds.width) : bounds.size
     }
 
+    static func rasterTransform(_ page: CGPDFPage, scale: Double) throws -> CGAffineTransform {
+        let naturalSize = try pageGeometry(page)
+        // CoreGraphics only scales DOWN in getDrawingTransform. Normalize in page points,
+        // then explicitly apply the requested pixel/point scale, including enlargement.
+        let normalized = page.getDrawingTransform(.cropBox, rect: CGRect(origin: .zero, size: naturalSize),
+                                                  rotate: 0, preserveAspectRatio: true)
+        return normalized.concatenating(CGAffineTransform(scaleX: scale, y: scale))
+    }
+
     static func rasterPage(_ bytes: Data, pageIndex: Int, longEdge: Int? = nil, dpi: Int? = nil) throws -> CGImage {
         let document = try pdf(bytes)
         guard pageIndex >= 0, pageIndex < document.numberOfPages, let page = document.page(at: pageIndex + 1) else {
@@ -170,9 +179,9 @@ enum NativeRendering {
         }
         context.setFillColor(CGColor(gray: 1, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        let target = CGRect(x: 0, y: 0, width: width, height: height)
+        let target = CGRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale)
         context.clip(to: target)
-        context.concatenate(page.getDrawingTransform(.cropBox, rect: target, rotate: 0, preserveAspectRatio: true))
+        context.concatenate(try rasterTransform(page, scale: scale))
         context.drawPDFPage(page)
         guard let image = context.makeImage() else { throw NativeFailure("raster_render", "The PDF raster could not be created.") }
         return image

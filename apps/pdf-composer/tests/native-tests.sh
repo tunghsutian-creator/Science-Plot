@@ -12,4 +12,4 @@ xcrun swiftc -swift-version 6 -warnings-as-errors -parse-as-library \
   -target "$(uname -m)-apple-macosx13.0" -module-cache-path "$evidence_dir/module-cache" \
   "${sources[@]}" tests/native-tests.swift -framework AppKit -framework WebKit \
   -framework ImageIO -framework UniformTypeIdentifiers -o "$evidence_dir/native-tests"
-"$evidence_dir/native-tests"
+"$evidence_dir/native-tests" | tee "$evidence_dir/native-tests.log"
