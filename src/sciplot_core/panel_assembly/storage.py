@@ -12,6 +12,7 @@ from typing import Any
 
 from sciplot_core.foundation.json_io import atomic_write_json
 
+from .document import _AssemblyDocument, validate_document
 from .errors import AssemblyError
 
 
@@ -25,8 +26,6 @@ _OBSERVED: dict[tuple[Path, str], _Snapshot] = {}
 
 
 def _session_key(target: Path, document: dict[str, Any]) -> tuple[Path, str] | None:
-    from .model import _AssemblyDocument
-
     return (target, document._session_token) if isinstance(document, _AssemblyDocument) else None
 
 
@@ -42,8 +41,6 @@ def _target(path: Path) -> Path:
 
 
 def _read(path: Path) -> tuple[dict[str, Any], _Snapshot]:
-    from .model import validate_document
-
     try:
         before = path.lstat()
         if not path.is_file() or path.is_symlink():
