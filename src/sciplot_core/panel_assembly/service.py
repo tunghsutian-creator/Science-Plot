@@ -118,7 +118,7 @@ def compose(request: dict[str, Any]) -> dict[str, Any]:
     if action == "export":
         from .export import export_document
 
-        return export_document(document, Path(request["out"]).expanduser().resolve(), dpi=request.get("dpi", 300))
+        return export_document(document, Path(request["out"]).expanduser().absolute(), dpi=request.get("dpi", 300))
     checked = request.get("check_sources", False)
     if checked:
         from .sources import assert_source_current

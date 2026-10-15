@@ -148,3 +148,17 @@ def test_public_entry_retains_the_layout_symlink_refusal(tmp_path):
         compose({"action": "inspect", "layout": str(alias)})
     assert path.read_bytes() == original
 
+
+
+def test_public_export_refuses_dangling_output_symlink_without_creating_its_target(tmp_path):
+    layout = tmp_path / "layout.json"
+    compose({"action": "new", "layout": str(layout)})
+    compose({"action": "apply", "layout": str(layout), "expected_revision": 0,
+             "operations": [add_panel(image_reference(tmp_path))]})
+    target = tmp_path / "uncreated-package"
+    alias = tmp_path / "selected-output"
+    alias.symlink_to(target, target_is_directory=True)
+    with pytest.raises(AssemblyError) as error:
+        compose({"action": "export", "layout": str(layout), "out": str(alias)})
+    assert error.value.code == "assembly_output_exists"
+    assert alias.is_symlink() and not target.exists()
