@@ -5,6 +5,7 @@ from typing import Any
 from sciplot_core.plot_document.errors import fail
 from sciplot_core.plot_document.validation import validate_wire
 from sciplot_core.plot_transforms.datasets import validate_dataset
+from sciplot_core.plot_layout.grid import validate_grid_cells
 
 from .schema import figure_spec_schema, figure_layout_schema
 from .styles import STYLE_FIELDS
@@ -39,6 +40,7 @@ def _composition(spec: dict[str, Any]) -> None:
         "figure_cell_bounds", "Grid cell positions must be inside declared rows and columns.", "/composition/cells")
     _check(len(composition["row_weights"]) == composition["rows"] and len(composition["column_weights"]) == composition["columns"],
         "figure_grid_weights", "Each declared row and column requires one positive weight.", "/composition")
+    validate_grid_cells(composition, list(views))
     kind = composition["kind"]
     _check(kind != "single" or len(views) == composition["rows"] == composition["columns"] == 1,
         "figure_single_composition", "Single composition has exactly one cell and view.", "/composition")

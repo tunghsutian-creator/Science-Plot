@@ -4,6 +4,7 @@ from typing import Any
 from sciplot_core.plot_document.schema import IDENTIFIER, closed
 
 from sciplot_core.rendering_contract import binding_schema
+from sciplot_core.plot_layout.schema import grid_schema
 from .styles import COLOR, MARK_TYPES, NUMBER, POSITIVE, scope_schema, style_schema
 
 def rendering_binding_schema(contract_id: str) -> dict[str, Any]:
@@ -110,13 +111,13 @@ def composition_schema() -> dict[str, Any]:
     integer = {"type": "integer", "minimum": 1, "maximum": 16}
     resolve = closed({"id": IDENTIFIER, "views": {"type": "array", "minItems": 2, "uniqueItems": True, "items": IDENTIFIER},
         **{axis: {"enum": ["shared", "independent"]} for axis in ("x", "y", "legend")}})
-    cell = closed({"view_id": IDENTIFIER, "row": {"type": "integer", "minimum": 0},
-        "column": {"type": "integer", "minimum": 0}, "row_span": {"const": 1}, "column_span": {"const": 1}})
-    return closed({"kind": {"enum": ["single", "hconcat", "vconcat", "grid"]}, "rows": integer, "columns": integer,
-        "cells": {"type": "array", "minItems": 1, "items": cell},
+    grid = grid_schema()["properties"]
+    fields = {"kind": {"enum": ["single", "hconcat", "vconcat", "grid"]}, "rows": integer, "columns": integer,
+        "cells": {**grid["cells"], "minItems": 1}, "capabilities": grid["capabilities"],
         "column_weights": {"type": "array", "minItems": 1, "items": POSITIVE},
         "row_weights": {"type": "array", "minItems": 1, "items": POSITIVE},
-        "resolve": {"type": "array", "items": resolve}})
+        "resolve": {"type": "array", "items": resolve}}
+    return closed(fields, [key for key in fields if key != "capabilities"])
 
 
 def figure_layout_schema() -> dict[str, Any]:
