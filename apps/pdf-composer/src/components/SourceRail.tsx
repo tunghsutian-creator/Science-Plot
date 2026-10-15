@@ -15,7 +15,7 @@ export function SourceRail({ assets, selectedAssetId, busy, onChoose, onCollapse
         disabled={busy} onClick={() => onChoose(asset)} aria-label={`Place ${asset.name}`}>
         <div className="source-thumbnail"><PagePreview asset={asset} pageIndex={0} maxPixels={240} label={false} /></div>
         <span className="source-name">{asset.name}</span><span className="source-detail">{asset.pages.length} {asset.pages.length === 1 ? 'page' : 'pages'}
-          {asset.pages.length === 1 ? ` · ${(asset.pages[0].widthPt / PT_PER_MM).toFixed(1)} × ${(asset.pages[0].heightPt / PT_PER_MM).toFixed(1)} mm` : ''}</span>
+          {asset.pages.length === 1 ? ` · ${(asset.pages[0].widthPt / PT_PER_MM).toFixed(2)} × ${(asset.pages[0].heightPt / PT_PER_MM).toFixed(2)} mm` : ''}</span>
         {asset.pages[0]?.dpiAssumed ? <span className="source-dpi-warning">DPI unknown · 300 dpi assumed</span> : null}
       </button>)}
       {assets.length === 0 ? <div className="empty-sources"><Icon name="file" size={26} />

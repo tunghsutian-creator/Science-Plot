@@ -85,6 +85,24 @@ automatic process-crash recovery or a second document authority.
 
 ## External control and native document boundary
 
+### Independent PDF page compositor
+
+`apps/pdf-composer/` is an independently built offline macOS application. It
+imports frozen PDF pages, not SciPlot documents or numerical sources, and does
+not depend on `sciplot_core`, Qt or Veusz. Its 60 × 55 mm cells compose complete
+source pages at their original physical size or an explicit uniform whole-page
+scale; merging changes only the container. It cannot reflow or edit plot internals.
+Original bytes/hash, page selection and layout live in one portable project.
+Source type/page geometry are re-inspected on reopen/save/export, and TIFF cache
+pixels require native re-decoding. The permissive PDF engine copies static page
+streams/resource graphs with explicit unsupported-state refusals. A thin Swift
+shell supplies local file dialogs, conflict-aware atomic saves, verified image
+decoding, preview/raster export and a bundled WebKit UI with network access denied.
+Its package-local checks and dedicated CI are separate from scientific runtime
+verification; it creates no second scientific or native-plot authority. See the
+[app contract](../apps/pdf-composer/CONTRACT.md) and
+[user/developer guide](../apps/pdf-composer/README.md).
+
 ### Semantic document engine
 
 The implemented authority boundary is specified in [Managed plot design](DESIGN_MANAGED_PLOTS.md).

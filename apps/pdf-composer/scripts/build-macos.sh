@@ -23,4 +23,10 @@ xcrun swiftc -swift-version 6 -warnings-as-errors -O -target "$arch-apple-macosx
   -framework AppKit -framework WebKit -framework ImageIO -framework UniformTypeIdentifiers \
   -o "$app_path/Contents/MacOS/FigureAssembly"
 plutil -lint "$app_path/Contents/Info.plist"
+source_commit="$(git rev-parse HEAD)"
+source_dirty=false
+if [[ -n "$(GIT_OPTIONAL_LOCKS=0 git status --porcelain -- .)" ]]; then source_dirty=true; fi
+printf '{"source_commit":"%s","architecture":"%s","app_source_dirty":%s}\n' \
+  "$source_commit" "$arch" "$source_dirty" > "$app_path/Contents/Resources/build-info.json"
+/usr/bin/ditto -c -k --sequesterRsrc --keepParent "$app_path" "$project_dir/release/Figure Assembly-macOS-$arch.zip"
 echo "$app_path"

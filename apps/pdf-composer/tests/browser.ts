@@ -30,6 +30,7 @@ async function pdf(name: string, sizes: [number, number][]): Promise<ImportedFil
 const multipage = await pdf('two-pages.pdf', [[60, 55], [40, 35]]);
 const oversized = await pdf('large-page.pdf', [[90, 55]]);
 const replacement = await pdf('replacement.pdf', [[55, 50]]);
+const roundedStandard = await pdf('rounded-standard.pdf', [[170 * 25.4 / 72, 156 * 25.4 / 72]]);
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1505, height: 1045 }, deviceScaleFactor: 1 });
 page.setDefaultTimeout(10000);
@@ -130,9 +131,9 @@ try {
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.equal(await cell(0, 0).getAttribute('data-asset-id'), priorId);
   await page.getByRole('button', { name: 'Place large-page.pdf' }).click();
-  await page.getByRole('button', { name: /^Choose maximum fit/ }).click();
-  await page.getByRole('button', { name: 'Apply scale', exact: true }).click();
-  assert.match(await page.locator('.scale-control').innerText(), /66\.66%.*Explicit/);
+  await page.getByRole('button', { name: /^Fit whole page to cell/ }).click();
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.match(await page.locator('.scale-control').innerText(), /66\.67%.*Explicit/);
   await command('undo'); assert.equal(await cell(0, 0).getAttribute('data-asset-id'), priorId);
   checks.push('Oversize replacement refuses automatic shrink; cancel preserves placement and explicit fit is undoable.');
 
@@ -189,11 +190,30 @@ try {
   await page.getByRole('button', { name: 'Export options' }).click();
   await page.getByLabel('Format', { exact: true }).selectOption('png');
   await page.getByLabel('Raster DPI', { exact: true }).selectOption('600');
+  assert.match(await page.locator('.dimension-readout').innerText(), /4252 × 2599 px/);
   assert.match(await page.locator('.resolution-list').innerText(), /300 dpi assumed/);
   await page.getByRole('button', { name: 'Export PNG', exact: true }).click(); await waitIdle();
   const rasterRequest = await page.evaluate(() => window.__figureBrowser.exports.at(-1)!);
   assert.equal(rasterRequest.format, 'png'); assert.equal(rasterRequest.dpi, 600);
   checks.push('Auxiliary raster request carries explicit DPI and shows unknown-DPI/source-resolution risk; native raster pixels are a separate gate.');
+
+  await cell(1, 0).click(); await queueImport(roundedStandard); await command('import'); await waitIdle();
+  await page.getByRole('button', { name: 'Place rounded-standard.pdf' }).click();
+  assert.match(await page.locator('.source-readout').innerText(), /55\.03 mm/);
+  await page.getByRole('button', { name: 'Keep original size', exact: true }).click();
+  assert.equal(await occupied(1, 0), false);
+  await page.getByRole('button', { name: 'Place rounded-standard.pdf' }).click();
+  await page.getByRole('button', { name: 'Fit whole page to cell (≈99.94%)', exact: true }).click();
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.match(await page.locator('.scale-control').innerText(), /99\.94%.*Explicit scale/);
+  await command('save'); await waitIdle();
+  const fittedProject = JSON.parse(await page.evaluate(() => window.__figureBrowser.saved.at(-1)!));
+  const fittedPanel = fittedProject.panels.find((panel: { row: number; column: number }) => panel.row === 1 && panel.column === 0);
+  const exactScale = (55 * (72 / 25.4)) / 156;
+  assert.ok(Math.abs(fittedPanel.scale - exactScale) < 1e-14);
+  assert.equal(fittedPanel.rowSpan, 1); assert.equal(fittedPanel.columnSpan, 1);
+  assert.equal(fittedProject.assets.find((asset: { name: string }) => asset.name === roundedStandard.name).bytesBase64, roundedStandard.bytesBase64);
+  checks.push('One-click fit retains exact 99.939430648% whole-page scale in one ordinary cell, displays ≈99.94%, and preserves original bytes plus the original-size choice.');
 
   await page.setViewportSize({ width: 1000, height: 700 });
   await page.evaluate(() => document.fonts.ready);

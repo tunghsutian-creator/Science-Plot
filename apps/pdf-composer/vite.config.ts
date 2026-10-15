@@ -4,6 +4,6 @@ export default defineConfig({
   base: './', plugins: [react()],
   build: {
     target: 'es2022', assetsInlineLimit: 0, sourcemap: false,
-    rollupOptions: { output: { format: 'iife', name: 'FigureAssembly', inlineDynamicImports: true } },
+    rolldownOptions: { output: { format: 'iife', name: 'FigureAssembly', codeSplitting: false } },
   },
 });

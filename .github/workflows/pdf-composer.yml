@@ -1,0 +1,72 @@
+name: Independent PDF compositor
+
+on:
+  push:
+    paths:
+      - 'apps/pdf-composer/**'
+      - '.github/workflows/pdf-composer.yml'
+  pull_request:
+    paths:
+      - 'apps/pdf-composer/**'
+      - '.github/workflows/pdf-composer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/pdf-composer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: apps/pdf-composer/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-composer-web-evidence
+          path: apps/pdf-composer/test-results/
+          if-no-files-found: error
+
+  macos-desktop:
+    runs-on: macos-26
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/pdf-composer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: apps/pdf-composer/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run build:mac
+      - run: bash tests/native-tests.sh
+      - run: bash tests/native-ui.sh
+      - run: bash tests/native-launch.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pdf-composer-macos-evidence
+          path: |
+            .tmp_verify/pdf-desktop/*.json
+            .tmp_verify/pdf-desktop/*.log
+            .tmp_verify/pdf-desktop/*.png
+            .tmp_verify/pdf-desktop/*.pdf
+            .tmp_verify/pdf-desktop/native-ui/*.json
+            .tmp_verify/pdf-desktop/native-ui/*.png
+            apps/pdf-composer/release/*.zip
+          if-no-files-found: error

@@ -88,7 +88,7 @@ export default function App() {
     <footer className="status-bar"><span>{composer.busy ? 'Working…' : 'Shift-click to select cells · Drag to swap'}</span>
       {selectedPage && composer.single ? <span className="selected-source-size">Source {(selectedPage.widthPt / PT_PER_MM).toFixed(2)} × {(selectedPage.heightPt / PT_PER_MM).toFixed(2)} mm · {Number((composer.single.scale * 100).toFixed(2))}%</span> : null}
       <div className="status-actions"><button className="text-button new-project" disabled={composer.busy} onClick={files.newProject}>New project</button>
-        <label className="zoom-control"><span className="sr-only">Canvas zoom</span><select value={zoom} onChange={(event) => setZoom(event.target.value)}>
+        <label className="zoom-control"><span aria-hidden="true">View</span><span className="sr-only">Canvas zoom</span><select value={zoom} onChange={(event) => setZoom(event.target.value)}>
           <option value="fit">Fit</option>{[50, 75, 100, 125, 150, 200].map((value) => <option key={value} value={String(value)}>{value}%</option>)}</select></label></div></footer>
     <Dialogs composer={composer} onExport={(format, dpi) => void files.exportFile(format, dpi)} onDiscard={files.discardAndContinue} />
   </div>;

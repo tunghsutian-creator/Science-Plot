@@ -15,10 +15,10 @@ function PagePicker({ asset, onPlace, onClose }: { asset: SourceAsset; onPlace: 
   return <Modal title="Choose a page" onClose={onClose} wide>
     <p className="dialog-description">{asset.name} · {asset.pages.length} pages. Each page stays intact.</p>
     <div className="page-picker-grid">{asset.pages.slice(batch, batch + 9).map((page) => <button key={page.index}
-      className={`page-choice${index === page.index ? ' is-selected' : ''}`} aria-label={`Page ${page.index + 1}, ${(page.widthPt / PT_PER_MM).toFixed(1)} by ${(page.heightPt / PT_PER_MM).toFixed(1)} millimetres`}
+      className={`page-choice${index === page.index ? ' is-selected' : ''}`} aria-label={`Page ${page.index + 1}, ${(page.widthPt / PT_PER_MM).toFixed(2)} by ${(page.heightPt / PT_PER_MM).toFixed(2)} millimetres`}
       aria-pressed={index === page.index} onClick={() => setIndex(page.index)}>
       <span className="page-choice-image"><PagePreview asset={asset} pageIndex={page.index} maxPixels={280} label={false} /></span>
-      <strong>Page {page.index + 1}</strong><span>{(page.widthPt / PT_PER_MM).toFixed(1)} × {(page.heightPt / PT_PER_MM).toFixed(1)} mm</span>
+      <strong>Page {page.index + 1}</strong><span>{(page.widthPt / PT_PER_MM).toFixed(2)} × {(page.heightPt / PT_PER_MM).toFixed(2)} mm</span>
     </button>)}</div>
     <div className="page-navigation"><button className="button" disabled={batch === 0} onClick={() => setIndex(Math.max(0, batch - 9))}>Previous</button>
       <label>Page <input type="number" min="1" max={asset.pages.length} value={index + 1}
@@ -54,17 +54,23 @@ function ScaleDialog({ composer }: { composer: Composer }) {
   const source = composer.document.assets.find((asset) => asset.id === modal.assetId);
   const page = source?.pages[modal.pageIndex];
   const valid = Number.isFinite(percent) && percent >= 0.1 && percent / 100 <= maximum + 0.000001;
-  const fitPercent = Math.floor(maximum * 10000) / 100;
+  const exactFit = Math.min(1, maximum);
+  const fitPercent = (exactFit * 100).toFixed(2);
   return <Modal title={modal.intent === 'scale' ? 'Scale whole page' : 'This page needs more room'} onClose={() => composer.setModal(null)}>
     <p className="dialog-description">{modal.intent === 'scale' ? 'Scaling is uniform and explicit.' : 'Merge cells for a larger container, or explicitly scale the whole page.'} Original whitespace and page proportions are preserved.</p>
-    {page ? <p className="source-readout">{source?.name} · {(page.widthPt / PT_PER_MM).toFixed(1)} × {(page.heightPt / PT_PER_MM).toFixed(1)} mm at 100%</p> : null}
+    {page ? <p className="source-readout">{source?.name} · {(page.widthPt / PT_PER_MM).toFixed(2)} × {(page.heightPt / PT_PER_MM).toFixed(2)} mm at 100%</p> : null}
     <form onSubmit={(event) => { event.preventDefault(); if (valid) composer.confirmScale(percent / 100); }}>
-      <label className="scale-field">Scale <span><input type="number" min="0.1" max={maximum * 100} step="0.01" value={percent}
+      <label className="scale-field">Scale <span><input type="number" min="0.1" max={maximum * 100} step="any" value={percent}
         onChange={(event) => setPercent(Number(event.target.value))} autoFocus /> %</span></label>
-      <button className="text-button" type="button" onClick={() => setPercent(fitPercent)}>Choose maximum fit ({fitPercent}%)</button>
-      {!valid ? <p className="dialog-error">Use a scale of {fitPercent}% or less to keep the complete page inside the container.</p> : null}
+      <button className="button button-primary fit-page-button" type="button" onClick={() => composer.confirmScale(exactFit)}>
+        Fit whole page to cell (≈{fitPercent}%)</button>
+      {!valid ? <p className="dialog-error">Use a smaller scale or choose the exact fit above. To keep 100%, retain the original and merge cells first.</p> : null}
       {page?.pixelWidth ? <p className="resolution-note">Effective source resolution: {Math.round((page.dpi ?? 300) / (percent / 100 || 1))} dpi{page.dpiAssumed ? ' · original DPI unknown; 300 dpi assumed' : ''}.</p> : null}
-      <DialogError composer={composer} /><div className="modal-actions"><button className="button" type="button" onClick={() => composer.setModal(null)}>Cancel</button>
+      <DialogError composer={composer} /><div className="modal-actions">
+        {modal.intent === 'place' && maximum < 1 ? <button className="button" type="button" onClick={() => {
+          composer.setModal(null); composer.setNotice({ text: 'Original size retained. Merge adjacent cells, then choose the source again to place at 100%. The current placement is unchanged.', error: false });
+        }}>Keep original size</button> : null}
+        <button className="button" type="button" onClick={() => composer.setModal(null)}>Cancel</button>
         <button className="button button-primary" disabled={!valid}>{modal.intent === 'split' ? 'Apply scale & split' : 'Apply scale'}</button></div>
     </form>
   </Modal>;
@@ -100,7 +106,7 @@ function ExportDialog({ composer, onExport }: { composer: Composer; onExport: (f
       <option value="pdf">PDF · vector</option><option value="png">PNG · raster</option><option value="tiff">TIFF · raster</option></select></label>
       <label>Raster DPI<select aria-label="Raster DPI" value={dpi} disabled={format === 'pdf'} onChange={(event) => setDpi(Number(event.target.value))}>
         {[150, 300, 600, 1200].map((value) => <option key={value} value={value}>{value} dpi</option>)}</select></label></div>
-    <p className="dimension-readout">{width} × {height} mm{format === 'pdf' ? '' : ` · ${Math.round(width / 25.4 * dpi)} × ${Math.round(height / 25.4 * dpi)} px`}</p>
+    <p className="dimension-readout">{width} × {height} mm{format === 'pdf' ? '' : ` · ${Math.ceil(width / 25.4 * dpi)} × ${Math.ceil(height / 25.4 * dpi)} px`}</p>
     {rasterPanels.length > 0 ? <div className="resolution-list"><h3>Source resolution</h3>{rasterPanels.map((item, index) => <p key={`${item.name}:${index}`}
       className={item.effective < (format === 'pdf' ? 300 : dpi) || item.assumed ? 'resolution-warning' : ''}>
       {item.name}: {Math.round(item.effective)} dpi{item.assumed ? ' · original DPI unknown, 300 dpi assumed' : ''}

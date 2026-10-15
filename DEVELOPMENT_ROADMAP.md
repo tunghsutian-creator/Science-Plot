@@ -3,6 +3,19 @@
 Status: 2026-10-15. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
+## Independent offline PDF composition
+
+`apps/pdf-composer/` separately implements manual opaque-page placement, fixed
+60 × 55 mm cells, rectangular merge/split, whole-page swap/replace/history,
+portable embedded-source projects and vector PDF export in a thin macOS app.
+It does not extend the native Research Plots panel editor or reflow source plots.
+Its current fidelity scope and explicit PDF/image refusals belong to the app
+README and contract, with package-local unit/browser/native gates and a dedicated
+CI workflow. Cross-Mac font/resource identity, signing/notarization and independent
+print/journal acceptance remain separate work. Historical incomplete private
+corpus/access-capture evidence remains BLOCKED, and external AI billed/token
+telemetry remains UNKNOWN; this document tool does not resolve those claims.
+
 ## 2026-10-15 local panel assembly acceptance
 
 The approved light workbench adds whole-panel selection, physical grid placement,
