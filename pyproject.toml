@@ -66,6 +66,7 @@ markers = [
 [tool.mypy]
 python_version = "3.11"
 files = [
+  "src/sciplot_core/studio_core/veusz_scientific_text.py",
   "src/sciplot_core/panel_assembly/__init__.py",
   "src/sciplot_core/panel_assembly/errors.py",
   "src/sciplot_core/panel_assembly/schema.py",

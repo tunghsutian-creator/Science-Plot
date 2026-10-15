@@ -18,9 +18,10 @@ Reopening and concurrent-save refusal have discriminating controls. Integrated
 frozen checks and exact-commit CI still determine this round's final status.
 Native reflow deliberately rejects unsupported geometry; source-root relocation,
 second-Mac font consistency, independent human usability and print/journal
-acceptance remain separate work. The existing Ubuntu superscript-minus font gate,
-access-capture closure and incomplete private corpus inventory are not resolved
-by this feature. No external AI token or billed-fee counters are available.
+acceptance remain separate work. A separate bounded native text repair addresses
+the Ubuntu superscript-minus case; its exact-commit CI remains an independent
+gate. Access-capture closure and incomplete private corpus inventory are not
+resolved by this feature. No external AI token or billed-fee counters are available.
 
 ## 2026-10-14 validation and publication closure
 
@@ -92,10 +93,13 @@ after installing the public Noto CJK dependency. The remaining performance PDF
 font gate still fails for two superscript minus glyphs falling back to DejaVu
 Serif. Two bounded experiments preserve that failure: a same-font, same-size
 mathematical minus does not fit the PDF glyph slot without colliding with its
-neighbor. TIFF and PDF device metrics differ. No product adapter, QA exception,
-font alias, character scaling or neighbor movement is installed. An approved
-font resource or separately reviewed design decision remains necessary before
-claiming this Ubuntu publication gate passes. See `docs/FONT_PORTABILITY.md`.
+neighbor. TIFF and PDF device metrics differ. These experiments remain failed
+historical evidence. The separately authorized repair now uses native script
+measurement and reflow only for complete negative integer runs in a missing-glyph
+Liberation Sans face at 7 pt or larger. The 6 pt radar and already correct font
+paths stay unchanged. No QA exception or font alias is installed; the original
+publication assertions and exact-commit CI determine acceptance. See
+`docs/FONT_PORTABILITY.md`.
 
 The explicitly authorized 13 legacy figures now have non-color line distinction.
 Actual vector inspection additionally found truncated SAXS/torque legend samples;

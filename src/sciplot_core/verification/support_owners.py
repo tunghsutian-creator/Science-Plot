@@ -19,6 +19,24 @@ VEUSZ_NATIVE_BUILD_OWNER = ChangedOwner(
     release_gates=("full_pytest",),
 )
 
+SCIENTIFIC_TEXT_OWNER = ChangedOwner(
+    owner_id="scientific_native_text",
+    exact_paths=frozenset({
+        "src/sciplot_core/studio_core/qt_compat.py",
+        "src/sciplot_core/studio_core/veusz_scientific_text.py",
+    }),
+    owned_test_paths=frozenset({"tests/test_veusz_scientific_text.py"}),
+    pytest_targets=(
+        "tests/test_veusz_scientific_text.py",
+        "tests/test_scientific_unit_expression_contract.py",
+        "tests/test_native_font_evidence.py",
+        "tests/test_performance_veusz.py",
+        "tests/test_radar_scientific_display.py",
+    ),
+    mypy_required=True,
+    release_gates=("full_pytest",),
+)
+
 DOCUMENTATION_OWNER = ChangedOwner(
     owner_id="documentation_contract",
     path_prefixes=("docs/", "third_party/tavotto-ui/"),
