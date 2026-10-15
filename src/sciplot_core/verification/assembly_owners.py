@@ -8,6 +8,7 @@ ASSEMBLY_TESTS = (
     "tests/test_panel_assembly_export.py",
     "tests/test_panel_assembly_sources.py",
     "tests/test_panel_assembly_preview.py",
+    "tests/test_panel_assembly_physical_styles.py",
     "tests/test_panel_assembly_desktop_previews.py",
     "tests/test_panel_assembly_desktop.py",
     "tests/test_panel_assembly_desktop_review.py",
