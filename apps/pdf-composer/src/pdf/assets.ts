@@ -35,7 +35,12 @@ export async function inspectSource(file: ImportedFile): Promise<SourceAsset> {
       asset.normalizedPngBase64 = file.normalizedPngBase64;
       asset.normalizedPngSha256 = await sha256(normalized);
     }
-    const pixels = await rasterDimensions(kind, bytes, normalized);
+    let pixels: Awaited<ReturnType<typeof rasterDimensions>>;
+    try { pixels = await rasterDimensions(kind, bytes, normalized); }
+    catch (error) {
+      if (error instanceof PdfAssemblyError) throw new PdfAssemblyError(error.code, `${name}: ${error.message}`);
+      throw error;
+    }
     if ((file.pixelWidth !== undefined && file.pixelWidth !== pixels.width)
         || (file.pixelHeight !== undefined && file.pixelHeight !== pixels.height)) {
       throw new PdfAssemblyError('image_dimensions_changed', `${name}: original image dimensions disagree with native import metadata.`);

@@ -159,9 +159,11 @@ test('PNG intrinsic DPI outranks contradictory native metadata; absent DPI is ex
 });
 
 test('single-page TIFF keeps original bytes and validates its native PNG byte seal/dimensions', async () => {
-  const bytes = tiff(), pngBytes = png();
+  const bytes = tiff(), pngBytes = png(150);
   const asset = await inspectSource({ name: 'figure.tiff', bytesBase64: toBase64(bytes), normalizedPngBase64: toBase64(pngBytes) });
   assert.equal(asset.bytesBase64, toBase64(bytes)); assert.equal(asset.normalizedPngSha256, await sha256(pngBytes));
+  // A derived PNG cache cannot supply an original TIFF's missing physical DPI.
+  assert.equal(asset.pages[0].dpi, 300); assert.equal(asset.pages[0].dpiAssumed, true);
   const initial = createDocument(1, 1), doc = placeSource(initial, initial.panels[0].id, asset, 0);
   await assert.rejects(composePdf(doc, labelFont), /native TIFF pixel verification is required/);
   let verified = false;

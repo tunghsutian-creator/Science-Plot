@@ -68,6 +68,9 @@ function jpegInfo(bytes: Uint8Array): Partial<RasterInfo> {
       if (unit === 1 || unit === 2) result.dpi = resolution(x * (unit === 2 ? 2.54 : 1), y * (unit === 2 ? 2.54 : 1));
       else if (x && y && x !== y) invalid('JPEG has non-square pixel aspect ratio; export square-pixel PNG.');
     }
+    if (marker === 0xe2 && String.fromCharCode(...bytes.slice(offset + 4, offset + 16)) === 'ICC_PROFILE\0') {
+      invalid('JPEG ICC color profiles are unsupported. Export a standard sRGB display PNG without an embedded ICC profile.');
+    }
     if (marker === 0xe1 && String.fromCharCode(...bytes.slice(offset + 4, offset + 10)) === 'Exif\0\0') {
       const exif = tiffFields(bytes.slice(offset + 10, offset + 2 + length), false);
       if (exif.orientation !== 1) invalid('Rotated JPEG EXIF orientation is unsupported. Export an orientation-normalized PNG first.');
@@ -88,15 +91,31 @@ function pngInfo(bytes: Uint8Array): RasterInfo {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const result: RasterInfo = { width: view.getUint32(16), height: view.getUint32(20) };
   checkPixels(result.width, result.height);
+  let srgb = false, corrected = false;
   for (let offset = 8; offset + 12 <= bytes.length;) {
     const length = view.getUint32(offset), type = String.fromCharCode(...bytes.slice(offset + 4, offset + 8));
     if (offset + 12 + length > bytes.length) invalid('Invalid PNG chunk.');
+    if (type === 'iCCP') invalid('PNG ICC color profiles are unsupported. Export a standard sRGB display PNG without an embedded ICC profile.');
+    if (type === 'sRGB') {
+      if (length !== 1 || bytes[offset + 8] > 3) invalid('Invalid PNG sRGB declaration.');
+      srgb = true;
+    }
+    if (type === 'gAMA') {
+      corrected = true;
+      if (length !== 4 || view.getUint32(offset + 8) !== 45455) invalid('Nonstandard PNG gamma is unsupported. Export a standard sRGB display PNG.');
+    }
+    if (type === 'cHRM') {
+      corrected = true;
+      const standard = [31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000];
+      if (length !== 32 || standard.some((value, index) => view.getUint32(offset + 8 + index * 4) !== value)) invalid('Nonstandard PNG chromaticities are unsupported. Export a standard sRGB display PNG.');
+    }
     if (['acTL', 'eXIf'].includes(type)) invalid('Animated or EXIF-oriented PNG is unsupported. Export a static orientation-normalized PNG.');
     if (type === 'pHYs' && length === 9 && bytes[offset + 16] === 1) {
       result.dpi = resolution(view.getUint32(offset + 8) * 0.0254, view.getUint32(offset + 12) * 0.0254);
     }
     offset += length + 12;
   }
+  if (corrected && !srgb) invalid('PNG color-correction metadata requires an explicit standard sRGB declaration.');
   return result;
 }
 
@@ -111,7 +130,7 @@ export async function rasterDimensions(kind: SourceKind, bytes: Uint8Array, norm
     if (fields && (fields.orientation !== 1 || fields.width !== image.width || fields.height !== image.height)) {
       invalid('TIFF orientation/dimensions disagree with its lossless PNG decoding; import an orientation-normalized single-page image.');
     }
-    return { width: image.width, height: image.height, dpi: fields?.dpi ?? info.dpi };
+    return { width: image.width, height: image.height, dpi: kind === 'tiff' ? fields?.dpi : info.dpi };
   } catch (error) {
     if (error instanceof PdfAssemblyError) throw error;
     invalid('Damaged or unsupported image bytes. Export a standard RGB PNG/JPEG or single-page TIFF.');
