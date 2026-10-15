@@ -1,5 +1,6 @@
 import { PDFArray, PDFBool, PDFDict, PDFDocument, PDFName, PDFNumber } from 'pdf-lib';
 import { PdfAssemblyError } from './error';
+import { assertSelfContainedResources } from './resources';
 
 export interface PdfGeometry {
   crop: { x: number; y: number; width: number; height: number };
@@ -23,6 +24,7 @@ export async function openPdf(bytes: Uint8Array, name: string): Promise<PDFDocum
     const names = document.catalog.lookupMaybe(PDFName.of('Names'), PDFDict);
     if (names?.has(PDFName.of('JavaScript'))) refuse(name, 'Document JavaScript cannot be preserved.');
     for (let index = 0; index < document.getPageCount(); index++) geometry(document, index, name);
+    assertSelfContainedResources(document, name);
     return document;
   } catch (error) {
     if (error instanceof PdfAssemblyError) throw error;
