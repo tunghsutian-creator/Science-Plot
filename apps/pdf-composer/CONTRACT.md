@@ -42,7 +42,7 @@ formats at chosen DPI, with effective source resolution shown.
   shared contract, final tests, documentation and CI.
 - Engine owns `src/pdf/` and `tests/pdf*.test.ts`. Proposed exports:
   `inspectSource(file: ImportedFile): Promise<SourceAsset>`;
-  `composePdf(document: AssemblyDocument, labelFont: Uint8Array): Promise<ExportResult>`.
+  `composePdf(document: AssemblyDocument, labelFont: Uint8Array, verifyTiff?: TiffVerifier): Promise<ExportResult>`.
 - Frontend owns React screen/components/styles and `src/bridge.ts` adapter;
   core helpers are imported from `src/core/document.ts`, `history.ts`, `storage.ts`.
 - Desktop owns `native/`, macOS packaging scripts, native bridge tests.
@@ -54,6 +54,10 @@ Methods and named parameters match `NativeBridge`: `importFiles {}`;
 `openProject {}`; `saveProject {text,name,token?}`;
 `saveExport {bytesBase64,name,format,dpi}`;
 `previewPdf {bytesBase64,pageIndex,maxPixels}` returning PNG data URI;
+`verifyTiff {bytesBase64,normalizedPngBase64}` returns null after decoding and
+comparing the actual pixels of the original TIFF and supplied PNG; a mismatch
+refuses. TIFF source admission, project load/save and export require this native
+port. Type/hash/header checks alone cannot establish decoding identity.
 `setDocumentState {title,dirty}`. Native menu sends
 `window.dispatchEvent(new CustomEvent('assembly-menu',{detail:action}))`.
 All resources are bundled locally; remote navigation and network access are
@@ -64,4 +68,6 @@ Core helpers: `createDocument(rows=2,columns=3)`, `validateDocument(doc)`,
 `splitPanel`, `swapPanels`, `setPanelScale`, `resizeGrid`, `toggleLabels`,
 `panelSizePt`, `requiredScale`, all immutable. History offers `createHistory`,
 `commit`, `undo`, `redo` and `present/past/future` fields. Portable storage offers
-async `serializeProject(doc)` and `parseProject(text)` validating byte hashes.
+async `serializeProject(doc,verifyTiff?)` and `parseProject(text,verifyTiff?)`
+validating byte hashes, independently inspecting original source type/page geometry,
+and comparing TIFF decoding pixels through the required native verifier.

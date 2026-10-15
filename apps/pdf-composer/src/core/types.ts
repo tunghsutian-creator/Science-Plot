@@ -71,12 +71,15 @@ export interface OpenedProject {
   token: string;
 }
 
+export type TiffVerifier = (bytesBase64: string, normalizedPngBase64: string) => Promise<void>;
+
 export interface NativeBridge {
   importFiles(): Promise<ImportedFile[]>;
   openProject(): Promise<OpenedProject | null>;
   saveProject(text: string, name: string, token?: string): Promise<NativeSaveResult>;
   saveExport(bytesBase64: string, name: string, format: 'pdf' | 'png' | 'tiff', dpi: number): Promise<NativeSaveResult>;
   previewPdf(bytesBase64: string, pageIndex: number, maxPixels: number): Promise<string>;
+  verifyTiff: TiffVerifier;
   setDocumentState(title: string, dirty: boolean): Promise<void>;
 }
 

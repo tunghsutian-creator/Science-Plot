@@ -127,6 +127,7 @@ function emptyPanel(row: number, column: number): Panel {
 }
 
 export function createDocument(rows = 2, columns = 3): AssemblyDocument {
+  if (!integer(rows, 1, 12) || !integer(columns, 1, 12)) throw new Error('Use 1–12 rows and columns.');
   const document: AssemblyDocument = {
     format: 'figure-assembly', version: 1, title: 'Untitled',
     grid: { rows, columns, cellWidthMm: 60, cellHeightMm: 55 },

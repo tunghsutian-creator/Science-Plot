@@ -9,6 +9,8 @@ import { createHistory, commit, undo, redo } from '../src/core/history';
 import { parseProject, serializeProject } from '../src/core/storage';
 import { toBase64, fromBase64, sha256 } from '../src/core/bytes';
 import type { SourceAsset } from '../src/core/types';
+import { PDFDocument } from 'pdf-lib';
+import { inspectSource } from '../src/pdf/index';
 
 async function asset(width = 60 * PT_PER_MM, height = 55 * PT_PER_MM, name = 'original.pdf'): Promise<SourceAsset> {
   const bytes = new TextEncoder().encode(`immutable source ${name}`);
@@ -17,7 +19,14 @@ async function asset(width = 60 * PT_PER_MM, height = 55 * PT_PER_MM, name = 'or
     pages: [{ index: 0, widthPt: width, heightPt: height }] };
 }
 
+async function realAsset(width = 60 * PT_PER_MM, height = 55 * PT_PER_MM): Promise<SourceAsset> {
+  const pdf = await PDFDocument.create();
+  pdf.addPage([width, height]).drawText('Original scientific page', { x: 10, y: 20, size: 8 });
+  return inspectSource({ name: 'real.pdf', bytesBase64: toBase64(await pdf.save()) });
+}
+
 test('all required presets have exact physical dimensions and no extra spacing', () => {
+  assert.throws(() => createDocument(100000, 100000), /1–12/);
   for (const [rows, columns] of [[2, 2], [2, 3], [3, 2], [3, 3]]) {
     const document = createDocument(rows, columns);
     assert.equal(document.panels.length, rows * columns);
@@ -111,13 +120,30 @@ test('undo redo restores replacement, merge and clear including exact source byt
 });
 
 test('portable save/reopen needs no source paths and detects corrupted original bytes', async () => {
-  const document = createDocument(), source = await asset();
+  const document = createDocument(), source = await realAsset();
   const placed = placeSource(document, document.panels[0].id, source, 0);
   const saved = await serializeProject(placed);
   assert.deepEqual(await parseProject(saved), placed);
   const corrupt = JSON.parse(saved);
   corrupt.assets[0].bytesBase64 = toBase64(new TextEncoder().encode('different'));
   await assert.rejects(parseProject(JSON.stringify(corrupt)), /source bytes changed/);
+});
+
+test('save/reopen re-inspects source type and actual geometry instead of trusting self-described metadata', async () => {
+  const source = await realAsset(340, 255);
+  const fabricated = { ...source, pages: [{ index: 0, widthPt: 160, heightPt: 100 }] };
+  const document = createDocument();
+  const misplaced = placeSource(document, document.panels[0].id, fabricated, 0);
+  await assert.rejects(serializeProject(misplaced), /geometry/);
+  await assert.rejects(parseProject(JSON.stringify(misplaced)), /geometry/);
+  const wrongKind = structuredClone(misplaced);
+  wrongKind.assets[0].kind = 'png';
+  await assert.rejects(parseProject(JSON.stringify(wrongKind)), /type or page inventory/);
+  const nonPdf = structuredClone(misplaced);
+  const bytes = new TextEncoder().encode('ordinary text, not a PDF');
+  nonPdf.assets[0].bytesBase64 = toBase64(bytes);
+  nonPdf.assets[0].sha256 = await sha256(bytes);
+  await assert.rejects(parseProject(JSON.stringify(nonPdf)));
 });
 
 test('closed project validation refuses unknown fields, overlap, gaps, nonfinite and missing references', async () => {
