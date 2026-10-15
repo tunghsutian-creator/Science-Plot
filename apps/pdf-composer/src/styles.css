@@ -46,7 +46,9 @@ button{user-select:none}
 .source-thumbnail{height:103px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #e1e2e7;margin-bottom:9px;width:100%;overflow:hidden}
 .page-preview{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none;user-select:none}
 .source-name{display:block;font-size:12px;line-height:17px;font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.source-detail{font-size:11px;line-height:16px;color:var(--muted)}
+.source-detail{font-size:10px;line-height:16px;color:var(--muted)}
+.source-dpi-warning{font-size:10px;line-height:15px;color:#97632e}
+.selected-source-size{font-size:10px;color:#717886;font-variant-numeric:tabular-nums}
 .empty-sources{color:#818591;text-align:center;padding:34px 0}
 .empty-sources>svg{color:#9096a4}
 .empty-sources p{font-size:12px;line-height:19px;margin:13px 0 17px}
@@ -145,6 +147,7 @@ input[type=number]{width:100%;font-variant-numeric:tabular-nums}
 }
 
 @media(max-width:1000px){.toolbar{gap:8px;padding:0 14px}
+.selected-source-size{display:none}
 .app-name{margin-right:12px}
 .source-rail{width:184px;min-width:184px}
 .source-list{padding-left:12px;padding-right:12px}

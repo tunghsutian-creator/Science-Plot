@@ -68,6 +68,9 @@ export const bridge: NativeBridge = {
   async importFiles() {
     if (hasNativeBridge()) return invoke<ImportedFile[]>('importFiles', {});
     const files = await chooseFiles('.pdf,.png,.jpg,.jpeg,.tif,.tiff', true);
+    if (files.length > 100 || files.some((file) => file.size > 64 * 1024 * 1024)) {
+      throw new Error('Import up to 100 sources, each no larger than 64 MiB.');
+    }
     return Promise.all(files.map(async (file) => ({ name: file.name,
       bytesBase64: toBase64(new Uint8Array(await file.arrayBuffer())) })));
   },
@@ -89,6 +92,10 @@ export const bridge: NativeBridge = {
   async previewPdf(bytesBase64, pageIndex, maxPixels) {
     if (!hasNativeBridge()) throw new Error('PDF previews are rendered in the desktop application.');
     return invoke<string>('previewPdf', { bytesBase64, pageIndex, maxPixels });
+  },
+  async verifyTiff(bytesBase64, normalizedPngBase64) {
+    if (!hasNativeBridge()) throw new Error('TIFF verification needs the desktop application. Import PDF, PNG or JPEG here.');
+    await invoke<void>('verifyTiff', { bytesBase64, normalizedPngBase64 });
   },
   async setDocumentState(title, dirty) {
     if (hasNativeBridge()) await invoke<void>('setDocumentState', { title, dirty });

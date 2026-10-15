@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { bridge } from './bridge';
 import type { NativeMenuAction } from './core/types';
+import { PT_PER_MM } from './core/document';
 import { Dialogs } from './components/Dialogs';
 import { Icon } from './components/Icon';
 import { PaperCanvas } from './components/PaperCanvas';
@@ -17,6 +18,8 @@ export default function App() {
   const [zoom, setZoom] = useState('fit');
   const title = composer.projectName.replace(/\.figureassembly$/i, '');
   const width = composer.document.grid.columns * 60, height = composer.document.grid.rows * 55;
+  const selectedSource = composer.document.assets.find((asset) => asset.id === composer.single?.assetId);
+  const selectedPage = selectedSource?.pages[composer.single?.pageIndex ?? 0];
 
   function action(name: string) {
     if (composer.busy) return;
@@ -44,7 +47,12 @@ export default function App() {
 
   useEffect(() => { void bridge.setDocumentState(title, composer.dirty).catch(() => undefined); }, [title, composer.dirty]);
   useEffect(() => {
-    const menu = (event: Event) => { if (!composer.modal) action((event as CustomEvent<NativeMenuAction>).detail); };
+    const menu = (event: Event) => {
+      const name = (event as CustomEvent<NativeMenuAction>).detail;
+      const editing = document.activeElement?.closest('input,textarea,[contenteditable="true"]');
+      if ((name === 'undo' || name === 'redo') && editing) { document.execCommand(name); return; }
+      if (!composer.modal) action(name);
+    };
     const shortcut = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target?.closest('input,textarea,select,[contenteditable="true"]') || composer.modal || composer.busy) return;
@@ -75,6 +83,7 @@ export default function App() {
           onSelect={composer.selectPanel} onSwap={composer.swap} onAction={action} /></div>
     </div>
     <footer className="status-bar"><span>{composer.busy ? 'Working…' : 'Shift-click to select cells · Drag to swap'}</span>
+      {selectedPage && composer.single ? <span className="selected-source-size">Source {(selectedPage.widthPt / PT_PER_MM).toFixed(2)} × {(selectedPage.heightPt / PT_PER_MM).toFixed(2)} mm · {Number((composer.single.scale * 100).toFixed(2))}%</span> : null}
       <div className="status-actions"><button className="text-button new-project" disabled={composer.busy} onClick={files.newProject}>New project</button>
         <label className="zoom-control"><span className="sr-only">Canvas zoom</span><select value={zoom} onChange={(event) => setZoom(event.target.value)}>
           <option value="fit">Fit</option>{[50, 75, 100, 125, 150, 200].map((value) => <option key={value} value={String(value)}>{value}%</option>)}</select></label></div></footer>

@@ -16,6 +16,10 @@ export function useProjectFiles(composer: Composer) {
       const files = await bridge.importFiles();
       if (files.length === 0) return;
       const assets = await Promise.all(files.map((file) => inspectSource(file)));
+      await Promise.all(assets.filter((asset) => asset.kind === 'tiff').map((asset) => {
+        if (!asset.normalizedPngBase64) throw new Error('TIFF is missing its lossless native decoding.');
+        return bridge.verifyTiff(asset.bytesBase64, asset.normalizedPngBase64);
+      }));
       composer.addAssets(assets);
       composer.setNotice({ text: `Imported ${assets.length} ${assets.length === 1 ? 'source' : 'sources'}. Select a cell, then choose a source.`, error: false });
       if (replaceTarget && assets.length === 1) composer.chooseSource(assets[0], replaceTarget);
@@ -29,7 +33,7 @@ export function useProjectFiles(composer: Composer) {
     try {
       const opened = await bridge.openProject();
       if (!opened) return;
-      const document = await parseProject(opened.text);
+      const document = await parseProject(opened.text, bridge.verifyTiff);
       composer.replaceDocument(document, opened.name, opened.token || undefined);
     } catch (error) { composer.report(error); }
     finally { composer.setBusy(false); }
@@ -50,7 +54,7 @@ export function useProjectFiles(composer: Composer) {
     composer.setBusy(true);
     try {
       const snapshot = composer.document;
-      const text = await serializeProject(snapshot);
+      const text = await serializeProject(snapshot, bridge.verifyTiff);
       const saved = await bridge.saveProject(text, composer.projectName, saveAs ? undefined : composer.projectToken);
       if (saved.cancelled) return;
       composer.setSavedSignature(documentSignature(snapshot));
@@ -64,7 +68,7 @@ export function useProjectFiles(composer: Composer) {
     if (composer.busy) return;
     composer.setBusy(true);
     try {
-      const result = await composePdf(composer.document, fontBytes);
+      const result = await composePdf(composer.document, fontBytes, bridge.verifyTiff);
       const stem = composer.projectName.replace(/\.figureassembly$/i, '');
       const saved = await bridge.saveExport(toBase64(result.bytes), `${stem}.${format === 'tiff' ? 'tiff' : format}`, format, dpi);
       if (saved.cancelled) return;
