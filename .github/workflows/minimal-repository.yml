@@ -1,8 +1,10 @@
-name: Minimal repository policy
+# Diagnostic branch only. Never merge this reduced selection into release gates.
+name: Current performance failure diagnostic
 
 on:
   push:
-  pull_request:
+    branches:
+      - codex/assembly-ci-diagnostic-20261015
 
 jobs:
   runtime-integrity:
@@ -12,6 +14,8 @@ jobs:
       PYTHONNOUSERSITE: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: d0e5aa3e1a00c4811391c9791f2a7bfce32aec36
       - name: Enforce minimal runtime distribution
         shell: bash
         run: |
@@ -139,37 +143,83 @@ jobs:
           python3 -m pip wheel . --no-deps --no-build-isolation \
             --wheel-dir /tmp/sciplot-wheel
           python3 tests/test_wheel_surface.py /tmp/sciplot-wheel/*.whl
-      - name: Run reviewed public focused behavior
-        run: python3 -m pytest -q --input-scope public-focused
-      - name: Run reviewed public comprehensive behavior
-        # Original generated observer negatives genuinely disable Python hooks.
-        # Execute every public comprehensive node in a bound source-only stage;
-        # raw/golden private namespaces remain outside its input closure.
-        shell: bash
+      - name: Bind the exact current unmodified release source
         run: |
-          set -euo pipefail
-          # Stream the original generated-only log while preserving the stage's
-          # exit status and its complete source/runtime/selected-body checks.
-          (
-            until [[ -f .tmp_verify/ci_public_comprehensive/command.log ]]; do
-              sleep 1
-            done
-            exec tail -n +1 --follow=name --retry .tmp_verify/ci_public_comprehensive/command.log
-          ) &
-          progress_pid=$!
-          trap 'kill "$progress_pid" 2>/dev/null || true; wait "$progress_pid" 2>/dev/null || true' EXIT
-          stage_status=0
-          python3 -m sciplot_core.verification.public_stage --profile public-comprehensive --out .tmp_verify/ci_public_comprehensive || stage_status=$?
-          kill "$progress_pid" 2>/dev/null || true
-          wait "$progress_pid" 2>/dev/null || true
-          trap - EXIT
-          if [[ "$stage_status" -ne 0 && -f .tmp_verify/ci_public_comprehensive/command.log ]]; then
-            tail -n 120 .tmp_verify/ci_public_comprehensive/command.log || true
-          fi
-          exit "$stage_status"
-      - name: Verify source-checkout wrapper bootstrap
-        run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
-      - name: Run readiness check
-        run: skill/scripts/sciplot doctor --json
-      - name: Run fixture-free lifecycle smoke
-        run: skill/scripts/sciplot smoke --out .tmp_verify/ci_runtime_smoke --json
+          mkdir -p .tmp_verify/ci_performance_baseline
+          python3 - <<'PYBIND'
+          import json, subprocess
+          from pathlib import Path
+          from sciplot_core.verification.public_stage import source_binding
+          root = Path.cwd()
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert head == 'd0e5aa3e1a00c4811391c9791f2a7bfce32aec36', head
+          subprocess.run(['git', 'diff', '--exit-code'], check=True)
+          before = source_binding(root)
+          Path('.tmp_verify/ci_performance_baseline/before.json').write_text(json.dumps(before, sort_keys=True))
+          print({'head': head, 'scope': 'One original public comprehensive node; diagnostic only; no product mutation or prototype'})
+          PYBIND
+      - name: Execute only the original failed performance node
+        shell: bash
+        env:
+          SCIPLOT_PUBLIC_STAGE_REPORT: .tmp_verify/ci_performance_baseline/reports.json
+          SCIPLOT_VERIFY_FINISH: .tmp_verify/ci_performance_baseline/finish.json
+        run: |
+          set -uo pipefail
+          set +e
+          python3 -m pytest -q --tb=long \
+            -p sciplot_core.verification.pytest_finish \
+            -p sciplot_core.verification.public_stage \
+            --input-scope public-comprehensive \
+            --basetemp=/tmp/sciplot-current-performance-diagnostic \
+            -k test_ready_performance_studio_review_preserves_lineage \
+            2>&1 | tee .tmp_verify/ci_performance_baseline/command.log
+          test_exit=${PIPESTATUS[0]}
+          printf '%s\n' "$test_exit" > .tmp_verify/ci_performance_baseline/exit.txt
+          exit "$test_exit"
+      - name: Preserve current original QA and actual native font evidence
+        if: always()
+        run: |
+          python3 - <<'PYQA'
+          import hashlib, json, shutil, subprocess
+          from pathlib import Path
+          import fitz
+          from PyQt6.QtGui import QFont, QGuiApplication, QRawFont, QTextLayout
+          from sciplot_core.verification.public_stage import source_binding
+          root = Path.cwd()
+          out = root / '.tmp_verify/ci_performance_baseline'
+          out.mkdir(parents=True, exist_ok=True)
+          before_path = out / 'before.json'
+          after = source_binding(root)
+          (out / 'after.json').write_text(json.dumps(after, sort_keys=True))
+          before = json.loads(before_path.read_text()) if before_path.exists() else None
+          source_unchanged = before == after if before is not None else None
+          base = Path('/tmp/sciplot-current-performance-diagnostic')
+          rows = []
+          for index, path in enumerate(sorted(base.rglob('publication_qa.json'))):
+              qa = json.loads(path.read_text())
+              shutil.copy2(path, out / f'publication_qa-{index}.json')
+              rows.append({'path': str(path), 'status': qa.get('status'), 'blocking_check_ids': qa.get('blocking_check_ids'), 'failed_checks': [c for c in qa.get('checks', []) if c.get('status') == 'failed']})
+          fonts = []
+          for index, path in enumerate(sorted(base.rglob('*.pdf'))):
+              document = fitz.open(path)
+              spans = [s for page in document for b in page.get_text('dict')['blocks'] if 'lines' in b for line in b['lines'] for s in line['spans']]
+              fonts.append({'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(), 'pdf_fonts': sorted({font[3] for page in document for font in page.get_fonts()}), 'superscript_minus_spans': [{k:s[k] for k in ('text','font','size','bbox','origin')} for s in spans if '\u207b' in s['text']]})
+              document.close()
+              shutil.copy2(path, out / f'native-{index}.pdf')
+          app = QGuiApplication([])
+          font = QFont('Arial', 7)
+          raw = QRawFont.fromFont(font)
+          layout = QTextLayout('Specific impact strength (kJ m\u207b\u00b2)', font)
+          layout.beginLayout(); layout.createLine(); layout.endLayout()
+          payload = {'kind': 'unmodified_current_performance_diagnostic', 'head': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(), 'source_unchanged': source_unchanged, 'qa': rows, 'pdf': fonts, 'qt_primary_font': raw.familyName(), 'qt_primary_has_u207b': raw.supportsCharacter(0x207B), 'qt_actual_glyph_families': [r.rawFont().familyName() for r in layout.glyphRuns()], 'release_validation': False, 'font_prototype_or_product_change': False}
+          (out / 'qa-details.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+          print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+          assert before is not None and source_unchanged is True, 'Original release source changed or was not captured'
+          PYQA
+      - name: Upload only generated public diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-performance-baseline-d0e5aa3
+          path: .tmp_verify/ci_performance_baseline/
+          if-no-files-found: error
