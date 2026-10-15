@@ -162,3 +162,37 @@ def test_public_export_refuses_dangling_output_symlink_without_creating_its_targ
         compose({"action": "export", "layout": str(layout), "out": str(alias)})
     assert error.value.code == "assembly_output_exists"
     assert alias.is_symlink() and not target.exists()
+
+
+def test_cli_mcp_and_desktop_keep_actionable_physical_style_details(tmp_path, monkeypatch, capsys):
+    from sciplot_core.panel_assembly import export
+    from sciplot_core.panel_assembly.desktop_messages import display_message
+
+    layout = tmp_path / "layout.json"
+    compose({"action": "new", "layout": str(layout)})
+    original = layout.read_bytes()
+    issue = {"code": "assembly_relative_physical_style", "panel_id": "panel:a", "panel_label": "a",
+             "setting_path": "/page/graph/x/Label/size", "value": "3%",
+             "repair": "Set a fixed size in pt in the original plot, Save, then use the current source version and retry export."}
+    message = "Panel a (panel:a): /page/graph/x/Label/size uses 3%. " + issue["repair"]
+
+    def refuse(*_args, **_kwargs):
+        raise AssemblyError(issue["code"], message, issues=[issue])
+
+    monkeypatch.setattr(export, "export_document", refuse)
+    assert main(["compose", "export", str(layout), "--out", str(tmp_path / "cli-package"), "--json"]) == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["reason_code"] == issue["code"]
+    assert result["message"] == message and result["issues"] == [issue]
+
+    async def scenario():
+        reply = await Adapter().call("sciplot_compose", {"request": {"action": "export", "layout": str(layout),
+                                                                     "out": str(tmp_path / "mcp-package")}})
+        assert reply.is_error and reply.structured_content["error"]["code"] == issue["code"]
+        assert reply.structured_content["error"]["message"] == message
+        assert reply.structured_content["issues"] == [issue]
+
+    anyio.run(scenario)
+    assert display_message(issue["code"] + ": " + message) == issue["code"] + ": " + message
+    assert layout.read_bytes() == original
+    assert not (tmp_path / "cli-package").exists() and not (tmp_path / "mcp-package").exists()
