@@ -38,13 +38,76 @@ enum NativeRendering {
         result["pixelWidth"] = width; result["pixelHeight"] = height
         if let dpi = try imageDPI(properties) { result["dpi"] = dpi }
         if isTIFF {
-            guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
-                  image.width == width, image.height == height else {
-                throw NativeFailure("image_decode", "The TIFF could not be decoded without changing its dimensions.")
-            }
+            let image = try decodeTIFF(bytes)
             result["normalizedPngBase64"] = try encode(image, type: .png, dpi: nil).base64EncodedString()
         }
         return result
+    }
+
+    static func decodeTIFF(_ bytes: Data) throws -> CGImage {
+        guard !(bytes.starts(with: [0x49, 0x49, 0x2b, 0]) || bytes.starts(with: [0x4d, 0x4d, 0, 0x2b])) else {
+            throw NativeFailure("unsupported_tiff", "BigTIFF is not supported.")
+        }
+        try rejectTIFFProfile(bytes)
+        guard let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+              CGImageSourceGetType(source) as String? == UTType.tiff.identifier,
+              CGImageSourceGetCount(source) == 1,
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              properties[kCGImagePropertyDepth] as? Int == 8,
+              properties[kCGImagePropertyProfileName] == nil,
+              width > 0, height > 0, width <= 32768, height <= 32768,
+              width <= NativeLimits.rasterPixels / height,
+              (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1 == 1,
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              image.width == width, image.height == height, image.bitsPerComponent == 8,
+              image.colorSpace?.model == .rgb || image.colorSpace?.model == .monochrome else {
+            throw NativeFailure("unsupported_tiff", "Use an upright, single-image, 8-bit grayscale or RGB TIFF.")
+        }
+        return image
+    }
+
+    private static func rejectTIFFProfile(_ bytes: Data) throws {
+        let little = bytes.first == 0x49
+        func number(_ offset: Int, _ count: Int) -> Int? {
+            guard offset >= 0, offset <= bytes.count - count else { return nil }
+            let values = little ? Array(bytes[offset..<offset + count].reversed()) : Array(bytes[offset..<offset + count])
+            return values.reduce(0) { $0 * 256 + Int($1) }
+        }
+        guard let offset = number(4, 4), let count = number(offset, 2), count <= 4096 else { return }
+        for index in 0..<count {
+            if number(offset + 2 + index * 12, 2) == 34675 {
+                throw NativeFailure("tiff_profile", "TIFFs with embedded color profiles are not supported. Keep the original and export a standard sRGB PNG.")
+            }
+        }
+    }
+
+    static func verifyTIFF(_ bytes: Data, normalizedPNG: Data) throws {
+        let original = try decodeTIFF(bytes)
+        guard let source = CGImageSourceCreateWithData(normalizedPNG as CFData, nil),
+              CGImageSourceGetType(source) as String? == UTType.png.identifier,
+              CGImageSourceGetCount(source) == 1,
+              let supplied = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              supplied.width == original.width, supplied.height == original.height,
+              supplied.bitsPerComponent == 8,
+              supplied.colorSpace?.model == .rgb || supplied.colorSpace?.model == .monochrome,
+              try canonicalRGBA(supplied) == canonicalRGBA(original) else {
+            throw NativeFailure("tiff_pixels_mismatch", "The saved TIFF preview does not match its original pixels. Reimport the original TIFF.")
+        }
+    }
+
+    private static func canonicalRGBA(_ image: CGImage) throws -> Data {
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+                                      bytesPerRow: image.width * 4, space: colorSpace,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            throw NativeFailure("image_decode", "The image pixels could not be verified.")
+        }
+        context.setBlendMode(.copy)
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        guard let pixels = context.data else { throw NativeFailure("image_decode", "The image pixels could not be read.") }
+        return Data(bytes: pixels, count: image.width * image.height * 4)
     }
 
     static func imageDPI(_ properties: [CFString: Any]) throws -> Double? {
@@ -141,6 +204,21 @@ enum NativeRendering {
         if let dpi { properties[kCGImagePropertyDPIWidth] = dpi; properties[kCGImagePropertyDPIHeight] = dpi }
         CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw NativeFailure("image_encode", "The image could not be encoded.") }
-        return bytes as Data
+        // ImageIO adds benign ColorSpace/dimension EXIF even for an upright CGImage.
+        // Only this freshly generated metadata is removed; original import bytes are immutable.
+        return type == .png ? try withoutGeneratedEXIF(bytes as Data) : bytes as Data
+    }
+
+    private static func withoutGeneratedEXIF(_ bytes: Data) throws -> Data {
+        var result = Data(bytes.prefix(8)), offset = 8
+        while offset + 12 <= bytes.count {
+            let length = bytes[offset..<offset + 4].reduce(0) { $0 * 256 + Int($1) }
+            guard length <= bytes.count - offset - 12 else { throw NativeFailure("image_encode", "The PNG encoder returned invalid chunks.") }
+            let type = String(data: bytes[offset + 4..<offset + 8], encoding: .ascii)
+            if type != "eXIf" { result.append(bytes[offset..<offset + length + 12]) }
+            offset += length + 12
+        }
+        guard offset == bytes.count else { throw NativeFailure("image_encode", "The PNG encoder returned incomplete chunks.") }
+        return result
     }
 }

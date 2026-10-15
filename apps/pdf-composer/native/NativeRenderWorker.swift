@@ -24,4 +24,8 @@ actor NativeRenderWorker {
     func export(_ bytes: Data, format: String, dpi: Int) throws -> Data {
         try NativeRendering.export(bytes, format: format, dpi: dpi)
     }
+
+    func verifyTIFF(_ bytes: Data, normalizedPNG: Data) throws {
+        try NativeRendering.verifyTIFF(bytes, normalizedPNG: normalizedPNG)
+    }
 }

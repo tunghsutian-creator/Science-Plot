@@ -84,6 +84,13 @@ struct NativeTests {
         let normalizedSource = CGImageSourceCreateWithData(normalized as CFData, nil)!
         let normalizedImage = CGImageSourceCreateImageAtIndex(normalizedSource, 0, nil)!
         try check(rgba(normalizedImage) == rgba(image), "TIFF normalized PNG pixel identity")
+        try NativeRendering.verifyTIFF(original, normalizedPNG: normalized)
+        try check(true, "TIFF provenance re-decode accepts exact pixels")
+        let blueContext = CGContext(data: nil, width: 24, height: 12, bitsPerComponent: 8, bytesPerRow: 96,
+                                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        blueContext.setFillColor(CGColor(red: 0, green: 0, blue: 1, alpha: 1)); blueContext.fill(CGRect(x: 0, y: 0, width: 24, height: 12))
+        let bluePNG = try NativeRendering.encode(blueContext.makeImage()!, type: .png, dpi: nil)
+        try failure("tiff_pixels_mismatch") { try NativeRendering.verifyTIFF(original, normalizedPNG: bluePNG) }
         try check(abs((imported["dpi"] as! Double) - 300) < 0.01, "TIFF physical DPI preserved")
         let multi = NSMutableData()
         let destination = CGImageDestinationCreateWithData(multi, UTType.tiff.identifier as CFString, 2, nil)!
@@ -111,6 +118,12 @@ struct NativeTests {
         }
         try failure("invalid_request") { _ = try BridgeRequest(["id": "a", "method": "openProject", "params": [:], "extra": 1]) }
         let dialogs = FixtureDialogs(), bridge = NativeBridge(dialogs: dialogs)
+        let verified = try await bridge.handle(BridgeRequest(["id": "verify", "method": "verifyTiff", "params": ["bytesBase64": original.base64EncodedString(), "normalizedPngBase64": normalized.base64EncodedString()]]))
+        try check(verified is NSNull, "TIFF verification bridge returns null")
+        do {
+            _ = try await bridge.handle(BridgeRequest(["id": "verify-bad", "method": "verifyTiff", "params": ["bytesBase64": original.base64EncodedString(), "normalizedPngBase64": bluePNG.base64EncodedString()]]))
+            throw TestFailure.assertion("bridge accepted wrong TIFF pixels")
+        } catch let error as NativeFailure { try check(error.code == "tiff_pixels_mismatch", "TIFF bridge refuses same-size substituted pixels") }
         let cancelled = try await bridge.handle(BridgeRequest(["id": "save", "method": "saveProject", "params": ["text": "{}", "name": "Cancelled"]])) as! [String: Any]
         try check(cancelled["cancelled"] as? Bool == true, "native Save As cancellation leaves no file")
         let openedCancelled = try await bridge.handle(BridgeRequest(["id": "open", "method": "openProject", "params": [:]]))

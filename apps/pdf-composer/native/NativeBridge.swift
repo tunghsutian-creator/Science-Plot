@@ -65,6 +65,12 @@ final class NativeBridge: NSObject, WKScriptMessageHandler {
             let index = try request.integer("pageIndex", range: 0...9999)
             let pixels = try request.integer("maxPixels", range: 1...NativeLimits.previewPixels)
             return try await renderer.preview(bytes, pageIndex: index, maxPixels: pixels)
+        case "verifyTiff":
+            try request.keys(["bytesBase64", "normalizedPngBase64"])
+            let bytes = try decodeBase64(request.string("bytesBase64", maximum: NativeLimits.sourceBytes * 2), maximum: NativeLimits.sourceBytes)
+            let png = try decodeBase64(request.string("normalizedPngBase64", maximum: NativeLimits.sourceBytes * 2), maximum: NativeLimits.sourceBytes)
+            try await renderer.verifyTIFF(bytes, normalizedPNG: png)
+            return NSNull()
         default:
             throw NativeFailure("unknown_method", "This native action is not supported.")
         }

@@ -47,9 +47,10 @@ final class AssemblyApplication: NSObject, NSApplicationDelegate, NSWindowDelega
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             do {
-                let rules = """
-                [{"trigger":{"url-filter":"^(https?|wss?|ftp)://"},"action":{"type":"block"}}]
-                """
+                let entries = ["http", "https", "ws", "wss", "ftp"].map {
+                    ["trigger": ["url-filter": "^\($0)://"], "action": ["type": "block"]]
+                }
+                let rules = String(data: try JSONSerialization.data(withJSONObject: entries), encoding: .utf8)!
                 let list = try await WKContentRuleListStore.default().compileContentRuleList(
                     forIdentifier: "FigureAssemblyOffline", encodedContentRuleList: rules)
                 if let list { configuration.userContentController.add(list) }
