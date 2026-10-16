@@ -56,6 +56,7 @@ DOCUMENTATION_OWNER = ChangedOwner(
             "skill/references/ordinary-create.md",
             "skill/references/saved-work-continuation.md",
             "skill/references/paper-figures.md",
+            "skill/references/managed-delivery.md",
             "skill/references/panel-assembly.md",
             "skill/references/paper-figures.json",
             "skill/references/performance-radar.md",

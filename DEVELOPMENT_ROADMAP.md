@@ -3,6 +3,34 @@
 Status: 2026-10-16. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
+## 2026-10-16 ordinary plotting and continuation review
+
+The current local reliability branch addresses an ordinary normalized wide-table
+stress-relaxation parser failure, explicit linear/log selection, visible runtime
+identity, interrupted Managed native publication, typed presentation placement,
+and selected Managed native snapshot delivery. The parser finding does not
+establish a numerical defect in the six previously delivered Managed figures.
+Already-normalized ratios retain their original values; linear selection keeps
+zero-time observations and explicit log selection records excluded nonpositive
+times without normalizing again. Actual native axis settings and displayed
+output require acceptance alongside source-level checks.
+
+Final acceptance must use isolated copies of the real 15-curve input, retain raw
+hashes and per-curve sequence/counts, review both axis variants, and demonstrate
+that later label-only edits preserve science. A native delivery snapshot must
+survive actual relocation, native reopening, an edit, Save and re-export before
+claiming portability. Local Managed continuation still requires its original
+semantic document and sources; a portable VSZ/ZIP alone does not establish a
+portable Managed project or provide a standalone Managed editor.
+
+Integrated changed-owner checks, one frozen unfiltered full run, final smoke and
+Doctor remain required before this branch is accepted. The private fixture
+inventory remains preliminary even when all declared dependencies are available;
+availability, scientific execution and complete native access capture are separate
+claims. Actual external AI tokens and billed cost remain UNKNOWN without client
+telemetry. This local review does not merge main, publish a release or alter the
+installed Figure Assembly applications.
+
 ## Independent offline PDF composition
 
 `apps/pdf-composer/` separately implements manual opaque-page placement, fixed

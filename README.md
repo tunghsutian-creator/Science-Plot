@@ -66,7 +66,10 @@ An observed renderer-identity mismatch can be a rebuild trigger even while saved
 input status is current and the saved graph marks no node invalid.
 
 The same patch surface covers supported axis limits, legend placement/visibility
-and managed annotations. Template creation separates the format, theme and explicit
+and managed annotations. FigureSpec v2 also exposes supported legend locations
+and annotation coordinates through the same typed contract. View and figure
+coordinates are presentation edits within `[0, 1]`; data coordinates require
+scientific intent. Template creation separates the format, theme and explicit
 data binding, then produces one final export. A saved native-only change can return
 one audited reimport preview; source or mapping changes still require their
 scientific workflow. The local service reuses its native worker between operations.
@@ -98,6 +101,16 @@ evidence. Originals stay unchanged. Existing output directories, changed sources
 and changed package contents block publication or reuse; an exact retry resumes
 unfinished work. Historical completion alone does not certify a current package.
 
+For current ManagedPlots, [Managed delivery](skill/references/managed-delivery.md)
+uses `plot deliver` (RPC `plot.deliver`, MCP `sciplot_plot_deliver`) to package
+an ordered selection of byte-sealed publications. It creates the index, original
+data, exact plotted datasets, PDF/TIFF, native snapshots, launcher and ZIP locally.
+Each item retains its own revision and recovery state. Missing or changed export
+evidence blocks packaging without rebuilding or replacing the original figure.
+A package can reconnect to an unchanged original ManagedPlot on this Mac; its
+independent VSZ remains editable after relocation. The package does not contain
+a portable Managed document registry or a standalone human Managed editor.
+
 A local panel workbench brings saved figures and microscopy images or diagrams
 onto one physical page. Run `sciplot compose open` to select figures across
 projects, drag whole panels, set grid spans and millimetre gaps, edit panel
@@ -126,6 +139,11 @@ sources and `.sciplot_documents` is sufficient to rebuild deleted artifacts with
 intent; theme edits preserve scientific identity. Fixed-file external scientific
 executors carry interpreter/script hashes and provenance. Unknown manual Veusz
 changes block rather than enter the canonical document.
+
+New Managed native builds are saved in an owned staging directory, audited and
+previewed before the complete VSZ is published without replacing an existing
+file. An interrupted save can leave diagnostic staging files; retry never
+adopts an unknown partial native file as a successful build.
 
 Existing VSZ imports, source-only task creation and explicit `mode: legacy` remain
 **LegacyPlot** compatibility workflows. FigureSpec v2 adds physical single/concat/grid
@@ -249,6 +267,15 @@ Outputs are saved beside your source data in `SOURCE_SciPlot/` by default.
 Original files, sample identities, units, and data provenance are preserved.
 Missing reference values stay missing.
 
+Normalized stress-relaxation wide tables with explicit `t_s` and
+`sigma_over_sigma0` pairs use the ordinary task route, including independent
+curve lengths and source-bound column choices. `task create --xscale linear`
+retains zero-time observations; `--xscale log` records the explicit positive-time
+selection. Neither choice normalizes an already-normalized ratio again. Use
+`--choose-columns` when the sample subset needs confirmation. Existing export
+QA still applies; style and legend constraints use the saved-figure edit route.
+See [ordinary creation](skill/references/ordinary-create.md).
+
 Physical-size and export checks are part of the workflow. Match the final
 dimensions, resolution, and styling to your target journal's requirements.
 
@@ -304,6 +331,13 @@ The build resolves `sip-build` from the invoked Python environment, so a direct
 `.venv/bin/python` invocation does not require activation. Interrupted binding
 generation is retried in a new build directory. Doctor requires all five
 vendored native helpers to load successfully.
+
+Doctor's `execution_identity` reports the loaded source, checkout HEAD when
+applicable, Python, Veusz and runtime roots. Its continuation identifies the
+command and environment for the next CLI call. Use this when several checkouts
+or an installed command coexist. A Git HEAD identifies checkout metadata;
+native execution and uncommitted source bytes require their own verification.
+Opening another checkout does not migrate existing projects or running sessions.
 
 Source setup has been checked locally on macOS. Windows and Linux installation
 are not yet verified; independent installation and beginner acceptance are

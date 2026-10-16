@@ -19,6 +19,7 @@ source code, development history or architecture for a routine plotting request.
 | Change or export an existing ordinary saved figure | [Saved figure](references/saved-figure-edit.md) |
 | Find and continue an original after source/project movement or copying | [Saved work](references/saved-work-continuation.md) |
 | Package selected final figures across projects in manuscript order | [Paper figures](references/paper-figures.md) |
+| Package selected ManagedPlot native snapshots with guarded local continuation | [Managed delivery](references/managed-delivery.md) |
 | Arrange saved figures and images on one physical page | [Panel assembly](references/panel-assembly.md) |
 | Read performance radar units, normalization and direction | [Radar interpretation](references/performance-radar.md) |
 | Plot original data as a new ordinary task | [Create](references/ordinary-create.md) |
