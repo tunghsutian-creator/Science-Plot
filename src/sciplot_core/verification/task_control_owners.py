@@ -14,7 +14,10 @@ PAPER_LEAF_PATHS = frozenset({
     "src/sciplot_core/task_papers.py", "src/sciplot_core/task_paper_contract.py",
     "src/sciplot_core/task_paper_sources.py", "src/sciplot_core/task_paper_native.py",
     "src/sciplot_core/task_paper_delivery.py", "src/sciplot_core/cli/task_paper.py",
+    "src/sciplot_core/task_paper_selection.py", "src/sciplot_core/task_paper_publication.py",
+    "src/sciplot_core/task_paper_status.py",
     "tests/test_task_papers.py", "tests/test_task_papers_native.py",
+    "tests/test_task_paper_selection.py", "tests/test_task_paper_publication.py",
 })
 
 
@@ -92,6 +95,7 @@ TASK_CONTROL_OWNERS = (
                         "tests/test_task_prepared_creation.py", "tests/test_task_control.py",
                         "tests/test_task_recovery.py", "tests/test_task_revision_guards.py",
                         "tests/test_task_preview_revision.py", "tests/test_task_papers.py",
+                        "tests/test_task_paper_selection.py",
                         "tests/test_product_task_entries.py", "tests/test_annotation_validation.py",
                         *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",),
@@ -101,6 +105,7 @@ TASK_CONTROL_OWNERS = (
         owner_id="task_paper_publication",
         exact_paths=PAPER_LEAF_PATHS,
         pytest_targets=("tests/test_task_papers.py", "tests/test_task_papers_native.py",
+                        "tests/test_task_paper_selection.py", "tests/test_task_paper_publication.py",
                         "tests/test_task_groups.py", "tests/test_product_task_entries.py",
                         "tests/test_output_package_contract.py", "tests/test_delivery_install.py",
                         "tests/test_task_saved_work.py", *ARCHITECTURE_CORE_TARGETS),
@@ -127,6 +132,7 @@ TASK_CONTROL_OWNERS = (
                         "tests/test_task_comparisons.py", "tests/test_task_comparisons_native.py",
                         "tests/test_project_create_cli.py", "tests/test_task_column_mapping.py", "tests/test_task_column_mapping_native.py",
                         "tests/test_task_capabilities.py", "tests/test_task_edit_context.py", "tests/test_task_shortcuts.py", "tests/test_task_ingress.py", "tests/test_task_local_recovery.py", "tests/test_task_error_feedback.py", "tests/test_task_transport_io.py", "tests/test_task_source_update.py", "tests/test_task_source_control.py", "tests/test_task_source_control_native.py",
+                        "tests/test_task_paper_selection.py", "tests/test_task_paper_publication.py",
                         *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",),
         final_milestone_gates=("smoke",), release_gates=("full_pytest",),
@@ -158,7 +164,7 @@ TASK_CONTROL_OWNERS = (
         owner_id="mcp_control_adapter", path_prefixes=("src/sciplot_core/mcp_server/",),
         exact_paths=frozenset({"src/sciplot_core/studio_core/control_results.py"}),
         owned_test_paths=frozenset({"tests/test_mcp_server.py", "tests/test_mcp_stdio.py", "tests/test_mcp_task_choices.py", "tests/test_product_task_entries.py"}),
-        pytest_targets=("tests/test_mcp_server.py", "tests/test_mcp_stdio.py", "tests/test_mcp_task_choices.py", "tests/test_product_task_entries.py", *ARCHITECTURE_CORE_TARGETS),
+        pytest_targets=("tests/test_mcp_server.py", "tests/test_mcp_stdio.py", "tests/test_mcp_task_choices.py", "tests/test_product_task_entries.py", "tests/test_plot_protocol.py", *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",),
         final_milestone_gates=("smoke",), release_gates=("full_pytest",),
     ),

@@ -95,8 +95,9 @@ without restarting missing or interrupted checks.
         specs = _prepare_specs(plan, repo_root, output)
         recorded_checks = [{"check_id": check["check_id"], "command": spec["command"]}
                            for check, spec in zip(plan["checks"], specs, strict=True)]
-        for spec in specs:
-            spec["scope"] = {**spec["scope"], "changed_record_checks_sha256": digest(recorded_checks)}
+        specs = [{**spec, "scope": {**spec["scope"], "check_id": check["check_id"],
+                                   "changed_record_checks_sha256": digest(recorded_checks)}}
+                 for check, spec in zip(plan["checks"], specs, strict=True)]
         if not reuse:
             output.mkdir(parents=True, exist_ok=False, mode=0o700)
             atomic_json(output / "plan.json", {
@@ -178,6 +179,7 @@ def changed_record_status(directory: Path, *, repo_root: Path) -> dict[str, Any]
                 if not isinstance(request, dict) or request.get("command") != check["command"]:
                     current = {"status": "BLOCKED", "reason": "recorded_command_mismatch"}
                 elif (not isinstance(request.get("scope"), dict)
+                      or request["scope"].get("check_id") != check["check_id"]
                       or request["scope"].get("changed_record_checks_sha256") != digest(plan["checks"])):
                     current = {"status": "BLOCKED", "reason": "recorded_plan_mismatch"}
                 else:

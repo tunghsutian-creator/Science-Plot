@@ -57,6 +57,7 @@ PLOT_TEST_PATHS = (
     "tests/test_plot_backend_semantics.py",
     "tests/test_plot_backend_semantics_native.py",
     "tests/test_plot_protocol.py",
+    "tests/test_plot_recovery.py",
     "tests/test_plot_typed_intent.py",
     "tests/test_plot_typed_intent_recovery.py",
     "tests/test_plot_protocol_native.py",

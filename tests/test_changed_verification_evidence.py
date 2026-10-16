@@ -187,6 +187,11 @@ def test_disconnected_record_reports_unstarted_checks_without_replaying(evidence
     display = capsys.readouterr().out
     assert "Checks completed: 1/2" in display and "unstarted_gate: NOT_STARTED" in display
     assert "record_incomplete_checks_not_started" in display
+    import shutil
+
+    shutil.copytree(directory / "synthetic_gate", directory / "unstarted_gate")
+    copied = changed_evidence.changed_record_status(directory, repo_root=root)
+    assert copied["status"] == "BLOCKED" and copied["checks"][1]["reason"] == "recorded_plan_mismatch"
     saved = json.loads((directory / "plan.json").read_text())
     saved["checks"].pop()
     (directory / "plan.json").write_text(json.dumps(saved))
