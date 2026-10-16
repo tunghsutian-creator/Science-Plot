@@ -1,6 +1,14 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+const focusable = 'button:not(:disabled),summary,a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])';
+
+function restoreAnchorFocus(anchor: HTMLElement | null) {
+  if (!anchor?.isConnected) return;
+  const candidates = anchor.matches(focusable) ? [anchor] : Array.from(anchor.querySelectorAll<HTMLElement>(focusable));
+  candidates.find((element) => element.getAttribute('aria-disabled') !== 'true' && element.getClientRects().length > 0)?.focus({ preventScroll: true });
+}
+
 /** Nonmodal, button-anchored settings. It never covers or blurs the workspace. */
 export function AnchoredPanel({ anchor, id, title, onClose, className = '', children }: {
   anchor: HTMLElement | null; id?: string; title: string; onClose: () => void;
@@ -9,6 +17,7 @@ export function AnchoredPanel({ anchor, id, title, onClose, className = '', chil
   const panel = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: 8, top: 8, maxHeight: 400 });
   useLayoutEffect(() => {
+    const surface = panel.current;
     const place = () => {
       const origin = anchor?.getBoundingClientRect(), popup = panel.current?.getBoundingClientRect();
       if (!origin || !popup) return;
@@ -24,7 +33,12 @@ export function AnchoredPanel({ anchor, id, title, onClose, className = '', chil
     if (panel.current) observer.observe(panel.current);
     window.addEventListener('resize', place); window.addEventListener('scroll', place, true);
     panel.current?.querySelector<HTMLElement>('button:not(:disabled),input,select,[tabindex="0"]')?.focus();
-    return () => { observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+    return () => {
+      observer.disconnect(); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true);
+      // Layout cleanup runs before the focused popup node is removed. Returning
+      // focus here also covers Apply/Zoom choices, without stealing outside focus.
+      if (surface?.contains(document.activeElement)) restoreAnchorFocus(anchor);
+    };
   }, [anchor]);
   useEffect(() => {
     const outside = (event: PointerEvent) => {
@@ -32,7 +46,7 @@ export function AnchoredPanel({ anchor, id, title, onClose, className = '', chil
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      event.preventDefault(); event.stopPropagation(); onClose(); anchor?.focus();
+      event.preventDefault(); event.stopPropagation(); onClose(); restoreAnchorFocus(anchor);
     };
     document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', escape, true);
     return () => { document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', escape, true); };
