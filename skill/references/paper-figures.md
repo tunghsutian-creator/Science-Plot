@@ -82,8 +82,7 @@ finish the original export explicitly before making a new selection. A sealed
 publication must also have completed its original rule, QA and delivery gates;
 a passing artifact QA inside an unfinished or blocked publication is insufficient.
 A missing completion record blocks capture rather than being assumed successful.
-A sealed
-publication's complete file inventory is guarded during capture, retries and
+Its complete file inventory is guarded during capture, retries and
 publication. Native Save, source inspection and scientific audits still execute;
 this route does not claim zero native calls.
 Current saved native presentation, including legitimate manual styles, passes
