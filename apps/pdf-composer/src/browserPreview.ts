@@ -1,4 +1,5 @@
-import { fromBase64 } from './core/bytes';
+import UPNG from '@pdf-lib/upng';
+import { fromBase64, toBase64 } from './core/bytes';
 import type { PDFiumLibrary } from '@hyzyla/pdfium/inline';
 
 let library: Promise<PDFiumLibrary> | undefined;
@@ -27,14 +28,10 @@ export function browserPdfPreview(bytesBase64: string, pageIndex: number, maxPix
         const { originalWidth, originalHeight } = page.getOriginalSize();
         const scale = maxPixels / Math.max(originalWidth, originalHeight);
         const rendered = await page.render({ scale, colorSpace: 'RGBA', transparent: false });
-        const canvas = window.document.createElement('canvas');
-        canvas.width = rendered.width; canvas.height = rendered.height;
-        try {
-          const context = canvas.getContext('2d');
-          if (!context) throw new Error('Edge could not create a canvas for the PDF preview.');
-          context.putImageData(new ImageData(new Uint8ClampedArray(rendered.data), rendered.width, rendered.height), 0, 0);
-          return canvas.toDataURL('image/png');
-        } finally { canvas.width = 0; canvas.height = 0; }
+        // These pixels need PNG encoding, not GPU drawing. Zero colors requests
+        // lossless RGBA encoding; it does not quantize a scientific preview.
+        const png = UPNG.encode([rendered.data.slice().buffer], rendered.width, rendered.height, 0);
+        return `data:image/png;base64,${toBase64(new Uint8Array(png))}`;
       } finally { page.close(); }
     } finally { document.destroy(); }
   };

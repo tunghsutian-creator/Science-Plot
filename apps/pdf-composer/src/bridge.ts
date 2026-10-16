@@ -67,7 +67,7 @@ function download(bytes: BlobPart, name: string, type: string): NativeSaveResult
 export const bridge: NativeBridge = {
   async importFiles() {
     if (hasNativeBridge()) return invoke<ImportedFile[]>('importFiles', {});
-    const files = await chooseFiles('.pdf,.png,.jpg,.jpeg,.tif,.tiff', true);
+    const files = await chooseFiles('.pdf,.png,.jpg,.jpeg', true);
     return readBrowserSources(files);
   },
   async openProject() {
