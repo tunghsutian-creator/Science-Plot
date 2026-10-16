@@ -1,4 +1,4 @@
-import { toBase64 } from './core/bytes';
+import { readBrowserProject, readBrowserSources } from './browserFiles';
 import type { ImportedFile, NativeBridge, NativeSaveResult, OpenedProject } from './core/types';
 
 interface NativeReply { id: string; result?: unknown; error?: { message: string; code?: string } }
@@ -68,16 +68,12 @@ export const bridge: NativeBridge = {
   async importFiles() {
     if (hasNativeBridge()) return invoke<ImportedFile[]>('importFiles', {});
     const files = await chooseFiles('.pdf,.png,.jpg,.jpeg,.tif,.tiff', true);
-    if (files.length > 100 || files.some((file) => file.size > 64 * 1024 * 1024)) {
-      throw new Error('Import up to 100 sources, each no larger than 64 MiB.');
-    }
-    return Promise.all(files.map(async (file) => ({ name: file.name,
-      bytesBase64: toBase64(new Uint8Array(await file.arrayBuffer())) })));
+    return readBrowserSources(files);
   },
   async openProject() {
     if (hasNativeBridge()) return invoke<OpenedProject | null>('openProject', {});
     const [file] = await chooseFiles('.figureassembly', false);
-    return file ? { name: file.name, text: await file.text(), token: '' } : null;
+    return file ? readBrowserProject(file) : null;
   },
   async saveProject(text, name, token) {
     if (hasNativeBridge()) return invoke<NativeSaveResult>('saveProject', { text, name, ...(token ? { token } : {}) });
@@ -90,8 +86,9 @@ export const bridge: NativeBridge = {
     return download(bytes.buffer, name, 'application/pdf');
   },
   async previewPdf(bytesBase64, pageIndex, maxPixels) {
-    if (!hasNativeBridge()) throw new Error('PDF previews are rendered in the desktop application.');
-    return invoke<string>('previewPdf', { bytesBase64, pageIndex, maxPixels });
+    if (hasNativeBridge()) return invoke<string>('previewPdf', { bytesBase64, pageIndex, maxPixels });
+    const { browserPdfPreview } = await import('./browserPreview');
+    return browserPdfPreview(bytesBase64, pageIndex, maxPixels);
   },
   async verifyTiff(bytesBase64, normalizedPngBase64) {
     if (!hasNativeBridge()) throw new Error('TIFF verification needs the desktop application. Import PDF, PNG or JPEG here.');

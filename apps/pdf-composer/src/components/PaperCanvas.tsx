@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import type { DragEvent, KeyboardEvent, CSSProperties } from 'react';
 import { orderedPanels, panelLetter, panelSizePt, PT_PER_MM } from '../core/document';
 import type { AssemblyDocument, Panel } from '../core/types';
+import { cancelSourceDrag, isActiveSourceDrag, PANEL_DRAG_TYPE, SOURCE_DRAG_TYPE } from '../browserFiles';
 import { Icon } from './Icon';
 import { PagePreview } from './PagePreview';
 
-export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, onAction }: {
+export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, onAction, onPlaceSource, onDropFiles }: {
   document: AssemblyDocument; selected: string[]; busy: boolean; zoom: string;
   onSelect: (id: string, range: boolean) => void; onSwap: (first: string, second: string) => void;
   onAction: (action: string) => void;
+  onPlaceSource: (assetId: string, panelId: string) => void;
+  onDropFiles: (files: File[], panelId?: string) => void;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
@@ -21,7 +24,7 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
   const occupied = panels.filter((panel) => panel.assetId !== null);
   const widthMm = document.grid.columns * document.grid.cellWidthMm;
   const heightMm = document.grid.rows * document.grid.cellHeightMm;
-  const fit = Math.max(120, Math.min(available.width - 72, (available.height - 108) * widthMm / heightMm));
+  const fit = Math.max(120, Math.min(available.width - 64, (available.height - 32) * widthMm / heightMm));
   const width = zoom === 'fit' ? fit : widthMm * 96 / 25.4 * Number(zoom) / 100;
   const height = width * heightMm / widthMm;
 
@@ -36,7 +39,7 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
   }, [menu]);
   useEffect(() => {
     const cancel = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') { setDragging(null); setDropTarget(null); setMenu(null); }
+      if (event.key === 'Escape') { setDragging(null); setDropTarget(null); setMenu(null); cancelSourceDrag(); }
     };
     window.addEventListener('keydown', cancel);
     return () => window.removeEventListener('keydown', cancel);
@@ -44,7 +47,7 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
 
   function startDrag(event: DragEvent, panel: Panel) {
     if (busy || !panel.assetId) { event.preventDefault(); return; }
-    event.dataTransfer.setData('application/x-figure-panel', panel.id);
+    event.dataTransfer.setData(PANEL_DRAG_TYPE, panel.id);
     event.dataTransfer.effectAllowed = 'move';
     setDragging(panel.id); onSelect(panel.id, false); setMenu(null);
   }
@@ -59,8 +62,14 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
     if (target) { buttons.current.get(target.id)?.focus(); onSelect(target.id, event.shiftKey); }
   }
 
-  return <main ref={viewport} className="workspace" aria-label="Figure layout canvas" onClick={() => setMenu(null)}>
-    <div className="paper-positioner" style={{ minWidth: width + 72, minHeight: height + 108 }}>
+  return <main ref={viewport} className="workspace" aria-label="Figure layout canvas" onClick={() => setMenu(null)}
+    onDragOver={(event) => {
+      if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = busy ? 'none' : 'copy'; }
+    }} onDrop={(event) => {
+      event.preventDefault(); event.stopPropagation(); setDropTarget(null); setDragging(null);
+      if (!busy && event.dataTransfer.files.length) onDropFiles(Array.from(event.dataTransfer.files));
+    }}>
+    <div className="paper-positioner" style={{ minWidth: width + 64, minHeight: height + 32 }}>
       <div className="paper" style={{ width, height }} role="group" aria-label={`${widthMm} by ${heightMm} millimetre figure`}>
         {panels.map((panel) => {
           const asset = document.assets.find((item) => item.id === panel.assetId);
@@ -76,10 +85,21 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
             onClick={(event) => { event.stopPropagation(); setMenu(null); onSelect(panel.id, event.shiftKey); }}
             onKeyDown={(event) => cellKey(event, panel)} draggable={Boolean(asset) && !busy}
             onDragStart={(event) => startDrag(event, panel)} onDragEnd={() => { setDragging(null); setDropTarget(null); }}
-            onDragOver={(event) => { if (dragging && !busy) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTarget(panel.id); } }}
+            onDragOver={(event) => {
+              const source = event.dataTransfer.types.includes(SOURCE_DRAG_TYPE), files = event.dataTransfer.types.includes('Files');
+              if ((dragging || source || files) && !busy) {
+                event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = source || files ? 'copy' : 'move'; setDropTarget(panel.id);
+              }
+            }}
             onDragLeave={() => setDropTarget(null)} onDrop={(event) => {
-              event.preventDefault(); const source = event.dataTransfer.getData('application/x-figure-panel');
-              if (dragging && source === dragging && !busy) onSwap(source, panel.id);
+              event.preventDefault(); event.stopPropagation();
+              const source = event.dataTransfer.getData(PANEL_DRAG_TYPE), assetId = event.dataTransfer.getData(SOURCE_DRAG_TYPE);
+              if (!busy) {
+                if (event.dataTransfer.files.length) onDropFiles(Array.from(event.dataTransfer.files), panel.id);
+                else if (assetId && isActiveSourceDrag(assetId)) onPlaceSource(assetId, panel.id);
+                else if (dragging && source === dragging) onSwap(source, panel.id);
+              }
+              cancelSourceDrag();
               setDragging(null); setDropTarget(null);
             }} onContextMenu={(event) => {
               event.preventDefault(); if (busy) return;
@@ -89,7 +109,7 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
             }}>
             {asset && page ? <span className="source-placement" style={{ width: `${page.widthPt * panel.scale / size.width * 100}%`,
               height: `${page.heightPt * panel.scale / size.height * 100}%` }}><PagePreview asset={asset} pageIndex={panel.pageIndex} /></span> :
-              <span className="empty-panel-hint"><Icon name="plus" size={22} /><span>Select a source</span></span>}
+              <span className="empty-panel-hint"><Icon name="plus" size={22} /><span>Drop PDF</span></span>}
             {asset && document.labels.enabled ? <span className="panel-letter" style={{
               left: `${document.labels.insetMm / (panel.columnSpan * document.grid.cellWidthMm) * 100}%`,
               top: `${document.labels.insetMm / (panel.rowSpan * document.grid.cellHeightMm) * 100}%`,

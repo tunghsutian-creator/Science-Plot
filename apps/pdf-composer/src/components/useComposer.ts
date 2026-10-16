@@ -50,27 +50,27 @@ export function useComposer() {
       && panel.column < right && panel.column + panel.columnSpan > left).map((panel) => panel.id));
   }
 
-  function targetPanel(): Panel {
-    const panel = single ?? document.panels.find((item) => item.assetId === null);
+  function targetPanel(current = document): Panel {
+    const panel = (single ? current.panels.find((item) => item.id === single.id) : undefined) ?? current.panels.find((item) => item.assetId === null);
     if (!panel) throw new Error('Select a panel to replace, or add empty cells.');
     return panel;
   }
 
-  function place(asset: SourceAsset, panelId: string, pageIndex: number) {
-    const panel = document.panels.find((item) => item.id === panelId);
+  function place(asset: SourceAsset, panelId: string, pageIndex: number, current = document) {
+    const panel = current.panels.find((item) => item.id === panelId);
     const page = asset.pages[pageIndex];
     if (!panel || !page) { report(new Error('Select an existing panel and source page.')); return; }
-    const fit = requiredScale(document, panel, page);
+    const fit = requiredScale(current, panel, page);
     if (fit < 1 - 0.000001) {
       setModal({ kind: 'scale', panelId, assetId: asset.id, pageIndex, maxScale: fit, intent: 'place' });
-    } else if (change(() => placeSource(document, panelId, asset, pageIndex), [panelId])) setModal(null);
+    } else if (change(() => placeSource(current, panelId, asset, pageIndex), [panelId])) setModal(null);
   }
 
-  function chooseSource(asset: SourceAsset, panelId?: string) {
+  function chooseSource(asset: SourceAsset, panelId?: string, current = document) {
     try {
-      const targetId = panelId ?? targetPanel().id;
+      const targetId = panelId ?? targetPanel(current).id;
       if (asset.pages.length > 1) setModal({ kind: 'pages', assetId: asset.id, targetId });
-      else place(asset, targetId, 0);
+      else place(asset, targetId, 0, current);
     } catch (error) { report(error); }
   }
 
