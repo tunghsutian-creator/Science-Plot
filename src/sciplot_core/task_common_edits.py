@@ -309,11 +309,13 @@ def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None 
 
             pending = active(Path(description["plot"]))
             continuation = receipt(Path(description["plot"]), pending) if pending is not None else {}
+            next_step = (continuation["next_step"] if continuation.get("status") == "needs_review" else
+                         description.get("next_step", continuation.get("next_step", {"action": "plot.describe", "plot": description["plot"]})))
             return {**description, "status": "blocked", "reason_code": "document_transaction_pending",
                     "doctor": doctor, "request_executed": False,
                     "message": "Continue the original pending edit before this new intent; its preview does not represent the requested new edit.",
                     **{field: continuation[field] for field in ("preview", "scientific_audit", "evidence", "decision_id") if field in continuation},
-                    "next_step": description.get("next_step", continuation.get("next_step", {"action": "plot.describe", "plot": description["plot"]}))}
+                    "next_step": next_step}
         root = Path(description["plot"])
         head = load_head(root)
         document = head["document"]

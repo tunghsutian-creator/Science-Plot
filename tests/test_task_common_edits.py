@@ -245,6 +245,6 @@ def test_unrelated_common_edit_preserves_existing_recovery_step(tmp_path, ready)
     entry = tmp_path / "new-intent-not-executed"
     result = edit_task(root, task_dir=entry, font_size="9pt", service=service)
     assert result["reason_code"] == "document_transaction_pending" and result["request_executed"] is False
-    assert result["next_step"] == {**reviewed["next_step"], "plot": str(root)}
+    assert result["next_step"] == reviewed["next_step"]
     assert result["recovery"]["idempotency_key"] == "edit-1"
     assert not entry.exists() and backend.native_writes == 0
