@@ -6,6 +6,20 @@ from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
 TASK_CONTROL_OWNERS = (
     ChangedOwner(
+        owner_id="current_native_legend_layout",
+        exact_paths=frozenset({"src/sciplot_core/studio_core/current_layout_review.py",
+                              "src/sciplot_core/studio_core/review_artifacts.py",
+                              "src/sciplot_core/studio_core/publish_evidence.py",
+                              "src/sciplot_core/veusz_audit/legend_geometry.py",
+                              "src/sciplot_core/veusz_audit/document.py"}),
+        owned_test_paths=frozenset({"tests/test_current_layout_review.py", "tests/test_current_layout_review_native.py"}),
+        pytest_targets=("tests/test_current_layout_review.py", "tests/test_current_layout_review_native.py",
+                        "tests/test_annotation_operations.py", "tests/test_annotation_operations_native.py",
+                        "tests/test_figure_plan_entrypoint_state.py", *ARCHITECTURE_CORE_TARGETS),
+        mypy_required=True, final_milestone_gates=("smoke",),
+        release_gates=("acceptance_rules", "full_pytest"),
+    ),
+    ChangedOwner(
         owner_id="native_font_catalog",
         exact_paths=frozenset({"src/sciplot_core/native_font_catalog.py",
                               "src/sciplot_core/veusz_worker/font_catalog.py",

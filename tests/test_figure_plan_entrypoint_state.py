@@ -204,7 +204,7 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
     monkeypatch.setattr(
         evidence_module,
         "_studio_layout_quality_from_spec",
-        lambda _document: {},
+        lambda _document, **_kwargs: {},
     )
     monkeypatch.setattr(
         publish_run_module,
