@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 5021,
-    "nodeids_sha256": "351c7ed9dcd2eb29be0df19bc1760e166745b007db0ec75b0a95bf142755702c",
-    "test_sources_sha256": "90ed13f08cfed2c51dbee08210ac07154edbff61dfc4e51572ba24baf553b2e5",
+    "nodeid_count": 5024,
+    "nodeids_sha256": "1a8ce83af85667b46cdea8ac560a601682bbca61d3b247d6512a93af8905557f",
+    "test_sources_sha256": "5c5ac45bfa6da6c6039532e84defc3ad506056c30dc50421638238d928bd5072",
     "test_source_count": 352,
     "candidate_nodeids": [
       "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[break-on-inf]",
@@ -590,7 +590,10 @@
       "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[unknown_rule]",
       "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[unknown_state]",
       "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[verification_blocked]",
-      "tests/test_task_paper_publication.py::test_replay_checks_current_canonical_rule_without_changing_original_bytes"
+      "tests/test_task_paper_publication.py::test_replay_checks_current_canonical_rule_without_changing_original_bytes",
+      "tests/test_task_groups.py::test_old_group_answers_recheck_every_original_before_any_mutation_and_resume_when_restored",
+      "tests/test_task_groups.py::test_raw_drift_blocks_group_continuation_or_explicit_retry_before_running_child[False]",
+      "tests/test_task_groups.py::test_raw_drift_blocks_group_continuation_or_explicit_retry_before_running_child[True]"
     ],
     "synthetic_candidates": [
       {
@@ -2248,9 +2251,21 @@
       {
         "nodeid": "tests/test_task_paper_publication.py::test_replay_checks_current_canonical_rule_without_changing_original_bytes",
         "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_old_group_answers_recheck_every_original_before_any_mutation_and_resume_when_restored",
+        "reason": "Generated tmp_path group requests, CSVs and native-placeholder bytes with the existing monkeypatched task/preview/export ports test whole-batch original-source revalidation before bound answers, explicit retry or continuation. Restoring the generated source permits exact resume; no retained private scientific inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_raw_drift_blocks_group_continuation_or_explicit_retry_before_running_child[False]",
+        "reason": "Generated tmp_path group requests, CSVs and native-placeholder bytes with the existing monkeypatched task/preview/export ports test whole-batch original-source revalidation before bound answers, explicit retry or continuation. Restoring the generated source permits exact resume; no retained private scientific inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_raw_drift_blocks_group_continuation_or_explicit_retry_before_running_child[True]",
+        "reason": "Generated tmp_path group requests, CSVs and native-placeholder bytes with the existing monkeypatched task/preview/export ports test whole-batch original-source revalidation before bound answers, explicit retry or continuation. Restoring the generated source permits exact resume; no retained private scientific inputs or native renderer are used."
       }
     ],
-    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion. 2026-10-16: reviewed all 106 newly collected generated round-2 nodes, including the explicit paper capture-retry rename, and changed test/helper bytes. Exact module-specific dispositions are recorded per added node. All retained lifecycle tiers, 165 private dependencies and 111 original failure responsibilities remain unchanged; no access-completeness promotion. 2026-10-16: reviewed 27 additional generated publication-completion and canonical-rule rejection cases after the final delivery fix; all earlier dispositions, lifecycle tiers and private responsibilities remain unchanged.",
+    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion. 2026-10-16: reviewed all 106 newly collected generated round-2 nodes, including the explicit paper capture-retry rename, and changed test/helper bytes. Exact module-specific dispositions are recorded per added node. All retained lifecycle tiers, 165 private dependencies and 111 original failure responsibilities remain unchanged; no access-completeness promotion. 2026-10-16: reviewed 27 additional generated publication-completion and canonical-rule rejection cases after the final delivery fix; all earlier dispositions, lifecycle tiers and private responsibilities remain unchanged. 2026-10-16: synchronized the final group raw-source guard before collection; all 2177 tracked file bytes matched the integration snapshot. Reviewed three new generated focused group continuation cases and strengthened existing native-case source-drift assertions, with no new native node or old tier change. Earlier private and synthetic dispositions remain unchanged.",
     "scope": [
       "real_world",
       "polymer_corpus",
