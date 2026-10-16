@@ -47,6 +47,13 @@ def resolve_column_metadata(
             problems.append({"code": "raw_metadata_conflict", "field": "unit",
                              "header_unit": header_unit, "unit_row": raw["unit"]})
         resolved = {"quantity": raw["header"], "unit": raw["unit"], "sample": raw["sample"]}
+        if rule.scientific_source_adapter == "stress_relaxation":
+            from sciplot_core.semantic_sources.stress_relaxation_wide import normalized_header_identity
+
+            compact = normalized_header_identity(raw["header"])
+            if compact is not None:
+                sample, quantity, unit = compact
+                resolved.update(quantity=quantity, unit=unit, sample=sample)
         # Establish explicit identity before interpreting a sample-labelled header.
         for field in ("sample", "quantity", "unit"):
             items = grouped.get((index, field), [])

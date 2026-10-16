@@ -50,3 +50,27 @@ def test_public_cli_column_choice_exports_real_pda_and_resumes_current_project(t
     preview_project_document(project, output_dir=tmp_path / "final_preview")
     assert source.read_bytes() == fixture.read_bytes()
     assert cli("task", "resume", task, "--response", answer)["status"] == "complete"
+
+
+@pytest.mark.comprehensive
+@pytest.mark.parametrize('scale,expected_count,first', [('log', 3, (0.1, 0.95)), ('linear', 4, (0, 1))])
+def test_stress_task_mapping_native_axis_matches_selected_projection(tmp_path, scale, expected_count, first):
+    from sciplot_core.task_control import start_task
+    from sciplot_core.task_column_mapping import table_question
+
+    source = tmp_path / 'relaxation.csv'
+    source.write_text('A|t_s,A|sigma_over_sigma0\n0,1\n0.1,.95\n1,.7\n10,.3\n')
+    original = source.read_bytes()
+    selection = {'rule_id': 'rheology_stress_relaxation', 'template': 'curve'}
+    mapping = table_question(source, selection)['mapping_candidates'][0]['mapping']
+    request = {'version': 1, 'action': 'create', 'source': str(source), **selection,
+               'mapping': mapping, 'xscale': scale}
+    result = start_task(request, task_dir=tmp_path / 'task')
+    assert result['status'] == 'complete', result.get('blocker')
+    assert result['result']['studio_run']['ready_to_use'] is True
+    spec = json.loads(Path(result['current_project']['figures'][0]['spec']).read_text())
+    assert spec['axes']['x']['scale'] == scale
+    series = spec['series'][0]
+    assert len(series['x_values']) == len(series['y_values']) == expected_count
+    assert (series['x_values'][0], series['y_values'][0]) == first
+    assert source.read_bytes() == original

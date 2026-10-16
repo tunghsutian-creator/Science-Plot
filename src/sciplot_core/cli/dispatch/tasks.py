@@ -110,8 +110,13 @@ def dispatch_task(args: Any) -> int:
     elif action == "create":
         from sciplot_core.task_shortcuts import create_task
 
+        create_options: dict[str, Any] = {}
+        if args.xscale is not None:
+            create_options["xscale"] = args.xscale
+        if args.choose_columns:
+            create_options["choose_columns"] = True
         result = create_task(args.source, rule_id=args.rule_id, template=args.template,
-                             profile=args.profile, out=args.out, task_dir=args.task_dir)
+                             profile=args.profile, out=args.out, task_dir=args.task_dir, **create_options)
     elif action == "style":
         from sciplot_core.task_shortcuts import style_task
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar, Any
 
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.semantic_sources.rheology_sweep_domain import (
@@ -27,6 +27,7 @@ class ScientificSourceResolutionError(ValueError):
 
     def __init__(self, reason_code: str, message: str) -> None:
         self.reason_code = reason_code
+        self.issues: list[dict[str, Any]] | None = None
         super().__init__(message)
 
 

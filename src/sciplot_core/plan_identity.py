@@ -20,6 +20,8 @@ def preview_identity_for(
             "scientific_transform",
         )
     }
+    if "source_options" in preview:
+        selection["source_options"] = preview["source_options"]
     if "data_mapping" in preview:
         selection["data_mapping"] = preview["data_mapping"]
     identity = {

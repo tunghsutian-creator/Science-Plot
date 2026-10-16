@@ -12,10 +12,11 @@ class TaskControlError(ValueError):
         super().__init__(message)
         self.reason_code = reason_code
         self.repair: dict[str, Any] | None = None
+        self.issues: list[dict[str, Any]] | None = None
 
 
 _FIELDS = {
-    "create": {"source", "rule_id", "template", "out", "profile", "choose_columns", "mapping"},
+    "create": {"source", "rule_id", "template", "out", "profile", "choose_columns", "mapping", "xscale"},
     "edit": {"project", "figure_id", "expected_document_sha256", "operations", "export"},
     "export": {"project"},
     "update_source": {"project", "source", "worksheet", "choose_columns"},
@@ -54,6 +55,8 @@ def task_request_schema() -> dict[str, Any]:
             properties["operations"] = annotation_operation_capabilities()["operations_schema"]
         if action == "create":
             properties["mapping"] = initial_mapping_schema()
+            properties["xscale"] = {"enum": ["log", "linear"],
+                "description": "Explicit stress-relaxation time display; normalization uses the original source before domain projection."}
         variant: dict[str, Any] = {
             "type": "object", "additionalProperties": False,
             "properties": properties,
@@ -150,6 +153,8 @@ def validate_task_request(value: dict[str, Any]) -> dict[str, Any]:
         raise TaskControlError("invalid_column_choice", "显式列选择使用 choose_columns=true。")
     if value.get("choose_columns") and value.get("profile"):
         raise TaskControlError("profile_selection_conflict", "列选择需要当前原始证据，不能同时复用旧配置。")
+    if "xscale" in value and value["xscale"] not in {"log", "linear"}:
+        raise TaskControlError("invalid_source_option", "xscale must be log or linear.")
     if "mapping" in value:
         from jsonschema import Draft202012Validator
 

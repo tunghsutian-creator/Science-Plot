@@ -45,6 +45,8 @@ def _response_evidence(snapshot: dict[str, Any]) -> list[tuple[str, str, dict[st
 
 def wide_table_candidates(snapshot: dict[str, Any], diagnostics: dict[str, Any]) -> list[dict[str, Any]]:
     """Suggest shared-X rows and sample headers only with explicit, unique metadata."""
+    if get_rule(snapshot["rule_id"]).scientific_source_adapter == "stress_relaxation":
+        return _stress_wide_candidate(snapshot)
     metadata = _response_evidence(snapshot)
     if len(metadata) != 1:
         return []
@@ -107,3 +109,37 @@ def wide_table_candidates(snapshot: dict[str, Any], diagnostics: dict[str, Any])
                 'review_required': 'Check that this note applies to these sample columns and that all selected rows/samples match the request.',
                 'mapping': mapping})
     return candidates
+
+
+def _stress_wide_candidate(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    """Offer every exact compact pair with its own full source row range."""
+    from sciplot_core.semantic_sources.stress_relaxation_wide import read_normalized_wide
+
+    if len(snapshot["tables"]) != 1:
+        return []
+    source = Path(snapshot["source"])
+    table = snapshot["tables"][0]
+    frame = read_original_table(source, table["sheet"], snapshot["file_sha256"])
+    try:
+        series = read_normalized_wide(source, frame)
+    except ValueError:
+        return []  # The question retains original cells and column diagnostics.
+    if not series:
+        return []
+    selection = {"sheet": table["sheet"], "header_rows": [0],
+                 "data_start_row": 1, "data_end_row": len(frame)}
+    pairs = []
+    for index, curve in enumerate(series):
+        pairs.append({"x_column": index * 2, "y_column": index * 2 + 1,
+            "table_selection": {**selection, "data_end_row": 1 + len(curve.points)}})
+    columns = select_table(snapshot, selection)
+    _proposal_contents(columns, pairs)
+    mapping = {"source_sha256": snapshot["file_sha256"], "table_selection": selection,
+               "column_mapping": {"pairs": pairs}}
+    return [{"candidate_id": canonical_json_sha256(mapping, allow_nan=False),
+        "table_selection": selection,
+        "pairs": [{"pair_index": i, **pair, "sample": curve.sample,
+                   "source_point_count": len(curve.points), "first_point": list(curve.points[0])}
+                  for i, (pair, curve) in enumerate(zip(pairs, series, strict=True))],
+        "review_required": "Confirm the original sample groups and pair order; every pair includes its own zero-time row and actual length. Log display excludes nonpositive time without renormalizing.",
+        "mapping": mapping}]

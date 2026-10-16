@@ -106,6 +106,7 @@ def accept_column_response(root: Path, state: dict[str, Any], response: dict[str
     seed = {
         "input": state["request"]["source"], "output": str(attempt / "run"),
         **question["selection"], "exports": ["pdf", "tiff_300"],
+        **({"xscale": state["request"]["xscale"]} if "xscale" in state["request"] else {}),
     }
     if request_path.exists():
         if json.loads(request_path.read_text()) != seed:
@@ -127,7 +128,9 @@ def accept_column_response(root: Path, state: dict[str, Any], response: dict[str
         preview_data_mapping_proposal(proposal, source_root=Path(seed["input"]).parent,
                                       request_path=request_path)
     except ValueError as exc:
-        raise TaskControlError("invalid_mapping_selection", str(exc)) from exc
+        error = TaskControlError("invalid_mapping_selection", str(exc))
+        error.issues = getattr(exc, "issues", None)
+        raise error from exc
     proposal_path = attempt / "proposal.json"
     receipt_path = attempt / "confirmation.json"
     if proposal_path.exists() and json.loads(proposal_path.read_text()) != proposal.to_dict():

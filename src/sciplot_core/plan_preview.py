@@ -172,6 +172,13 @@ def build_plan_preview(
             reason_code="plan_source_inspection_failed",
             message=str(inspection_error),
         )
+    if "xscale" in request_snapshot and (
+        rule_id != "rheology_stress_relaxation" or not isinstance(request_snapshot["xscale"], str)
+        or request_snapshot["xscale"] not in {"log", "linear"}
+    ):
+        return _blocked_preview(source=source, rule_id=rule_id, template=template,
+            reason_code="plan_source_option_invalid",
+            message="Explicit xscale is supported only for stress-relaxation log/linear time; other scientific adapters retain their registered contract.")
     study_model = study_model_from_request(
         request=request_snapshot,
         semantic=semantic,
@@ -192,6 +199,7 @@ def build_plan_preview(
             template=template,
             reason_code=exc.reason_code,
             message=str(exc),
+            issues=getattr(exc, "issues", None),
         )
     transform = (
         resolved_scientific_source.transform
@@ -250,6 +258,8 @@ def build_plan_preview(
         "scientific_transform": scientific_transform,
         "blocker": None,
     }
+    if "xscale" in request_snapshot:
+        payload["source_options"] = {"xscale": request_snapshot["xscale"]}
     assert source_hash is not None
     payload["preview_identity"] = preview_identity_for(
         dict(payload), source_sha256=source_hash
@@ -330,6 +340,11 @@ def verify_expected_plan(
         "rule_id": rule_id if rule_id is not None else expected.get("rule_id"),
         "template": template if template is not None else expected.get("template"),
     }
+    if "source_options" in expected:
+        options = expected["source_options"]
+        if not isinstance(options, dict) or set(options) != {"xscale"}:
+            raise ValueError("Expected plan has invalid source options.")
+        selected.update(options)
     mapping = expected.get("data_mapping")
     if mapping is not None:
         if not isinstance(mapping, dict):

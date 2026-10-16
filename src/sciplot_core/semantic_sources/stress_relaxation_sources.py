@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 import pandas as pd
 
 from sciplot_core.foundation.text_values import token as _token
+
+from sciplot_core.semantic_sources.stress_relaxation_projection import (
+    _project_stress_relaxation_time,
+)
+from sciplot_core.semantic_sources.stress_relaxation_wide import (
+    StressSourceBindingError, read_normalized_wide,
+)
 
 from sciplot_core.semantic_sources.models import (
     CurveSeriesPayload,
@@ -41,7 +47,7 @@ from sciplot_core.semantic_sources.series_normalization import (
 )
 
 
-def _read_wide_stress_relaxation_series(source: Path) -> list[CurveSeriesPayload]:
+def _read_wide_stress_relaxation_series(source: Path, *, xscale: str = "log") -> list[CurveSeriesPayload]:
     series_list = _scan_curve_series_source(
         source,
         x_aliases=("time", "时间"),
@@ -62,11 +68,9 @@ def _read_wide_stress_relaxation_series(source: Path) -> list[CurveSeriesPayload
     if not series_list:
         raise ValueError("Could not find wide stress-relaxation time/stress series.")
     return [
-        _normalize_series(
-            _retain_positive_stress_relaxation_time(series),
-            y_label="Normalized stress",
-            y_unit="sigma/sigma0",
-        )
+        _project_stress_relaxation_time(_normalize_series(
+            series, y_label="Normalized stress", y_unit="sigma/sigma0",
+        ), xscale=xscale, require_positive_anchor=False)
         for series in series_list
     ]
 
@@ -95,67 +99,14 @@ def _read_strain_controlled_stress_relaxation_series(
     return _normalize_strain_controlled_hold(response, control)
 
 
-def _retain_positive_stress_relaxation_time(
-    series: CurveSeriesPayload,
-) -> CurveSeriesPayload:
-    baseline_time = (series.diagnostics or {}).get(
-        "normalization_baseline_source_time",
-        (series.diagnostics or {}).get("normalization_baseline_time"),
-    )
-    if (
-        isinstance(baseline_time, int | float)
-        and math.isfinite(float(baseline_time))
-        and float(baseline_time) <= 0.0
-    ):
-        raise ValueError(
-            "The normalization anchor is not compatible with logarithmic time: "
-            "its retained source time must be greater than zero."
-        )
-    retained = tuple(
-        (time_value, response_value)
-        for time_value, response_value in series.points
-        if (
-            math.isfinite(time_value)
-            and math.isfinite(response_value)
-            and time_value > 0.0
-        )
-    )
-    excluded_nonpositive_time = sum(
-        math.isfinite(time_value) and time_value <= 0.0
-        for time_value, _response_value in series.points
-    )
-    excluded_nonfinite_points = sum(
-        not (math.isfinite(time_value) and math.isfinite(response_value))
-        for time_value, response_value in series.points
-    )
-    if len(retained) < 2:
-        raise ValueError(
-            "Stress-relaxation logarithmic time rendering needs at least two "
-            "finite points with time > 0."
-        )
-    return CurveSeriesPayload(
-        sample=series.sample,
-        x_label=series.x_label,
-        x_unit=series.x_unit,
-        y_label=series.y_label,
-        y_unit=series.y_unit,
-        points=retained,
-        diagnostics={
-            **(series.diagnostics or {}),
-            "log_domain_source_point_count": len(series.points),
-            "excluded_nonpositive_time_count": excluded_nonpositive_time,
-            "excluded_nonfinite_log_domain_point_count": excluded_nonfinite_points,
-            "log_domain_selected_point_count": len(retained),
-            "time_log_domain_policy": (
-                "retain only finite time > 0 for logarithmic time rendering"
-            ),
-        },
-    )
-
-
-def _read_stress_relaxation_source_series(source: Path) -> list[CurveSeriesPayload]:
+def _read_stress_relaxation_source_series(source: Path, *, xscale: str = "log") -> list[CurveSeriesPayload]:
     fallback = _source_display_sample(source)
-    raw = _read_raw_table_normalized(source).dropna(axis=1, how="all")
+    raw = _read_raw_table_normalized(source)
+    compact = read_normalized_wide(source, raw)
+    if compact is not None:
+        return [_project_stress_relaxation_time(series, xscale=xscale,
+                    require_positive_anchor=False) for series in compact]
+    raw = raw.dropna(axis=1, how="all")
     sections = _rheology_test_sections(raw, fallback=fallback)
     parsed: list[CurveSeriesPayload] = []
     section_errors: list[str] = []
@@ -165,7 +116,7 @@ def _read_stress_relaxation_source_series(source: Path) -> list[CurveSeriesPaylo
                 source,
                 raw=block,
             )
-            normalized = _retain_positive_stress_relaxation_time(normalized)
+            normalized = _project_stress_relaxation_time(normalized, xscale=xscale)
             parsed.append(
                 _with_series_sample(
                     CurveSeriesPayload(
@@ -207,7 +158,7 @@ def _read_stress_relaxation_source_series(source: Path) -> list[CurveSeriesPaylo
         )
 
     try:
-        series_list = _read_wide_stress_relaxation_series(source)
+        series_list = _read_wide_stress_relaxation_series(source, xscale=xscale)
     except ValueError as exc:
         raise ValueError(
             "The stress-relaxation contract requires shear stress, "
@@ -230,19 +181,23 @@ def _read_stress_relaxation_source_series(source: Path) -> list[CurveSeriesPaylo
         )
         for series in series_list
     ]
-    if len(series_list) == 1:
+    if (len(series_list) == 1 and (series_list[0].diagnostics or {}).get(
+        "source_sample_detection") == "fallback_from_source_table"
+    ):
         return [_with_series_sample(series_list[0], fallback)]
     return series_list
 
 
-def _read_stress_relaxation_series_list(source: Path) -> list[CurveSeriesPayload]:
+def _read_stress_relaxation_series_list(source: Path, *, xscale: str = "log") -> list[CurveSeriesPayload]:
     if not source.is_dir():
-        return _read_stress_relaxation_source_series(source)
+        return _read_stress_relaxation_source_series(source, xscale=xscale)
     series_list: list[CurveSeriesPayload] = []
     errors: list[str] = []
     for candidate in _sweep_source_files(source):
         try:
-            series_list.extend(_read_stress_relaxation_source_series(candidate))
+            series_list.extend(_read_stress_relaxation_source_series(candidate, xscale=xscale))
+        except StressSourceBindingError:
+            raise  # Preserve actionable columns/rows; never return partial curves.
         except _StressRelaxationHoldError as exc:
             raise ValueError(f"{candidate.name}: {exc}") from exc
         except (OSError, ValueError) as exc:

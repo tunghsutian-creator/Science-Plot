@@ -26,10 +26,11 @@ def resolve_stress_relaxation_transform(
     source: Path,
     *,
     series_order: object = None,
+    xscale: str = "log",
 ) -> ResolvedScientificTransform:
     """Read and transform once, then expose the same series to preview and prepare."""
 
-    series_list = _read_stress_relaxation_series_list(source)
+    series_list = _read_stress_relaxation_series_list(source, xscale=xscale)
     explicit_order = bool(_series_order_map(series_order))
     if explicit_order:
         series_list = _order_curve_series(series_list, series_order)
@@ -40,6 +41,7 @@ def resolve_stress_relaxation_transform(
         series_list,
         selected_sources=selected_sources,
         automatic_visual_ordering=not explicit_order and source.is_dir(),
+        xscale=xscale,
     )
     return ResolvedScientificTransform(
         series=tuple(series_list),

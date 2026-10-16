@@ -67,16 +67,23 @@ def _target_error(code: str, message: str, context: dict[str, Any], sample: str 
 def create_task(
     source: Path, *, rule_id: str | None = None, template: str | None = None,
     profile: Path | None = None, out: Path | None = None, task_dir: Path | None = None,
+    xscale: str | None = None, choose_columns: bool = False,
 ) -> dict[str, Any]:
     """Start from original input; scientific choices stay with ordinary creation."""
     request: dict[str, Any] = {"version": 1, "action": "create", "source": str(source)}
-    for key, value in (("rule_id", rule_id), ("template", template), ("profile", profile), ("out", out)):
+    for key, value in (("rule_id", rule_id), ("template", template), ("profile", profile), ("out", out), ("xscale", xscale)):
         if value is not None:
             request[key] = str(value)
+    if choose_columns:
+        request["choose_columns"] = True
     request = validate_task_request(request)
     runtime = doctor_payload()
     doctor = {"kind": runtime["kind"], "status": runtime["status"],
               "failed_checks": [item for item in runtime["checks"] if item.get("status") != "passed"]}
+    if isinstance(runtime.get("execution_identity"), dict):
+        doctor["execution_identity"] = {key: runtime["execution_identity"][key] for key in (
+            "source_package_root", "source_git_head", "runtime_repo_root", "python_executable", "native_execution_verified",
+        ) if key in runtime["execution_identity"]}
     if runtime["status"] != "ready":
         return {"kind": "sciplot_task_shortcut", "version": 1, "status": "blocked",
                 "reason_code": "runtime_not_ready", "doctor": doctor,

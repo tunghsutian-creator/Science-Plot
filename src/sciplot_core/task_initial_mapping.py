@@ -55,7 +55,8 @@ def apply_mapping_choices(root: Path, state: dict[str, Any], mapping: dict[str, 
     except TaskControlError as exc:
         if exc.reason_code != "invalid_mapping_selection":
             raise
-        state["mapping_error"] = {"reason_code": exc.reason_code, "message": str(exc)}
+        state["mapping_error"] = {"reason_code": exc.reason_code, "message": str(exc),
+                                  **({"issues": exc.issues} if exc.issues else {})}
         save_task(root, state)
         return False
     state.pop("mapping_error", None)

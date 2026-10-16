@@ -178,18 +178,24 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
         if not apply_initial_mapping(root, state, source, selected):
             return None
     mapping_choice = state.get("mapping_choice")
-    plan_request = mapped_plan_request(state) if mapping_choice else selected
+    plan_request = mapped_plan_request(state) if mapping_choice else dict(selected)
+    if "xscale" in request:
+        plan_request["xscale"] = request["xscale"]
     plan = dict(build_plan_preview(source, request=plan_request))
     atomic_write_json(root / "plan.json", plan)
     state["selection"] = {"rule_id": plan["rule_id"], "template": plan["template"]}
     blocker_snapshot = plan.get("blocker")
     reason = str(blocker_snapshot.get("reason_code", "")) if isinstance(blocker_snapshot, dict) else ""
     invalid_rule = reason in {"plan_rule_invalid", "plan_rule_unknown", "plan_template_unsupported"}
-    if not mapping_choice and not invalid_rule:
+    if not mapping_choice and not invalid_rule and reason != "plan_source_option_invalid":
         question = column_question(source, state["selection"], explicit=request.get("choose_columns", False))
         if question is None and plan["status"] == "blocked":
             question = table_question(source, state["selection"])
         if question:
+            if isinstance(blocker_snapshot, dict) and blocker_snapshot.get("issues"):
+                question["source_issues"] = blocker_snapshot["issues"]
+                question["question_id"] = canonical_json_sha256(
+                    {key: value for key, value in question.items() if key != "question_id"}, allow_nan=False)
             if (not request.get("choose_columns") and plan["status"] == "blocked"
                     and question["field"] == "table_selection"):
                 from sciplot_core.data_mapping.table_diagnostics import explicit_layout_mapping

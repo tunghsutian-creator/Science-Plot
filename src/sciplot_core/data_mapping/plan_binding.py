@@ -49,6 +49,8 @@ def resolve_mapping_plan_request(
             raise ValueError(f"The confirmed mapping request is missing {key}.")
         if key in request and request[key] != selected:
             raise ValueError(f"The mapping plan cannot override confirmed {key}.")
+    if "xscale" in request and request["xscale"] != seed.get("xscale"):
+        raise ValueError("The mapping plan cannot override confirmed xscale.")
     rule = get_rule(seed["rule_id"])
     if not supports_table_mapping(rule):
         raise ValueError("This scientific adapter does not consume confirmed XY tables.")
@@ -93,7 +95,8 @@ def verify_mapping_sample_identity(
         )
     if "expected_series_points" in binding:
         series = output.get("series", []) if isinstance(output, dict) else []
-        counts = {item["sample"]: item["point_count"] for item in series}
+        stress = scientific_transform and scientific_transform.get("semantic_family") == "rheology_stress_relaxation"
+        counts = {item["sample"]: item["source_point_count"] if stress else item["point_count"] for item in series}
         if counts != binding["expected_series_points"]:
             raise ValueError("Mapped scientific point counts do not match each confirmed source range.")
 

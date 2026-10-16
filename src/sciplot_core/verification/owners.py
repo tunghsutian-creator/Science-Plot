@@ -206,6 +206,8 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/semantic_sources/stress_relaxation_evidence.py",
                 "src/sciplot_core/semantic_sources/stress_relaxation_hold.py",
                 "src/sciplot_core/semantic_sources/stress_relaxation_sources.py",
+                "src/sciplot_core/semantic_sources/stress_relaxation_wide.py",
+                "src/sciplot_core/semantic_sources/stress_relaxation_projection.py",
                 "src/sciplot_core/semantic_sources/stress_relaxation_transform.py",
                 "src/sciplot_core/semantic_sources/table_candidate_sources.py",
                 "src/sciplot_core/semantic_sources/table_scanning.py",

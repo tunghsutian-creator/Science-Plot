@@ -110,3 +110,82 @@ Retain raw source and `.sciplot_documents`; `plot export` reconstructs deleted
 VSZ/IR/render/export products. Deliver only `ready_to_use` exports with passed hard
 QA; inspect soft warnings separately. No Veusz path discovery or per-chart CLI is
 needed for this route.
+
+## Stress-relaxation paired wide tables
+
+The stress owner recognizes the explicit compact pairs
+`sample|t_s,sample|sigma_over_sigma0` (or a single `t_s,sigma_over_sigma0` pair).
+Seconds and the already normalized response are declared by those exact headers;
+G(t)/G0 and relaxation modulus remain different contracts. Each pair keeps its
+own source order and actual length. Only structurally empty trailing paired cells
+are outside that curve; interior holes, half pairs, nonnumeric values and mismatched
+sample headers return the original source/column, expected/observed evidence and a
+same-task mapping continuation. Never repair those errors by rewriting raw cells.
+
+To review groups before plotting, use the ordinary entry:
+
+```bash
+skill/scripts/sciplot task create /absolute/original.csv --rule rheology_stress_relaxation --choose-columns --xscale linear --json
+```
+
+Review the returned candidate's original sample identities, per-pair row ranges,
+counts and first points. `mapping_candidate_id` plus explicit `pair_indices`
+selects/orders only the requested curves; use a new task/output for another group.
+For an already understood multi-figure request, existing `task group` items may
+carry complete `create.mapping` selections and `xscale`, so local validation,
+FigurePlan, preparation, native QA and canonical delivery remain the same route.
+Do not reconstruct a default FigureTemplate, split raw files, or send numeric
+arrays through the AI request. Group item labels are distinct from the original
+source-column identities; explicit pair `label` is a recorded display label.
+
+`--xscale log|linear` is a closed stress-relaxation create option, bound into the
+expected plan and canonical request. Other adapters keep their registered scales.
+Normalization is determined from the complete source sequence before any display
+projection: already normalized values are preserved point for point; unnormalized
+stress uses its original first finite nonzero response. Log display then explicitly
+selects positive time, recording source/pre-display/active counts and exclusions;
+it does not renormalize the first visible point. Linear includes the original
+zero-time pair. A supplied (0,1) therefore appears as (0,1) on linear but is not
+visible on log. The original SHA-bound source still contains the complete arrays;
+the active log table does not claim to contain its excluded zero row.
+
+The ordinary stress template does not add a user-requested `1/e` reference or
+sample annotation automatically. Continue the returned saved project through the
+existing reviewed annotation task; no mathematical CSV is needed. Read the
+selected figure once with `project inspect PROJECT --figure FIGURE_ID --json` to
+obtain its current document SHA and exact displayed annotation axis unit. The
+ratio-only stress y label has the dimensionless annotation unit `""`, which differs
+from its source metric unit `sigma/sigma0`; always use the inspected value.
+A single existing edit request can batch:
+
+```json
+{
+  "version": 1,
+  "action": "edit",
+  "project": "RETURNED_PROJECT",
+  "figure_id": "RETURNED_FIGURE_ID",
+  "expected_document_sha256": "CURRENT_DOCUMENT_SHA256",
+  "operations": [
+    {"op":"add_reference_line","id":"one_over_e","parent_path":"/page1/graph1","axis":"y","value":0.36787944117144233,"unit":""},
+    {"op":"add_annotation","id":"one_over_e_label","parent_path":"/page1/graph1","text":"1/e","position":{"mode":"relative","x":0.85,"y":0.4}},
+    {"op":"add_annotation","id":"sample_display","parent_path":"/page1/graph1","text":"USER_CONFIRMED_NAME","position":{"mode":"relative","x":0.65,"y":0.7}}
+  ]
+}
+```
+
+Start it with `task start --request EDIT.json --task-dir NEW_EDIT_TASK --json`.
+Reference lines are natively dashed. Inspect the returned actual preview and
+scientific audit, then accept its exact operation ID using the returned resume
+command. The relative text positions above are examples, not collision guarantees;
+revise the same batch if the actual legend or data overlaps. The normal edit/export
+owners update the saved VSZ and delivery; source columns are not renamed, native
+VSZ text is not patched, and Legacy authority is not promoted to Managed authority.
+
+A dense multi-series log figure may still fail the existing non-colour/grayscale
+or native legend-clearance gate at the ordinary 60 mm size. That is a presentation
+constraint, not evidence that normalization or source binding failed. Preserve the
+project and scientific arrays; use advertised native series/legend style operations
+in the same reviewed edit path, then follow `repair_export_then_retry`. Do not
+weaken QA, regenerate a different experiment, or rename source columns. For a
+requested upper-left sample label, inspect that actual location in the returned
+preview instead of treating the example relative coordinates as a universal fit.

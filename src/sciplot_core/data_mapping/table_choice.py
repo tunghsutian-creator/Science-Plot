@@ -229,6 +229,13 @@ def _proposal_contents(snapshot: dict[str, Any], pairs: list[dict[str, Any]]) ->
             raise ValueError("Each pair needs original integer x_column/y_column indices.")
         x, y = columns[pair["x_column"]], columns[pair["y_column"]]
         if x["index"] == y["index"] or not x["x_eligible"] or not y["y_eligible"]:
+            if get_rule(snapshot["rule_id"]).scientific_source_adapter == "stress_relaxation":
+                from sciplot_core.semantic_sources.stress_relaxation_wide import StressSourceBindingError
+
+                bad = x if not x["x_eligible"] else y
+                raise StressSourceBindingError(f"series_{index:03}", bad["index"],
+                    "explicit stress time/normalized-response identity, units, and complete selected rows",
+                    {"header": bad["header"], "x": x["x_rejection_reasons"], "y": y["y_rejection_reasons"]})
             raise ValueError(f"Pair {index} in {selection['sheet']!r} needs explicit axis names, observed units, and finite numeric values; "
                              f"x_column={x['index']}: {x['x_rejection_reasons']}; y_column={y['index']}: {y['y_rejection_reasons']}.")
         y_identity = (selection["sheet"], y["index"])

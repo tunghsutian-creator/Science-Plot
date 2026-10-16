@@ -181,3 +181,103 @@ def test_mapped_native_creation_retains_original_archive_and_passes_source_audit
     archive = manifest["raw_archive"]["original_input"]
     assert Path(archive["path"]).read_bytes() == source.read_bytes()
     assert Path(execution["effective_input"]).read_bytes() != source.read_bytes()
+
+
+def test_compact_stress_mapping_uses_own_pair_ranges_and_frozen_scale(tmp_path):
+    from sciplot_core.task_column_mapping import table_question
+    from sciplot_core.task_initial_mapping import apply_mapping_choices
+    from sciplot_core.task_column_mapping import mapped_plan_request
+    from sciplot_core.task_storage import save_task
+
+    source = tmp_path / 'relaxation.csv'
+    source.write_text('A|t_s,A|sigma_over_sigma0,B|t_s,B|sigma_over_sigma0\n0,1,0,1\n1,.8,1,.7\n2,.5,2,.4\n3,.3,,\n')
+    selection = {'rule_id': 'rheology_stress_relaxation', 'template': 'curve'}
+    question = table_question(source, selection)
+    candidate = question['mapping_candidates'][0]
+    assert [pair['source_point_count'] for pair in candidate['pairs']] == [4, 3]
+    assert [pair['table_selection']['data_end_row'] for pair in candidate['pairs']] == [5, 4]
+    task = tmp_path / 'task'
+    task.mkdir()
+    state = {'kind': 'sciplot_task_state', 'version': 1, 'task_id': 'stress-test',
+             'request': {'version': 1, 'action': 'create', 'source': str(source), 'xscale': 'linear'},
+             'created_at': '2026-10-16T12:00:00+00:00', 'source_sha256': source_tree_sha256(source)}
+    save_task(task, state)
+    assert apply_mapping_choices(task, state, candidate['mapping'], source, selection)
+    request = mapped_plan_request(state)
+    plan = build_plan_preview(source, request=request)
+    assert plan['status'] == 'planned', plan['blocker']
+    assert plan['source_options'] == {'xscale': 'linear'}
+    assert [curve['point_count'] for curve in plan['scientific_transform']['output']['series']] == [4, 3]
+    assert all(curve['first_point'] == [0, 1] for curve in plan['scientific_transform']['output']['series'])
+    assert verify_expected_plan(source, plan, rule_id=selection['rule_id'], template='curve') == plan
+    rejected = build_plan_preview(source, request={**request, 'xscale': 'log'})
+    assert rejected['status'] == 'blocked'
+    assert 'override confirmed xscale' in rejected['blocker']['message']
+
+
+def test_compact_stress_mapping_log_accounts_for_complete_source_counts(tmp_path):
+    from sciplot_core.data_mapping.plan_binding import verify_mapping_sample_identity
+    from sciplot_core.semantic_sources.stress_relaxation_transform import resolve_stress_relaxation_transform
+
+    source = tmp_path / 'relaxation.csv'
+    source.write_text('A|t_s,A|sigma_over_sigma0\n0,1\n1,.8\n2,.5\n')
+    transform = resolve_stress_relaxation_transform(source)
+    verify_mapping_sample_identity({'expected_sample_labels': ['A'], 'expected_series_points': {'A': 3}}, transform.contract.to_payload())
+    assert transform.contract.output['series'][0]['point_count'] == 2
+    assert transform.contract.output['series'][0]['source_point_count'] == 3
+    with pytest.raises(ValueError, match='point counts'):
+        verify_mapping_sample_identity({'expected_sample_labels': ['A'], 'expected_series_points': {'A': 2}}, transform.contract.to_payload())
+
+
+def test_explicit_scale_is_rejected_for_other_scientific_adapters(tmp_path):
+    source, selection, _execution = _mapped_case(tmp_path)
+    plain = build_plan_preview(source, request={'rule_id': 'uvvis_spectrum'})
+    rejected = build_plan_preview(source, request={'rule_id': 'uvvis_spectrum', 'xscale': 'linear'})
+    assert plain['status'] == 'planned'
+    assert 'source_options' not in plain
+    assert rejected['status'] == 'blocked'
+    assert rejected['blocker']['reason_code'] == 'plan_source_option_invalid'
+
+
+def test_stress_scale_expected_plan_reaches_canonical_studio_request(tmp_path, monkeypatch):
+    source = tmp_path / 'relaxation.csv'
+    source.write_text('A|t_s,A|sigma_over_sigma0\n0,1\n1,.8\n2,.5\n')
+    plan = build_plan_preview(source, request={'rule_id': 'rheology_stress_relaxation', 'xscale': 'linear'})
+    assert plan['status'] == 'planned', plan['blocker']
+    calls = []
+    def prepare(target, **options):
+        request = json.loads(target.read_text())
+        calls.append(request)
+        assert options == {'rule_id': 'rheology_stress_relaxation', 'template': 'curve'}
+        return {'project_dir': str(target.parent), 'request': str(target), 'document': str(target.parent / 'studio/document.vsz')}
+    monkeypatch.setattr(project_creation, 'prepare_studio_document', prepare)
+    monkeypatch.setattr(project_creation, '_publish', lambda payload: payload)
+    project_creation.create_project(source, expected_plan=plan)
+    assert calls[0]['input'] == str(source)
+    assert calls[0]['xscale'] == 'linear'
+    assert calls[0]['render_options'] == {'xscale': 'linear', 'x_tick_format': 'Auto'}
+    assert calls[0]['resolved_figure_plan'] == plan['resolved_figure_plan']
+
+
+def test_compact_stress_bad_source_returns_same_task_mapping_evidence(tmp_path):
+    from sciplot_core.task_control import start_task, resume_task, inspect_task
+    from sciplot_core.task_contract import TaskControlError
+
+    source = tmp_path / 'relaxation.csv'
+    source.write_text('A|t_s,A|sigma_over_sigma0\n0,1\n1,\n2,.5\n')
+    before = source.read_bytes()
+    request = {'version': 1, 'action': 'create', 'source': str(source), 'rule_id': 'rheology_stress_relaxation', 'xscale': 'linear'}
+    result = start_task(request, task_dir=tmp_path / 'task')
+    assert result['status'] == 'needs_input'
+    question = result['question']
+    issue = question['source_issues'][0]
+    assert issue['source_id'] == 'A' and issue['column'] == 1 and issue['row'] == 2
+    assert set(issue) >= {'expected', 'observed', 'continuation'}
+    assert issue['continuation']['same_task'] is True
+    # Retry cannot rewrite bad values or silently choose a different experiment.
+    with pytest.raises(TaskControlError, match='table_selection'):
+        resume_task(tmp_path / 'task', {'retry': True})
+    unchanged = inspect_task(tmp_path / 'task')
+    assert unchanged['status'] == 'needs_input'
+    assert unchanged['question']['question_id'] == question['question_id']
+    assert source.read_bytes() == before

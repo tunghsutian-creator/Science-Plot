@@ -69,7 +69,7 @@ def create_project(
     layout.workspace_root.parent.mkdir(parents=True, exist_ok=True)
     with external_project_session(layout.workspace_root):
         require_new_layout(layout)
-        if "data_mapping" in verified:
+        if "data_mapping" in verified or "source_options" in verified:
             payload = _prepare_mapped_project(source, verified=verified, layout=layout)
         else:
             payload = prepare_studio_document(
@@ -96,21 +96,35 @@ def _prepare_mapped_project(
 ) -> dict[str, Any]:
     """Enter the existing canonical-request Studio route with confirmed lineage."""
 
-    mapping = verified["data_mapping"]
-    request, current = resolve_mapping_plan_request(
-        source,
-        {**mapping, "rule_id": verified["rule_id"], "template": verified["template"]},
-    )
-    if current != mapping:
-        raise ValueError("The confirmed mapping changed after the expected plan.")
+    current = None
+    if "data_mapping" in verified:
+        mapping = verified["data_mapping"]
+        request, current = resolve_mapping_plan_request(
+            source, {**mapping, "rule_id": verified["rule_id"], "template": verified["template"]},
+        )
+        if current != mapping:
+            raise ValueError("The confirmed mapping changed after the expected plan.")
+    else:
+        request = {"input": str(source), "rule_id": verified["rule_id"], "template": verified["template"]}
+    request.update(verified.get("source_options", {}))
     project = layout.workspace_root / "projects" / source.stem
     project.mkdir(parents=True, exist_ok=False)
     request["output"] = str(project / "runs" / "run_001")
     request[REQUEST_DELIVERY_ROOT_KEY] = str(layout.delivery_root)
     request["resolved_figure_plan"] = verified["resolved_figure_plan"]
-    request["data_mapping_plan_binding"] = current
+    if current is not None:
+        request["data_mapping_plan_binding"] = current
     request_path = project / "plot_request.json"
+    if verified["rule_id"] == "rheology_stress_relaxation":
+        # The canonical-request route must reuse the rule-default owner just as
+        # raw-source intake does. A top-level scientific choice alone is not a
+        # render option and must never leave a log projection on a linear axis.
+        scale = request.get("xscale", "log")
+        request["render_options"] = {"xscale": scale,
+            **({"x_tick_format": "Auto"} if scale == "linear" else {})}
     atomic_write_json(request_path, request)
+    if verified["rule_id"] == "rheology_stress_relaxation":
+        return prepare_studio_document(request_path, rule_id=verified["rule_id"], template=verified["template"])
     return prepare_studio_document(request_path)
 
 

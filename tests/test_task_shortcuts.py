@@ -214,3 +214,19 @@ def test_guidance_carries_exact_current_arguments_without_shell_concatenation():
     state.update(status="needs_review", request={"action": "update_source"}, revision_id="c" * 64)
     assert "cli_argv" not in task_next_step(state)
     assert "typed_entries" in task_capabilities()
+
+
+def test_stress_create_options_reuse_one_doctor_identity(ready, monkeypatch):
+    calls, runtime = ready
+    identity = {'source_package_root': '/source/src/sciplot_core', 'source_git_head': 'a' * 40,
+                'runtime_repo_root': '/source', 'python_executable': '/python',
+                'native_execution_verified': False}
+    runtime['execution_identity'] = {**identity, 'unbounded_detail': ['not forwarded']}
+    requests = []
+    monkeypatch.setattr(shortcuts, 'start_task', lambda request, **kwargs: requests.append(request) or {'status': 'needs_input'})
+    result = shortcuts.create_task(Path('/original.csv'), rule_id='rheology_stress_relaxation',
+                                   xscale='linear', choose_columns=True)
+    assert calls == ['doctor']
+    assert requests[0]['choose_columns'] is True and requests[0]['xscale'] == 'linear'
+    assert result['doctor']['execution_identity'] == identity
+    assert result['doctor']['execution_identity']['native_execution_verified'] is False
