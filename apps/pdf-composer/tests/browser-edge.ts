@@ -98,7 +98,7 @@ page.setDefaultTimeout(15000);
 const commandKey = process.platform === 'darwin' ? 'Meta' : 'Control';
 const errors: string[] = [], warnings: string[] = [], externalRequests: string[] = [], checks: string[] = [], screenshots: string[] = [];
 const requests: { method: string; pathname: string; body: boolean }[] = [];
-let glassProof: unknown, privateAcceptance: unknown = { status: 'not supplied', scope: 'Synthetic controls do not certify original-data acceptance.' };
+let appearanceProof: unknown, privateAcceptance: unknown = { status: 'not supplied', scope: 'Synthetic controls do not certify original-data acceptance.' };
 page.on('pageerror', (error) => errors.push(error.message));
 page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); else if (message.type() === 'warning') warnings.push(message.text()); });
 await context.route('**/*', async (route) => {
@@ -144,6 +144,21 @@ async function panelAction(name: string) {
     await page.locator('.figure-panel.is-selected').first().click({ button: 'right', force: domDiagnostic });
     await page.getByRole('menuitem', { name: name === 'Split' ? 'Split cells' : 'Move / swap…', exact: true }).click({ force: domDiagnostic });
   }
+}
+async function selectPanel(row: number, column: number) {
+  // Right-click selects an empty container without requesting a new file.
+  // Escape dismisses that context menu and retains the real selection.
+  await cell(row, column).click({ button: 'right', force: domDiagnostic });
+  await page.keyboard.press('Escape');
+}
+async function toggleLabels() {
+  await page.getByRole('button', { name: 'Labels', exact: true }).click({ force: domDiagnostic });
+  await page.getByRole('switch', { name: 'Show panel letters', exact: true }).click({ force: domDiagnostic });
+  await page.keyboard.press('Escape');
+}
+async function zoom(value: string) {
+  await page.getByRole('button', { name: 'Canvas zoom', exact: true }).click({ force: domDiagnostic });
+  await page.getByRole('menuitemradio', { name: value === 'fit' ? 'Fit to view' : `${value}%`, exact: true }).click({ force: domDiagnostic });
 }
 async function externalDrop(file: { name: string; bytes: Uint8Array }, target: Locator) {
   const transfer = await page.evaluateHandle(({ name, bytes }) => {
@@ -220,44 +235,25 @@ async function checkExport(bytes: Uint8Array, document: AssemblyDocument) {
   assert.ok(!streams.some((content) => /\/Image\b/.test(content)), 'The vector fixtures must not be replaced by image content.');
 }
 
-async function proveRefraction() {
+async function proveMinimalControls() {
   const diagnostic = await context.newPage();
   try {
     await diagnostic.goto(origin);
-    const group = diagnostic.locator('.grid-group');
-    await group.locator('.glass-backdrop[data-lg-active]').waitFor();
+    await diagnostic.getByRole('button', { name: 'Choose grid template', exact: true }).waitFor();
     const state = await diagnostic.evaluate(() => {
-      const backdrop = document.querySelector('.grid-group > .glass-backdrop')!;
-      const foreground = document.querySelector('.grid-group > .glass-foreground')!;
-      const tray = document.querySelector('.source-tray-shell > .glass-backdrop')!;
-      return { backdrop: getComputedStyle(backdrop).backdropFilter, foreground: getComputedStyle(foreground).filter,
-        foregroundBackdrop: getComputedStyle(foreground).backdropFilter, tray: getComputedStyle(tray).backdropFilter,
-        scales: Array.from(document.querySelectorAll('feDisplacementMap')).map((element) => Number(element.getAttribute('scale'))),
-        passes: document.querySelectorAll('.grid-group [data-lg-active]').length };
+      return { background: getComputedStyle(document.querySelector('.app-shell')!).backgroundColor,
+        effects: Array.from(document.querySelectorAll('.toolbar,.toolbar-control,.source-tray-shell,.toolbar-popover')).map((element) => ({
+          filter: getComputedStyle(element).filter, backdrop: getComputedStyle(element).backdropFilter })),
+        displacementMaps: document.querySelectorAll('feDisplacementMap').length,
+        activeGlass: document.querySelectorAll('[data-lg-active]').length,
+        initialSelection: document.querySelectorAll('.selection-bar,.figure-panel.is-selected').length };
     });
-    assert.match(state.backdrop, /url\(/);
-    assert.ok(state.scales.length >= 3 && state.scales.every((scale) => scale !== 0));
-    assert.equal(state.foreground, 'none'); assert.equal(state.foregroundBackdrop, 'none');
-    assert.doesNotMatch(state.tray, /url\(/, 'Source library must not carry the small-group displacement filter.');
-    // Diagnostic-only substrate in a disposable page, never in product captures.
-    // It is an earlier sibling of the actual production backdrop, preserving
-    // that exact engine/filter/clear-foreground stack.
-    await group.evaluate((element) => {
-      const pattern = document.createElement('div');
-      pattern.setAttribute('data-edge-refraction-diagnostic', '');
-      pattern.style.cssText = 'position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(90deg,#444 0 1px,#fff 1px 5px);border-radius:inherit';
-      element.prepend(pattern);
-    });
-    await diagnostic.waitForTimeout(200);
-    const active = await group.screenshot({ path: join(out, 'glass-diagnostic-active.png'), animations: 'disabled' });
-    const stable = await group.screenshot({ animations: 'disabled' });
-    assert.equal(sha256(active), sha256(stable), 'Refraction comparison must use a stable scene.');
-    await diagnostic.evaluate(() => document.querySelectorAll('feDisplacementMap').forEach((element) => element.setAttribute('scale', '0')));
-    const zero = await group.screenshot({ path: join(out, 'glass-diagnostic-scale-zero.png'), animations: 'disabled' });
-    assert.notEqual(sha256(active), sha256(zero), 'Actual Edge pixels must change when only SVG displacement is set to zero.');
-    return { ...state, activeSha256: sha256(active), zeroScaleSha256: sha256(zero),
-      evidence: ['glass-diagnostic-active.png', 'glass-diagnostic-scale-zero.png'],
-      scope: 'Separate diagnostic page with temporary achromatic stripes; same production SVG filter. Normal workbench screenshots retain pure-white background.' };
+    assert.equal(state.background, 'rgb(255, 255, 255)');
+    assert.equal(state.displacementMaps, 0); assert.equal(state.activeGlass, 0); assert.equal(state.initialSelection, 0);
+    assert.ok(state.effects.length > 0 && state.effects.every((effect) => effect.filter === 'none' && effect.backdrop === 'none'));
+    await diagnostic.locator('.toolbar').screenshot({ path: join(out, 'minimal-controls.png'), animations: 'disabled', timeout: 10000 });
+    return { ...state, evidence: ['minimal-controls.png'],
+      scope: 'Actual Edge minimal white preview: clear controls, no blur/displacement renderer and no initial selected cell. Focused preview acceptance separately records real 140/180/220 ms motions and reduced motion.' };
   } finally { await diagnostic.close(); }
 }
 
@@ -335,6 +331,7 @@ try {
   await page.getByRole('button', { name: 'Export PDF', exact: true }).waitFor();
   assert.equal(await page.locator('[data-panel-id]').count(), 6);
   assert.equal(await page.locator('.source-item').count(), 0);
+  assert.equal(await page.locator('.selection-bar,.figure-panel.is-selected').count(), 0);
   const blankLibraryWidth = await page.locator('.source-tray').evaluate((element) => element.getBoundingClientRect().width);
   assert.equal(await page.getByRole('button', { name: 'Scroll sources right', exact: true }).count(), 0);
   assert.equal(await page.locator('footer.status-bar, .source-rail').count(), 0);
@@ -343,9 +340,9 @@ try {
   await shot('01-empty-edge-1463x1075.png');
   checks.push('Actual Microsoft Edge, no native bridge, meaningful blank 3 × 2 app, no framework overlay or obsolete footer.');
   if (!domDiagnostic) {
-    glassProof = await proveRefraction();
-    checks.push('Actual Edge SVG displacement changes diagnostic pixels; compact groups have nonzero maps and clear foreground, source library has no displacement URL.');
-  } else glassProof = { status: 'blocked', reason: 'Explicit DOM-only diagnosis while actual Edge about:blank screenshots time out; pixel refraction proof remains required.' };
+    appearanceProof = await proveMinimalControls();
+    checks.push('Actual Edge minimal white controls have no blur, active glass or displacement maps and no initial selected cell; actual toolbar pixels captured.');
+  } else appearanceProof = { status: 'blocked', reason: 'Explicit DOM-only diagnosis; actual rendered preview acceptance remains required.' };
 
   await page.getByLabel('More options', { exact: true }).click({ force: domDiagnostic });
   await page.getByRole('button', { name: 'Export options…', exact: true }).click({ force: domDiagnostic });
@@ -364,7 +361,7 @@ try {
   await page.getByRole('button', { name: '2 × 2', exact: true }).click({ force: domDiagnostic });
   await page.getByRole('button', { name: 'Apply grid', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('[data-panel-id]').count(), 4);
-  await cell(0, 0).click({ force: domDiagnostic });
+  await selectPanel(0, 0);
   await page.getByRole('button', { name: `Place ${multipage.name}`, exact: true }).click({ force: domDiagnostic });
   await page.getByRole('heading', { name: 'Choose a page' }).waitFor();
   await page.getByRole('button', { name: /^Page 2,/ }).click({ force: domDiagnostic });
@@ -374,7 +371,7 @@ try {
   checks.push('Explicit multipage choice places page 2 at original physical size; actual canvas preview contains ink.');
 
   await cell(0, 1).click({ modifiers: ['Shift'], force: domDiagnostic });
-  await page.getByRole('button', { name: 'Merge', exact: true }).click({ force: domDiagnostic });
+  await page.getByRole('button', { name: 'Merge cells', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('[data-panel-id]').count(), 3);
   await panelAction('Split');
   assert.equal(await page.locator('[data-panel-id]').count(), 4);
@@ -382,7 +379,7 @@ try {
   await sourceDrag(ordinary[0].name, cell(0, 1));
   assert.equal(await occupied(0, 1), true);
   await cell(0, 0).click({ force: domDiagnostic }); await cell(0, 1).click({ modifiers: ['Shift'], force: domDiagnostic });
-  await page.getByRole('button', { name: 'Merge', exact: true }).click({ force: domDiagnostic });
+  await page.getByRole('button', { name: 'Merge cells', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('[data-panel-id]').count(), 4);
   assert.match(await page.getByRole('alert').innerText(), /one|source|figure/i);
   checks.push('Adjacent rectangle merge/split retains source; merging two occupied cells refuses atomically. Tray drag places the complete source.');
@@ -390,7 +387,7 @@ try {
   await externalDrop(ordinary[1], cell(1, 0));
   assert.equal(await occupied(1, 0), true);
   await assertPreview(cell(1, 0));
-  await cell(1, 1).click({ force: domDiagnostic });
+  await selectPanel(1, 1);
   await page.getByRole('button', { name: `Place ${rounded.name}`, exact: true }).click({ force: domDiagnostic });
   await page.getByRole('heading', { name: 'This page needs more room' }).waitFor();
   await page.getByRole('button', { name: 'Keep original size', exact: true }).click({ force: domDiagnostic });
@@ -399,9 +396,9 @@ try {
   await page.getByRole('button', { name: 'Fit whole page to cell (≈99.94%)', exact: true }).click({ force: domDiagnostic });
   assert.equal(await occupied(1, 1), true);
   assert.equal(await page.getByRole('button', { name: `Place ${rounded.name}`, exact: true }).getAttribute('aria-pressed'), 'true');
-  await page.getByRole('button', { name: 'Labels', exact: true }).click({ force: domDiagnostic });
+  await toggleLabels();
   assert.equal(await page.locator('.panel-letter').count(), 0);
-  await page.getByRole('button', { name: 'Labels', exact: true }).click({ force: domDiagnostic });
+  await toggleLabels();
   assert.equal(await page.locator('.panel-letter').count(), 4);
   checks.push('External real PDF drop places a whole page; oversized original choice preserves empty cell; explicit ≈99.94% fit and panel letters work.');
 
@@ -454,8 +451,8 @@ try {
   if (!domDiagnostic) await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
   assert.equal(await sourceList.evaluate((element) => element.scrollTop), 0, 'Screenshot starts at the first source after real vertical wheel scrolling settles.');
   checks.push('Real vertical wheel and keyboard End/Home reveal later sources and return to the first; the fixed import area stays visible and stationary.');
-  await page.getByLabel('Canvas zoom').selectOption('125');
-  await page.getByLabel('Canvas zoom').selectOption('fit');
+  await zoom('125');
+  await zoom('fit');
   await shot('02-populated-edge-1463x1075.png');
   const metrics = await page.evaluate(() => {
     const paper = document.querySelector('.paper')!.getBoundingClientRect();
@@ -501,10 +498,10 @@ try {
   const fitted = saved.document.panels.find((panel) => panel.row === 1 && panel.column === 1)!;
   assert.ok(Math.abs(fitted.scale - 55 * mm / 156) < 1e-14);
   assert.equal(saved.document.panels.find((panel) => panel.row === 0 && panel.column === 0)!.pageIndex, 1);
-  await page.getByLabel('Canvas zoom').selectOption('150');
+  await zoom('150');
   const zoomed = await savedProject('zoom-only.figureassembly');
   assert.deepEqual(zoomed.document, saved.document, 'Screen zoom must not alter the portable layout or physical scale.');
-  await page.getByLabel('Canvas zoom').selectOption('fit');
+  await zoom('fit');
   checks.push('Real project download embeds exact original bytes+SHA256, explicit page selection, exact fit ratio; zoom does not alter saved layout.');
 
   const exported = await download(() => page.getByRole('button', { name: 'Export PDF', exact: true }).click({ force: domDiagnostic }), 'publication.pdf');
@@ -517,10 +514,11 @@ try {
   assert.equal(await page.locator('.source-item').count(), 0);
   await externalDrop({ name: 'saved.figureassembly', bytes: saved.bytes }, page.locator('.workspace'));
   assert.equal(await page.locator('.has-source').count(), 4);
+  assert.equal(await page.locator('.selection-bar,.figure-panel.is-selected').count(), 0, 'Reopening a project does not select a cell.');
   await assertPreview(cell(0, 0));
   const reopened = await savedProject('reopened.figureassembly');
   assert.deepEqual(reopened.document, saved.document);
-  await page.getByRole('button', { name: 'Labels', exact: true }).click({ force: domDiagnostic });
+  await toggleLabels();
   await externalDrop({ name: 'saved.figureassembly', bytes: saved.bytes }, page.locator('.source-tray'));
   await page.getByRole('heading', { name: 'Keep your changes?' }).waitFor();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click({ force: domDiagnostic });
@@ -528,11 +526,12 @@ try {
   await externalDrop({ name: 'saved.figureassembly', bytes: saved.bytes }, page.locator('.source-tray'));
   await page.getByRole('button', { name: 'Discard changes', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('.panel-letter').count(), 4);
+  await cell(0, 0).click({ force: domDiagnostic });
   checks.push('Downloaded project reopens from external drop without original paths; dirty project-drop Cancel retains edits, explicit discard restores the package.');
 
   for (const viewport of [{ width: 1000, height: 700 }, { width: 600, height: 800 }]) {
     await page.setViewportSize(viewport);
-    await page.getByLabel('Canvas zoom').selectOption('fit');
+    await zoom('fit');
     if (!domDiagnostic) await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
     const sizing = await page.evaluate(() => {
       const list = document.querySelector('.source-list')!;
@@ -584,7 +583,7 @@ try {
   const result = { status, screenshotGate: domDiagnostic ? 'blocked: explicit DOM-only diagnosis does not satisfy screenshot acceptance' : 'passed', browser: 'Actual Microsoft Edge; Browser plugin not available; regular Playwright fallback', executablePath,
     version: browser.version(), userAgent: agent, origin, viewport: { width: 1463, height: 1075 }, nativeBridge: false,
     sourceHead, testSha256, buildHashes,
-    checks, errors, warnings, externalRequests, requests, screenshots, glassProof, privateAcceptance, fileDelivery,
+    checks, errors, warnings, externalRequests, requests, screenshots, appearanceProof, privateAcceptance, fileDelivery,
     diagnosticPreference: domDiagnostic ? 'Reduced motion; SVG engine accessibility gate is off. Forced real mouse clicks bypass unavailable RAF stability; HTML drag events exercise product handlers. Normal pointer/normal-motion/screenshot acceptance remains BLOCKED.' : null,
     sourceHashes: [multipage, oversized, rounded, ...ordinary].map(({ name, sha256 }) => ({ name, sha256 })),
     exportSha256: sha256(exported), projectSha256: sha256(saved.bytes) };

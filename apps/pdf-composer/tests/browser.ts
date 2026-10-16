@@ -80,6 +80,15 @@ const panelAction = async (name: string) => {
     await page.getByRole('menuitem', { name: name === 'Split' ? 'Split cells' : 'Move / swap…', exact: true }).click();
   }
 };
+const selectPanel = async (row: number, column: number) => {
+  await cell(row, column).click({ button: 'right' });
+  await page.keyboard.press('Escape');
+};
+const toggleLabels = async () => {
+  await page.getByRole('button', { name: 'Labels', exact: true }).click();
+  await page.getByRole('switch', { name: 'Show panel letters', exact: true }).click();
+  await page.keyboard.press('Escape');
+};
 
 try {
   await page.goto(pathToFileURL(entry).href);
@@ -87,10 +96,12 @@ try {
   await page.evaluate(() => document.fonts.ready);
   assert.equal(await page.locator('[data-panel-id]').count(), 6);
   assert.equal(await page.locator('.source-item').count(), 0);
+  assert.equal(await page.locator('.selection-bar,.figure-panel.is-selected').count(), 0);
   await page.screenshot({ path: resolve(out, 'blank-desktop.png') });
   checks.push('Blank 3 × 2 start, no synthetic data seeded into the application.');
 
   await queueImport(multipage); await command('import'); await waitIdle();
+  await selectPanel(0, 0);
   await page.getByRole('button', { name: 'Place two-pages.pdf' }).click();
   await page.getByRole('heading', { name: 'Choose a page' }).waitFor();
   await page.getByRole('button', { name: /^Page 2,/ }).click();
@@ -102,7 +113,7 @@ try {
   await command('undo'); assert.equal(await occupied(0, 0), false);
   await command('redo'); assert.equal(await occupied(0, 0), true);
   await cell(0, 1).click({ modifiers: ['Shift'] });
-  await page.getByRole('button', { name: 'Merge', exact: true }).click();
+  await page.getByRole('button', { name: 'Merge cells', exact: true }).click();
   assert.equal(await page.locator('[data-panel-id]').count(), 5);
   assert.match(await page.locator('.scale-control').getAttribute('title') ?? '', /Current scale 100%/);
   await panelAction('Split');
@@ -149,9 +160,9 @@ try {
   await page.getByRole('button', { name: 'Replace', exact: true }).click(); await waitIdle();
   assert.match(await cell(0, 0).getAttribute('aria-label') ?? '', /replacement\.pdf/);
   await command('undo'); assert.equal(await cell(0, 0).getAttribute('data-asset-id'), priorId);
-  await page.getByRole('button', { name: 'Labels', exact: true }).click();
+  await toggleLabels();
   assert.equal(await page.locator('.panel-letter').count(), 0);
-  await page.getByRole('button', { name: 'Labels', exact: true }).click();
+  await toggleLabels();
   checks.push('Replacement is undoable; panel letters toggle on and off.');
 
   await page.getByRole('button', { name: 'Choose grid template' }).click();
@@ -161,7 +172,7 @@ try {
   await page.getByRole('button', { name: 'Choose grid template' }).click();
   await page.getByLabel('Columns', { exact: true }).fill('4'); await command('undo');
   assert.equal(await page.locator('[data-panel-id]').count(), 9, 'Native text undo must not undo the document.');
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.keyboard.press('Escape');
   await command('undo'); assert.equal(await page.locator('[data-panel-id]').count(), 6);
   checks.push('Grid templates and custom inputs are atomic; native text-field undo does not change layout history.');
 
@@ -177,6 +188,7 @@ try {
   await page.evaluate((text) => { window.__figureBrowser.open = { text, name: 'Reopened.figureassembly', token: 'reopened' }; }, saved);
   await command('open'); await waitIdle();
   assert.equal(await occupied(0, 0), true);
+  assert.equal(await page.locator('.selection-bar,.figure-panel.is-selected').count(), 0);
   checks.push('Save cancellation retains dirty state; portable save retains exact source bytes and reopens without source paths.');
 
   await page.getByRole('button', { name: 'Export PDF', exact: true }).click(); await waitIdle();
@@ -194,7 +206,7 @@ try {
     return { name: 'unknown-dpi.png', bytesBase64: canvas.toDataURL('image/png').split(',')[1] };
   });
   await queueImport(image); await command('import'); await waitIdle();
-  await cell(0, 1).click(); await page.getByRole('button', { name: 'Place unknown-dpi.png' }).click();
+  await selectPanel(0, 1); await page.getByRole('button', { name: 'Place unknown-dpi.png' }).click();
   await page.getByLabel('More options', { exact: true }).click();
   await page.getByRole('button', { name: 'Export options…', exact: true }).click();
   await page.getByLabel('Format', { exact: true }).selectOption('png');
@@ -206,7 +218,7 @@ try {
   assert.equal(rasterRequest.format, 'png'); assert.equal(rasterRequest.dpi, 600);
   checks.push('Auxiliary raster request carries explicit DPI and shows unknown-DPI/source-resolution risk; native raster pixels are a separate gate.');
 
-  await cell(1, 0).click(); await queueImport(roundedStandard); await command('import'); await waitIdle();
+  await selectPanel(1, 0); await queueImport(roundedStandard); await command('import'); await waitIdle();
   await page.getByRole('button', { name: 'Place rounded-standard.pdf' }).click();
   assert.match(await page.locator('.source-readout').innerText(), /55\.03 mm/);
   await page.getByRole('button', { name: 'Keep original size', exact: true }).click();

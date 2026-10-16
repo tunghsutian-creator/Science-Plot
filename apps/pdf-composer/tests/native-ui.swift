@@ -48,12 +48,14 @@ final class NativeUIRun {
         try await checkLibraryLayout()
         try check(try await evaluate("(() => { const items = [...document.querySelectorAll('.source-item')].map(e => e.getBoundingClientRect()); return items.length === 3 && items.every((item, index) => index === 0 || (items[index-1].bottom <= item.top && Math.abs(items[index-1].left-item.left) < 1)); })()") as? Bool == true,
                   "native imported sources form a vertical list")
+        try await selectPanel(row: 0, column: 0)
         try await click("button[aria-label='Place Synthetic vector pages.pdf']")
         try await wait("document.querySelectorAll('.page-choice').length === 2")
         try await click(".page-choice:nth-child(2)")
         try await button("Place page 2")
         try await wait("document.querySelector('[data-row=\"0\"][data-column=\"0\"]').getAttribute('aria-label').includes('page 2')")
-        try await click("[data-row='0'][data-column='1']")
+        try await checkLibraryLayout(selected: true)
+        try await selectPanel(row: 0, column: 1)
         try await click("button[aria-label='Place Synthetic RGB image.png']")
         try await wait("document.querySelectorAll('.figure-panel.has-source').length === 2")
         try menu("undo")
@@ -63,7 +65,7 @@ final class NativeUIRun {
         try menu("redo")
         try await wait("document.querySelectorAll('.figure-panel.has-source').length === 2")
         try check(true, "actual native Redo menu restores exactly one operation")
-        try await click("[data-row='0'][data-column='2']")
+        try await selectPanel(row: 0, column: 2)
         try await click("button[aria-label='Place Synthetic RGB image.tiff']")
         try await wait("document.querySelectorAll('.figure-panel.has-source').length === 3")
         try await wait("[...document.querySelectorAll('.figure-panel.has-source img.page-preview')].every(i=>i.complete&&i.naturalWidth>0)")
@@ -102,7 +104,7 @@ final class NativeUIRun {
         try await cleanStateRelease.value
         try check(FileManager.default.fileExists(atPath: project.path) && !app.window.isDocumentEdited,
                   "real native Save writes portable project and marks clean")
-        try await click("button[aria-label='Labels']")
+        try await toggleLabels()
         try await pause()
         try Data("EXTERNAL CHANGE: PRESERVE THIS FILE".utf8).write(to: project)
         app.window.performClose(nil)
@@ -110,7 +112,7 @@ final class NativeUIRun {
         try await wait("document.body.innerText.includes('changed outside')")
         try check(app.window.isVisible && app.window.isDocumentEdited, "dirty Close failed Save keeps window open")
         try check(try String(contentsOf: project, encoding: .utf8) == "EXTERNAL CHANGE: PRESERVE THIS FILE", "UI conflict leaves external bytes intact")
-        try await click("button[aria-label='Labels']")
+        try await toggleLabels()
         let recovered = output.appendingPathComponent("Recovered native integration.figureassembly")
         dialogs.saving = recovered
         try menu("saveAs")
@@ -135,12 +137,12 @@ final class NativeUIRun {
         try await snapshot("mixed-native-workbench.png")
         try await click("summary[aria-label='More options']")
         try await button("Export options…")
-        try await wait("document.querySelector('dialog[open]') !== null")
+        try await wait("document.querySelector('.settings-popover[role=dialog][aria-label=\"Export figure\"]') !== null && document.querySelector('dialog[open]') === null")
         _ = try await evaluate("(() => {const s=document.querySelector('.export-form select');s.value='png';s.dispatchEvent(new Event('change',{bubbles:true}));return true})()")
-        try await wait("document.querySelector('dialog[open]').innerText.includes('Export PNG')")
+        try await wait("document.querySelector('.settings-popover').innerText.includes('Export PNG')")
         dialogs.saving = output.appendingPathComponent("Native composed.png")
         try await button("Export PNG")
-        try await wait("document.querySelector('.notice[role=status]')?.innerText.startsWith('PNG exported.') === true && document.querySelector('.app-shell').getAttribute('aria-busy') === 'false' && document.querySelector('dialog[open]') === null")
+        try await wait("document.querySelector('.notice[role=status]')?.innerText.startsWith('PNG exported.') === true && document.querySelector('.app-shell').getAttribute('aria-busy') === 'false' && document.querySelector('.settings-popover') === null")
         try check(FileManager.default.fileExists(atPath: dialogs.saving!.path), "native auxiliary PNG export through real frontend bridge")
 
         let current = app.webView.url
@@ -196,6 +198,18 @@ final class NativeUIRun {
         _ = try await evaluate("(() => { const e=document.querySelector(\(String(data:data,encoding:.utf8)!)); if(!e)throw Error('Missing element'); e.click(); return true })()")
         try await pause()
     }
+    func selectPanel(row: Int, column: Int) async throws {
+        _ = try await evaluate("(() => { const e=document.querySelector('[data-row=\"\(row)\"][data-column=\"\(column)\"]'); if(!e)throw Error('Missing panel');const r=e.getBoundingClientRect();e.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.x+8,clientY:r.y+8}));return true})()")
+        try await pause()
+        _ = try await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))")
+        try await pause()
+    }
+    func toggleLabels() async throws {
+        try await click("button[aria-label='Labels']")
+        try await click("[role='switch']")
+        _ = try await evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))")
+        try await pause()
+    }
     func button(_ text: String) async throws {
         let data = try JSONSerialization.data(withJSONObject: text, options: [.fragmentsAllowed])
         _ = try await evaluate("(() => { const e=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===\(String(data:data,encoding:.utf8)!));if(!e)throw Error('Missing button');e.click();return true })()")
@@ -212,16 +226,16 @@ final class NativeUIRun {
         guard let root = NSApp.mainMenu, let (menu, index) = find(root) else { throw UITestError.failed("Missing native menu \(action)") }
         menu.performActionForItem(at: index)
     }
-    func checkLibraryLayout() async throws {
+    func checkLibraryLayout(selected: Bool = false) async throws {
         let expression = """
         (() => {
           const bounds = selector => document.querySelector(selector)?.getBoundingClientRect();
           const library = bounds('.source-tray'), list = bounds('.source-list'), importer = bounds('.tray-import');
           const canvas = bounds('.workspace'), paper = bounds('.paper'), selection = bounds('.selection-bar');
-          return library && list && importer && canvas && paper && selection && library.width > 0 &&
+          const selectionValid = \(selected ? "selection && selection.left >= canvas.left && selection.right <= canvas.right" : "!selection && document.querySelectorAll('.figure-panel.is-selected').length === 0");
+          return library && list && importer && canvas && paper && selectionValid && library.width > 0 &&
             library.right <= canvas.left && list.bottom <= importer.top && importer.bottom <= innerHeight &&
             importer.left >= library.left && importer.right <= library.right &&
-            selection.left >= canvas.left && selection.right <= canvas.right &&
             paper.left >= canvas.left && paper.right <= canvas.right && paper.bottom <= canvas.bottom &&
             Math.abs((paper.left + paper.right - canvas.left - canvas.right) / 2) < 3;
         })()
