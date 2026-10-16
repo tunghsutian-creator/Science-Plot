@@ -141,8 +141,19 @@ def test_declared_group_presentation_reviews_prepared_native_before_first_public
     original_native = file_sha256(native)
     before = run_document_worker('audit-spec-data', native, native.with_name('spec.json'), '--allow-presentation-edits')
     assert before['status'] == 'passed'
+    responses = write(tmp_path / 'reviewed.json', pending['next_step']['responses_template'])
+    spec_before = file_sha256(native.with_name('spec.json'))
+    source.write_text(source.read_text().replace('450,3', '450,30'))
+    blocked = subprocess.run([str(REPO_ROOT / 'skill/scripts/sciplot'), 'task', 'group', 'resume',
+                              str(group), '--responses', str(responses), '--json'],
+                             cwd=REPO_ROOT, capture_output=True, text=True, timeout=240)
+    assert blocked.returncode != 0 and json.loads(blocked.stdout)['reason_code'] == 'source_changed'
+    assert file_sha256(native) == original_native
+    assert file_sha256(native.with_name('spec.json')) == spec_before
+    assert not list(project.glob('runs/studio_*'))
+    source.write_bytes(original)
     result = cli('task', 'group', 'resume', group, '--responses',
-                 write(tmp_path / 'reviewed.json', pending['next_step']['responses_template']))
+                 responses)
     assert result['status'] == 'complete'
     assert result['items'][0]['ready_to_use'] is None  # Current inspection is not a fresh publication certificate.
     assert all(result['items'][0]['current_evidence'][key]['current'] for key in ('source', 'qa', 'delivery'))

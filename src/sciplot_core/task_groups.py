@@ -6,6 +6,7 @@ from pathlib import Path
 from subprocess import TimeoutExpired
 from typing import Any
 
+from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import TaskControlError
@@ -17,6 +18,15 @@ from sciplot_core.task_group_review import group_overview
 
 def _step(root: Path, identifier: str, name: str, request: dict[str, Any]) -> dict[str, Any]:
     return {"name": name, "task_dir": str(root / "tasks" / identifier / name), "request": request}
+
+
+def _require_original_source_current(item: dict[str, Any]) -> None:
+    first = step_state(item["steps"][0])
+    if first and first["request"]["action"] == "create":
+        expected = first.get("source_sha256")
+        if expected is not None and source_tree_sha256(Path(first["request"]["source"])) != expected:
+            raise TaskControlError(
+                "source_changed", "The original group source changed. Preserve the saved native project and preview; resolve the scientific source revision before continuing this same group.")
 
 
 def _presentation_steps(root: Path, state: dict[str, Any], item: dict[str, Any]) -> list[dict[str, Any]]:
@@ -59,6 +69,7 @@ def _presentation_steps(root: Path, state: dict[str, Any], item: dict[str, Any])
 
 
 def _advance(root: Path, state: dict[str, Any], item: dict[str, Any]) -> None:
+    _require_original_source_current(item)
     item.pop("blocker", None)
     while True:
         for step in item["steps"]:
@@ -154,6 +165,9 @@ def resume_group(group: Path, responses: list[dict[str, Any]] | None = None) -> 
             if identifier not in entries or identifier in seen:
                 raise TaskControlError("invalid_group_response", "答复必须指向不同的现有实验项。")
             seen.add(identifier)
+            # Check every answered create origin before the first child can
+            # apply. Its processed series are not the original raw source.
+            _require_original_source_current(entries[identifier])
             step, child = active_step(entries[identifier])
             if response["task_dir"] != step["task_dir"]:
                 raise TaskControlError("stale_group_response", "答复对应的子任务已变化，请查询当前实验组。")

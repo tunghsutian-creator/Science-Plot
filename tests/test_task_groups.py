@@ -417,3 +417,47 @@ def test_presentation_preset_paths_resolve_against_original_group_request(case):
     normalized = normalize_group_request(request, base_dir=root.parent)
     assert normalized['items'][0]['presentation']['operations'][0]['preset'] == str(root.parent / 'known-style.json')
     assert request['items'][0]['presentation']['operations'][0]['preset'] == 'known-style.json'
+
+
+def test_old_group_answers_recheck_every_original_before_any_mutation_and_resume_when_restored(case):
+    request, root, calls, _, resumes = case
+    with_presentations(request)
+    pending = groups.start_group(request, group_dir=root)
+    answers = pending['next_step']['responses_template']
+    source = Path(request['items'][1]['request']['source'])
+    original = source.read_bytes()
+    native = {f['document']: Path(f['document']).read_bytes()
+              for item in pending['items'] for f in item['figures']}
+    source.write_text('actual raw CSV changed after all previews')
+    with pytest.raises(TaskControlError) as error:
+        groups.resume_group(root, answers)
+    assert error.value.reason_code == 'source_changed'
+    assert resumes == []
+    assert [call['action'] for call in calls].count('export') == 0
+    assert all(Path(path).read_bytes() == contents for path, contents in native.items())
+    source.write_bytes(original)
+    assert groups.resume_group(root, answers)['status'] == 'complete'
+    assert [call['action'] for call in calls].count('create') == 2
+    assert [call['action'] for call in calls].count('export') == 2
+
+
+@pytest.mark.parametrize('retry', [False, True])
+def test_raw_drift_blocks_group_continuation_or_explicit_retry_before_running_child(case, retry):
+    request, root, calls, _, resumes = case
+    with_presentations(request)
+    pending = groups.start_group(request, group_dir=root)
+    task = Path(pending['items'][0]['task_dir'])
+    interrupted = load_task(task)
+    interrupted.update(status='running', phase='previewing')
+    save_task(task, interrupted)
+    Path(request['items'][0]['request']['source']).write_text('changed raw file before continuation')
+    if retry:
+        with pytest.raises(TaskControlError) as error:
+            groups.resume_group(root, [{'item_id': 'a', 'task_dir': str(task), 'response': {'retry': True}}])
+        assert error.value.reason_code == 'source_changed'
+    else:
+        current = groups.resume_group(root)
+        assert current['items'][0]['status'] == 'blocked'
+        assert current['items'][0]['blocker']['reason_code'] == 'source_changed'
+    assert resumes == [] and [call['action'] for call in calls].count('create') == 2
+    assert [call['action'] for call in calls].count('export') == 0

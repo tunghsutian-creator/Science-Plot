@@ -54,7 +54,7 @@ def _saved_preview(root: Path, project: str, figure: dict[str, Any]) -> dict[str
 def _item_overview(root: Path, item: dict[str, Any]) -> dict[str, Any]:
     step, child = active_step(item)
     status = item["status"]
-    if child and child["status"] != "complete":
+    if not item.get("blocker") and child and child["status"] != "complete":
         status = child["status"]
     elif not item.get("finished") and not item.get("blocker"):
         status = "pending"
