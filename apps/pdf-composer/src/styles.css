@@ -73,7 +73,7 @@ button svg{flex-shrink:0}
 .toolbar-menu{height:100%;border-radius:7px;position:relative}
 .toolbar-menu summary{cursor:pointer;list-style:none;user-select:none}
 .toolbar-menu summary::-webkit-details-marker{display:none}
-.toolbar-popover{position:absolute;top:calc(100% + 10px);left:0;z-index:30;min-width:190px;padding:5px;border:1px solid #e3e3df;border-radius:10px;background:#fffffff5;box-shadow:0 8px 26px #25282212;backdrop-filter:blur(12px);animation:menu-reveal 160ms ease-out}
+.toolbar-popover{position:absolute;top:calc(100% + 10px);left:0;z-index:30;min-width:190px;padding:5px;border:1px solid #e3e3df;border-radius:10px;background:#fff;box-shadow:0 8px 26px #25282212;backdrop-filter:none;animation:menu-reveal 160ms ease-out}
 .toolbar-popover-right{left:auto;right:0}
 .toolbar-popover button{width:100%;display:flex;justify-content:space-between;gap:20px;text-align:left;border:0;border-radius:5px;background:transparent;padding:8px 10px;font-size:12px;line-height:19px;white-space:nowrap}
 .toolbar-popover button:hover:not(:disabled){background:#f2f2ef}
@@ -97,7 +97,7 @@ button svg{flex-shrink:0}
 .source-thumbnail .preview-unavailable svg{width:18px;height:18px}
 .tray-import{width:100%;flex:0 0 40px;min-height:40px;padding:8px;border:1px solid #deded7;background:#fff;border-radius:7px;display:flex;align-items:center;justify-content:center;gap:7px;text-align:center;font-size:12px;line-height:20px;transition:background 140ms ease-out,transform 140ms ease-out,border-color 140ms ease-out}
 .tray-import-actions{flex:none;display:flex;flex-direction:column;gap:6px}
-.tray-import-folder{width:100%;min-height:28px;border:0;background:transparent;border-radius:6px;display:flex;align-items:center;justify-content:center;gap:7px;font-size:11px;color:#818875;transition:background 140ms ease-out,transform 140ms ease-out}
+.tray-import-folder{width:100%;min-height:32px;border:0;background:transparent;border-radius:6px;display:flex;align-items:center;justify-content:center;gap:7px;font-size:11px;color:#62695b;transition:background 140ms ease-out,transform 140ms ease-out}
 .tray-import-folder:hover:not(:disabled){background:#eeefe7}.tray-import-folder:active:not(:disabled){transform:scale(.985);transition-duration:100ms}
 .tray-import>svg{width:17px;height:17px;color:#7d8076}
 .tray-import:hover:not(:disabled){background:#f1f2ed;border-color:#c9cbc0}
@@ -105,7 +105,7 @@ button svg{flex-shrink:0}
 .source-tray.is-file-drag{outline:1.5px solid var(--accent);outline-offset:-5px;background:#f7f7f3}
 .canvas-region{display:flex;flex-direction:column;position:relative;flex:1;min-width:0;min-height:0;padding-top:60px;background:#fdfdfc}
 .selection-tools{position:absolute;top:13px;left:0;right:0;z-index:6;display:flex;justify-content:center;pointer-events:none}
-.selection-bar{pointer-events:auto;background:#ffffffeb;border:1px solid #e8e8e2;border-radius:9px;box-shadow:0 4px 15px #2529210b,0 1px 2px #25292105;backdrop-filter:blur(12px);animation:selection-reveal 180ms cubic-bezier(.2,.7,.2,1)}
+.selection-bar{pointer-events:auto;background:#fff;border:1px solid #e8e8e2;border-radius:9px;box-shadow:0 4px 15px #2529210b,0 1px 2px #25292105;backdrop-filter:none;animation:selection-reveal 180ms cubic-bezier(.2,.7,.2,1)}
 .selection-primary{display:flex;align-items:center;height:36px;padding:2px}
 .selection-primary>button{background:transparent;border:0;border-radius:6px;padding:0 14px;min-height:30px;font-size:12px;line-height:20px;transition:background 140ms ease-out,transform 140ms ease-out}
 .selection-primary>button:hover:not(:disabled){background:#f1f2ed}
@@ -130,7 +130,7 @@ button svg{flex-shrink:0}
 .figure-panel.is-selected .empty-panel-hint,.figure-panel:hover .empty-panel-hint,.figure-panel:focus-visible .empty-panel-hint{opacity:1}
 .panel-letter{position:absolute;display:block;line-height:normal;font-family:AssemblyLetter,sans-serif;font-weight:400;pointer-events:none}
 .selection-corners{display:none}
-.panel-menu{position:absolute;z-index:10;min-width:166px;padding:5px;border:1px solid #e3e4dc;border-radius:9px;background:#fffffff5;box-shadow:0 7px 23px #25292112;backdrop-filter:blur(12px);animation:menu-reveal 160ms ease-out}
+.panel-menu{position:absolute;z-index:10;min-width:166px;padding:5px;border:1px solid #e3e4dc;border-radius:9px;background:#fff;box-shadow:0 7px 23px #25292112;backdrop-filter:none;animation:menu-reveal 160ms ease-out}
 .panel-menu button{display:block;width:100%;border:0;background:transparent;text-align:left;border-radius:5px;padding:7px 10px;font-size:12px}
 .panel-menu button:hover{background:#f2f3ed}
 @keyframes selection-reveal{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
