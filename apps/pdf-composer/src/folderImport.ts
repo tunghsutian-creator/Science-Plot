@@ -8,7 +8,7 @@ export interface FolderImportResult {
   unsupported: number;
   invalid: number;
   limited: number;
-  failures: { name: string; reason: string }[];
+  failures: { name: string; path: string; reason: string }[];
   relativePaths: Record<string, string>;
 }
 
@@ -48,7 +48,7 @@ export async function inspectFolderSources(files: readonly File[], existing: rea
       result.relativePaths[asset.id] = file.webkitRelativePath || file.name;
     } catch (error) {
       result.invalid++;
-      if (result.failures.length < 2) result.failures.push({ name: file.name,
+      if (result.failures.length < 2) result.failures.push({ name: file.name, path: file.webkitRelativePath || file.name,
         reason: error instanceof Error ? error.message : 'The file could not be read.' });
     }
   }
@@ -60,9 +60,9 @@ export function folderImportNotice(result: FolderImportResult): string {
   const status = count ? `Imported ${count} ${count === 1 ? 'source' : 'sources'} from folder.` : 'No sources imported from folder.';
   const skipped = [result.unsupported ? `${result.unsupported} unsupported` : '',
     result.invalid ? `${result.invalid} unreadable or invalid` : '', result.limited ? `${result.limited} over project limits` : ''].filter(Boolean);
-  const details = result.failures.map(({ name }) => {
-    const characters = [...name];
-    return characters.length > 48 ? `${characters.slice(0, 45).join('')}…` : name;
+  const details = result.failures.map(({ path }) => {
+    const characters = [...path];
+    return characters.length > 72 ? `…${characters.slice(-69).join('')}` : path;
   }).join(', ');
   return `${status}${skipped.length ? ` Skipped ${skipped.join(', ')}${details ? ` (${details})` : ''}.` : ''}${result.unsupported ? ' Supported: PDF, PNG and JPEG.' : ''}`;
 }

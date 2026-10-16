@@ -64,8 +64,10 @@ test('unsupported TIFF and other files, corrupt sources and unreadable files are
   assert.equal(result.assets.length, 1); assert.equal(result.assets[0].name, 'good.PDF');
   assert.equal(result.unsupported, 2); assert.equal(result.invalid, 2); assert.equal(result.limited, 0);
   assert.deepEqual(result.failures.map((failure) => failure.name), ['broken.pdf', 'unreadable.pdf']);
+  assert.deepEqual(result.failures.map((failure) => failure.path), ['Folder/b/broken.pdf', 'Folder/c/unreadable.pdf']);
   assert.match(folderImportNotice(result), /Imported 1 source from folder/);
   assert.match(folderImportNotice(result), /2 unsupported, 2 unreadable or invalid/);
+  assert.match(folderImportNotice(result), /Folder\/b\/broken\.pdf/);
   assert.match(folderImportNotice(result), /Supported: PDF, PNG and JPEG/);
 });
 
