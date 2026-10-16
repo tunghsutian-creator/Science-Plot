@@ -106,3 +106,10 @@ font installation, journal or a transferable full Managed project.
 For a complete Managed project migration, retain its original sources and
 registry and use an explicitly supported migration owner when available;
 this native snapshot route does not invent one.
+
+For an ordinary completed Legacy project group, use `task paper start --group
+GROUP_DIRECTORY --out NEW_OUTPUT --paper-dir NEW_PAPER_TASK --json` as described
+in [Paper figures](paper-figures.md). It freezes the ordered current selection
+locally and consumes existing sealed PDF/TIFF bytes. A Managed artifact cache
+is not an ordinary registered project; keep this Managed route for its native
+snapshot/continuation authority. Neither route edits across plots atomically.

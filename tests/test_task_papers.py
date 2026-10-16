@@ -17,6 +17,9 @@ from sciplot_core import task_papers as paper
 @pytest.fixture
 def case(tmp_path, monkeypatch):
     monkeypatch.setattr("sciplot_core.task_paper_sources.native_link_sources", lambda document: [])
+    monkeypatch.setattr(paper, "capture_publication", lambda selection: {"fixture": selection["project"]})
+    monkeypatch.setattr(paper, "assert_publication_current", lambda *_: None)
+    monkeypatch.setattr("sciplot_core.task_paper_status.assert_publication_current", lambda *_: None)
     projects = []
     for index in range(2):
         source = tmp_path / f"raw{index}.csv"

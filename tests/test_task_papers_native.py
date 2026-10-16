@@ -38,7 +38,7 @@ def _projects(tmp_path):
         source.write_text(text)
         sources.append(source)
         created = start_task({"version": 1, "action": "create", "source": str(source)},
-                             task_dir=tmp_path / f"create-{name}", defer_creation_export=True)
+                             task_dir=tmp_path / f"create-{name}", defer_creation_export=False)
         assert created["status"] == "complete", created
         projects.append(Path(created["project"]))
     return sources, projects
@@ -71,6 +71,10 @@ def test_public_paper_cli_packages_two_native_figures_and_relocated_editable_exp
         " atomic_save_veusz_document(doc,path)\n")
     saved = subprocess.run([sys.executable, str(native_script)], env=veusz_worker_environment(), capture_output=True, text=True, timeout=120)
     assert saved.returncode == 0, saved.stdout + saved.stderr
+    # The changed original must be explicitly published by its existing export
+    # owner before the paper can consume those sealed bytes; paper never exports.
+    published = start_task({"version": 1, "action": "export", "project": str(projects[0])}, task_dir=tmp_path / "publish-manual-save")
+    assert published["status"] == "complete", published
     before = {p: file_inventory(p) for p in [*sources, *projects, linked]}
     request = _request(tmp_path, projects)
     for item in request["items"]:
@@ -113,7 +117,7 @@ def test_public_paper_cli_packages_two_native_figures_and_relocated_editable_exp
 
 
 @pytest.mark.comprehensive
-def test_native_second_export_failure_and_exact_retry_only_reruns_unsealed_figure(tmp_path, monkeypatch):
+def test_native_second_capture_failure_and_exact_retry_only_captures_unsealed_figure(tmp_path, monkeypatch):
     sources, projects = _projects(tmp_path)
     before = {p: file_inventory(p) for p in [*sources, *projects]}
     request = _request(tmp_path, projects)
@@ -122,26 +126,26 @@ def test_native_second_export_failure_and_exact_retry_only_reruns_unsealed_figur
         item.pop("document_authority")
     from sciplot_core import task_papers as owner
 
-    export = owner.export_studio_document
+    portable = owner._portable
     calls = []
 
-    def failure(document, **options):
-        calls.append(document.name)
-        if document.name == "002_Fig1.vsz":
-            raise RuntimeError("injected native export failure after first sealed item")
-        return export(document, **options)
+    def failure(source, target, imports):
+        calls.append(target.name)
+        if target.name == "002_Fig1.vsz":
+            raise RuntimeError("injected native capture failure after first sealed item")
+        return portable(source, target, imports)
 
-    monkeypatch.setattr(owner, "export_studio_document", failure)
+    monkeypatch.setattr(owner, "_portable", failure)
     first = start_paper(request, paper_dir=tmp_path / "paper-task")
     assert first["status"] == "blocked", first
     assert [i["status"] for i in first["items"]] == ["sealed", "exporting"]
     assert not Path(request["out"]).exists()
 
-    def restored(document, **options):
-        calls.append(document.name)
-        return export(document, **options)
+    def restored(source, target, imports):
+        calls.append(target.name)
+        return portable(source, target, imports)
 
-    monkeypatch.setattr(owner, "export_studio_document", restored)
+    monkeypatch.setattr(owner, "_portable", restored)
     from sciplot_core.delivery import install
 
     atomic_install = install.install_new_delivery
@@ -160,3 +164,42 @@ def test_native_second_export_failure_and_exact_retry_only_reruns_unsealed_figur
     assert calls == ["001_Fig2.vsz", "002_Fig1.vsz", "002_Fig1.vsz"]
     assert all(file_inventory(p) == before[p] for p in before)
     assert all(file_sha256(Path(i["path"])) == i["delivery_sha256"] for i in final["result"]["figures"])
+
+
+@pytest.mark.comprehensive
+def test_public_completed_group_freezes_once_and_reuses_current_native_publications(tmp_path):
+    from sciplot_core.task_group_storage import save_group
+
+    sources, projects = _projects(tmp_path)
+    root = tmp_path / 'finished-group'
+    root.mkdir()
+    entries = []
+    for source, name in zip(sources, ('UVvis', 'FTIR'), strict=True):
+        request = {'version': 1, 'action': 'create', 'source': str(source)}
+        entries.append({'id': name, 'label': name, 'request': request})
+    group = {'kind': 'sciplot_task_group', 'version': 1, 'group_dir': str(root),
+             'request': {'version': 1, 'title': 'Two current original publications', 'items': entries},
+             'items': [{'id': entry['id'], 'label': entry['label'], 'status': 'complete', 'finished': True,
+                        'steps': [{'name': 'initial', 'request': entry['request'],
+                                   'task_dir': str(tmp_path / ('create-' + entry['id']))}]} for entry in entries]}
+    save_group(root, group)
+    originals = {path: file_inventory(path) for path in [*sources, *projects, root]}
+    out, paper = tmp_path / 'group-publication', tmp_path / 'group-paper'
+    result = _public('start', '--group', root, '--out', out, '--paper-dir', paper, '--item-id', 'FTIR', '--item-id', 'UVvis')
+    assert result['status'] == 'complete', result
+    assert [Path(item['project']) for item in result['items']] == list(reversed(projects))
+    state = json.loads((paper / 'paper.json').read_text())
+    assert state['selection_origin']['group_state_sha256'] == group['state_sha256']
+    for source, item in zip(state['selections'], state['items'], strict=True):
+        assert item['exports']['mode'] == 'copied_current_sealed_publication'
+        for exported in item['exports']['exports']:
+            original = next(record for record in source['publication']['exports'] if record['format'] == exported['format'])
+            assert file_sha256(Path(exported['path'])) == original['sha256']
+    assert all(file_inventory(path) == before for path, before in originals.items())
+    frozen = (paper / 'paper.json').read_bytes()
+    # A changed group cannot select a new revision during same-checkpoint replay.
+    group['request']['title'] = 'New later group title'
+    save_group(root, group)
+    repeated = _public('start', '--group', root, '--out', out, '--paper-dir', paper, '--item-id', 'FTIR', '--item-id', 'UVvis')
+    assert repeated['ready_to_use'] is True and repeated['title'] == result['title']
+    assert (paper / 'paper.json').read_bytes() == frozen

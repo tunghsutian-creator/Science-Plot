@@ -13,7 +13,6 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.source_coverage.managed_documents import verify_managed_document_sources, source_records
 from sciplot_core.studio_core.document_edit_state import run_document_worker
-from sciplot_core.studio_core.export_execution import export_studio_document
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.studio_core.source_update_commit import file_inventory
@@ -21,6 +20,8 @@ from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_paper_contract import normalize_paper_request, paper_stem, paper_request_schema
 from sciplot_core.task_paper_delivery import assert_sealed_item, publish_paper
 from sciplot_core.task_paper_sources import capture_selection, assert_selection_current
+from sciplot_core.task_paper_publication import capture_publication, assert_publication_current
+from sciplot_core.task_paper_status import _verify_delivery, _summary, _current_summary
 from sciplot_core.task_storage import task_location
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
@@ -73,7 +74,9 @@ def paper_capabilities(*, project: Path | None = None, figure_id: str | None = N
                               "request_schema": paper_request_schema(), "actions": ["start", "inspect", "resume"],
                               "order": "items array order", "formats": ["pdf", "tiff_300", "editable_vsz"],
                               "selection": "Exact canonical project and registered figure_id; saved native state is preserved.",
-                              "output_policy": "New caller-selected directory; never replace existing output."}
+                              "output_policy": "New caller-selected directory; never replace existing output.",
+                              "publication_policy": "Consume complete current sealed PDF/TIFF; never render/export for packaging.",
+                              "group_start": "task paper start --group GROUP --out NEW_OUTPUT --paper-dir NEW_CHECKPOINT"}
     if project is not None:
         if figure_id is None:
             raise TaskControlError("paper_figure_required", "Specify an exact registered figure_id to read its version.")
@@ -100,6 +103,9 @@ def _portable(source: Path, target: Path, imports: Path) -> dict[str, Any]:
 
 def _seal(root: Path, state: dict[str, Any], selection: dict[str, Any], item: dict[str, Any]) -> None:
     assert_selection_current(selection)
+    if not selection.get("publication"):
+        raise TaskControlError("paper_publication_unsealed", "This old incomplete selection has no frozen publication; preserve it and start a new selection.")
+    assert_publication_current(selection["publication"], selection)
     attempt = root / "attempts" / item["stem"] / uuid4().hex
     item.update(status="exporting", attempt=str(attempt))
     _save(root, state)  # An interrupted attempt is never silently reused or overwritten.
@@ -115,17 +121,27 @@ def _seal(root: Path, state: dict[str, Any], selection: dict[str, Any], item: di
     target_spec = target.with_suffix(".spec.json")
     target_spec.write_bytes(original_spec.read_bytes())
     portable = _portable(original, target, attempt / "data/imports" / item["stem"])
-    # Reopen and export the copied document in its new location, using native export.
-    exported = export_studio_document(target, formats=["pdf", "tiff_300"], output_dir=attempt / "exports")
+    # Reuse the exact current publication. Native Save/audit remain necessary,
+    # but packaging must not render/export a new visual interpretation.
+    import shutil
+    from sciplot_core.foundation.file_hashing import file_sha256
+
+    exports = []
+    for record in selection["publication"]["exports"]:
+        original_export = Path(record["path"])
+        target_export = attempt / "exports" / original_export.name
+        target_export.parent.mkdir(exist_ok=True)
+        shutil.copy2(original_export, target_export)
+        if file_sha256(target_export) != record["sha256"]:
+            raise TaskControlError("paper_publication_changed", "A publication copy differs from its original byte seal.")
+        exports.append({**record, "path": str(target_export)})
+    exported = {"exports": exports, "mode": "copied_current_sealed_publication"}
     copied_audit = run_document_worker("audit-spec-data", target, target_spec, "--allow-presentation-edits")
     scientific_hash = canonical_json_sha256(audit["units"], allow_nan=False)
     if canonical_json_sha256(copied_audit["units"], allow_nan=False) != scientific_hash:
         raise TaskControlError("paper_science_changed", "The copied native document changed its scientific dataset identity.")
-    from sciplot_core.qa.run import run_qa
-
-    qa = run_qa(attempt / "exports", veusz_documents=[target])
-    if qa["status"] != "passed" or qa["pdf_count"] != 1 or qa["tiff_count"] != 1:
-        raise TaskControlError("paper_export_qa_failed", "Selected single-figure PDF/TIFF QA failed.")
+    qa = selection["publication"]["qa"]
+    assert_publication_current(selection["publication"], selection)
     assert_selection_current(selection)
     item.update(status="sealed", portable_native=portable, scientific_sha256=scientific_hash,
                 prepared_source_sha256=canonical_json_sha256(source_verification["documents"][0]["prepared_source_derivation"], allow_nan=False),
@@ -137,6 +153,10 @@ def _run(root: Path, state: dict[str, Any]) -> None:
     try:
         for selection in state["selections"]:
             assert_selection_current(selection)
+            if selection.get("publication"):
+                assert_publication_current(selection["publication"], selection)
+            elif state["status"] != "complete":
+                raise TaskControlError("paper_publication_unsealed", "The incomplete historical selection has no sealed publication. Start a new selection; nothing was redrawn.")
         if state["status"] == "complete":
             _verify_delivery(state)
             return
@@ -168,26 +188,8 @@ def _run(root: Path, state: dict[str, Any]) -> None:
         _save(root, state)
 
 
-def _verify_delivery(state: dict[str, Any]) -> None:
-    if file_inventory(Path(state["request"]["out"])) != state["delivery_files"]:
-        raise TaskControlError("paper_delivery_changed", "The published paper package changed; no file was replaced.")
-
-
-def _summary(state: dict[str, Any]) -> dict[str, Any]:
-    return {"kind": state["kind"], "version": 1, "paper_dir": state["paper_dir"], "status": state["status"],
-            "title": state["request"]["title"], "out": state["request"]["out"],
-            "items": [{"stem": item["stem"], "status": item["status"], "project": source["project"],
-                       "figure_id": source["figure_id"], "version": source["version"],
-                       **({"scientific_sha256": item["scientific_sha256"]} if item["status"] == "sealed" else {})}
-                      for source, item in zip(state["selections"], state["items"], strict=True)],
-            **({"blocker": state["blocker"]} if state.get("blocker") else {}),
-            **({"result": state["delivery"]} if state.get("delivery") else {}),
-            "next_step": {"action": "review_selected_exports_and_deliver" if state["status"] == "complete" else "inspect_and_retry_exact_selection",
-                          "paper_dir": state["paper_dir"]},
-            "model_calls_by_sciplot": 0, "journal_acceptance_evaluated": False}
-
-
-def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = None) -> dict[str, Any]:
+def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = None,
+                selection_origin: dict[str, Any] | None = None) -> dict[str, Any]:
     normalized = normalize_paper_request(request, base_dir=base_dir)
     root = _path(paper_dir)
     _validate_locations(root, normalized)
@@ -195,7 +197,7 @@ def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = Non
     with external_project_session(root):
         if root.exists():
             state = _load(root)
-            if state["request"] != normalized:
+            if state["request"] != normalized or (selection_origin is not None and state.get("selection_origin") != selection_origin):
                 raise TaskControlError("paper_already_exists", "This paper task already owns a different ordered selection.")
             return _current_summary(root, state)
         else:
@@ -208,65 +210,16 @@ def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = Non
             if any(source["version"] != item["expected_version"] for source, item in zip(selections, normalized["items"], strict=True)):
                 raise TaskControlError("paper_selection_changed", "Use each selected figure's exact current version from paper capabilities.")
             _validate_source_locations(root, Path(normalized["out"]), selections)
+            for selection in selections:
+                selection["publication"] = capture_publication(selection)
             root.mkdir(mode=0o700)
             state = {"kind": "sciplot_task_paper", "version": 1, "paper_dir": str(root), "request": normalized,
-                     "status": "pending", "selections": selections,
+                     "status": "pending", "selections": selections, "selection_origin": selection_origin,
                      "items": [{"stem": paper_stem(index, item["label"]), "status": "pending"}
                                for index, item in enumerate(normalized["items"], 1)]}
             _save(root, state)
             _run(root, state)
         return _summary(state)
-
-
-def _current_summary(root: Path, state: dict[str, Any]) -> dict[str, Any]:
-    """Project currentness under the caller's existing lease without writes."""
-    current = []
-    for selection in state["selections"]:
-        try:
-            assert_selection_current(selection)
-            current.append({"project": selection["project"], "figure_id": selection["figure_id"], "current": True})
-        except (OSError, ValueError) as exc:
-            current.append({"project": selection["project"], "figure_id": selection["figure_id"], "current": False, "message": str(exc)})
-    summary = _summary(state)
-    summary["recorded_status"] = state["status"]
-    summary["selection_scope"] = "frozen_selected_versions"
-    summary["result_scope"] = "historical_frozen_delivery"
-    summary["current_selections"] = current
-    summary["source_versions_current"] = all(item["current"] for item in current)
-    summary["delivery_current"] = None
-    if state.get("delivery_files"):
-        try:
-            _verify_delivery(state)
-            summary["delivery_current"] = True
-        except (OSError, ValueError):
-            summary["delivery_current"] = False
-    summary["ready_to_use"] = bool(state["status"] == "complete"
-                                   and summary["source_versions_current"]
-                                   and summary["delivery_current"] is True)
-    summary["readiness_evaluated"] = True
-    summary["readiness_scope"] = "Frozen package and selected source byte identities; no fresh native audit."
-    if summary["delivery_current"] is False:
-        summary.update(status="blocked", blocker={
-            "reason_code": "paper_delivery_changed",
-            "message": "The published paper package differs from its frozen inventory. Preserve the changed package and choose a new output for a new selection.",
-        }, repair={"action": "preserve_changed_package_and_start_new_selection",
-                   "output": state["request"]["out"], "new_output_required": True,
-                   "automatic_overwrite": False},
-            next_step={"action": "preserve_changed_package_and_start_new_selection", "paper_dir": str(root)})
-    elif not summary["source_versions_current"]:
-        summary.update(status="blocked", blocker={
-            "reason_code": "paper_selection_changed",
-            "message": "The package retains the frozen selected versions; its original projects or sources have changed. Review those changes and start a new current selection.",
-        }, repair={"action": "review_changed_sources_and_start_new_selection",
-                   "new_output_required": True, "automatic_overwrite": False},
-            next_step={"action": "review_changed_sources_and_start_new_selection", "paper_dir": str(root)})
-    elif state["status"] == "complete" and summary["delivery_current"] is not True:
-        summary.update(status="blocked", blocker={
-            "reason_code": "paper_delivery_unverified",
-            "message": "The completed receipt has no verifiable frozen package inventory. Preserve it and inspect its evidence.",
-        }, repair={"action": "inspect_paper_delivery_evidence", "automatic_overwrite": False},
-            next_step={"action": "inspect_paper_delivery_evidence", "paper_dir": str(root)})
-    return summary
 
 
 def inspect_paper(paper: Path) -> dict[str, Any]:

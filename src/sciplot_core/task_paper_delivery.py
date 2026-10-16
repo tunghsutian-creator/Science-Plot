@@ -21,6 +21,7 @@ from sciplot_core.policy import DELIVERY_DATA_DIR, DELIVERY_PDF_DIR, DELIVERY_TI
 from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_paper_sources import assert_selection_current
+from sciplot_core.task_paper_publication import assert_publication_current
 
 
 def assert_sealed_item(item: dict[str, Any]) -> None:
@@ -36,7 +37,7 @@ def paper_manifest(state: dict[str, Any]) -> dict[str, Any]:
                        "version": source["version"], "source_files": source["source_files"],
                        "source_memberships": source["source_memberships"],
                        "source_scope": source["source_scope"], "document_authority": source["document_authority"],
-                       "scientific_sha256": item["scientific_sha256"],
+                       "publication": source.get("publication"), "scientific_sha256": item["scientific_sha256"],
                        "prepared_source_sha256": item["prepared_source_sha256"],
                        "portable_native": item["portable_native"],
                        "pdf": f"{DELIVERY_PDF_DIR}/{item['stem']}.pdf", "tiff": f"{DELIVERY_TIFF_DIR}/{item['stem']}_300dpi.tiff",
@@ -60,6 +61,7 @@ def publish_paper(root: Path, state: dict[str, Any], *, checkpoint: Callable[[],
         data_records = []
         for source, item in zip(state["selections"], state["items"], strict=True):
             assert_selection_current(source)
+            assert_publication_current(source["publication"], source)
             assert_sealed_item(item)
             attempt = Path(item["attempt"])
             stem = item["stem"]
@@ -125,9 +127,13 @@ def publish_paper(root: Path, state: dict[str, Any], *, checkpoint: Callable[[],
     checkpoint()  # Freeze full candidate closure before exclusive atomic publish.
     for selection in state["selections"]:
         assert_selection_current(selection)
+        assert_publication_current(selection["publication"], selection)
     from sciplot_core.delivery.install import install_new_delivery
 
     install_new_delivery(private, destination)
+    for selection in state["selections"]:
+        assert_selection_current(selection)
+        assert_publication_current(selection["publication"], selection)
     final["verification"] = verify_delivery_package(final, expected_root=destination, expected_manifest={})
     if final["verification"]["passed"] is not True:
         raise TaskControlError("paper_delivery_failed", "Installed selected paper package failed verification; preserve and inspect.")

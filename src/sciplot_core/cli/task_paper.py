@@ -18,8 +18,13 @@ def register_paper_commands(task_actions: Any) -> None:
             action.add_argument("--project", type=Path, help="Read a selected figure's exact current version.")
             action.add_argument("--figure", help="Exact registered figure_id; required with --project.")
         elif name == "start":
-            action.add_argument("--request", type=Path, required=True)
+            selection = action.add_mutually_exclusive_group(required=True)
+            selection.add_argument("--request", type=Path)
+            selection.add_argument("--group", type=Path, help="Freeze the current ordered group figures locally.")
             action.add_argument("--paper-dir", type=Path, required=True)
+            action.add_argument("--out", type=Path, help="New output directory; required with --group.")
+            action.add_argument("--title", help="Optional title for --group selection.")
+            action.add_argument("--item-id", action="append", dest="item_ids", help="Select group items in this explicit order.")
         else:
             action.add_argument("target", type=Path)
 
@@ -30,8 +35,18 @@ def dispatch_paper(args: Any) -> int:
     if args.paper_action == "capabilities":
         result = paper_capabilities(project=args.project, figure_id=args.figure)
     elif args.paper_action == "start":
-        request = args.request.expanduser().resolve()
-        result = start_paper(json.loads(request.read_text(encoding="utf-8")), paper_dir=args.paper_dir, base_dir=request.parent)
+        if args.group is not None:
+            from sciplot_core.task_paper_selection import start_group_paper
+
+            if args.out is None:
+                raise ValueError("--group requires a new --out directory.")
+            result = start_group_paper(args.group, paper_dir=args.paper_dir, out=args.out,
+                                      title=args.title, item_ids=args.item_ids)
+        else:
+            if args.out is not None or args.title is not None or args.item_ids is not None:
+                raise ValueError("--out/--title/--item-id select a current --group; explicit requests retain their closed wire contract.")
+            request = args.request.expanduser().resolve()
+            result = start_paper(json.loads(request.read_text(encoding="utf-8")), paper_dir=args.paper_dir, base_dir=request.parent)
     elif args.paper_action == "inspect":
         result = inspect_paper(args.target)
     else:

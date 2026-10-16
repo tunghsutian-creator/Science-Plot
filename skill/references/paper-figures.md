@@ -5,6 +5,26 @@ output directory. Each item selects exactly one canonical project and registered
 `figure_id`, a unique safe label, and its current version. Select secondary
 figures by their actual ID; export snapshots are not original projects.
 
+For an already completed experiment group, select the complete current set in one
+public command. The product captures every exact project/registered figure and
+its four version hashes locally, in group item order and registered figure order:
+
+```bash
+skill/scripts/sciplot task paper start --group GROUP_DIRECTORY --out NEW_OUTPUT --paper-dir NEW_PAPER_TASK --json
+```
+
+Use repeated `--item-id ID` to select a subset in that explicit order, and
+`--title TITLE` to override the group title. Every selected item must be finished
+and every creation/presentation/export child complete. This entry does not
+advance tasks, render a gallery or accept previews. It validates current source,
+native, semantic and publication bytes; group completion alone is not readiness.
+The checkpoint freezes the resolved list once. Repeating the same command reads
+that frozen selection, even if the group later changes; `resume` continues it.
+Different group/order/output/title options need a new checkpoint. Existing
+explicit `--request` remains unchanged and cannot be mixed with group options.
+
+For an explicit cross-project selection, retain the existing strict wire:
+
 1. Query existing projects with `project inspect` for their registered figure IDs.
    Read the selected version with
    `sciplot task paper capabilities --project PROJECT --figure FIGURE_ID --json`.
@@ -41,8 +61,15 @@ figure, request/spec/VSZ/source versions, actual scientific and native state
 seals, and portable document hashes. It is immutable delivery evidence, not
 another scientific or editable document authority.
 
-The original saved project is read only. Export does not regenerate data,
-reapply edits, export unselected figures or change its existing delivery.
+The original saved project is read only. Packaging copies the existing current,
+QA-bound PDF/TIFF bytes from its sealed publication run. It never renders or
+exports a figure merely to package it, regenerates data, reapplies edits or
+changes an existing delivery. Missing/stale publication, export, request, native
+or spec evidence returns `paper_publication_unsealed`/`paper_publication_changed`;
+finish the original export explicitly before making a new selection. A sealed
+publication's complete file inventory is guarded during capture, retries and
+publication. Native Save, source inspection and scientific audits still execute;
+this route does not claim zero native calls.
 Current saved native presentation, including legitimate manual styles, passes
 through secure native Save and actual scientific audits. Registered canonical
 project figures are supported; standalone VSZs, moved snapshots and ManagedPlot
@@ -52,7 +79,7 @@ ManagedPlot canonical bindings are not guessed or relabelled as legacy projects.
 Actual native linked data join the exact source closure. Only inputs consumed by
 selected documents are copied into `data/imports/`, and Veusz serializes relative
 imports. Copies securely reopen with matching complete native state and scientific
-audits before native PDF/TIFF export. A moved package opens as an independent
+audits while the sealed original PDF/TIFF bytes are copied unchanged. A moved package opens as an independent
 portable Veusz copy without editing an original project.
 
 Successful single figures are byte sealed in the task's private staging for exact
@@ -71,6 +98,13 @@ the shared task parser and `dispatch_paper(args)` for a `task_action == "paper"`
 dispatch branch. MCP uses the same `task_papers` functions: `paper_capabilities`,
 `start_paper`, `inspect_paper`, `resume_paper`. The closed JSON request schema is
 owned by `task_paper_contract.paper_request_schema`.
+
+The group CLI delegates through `task_paper_selection.start_group_paper`, then
+the same strict `start_paper` owner. It reads hashed group/child receipts and
+registered projects without the gallery/preview path. The frozen group origin
+and four per-figure version guards remain in the paper receipt. This is an
+ordered delivery, never an atomic edit across plots. MCP's existing explicit
+paper request contract remains strict; no generic JSON execution surface exists.
 
 CLI and MCP use these owners directly. Ordinary user instructions use the
 shared `sciplot task paper` entry above.
