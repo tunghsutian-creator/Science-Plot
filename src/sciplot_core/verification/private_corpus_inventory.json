@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4776,
-    "nodeids_sha256": "b90b6cf9b26f357399eb19efae4c63271f5fb829a54e9e7790cae317c142299b",
-    "test_sources_sha256": "0ef9064ef3c8407b09cbd769a5ef267d33b658bbf92f5e6febb032c1ef43387a",
-    "test_source_count": 341,
+    "nodeid_count": 4840,
+    "nodeids_sha256": "120f3dacac9115712b8599311579ef00609d40d0ec5be1728df4f038e2a53014",
+    "test_sources_sha256": "1ef67c2e67b252e9e27959566bd8c598eccb784e427e126b04f8b2399d0ad989",
+    "test_source_count": 347,
     "candidate_nodeids": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
       "tests/test_delivery_studio_lifecycle.py::test_dsc_public_delivery_continues_project_and_copied_package_exports_independently",
@@ -36,6 +36,13 @@
       "tests/test_dma_temperature_scientific_transform.py::test_real_dma_transform_preserves_units_points_empty_tails_and_negative",
       "tests/test_dma_temperature_scientific_transform.py::test_resolved_dma_snapshot_materializes_without_a_second_parse",
       "tests/test_doctor_contract_topology.py::test_doctor_names_configured_private_fixture_root_without_requiring_it",
+      "tests/test_doctor_execution_identity.py::test_continuation_wrapper_uses_reported_python_instead_of_runtime_default",
+      "tests/test_doctor_execution_identity.py::test_execution_identity_does_not_call_a_failed_git_probe_a_checkout",
+      "tests/test_doctor_execution_identity.py::test_execution_identity_preserves_distinct_source_and_runtime[False]",
+      "tests/test_doctor_execution_identity.py::test_execution_identity_preserves_distinct_source_and_runtime[True]",
+      "tests/test_doctor_execution_identity.py::test_wheel_or_nested_source_cannot_inherit_ancestor_git_identity[.venv/lib/python3.14/site-packages]",
+      "tests/test_doctor_execution_identity.py::test_wheel_or_nested_source_cannot_inherit_ancestor_git_identity[nested/src]",
+      "tests/test_doctor_execution_identity.py::test_wheel_or_nested_source_cannot_inherit_ancestor_git_identity[site-packages]",
       "tests/test_dsc_cycle_workflow.py::test_dsc_analysis_metrics_remain_algorithmic_without_transition_identity",
       "tests/test_dsc_figure_plan_activation.py::test_dsc_studio_activates_exact_single_task_registry",
       "tests/test_dsc_figure_plan_activation.py::test_dsc_studio_publication_delivers_exact_single_figure",
@@ -45,9 +52,50 @@
       "tests/test_dsc_figure_plan_activation.py::test_dsc_workflow_uses_its_bound_snapshot_after_render",
       "tests/test_dtg_analysis.py::test_dtg_peak_temperature_tracks_the_fixture_maximum_response",
       "tests/test_dtg_analysis.py::test_xrd_peak_positions_track_each_fixture_maximum_intensity",
+      "tests/test_figure_document.py::test_data_anchor_position_requires_scientific_intent_without_running_transforms",
+      "tests/test_figure_document.py::test_position_batch_preserves_science_and_rejects_wrong_space_or_scope",
       "tests/test_generic_single_task_plan.py::test_dsc_rule_uses_the_shared_generic_studio_queue",
       "tests/test_generic_single_task_plan.py::test_stress_plan_uses_shared_bundle_and_generic_studio_queue",
       "tests/test_input_scope.py::test_private_presence_can_authorize_bodies_without_claiming_complete_audit",
+      "tests/test_managed_compile_publication.py::test_compile_preview_cannot_alias_canonical_document",
+      "tests/test_managed_compile_publication.py::test_managed_compile_stages_native_until_audited_and_rendered[None]",
+      "tests/test_managed_compile_publication.py::test_managed_compile_stages_native_until_audited_and_rendered[audit]",
+      "tests/test_managed_compile_publication.py::test_managed_compile_stages_native_until_audited_and_rendered[concurrent_native]",
+      "tests/test_managed_compile_publication.py::test_managed_compile_stages_native_until_audited_and_rendered[preview]",
+      "tests/test_managed_compile_publication.py::test_managed_compile_stages_native_until_audited_and_rendered[save]",
+      "tests/test_managed_delivery.py::test_cache_guards_never_reexport_or_overwrite_existing_figures[changed_figure]",
+      "tests/test_managed_delivery.py::test_cache_guards_never_reexport_or_overwrite_existing_figures[missing_cached_qa]",
+      "tests/test_managed_delivery.py::test_cache_guards_never_reexport_or_overwrite_existing_figures[missing_figure]",
+      "tests/test_managed_delivery.py::test_cache_guards_never_reexport_or_overwrite_existing_figures[missing_qa]",
+      "tests/test_managed_delivery.py::test_cache_guards_never_reexport_or_overwrite_existing_figures[wrong_ir]",
+      "tests/test_managed_delivery.py::test_changed_published_file_is_preserved_and_blocks_replay",
+      "tests/test_managed_delivery.py::test_edited_sealed_partial_item_is_not_silently_regenerated",
+      "tests/test_managed_delivery.py::test_existing_empty_output_and_changed_request_never_replace_files",
+      "tests/test_managed_delivery.py::test_existing_sealed_exports_get_fresh_native_qa_without_rebuild",
+      "tests/test_managed_delivery.py::test_missing_cache_blocks_without_export_or_rebuild",
+      "tests/test_managed_delivery.py::test_native_save_must_consume_freshly_audited_original_bytes",
+      "tests/test_managed_delivery.py::test_original_native_exact_seal_blocks_resume_and_complete_replay[missing-complete]",
+      "tests/test_managed_delivery.py::test_original_native_exact_seal_blocks_resume_and_complete_replay[missing-sealed_partial]",
+      "tests/test_managed_delivery.py::test_original_native_exact_seal_blocks_resume_and_complete_replay[replace-complete]",
+      "tests/test_managed_delivery.py::test_original_native_exact_seal_blocks_resume_and_complete_replay[replace-sealed_partial]",
+      "tests/test_managed_delivery.py::test_partial_retry_only_audits_unsealed_plot_and_completed_replay_is_read_only",
+      "tests/test_managed_delivery.py::test_product_generates_index_originals_canonical_launcher_and_archive",
+      "tests/test_managed_delivery.py::test_publication_checks_original_again_after_exclusive_install",
+      "tests/test_managed_delivery.py::test_publication_validates_original_seal_after_candidate_relocation",
+      "tests/test_managed_delivery.py::test_reconnect_requires_exact_members_and_original_native_seal",
+      "tests/test_managed_delivery.py::test_recover_lost_reply_after_exclusive_install_without_reexport",
+      "tests/test_managed_delivery.py::test_request_key_label_or_order_cannot_change_at_same_destination",
+      "tests/test_managed_delivery.py::test_shared_rpc_contract_routes_deliver_without_plot_parameter",
+      "tests/test_managed_delivery.py::test_snapshot_open_reconnects_only_exact_current_local_authority",
+      "tests/test_managed_delivery.py::test_source_drift_and_unknown_mode_are_rejected_before_export",
+      "tests/test_managed_delivery_data.py::test_each_dataset_keeps_own_length_column_order_float_roundtrip_and_null",
+      "tests/test_managed_delivery_data.py::test_ir_content_seal_and_selected_identity_checked_before_csv[tampered_values]",
+      "tests/test_managed_delivery_data.py::test_ir_content_seal_and_selected_identity_checked_before_csv[wrong_selected_hash]",
+      "tests/test_managed_delivery_data.py::test_mismatched_columns_block_instead_of_padding_or_truncating",
+      "tests/test_managed_delivery_native.py::test_public_managed_delivery_relocated_native_open_edit_save_and_export",
+      "tests/test_managed_delivery_public.py::test_cli_deliver_routes_only_request_and_partial_is_nonzero",
+      "tests/test_managed_delivery_public.py::test_mcp_discovery_closed_schema_dispatch_and_partial_error",
+      "tests/test_managed_recovery_native.py::test_real_save_process_death_never_publishes_partial_canonical_and_public_retry_recovers",
       "tests/test_mechanical_figure_plan_activation.py::test_mechanical_studio_secondary_failure_rolls_back_the_whole_plan",
       "tests/test_mechanical_figure_plan_activation.py::test_mechanical_workflow_delivers_exact_real_figure_plan[compression_curve]",
       "tests/test_mechanical_figure_plan_activation.py::test_mechanical_workflow_delivers_exact_real_figure_plan[flexural_curve]",
@@ -249,6 +297,14 @@
       "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_hashes_only_archive_for_paired_snapshot[tga_curve]",
       "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_rejects_drifted_archive_for_paired_snapshot",
       "tests/test_scientific_source_pipeline.py::test_workflow_source_binding_without_snapshot_hashes_live_and_archive",
+      "tests/test_scientific_transform_contract.py::test_compact_stress_directory_keeps_structured_binding_failure",
+      "tests/test_scientific_transform_contract.py::test_compact_stress_invalid_pair_has_recoverable_source_evidence[A|t_s,A|sigma_over_sigma0\\n0,1\\n,.8\\n2,.7\\n]",
+      "tests/test_scientific_transform_contract.py::test_compact_stress_invalid_pair_has_recoverable_source_evidence[A|t_s,A|sigma_over_sigma0\\n0,1\\n,\\n2,.7\\n]",
+      "tests/test_scientific_transform_contract.py::test_compact_stress_invalid_pair_has_recoverable_source_evidence[A|t_s,A|sigma_over_sigma0\\n0,1\\n1,inf\\n]",
+      "tests/test_scientific_transform_contract.py::test_compact_stress_invalid_pair_has_recoverable_source_evidence[A|t_s,B|sigma_over_sigma0\\n0,1\\n1,.8\\n]",
+      "tests/test_scientific_transform_contract.py::test_compact_stress_wide_keeps_normalization_order_and_ragged_lengths",
+      "tests/test_scientific_transform_contract.py::test_stress_compact_support_does_not_relabel_relaxation_modulus",
+      "tests/test_scientific_transform_contract.py::test_stress_normalizes_unscaled_response_before_log_projection",
       "tests/test_study_model_artifact_binding.py::test_registered_single_curve_plan_replaces_the_generic_study_queue",
       "tests/test_study_model_artifact_binding.py::test_uvvis_recommendation_uses_the_resolved_plan_task_identity",
       "tests/test_suite_verification_cli.py::test_fixed_suite_rejects_inherited_filter_without_clearing_it[--ignore=tests/test_private.py]",
@@ -269,8 +325,14 @@
       "tests/test_swelling_single_snapshot.py::test_swelling_prepare_and_terminals_reuse_one_resolved_snapshot",
       "tests/test_swelling_source_contract.py::test_real_swelling_fixture_matches_its_authorized_labeled_block_dynamically",
       "tests/test_task_column_mapping_native.py::test_public_cli_column_choice_exports_real_pda_and_resumes_current_project",
+      "tests/test_task_column_mapping_native.py::test_stress_task_mapping_native_axis_matches_selected_projection[linear-4-first1]",
+      "tests/test_task_column_mapping_native.py::test_stress_task_mapping_native_axis_matches_selected_projection[log-3-first0]",
       "tests/test_task_control.py::test_old_reduced_mechanical_source_reports_missing_metrics_not_rule_question",
       "tests/test_task_control.py::test_original_research_directory_selects_production_without_ai_style_request[rheology-v1-rheology_frequency_sweep-FS]",
+      "tests/test_task_mapping_plan.py::test_compact_stress_bad_source_returns_same_task_mapping_evidence",
+      "tests/test_task_mapping_plan.py::test_compact_stress_mapping_log_accounts_for_complete_source_counts",
+      "tests/test_task_mapping_plan.py::test_compact_stress_mapping_uses_own_pair_ranges_and_frozen_scale",
+      "tests/test_task_mapping_plan.py::test_explicit_scale_is_rejected_for_other_scientific_adapters",
       "tests/test_task_mapping_plan.py::test_mapped_creation_enters_existing_canonical_request_studio_route",
       "tests/test_task_mapping_plan.py::test_mapped_native_creation_retains_original_archive_and_passes_source_audit",
       "tests/test_task_mapping_plan.py::test_mapping_does_not_allow_rule_override_or_a_foreign_task_source",
@@ -281,6 +343,8 @@
       "tests/test_task_mapping_plan.py::test_mapping_plan_rejects_changed_evidence_before_creation[source]",
       "tests/test_task_mapping_plan.py::test_mapping_source_indicator_checks_original_and_effective_bytes",
       "tests/test_task_mapping_plan.py::test_real_pda_mapping_preserves_selected_sample_measurements",
+      "tests/test_task_mapping_plan.py::test_stress_scale_expected_plan_reaches_canonical_studio_request",
+      "tests/test_task_shortcuts.py::test_stress_create_options_reuse_one_doctor_identity",
       "tests/test_temperature_figure_plan_activation.py::test_temperature_studio_activates_exact_two_task_plan_with_one_preparation",
       "tests/test_temperature_figure_plan_activation.py::test_temperature_studio_publication_delivers_two_complete_figure_members",
       "tests/test_temperature_figure_plan_activation.py::test_temperature_studio_second_task_failure_rolls_back_both_documents",
@@ -352,8 +416,200 @@
         "reason": "Synthetic unit rule and optional missing temporary fixture; no required retained data."
       },
       {
+        "nodeid": "tests/test_doctor_execution_identity.py::test_continuation_wrapper_uses_reported_python_instead_of_runtime_default",
+        "reason": "Generated temporary checkout/install layouts and fake interpreters; probes report runtime metadata and never consume a retained scientific fixture."
+      },
+      {
+        "nodeid": "tests/test_doctor_execution_identity.py::test_execution_identity_does_not_call_a_failed_git_probe_a_checkout",
+        "reason": "Generated temporary checkout/install layouts and fake interpreters; probes report runtime metadata and never consume a retained scientific fixture."
+      },
+      {
+        "nodeid": "tests/test_doctor_execution_identity.py::test_execution_identity_preserves_distinct_source_and_runtime[False]",
+        "reason": "Generated temporary checkout/install layouts and fake interpreters; probes report runtime metadata and never consume a retained scientific fixture."
+      },
+      {
+        "nodeid": "tests/test_doctor_execution_identity.py::test_execution_identity_preserves_distinct_source_and_runtime[True]",
+        "reason": "Generated temporary checkout/install layouts and fake interpreters; probes report runtime metadata and never consume a retained scientific fixture."
+      },
+      {
+        "nodeid": "tests/test_doctor_execution_identity.py::test_wheel_or_nested_source_cannot_inherit_ancestor_git_identity[.venv/lib/python3.14/site-packages]",
+        "reason": "Generated temporary checkout/install layouts and fake interpreters; probes report runtime metadata and never consume a retained scientific fixture."
+      },
+      {
+        "nodeid": "tests/test_doctor_execution_identity.py::test_wheel_or_nested_source_cannot_inherit_ancestor_git_identity[nested/src]",
+        "reason": "Generated temporary checkout/install layouts and fake interpreters; probes report runtime metadata and never consume a retained scientific fixture."
+      },
+      {
+        "nodeid": "tests/test_doctor_execution_identity.py::test_wheel_or_nested_source_cannot_inherit_ancestor_git_identity[site-packages]",
+        "reason": "Generated temporary checkout/install layouts and fake interpreters; probes report runtime metadata and never consume a retained scientific fixture."
+      },
+      {
+        "nodeid": "tests/test_figure_document.py::test_data_anchor_position_requires_scientific_intent_without_running_transforms",
+        "reason": "Public FigureSpec fixture with tmp_path CSV values; generated property-edit transactions and intent validation only."
+      },
+      {
+        "nodeid": "tests/test_figure_document.py::test_position_batch_preserves_science_and_rejects_wrong_space_or_scope",
+        "reason": "Public FigureSpec fixture with tmp_path CSV values; generated property-edit transactions and intent validation only."
+      },
+      {
         "nodeid": "tests/test_input_scope.py::test_private_presence_can_authorize_bodies_without_claiming_complete_audit",
         "reason": "Temporary generated fixture and inventory explicitly labelled non-measured; checks presence authorization separately from incomplete scientific access audit."
+      },
+      {
+        "nodeid": "tests/test_managed_compile_publication.py::test_compile_preview_cannot_alias_canonical_document",
+        "reason": "Generated PlotIR/documents and injected compiler/publication failures; no retained private data or golden files."
+      },
+      {
+        "nodeid": "tests/test_managed_compile_publication.py::test_managed_compile_stages_native_until_audited_and_rendered[None]",
+        "reason": "Generated PlotIR/documents and injected compiler/publication failures; no retained private data or golden files."
+      },
+      {
+        "nodeid": "tests/test_managed_compile_publication.py::test_managed_compile_stages_native_until_audited_and_rendered[audit]",
+        "reason": "Generated PlotIR/documents and injected compiler/publication failures; no retained private data or golden files."
+      },
+      {
+        "nodeid": "tests/test_managed_compile_publication.py::test_managed_compile_stages_native_until_audited_and_rendered[concurrent_native]",
+        "reason": "Generated PlotIR/documents and injected compiler/publication failures; no retained private data or golden files."
+      },
+      {
+        "nodeid": "tests/test_managed_compile_publication.py::test_managed_compile_stages_native_until_audited_and_rendered[preview]",
+        "reason": "Generated PlotIR/documents and injected compiler/publication failures; no retained private data or golden files."
+      },
+      {
+        "nodeid": "tests/test_managed_compile_publication.py::test_managed_compile_stages_native_until_audited_and_rendered[save]",
+        "reason": "Generated PlotIR/documents and injected compiler/publication failures; no retained private data or golden files."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_cache_guards_never_reexport_or_overwrite_existing_figures[changed_figure]",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_cache_guards_never_reexport_or_overwrite_existing_figures[missing_cached_qa]",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_cache_guards_never_reexport_or_overwrite_existing_figures[missing_figure]",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_cache_guards_never_reexport_or_overwrite_existing_figures[missing_qa]",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_cache_guards_never_reexport_or_overwrite_existing_figures[wrong_ir]",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_changed_published_file_is_preserved_and_blocks_replay",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_edited_sealed_partial_item_is_not_silently_regenerated",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_existing_empty_output_and_changed_request_never_replace_files",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_existing_sealed_exports_get_fresh_native_qa_without_rebuild",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_missing_cache_blocks_without_export_or_rebuild",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_native_save_must_consume_freshly_audited_original_bytes",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_original_native_exact_seal_blocks_resume_and_complete_replay[missing-complete]",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_original_native_exact_seal_blocks_resume_and_complete_replay[missing-sealed_partial]",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_original_native_exact_seal_blocks_resume_and_complete_replay[replace-complete]",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_original_native_exact_seal_blocks_resume_and_complete_replay[replace-sealed_partial]",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_partial_retry_only_audits_unsealed_plot_and_completed_replay_is_read_only",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_product_generates_index_originals_canonical_launcher_and_archive",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_publication_checks_original_again_after_exclusive_install",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_publication_validates_original_seal_after_candidate_relocation",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_reconnect_requires_exact_members_and_original_native_seal",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_recover_lost_reply_after_exclusive_install_without_reexport",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_request_key_label_or_order_cannot_change_at_same_destination",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_shared_rpc_contract_routes_deliver_without_plot_parameter",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_snapshot_open_reconnects_only_exact_current_local_authority",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_source_drift_and_unknown_mode_are_rejected_before_export",
+        "reason": "Generated managed plot fixtures and mocked native/export boundaries, exact file seals and conflict/recovery controls; no private retained corpus."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery_data.py::test_each_dataset_keeps_own_length_column_order_float_roundtrip_and_null",
+        "reason": "Sealed generated PlotIR tables with independent lengths and exact float/null/hash controls; no private data."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery_data.py::test_ir_content_seal_and_selected_identity_checked_before_csv[tampered_values]",
+        "reason": "Sealed generated PlotIR tables with independent lengths and exact float/null/hash controls; no private data."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery_data.py::test_ir_content_seal_and_selected_identity_checked_before_csv[wrong_selected_hash]",
+        "reason": "Sealed generated PlotIR tables with independent lengths and exact float/null/hash controls; no private data."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery_data.py::test_mismatched_columns_block_instead_of_padding_or_truncating",
+        "reason": "Sealed generated PlotIR tables with independent lengths and exact float/null/hash controls; no private data."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery_native.py::test_public_managed_delivery_relocated_native_open_edit_save_and_export",
+        "reason": "Public generated FigureSpec/CSV inputs in tmp_path, actual native packaging and moved-snapshot edit/export; no private fixture or golden dependency."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery_public.py::test_cli_deliver_routes_only_request_and_partial_is_nonzero",
+        "reason": "Closed generated wire requests and mocked CLI/MCP owner dispatch; no scientific inputs are loaded."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery_public.py::test_mcp_discovery_closed_schema_dispatch_and_partial_error",
+        "reason": "Closed generated wire requests and mocked CLI/MCP owner dispatch; no scientific inputs are loaded."
+      },
+      {
+        "nodeid": "tests/test_managed_recovery_native.py::test_real_save_process_death_never_publishes_partial_canonical_and_public_retry_recovers",
+        "reason": "Generated tmp_path Managed template/Binding/CSV inputs and owned child process-death recovery; no retained private corpus."
       },
       {
         "nodeid": "tests/test_private_corpus_preflight.py::test_checked_in_inventory_is_explicitly_preliminary",
@@ -752,6 +1008,38 @@
         "reason": "Zero-copy branch never calls the real fixture helper."
       },
       {
+        "nodeid": "tests/test_scientific_transform_contract.py::test_compact_stress_directory_keeps_structured_binding_failure",
+        "reason": "Explicit tiny tmp_path normalized/unscaled wide tables, invalid pair controls and generated directory fixtures; no private corpus input."
+      },
+      {
+        "nodeid": "tests/test_scientific_transform_contract.py::test_compact_stress_invalid_pair_has_recoverable_source_evidence[A|t_s,A|sigma_over_sigma0\\n0,1\\n,.8\\n2,.7\\n]",
+        "reason": "Explicit tiny tmp_path normalized/unscaled wide tables, invalid pair controls and generated directory fixtures; no private corpus input."
+      },
+      {
+        "nodeid": "tests/test_scientific_transform_contract.py::test_compact_stress_invalid_pair_has_recoverable_source_evidence[A|t_s,A|sigma_over_sigma0\\n0,1\\n,\\n2,.7\\n]",
+        "reason": "Explicit tiny tmp_path normalized/unscaled wide tables, invalid pair controls and generated directory fixtures; no private corpus input."
+      },
+      {
+        "nodeid": "tests/test_scientific_transform_contract.py::test_compact_stress_invalid_pair_has_recoverable_source_evidence[A|t_s,A|sigma_over_sigma0\\n0,1\\n1,inf\\n]",
+        "reason": "Explicit tiny tmp_path normalized/unscaled wide tables, invalid pair controls and generated directory fixtures; no private corpus input."
+      },
+      {
+        "nodeid": "tests/test_scientific_transform_contract.py::test_compact_stress_invalid_pair_has_recoverable_source_evidence[A|t_s,B|sigma_over_sigma0\\n0,1\\n1,.8\\n]",
+        "reason": "Explicit tiny tmp_path normalized/unscaled wide tables, invalid pair controls and generated directory fixtures; no private corpus input."
+      },
+      {
+        "nodeid": "tests/test_scientific_transform_contract.py::test_compact_stress_wide_keeps_normalization_order_and_ragged_lengths",
+        "reason": "Explicit tiny tmp_path normalized/unscaled wide tables, invalid pair controls and generated directory fixtures; no private corpus input."
+      },
+      {
+        "nodeid": "tests/test_scientific_transform_contract.py::test_stress_compact_support_does_not_relabel_relaxation_modulus",
+        "reason": "Explicit tiny tmp_path normalized/unscaled wide tables, invalid pair controls and generated directory fixtures; no private corpus input."
+      },
+      {
+        "nodeid": "tests/test_scientific_transform_contract.py::test_stress_normalizes_unscaled_response_before_log_projection",
+        "reason": "Explicit tiny tmp_path normalized/unscaled wide tables, invalid pair controls and generated directory fixtures; no private corpus input."
+      },
+      {
         "nodeid": "tests/test_suite_verification_cli.py::test_fixed_suite_rejects_inherited_filter_without_clearing_it[--ignore=tests/test_private.py]",
         "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
       },
@@ -812,6 +1100,30 @@
         "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
       },
       {
+        "nodeid": "tests/test_task_column_mapping_native.py::test_stress_task_mapping_native_axis_matches_selected_projection[linear-4-first1]",
+        "reason": "Generated tmp_path one-pair stress table and real native axis/point audits; no private fixture or golden access."
+      },
+      {
+        "nodeid": "tests/test_task_column_mapping_native.py::test_stress_task_mapping_native_axis_matches_selected_projection[log-3-first0]",
+        "reason": "Generated tmp_path one-pair stress table and real native axis/point audits; no private fixture or golden access."
+      },
+      {
+        "nodeid": "tests/test_task_mapping_plan.py::test_compact_stress_bad_source_returns_same_task_mapping_evidence",
+        "reason": "Generated tmp_path compact stress tables and mocked task/planning seams; source/count/scale and structured-repair behavior only."
+      },
+      {
+        "nodeid": "tests/test_task_mapping_plan.py::test_compact_stress_mapping_log_accounts_for_complete_source_counts",
+        "reason": "Generated tmp_path compact stress tables and mocked task/planning seams; source/count/scale and structured-repair behavior only."
+      },
+      {
+        "nodeid": "tests/test_task_mapping_plan.py::test_compact_stress_mapping_uses_own_pair_ranges_and_frozen_scale",
+        "reason": "Generated tmp_path compact stress tables and mocked task/planning seams; source/count/scale and structured-repair behavior only."
+      },
+      {
+        "nodeid": "tests/test_task_mapping_plan.py::test_explicit_scale_is_rejected_for_other_scientific_adapters",
+        "reason": "Generated tmp_path compact stress tables and mocked task/planning seams; source/count/scale and structured-repair behavior only."
+      },
+      {
         "nodeid": "tests/test_task_mapping_plan.py::test_mapped_creation_enters_existing_canonical_request_studio_route",
         "reason": "The helper is called with default real=False; it writes a synthetic source."
       },
@@ -842,6 +1154,14 @@
       {
         "nodeid": "tests/test_task_mapping_plan.py::test_mapping_source_indicator_checks_original_and_effective_bytes",
         "reason": "The helper is called with default real=False; it writes a synthetic source."
+      },
+      {
+        "nodeid": "tests/test_task_mapping_plan.py::test_stress_scale_expected_plan_reaches_canonical_studio_request",
+        "reason": "Generated tmp_path compact stress tables and mocked task/planning seams; source/count/scale and structured-repair behavior only."
+      },
+      {
+        "nodeid": "tests/test_task_shortcuts.py::test_stress_create_options_reuse_one_doctor_identity",
+        "reason": "Mocked Doctor/task owner with synthetic source arguments and compact identity projection; no private source read."
       },
       {
         "nodeid": "tests/test_verification_evidence_scope.py::test_command_conflict_unknown_owner_and_unknown_private_node_block",
@@ -1020,7 +1340,7 @@
         "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
       }
     ],
-    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling.",
+    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged.",
     "scope": [
       "real_world",
       "polymer_corpus",

@@ -10,9 +10,8 @@ Keep ordinary plotting work within that interface.
 
 ## Select one route
 
-Read only the matching route below, once per session while its contract is
-unchanged. Each ordinary route is self-contained; do not load the other routes,
-source code, development history or architecture for a routine plotting request.
+Read the matching self-contained route once per session while its contract is unchanged.
+For routine plotting do not load other routes, source code, history or architecture.
 
 | User intent | Route |
 | --- | --- |
