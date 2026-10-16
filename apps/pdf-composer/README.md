@@ -6,6 +6,12 @@ and publication PDF export run on your computer with bundled code and a bundled
 PDFium WebAssembly renderer. Files are not uploaded. No account, model API,
 Python, Veusz or Research Plots runtime is required.
 
+On macOS, **Figure Assembly Browser.app** starts its own local service and opens
+the workbench in the installed Microsoft Edge. Once installed, it needs no
+Terminal command, Node or Python runtime. The stable application location is
+`~/Applications/Figure Assembly Browser.app`; its Desktop shortcut points there.
+Installation preserves any existing same-name Desktop item instead of replacing it.
+
 The existing double-clickable macOS app remains a separate native delivery. Its
 file dialogs, conflict-aware saves, TIFF verification and auxiliary raster exports
 use Apple system frameworks. The new SVG glass appearance is verified in Edge;
@@ -19,6 +25,14 @@ diagnostics and the separate native app pass, but Mac Edge visual/hardware
 acceptance remains blocked; Linux screenshots do not establish that result.
 
 ## Use
+
+Double-click **Figure Assembly Browser** on the Desktop or in `~/Applications`.
+The launcher checks that its local service is healthy before opening Edge.
+Opening it again reuses that healthy service. The preferred port is 5178;
+if another application owns it, the launcher tries 5179–5197 without stopping
+the other application. The service accepts connections only from this Mac.
+Choose **停止服务并退出** in its app or **FA** menu, or Quit its Dock icon, to stop
+the launcher's service. Closing an Edge tab does not quit the launcher.
 
 Open the local workbench in Edge, then choose **Import PDFs** at the bottom of
 the left source library or drop files there. The library has a fixed width and
@@ -126,6 +140,20 @@ loaded from that same local origin; opening `dist/index.html` directly with a
 `file:` URL is also supported by the self-contained build and checked separately.
 No public deployment is required.
 
+To package the browser launcher on macOS, build the browser assets first, then
+run `bash scripts/build-browser-macos.sh`. Packaging needs Xcode Command Line
+Tools and Python 3; these are build dependencies, not dependencies of the
+finished launcher. The output is `release/Figure Assembly Browser.app`.
+The script refuses an existing output; use `BROWSER_LAUNCHER_OUTPUT_DIR` for a
+fresh output directory. The browser launcher is separate from the native
+`Figure Assembly.app` described below.
+
+Its local startup log is `~/Library/Logs/Figure Assembly Browser/launcher.jsonl`.
+**查看启动日志** in the app or **FA** menu reveals that file. The bundled
+`Contents/MacOS/FigureAssemblyBrowser --status` command reports the checked
+service identity; `--stop` quits only the matching application. Neither command
+kills a process merely because it occupies a port.
+
 Package checks and actual Edge acceptance:
 
 ```sh
@@ -160,6 +188,23 @@ The bundle is `release/Figure Assembly.app`. Build output is ignored and is neve
 committed. The app uses only bundled JS/font resources and Apple system frameworks.
 The native build is local and unsigned; signing, notarization, distribution to
 other Macs and Gatekeeper changes are not performed by this build.
+
+Run the independent launcher checks against a built app and a fresh local
+evidence directory:
+
+```sh
+bash tests/browser-launcher.sh \
+  "release/Figure Assembly Browser.app" \
+  "../../.tmp_verify/browser-launcher-check"
+```
+
+These checks compile a development-only Swift runner and launch the real app
+with isolated QA support/log directories and owned random ports. They cover
+health/build/PID identity, exact served assets, loopback binding, repeated
+launch/reopen, normal Quit/restart, safe port conflict and actual Microsoft Edge
+open callbacks. They neither read nor close existing browser tabs. QA directory,
+port and browser-suppression overrides are accepted only with the explicit
+`FIGURE_ASSEMBLY_LAUNCHER_QA=1` guard; ordinary double-click use needs no flags.
 
 Tests cover geometry/history/portable integrity, actual vector/font resources,
 explicit refusal controls, rendered browser interactions, native save conflicts,
