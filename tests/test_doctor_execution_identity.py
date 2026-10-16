@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from types import SimpleNamespace
+import os
 import subprocess
 
 import pytest
@@ -44,6 +45,7 @@ def test_execution_identity_preserves_distinct_source_and_runtime(tmp_path, monk
     assert result["continuation"]["existing_documents_migrated"] is False
     assert result["continuation"]["environment"] == {
         "SCIPLOT_REPO": str(checkout), "SCIPLOT_RUNTIME_REPO": str(runtime),
+        "SCIPLOT_PYTHON": identity.sys.executable,
         "SCIPLOT_SOURCE_ROOT": str(package.parent), "SCIPLOT_VEUSZ_ROOT": str(runtime / "third_party/veusz"),
     }
     assert wrapper.read_text() == "owned source wrapper"
@@ -57,3 +59,38 @@ def test_execution_identity_does_not_call_a_failed_git_probe_a_checkout(tmp_path
     result = identity.execution_identity()
     assert result["source_checkout_root"] is None and result["source_git_head"] is None
     assert Path(result["python_binary"]).is_absolute()
+
+
+@pytest.mark.parametrize("package_location", [".venv/lib/python3.14/site-packages", "nested/src", "site-packages"])
+def test_wheel_or_nested_source_cannot_inherit_ancestor_git_identity(tmp_path, monkeypatch, package_location):
+    ancestor = tmp_path / "ancestor-repo"
+    package = ancestor / package_location / "sciplot_core"
+    package.mkdir(parents=True)
+    monkeypatch.setattr(identity, "PACKAGE_ROOT", package)
+    monkeypatch.setattr(identity.subprocess, "run", lambda *_args, **_kwargs:
+                        SimpleNamespace(returncode=0, stdout=f"{ancestor}\n{'b' * 40}\n"))
+    result = identity.execution_identity()
+    assert result["source_package_root"] == str(package)
+    assert result["source_checkout_root"] is None and result["source_git_head"] is None
+    assert result["continuation"]["command_prefix"] == [identity.sys.executable, "-m", "sciplot_core.cli"]
+
+
+def test_continuation_wrapper_uses_reported_python_instead_of_runtime_default(tmp_path, monkeypatch):
+    # A distinct runtime may have an incompatible interpreter. The reported
+    # continuation must retain this process's interpreter without changing it.
+    runtime = tmp_path / "runtime"
+    wrong_python = runtime / ".venv/bin/python"
+    wrong_python.parent.mkdir(parents=True)
+    wrong_python.write_text("#!/bin/sh\nprintf 'WRONG_RUNTIME_PYTHON\\n'\nexit 73\n")
+    wrong_python.chmod(0o755)
+    monkeypatch.setattr(identity, "RUNTIME_REPO_ROOT", runtime)
+    report = identity.execution_identity()
+    continuation = report["continuation"]
+    assert continuation["environment"]["SCIPLOT_PYTHON"] == report["python_executable"]
+    result = subprocess.run([*continuation["command_prefix"], "--help"],
+                            env={**os.environ, **continuation["environment"]},
+                            capture_output=True, text=True, timeout=30, check=False)
+    assert result.returncode == 0, result.stderr
+    assert "WRONG_RUNTIME_PYTHON" not in result.stdout
+    assert "Local SciPlot plotting" in result.stdout
+    assert wrong_python.read_text().endswith("exit 73\n")

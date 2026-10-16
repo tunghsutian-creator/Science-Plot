@@ -19,7 +19,9 @@ def execution_identity() -> dict[str, Any]:
             capture_output=True, text=True, timeout=2, check=False,
         )
         lines = result.stdout.splitlines()
-        if result.returncode == 0 and len(lines) == 2:
+        if (result.returncode == 0 and len(lines) == 2
+                and Path(lines[0]).resolve() == source_root.resolve()
+                and PACKAGE_ROOT.resolve() == (source_root / "src/sciplot_core").resolve()):
             checkout, head = lines
     except (OSError, subprocess.TimeoutExpired):
         pass  # A packaged install, missing Git or unavailable checkout stays explicit.
@@ -40,6 +42,7 @@ def execution_identity() -> dict[str, Any]:
         "native_execution_verified": False,
         "continuation": {"command_prefix": command,
                          "environment": {"SCIPLOT_REPO": str(REPO_ROOT),
+                                         "SCIPLOT_PYTHON": sys.executable,
                                          "SCIPLOT_RUNTIME_REPO": str(RUNTIME_REPO_ROOT),
                                          "SCIPLOT_SOURCE_ROOT": str(PACKAGE_ROOT.parent),
                                          "SCIPLOT_VEUSZ_ROOT": str(VEUSZ_ROOT)},
