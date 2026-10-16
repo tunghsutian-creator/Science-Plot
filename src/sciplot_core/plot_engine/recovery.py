@@ -48,6 +48,11 @@ def project_recovery(result: dict[str, Any], root: Path, transaction: dict[str, 
         recovery["continuation_blocked"] = True
         recovery["next_step"] = {"action": "resolve_changed_inputs", "plot": str(root),
                                  "changed_inputs": result["changed_inputs"]}
+        if (result["status"] == "stale" and phase == "applying"
+                and transaction["document"].get("plot_type", "LegacyPlot") == "LegacyPlot"
+                and "changes" in request and transaction.get("mode") != "reimport"):
+            recovery["guarded_resume"] = {**resume, "automatic_retry": False, "owner_validation_required": True,
+                "message": "Optional original-key recovery: the native apply owner must verify its saved receipt and source/native/revision guards, and may refuse. This summary remains stale."}
     else:
         recovery["resume"] = resume
     result["recovery"] = recovery

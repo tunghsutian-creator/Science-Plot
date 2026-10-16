@@ -131,6 +131,12 @@ current revision without rendering or applying anything. A pending review includ
 the original preview/audit and exact `plot.decide` request; inspect that preview
 before accepting. Export-pending points to `plot.export`, which preserves the
 committed revision. Changed inputs block continuation and require resolution.
+For a stale LegacyPlot journal still in `applying`, `recovery.guarded_resume`
+may also offer an optional original-key request. The summary remains stale and
+its conservative default step is unchanged. Only an explicit call asks the native
+apply owner to verify its existing receipt and source/native/revision guards;
+that owner may refuse. The option does not identify drift as the transaction's
+own write and never automatically accepts or resends a mutation.
 
 The explicit compact recovery entry accepts only the original three fields:
 

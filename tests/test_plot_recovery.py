@@ -76,6 +76,7 @@ def test_review_recovery_refuses_drift_and_summary_cannot_offer_accept(tmp_path,
     summary = service.describe(root)
     assert summary["status"] == "stale" and summary["recovery"]["continuation_blocked"]
     assert summary["recovery"]["next_step"]["action"] == "resolve_changed_inputs"
+    assert "guarded_resume" not in summary["recovery"]
     assert summary.get("next_step", {}).get("action") != "plot.decide"
     with pytest.raises(EngineError) as failed:
         service.resume(root, _bound(document))
@@ -89,10 +90,40 @@ def test_explicit_resume_recovers_uncertain_apply_once(tmp_path):
     with pytest.raises(SimulatedCrash):
         service.patch(root, request())
     assert backend.native_writes == 1 and load_head(root)["document"]["revision"] == 0
-    complete = PlotService(backend).resume(root, _bound(document))
+    calls = deepcopy(backend.calls)
+    summary = service.describe(root)
+    assert summary["status"] == "stale" and str(backend.native) in summary["changed_inputs"]
+    assert summary["recovery"]["continuation_blocked"] is True
+    assert summary["recovery"]["next_step"]["action"] == "resolve_changed_inputs"
+    optional = summary["recovery"]["guarded_resume"]
+    assert optional["request"] == _bound(document)
+    assert optional["owner_validation_required"] and optional["automatic_retry"] is False
+    assert all(backend.calls[name] == calls[name] for name in ("preview", "apply", "export", "render"))
+    complete = PlotService(backend).resume(root, optional["request"])
     assert complete["status"] == "complete" and complete["revision"] == 1
     assert backend.native_writes == 1
     assert complete["scientific_hash"] == document["scientific_hash"]
+
+
+@pytest.mark.parametrize("drift", ["source", "native"])
+def test_guarded_legacy_apply_resume_refuses_external_bytes(tmp_path, drift):
+    service, root, backend, document = _legacy(tmp_path)
+    backend.crash_after_apply = True
+    with pytest.raises(SimulatedCrash):
+        service.patch(root, request())
+    path = backend.raw if drift == "source" else backend.native
+    path.write_bytes(path.read_bytes() + b"external change after interrupted own apply")
+    external_bytes = path.read_bytes()
+    summary = service.describe(root)
+    assert summary["status"] == "stale" and str(path) in summary["changed_inputs"]
+    assert summary["recovery"]["continuation_blocked"] is True
+    assert summary["recovery"]["next_step"]["action"] == "resolve_changed_inputs"
+    optional = summary["recovery"]["guarded_resume"]
+    assert optional["request"] == _bound(document) and optional["owner_validation_required"]
+    result = service.resume(root, optional["request"])
+    assert result["status"] == "blocked" and result.get("ready_to_use") is not True
+    assert backend.native_writes == 1 and load_head(root)["document"] == document
+    assert path.read_bytes() == external_bytes
 
 
 def test_explicit_resume_export_pending_preserves_committed_semantic_revision(tmp_path):
