@@ -23,6 +23,7 @@ def tool_definitions() -> list[Tool]:
         rollback_schema,
     )
     from sciplot_core.plot_engine.typed_intent import intent_schema
+    from sciplot_core.plot_engine.managed_delivery_contract import managed_delivery_schema
     from sciplot_core.task_choice_schema import table_region_schema
     from sciplot_core.task_comparison_contract import (
         comparison_request_schema,
@@ -65,6 +66,8 @@ def tool_definitions() -> list[Tool]:
                       ["scope", "target", "property"]),
     ], "description": "For a previously identified ManagedPlot, request summary first, then edit for one advertised stable target ID/property. Omit for unknown or LegacyPlot authority, or when the full response is needed. Omission preserves the unchanged full response."}
     semantic_plot = {"plot": {**semantic_path, "description": "Stable absolute local plot document directory returned by project_open or plot_create."}}
+    add("plot_deliver", "Package an ordered list of exact current ManagedPlot revisions into a new native-snapshot delivery and ZIP. Reuses per-plot audited export and native Save, retains original source bytes, reports partial completion and resumes the identical request. Never replaces an existing destination or claims a portable ManagedPlot registry. Local semantic continuation and independent native editing remain distinct.",
+        {"request": managed_delivery_schema()}, ["request"], idempotent=True)
     add("project_open", "Open one existing saved figure. For a known ManagedPlot, pass description scope summary to get currentness, revision and edit targets without the full schema; for unknown or LegacyPlot authority omit description. Legacy remains under its native coverage. Does not overwrite the figure.",
         {"target": semantic_path, "figure_id": string, "description": description}, ["target"], idempotent=True)
     add("plot_describe", "Read current saved state without rebuilding science. After a ManagedPlot summary, pass description scope edit with one advertised target/property for its current value, exact schema and risk. Omit description for the full response. Stale/native changes and pending work remain explicit.",

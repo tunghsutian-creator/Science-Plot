@@ -69,6 +69,21 @@ class PlotService:
               description: dict[str, Any] | None = None,
               adoption: tuple[dict[str, str], dict[str, Any]] | None = None) -> dict[str, Any]:
         target = canonical_path(target)
+        from sciplot_core.foundation.json_io import read_json_object
+
+        delivery_index = target / "index.json"
+        package = read_json_object(delivery_index) if delivery_index.is_file() and not delivery_index.is_symlink() else None
+        if package is not None and package.get("kind") == "sciplot_managed_delivery":
+            from sciplot_core.plot_engine.managed_delivery_continuation import local_managed_target
+
+            selected = local_managed_target(target, figure_id)
+            head = load_head(selected["plot"])
+            require_current(self.backend, head["binding"])
+            result = self.describe(selected["plot"], description=description)
+            result["delivery_continuation"] = {"mode": "original_local_managed", "item_id": selected["item_id"],
+                                               "independent_native_snapshot": selected["native_snapshot"],
+                                               "portable_managed_project": False}
+            return result
         if (target / "head.json").is_file():
             if adoption is not None:
                 from .adoption import require_adoption
@@ -159,6 +174,12 @@ class PlotService:
         root = canonical_path(plot)
         with external_project_session(root):
             return self._patch(root, request)
+
+    def deliver(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Package exact managed revisions; each export retains its own transaction."""
+        from sciplot_core.plot_engine.managed_delivery import deliver
+
+        return deliver(self, request)
 
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         """Resolve two explicit FigureSpec text edits into the existing patch owner."""

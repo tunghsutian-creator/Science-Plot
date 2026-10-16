@@ -46,7 +46,9 @@ INSTRUCTIONS = (
     "coverage, never convert it just for compact reads. Check status, changed "
     "inputs and pending work before editing. Use returned stable IDs and revision; "
     "keep idempotency_key unchanged on retry. Follow local decision and export "
-    "receipts instead of reapplying committed work. Existing task_start/task_resume "
+    "receipts instead of reapplying committed work. plot_deliver packages exact current "
+    "ManagedPlot revisions as independent native snapshots; portable Managed registry "
+    "migration is unsupported. Existing task_start/task_resume "
     "remain supported for their advertised workflows. Inspect existing saved "
     "projects instead of creating them again. Compatibility native-edit tools "
     "require real figure/object IDs and the saved SHA. Read candidate PNG resources and scientific "
@@ -164,7 +166,7 @@ class Adapter:
             compact = {**compact, "preview_resources": group_resources}
         if warnings:
             compact = {**compact, "resource_warnings": warnings}
-        result = _text_result(compact, is_error=compact.get("status") in {"error", "failed", "blocked"})
+        result = _text_result(compact, is_error=compact.get("status") in {"error", "failed", "blocked", "partial"})
         result.content.extend(ResourceLink(**item.metadata()) for item in links)
         return result
 

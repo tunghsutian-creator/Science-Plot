@@ -22,6 +22,7 @@ class Service(Protocol):
     def export(self, plot: Path) -> dict[str, Any]: ...
     def rollback(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def create(self, request: dict[str, Any]) -> dict[str, Any]: ...
+    def deliver(self, request: dict[str, Any]) -> dict[str, Any]: ...
     def decide(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
 
 
@@ -85,6 +86,7 @@ def validate_params(method: str, params: dict[str, Any]) -> None:
     fields: dict[str, tuple[set[str], set[str]]] = {
         "project.open": ({"target"}, {"target", "figure_id", "description"}),
         "plot.create": ({"request"}, {"request"}),
+        "plot.deliver": ({"request"}, {"request"}),
         "plot.describe": ({"plot"}, {"plot", "description"}),
         "plot.render": ({"plot"}, {"plot"}),
         "plot.export": ({"plot"}, {"plot"}),
@@ -124,6 +126,8 @@ def invoke(service: Service, method: str, params: dict[str, Any]) -> dict[str, A
         return service.open(target, figure_id=params.get("figure_id"))
     if method == "plot.create":
         return service.create(params["request"])
+    if method == "plot.deliver":
+        return service.deliver(params["request"])
     plot = Path(params["plot"]).expanduser().resolve()
     if method == "plot.describe":
         if "description" in params:

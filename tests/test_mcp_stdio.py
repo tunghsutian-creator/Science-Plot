@@ -74,7 +74,7 @@ def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 41
+            assert len(tools.tools) == 42
             assert "sciplot_plot_intent" in {tool.name for tool in tools.tools}
             caps = await _call(client, "sciplot_capabilities", {})
             assert caps["transport"] == "mcp_stdio"
