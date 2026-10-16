@@ -98,7 +98,7 @@ final class NativeUIRun {
         try await cleanStateRelease.value
         try check(FileManager.default.fileExists(atPath: project.path) && !app.window.isDocumentEdited,
                   "real native Save writes portable project and marks clean")
-        try await click(".labels-button")
+        try await click("button[aria-label='Labels']")
         try await pause()
         try Data("EXTERNAL CHANGE: PRESERVE THIS FILE".utf8).write(to: project)
         app.window.performClose(nil)
@@ -106,7 +106,7 @@ final class NativeUIRun {
         try await wait("document.body.innerText.includes('changed outside')")
         try check(app.window.isVisible && app.window.isDocumentEdited, "dirty Close failed Save keeps window open")
         try check(try String(contentsOf: project, encoding: .utf8) == "EXTERNAL CHANGE: PRESERVE THIS FILE", "UI conflict leaves external bytes intact")
-        try await click(".labels-button")
+        try await click("button[aria-label='Labels']")
         let recovered = output.appendingPathComponent("Recovered native integration.figureassembly")
         dialogs.saving = recovered
         try menu("saveAs")
@@ -125,7 +125,7 @@ final class NativeUIRun {
         try check(true, "native Open restores source bytes, TIFF verification and mixed previews")
         dialogs.saving = output.appendingPathComponent("Native composed.pdf")
         try menu("export")
-        try await wait("document.querySelector('.notice[role=status]')?.innerText.startsWith('Exported.') === true && document.querySelector('.app-shell').getAttribute('aria-busy') === 'false'")
+        try await wait("document.querySelector('.notice[role=status]')?.innerText.startsWith('PDF exported.') === true && document.querySelector('.app-shell').getAttribute('aria-busy') === 'false'")
         let composed = try Data(contentsOf: dialogs.saving!)
         try check(try NativeRendering.pdf(composed).numberOfPages == 1, "actual native Export menu writes composed PDF")
         try await snapshot("mixed-native-workbench.png")
@@ -136,7 +136,7 @@ final class NativeUIRun {
         try await wait("document.querySelector('dialog[open]').innerText.includes('Export PNG')")
         dialogs.saving = output.appendingPathComponent("Native composed.png")
         try await button("Export PNG")
-        try await wait("document.querySelector('.notice[role=status]')?.innerText.startsWith('Exported.') === true && document.querySelector('.app-shell').getAttribute('aria-busy') === 'false' && document.querySelector('dialog[open]') === null")
+        try await wait("document.querySelector('.notice[role=status]')?.innerText.startsWith('PNG exported.') === true && document.querySelector('.app-shell').getAttribute('aria-busy') === 'false' && document.querySelector('dialog[open]') === null")
         try check(FileManager.default.fileExists(atPath: dialogs.saving!.path), "native auxiliary PNG export through real frontend bridge")
 
         let current = app.webView.url

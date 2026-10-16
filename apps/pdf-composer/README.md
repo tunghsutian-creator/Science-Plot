@@ -134,6 +134,9 @@ that Playwright Chromium is Edge. Override its default Mac executable with
 inputs/downloads, checks PDF preview ink and publication PDF resources, and
 refuses unexpected external requests. The older browser harness separately tests
 the native bridge contract with explicit PDFKit-preview refusal.
+`FIGURE_ASSEMBLY_EDGE_DOM_ONLY=1` is an explicit partial diagnostic for hosts whose
+compositor cannot capture even a blank page. It uses reduced motion and records
+**BLOCKED**, exit 2; it cannot satisfy screenshot, pointer or refraction acceptance.
 
 Building the native delivery additionally needs Xcode Command Line Tools:
 

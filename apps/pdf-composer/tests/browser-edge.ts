@@ -342,6 +342,14 @@ try {
     checks.push('Actual Edge SVG displacement changes diagnostic pixels; compact groups have nonzero maps and clear foreground, wide tray has no displacement URL.');
   } else glassProof = { status: 'blocked', reason: 'Explicit DOM-only diagnosis while actual Edge about:blank screenshots time out; pixel refraction proof remains required.' };
 
+  await page.getByLabel('More options', { exact: true }).click({ force: domDiagnostic });
+  await page.getByRole('button', { name: 'Export options…', exact: true }).click({ force: domDiagnostic });
+  const formats = await page.getByLabel('Format', { exact: true }).locator('option').allTextContents();
+  assert.deepEqual(formats, ['PDF · vector']);
+  assert.equal(await page.getByLabel('Raster DPI', { exact: true }).count(), 0);
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click({ force: domDiagnostic });
+  checks.push('Browser export options expose PDF only and no unavailable native raster-DPI controls.');
+
   await importPicker([multipage, oversized, rounded, ...ordinary]);
   assert.equal(await page.locator('.source-item').count(), 11);
   await assertPreview(page.getByRole('button', { name: `Place ${ordinary[0].name}`, exact: true }));
@@ -407,11 +415,13 @@ try {
     const tray = document.querySelector('.source-tray')!.getBoundingClientRect();
     return { paper: paper.toJSON(), bar: bar.toJSON(), toolbar: toolbar.toJSON(), tray: tray.toJSON(), bodyWidth: document.body.scrollWidth, innerWidth };
   });
+  await writeFile(join(out, 'desktop-layout.json'), JSON.stringify(metrics, null, 2));
   assert.equal(metrics.bodyWidth, metrics.innerWidth);
   assert.ok(metrics.bar.bottom <= metrics.paper.top || metrics.bar.top >= metrics.paper.bottom, 'Selected controls must not cover the figure.');
-  assert.ok(metrics.toolbar.bottom < metrics.paper.top && metrics.paper.bottom <= metrics.tray.top, 'Paper stays between toolbar and horizontal tray.');
-  await writeFile(join(out, 'desktop-layout.json'), JSON.stringify(metrics, null, 2));
-  checks.push('Horizontal tray scrolls while import remains visible; top zoom changes only the view; no selection-bar/paper overlap at approved 1463 × 1075 viewport.');
+  if (!domDiagnostic) {
+    assert.ok(metrics.toolbar.bottom < metrics.paper.top && metrics.paper.bottom <= metrics.tray.top, 'Paper stays between toolbar and horizontal tray.');
+    checks.push('Horizontal tray scrolls while import remains visible; top zoom changes only the view; no selection-bar/paper overlap at approved 1463 × 1075 viewport.');
+  } else checks.push('Tray scroll and top zoom work; measured paper bounds remain BLOCKED because the frozen compositor does not deliver the initial ResizeObserver frame.');
 
   await page.keyboard.press(`${commandKey}+n`);
   await page.getByRole('heading', { name: 'Keep your changes?' }).waitFor();
@@ -506,7 +516,8 @@ try {
   if (domDiagnostic) process.exitCode = 2;
 } catch (error) {
   await shot('failure.png').catch(() => undefined);
-  await writeFile(join(out, 'result.json'), JSON.stringify({ status: 'failed', completed: checks, error: String(error), errors, warnings, externalRequests, screenshots }, null, 2));
+  await writeFile(join(out, 'result.json'), JSON.stringify({ status: 'failed', completed: checks, error: String(error), errors, warnings, externalRequests, screenshots,
+    version: browser.version(), executablePath, sourceHead, testSha256, buildHashes, domDiagnostic }, null, 2));
   throw error;
 } finally {
   clearTimeout(deadline);
