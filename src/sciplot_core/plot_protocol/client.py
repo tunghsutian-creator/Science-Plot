@@ -41,7 +41,9 @@ def _remaining_timeout(deadline: float) -> float:
 def _recovery(request: dict[str, Any], *, request_sent: bool) -> dict[str, Any]:
     """Keep the known semantic binding; recovery is always an explicit call."""
     params = request.get("params", {})
+    params = params if isinstance(params, dict) else {}
     original = params.get("request", {})
+    original = original if isinstance(original, dict) else {}
     repair = {"action": "retry_same_request", "method": request["method"], "request_id": request["id"],
               "request_sent": request_sent, "automatic_retry": False,
               "preserve": "Keep the original request and idempotency_key; do not create a new operation.",

@@ -496,3 +496,43 @@ def test_resume_cli_rpc_and_mcp_share_one_closed_schema(monkeypatch, tmp_path, c
     params = {"plot": "/tmp/plot", "request": request}
     assert invoke_owner("sciplot_plot_resume", params) == {"status": "complete"}
     assert captured == [("plot.resume", params)]
+
+
+@pytest.mark.parametrize("params", [None, 7, {"plot": "/tmp/plot", "request": None},
+                                         {"plot": "/tmp/plot", "request": 7}])
+def test_bad_reply_to_malformed_wire_request_keeps_transport_error(params):
+    with tempfile.TemporaryDirectory(prefix="spr-malformed-", dir="/tmp") as temporary:
+        path = Path(temporary) / "socket"
+        received = []
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            listener.bind(str(path))
+            listener.listen(1)
+
+            def invalid_reply():
+                connection, _ = listener.accept()
+                with connection:
+                    received.append(rpc.decode(server.read_frame(connection, rpc.MAX_REQUEST_BYTES)))
+                    connection.sendall(rpc.encode({"jsonrpc": "2.0", "id": "wrong", "result": {}}))
+
+            thread = threading.Thread(target=invalid_reply)
+            thread.start()
+            request = {"jsonrpc": "2.0", "id": "original", "method": "plot.patch", "params": params}
+            with pytest.raises(TransportError) as failed:
+                client._exchange(path, request, 3)
+            thread.join(timeout=3)
+            assert not thread.is_alive() and received == [request]
+            assert failed.value.reason_code == "invalid_engine_response"
+            repair = failed.value.repair
+            assert repair["request_id"] == "original" and repair["method"] == "plot.patch"
+            assert repair["automatic_retry"] is False and repair["request_sent"] is True
+            assert "idempotency_key" not in repair
+            if isinstance(params, dict):
+                assert repair["next_step"]["plot"] == params["plot"]
+
+
+@pytest.mark.parametrize("value", [None, 7])
+def test_public_call_rejects_malformed_request_before_startup(monkeypatch, value):
+    monkeypatch.setattr(client, "ensure_server", lambda *_a, **_k: pytest.fail("Invalid request started a daemon"))
+    with pytest.raises(rpc.ProtocolError) as failed:
+        client.call("plot.patch", {"plot": "/tmp/plot", "request": value})
+    assert failed.value.reason_code == "invalid_rpc_params"
