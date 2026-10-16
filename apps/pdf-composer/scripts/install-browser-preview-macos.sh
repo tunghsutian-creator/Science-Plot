@@ -9,7 +9,21 @@ if [[ ! -f "$source_app/Contents/MacOS/FigureAssemblyBrowser" ]]; then
   exit 1
 fi
 codesign --verify --deep --strict "$source_app"
+python3 - "$source_app" <<'PY'
+from pathlib import Path
+import json, plistlib, sys
+app = Path(sys.argv[1])
+info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
+manifest = json.loads((app / 'Contents/Resources/BrowserBuild.json').read_text())
+identity = 'org.sciplot.figureassembly.browser.preview'
+if info.get('CFBundleIdentifier') != identity or manifest.get('build', {}).get('applicationID') != identity:
+    raise SystemExit('Refusing to install a non-preview application as Figure Assembly Preview.')
+if info.get('CFBundleExecutable') != 'FigureAssemblyBrowser':
+    raise SystemExit('Unexpected preview application executable.')
+PY
 mkdir -p "$install_dir" "$desktop_dir"
+install_dir="$(cd "$install_dir" && pwd)"
+desktop_dir="$(cd "$desktop_dir" && pwd)"
 number=1
 destination="$install_dir/Figure Assembly Preview.app"
 while [[ -e "$destination" || -L "$destination" ]]; do

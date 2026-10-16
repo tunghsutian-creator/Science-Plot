@@ -16,7 +16,7 @@
     "install:browser:mac": "bash scripts/install-browser-macos.sh",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
     "test:preview": "node --import tsx tests/browser-preview.ts",
-    "build:browser:preview:mac": "bash scripts/build-browser-preview-macos.sh",
+    "build:browser:preview:mac": "npm run build && bash scripts/build-browser-preview-macos.sh",
     "install:browser:preview:mac": "bash scripts/install-browser-preview-macos.sh"
   },
   "dependencies": {

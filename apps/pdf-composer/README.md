@@ -35,7 +35,7 @@ the other application. The service accepts connections only from this Mac.
 Choose **停止服务并退出** in its app or **FA** menu, or Quit its Dock icon, to stop
 the launcher's service. Closing an Edge tab does not quit the launcher.
 
-Open the local workbench in Edge, then choose **Import files** at the bottom of
+Open the local workbench in Edge, then choose **Import PDFs** at the bottom of
 the left source library or drop files there. **Import folder** opens Edge's local
 folder picker and includes supported files from nested folders. Folder import
 adds sources to the library without filling the canvas; unsupported and damaged
@@ -109,7 +109,6 @@ Shortcuts: ⌘I import, ⌘O open, ⌘S save, ⇧⌘S save as, ⌘E export PDF,
 Build this branch and package its separate preview launcher:
 
 ```sh
-npm run build
 npm run build:browser:preview:mac
 npm run install:browser:preview:mac
 ```
