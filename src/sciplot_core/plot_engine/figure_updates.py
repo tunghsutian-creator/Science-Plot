@@ -8,12 +8,13 @@ from sciplot_core.plot_ir.figure_document import figure_spec, store_spec
 
 from .errors import EngineError
 
-PROPERTIES = {"theme", "layout", "scale.domain", "axis.ticks", "axis.label", "style", "annotation.text"}
+PROPERTIES = {"theme", "layout", "scale.domain", "axis.ticks", "axis.label", "style",
+              "legend.location", "annotation.text", "annotation.x", "annotation.y"}
 _PROPERTY_NAMES = {
     "figure": ("theme", "layout"), "scale": ("scale.domain",),
     "view": ("style",), "axis": ("style", "axis.label", "axis.ticks"),
-    "layer": ("style",), "mark": ("style",), "legend": ("style",),
-    "annotation": ("style", "annotation.text"),
+    "layer": ("style",), "mark": ("style",), "legend": ("style", "legend.location"),
+    "annotation": ("style", "annotation.text", "annotation.x", "annotation.y"),
 }
 
 
@@ -41,16 +42,19 @@ def figure_property_names(spec: dict[str, Any]) -> dict[str, list[str]]:
     return {target: list(_PROPERTY_NAMES[kind]) for target, kind, _ in _figure_targets(spec)}
 
 
-def _figure_edit_descriptor(kind: str, property_name: str, mark_type: str | None) -> dict[str, Any]:
+def _figure_edit_descriptor(spec: dict[str, Any], target: str, kind: str,
+                            property_name: str, mark_type: str | None) -> dict[str, Any]:
     """The shared descriptor owner for full and selective Figure reads."""
     from sciplot_core.plot_grammar.schema import (
         axis_schema,
         figure_layout_schema,
+        guide_schema,
         scale_schema,
     )
     from sciplot_core.plot_grammar.styles import scope_schema, style_schema
     from sciplot_core.plot_ir.figure_document import theme_schema
 
+    risk = "scientific" if property_name == "scale.domain" else "presentation"
     if property_name == "theme":
         schema = theme_schema()
     elif property_name == "layout":
@@ -61,13 +65,27 @@ def _figure_edit_descriptor(kind: str, property_name: str, mark_type: str | None
         schema = axis_schema()["properties"][property_name.removeprefix("axis.")]
     elif property_name == "annotation.text":
         schema = {"type": "string", "minLength": 1, "maxLength": 500}
+    elif property_name == "legend.location":
+        guide = next(item for item in spec["guides"] if item["id"] == target)
+        schema = deepcopy(guide_schema()["properties"]["location"])
+        locations = ({"top-right", "top-left", "bottom-right", "bottom-left",
+                      *({"inside-best"} if "rendering_contract" in spec else set())}
+                     if guide["scope"] == "view" else {"top", "bottom", "left", "right"})
+        schema["enum"] = [value for value in schema["enum"] if value in locations]
+    elif property_name in {"annotation.x", "annotation.y"}:
+        annotation = next(item for item in spec["annotations"] if item["id"] == target)
+        schema = {"type": "number"}
+        if annotation["space"] == "data":
+            risk = "scientific"
+        else:
+            schema.update(minimum=0, maximum=1)
     elif kind == "view":
         schema = scope_schema()
     elif kind == "layer":
         schema = scope_schema(layer=True)
     else:
         schema = style_schema(mark_type if kind == "mark" and mark_type is not None else kind)
-    return {"value_schema": schema, "risk": "scientific" if property_name == "scale.domain" else "presentation"}
+    return {"value_schema": schema, "risk": risk}
 
 
 def figure_edit_descriptor(spec: dict[str, Any], target: str, property_name: str) -> dict[str, Any]:
@@ -76,7 +94,7 @@ def figure_edit_descriptor(spec: dict[str, Any], target: str, property_name: str
         if candidate == target:
             if property_name not in _PROPERTY_NAMES[kind]:
                 raise ValueError("The requested Figure property is not advertised for this target.")
-            return _figure_edit_descriptor(kind, property_name, mark_type)
+            return _figure_edit_descriptor(spec, target, kind, property_name, mark_type)
     raise ValueError("The requested Figure target does not exist.")
 
 
@@ -105,11 +123,9 @@ def prepare_figure_update(document: dict[str, Any], request: dict[str, Any]) -> 
             "theme": ({"figure"}, "theme"), "layout": ({"figure"}, "layout"),
             "scale.domain": ({"scale"}, "domain"), "axis.ticks": ({"axis"}, "ticks"),
             "axis.label": ({"axis"}, "label"), "style": ({"view", "layer", "mark", "axis", "legend", "annotation"}, "style"),
-            "annotation.text": ({"annotation"}, "text"),
+            "legend.location": ({"legend"}, "location"), "annotation.text": ({"annotation"}, "text"),
+            "annotation.x": ({"annotation"}, "x"), "annotation.y": ({"annotation"}, "y"),
         }[prop]
-        risk = "scientific" if prop == "scale.domain" else "presentation"
-        if risk == "scientific" and request["intent_class"] != "scientific":
-            raise EngineError("figure_scientific_intent_required", "Scale domain changes require explicit scientific intent.")
         for target in change["target"]:
             if target not in index or index[target][1] not in allowed:
                 raise EngineError("document_unknown_target", "This grammar property requires a matching stable semantic target.")
@@ -117,19 +133,28 @@ def prepare_figure_update(document: dict[str, Any], request: dict[str, Any]) -> 
                 raise EngineError("document_duplicate_change", "Set each target/property once per transaction.")
             touched.add((target, prop))
             item = index[target][0]
+            descriptor = figure_edit_descriptor(spec, target, prop)
+            risk = descriptor["risk"]
+            if risk == "scientific" and request["intent_class"] != "scientific":
+                raise EngineError("figure_scientific_intent_required",
+                                  "Scale domains and data-space annotation coordinates require explicit scientific intent.")
+            if prop in {"legend.location", "annotation.x", "annotation.y"}:
+                from sciplot_core.plot_document.validation import validate_wire
+
+                validate_wire(change["value"], descriptor["value_schema"], code="figure_edit_invalid_value")
             before, after = deepcopy(item[field]), deepcopy(change["value"])
             if before != after:
                 item[field] = after
                 diff.append({"target": target, "property": prop, "before": before, "after": after, "risk": risk})
     updated = store_spec(document, spec)
     risk = "scientific" if updated["scientific_hash"] != document["scientific_hash"] else "presentation"
-    # Domain changes recompile sealed coordinates; they do not execute transforms.
+    # Domain/anchor changes recompile sealed coordinates; they do not execute transforms.
     return updated, diff, risk, False
 
 
 def patch_capabilities(spec: dict[str, Any]) -> dict[str, Any]:
     """Publish exact value schemas and stable target IDs for generic grammar edits."""
-    return {target: {name: _figure_edit_descriptor(kind, name, mark_type) for name in _PROPERTY_NAMES[kind]}
+    return {target: {name: _figure_edit_descriptor(spec, target, kind, name, mark_type) for name in _PROPERTY_NAMES[kind]}
             for target, kind, mark_type in _figure_targets(spec)}
 
 
@@ -137,7 +162,8 @@ def current_edit_value(spec: dict[str, Any], target: str, property_name: str) ->
     """Read the exact represented value corresponding to a figure patch capability."""
     field = {"theme": "theme", "layout": "layout", "scale.domain": "domain",
              "axis.label": "label", "axis.ticks": "ticks", "style": "style",
-             "annotation.text": "text"}[property_name]
+             "legend.location": "location", "annotation.text": "text",
+             "annotation.x": "x", "annotation.y": "y"}[property_name]
     objects = [spec, *spec["scales"]]
     for view in spec["views"]:
         objects.extend([view, *view["axes"]])

@@ -147,6 +147,13 @@ def _scoped_description(result: dict[str, Any], document: dict[str, Any], bindin
             scale = next(scale for scale in spec["scales"] if scale["id"] == axis["scale_id"])
             compact["target_context"] = {"scale_id": scale["id"], **{key: scale[key] for key in
                                          ("dimension", "quantity", "unit", "transform", "direction", "domain")}}
+        elif property_name == "legend.location":
+            guide = next(item for item in spec["guides"] if item["id"] == target)
+            compact["target_context"] = {key: guide[key] for key in ("scope", "view_id") if key in guide}
+        elif property_name in {"annotation.text", "annotation.x", "annotation.y"}:
+            annotation = next(item for item in spec["annotations"] if item["id"] == target)
+            compact["target_context"] = {key: annotation[key] for key in
+                                         ("space", "view_id", "x_scale", "y_scale", "x", "y") if key in annotation}
         risk = descriptor["risk"]
     else:
         obj = objects[target]

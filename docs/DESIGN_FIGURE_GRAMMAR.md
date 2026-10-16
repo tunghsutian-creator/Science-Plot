@@ -134,9 +134,16 @@ The complete minimal input is `tests/fixtures/figure_spec_v2.json`.
 CSV/row/unit Binding and the shared create request. Semantic patches use the same
 `plot_id`, `base_revision`, `idempotency_key`, `intent_class` and `changes` contract.
 Supported v2 properties are `theme`, `layout`, `style`, `scale.domain`,
-`axis.ticks`, `axis.label`, and `annotation.text`; descriptors identify valid
+`axis.ticks`, `axis.label`, `legend.location`, `annotation.text`, `annotation.x`
+and `annotation.y`; descriptors identify valid
 stable target IDs and full replacement value schemas. Range changes require
 scientific intent but reuse immutable datasets, without scientific execution.
+Legend location choices respect the guide's view or figure scope. View/figure
+annotation coordinates are normalized to `[0, 1]` and are presentation edits;
+data-space coordinates retain scientific risk and require explicit scientific
+intent. Scoped edit reads return the coordinate space and bound view/scales.
+Batch related properties in one existing `plot.patch` transaction; placement
+does not require recreating the plot or changing its scientific identity.
 
 Default precedence is `plot_grammar/styles.py:DEFAULTS` -> project -> figure ->
 view -> layer -> mark. Partial overrides are resolved before IR. View-local guides

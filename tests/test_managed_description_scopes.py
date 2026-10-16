@@ -87,6 +87,18 @@ def test_omitted_full_and_compact_open_describe_equivalence(tmp_path, monkeypatc
 
 def test_every_figure_summary_pair_matches_exact_full_contract(tmp_path, monkeypatch):
     service, root, document = _service(tmp_path, monkeypatch)
+    spec = figure_spec(document)
+    spec['annotations'] = [
+        {'id': 'annotation:sample', 'space': 'view', 'view_id': 'view:A',
+         'x': .2, 'y': .9, 'text': 'Sample 0.3', 'visible': True, 'style': {}},
+        {'id': 'annotation:figure', 'space': 'figure',
+         'x': .1, 'y': .1, 'text': 'Figure', 'visible': True, 'style': {}},
+        {'id': 'annotation:peak', 'space': 'data', 'view_id': 'view:A',
+         'x_scale': 'scale:x', 'y_scale': 'scale:y',
+         'x': 5, 'y': 15, 'text': 'Peak', 'visible': True, 'style': {}},
+    ]
+    document = store_spec(document, spec)
+    service_module.load_head(root)['document'] = document
     full = patch_capabilities(figure_spec(document))
     summary = service.describe(root, description={"scope": "summary"})
     assert {target: info["properties"] for target, info in summary["edit_targets"].items()} == {
@@ -95,6 +107,34 @@ def test_every_figure_summary_pair_matches_exact_full_contract(tmp_path, monkeyp
         for prop, descriptor in properties.items():
             scoped = service.describe(root, description={"scope": "edit", "target": target, "property": prop})
             assert scoped["figure_edit_contract"] == {target: {prop: descriptor}}
+    for target, space, risk in [('annotation:sample', 'view', 'presentation'),
+                                 ('annotation:figure', 'figure', 'presentation'),
+                                 ('annotation:peak', 'data', 'scientific')]:
+        for prop in ('annotation.x', 'annotation.y'):
+            scoped = service.describe(root, description={'scope': 'edit', 'target': target, 'property': prop})
+            descriptor = scoped['figure_edit_contract'][target][prop]
+            assert descriptor['risk'] == scoped['next_step']['intent_class'] == risk
+            assert scoped['target_context']['space'] == space
+            if space == 'data':
+                assert descriptor['value_schema'] == {'type': 'number'}
+                assert scoped['target_context']['x_scale'] == 'scale:x'
+                assert scoped['target_context']['y_scale'] == 'scale:y'
+            else:
+                assert descriptor['value_schema'] == {'type': 'number', 'minimum': 0, 'maximum': 1}
+    scoped = service.describe(root, description={'scope': 'edit', 'target': 'guide:legend',
+                                                'property': 'legend.location'})
+    assert scoped['current_value'] == 'top-right'
+    assert scoped['target_context'] == {'scope': 'view', 'view_id': 'view:A'}
+    assert scoped['figure_edit_contract']['guide:legend']['legend.location']['value_schema'] == {
+        'enum': ['top-right', 'top-left', 'bottom-right', 'bottom-left', 'inside-best']}
+    legacy_spec = figure_spec(document)
+    legacy_spec.pop('rendering_contract')
+    assert 'inside-best' not in patch_capabilities(legacy_spec)['guide:legend']['legend.location']['value_schema']['enum']
+    figure_guide = figure_spec(document)
+    figure_guide['guides'][0].update(scope='figure', location='top')
+    figure_guide['guides'][0].pop('view_id')
+    assert patch_capabilities(figure_guide)['guide:legend']['legend.location']['value_schema'] == {
+        'enum': ['top', 'bottom', 'left', 'right']}
 
 
 @pytest.mark.parametrize("description", [
