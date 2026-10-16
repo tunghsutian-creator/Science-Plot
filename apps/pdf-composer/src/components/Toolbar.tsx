@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { GlassSurface } from './GlassSurface';
 import { Icon } from './Icon';
@@ -7,11 +8,25 @@ export function Toolbar({ title, dirty, rows, columns, labels, canUndo, canRedo,
   canUndo: boolean; canRedo: boolean; busy: boolean; zoom: string;
   onZoomChange: (value: string) => void; onAction: (action: string) => void;
 }) {
+  const toolbar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const close = (event: globalThis.MouseEvent | KeyboardEvent) => {
+      for (const menu of toolbar.current?.querySelectorAll<HTMLDetailsElement>('details[open]') ?? []) {
+        if (event instanceof KeyboardEvent) {
+          if (event.key !== 'Escape') return;
+          menu.open = false; menu.querySelector<HTMLElement>('summary')?.focus();
+        } else if (!(event.target instanceof Node) || !menu.contains(event.target)) menu.open = false;
+      }
+    };
+    window.addEventListener('click', close); window.addEventListener('keydown', close);
+    return () => { window.removeEventListener('click', close); window.removeEventListener('keydown', close); };
+  }, []);
+
   function closeMenu(event: MouseEvent<HTMLButtonElement>, action: string) {
     event.currentTarget.closest('details')?.removeAttribute('open'); onAction(action);
   }
 
-  return <header className="toolbar" aria-label="Figure assembly toolbar">
+  return <header ref={toolbar} className="toolbar" aria-label="Figure assembly toolbar">
     <GlassSurface className="document-menu-group">
       <details className="toolbar-menu">
         <summary aria-label="Project menu" title="Project menu"><Icon name="rail" size={24} /><Icon name="chevron" size={15} /></summary>
