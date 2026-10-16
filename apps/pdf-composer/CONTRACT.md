@@ -1,6 +1,8 @@
 # Independent Figure Assembly contract
 
-This app imports existing PDF pages as indivisible figures. It does not import
+This app imports existing PDF pages as indivisible figures. Its local browser
+workbench targets Microsoft Edge; Safari compatibility is not a new requirement.
+It does not import
 SciPlot, Veusz, data models, AI or scientific editors. Its owned verification is
 the package's type/lint/unit/browser tests and macOS native integration tests;
 Research Plots' full suite is outside this independent application change.
@@ -27,6 +29,11 @@ No absolute source paths or external assets are required after save. Unknown
 schema, corrupted hashes, invalid geometry or duplicate identifiers fail closed.
 Native save uses a content token to refuse overwriting a concurrently changed
 file and atomic same-directory replacement. Cancel never mutates editor state.
+Browser save starts a local download. It cannot acknowledge Edge's final file
+write or download cancellation and therefore does not mark a dirty document
+clean. A successfully reopened validated project is clean. Browser new/open/drop
+replacement requires explicit discard when dirty, and beforeunload guards browser
+navigation. Original project/source bytes never leave the local browser.
 
 PDF export copies original content streams and resource graphs into page Form
 XObjects. No screenshot or browser print route. Unsupported page state (including
@@ -35,6 +42,11 @@ fonts/text/vector/transparency remain source-owned. Only new panel letters are
 added as real text with a bundled licensed font. Preview rasters are disposable
 and do not enter PDF export. PNG/TIFF exports are explicit auxiliary raster
 formats at chosen DPI, with effective source resolution shown.
+Edge previews use the bundled PDFium WASM renderer at the local application
+origin, without a native bridge or remote rendering endpoint. PDFium does not
+own composition, preflight, original bytes or exported publication resources.
+Browser export supports PDF; native TIFF verification and native PNG/TIFF export
+remain explicit native-only boundaries.
 
 ## Module ownership and APIs
 
@@ -62,6 +74,11 @@ port. Type/hash/header checks alone cannot establish decoding identity.
 `window.dispatchEvent(new CustomEvent('assembly-menu',{detail:action}))`.
 All resources are bundled locally; remote navigation and network access are
 disabled. No account, server, automatic update or model API is required.
+The Edge route uses local file inputs, drag/drop and downloads instead of the
+WebKit bridge. Its development/preview HTTP server only serves local application
+assets. It has no upload/API endpoint and no telemetry/model request. SVG
+displacement is restricted to compact glass control groups; foreground text/icons
+remain clear, and the wide source tray uses bounded border/shadow layering.
 
 Core helpers: `createDocument(rows=2,columns=3)`, `validateDocument(doc)`,
 `placeSource(doc,panelId,asset,pageIndex,scale=1)`, `clearPanel`, `mergePanels`,

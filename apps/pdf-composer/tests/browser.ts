@@ -72,6 +72,11 @@ const command = async (action: string) => page.evaluate(async (detail) => {
 }, action);
 const queueImport = async (file: ImportedFile) => page.evaluate((value) => { window.__figureBrowser.imports.push([value]); }, file);
 const waitIdle = () => page.locator('.app-shell[aria-busy="false"]').waitFor();
+const panelAction = async (name: string) => {
+  const button = page.getByRole('button', { name, exact: true });
+  if (!await button.isVisible()) await page.getByLabel('More panel actions', { exact: true }).click();
+  await button.click();
+};
 
 try {
   await page.goto(pathToFileURL(entry).href);
@@ -96,8 +101,8 @@ try {
   await cell(0, 1).click({ modifiers: ['Shift'] });
   await page.getByRole('button', { name: 'Merge', exact: true }).click();
   assert.equal(await page.locator('[data-panel-id]').count(), 5);
-  assert.match(await page.locator('.scale-control').innerText(), /100%.*Original/);
-  await page.getByRole('button', { name: 'Split', exact: true }).click();
+  assert.match(await page.locator('.scale-control').getAttribute('title') ?? '', /Current scale 100%/);
+  await panelAction('Split');
   assert.equal(await page.locator('[data-panel-id]').count(), 6);
   assert.equal(await occupied(0, 0), true);
   checks.push('Shift selection merges only containers; split retains the complete source at 100%.');
@@ -116,7 +121,7 @@ try {
   checks.push('Escape cancels drag without mutation; whole-source drag swap and one native-menu undo work.');
 
   await cell(0, 0).click();
-  await page.getByRole('button', { name: 'Move', exact: true }).click();
+  await panelAction('Move');
   const option = await page.getByLabel('Destination').locator('option').filter({ hasText: 'Row 2, column 3' }).getAttribute('value');
   await page.getByLabel('Destination').selectOption(option!);
   await page.getByRole('button', { name: 'Move / swap', exact: true }).click();
@@ -133,7 +138,7 @@ try {
   await page.getByRole('button', { name: 'Place large-page.pdf' }).click();
   await page.getByRole('button', { name: /^Fit whole page to cell/ }).click();
   assert.equal(await page.locator('dialog[open]').count(), 0);
-  assert.match(await page.locator('.scale-control').innerText(), /66\.67%.*Explicit/);
+  assert.match(await page.locator('.scale-control').getAttribute('title') ?? '', /Current scale 66\.67%/);
   await command('undo'); assert.equal(await cell(0, 0).getAttribute('data-asset-id'), priorId);
   checks.push('Oversize replacement refuses automatic shrink; cancel preserves placement and explicit fit is undoable.');
 
@@ -159,7 +164,7 @@ try {
 
   await page.evaluate(() => { window.__figureBrowser.cancelSave = true; });
   await command('save'); await waitIdle();
-  assert.match(await page.locator('.document-strip').innerText(), /•/);
+  assert.equal(await page.getByLabel('Unsaved changes', { exact: true }).count(), 1);
   assert.equal(await page.evaluate(() => window.__figureBrowser.saved.length), 0);
   await command('save'); await waitIdle();
   const saved = await page.evaluate(() => window.__figureBrowser.saved.at(-1)!);
@@ -187,7 +192,8 @@ try {
   });
   await queueImport(image); await command('import'); await waitIdle();
   await cell(0, 1).click(); await page.getByRole('button', { name: 'Place unknown-dpi.png' }).click();
-  await page.getByRole('button', { name: 'Export options' }).click();
+  await page.getByLabel('More options', { exact: true }).click();
+  await page.getByRole('button', { name: 'Export options…', exact: true }).click();
   await page.getByLabel('Format', { exact: true }).selectOption('png');
   await page.getByLabel('Raster DPI', { exact: true }).selectOption('600');
   assert.match(await page.locator('.dimension-readout').innerText(), /4252 × 2599 px/);
@@ -205,7 +211,7 @@ try {
   await page.getByRole('button', { name: 'Place rounded-standard.pdf' }).click();
   await page.getByRole('button', { name: 'Fit whole page to cell (≈99.94%)', exact: true }).click();
   assert.equal(await page.locator('dialog[open]').count(), 0);
-  assert.match(await page.locator('.scale-control').innerText(), /99\.94%.*Explicit scale/);
+  assert.match(await page.locator('.scale-control').getAttribute('title') ?? '', /Current scale 99\.94%/);
   await command('save'); await waitIdle();
   const fittedProject = JSON.parse(await page.evaluate(() => window.__figureBrowser.saved.at(-1)!));
   const fittedPanel = fittedProject.panels.find((panel: { row: number; column: number }) => panel.row === 1 && panel.column === 0);
@@ -218,13 +224,13 @@ try {
   await page.setViewportSize({ width: 1000, height: 700 });
   await page.evaluate(() => document.fonts.ready);
   const metrics = await page.evaluate(() => ({ width: innerWidth, body: document.body.scrollWidth,
-    exportRight: document.querySelector('.export-buttons')!.getBoundingClientRect().right }));
+    exportRight: document.querySelector('.export-group')!.getBoundingClientRect().right }));
   assert.equal(metrics.body, metrics.width); assert.ok(metrics.exportRight <= metrics.width);
   await page.screenshot({ path: resolve(out, 'narrow-desktop.png') });
   checks.push('1000 × 700 desktop viewport has no horizontal page or primary-toolbar clipping.');
   await page.setViewportSize({ width: 390, height: 844 });
   const mobile = await page.evaluate(() => ({ width: innerWidth, body: document.body.scrollWidth,
-    exportRight: document.querySelector('.export-buttons')!.getBoundingClientRect().right }));
+    exportRight: document.querySelector('.export-group')!.getBoundingClientRect().right }));
   assert.equal(mobile.body, mobile.width); assert.ok(mobile.exportRight <= mobile.width);
   await page.screenshot({ path: resolve(out, 'small-viewport.png') });
   checks.push('Small viewport wraps toolbar controls and keeps the primary export accessible.');

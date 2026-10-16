@@ -9,7 +9,7 @@ Ask your AI assistant for the figure you need. SciPlot turns experimental data i
 Bring the result into your manuscript, then keep refining it as your research evolves.
 
 For manual placement of already exported PDF pages, the independent
-[Figure Assembly macOS app](apps/pdf-composer/README.md) provides offline grid
+[Figure Assembly local Edge workbench and macOS app](apps/pdf-composer/README.md) provide offline grid
 composition and portable layouts without installing the SciPlot runtime.
 
 [**Download source ↓**](https://github.com/tunghsutian-creator/Science-Plot/archive/refs/heads/main.zip) · [Get started](#get-started) · [See the figures](#gallery) · [Connect your AI](#connect-your-ai)

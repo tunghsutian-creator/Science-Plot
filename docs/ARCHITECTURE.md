@@ -87,7 +87,8 @@ automatic process-crash recovery or a second document authority.
 
 ### Independent PDF page compositor
 
-`apps/pdf-composer/` is an independently built offline macOS application. It
+`apps/pdf-composer/` is an independently built local Edge workbench with an
+existing macOS native delivery. It
 imports frozen PDF pages, not SciPlot documents or numerical sources, and does
 not depend on `sciplot_core`, Qt or Veusz. Its 60 × 55 mm cells compose complete
 source pages at their original physical size or an explicit uniform whole-page
@@ -95,7 +96,15 @@ scale; merging changes only the container. It cannot reflow or edit plot interna
 Original bytes/hash, page selection and layout live in one portable project.
 Source type/page geometry are re-inspected on reopen/save/export, and TIFF cache
 pixels require native re-decoding. The permissive PDF engine copies static page
-streams/resource graphs with explicit unsupported-state refusals. A thin Swift
+streams/resource graphs with explicit unsupported-state refusals. Edge uses
+bundled PDFium WASM only for disposable previews; file inputs/drop and downloads
+replace the native bridge. Browser downloads cannot confirm final disk writes,
+so dirty state remains until a validated project is reopened. New/open/drop
+replacement and browser navigation protect unsaved changes. No source is uploaded.
+SVG refraction is bounded to compact control groups with clear foreground text;
+the wide horizontal source tray uses light border/shadow layers. The browser
+appearance is verified in Edge, without adding Safari compatibility work.
+A thin Swift
 shell supplies local file dialogs, conflict-aware atomic saves, verified image
 decoding, preview/raster export and a bundled WebKit UI with network access denied.
 Its package-local checks and dedicated CI are separate from scientific runtime

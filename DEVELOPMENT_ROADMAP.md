@@ -1,13 +1,17 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-15. External AI is the task interface. Current behavior belongs
+Status: 2026-10-16. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
 ## Independent offline PDF composition
 
 `apps/pdf-composer/` separately implements manual opaque-page placement, fixed
 60 × 55 mm cells, rectangular merge/split, whole-page swap/replace/history,
-portable embedded-source projects and vector PDF export in a thin macOS app.
+portable embedded-source projects and vector PDF export in a local Edge
+workbench and thin macOS app. Edge's white glass controls and horizontal source
+tray use the same opaque-page engine; bundled PDFium renders previews locally.
+Browser save downloads keep leave protection active until the package is
+successfully reopened, since download initiation is not a confirmed disk write.
 It does not extend the native Research Plots panel editor or reflow source plots.
 Its current fidelity scope and explicit PDF/image refusals belong to the app
 README and contract, with package-local unit/browser/native gates and a dedicated
