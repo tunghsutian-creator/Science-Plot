@@ -176,7 +176,7 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
     entries = []
     for source, name in zip(sources, ('UVvis', 'FTIR'), strict=True):
         request = {'version': 1, 'action': 'create', 'source': str(source)}
-        entries.append({'id': name, 'label': name, 'request': request})
+        entries.append({'id': name, 'label': {'UVvis': 'P0.3/0.7 log', 'FTIR': 'P0.5/0.5 linear'}[name], 'request': request})
     group = {'kind': 'sciplot_task_group', 'version': 1, 'group_dir': str(root),
              'request': {'version': 1, 'title': 'Two current original publications', 'items': entries},
              'items': [{'id': entry['id'], 'label': entry['label'], 'status': 'complete', 'finished': True,
@@ -184,10 +184,16 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
                                    'task_dir': str(tmp_path / ('create-' + entry['id']))}]} for entry in entries]}
     save_group(root, group)
     originals = {path: file_inventory(path) for path in [*sources, *projects, root]}
+    forward = _public('start', '--group', root, '--out', tmp_path / 'forward-publication', '--paper-dir', tmp_path / 'forward-paper')
+    assert [item['stem'] for item in forward['items']] == ['001_P0_3_0_7_log', '002_P0_5_0_5_linear']
     out, paper = tmp_path / 'group-publication', tmp_path / 'group-paper'
     result = _public('start', '--group', root, '--out', out, '--paper-dir', paper, '--item-id', 'FTIR', '--item-id', 'UVvis')
     assert result['status'] == 'complete', result
     assert [Path(item['project']) for item in result['items']] == list(reversed(projects))
+    assert [item['stem'] for item in result['items']] == ['001_P0_5_0_5_linear', '002_P0_3_0_7_log']
+    assert sorted(path.name for path in (out / 'figures').glob('*.pdf')) == ['001_P0_5_0_5_linear.pdf', '002_P0_3_0_7_log.pdf']
+    manifest = json.loads((out / 'data/figure_sources.json').read_text())
+    assert [item['label'] for item in manifest['items']] == ['P0_5_0_5_linear', 'P0_3_0_7_log']
     state = json.loads((paper / 'paper.json').read_text())
     assert state['selection_origin']['group_state_sha256'] == group['state_sha256']
     for source, item in zip(state['selections'], state['items'], strict=True):

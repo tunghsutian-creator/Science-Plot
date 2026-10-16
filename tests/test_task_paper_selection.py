@@ -21,7 +21,7 @@ def group(tmp_path, monkeypatch):
         task_dir = root / "tasks" / name
         source = tmp_path / (name + ".csv")
         source.write_text("x,y\n1,2\n")
-        sources.append({"id": name, "label": name, "request": {"version": 1, "action": "create", "source": str(source)}})
+        sources.append({"id": name, "label": {"A": "P0.3/0.7 log", "B": "P0.5/0.5 linear"}[name], "request": {"version": 1, "action": "create", "source": str(source)}})
         children[str(task_dir)] = {"status": "complete", "project": str(tmp_path / ("project-" + name))}
     state = {"kind": "sciplot_task_group", "version": 1, "group_dir": str(root),
              "request": {"version": 1, "title": "Current ordered group", "items": sources},
@@ -47,8 +47,10 @@ def test_default_order_and_explicit_item_order_capture_versions_once(group, tmp_
     assert selection.start_group_paper(root, out=tmp_path / "out", paper_dir=tmp_path / "paper")["status"] == "complete"
     assert [Path(item["project"]).name for item in saved[0][0]["items"]] == ["project-A", "project-B"]
     assert all("expected_version" in item for item in saved[0][0]["items"])
+    assert [item["label"] for item in saved[0][0]["items"]] == ["P0_3_0_7_log", "P0_5_0_5_linear"]
     selection.start_group_paper(root, out=tmp_path / "out2", paper_dir=tmp_path / "paper2", item_ids=["B", "A"])
     assert [Path(item["project"]).name for item in saved[-1][0]["items"]] == ["project-B", "project-A"]
+    assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_5_0_5_linear", "P0_3_0_7_log"]
     assert len(captures) == 4
 
 
@@ -120,3 +122,16 @@ def test_group_change_during_capture_blocks_before_start(group, tmp_path, monkey
     with pytest.raises(ValueError):
         selection.start_group_paper(root, out=tmp_path / 'out', paper_dir=tmp_path / 'paper')
     assert not saved
+
+
+
+def test_only_multi_figure_projects_add_titles_or_necessary_stable_identity(group, tmp_path, monkeypatch):
+    root, _, _, _, saved = group
+    figures = [{"figure_id": "internal-A", "title": "Observed curve", "status": "ready"},
+               {"figure_id": "internal-B", "title": "Reference", "status": "ready"}]
+    monkeypatch.setattr(selection, "project_snapshot", lambda _: ({}, "internal-A", figures))
+    selection.start_group_paper(root, out=tmp_path / "out", paper_dir=tmp_path / "paper", item_ids=["A"])
+    assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_3_0_7_log_Observed_curve", "P0_3_0_7_log_Reference"]
+    figures[1]["title"] = "Observed curve"
+    selection.start_group_paper(root, out=tmp_path / "out2", paper_dir=tmp_path / "paper2", item_ids=["A"])
+    assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_3_0_7_log_internal-A", "P0_3_0_7_log_internal-B"]

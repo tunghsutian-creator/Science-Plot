@@ -14,7 +14,12 @@ skill/scripts/sciplot task paper start --group GROUP_DIRECTORY --out NEW_OUTPUT 
 ```
 
 Use repeated `--item-id ID` to select a subset in that explicit order, and
-`--title TITLE` to override the group title. Every selected item must be finished
+`--title TITLE` to override the group title. A single-figure item's filename
+uses its explicit group display label, normalized to safe ASCII characters
+(e.g. `P0.3/0.7 log` becomes `001_P0_3_0_7_log.pdf`). The ordinal is added once.
+Only a multi-figure project appends its figure title, or a stable figure ID when
+titles cannot distinguish figures. The existing strict explicit-request label
+contract and duplicate-label guard remain unchanged. Every selected item must be finished
 and every creation/presentation/export child complete. This entry does not
 advance tasks, render a gallery or accept previews. It validates current source,
 native, semantic and publication bytes; group completion alone is not readiness.

@@ -14,6 +14,22 @@ from sciplot_core.task_paper_status import _current_summary
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 
 
+def _label(item: dict[str, Any], figure: dict[str, Any], figures: list[dict[str, Any]]) -> str:
+    def safe(value: str) -> str:
+        return re.sub(r"[^A-Za-z0-9_-]+", "_", value).strip("_-")
+
+    label = safe(item["label"])
+    if len(figures) > 1:
+        titles = [safe(str(entry.get("title") or entry["figure_id"])) for entry in figures]
+        title = safe(str(figure.get("title") or figure["figure_id"]))
+        suffix = title if title and titles.count(title) == 1 else safe(figure["figure_id"])
+        suffix = suffix[:48]
+        label = label[:max(1, 63 - len(suffix))] + "_" + suffix
+    if not label:
+        raise TaskControlError("paper_group_label_invalid", "Give the selected group item a nonempty safe display label.")
+    return label[:64]
+
+
 def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | None = None,
                       item_ids: list[str] | None = None) -> dict[str, Any]:
     """Capture once, then use frozen versions on every retry; never render a gallery."""
@@ -50,7 +66,7 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
             if figure["status"] != "ready":
                 raise TaskControlError("paper_group_figure_pending", "Every selected registered figure must have a saved native document.")
             captured = capture_selection(project, figure["figure_id"])
-            label = f"{len(selected) + 1:03d}_" + re.sub(r"[^A-Za-z0-9_-]", "_", identifier + "_" + figure["figure_id"])[:59]
+            label = _label(item, figure, figures)
             selected.append({"project": captured["project"], "figure_id": figure["figure_id"],
                              "label": label, "expected_version": captured["version"]})
     group_sha256 = state["state_sha256"]
