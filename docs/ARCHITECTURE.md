@@ -102,7 +102,10 @@ replace the native bridge. Browser downloads cannot confirm final disk writes,
 so dirty state remains until a validated project is reopened. New/open/drop
 replacement and browser navigation protect unsaved changes. No source is uploaded.
 SVG refraction is bounded to compact control groups with clear foreground text;
-the wide horizontal source tray uses light border/shadow layers. The browser
+the fixed-width left source library uses light border/shadow layers. Its source
+list scrolls vertically above a fixed import area; the right canvas uses the
+remaining space to fit and center the complete paper. Screen fitting never
+changes physical geometry or source scale. The browser
 appearance is verified in Edge, without adding Safari compatibility work.
 A thin Swift
 shell supplies local file dialogs, conflict-aware atomic saves, verified image

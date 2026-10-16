@@ -8,8 +8,10 @@ in README and live capabilities; this file lists unfinished, closable work.
 `apps/pdf-composer/` separately implements manual opaque-page placement, fixed
 60 × 55 mm cells, rectangular merge/split, whole-page swap/replace/history,
 portable embedded-source projects and vector PDF export in a local Edge
-workbench and thin macOS app. Edge's white glass controls and horizontal source
-tray use the same opaque-page engine; bundled PDFium renders previews locally.
+workbench and thin macOS app. Edge's white glass controls and fixed-width left
+source library use the same opaque-page engine; the list scrolls vertically with
+a fixed import area, and the remaining right canvas fits and centers the page.
+Bundled PDFium renders previews locally.
 Browser save downloads keep leave protection active until the package is
 successfully reopened, since download initiation is not a confirmed disk write.
 It does not extend the native Research Plots panel editor or reflow source plots.
@@ -19,7 +21,8 @@ CI workflow. Cross-Mac font/resource identity, signing/notarization and independ
 print/journal acceptance remain separate work. Historical incomplete private
 corpus/access-capture evidence remains BLOCKED, and external AI billed/token
 telemetry remains UNKNOWN; this document tool does not resolve those claims.
-Actual Linux Edge normal-motion visual/refraction checks pass. The current Mac
+Actual Linux Edge normal-motion visual/refraction checks remain a layout acceptance
+gate. The current Mac
 host's Edge frame/capture stall also reproduces on an empty page in two official
 versions; its cause and Mac Edge hardware visual acceptance remain open.
 

@@ -78,7 +78,11 @@ The Edge route uses local file inputs, drag/drop and downloads instead of the
 WebKit bridge. Its development/preview HTTP server only serves local application
 assets. It has no upload/API endpoint and no telemetry/model request. SVG
 displacement is restricted to compact glass control groups; foreground text/icons
-remain clear, and the wide source tray uses bounded border/shadow layering.
+remain clear. The fixed-width source library on the left uses bounded border/shadow
+layering, a vertically scrolling list and a fixed bottom import area. The remaining
+right canvas fits and centers the complete paper without changing stored dimensions
+or source scale. The selection controls stay clear of the paper, including the
+600-pixel-wide workbench layout. There is no bottom source tray or footer status text.
 
 Core helpers: `createDocument(rows=2,columns=3)`, `validateDocument(doc)`,
 `placeSource(doc,panelId,asset,pageIndex,scale=1)`, `clearPanel`, `mergePanels`,

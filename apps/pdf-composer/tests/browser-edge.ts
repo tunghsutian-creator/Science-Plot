@@ -238,7 +238,7 @@ async function proveRefraction() {
     assert.match(state.backdrop, /url\(/);
     assert.ok(state.scales.length >= 3 && state.scales.every((scale) => scale !== 0));
     assert.equal(state.foreground, 'none'); assert.equal(state.foregroundBackdrop, 'none');
-    assert.doesNotMatch(state.tray, /url\(/, 'Wide tray must not carry the small-group displacement filter.');
+    assert.doesNotMatch(state.tray, /url\(/, 'Source library must not carry the small-group displacement filter.');
     // Diagnostic-only substrate in a disposable page, never in product captures.
     // It is an earlier sibling of the actual production backdrop, preserving
     // that exact engine/filter/clear-foreground stack.
@@ -310,8 +310,8 @@ async function fileDeliverySmoke() {
     await (await choice).setFiles(ordinary[0].path);
     await direct.locator('.app-shell[aria-busy="false"]').waitFor();
     await assertPreview(direct.getByRole('button', { name: `Place ${ordinary[0].name}`, exact: true }));
-    const tray = await direct.locator('.source-list').evaluate((element) => ({ width: element.clientWidth, scroll: element.scrollWidth }));
-    assert.ok(tray.scroll <= tray.width, 'The existing single-source file-delivery state has no tray overflow.');
+    const tray = await direct.locator('.source-list').evaluate((element) => ({ height: element.clientHeight, scroll: element.scrollHeight }));
+    assert.ok(tray.scroll <= tray.height, 'The existing single-source file-delivery state has no vertical overflow.');
     assert.equal(await direct.getByRole('button', { name: 'Scroll sources right', exact: true }).count(), 0);
     if (!domDiagnostic) await direct.screenshot({ path: join(out, 'file-delivery-edge.png'), animations: 'disabled', timeout: 10000 });
     return { status: 'passed', sourceSha256: ordinary[0].sha256, scope: 'Actual built file:// entry imports original PDF and renders nonwhite bundled PDFium preview, with no local HTTP server or remote renderer.' };
@@ -335,15 +335,16 @@ try {
   await page.getByRole('button', { name: 'Export PDF', exact: true }).waitFor();
   assert.equal(await page.locator('[data-panel-id]').count(), 6);
   assert.equal(await page.locator('.source-item').count(), 0);
+  const blankLibraryWidth = await page.locator('.source-tray').evaluate((element) => element.getBoundingClientRect().width);
   assert.equal(await page.getByRole('button', { name: 'Scroll sources right', exact: true }).count(), 0);
   assert.equal(await page.locator('footer.status-bar, .source-rail').count(), 0);
   assert.equal(await page.locator('vite-error-overlay, nextjs-portal').count(), 0);
   console.log('Edge acceptance: identity/blank checks passed; fonts:', await page.evaluate(() => document.fonts.status));
   await shot('01-empty-edge-1463x1075.png');
-  checks.push('Actual Microsoft Edge, no native bridge, meaningful blank 3 × 2 app, no framework overlay, no old left rail/footer.');
+  checks.push('Actual Microsoft Edge, no native bridge, meaningful blank 3 × 2 app, no framework overlay or obsolete footer.');
   if (!domDiagnostic) {
     glassProof = await proveRefraction();
-    checks.push('Actual Edge SVG displacement changes diagnostic pixels; compact groups have nonzero maps and clear foreground, wide tray has no displacement URL.');
+    checks.push('Actual Edge SVG displacement changes diagnostic pixels; compact groups have nonzero maps and clear foreground, source library has no displacement URL.');
   } else glassProof = { status: 'blocked', reason: 'Explicit DOM-only diagnosis while actual Edge about:blank screenshots time out; pixel refraction proof remains required.' };
 
   await page.getByLabel('More options', { exact: true }).click({ force: domDiagnostic });
@@ -397,6 +398,7 @@ try {
   await page.getByRole('button', { name: `Place ${rounded.name}`, exact: true }).click({ force: domDiagnostic });
   await page.getByRole('button', { name: 'Fit whole page to cell (≈99.94%)', exact: true }).click({ force: domDiagnostic });
   assert.equal(await occupied(1, 1), true);
+  assert.equal(await page.getByRole('button', { name: `Place ${rounded.name}`, exact: true }).getAttribute('aria-pressed'), 'true');
   await page.getByRole('button', { name: 'Labels', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('.panel-letter').count(), 0);
   await page.getByRole('button', { name: 'Labels', exact: true }).click({ force: domDiagnostic });
@@ -404,46 +406,54 @@ try {
   checks.push('External real PDF drop places a whole page; oversized original choice preserves empty cell; explicit ≈99.94% fit and panel letters work.');
 
   const sourceList = page.locator('.source-list');
+  await sourceList.hover({ force: domDiagnostic });
+  await page.mouse.wheel(0, -await sourceList.evaluate((element) => element.scrollHeight));
+  await page.waitForFunction(() => document.querySelector('.source-list')!.scrollTop === 0);
   const tray = await sourceList.evaluate((element) => {
     const clip = element.getBoundingClientRect();
-    return { width: element.clientWidth, scroll: element.scrollWidth, left: element.scrollLeft,
+    return { width: element.clientWidth, scrollWidth: element.scrollWidth, height: element.clientHeight, scroll: element.scrollHeight, top: element.scrollTop,
       visible: Array.from(element.querySelectorAll('.source-item')).flatMap((source, index) => {
         const bounds = source.getBoundingClientRect();
-        return bounds.left >= clip.left && bounds.right <= clip.right ? [index] : [];
+        return bounds.top >= clip.top && bounds.bottom <= clip.bottom ? [index] : [];
       }) };
   });
-  assert.ok(tray.scroll > tray.width, 'Fixture count forces real horizontal tray overflow.');
-  const nextSources = page.getByRole('button', { name: 'Scroll sources right', exact: true });
-  await nextSources.waitFor();
-  assert.equal(await nextSources.isEnabled(), true);
+  assert.ok(tray.scroll > tray.height, 'Existing imported sources force real vertical library overflow.');
+  assert.ok(tray.scrollWidth <= tray.width, 'The source library must not need horizontal scrolling.');
+  assert.equal(await page.getByRole('button', { name: 'Scroll sources right', exact: true }).count(), 0);
   const importButton = page.getByRole('button', { name: 'Import PDFs', exact: true });
   const importBefore = await importButton.boundingBox();
   assert.ok(importBefore);
-  await nextSources.click({ force: domDiagnostic });
+  await page.mouse.wheel(0, Math.max(1, tray.height));
   await page.waitForFunction((before) => {
     const list = document.querySelector('.source-list')!;
     const clip = list.getBoundingClientRect();
-    return list.scrollLeft > before.left + 1 && Array.from(list.querySelectorAll('.source-item')).some((source, index) => {
+    return list.scrollTop > before.top + 1 && Array.from(list.querySelectorAll('.source-item')).some((source, index) => {
       const bounds = source.getBoundingClientRect();
-      return !before.visible.includes(index) && bounds.left >= clip.left && bounds.right <= clip.right;
+      return !before.visible.includes(index) && bounds.top >= clip.top && bounds.bottom <= clip.bottom;
     });
   }, tray);
   assert.equal(await importButton.isVisible(), true);
   assert.deepEqual(await importButton.boundingBox(), importBefore, 'Scrolling sources must not move or resize the fixed import area.');
-  await sourceList.hover({ force: domDiagnostic });
-  await page.mouse.wheel(tray.scroll, 0);
+  await page.mouse.wheel(0, tray.scroll);
   await page.waitForFunction(() => {
     const list = document.querySelector('.source-list')!;
-    const next = document.querySelector<HTMLButtonElement>('.tray-scroll-next');
-    return list.scrollLeft + list.clientWidth >= list.scrollWidth - 1 && next?.disabled;
+    return list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
   });
-  assert.equal(await nextSources.isEnabled(), false, 'The next-sources control is disabled at the actual scroll end.');
   assert.deepEqual(await importButton.boundingBox(), importBefore);
-  await page.mouse.wheel(-tray.scroll, 0);
-  await page.waitForFunction(() => document.querySelector('.source-list')!.scrollLeft === 0 && !document.querySelector<HTMLButtonElement>('.tray-scroll-next')?.disabled);
+  await page.mouse.wheel(0, -tray.scroll);
+  await page.waitForFunction(() => document.querySelector('.source-list')!.scrollTop === 0);
+  await page.getByRole('region', { name: 'Source pages', exact: true }).focus();
+  await page.keyboard.press('End');
+  await page.waitForFunction(() => {
+    const list = document.querySelector('.source-list')!;
+    return list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
+  });
+  assert.deepEqual(await importButton.boundingBox(), importBefore, 'Keyboard source scrolling keeps import fixed too.');
+  await page.keyboard.press('Home');
+  await page.waitForFunction(() => document.querySelector('.source-list')!.scrollTop === 0);
   if (!domDiagnostic) await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
-  assert.equal(await sourceList.evaluate((element) => element.scrollLeft), 0, 'Reference-state screenshot starts at the first source after real wheel scrolling settles.');
-  checks.push('Overflow enables the actual next-sources button; clicking reveals later sources, preserves the fixed import area and real wheel scrolling returns to the first group.');
+  assert.equal(await sourceList.evaluate((element) => element.scrollTop), 0, 'Screenshot starts at the first source after real vertical wheel scrolling settles.');
+  checks.push('Real vertical wheel and keyboard End/Home reveal later sources and return to the first; the fixed import area stays visible and stationary.');
   await page.getByLabel('Canvas zoom').selectOption('125');
   await page.getByLabel('Canvas zoom').selectOption('fit');
   await shot('02-populated-edge-1463x1075.png');
@@ -452,15 +462,20 @@ try {
     const bar = document.querySelector('.selection-bar')!.getBoundingClientRect();
     const toolbar = document.querySelector('.toolbar')!.getBoundingClientRect();
     const tray = document.querySelector('.source-tray')!.getBoundingClientRect();
-    return { paper: paper.toJSON(), bar: bar.toJSON(), toolbar: toolbar.toJSON(), tray: tray.toJSON(), bodyWidth: document.body.scrollWidth, innerWidth };
+    const workspace = document.querySelector('.workspace')!.getBoundingClientRect();
+    return { paper: paper.toJSON(), bar: bar.toJSON(), toolbar: toolbar.toJSON(), tray: tray.toJSON(), workspace: workspace.toJSON(), bodyWidth: document.body.scrollWidth, innerWidth };
   });
   await writeFile(join(out, 'desktop-layout.json'), JSON.stringify(metrics, null, 2));
   assert.equal(metrics.bodyWidth, metrics.innerWidth);
+  assert.equal(metrics.tray.width, blankLibraryWidth, 'Library width stays fixed when original sources and selection populate the layout.');
   assert.ok(metrics.bar.bottom <= metrics.paper.top || metrics.bar.top >= metrics.paper.bottom, 'Selected controls must not cover the figure.');
   if (!domDiagnostic) {
-    assert.ok(metrics.toolbar.bottom < metrics.paper.top && metrics.paper.bottom <= metrics.tray.top, 'Paper stays between toolbar and horizontal tray.');
-    checks.push('Horizontal tray scrolls while import remains visible; top zoom changes only the view; no selection-bar/paper overlap at approved 1463 × 1075 viewport.');
-  } else checks.push('Tray scroll and top zoom work; measured paper bounds remain BLOCKED because the frozen compositor does not deliver the initial ResizeObserver frame.');
+    assert.ok(metrics.tray.right <= metrics.workspace.left, 'The fixed source library stays left of the canvas without overlap.');
+    assert.ok(metrics.bar.left >= metrics.workspace.left && metrics.bar.right <= metrics.workspace.right, 'Selection controls stay fully inside the right canvas.');
+    assert.ok(metrics.toolbar.bottom < metrics.paper.top && metrics.paper.left >= metrics.workspace.left && metrics.paper.right <= metrics.workspace.right && metrics.paper.bottom <= metrics.workspace.bottom, 'The entire fitted paper stays inside the right canvas.');
+    assert.ok(Math.abs((metrics.paper.left + metrics.paper.right) / 2 - (metrics.workspace.left + metrics.workspace.right) / 2) < 3, 'The fitted paper is horizontally centered in the remaining canvas.');
+    checks.push('Left source library and right fitted canvas do not overlap; paper is centered, selection controls stay clear and top zoom changes only the view at 1463 × 1075.');
+  } else checks.push('Vertical source scrolling and top zoom work; measured paper bounds remain BLOCKED because the frozen compositor does not deliver the initial ResizeObserver frame.');
 
   await page.keyboard.press(`${commandKey}+n`);
   await page.getByRole('heading', { name: 'Keep your changes?' }).waitFor();
@@ -518,12 +533,31 @@ try {
   for (const viewport of [{ width: 1000, height: 700 }, { width: 600, height: 800 }]) {
     await page.setViewportSize(viewport);
     await page.getByLabel('Canvas zoom').selectOption('fit');
-    const sizing = await page.evaluate(() => ({ width: innerWidth, body: document.body.scrollWidth,
-      exportRight: Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('Export PDF'))!.getBoundingClientRect().right }));
+    if (!domDiagnostic) await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+    const sizing = await page.evaluate(() => {
+      const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().toJSON() as DOMRect;
+      const list = document.querySelector('.source-list')!;
+      return { width: innerWidth, height: innerHeight, body: document.body.scrollWidth,
+        exportRight: Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('Export PDF'))!.getBoundingClientRect().right,
+        sidebar: bounds('.source-tray'), list: bounds('.source-list'), workspace: bounds('.workspace'), paper: bounds('.paper'),
+        selection: bounds('.selection-bar'), importer: bounds('.tray-import'), sourceOverflow: list.scrollHeight > list.clientHeight,
+        sources: Array.from(list.querySelectorAll('.source-item')).slice(0, 2).map((element) => element.getBoundingClientRect().toJSON() as DOMRect) };
+    });
     assert.equal(sizing.body, sizing.width); assert.ok(sizing.exportRight <= sizing.width);
+    assert.equal(sizing.sourceOverflow, true);
+    assert.ok(sizing.sources.length === 2 && sizing.sources[0].bottom <= sizing.sources[1].top && Math.abs(sizing.sources[0].left - sizing.sources[1].left) < 1, 'Sources remain a vertical stack at the narrower viewport.');
+    assert.ok(sizing.list.bottom <= sizing.importer.top && sizing.importer.bottom <= sizing.height && sizing.importer.left >= sizing.sidebar.left && sizing.importer.right <= sizing.sidebar.right, 'Import remains fixed below the source list and fully inside the visible left library.');
+    assert.ok(sizing.sidebar.right <= sizing.workspace.left && sizing.workspace.width > 120, 'Narrow layout retains a usable right canvas beside the source library.');
+    if (!domDiagnostic) {
+      assert.ok(sizing.paper.left >= sizing.workspace.left && sizing.paper.right <= sizing.workspace.right && sizing.paper.bottom <= sizing.workspace.bottom, 'The fitted whole paper stays inside the narrower right canvas.');
+      assert.ok(sizing.selection.left >= sizing.workspace.left && sizing.selection.right <= sizing.workspace.right, 'Narrow selection controls remain inside the right canvas without crossing the source library.');
+      assert.ok(sizing.selection.bottom <= sizing.paper.top || sizing.selection.top >= sizing.paper.bottom, 'Narrow selection controls do not cover the fitted paper.');
+      assert.ok(Math.abs((sizing.paper.left + sizing.paper.right) / 2 - (sizing.workspace.left + sizing.workspace.right) / 2) < 3, 'Narrow fitted paper stays centered in the remaining canvas.');
+    }
+    await writeFile(join(out, `layout-${viewport.width}x${viewport.height}.json`), JSON.stringify(sizing, null, 2));
     await shot(`03-edge-${viewport.width}x${viewport.height}.png`);
   }
-  checks.push('1000 × 700 and 600 × 800 viewports retain primary export without horizontal page overflow.');
+  checks.push('1000 × 700 and 600 × 800 retain a vertical source list, fixed visible import, right fitted canvas, clear selection controls and primary export without horizontal page overflow.');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const reducedMotion = await page.evaluate(() => ({ enabled: matchMedia('(prefers-reduced-motion: reduce)').matches,
     transitions: Array.from(document.querySelectorAll('.toolbar-control,.button')).map((element) => getComputedStyle(element).transitionDuration) }));

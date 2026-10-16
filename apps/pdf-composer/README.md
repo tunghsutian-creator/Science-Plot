@@ -11,8 +11,8 @@ file dialogs, conflict-aware saves, TIFF verification and auxiliary raster expor
 use Apple system frameworks. The new SVG glass appearance is verified in Edge;
 Safari/WebKit visual parity is outside this browser workbench's scope.
 
-Normal-motion visual and SVG-refraction acceptance has passed in actual Linux
-Edge 155.0.4283.60. On the current Mac test host, both installed Edge 155.0.4283.45
+Normal-motion visual and SVG-refraction acceptance uses actual Linux Edge.
+On the current Mac test host, both installed Edge 155.0.4283.45
 and an isolated official 155.0.4283.60 build stall frame callbacks and blank-page
 capture before the workbench loads. The cause remains unknown. Local functional
 diagnostics and the separate native app pass, but Mac Edge visual/hardware
@@ -20,8 +20,11 @@ acceptance remains blocked; Linux screenshots do not establish that result.
 
 ## Use
 
-Open the local workbench in Edge, then choose **Import PDFs** in the bottom
-source tray or drop files there. Select a cell and choose a source, or drag its
+Open the local workbench in Edge, then choose **Import PDFs** at the bottom of
+the left source library or drop files there. The library has a fixed width and
+scrolls vertically; its import area stays visible while you browse long lists.
+The canvas fits and centers the complete page in the remaining space on the right.
+Select a cell and choose a source, or drag its
 thumbnail into a cell. Dropping one external PDF into a cell imports and places
 that whole page. Multipage PDFs always ask which page to place.
 The presets are 2 × 2, 3 × 2, 2 × 3 and 3 × 3 (columns × rows), with custom
@@ -134,7 +137,7 @@ node --import tsx tests/browser-edge.ts
 ```
 
 The Edge test requires an installed Microsoft Edge executable; it does not claim
-that Playwright Chromium is Edge. Override its default Mac executable with
+that Playwright Chromium is Edge. Override its executable with
 `FIGURE_ASSEMBLY_EDGE_EXECUTABLE` if needed; otherwise Playwright uses its
 `msedge` channel on the current platform. Send evidence outside the repository with
 `FIGURE_ASSEMBLY_EDGE_OUT`. It starts a loopback static server, uses actual file

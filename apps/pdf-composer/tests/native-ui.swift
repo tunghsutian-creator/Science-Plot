@@ -31,6 +31,7 @@ final class NativeUIRun {
     func run() async throws {
         try await wait("document.querySelectorAll('.figure-panel').length === 6")
         try check(app.window.isVisible, "actual Cocoa window visible with bundled offline frontend")
+        try await checkLibraryLayout()
         try await snapshot("blank-native-workbench.png")
         let pdf = output.appendingPathComponent("Synthetic vector pages.pdf")
         let png = output.appendingPathComponent("Synthetic RGB image.png")
@@ -44,6 +45,9 @@ final class NativeUIRun {
         try await wait("document.querySelectorAll('.source-item').length === 3 && document.querySelector('.app-shell').getAttribute('aria-busy') === 'false'")
         try await wait("[...document.querySelectorAll('.source-item img.page-preview')].filter(i=>i.complete&&i.naturalWidth>0).length === 3")
         try check(true, "native import and real PDF/PNG/TIFF source previews")
+        try await checkLibraryLayout()
+        try check(try await evaluate("(() => { const items = [...document.querySelectorAll('.source-item')].map(e => e.getBoundingClientRect()); return items.length === 3 && items.every((item, index) => index === 0 || (items[index-1].bottom <= item.top && Math.abs(items[index-1].left-item.left) < 1)); })()") as? Bool == true,
+                  "native imported sources form a vertical list")
         try await click("button[aria-label='Place Synthetic vector pages.pdf']")
         try await wait("document.querySelectorAll('.page-choice').length === 2")
         try await click(".page-choice:nth-child(2)")
@@ -207,6 +211,24 @@ final class NativeUIRun {
         }
         guard let root = NSApp.mainMenu, let (menu, index) = find(root) else { throw UITestError.failed("Missing native menu \(action)") }
         menu.performActionForItem(at: index)
+    }
+    func checkLibraryLayout() async throws {
+        let expression = """
+        (() => {
+          const bounds = selector => document.querySelector(selector)?.getBoundingClientRect();
+          const library = bounds('.source-tray'), list = bounds('.source-list'), importer = bounds('.tray-import');
+          const canvas = bounds('.workspace'), paper = bounds('.paper'), selection = bounds('.selection-bar');
+          return library && list && importer && canvas && paper && selection && library.width > 0 &&
+            library.right <= canvas.left && list.bottom <= importer.top && importer.bottom <= innerHeight &&
+            importer.left >= library.left && importer.right <= library.right &&
+            selection.left >= canvas.left && selection.right <= canvas.right &&
+            paper.left >= canvas.left && paper.right <= canvas.right && paper.bottom <= canvas.bottom &&
+            Math.abs((paper.left + paper.right - canvas.left - canvas.right) / 2) < 3;
+        })()
+        """
+        try await wait(expression)
+        try check(try await evaluate(expression) as? Bool == true,
+                  "native fixed left source library and bottom import stay beside the centered right paper")
     }
     func waitSheet() async throws {
         for _ in 0..<30 { if app.window.attachedSheet != nil { return }; try await pause() }

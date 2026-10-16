@@ -227,16 +227,30 @@ try {
   await page.setViewportSize({ width: 1000, height: 700 });
   await page.evaluate(() => document.fonts.ready);
   const metrics = await page.evaluate(() => ({ width: innerWidth, body: document.body.scrollWidth,
-    exportRight: document.querySelector('.export-group')!.getBoundingClientRect().right }));
+    exportRight: document.querySelector('.export-group')!.getBoundingClientRect().right,
+    sourceRight: document.querySelector('.source-tray')!.getBoundingClientRect().right,
+    canvasLeft: document.querySelector('.workspace')!.getBoundingClientRect().left,
+    canvasRight: document.querySelector('.workspace')!.getBoundingClientRect().right,
+    selection: document.querySelector('.selection-bar')!.getBoundingClientRect().toJSON() as DOMRect,
+    importBottom: document.querySelector('.tray-import')!.getBoundingClientRect().bottom, height: innerHeight }));
   assert.equal(metrics.body, metrics.width); assert.ok(metrics.exportRight <= metrics.width);
+  assert.ok(metrics.sourceRight <= metrics.canvasLeft && metrics.importBottom <= metrics.height);
+  assert.ok(metrics.selection.left >= metrics.canvasLeft && metrics.selection.right <= metrics.canvasRight);
   await page.screenshot({ path: resolve(out, 'narrow-desktop.png') });
   checks.push('1000 × 700 desktop viewport has no horizontal page or primary-toolbar clipping.');
   await page.setViewportSize({ width: 390, height: 844 });
   const mobile = await page.evaluate(() => ({ width: innerWidth, body: document.body.scrollWidth,
-    exportRight: document.querySelector('.export-group')!.getBoundingClientRect().right }));
+    exportRight: document.querySelector('.export-group')!.getBoundingClientRect().right,
+    sourceRight: document.querySelector('.source-tray')!.getBoundingClientRect().right,
+    canvasLeft: document.querySelector('.workspace')!.getBoundingClientRect().left,
+    canvasRight: document.querySelector('.workspace')!.getBoundingClientRect().right,
+    selection: document.querySelector('.selection-bar')!.getBoundingClientRect().toJSON() as DOMRect,
+    importBottom: document.querySelector('.tray-import')!.getBoundingClientRect().bottom, height: innerHeight }));
   assert.equal(mobile.body, mobile.width); assert.ok(mobile.exportRight <= mobile.width);
+  assert.ok(mobile.sourceRight <= mobile.canvasLeft && mobile.importBottom <= mobile.height);
+  assert.ok(mobile.selection.left >= mobile.canvasLeft && mobile.selection.right <= mobile.canvasRight);
   await page.screenshot({ path: resolve(out, 'small-viewport.png') });
-  checks.push('Small viewport wraps toolbar controls and keeps the primary export accessible.');
+  checks.push('Small viewport wraps toolbar controls, retains the left library beside the canvas and keeps import/export accessible.');
   assert.deepEqual(failures, []);
   await writeFile(resolve(out, 'result.json'), JSON.stringify({ status: 'passed', checks,
     browser: 'Playwright Chromium; Browser/IAB tools unavailable',

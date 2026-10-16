@@ -11,6 +11,7 @@ Bring the result into your manuscript, then keep refining it as your research ev
 For manual placement of already exported PDF pages, the independent
 [Figure Assembly local Edge workbench and macOS app](apps/pdf-composer/README.md) provide offline grid
 composition and portable layouts without installing the SciPlot runtime.
+Its left source library scrolls vertically beside a fitted, centered page canvas.
 
 [**Download source ↓**](https://github.com/tunghsutian-creator/Science-Plot/archive/refs/heads/main.zip) · [Get started](#get-started) · [See the figures](#gallery) · [Connect your AI](#connect-your-ai)
 
