@@ -107,8 +107,42 @@ await context.route('**/*', async (route) => {
 });
 const cell = (row: number, column: number) => page.locator(`[data-row="${row}"][data-column="${column}"]`);
 const idle = () => page.locator('.app-shell[aria-busy="false"]').waitFor();
+let motionReceipt = 0;
+async function motionMetadata() {
+  return page.evaluate(() => document.getAnimations().map((animation) => {
+    const effect = animation.effect;
+    const target = effect instanceof KeyframeEffect && effect.target instanceof Element ? effect.target : null;
+    const style = target ? getComputedStyle(target) : null;
+    return { className: target?.getAttribute('class'), tag: target?.tagName,
+      playState: animation.playState, pending: animation.pending, currentTime: String(animation.currentTime), timing: effect?.getTiming(),
+      display: style?.display, visibility: style?.visibility, opacity: style?.opacity,
+      closedDetails: Boolean(target?.closest('details:not([open])')), bounds: target?.getBoundingClientRect().toJSON() };
+  }));
+}
+async function settleVisibleMotion(label: string) {
+  const receipt = `${String(++motionReceipt).padStart(2, '0')}-${label.replaceAll(/[^a-z0-9]+/gi, '-')}`;
+  await writeFile(join(out, `animation-${receipt}.before.json`), JSON.stringify(await motionMetadata(), null, 2));
+  try {
+    await page.evaluate(async () => {
+      const animations = document.getAnimations().filter((animation) => {
+        const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null;
+        if (!(target instanceof Element) || target.closest('details:not([open])')) return false;
+        if (!target.closest('.control-popover,.selection-bar,.source-placement,.toolbar-control,.toolbar-menu[open],.panel-menu,.source-item,.tray-import,.tray-import-folder')) return false;
+        const bounds = target.getBoundingClientRect(), style = getComputedStyle(target);
+        return bounds.width > 0 && bounds.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      });
+      await Promise.race([
+        Promise.allSettled(animations.map((animation) => animation.finished)),
+        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('Visible UI animations did not naturally settle within two seconds.')), 2000)),
+      ]);
+    });
+  } catch (error) {
+    await writeFile(join(out, `animation-${receipt}.failure.json`), JSON.stringify(await motionMetadata(), null, 2));
+    throw error;
+  }
+}
 async function screenshot(name: string) {
-  await page.evaluate(async () => { await Promise.allSettled(document.getAnimations().map((animation) => animation.finished)); });
+  await settleVisibleMotion(name);
   await page.screenshot({ path: join(out, name), timeout: 10000 });
   screenshots.push(name);
 }
@@ -127,7 +161,7 @@ async function save(name: string): Promise<AssemblyDocument> {
   return JSON.parse(await readFile(join(out, name), 'utf8')) as AssemblyDocument;
 }
 async function assertPopupBounds(popup: Locator, name: string) {
-  await popup.evaluate(async (element) => { await Promise.allSettled(element.getAnimations({ subtree: true }).map((animation) => animation.finished)); });
+  await settleVisibleMotion(name);
   assert.equal(await popup.evaluate((element) => Number(getComputedStyle(element).opacity)), 1, 'The actual popover entrance finishes before evidence capture.');
   const bounds = await popup.boundingBox();
   assert.ok(bounds);
