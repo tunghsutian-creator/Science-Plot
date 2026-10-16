@@ -310,6 +310,9 @@ async function fileDeliverySmoke() {
     await (await choice).setFiles(ordinary[0].path);
     await direct.locator('.app-shell[aria-busy="false"]').waitFor();
     await assertPreview(direct.getByRole('button', { name: `Place ${ordinary[0].name}`, exact: true }));
+    const tray = await direct.locator('.source-list').evaluate((element) => ({ width: element.clientWidth, scroll: element.scrollWidth }));
+    assert.ok(tray.scroll <= tray.width, 'The existing single-source file-delivery state has no tray overflow.');
+    assert.equal(await direct.getByRole('button', { name: 'Scroll sources right', exact: true }).count(), 0);
     if (!domDiagnostic) await direct.screenshot({ path: join(out, 'file-delivery-edge.png'), animations: 'disabled', timeout: 10000 });
     return { status: 'passed', sourceSha256: ordinary[0].sha256, scope: 'Actual built file:// entry imports original PDF and renders nonwhite bundled PDFium preview, with no local HTTP server or remote renderer.' };
   } finally { await direct.close(); }
@@ -332,6 +335,7 @@ try {
   await page.getByRole('button', { name: 'Export PDF', exact: true }).waitFor();
   assert.equal(await page.locator('[data-panel-id]').count(), 6);
   assert.equal(await page.locator('.source-item').count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Scroll sources right', exact: true }).count(), 0);
   assert.equal(await page.locator('footer.status-bar, .source-rail').count(), 0);
   assert.equal(await page.locator('vite-error-overlay, nextjs-portal').count(), 0);
   console.log('Edge acceptance: identity/blank checks passed; fonts:', await page.evaluate(() => document.fonts.status));
@@ -399,12 +403,47 @@ try {
   assert.equal(await page.locator('.panel-letter').count(), 4);
   checks.push('External real PDF drop places a whole page; oversized original choice preserves empty cell; explicit ≈99.94% fit and panel letters work.');
 
-  const tray = await page.locator('.source-list').evaluate((element) => ({ width: element.clientWidth, scroll: element.scrollWidth }));
+  const sourceList = page.locator('.source-list');
+  const tray = await sourceList.evaluate((element) => {
+    const clip = element.getBoundingClientRect();
+    return { width: element.clientWidth, scroll: element.scrollWidth, left: element.scrollLeft,
+      visible: Array.from(element.querySelectorAll('.source-item')).flatMap((source, index) => {
+        const bounds = source.getBoundingClientRect();
+        return bounds.left >= clip.left && bounds.right <= clip.right ? [index] : [];
+      }) };
+  });
   assert.ok(tray.scroll > tray.width, 'Fixture count forces real horizontal tray overflow.');
-  await page.locator('.source-list').evaluate((element) => { element.scrollLeft = element.scrollWidth; });
-  assert.ok(await page.locator('.source-list').evaluate((element) => element.scrollLeft) > 0);
-  assert.ok(await page.getByRole('button', { name: /Import PDFs|Import sources|Import files/ }).isVisible());
-  await page.locator('.source-list').evaluate((element) => { element.scrollLeft = 0; });
+  const nextSources = page.getByRole('button', { name: 'Scroll sources right', exact: true });
+  await nextSources.waitFor();
+  assert.equal(await nextSources.isEnabled(), true);
+  const importButton = page.getByRole('button', { name: 'Import PDFs', exact: true });
+  const importBefore = await importButton.boundingBox();
+  assert.ok(importBefore);
+  await nextSources.click({ force: domDiagnostic });
+  await page.waitForFunction((before) => {
+    const list = document.querySelector('.source-list')!;
+    const clip = list.getBoundingClientRect();
+    return list.scrollLeft > before.left + 1 && Array.from(list.querySelectorAll('.source-item')).some((source, index) => {
+      const bounds = source.getBoundingClientRect();
+      return !before.visible.includes(index) && bounds.left >= clip.left && bounds.right <= clip.right;
+    });
+  }, tray);
+  assert.equal(await importButton.isVisible(), true);
+  assert.deepEqual(await importButton.boundingBox(), importBefore, 'Scrolling sources must not move or resize the fixed import area.');
+  await sourceList.hover({ force: domDiagnostic });
+  await page.mouse.wheel(tray.scroll, 0);
+  await page.waitForFunction(() => {
+    const list = document.querySelector('.source-list')!;
+    const next = document.querySelector<HTMLButtonElement>('.tray-scroll-next');
+    return list.scrollLeft + list.clientWidth >= list.scrollWidth - 1 && next?.disabled;
+  });
+  assert.equal(await nextSources.isEnabled(), false, 'The next-sources control is disabled at the actual scroll end.');
+  assert.deepEqual(await importButton.boundingBox(), importBefore);
+  await page.mouse.wheel(-tray.scroll, 0);
+  await page.waitForFunction(() => document.querySelector('.source-list')!.scrollLeft === 0 && !document.querySelector<HTMLButtonElement>('.tray-scroll-next')?.disabled);
+  if (!domDiagnostic) await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+  assert.equal(await sourceList.evaluate((element) => element.scrollLeft), 0, 'Reference-state screenshot starts at the first source after real wheel scrolling settles.');
+  checks.push('Overflow enables the actual next-sources button; clicking reveals later sources, preserves the fixed import area and real wheel scrolling returns to the first group.');
   await page.getByLabel('Canvas zoom').selectOption('125');
   await page.getByLabel('Canvas zoom').selectOption('fit');
   await shot('02-populated-edge-1463x1075.png');
