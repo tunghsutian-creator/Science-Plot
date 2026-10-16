@@ -3,6 +3,25 @@
 Status: 2026-10-16. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
+## 2026-10-16 group workflow acceptance
+
+The group workflow composes initial create/presentation review, compact
+original-key recovery, ordered group paper delivery from sealed publications,
+and scoped development feedback through existing owners. Its acceptance contract
+compares the same six-figure, two-intent workload against the frozen 9095 baseline:
+initial Sample labels, a later text-only P rename, both preview reviews, then one
+current paper delivery. Count actual public calls and local command wall time;
+do not treat those measurements as external AI rounds, tokens or billed cost.
+Verify original arrays/source hashes and inspect all final native exports.
+
+Future changes must retain integrated changed-owner checks, fresh exact-node
+scope review and frozen release gates before a default-entry upgrade. The
+default retains the existing physical project path and recoverable backups.
+Complete private access capture and actual AI telemetry remain deferred:
+preliminary inventory stays incomplete and cost stays UNKNOWN. Cross-Mac font,
+human usability and print/journal acceptance require their own evidence. Local
+acceptance does not establish a remote CI result, main merge or publication.
+
 ## 2026-10-16 ordinary plotting and continuation review
 
 The current local reliability branch addresses an ordinary normalized wide-table

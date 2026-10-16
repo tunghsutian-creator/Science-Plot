@@ -247,6 +247,12 @@ leave the revision committed; retries never reapply it. Only known transient
 preview/export failures get one durable extra attempt. Undo appends a revision.
 This is recoverable logical execution, not a claim of atomic multi-file filesystem
 replacement across power loss. Full candidate/native evidence stays local.
+`plot_engine/recovery` projects that existing frozen receipt into descriptions
+and validates a compact plot ID/base revision/idempotency key before replaying
+the original saved patch. CLI, RPC and MCP delegate to this owner. Recovery
+cannot accept a preview, invent a missing request, rebind changed inputs or
+advance a historical transaction as current. Transport failure guidance retains
+the original key and distinguishes a request not sent from a lost reply.
 
 Large imported scientific provenance values are interned once into immutable
 content-addressed JSON blobs before revision zero. References seal exact bytes;
@@ -451,6 +457,13 @@ keeps its separate, stricter scientific-compatibility owner.
 before execution and carries successful items past another item's question or
 failure. Shared sample styles expand into ordinary per-figure edit tasks with
 deferred export; the existing native transactions retain all scientific checks.
+Create items may attach typed initial presentation operations. Native preparation
+checkpoints before a normal edit preview and exports only after its bound
+acceptance. This composes existing create/edit children; it adds no group-level
+mutation authority or cross-plot transaction. Original-source preflight guards
+both selected responses and automatic child continuation before native writes.
+The overview projects the existing response templates, next steps and ordered
+figure descriptors, so an unchanged receipt needs no repeated discovery.
 `task_group_review` queries current project evidence and caches native PNGs by
 project/figure/document/spec identity, then writes a read-only HTML gallery.
 It contains no plotting implementation, browser editor, model provider or
@@ -622,12 +635,20 @@ remain separate, snapshots remain non-original, and no catalog or path rebinding
 is introduced. Current editing authority does not imply ready delivery.
 
 `task_papers` packages an ordered selection of registered project figures using
-the existing native export/audit ports. Version guards and source closure bind
+the existing native Save/audit ports and sealed publication files. Version guards and source closure bind
 each selection. Native Save converts consumed linked inputs to portable copies;
 it never patches VSZ text. Sealed staging supports exact partial retries and the
 generic exclusive directory installer rejects all existing targets. Completed
 start replay, inspect and resume share a read-only currentness projection;
 historical frozen delivery stays distinct from present source/package validity.
+`task_paper_selection` is a read-only group adapter: it freezes complete selected
+children and registered figures through the strict paper request owner, without
+rendering a gallery. `task_paper_publication` validates the existing publication
+receipt and exact file inventory and copies its PDF/TIFF bytes; it cannot render
+to repair a missing or changed publication. Native portable Save and scientific
+audits remain required. `task_paper_status` projects current source/package
+evidence; the new group start calls it after completion before offering delivery.
+Explicit-request start retains its original completion/inspection boundary.
 
 Radar interpretation is presentation of existing scientific values and declared
 normalization. A reserved panel expands new page width without changing the

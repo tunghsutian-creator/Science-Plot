@@ -37,6 +37,20 @@ Once the data and intent are clear, one local task carries the figure through to
 export. If samples, units, or worksheet choices are ambiguous, SciPlot asks for
 clarification before proceeding.
 
+For an understood group of figures, include the requested presentation batch in
+each `task group start` create item. One group response returns all bound
+candidates and the acceptance template; review them together and continue with
+`task group resume`. Later changes remain separate intents and previews. The
+group checks original source bytes before applying a saved continuation.
+After the selected items finish, `task paper start --group GROUP --out NEW_OUTPUT
+--paper-dir NEW_CHECKPOINT --json` captures their current versions in order and
+copies sealed PDF/TIFF publications into one portable editable package. Its first
+successful response reports checked package/source currentness. Missing or
+changed publication evidence blocks delivery and points back to the original
+export; packaging does not redraw the figures. See the
+[create route](skill/references/ordinary-create.md) and
+[paper route](skill/references/paper-figures.md).
+
 Saved ordinary figures also support a persistent semantic editing engine. For a
 previously identified ManagedPlot, start with `sciplot plot open TARGET --scope
 summary --json`; it returns currentness, revision and stable edit targets without
@@ -50,6 +64,12 @@ owns native paths and recovery. Repeating its idempotency key resumes the same
 work. Structural changes return a bound preview when needed. CLI and MCP share
 this engine; existing projects retain their native VSZ and explicit partial-import
 coverage. See the [saved-figure route](skill/references/saved-figure-edit.md).
+After an uncertain reply, retain the original plot ID, base revision and
+idempotency key. `plot describe` exposes the frozen pending receipt and its next
+step; `plot resume` loads that exact saved request under the existing source,
+native and revision guards. A pending preview still requires its bound decision,
+and a committed edit can continue export without applying it again. CLI, RPC and
+MCP share the same recovery owner.
 When authority is unknown or the figure is a LegacyPlot, omit the scope for the
 unchanged full open. Reuse that response; legacy imports retain their full open
 behavior and native coverage, with no automatic conversion to ManagedPlot.
