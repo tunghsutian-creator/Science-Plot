@@ -21,4 +21,10 @@ for (const [path, metadata] of Object.entries(lock.packages)) {
   sections.push(`${path.replace('node_modules/', '')} ${metadata.version} (${metadata.license})`, ...notices);
 }
 sections.push('Noto Sans Regular — unchanged font from https://github.com/notofonts/noto-fonts', read('assets/OFL.txt'));
+sections.push(
+  'Liquid Glass — adapted single headless engine from https://github.com/xcyberpunkx0/liquid-glass at b1313491cd29bc7a3cb66284324b01bdc3f41313 (MIT).',
+  read('src/glass/vendor/LICENSE'),
+  'PDFium — unmodified WASM bundled by @hyzyla/pdfium 3.0.0; byte-identical to pdfium-lib release 8046d, SHA256 beeaf5bbff216d555fecec7cd486072838c4632a2272d31b52ef1fd05008fe7c. Upstream license: https://pdfium.googlesource.com/pdfium/+/refs/heads/chromium/8046/LICENSE',
+  read('assets/pdfium-LICENSE.txt'),
+);
 writeFileSync(resolve(root, 'dist/THIRD_PARTY_NOTICES.txt'), sections.join('\n\n--------------------\n\n'));
