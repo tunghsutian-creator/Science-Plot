@@ -18,12 +18,13 @@ use Apple system frameworks. This branch contains an independent minimal-motion 
 for review, with the stable installed browser app retained separately.
 Safari/WebKit visual parity is outside this browser workbench's scope.
 
-Normal-motion visual and SVG-refraction acceptance uses actual Linux Edge.
-On the current Mac test host, both installed Edge 155.0.4283.45
-and an isolated official 155.0.4283.60 build stall frame callbacks and blank-page
-capture before the workbench loads. The cause remains unknown. Local functional
-diagnostics and the separate native app pass, but Mac Edge visual/hardware
-acceptance remains blocked; Linux screenshots do not establish that result.
+Verification records the actual Edge build and platform. A fresh macOS run of
+this preview in official Edge 155.0.4283.60 completed standard screenshots,
+unforced pointer interaction, local file choice and source placement. An earlier
+session's blank-page capture stall did not recur in that run; its historical
+cause remains unknown. Automated browser evidence and the user's foreground
+visual judgement remain separate. Preview images and recording use synthetic
+sources; private-file acceptance evidence stays local.
 
 ## Use
 

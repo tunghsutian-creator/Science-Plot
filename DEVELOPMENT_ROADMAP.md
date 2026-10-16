@@ -24,9 +24,10 @@ telemetry remains UNKNOWN; this document tool does not resolve those claims.
 The independent minimal-motion preview adds button-anchored settings, empty-cell
 file choice and local folder import while retaining the stable app. Actual Edge
 interaction, normal/reduced-motion and PDF-source checks are its acceptance gate.
-User approval of this visual proposal remains open. The current Mac
-host's Edge frame/capture stall also reproduces on an empty page in two official
-versions; its cause and Mac Edge hardware visual acceptance remain open.
+User approval of this visual proposal remains open. A fresh macOS Edge 155.0.4283.60 preview run completed normal-motion capture and
+unforced interaction. The earlier session's capture stall remains unexplained,
+without blocking that fresh result. Foreground hardware review, user approval of
+the preview and cross-machine font/print acceptance remain open.
 
 ## 2026-10-15 local panel assembly acceptance
 
