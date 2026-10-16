@@ -15,6 +15,12 @@ zero-time observations and explicit log selection records excluded nonpositive
 times without normalizing again. Actual native axis settings and displayed
 output require acceptance alongside source-level checks.
 
+The end-to-end trial also exposed a saved-legend recovery defect: export could
+retain a zero-clearance generation diagnostic after a valid native edit moved
+the legend. Current geometry, marker extent, unchanged document bytes and a
+still-overlapping negative control must determine the corrected export result;
+the original threshold and generation diagnostic remain intact.
+
 Final acceptance must use isolated copies of the real 15-curve input, retain raw
 hashes and per-curve sequence/counts, review both axis variants, and demonstrate
 that later label-only edits preserve science. A native delivery snapshot must

@@ -85,6 +85,9 @@ on the saved figure's advertised authority; unsupported changes are rejected
 before applying any part of the request. Keep `--task-dir` stable from the first
 call to recover an uncertain reply. A pending preview still needs its returned
 revision-bound continuation. Raw values and scientific hashes remain unchanged.
+For saved ordinary figures, export checks legend clearance against current
+native geometry. Generation-time diagnostics remain available as history;
+stale or unsupported native measurements cannot establish a current pass.
 See [common saved edits](skill/references/saved-figure-edit.md).
 
 If a source or project moved, `task continue SOURCE --search-root KNOWN_FOLDER

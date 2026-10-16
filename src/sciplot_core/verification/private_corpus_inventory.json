@@ -7,11 +7,54 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4840,
-    "nodeids_sha256": "120f3dacac9115712b8599311579ef00609d40d0ec5be1728df4f038e2a53014",
-    "test_sources_sha256": "1ef67c2e67b252e9e27959566bd8c598eccb784e427e126b04f8b2399d0ad989",
-    "test_source_count": 347,
+    "nodeid_count": 4883,
+    "nodeids_sha256": "14194598a8ac7f2253ef11f764c60371c833f1541b7ae065800838672d2ba0f9",
+    "test_sources_sha256": "273593c58a16f0480d6f7c5ce2e97914895de5c4d000d716b2135efae0aea44b",
+    "test_source_count": 349,
     "candidate_nodeids": [
+      "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[break-on-inf]",
+      "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[ignore-0]",
+      "tests/test_current_layout_review.py::test_current_legend_measurement_preserves_generated_issue_and_target[0-critical]",
+      "tests/test_current_layout_review.py::test_current_legend_measurement_preserves_generated_issue_and_target[1-warning]",
+      "tests/test_current_layout_review.py::test_current_legend_measurement_preserves_generated_issue_and_target[2-info]",
+      "tests/test_current_layout_review.py::test_current_legend_measurement_preserves_generated_issue_and_target[7-info]",
+      "tests/test_current_layout_review.py::test_native_thick_stroke_caps_and_expanded_clipping_remain_blocking[xs0-ys0-box0]",
+      "tests/test_current_layout_review.py::test_native_thick_stroke_caps_and_expanded_clipping_remain_blocking[xs1-ys1-box1]",
+      "tests/test_current_layout_review.py::test_new_overlap_is_found_without_a_generated_issue",
+      "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[None]",
+      "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[missing]",
+      "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[stale]",
+      "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[unsupported]",
+      "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[wrong_graph]",
+      "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[wrong_key]",
+      "tests/test_current_layout_review.py::test_sparse_segment_crosses_legend_even_when_endpoints_are_outside",
+      "tests/test_current_layout_review.py::test_unknown_historical_target_cannot_inherit_a_noncritical_severity[0]",
+      "tests/test_current_layout_review.py::test_unknown_historical_target_cannot_inherit_a_noncritical_severity[None]",
+      "tests/test_current_layout_review.py::test_unknown_historical_target_cannot_inherit_a_noncritical_severity[True]",
+      "tests/test_current_layout_review.py::test_unknown_historical_target_cannot_inherit_a_noncritical_severity[nan]",
+      "tests/test_current_layout_review.py::test_unsupported_curve_geometry_is_explicit[bezier]",
+      "tests/test_current_layout_review.py::test_unsupported_curve_geometry_is_explicit[error]",
+      "tests/test_current_layout_review.py::test_unsupported_curve_geometry_is_explicit[fill]",
+      "tests/test_current_layout_review.py::test_unsupported_curve_geometry_is_explicit[missing]",
+      "tests/test_current_layout_review.py::test_unsupported_curve_geometry_is_explicit[step]",
+      "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[empty]",
+      "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[missing]",
+      "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[nan]",
+      "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[path]",
+      "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[sha]",
+      "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[unsupported]",
+      "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[wrong_graph]",
+      "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[wrong_key]",
+      "tests/test_current_layout_review.py::test_visible_native_widgets_missing_paint_state_cannot_establish_clearance[curve]",
+      "tests/test_current_layout_review.py::test_visible_native_widgets_missing_paint_state_cannot_establish_clearance[key]",
+      "tests/test_current_layout_review_native.py::test_current_native_legend_layout_uses_current_geometry_without_changing_science[0.03-True-False-False-passed]",
+      "tests/test_current_layout_review_native.py::test_current_native_legend_layout_uses_current_geometry_without_changing_science[0.03-True-False-True-passed]",
+      "tests/test_current_layout_review_native.py::test_current_native_legend_layout_uses_current_geometry_without_changing_science[0.7-False-False-False-failed]",
+      "tests/test_current_layout_review_native.py::test_current_native_legend_layout_uses_current_geometry_without_changing_science[0.7-False-True-False-failed]",
+      "tests/test_current_layout_review_native.py::test_current_native_legend_layout_uses_current_geometry_without_changing_science[0.7-True-False-False-failed]",
+      "tests/test_current_layout_review_native.py::test_native_audit_rejects_a_document_changed_after_loading",
+      "tests/test_current_layout_review_native.py::test_native_marker_path_uses_radius_scale_and_equal_area[circle]",
+      "tests/test_current_layout_review_native.py::test_native_marker_path_uses_radius_scale_and_equal_area[square]",
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
       "tests/test_delivery_studio_lifecycle.py::test_dsc_public_delivery_continues_project_and_copied_package_exports_independently",
       "tests/test_dma_named_recipe_plan_binding.py::test_dma_auto_and_named_recipe_have_identical_terminal_evidence",
@@ -411,6 +454,178 @@
       "tests/test_verification_evidence_scope.py::test_unrelated_documentation_commit_reuses_executable_evidence"
     ],
     "synthetic_candidates": [
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[break-on-inf]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[ignore-0]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_current_legend_measurement_preserves_generated_issue_and_target[0-critical]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_current_legend_measurement_preserves_generated_issue_and_target[1-warning]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_current_legend_measurement_preserves_generated_issue_and_target[2-info]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_current_legend_measurement_preserves_generated_issue_and_target[7-info]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_native_thick_stroke_caps_and_expanded_clipping_remain_blocking[xs0-ys0-box0]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_native_thick_stroke_caps_and_expanded_clipping_remain_blocking[xs1-ys1-box1]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_new_overlap_is_found_without_a_generated_issue",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[None]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[missing]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[stale]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[unsupported]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[wrong_graph]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_only_byte_bound_explicit_native_hide_can_clear_a_prior_issue[wrong_key]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_sparse_segment_crosses_legend_even_when_endpoints_are_outside",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unknown_historical_target_cannot_inherit_a_noncritical_severity[0]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unknown_historical_target_cannot_inherit_a_noncritical_severity[None]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unknown_historical_target_cannot_inherit_a_noncritical_severity[True]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unknown_historical_target_cannot_inherit_a_noncritical_severity[nan]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unsupported_curve_geometry_is_explicit[bezier]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unsupported_curve_geometry_is_explicit[error]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unsupported_curve_geometry_is_explicit[fill]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unsupported_curve_geometry_is_explicit[missing]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unsupported_curve_geometry_is_explicit[step]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[empty]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[missing]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[nan]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[path]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[sha]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[unsupported]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[wrong_graph]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_unverified_current_geometry_cannot_clear_critical[wrong_key]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_visible_native_widgets_missing_paint_state_cannot_establish_clearance[curve]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review.py::test_visible_native_widgets_missing_paint_state_cannot_establish_clearance[key]",
+        "reason": "Generated dictionaries and tmp_path native-placeholder bytes exercise exact native identity, current legend geometry projection, missing/unsupported measurements and conservative threshold decisions. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review_native.py::test_current_native_legend_layout_uses_current_geometry_without_changing_science[0.03-True-False-False-passed]",
+        "reason": "Generated NumPy curve values and temporary CSV/native Veusz documents exercise actual key geometry, marker paths, public presentation edits and native load drift. All plot data is created in the test; no retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review_native.py::test_current_native_legend_layout_uses_current_geometry_without_changing_science[0.03-True-False-True-passed]",
+        "reason": "Generated NumPy curve values and temporary CSV/native Veusz documents exercise actual key geometry, marker paths, public presentation edits and native load drift. All plot data is created in the test; no retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review_native.py::test_current_native_legend_layout_uses_current_geometry_without_changing_science[0.7-False-False-False-failed]",
+        "reason": "Generated NumPy curve values and temporary CSV/native Veusz documents exercise actual key geometry, marker paths, public presentation edits and native load drift. All plot data is created in the test; no retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review_native.py::test_current_native_legend_layout_uses_current_geometry_without_changing_science[0.7-False-True-False-failed]",
+        "reason": "Generated NumPy curve values and temporary CSV/native Veusz documents exercise actual key geometry, marker paths, public presentation edits and native load drift. All plot data is created in the test; no retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review_native.py::test_current_native_legend_layout_uses_current_geometry_without_changing_science[0.7-True-False-False-failed]",
+        "reason": "Generated NumPy curve values and temporary CSV/native Veusz documents exercise actual key geometry, marker paths, public presentation edits and native load drift. All plot data is created in the test; no retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review_native.py::test_native_audit_rejects_a_document_changed_after_loading",
+        "reason": "Generated NumPy curve values and temporary CSV/native Veusz documents exercise actual key geometry, marker paths, public presentation edits and native load drift. All plot data is created in the test; no retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review_native.py::test_native_marker_path_uses_radius_scale_and_equal_area[circle]",
+        "reason": "Generated NumPy curve values and temporary CSV/native Veusz documents exercise actual key geometry, marker paths, public presentation edits and native load drift. All plot data is created in the test; no retained scientific corpus is accessed."
+      },
+      {
+        "nodeid": "tests/test_current_layout_review_native.py::test_native_marker_path_uses_radius_scale_and_equal_area[square]",
+        "reason": "Generated NumPy curve values and temporary CSV/native Veusz documents exercise actual key geometry, marker paths, public presentation edits and native load drift. All plot data is created in the test; no retained scientific corpus is accessed."
+      },
       {
         "nodeid": "tests/test_doctor_contract_topology.py::test_doctor_names_configured_private_fixture_root_without_requiring_it",
         "reason": "Synthetic unit rule and optional missing temporary fixture; no required retained data."
@@ -1340,7 +1555,7 @@
         "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
       }
     ],
-    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged.",
+    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged.",
     "scope": [
       "real_world",
       "polymer_corpus",
