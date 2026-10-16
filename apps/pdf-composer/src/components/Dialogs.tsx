@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { hasNativeBridge } from '../bridge';
 import { orderedPanels, PT_PER_MM } from '../core/document';
 import type { SourceAsset } from '../core/types';
 import { Modal } from './Modal';
@@ -93,6 +94,7 @@ function MoveDialog({ composer }: { composer: Composer }) {
 }
 
 function ExportDialog({ composer, onExport }: { composer: Composer; onExport: (format: 'pdf' | 'png' | 'tiff', dpi: number) => void }) {
+  const native = hasNativeBridge();
   const [format, setFormat] = useState<'pdf' | 'png' | 'tiff'>('pdf');
   const [dpi, setDpi] = useState(300);
   const rasterPanels = composer.document.panels.filter((panel) => panel.assetId).flatMap((panel) => {
@@ -101,11 +103,11 @@ function ExportDialog({ composer, onExport }: { composer: Composer; onExport: (f
   });
   const width = composer.document.grid.columns * 60, height = composer.document.grid.rows * 55;
   return <Modal title="Export figure" onClose={() => composer.setModal(null)}>
-    <p className="dialog-description">PDF preserves original text, vectors and source resources. PNG and TIFF render the assembled page at your chosen DPI.</p>
+    <p className="dialog-description">PDF preserves original text, vectors and source resources.{native ? ' PNG and TIFF render the assembled page at your chosen DPI.' : ''}</p>
     <div className="export-form"><label>Format<select aria-label="Format" value={format} onChange={(event) => setFormat(event.target.value as typeof format)}>
-      <option value="pdf">PDF · vector</option><option value="png">PNG · raster</option><option value="tiff">TIFF · raster</option></select></label>
-      <label>Raster DPI<select aria-label="Raster DPI" value={dpi} disabled={format === 'pdf'} onChange={(event) => setDpi(Number(event.target.value))}>
-        {[150, 300, 600, 1200].map((value) => <option key={value} value={value}>{value} dpi</option>)}</select></label></div>
+      <option value="pdf">PDF · vector</option>{native ? <><option value="png">PNG · raster</option><option value="tiff">TIFF · raster</option></> : null}</select></label>
+      {native ? <label>Raster DPI<select aria-label="Raster DPI" value={dpi} disabled={format === 'pdf'} onChange={(event) => setDpi(Number(event.target.value))}>
+        {[150, 300, 600, 1200].map((value) => <option key={value} value={value}>{value} dpi</option>)}</select></label> : null}</div>
     <p className="dimension-readout">{width} × {height} mm{format === 'pdf' ? '' : ` · ${Math.ceil(width / 25.4 * dpi)} × ${Math.ceil(height / 25.4 * dpi)} px`}</p>
     {rasterPanels.length > 0 ? <div className="resolution-list"><h3>Source resolution</h3>{rasterPanels.map((item, index) => <p key={`${item.name}:${index}`}
       className={item.effective < (format === 'pdf' ? 300 : dpi) || item.assumed ? 'resolution-warning' : ''}>
