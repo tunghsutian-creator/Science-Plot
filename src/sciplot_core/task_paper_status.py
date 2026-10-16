@@ -80,5 +80,3 @@ def _current_summary(root: Path, state: dict[str, Any]) -> dict[str, Any]:
         }, repair={"action": "inspect_paper_delivery_evidence", "automatic_overwrite": False},
             next_step={"action": "inspect_paper_delivery_evidence", "paper_dir": str(root)})
     return summary
-
-
