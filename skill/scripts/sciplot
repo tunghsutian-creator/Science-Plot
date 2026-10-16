@@ -11,7 +11,14 @@ if [[ ! -x "$PYTHON" ]]; then
   PYTHON="python3"
 fi
 
-if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v otool >/dev/null 2>&1; then
+if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" && -n "${SCIPLOT_BUNDLED_QT_LIB:-}" ]]; then
+  if [[ ! -d "$SCIPLOT_BUNDLED_QT_LIB" ]]; then
+    printf '%s\n' 'The bundled Qt library directory is missing; repair this installation.' >&2
+    exit 1
+  fi
+  export DYLD_FRAMEWORK_PATH="$SCIPLOT_BUNDLED_QT_LIB"
+  export DYLD_LIBRARY_PATH="$SCIPLOT_BUNDLED_QT_LIB"
+elif [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v otool >/dev/null 2>&1; then
   VEUSZ_RUNTIME_ROOT="${SCIPLOT_VEUSZ_ROOT:-$RUNTIME_REPO/third_party/veusz}"
   QTLOOPS_EXTENSION=""
   for candidate in "$VEUSZ_RUNTIME_ROOT"/veusz/helpers/qtloops*.so; do
@@ -21,14 +28,26 @@ if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v otool >/dev
     fi
   done
   if [[ -n "$QTLOOPS_EXTENSION" ]]; then
-    QT_FRAMEWORK_ROOT="$(
+    QT_CORE_LIBRARY="$(
       otool -L "$QTLOOPS_EXTENSION" |
-        awk '/QtCore[.]framework/ { path=$1; sub("/QtCore[.]framework.*", "", path); print path; exit }'
+        awk '/QtCore[.]framework/ { print $1; exit }'
     )"
+    QT_FRAMEWORK_ROOT="${QT_CORE_LIBRARY%%/QtCore.framework/*}"
     if [[ -n "$QT_FRAMEWORK_ROOT" && -d "$QT_FRAMEWORK_ROOT" ]]; then
+      QT_FRAMEWORK_PATH="$QT_FRAMEWORK_ROOT"
+      # qtbase omits QtSvg. Only add a complete Qt tree that resolves the exact
+      # helper-linked QtCore, so a custom runtime cannot mix unrelated Qt builds.
+      for candidate in "${QT_FRAMEWORK_ROOT%/qtbase/lib}/qt/lib" /opt/homebrew/opt/qt/lib /usr/local/opt/qt/lib; do
+        if [[ -f "$candidate/QtSvg.framework/Versions/A/QtSvg" &&
+              "$candidate/QtCore.framework/Versions/A/QtCore" -ef "$QT_CORE_LIBRARY" &&
+              "$candidate" != "$QT_FRAMEWORK_ROOT" ]]; then
+          QT_FRAMEWORK_PATH="$QT_FRAMEWORK_PATH:$candidate"
+          break
+        fi
+      done
       case ":${DYLD_FRAMEWORK_PATH:-}:" in
-        *":$QT_FRAMEWORK_ROOT:"*) ;;
-        *) export DYLD_FRAMEWORK_PATH="$QT_FRAMEWORK_ROOT${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}" ;;
+        *":$QT_FRAMEWORK_PATH:"*) ;;
+        *) export DYLD_FRAMEWORK_PATH="$QT_FRAMEWORK_PATH${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}" ;;
       esac
     fi
   fi
