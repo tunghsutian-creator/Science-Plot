@@ -23,6 +23,13 @@ contract and duplicate-label guard remain unchanged. Every selected item must be
 and every creation/presentation/export child complete. This entry does not
 advance tasks, render a gallery or accept previews. It validates current source,
 native, semantic and publication bytes; group completion alone is not readiness.
+A successful first group call also runs the existing read-only paper inspection
+before returning `ready_to_use`, `source_versions_current`, `delivery_current`
+and `readiness_evaluated`. These check the frozen source/publication and final
+package byte inventories; their scope explicitly excludes a fresh native audit,
+human review and journal acceptance. A change during handoff returns the owner's
+blocked result, never an unconditional readiness value. The old explicit
+`--request` start still has its original completion/inspect boundary.
 The checkpoint freezes the resolved list once. Repeating the same command reads
 that frozen selection, even if the group later changes; `resume` continues it.
 Different group/order/output/title options need a new checkpoint. Existing

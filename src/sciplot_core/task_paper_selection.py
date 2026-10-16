@@ -9,7 +9,7 @@ from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_group_storage import group_path, load_group, step_state
 from sciplot_core.task_paper_sources import capture_selection
-from sciplot_core.task_papers import _path, _load, start_paper
+from sciplot_core.task_papers import _path, _load, start_paper, inspect_paper
 from sciplot_core.task_paper_status import _current_summary
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 
@@ -73,5 +73,6 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
     group_title = state["request"]["title"]
     _assert_snapshot_current(snapshot, label="paper current group selection")
     request = {"version": 1, "title": title if title is not None else group_title, "out": str(out), "items": selected}
-    return start_paper(request, paper_dir=root, selection_origin={"request": origin, "group_state_sha256": group_sha256,
-                                                               "scope": "Frozen ordered registered figures, not a cross-plot edit."})
+    result = start_paper(request, paper_dir=root, selection_origin={"request": origin, "group_state_sha256": group_sha256,
+                                                                 "scope": "Frozen ordered registered figures, not a cross-plot edit."})
+    return inspect_paper(root) if result.get("status") == "complete" else result

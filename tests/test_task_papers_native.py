@@ -185,10 +185,13 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
     save_group(root, group)
     originals = {path: file_inventory(path) for path in [*sources, *projects, root]}
     forward = _public('start', '--group', root, '--out', tmp_path / 'forward-publication', '--paper-dir', tmp_path / 'forward-paper')
+    assert forward['ready_to_use'] is True and forward['readiness_evaluated'] is True
+    assert forward['source_versions_current'] is True and forward['delivery_current'] is True
+    assert 'no fresh native audit' in forward['readiness_scope']
     assert [item['stem'] for item in forward['items']] == ['001_P0_3_0_7_log', '002_P0_5_0_5_linear']
     out, paper = tmp_path / 'group-publication', tmp_path / 'group-paper'
     result = _public('start', '--group', root, '--out', out, '--paper-dir', paper, '--item-id', 'FTIR', '--item-id', 'UVvis')
-    assert result['status'] == 'complete', result
+    assert result['status'] == 'complete' and result['ready_to_use'] is True, result
     assert [Path(item['project']) for item in result['items']] == list(reversed(projects))
     assert [item['stem'] for item in result['items']] == ['001_P0_5_0_5_linear', '002_P0_3_0_7_log']
     assert sorted(path.name for path in (out / 'figures').glob('*.pdf')) == ['001_P0_5_0_5_linear.pdf', '002_P0_3_0_7_log.pdf']

@@ -39,6 +39,7 @@ def group(tmp_path, monkeypatch):
     monkeypatch.setattr(selection, "capture_selection", capture)
     saved = []
     monkeypatch.setattr(selection, "start_paper", lambda request, **options: saved.append((request, options)) or {"status": "complete"})
+    monkeypatch.setattr(selection, "inspect_paper", lambda _: {"status": "complete", "ready_to_use": True})
     return root, state, children, captures, saved
 
 
@@ -135,3 +136,29 @@ def test_only_multi_figure_projects_add_titles_or_necessary_stable_identity(grou
     figures[1]["title"] = "Observed curve"
     selection.start_group_paper(root, out=tmp_path / "out2", paper_dir=tmp_path / "paper2", item_ids=["A"])
     assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_3_0_7_log_internal-A", "P0_3_0_7_log_internal-B"]
+
+
+
+def test_first_group_completion_returns_fresh_owner_result_and_never_promotes_blocked(group, tmp_path, monkeypatch):
+    root, _, _, _, _ = group
+    checked = []
+    current = {"status": "blocked", "recorded_status": "complete", "ready_to_use": False,
+               "readiness_evaluated": True, "delivery_current": False,
+               "readiness_scope": "Frozen package and selected source byte identities; no fresh native audit.",
+               "blocker": {"reason_code": "paper_delivery_changed"}}
+    monkeypatch.setattr(selection, "inspect_paper", lambda path: checked.append(path) or current)
+    result = selection.start_group_paper(root, out=tmp_path / "out", paper_dir=tmp_path / "paper")
+    assert result is current and result["ready_to_use"] is False
+    assert checked == [tmp_path / "paper"]
+    healthy = {"status": "complete", "recorded_status": "complete", "ready_to_use": True,
+               "source_versions_current": True, "delivery_current": True, "readiness_evaluated": True,
+               "readiness_scope": current["readiness_scope"]}
+    monkeypatch.setattr(selection, "inspect_paper", lambda path: checked.append(path) or healthy)
+    assert selection.start_group_paper(root, out=tmp_path / "healthy-out", paper_dir=tmp_path / "healthy-paper") is healthy
+    source_drift = {**current, "delivery_current": True, "source_versions_current": False,
+                    "blocker": {"reason_code": "paper_selection_changed"}}
+    monkeypatch.setattr(selection, "inspect_paper", lambda path: source_drift)
+    assert selection.start_group_paper(root, out=tmp_path / "source-out", paper_dir=tmp_path / "source-paper") is source_drift
+    monkeypatch.setattr(selection, "start_paper", lambda *_, **__: {"status": "blocked", "blocker": {"reason_code": "paper_publication_changed"}})
+    monkeypatch.setattr(selection, "inspect_paper", lambda *_: pytest.fail("An incomplete publication cannot acquire current delivery readiness"))
+    assert selection.start_group_paper(root, out=tmp_path / "out2", paper_dir=tmp_path / "paper2")["status"] == "blocked"
