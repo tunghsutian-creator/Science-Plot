@@ -33,7 +33,6 @@ def test_native_figure_rebuild_and_qa(tmp_path):
 def test_all_seven_marks_and_native_clipped_text_rejection(tmp_path):
     from copy import deepcopy
     import subprocess
-    from sciplot_core.plot_document import DocumentError
 
     spec, datasets = example()
     data = datasets['raw:A']['columns']
@@ -64,10 +63,15 @@ def test_all_seven_marks_and_native_clipped_text_rejection(tmp_path):
         bad['annotations'] = [{'id': 'annotation:long', 'space': 'view', 'view_id': 'view:A',
             'x': .5, 'y': .5, 'text': 'W' * 100, 'visible': True, 'style': {}}]
         invalid = resolve(bad, datasets)
-        with pytest.raises((ValueError, subprocess.CalledProcessError)):
+        with pytest.raises((ValueError, subprocess.CalledProcessError)) as rejected:
             compiler.compile_ir(invalid, tmp_path / 'clipped')
-        with pytest.raises(DocumentError, match='publication'):
+        detail = rejected.value.stderr if isinstance(rejected.value, subprocess.CalledProcessError) else str(rejected.value)
+        assert 'publication QA failed' in detail
+        # A rejected native candidate is never published at its canonical path.
+        assert not (tmp_path / 'clipped/document.vsz').exists()
+        with pytest.raises(subprocess.CalledProcessError) as missing:
             compiler.export_ir(invalid, tmp_path / 'clipped/document.vsz', tmp_path / 'must-not-export')
+        assert 'FileNotFoundError' in missing.value.stderr
         assert not (tmp_path / 'must-not-export').exists()
     finally:
         compiler.close()

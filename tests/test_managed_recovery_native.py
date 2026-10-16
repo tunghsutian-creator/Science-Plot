@@ -3,6 +3,8 @@
 from copy import deepcopy
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -12,10 +14,64 @@ from sciplot_core.plot_backends.managed_plan import native_name
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_engine.storage import digest, load_head, read
 from managed_plot_helpers import request_for_source
+from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
 class SimulatedCrash(BaseException):
     """Model process interruption beyond the ordinary recoverable error handler."""
+
+
+@pytest.mark.comprehensive
+def test_real_save_process_death_never_publishes_partial_canonical_and_public_retry_recovers(tmp_path, monkeypatch):
+    request = request_for_source(tmp_path)
+    source = Path(request["data_binding"]["data_sources"][0]["path"])
+    source_bytes = source.read_bytes()
+    counts = _spy_work(monkeypatch)
+    service = PlotService()
+    original_run = service.backend.managed.compiler._run
+    crash_script = tmp_path / "interrupt-native-save.py"
+    crash_script.write_text(
+        "import os, sys\n"
+        "from pathlib import Path\n"
+        "from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path\n"
+        "ensure_veusz_runtime_path()\n"
+        "from veusz.document import CommandInterface\n"
+        "from sciplot_core.veusz_worker.managed import compile_plot_ir\n"
+        "save = CommandInterface.Save\n"
+        "def interrupted(self, path):\n"
+        "    save(self, path)\n"
+        "    os._exit(76)\n"
+        "CommandInterface.Save = interrupted\n"
+        "compile_plot_ir(Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[4]))\n"
+    )
+
+    def interrupted_run(arguments):
+        assert arguments[0] == "compile-plot-ir"
+        result = subprocess.run([sys.executable, str(crash_script), *arguments[1:]],
+                                capture_output=True, text=True, timeout=60, env=veusz_worker_environment())
+        assert result.returncode == 76, result.stderr
+        raise SimulatedCrash("Real native process exited after Save, before audit/publication.")
+
+    monkeypatch.setattr(service.backend.managed.compiler, "_run", interrupted_run)
+    try:
+        with pytest.raises(SimulatedCrash):
+            service.create(request)
+        root = _root(tmp_path, request)
+        prior = load_head(root)
+        native = Path(prior["binding"]["document"])
+        assert not native.exists()
+        abandoned = list(native.parent.glob(".sciplot-compile-*/document.vsz"))
+        assert len(abandoned) == 1 and abandoned[0].stat().st_size > 0
+        staged_bytes = abandoned[0].read_bytes()
+        monkeypatch.setattr(service.backend.managed.compiler, "_run", original_run)
+        recovered = service.create(request)
+        assert recovered["ready_to_use"] and recovered["revision"] == 0, recovered
+        assert counts == {"science": 1, "compile": 2}
+        assert source.read_bytes() == source_bytes
+        assert abandoned[0].read_bytes() == staged_bytes  # Never rmtree/adopt an unknown old attempt.
+        _assert_semantics_untouched(root, prior)
+    finally:
+        service.close()
 
 
 def _root(directory, request):

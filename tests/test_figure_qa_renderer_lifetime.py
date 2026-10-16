@@ -39,10 +39,13 @@ def test_native_text_measurement_does_not_retain_renderer_until_gc(monkeypatch):
         def paintTo(self, _helper, _page):
             painter = SimpleNamespace(widget=SimpleNamespace(path="/page/label"))
             renderer = utils.Renderer(painter, None, 0, 0, "Label")
+            assert isinstance(renderer, Renderer)  # No proxy changes native object identity.
             assert renderer.render() == "painted"
             assert renderer.render() == "painted"
             # Veusz also renders text using a temporary in one expression.
             assert utils.Renderer(painter, None, 0, 0, "Legend").render() == "painted"
+            del renderer
+            assert all(renderer_ref() is not None for renderer_ref in render_refs)
 
     def check(_layout, observations, *, expected_text_ids, data_points):
         recorded.extend(observations)

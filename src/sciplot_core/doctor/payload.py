@@ -7,6 +7,7 @@ import sys
 from typing import Any
 
 from sciplot_core._paths import REPO_ROOT, VEUSZ_ROOT
+from sciplot_core.doctor.execution_identity import execution_identity
 from sciplot_core.doctor.actions import (
     _next_actions,
 )
@@ -164,6 +165,7 @@ def doctor_payload() -> dict[str, Any]:
         "kind": "sciplot_doctor",
         "status": "ready" if not required_failures else "blocked",
         "repo_root": str(REPO_ROOT),
+        "execution_identity": execution_identity(),
         "normal_mode": {
             "task_interface": "external_ai",
             "daily_entrypoint": "sciplot task start --request REQUEST_JSON --json",

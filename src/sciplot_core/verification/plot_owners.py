@@ -26,6 +26,7 @@ PLOT_TEST_PATHS = (
     "tests/test_managed_rebuild_explanation.py",
     "tests/test_managed_description_performance.py",
     "tests/test_managed_backend.py",
+    "tests/test_managed_compile_publication.py",
     "tests/test_managed_backend_native.py",
     "tests/test_managed_engine_native.py",
     "tests/test_managed_external_native.py",
