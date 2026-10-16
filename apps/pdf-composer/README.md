@@ -14,7 +14,8 @@ Installation preserves any existing same-name Desktop item instead of replacing 
 
 The existing double-clickable macOS app remains a separate native delivery. Its
 file dialogs, conflict-aware saves, TIFF verification and auxiliary raster exports
-use Apple system frameworks. The new SVG glass appearance is verified in Edge;
+use Apple system frameworks. This branch contains an independent minimal-motion preview. It is a proposal
+for review, with the stable installed browser app retained separately.
 Safari/WebKit visual parity is outside this browser workbench's scope.
 
 Normal-motion visual and SVG-refraction acceptance uses actual Linux Edge.
@@ -34,13 +35,25 @@ the other application. The service accepts connections only from this Mac.
 Choose **停止服务并退出** in its app or **FA** menu, or Quit its Dock icon, to stop
 the launcher's service. Closing an Edge tab does not quit the launcher.
 
-Open the local workbench in Edge, then choose **Import PDFs** at the bottom of
-the left source library or drop files there. The library has a fixed width and
+Open the local workbench in Edge, then choose **Import files** at the bottom of
+the left source library or drop files there. **Import folder** opens Edge's local
+folder picker and includes supported files from nested folders. Folder import
+adds sources to the library without filling the canvas; unsupported and damaged
+files are summarized. Relative-path ordering is deterministic and preserves
+separate sources with the same filename. Nothing is uploaded. The library has a fixed width and
 scrolls vertically; its import area stays visible while you browse long lists.
 The canvas fits and centers the complete page in the remaining space on the right.
-Select a cell and choose a source, or drag its
-thumbnail into a cell. Dropping one external PDF into a cell imports and places
+Click an empty cell to choose a local source for that cell, or drag a library
+thumbnail into it. Clicking an occupied cell selects it; **Replace** opens the
+file picker. Cancelling a picker leaves the layout unchanged. Dropping one external PDF into a cell imports and places
 that whole page. Multipage PDFs always ask which page to place.
+Grid, labels and zoom use compact settings anchored under their toolbar buttons.
+Click outside or press Escape to close them. The selection toolbar appears only
+after selecting a cell. Hover/press feedback lasts 140 ms, selection controls
+enter over 180 ms, and a loaded PDF settles into its cell over 220 ms using only
+opacity and translation. Reduced-motion preferences disable these transitions;
+PDF export is independent of screen animation.
+
 The presets are 2 × 2, 3 × 2, 2 × 3 and 3 × 3 (columns × rows), with custom
 counts from 1 to 12. Each cell is exactly **60 × 55 mm**, including the source's
 existing white space. There is no extra exterior margin or intercell spacing.
@@ -90,6 +103,25 @@ unknown original DPI is explicitly recorded as a 300 dpi assumption.
 
 Shortcuts: ⌘I import, ⌘O open, ⌘S save, ⇧⌘S save as, ⌘E export PDF,
 ⌘Z undo, ⇧⌘Z redo, ⌘N new layout. Text inputs retain their own undo behavior.
+
+## Independent Mac preview entry
+
+Build this branch and package its separate preview launcher:
+
+```sh
+npm run build
+npm run build:browser:preview:mac
+npm run install:browser:preview:mac
+```
+
+The new **Figure Assembly Preview.app** desktop entry uses a distinct bundle ID,
+application support/log directories and loopback ports starting at **5210**. It
+bundles the built workbench and uses the existing native launcher lifecycle; it
+has no Node/Python runtime dependency. Reopening reuses its healthy owned service.
+The stable **Figure Assembly Browser.app** and port 5178 are separate. Output or
+installation names are never overwritten; choose a fresh
+`BROWSER_PREVIEW_OUTPUT_DIR` for another build and pass that app through
+`BROWSER_PREVIEW_APP` when installing it. This preview is not a release decision.
 
 ## Supported fidelity boundary
 

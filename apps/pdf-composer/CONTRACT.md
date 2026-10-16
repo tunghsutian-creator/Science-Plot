@@ -76,13 +76,19 @@ All resources are bundled locally; remote navigation and network access are
 disabled. No account, server, automatic update or model API is required.
 The Edge route uses local file inputs, drag/drop and downloads instead of the
 WebKit bridge. Its development/preview HTTP server only serves local application
-assets. It has no upload/API endpoint and no telemetry/model request. SVG
-displacement is restricted to compact glass control groups; foreground text/icons
-remain clear. The fixed-width source library on the left uses bounded border/shadow
+assets. It has no upload/API endpoint and no telemetry/model request. The preview uses compact toolbar controls without per-button glass wrappers or
+workspace blur. Grid, labels and zoom are nonmodal button-anchored popovers;
+outside click and Escape close them, with viewport edge avoidance. The fixed-width source library on the left uses bounded border/shadow
 layering, a vertically scrolling list and a fixed bottom import area. The remaining
 right canvas fits and centers the complete paper without changing stored dimensions
 or source scale. The selection controls stay clear of the paper, including the
-600-pixel-wide workbench layout. There is no bottom source tray or footer status text.
+600-pixel-wide workbench layout. There is no bottom source tray or footer status text. Initial selection is empty.
+Empty-cell activation opens the local file picker for that target; occupied-cell
+activation only selects. Folder import recursively admits supported local sources
+in deterministic relative-path order, reports invalid/unsupported files and never
+automatically places sources. Ordinary file batches retain their atomic contract.
+Only UI opacity/translation is animated, with reduced motion respected; neither
+source bytes nor exported PDF content includes animation.
 
 The independent Mac browser launcher serves only its hash-verified bundled
 assets over `127.0.0.1`, checks health before opening Microsoft Edge and reuses
@@ -90,6 +96,10 @@ the same healthy service on repeated launches. Foreign port owners are preserved
 normal AppKit Quit stops only its owned service. The installed app has no Node or
 Python runtime dependency and creates no login item. Launcher lifecycle checks
 are separate from browser pixel acceptance and from the scientific runtime.
+
+The independent preview launcher packages the same bounded server with a
+distinct application ID/name, support/log namespace and port range 5210–5229.
+It cannot reuse the stable launcher's identity or installation.
 
 Core helpers: `createDocument(rows=2,columns=3)`, `validateDocument(doc)`,
 `placeSource(doc,panelId,asset,pageIndex,scale=1)`, `clearPanel`, `mergePanels`,

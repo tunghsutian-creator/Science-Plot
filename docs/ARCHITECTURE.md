@@ -101,8 +101,13 @@ bundled PDFium WASM only for disposable previews; file inputs/drop and downloads
 replace the native bridge. Browser downloads cannot confirm final disk writes,
 so dirty state remains until a validated project is reopened. New/open/drop
 replacement and browser navigation protect unsaved changes. No source is uploaded.
-SVG refraction is bounded to compact control groups with clear foreground text;
-the fixed-width left source library uses light border/shadow layers. Its source
+The independent minimal-motion preview uses compact controls and nonmodal settings
+anchored to their trigger buttons, with no workspace blur. Empty-cell activation
+opens a target-bound file picker. Folder enumeration and partial-file admission
+belong to the browser I/O layer; deterministic relative-path ordering never
+changes the portable source schema or automatically fills the canvas. Paths used
+to distinguish duplicate filenames are transient UI metadata. The fixed-width
+left source library uses light border/shadow layers. Its source
 list scrolls vertically above a fixed import area; the right canvas uses the
 remaining space to fit and center the complete paper. Screen fitting never
 changes physical geometry or source scale. The browser
@@ -112,6 +117,11 @@ Swift Network server bound only to IPv4 loopback. It verifies bundled hashes,
 reuses its identity-checked healthy instance, waits for readiness and opens Edge
 through LaunchServices. AppKit Quit stops its owned listener; it has no login
 item, upload endpoint or dependency on a development terminal, Node or Python.
+A preview packaging recipe reuses those launcher sources in a fresh temporary
+build directory with a distinct bundle ID, name, support/log directory and port
+range; it never overwrites the stable installed browser app. Opacity/translation
+motion belongs to presentation, respects reduced motion and is absent from the
+publication engine and portable project.
 A thin Swift
 shell supplies local file dialogs, conflict-aware atomic saves, verified image
 decoding, preview/raster export and a bundled WebKit UI with network access denied.

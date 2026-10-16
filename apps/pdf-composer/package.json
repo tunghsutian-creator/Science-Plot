@@ -14,7 +14,10 @@
     "build:mac": "npm run build && bash scripts/build-macos.sh",
     "build:browser:mac": "npm run build && bash scripts/build-browser-macos.sh",
     "install:browser:mac": "bash scripts/install-browser-macos.sh",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
+    "test:preview": "node --import tsx tests/browser-preview.ts",
+    "build:browser:preview:mac": "bash scripts/build-browser-preview-macos.sh",
+    "install:browser:preview:mac": "bash scripts/install-browser-preview-macos.sh"
   },
   "dependencies": {
     "@hyzyla/pdfium": "3.0.0",

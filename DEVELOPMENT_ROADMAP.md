@@ -21,8 +21,10 @@ CI workflow. Cross-Mac font/resource identity, signing/notarization and independ
 print/journal acceptance remain separate work. Historical incomplete private
 corpus/access-capture evidence remains BLOCKED, and external AI billed/token
 telemetry remains UNKNOWN; this document tool does not resolve those claims.
-Actual Linux Edge normal-motion visual/refraction checks remain a layout acceptance
-gate. The current Mac
+The independent minimal-motion preview adds button-anchored settings, empty-cell
+file choice and local folder import while retaining the stable app. Actual Edge
+interaction, normal/reduced-motion and PDF-source checks are its acceptance gate.
+User approval of this visual proposal remains open. The current Mac
 host's Edge frame/capture stall also reproduces on an empty page in two official
 versions; its cause and Mac Edge hardware visual acceptance remain open.
 
