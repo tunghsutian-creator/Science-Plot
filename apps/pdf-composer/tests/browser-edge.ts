@@ -535,12 +535,16 @@ try {
     await page.getByLabel('Canvas zoom').selectOption('fit');
     if (!domDiagnostic) await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
     const sizing = await page.evaluate(() => {
-      const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().toJSON() as DOMRect;
       const list = document.querySelector('.source-list')!;
       return { width: innerWidth, height: innerHeight, body: document.body.scrollWidth,
         exportRight: Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('Export PDF'))!.getBoundingClientRect().right,
-        sidebar: bounds('.source-tray'), list: bounds('.source-list'), workspace: bounds('.workspace'), paper: bounds('.paper'),
-        selection: bounds('.selection-bar'), importer: bounds('.tray-import'), sourceOverflow: list.scrollHeight > list.clientHeight,
+        sidebar: document.querySelector('.source-tray')!.getBoundingClientRect().toJSON() as DOMRect,
+        list: list.getBoundingClientRect().toJSON() as DOMRect,
+        workspace: document.querySelector('.workspace')!.getBoundingClientRect().toJSON() as DOMRect,
+        paper: document.querySelector('.paper')!.getBoundingClientRect().toJSON() as DOMRect,
+        selection: document.querySelector('.selection-bar')!.getBoundingClientRect().toJSON() as DOMRect,
+        importer: document.querySelector('.tray-import')!.getBoundingClientRect().toJSON() as DOMRect,
+        sourceOverflow: list.scrollHeight > list.clientHeight,
         sources: Array.from(list.querySelectorAll('.source-item')).slice(0, 2).map((element) => element.getBoundingClientRect().toJSON() as DOMRect) };
     });
     assert.equal(sizing.body, sizing.width); assert.ok(sizing.exportRight <= sizing.width);
