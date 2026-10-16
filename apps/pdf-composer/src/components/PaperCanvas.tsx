@@ -24,7 +24,7 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
   const occupied = panels.filter((panel) => panel.assetId !== null);
   const widthMm = document.grid.columns * document.grid.cellWidthMm;
   const heightMm = document.grid.rows * document.grid.cellHeightMm;
-  const fit = Math.max(120, Math.min(available.width - 64, (available.height - 32) * widthMm / heightMm));
+  const fit = Math.max(120, Math.min(available.width - 64, (available.height - 20) * widthMm / heightMm));
   const width = zoom === 'fit' ? fit : widthMm * 96 / 25.4 * Number(zoom) / 100;
   const height = width * heightMm / widthMm;
 
@@ -69,7 +69,7 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
       event.preventDefault(); event.stopPropagation(); setDropTarget(null); setDragging(null);
       if (!busy && event.dataTransfer.files.length) onDropFiles(Array.from(event.dataTransfer.files));
     }}>
-    <div className="paper-positioner" style={{ minWidth: width + 64, minHeight: height + 32 }}>
+    <div className="paper-positioner" style={{ minWidth: width + 64, minHeight: height + 20 }}>
       <div className="paper" style={{ width, height }} role="group" aria-label={`${widthMm} by ${heightMm} millimetre figure`}>
         {panels.map((panel) => {
           const asset = document.assets.find((item) => item.id === panel.assetId);
