@@ -646,7 +646,10 @@ children and registered figures through the strict paper request owner, without
 rendering a gallery. `task_paper_publication` validates the existing publication
 receipt and exact file inventory and copies its PDF/TIFF bytes; it cannot render
 to repair a missing or changed publication. Native portable Save and scientific
-audits remain required. `task_paper_status` projects current source/package
+audits remain required. The original publication must be finished and ready with
+its canonical rule, QA and delivery gates satisfied; QA alone cannot establish
+completion. Missing completion evidence fails closed without repairing the run.
+`task_paper_status` projects current source/package
 evidence; the new group start calls it after completion before offering delivery.
 Explicit-request start retains its original completion/inspection boundary.
 
