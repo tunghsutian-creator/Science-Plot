@@ -11,6 +11,9 @@ import { decodePDFRawStream, PDFDict, PDFDocument, PDFName, PDFRawStream, rgb } 
 import { chromium, type Download, type Locator } from 'playwright';
 import type { AssemblyDocument } from '../src/core/types';
 
+// Node's ESM loader preserves this dependency's transpiled CJS default wrapper.
+const pngDecoder = (UPNG as unknown as { default?: typeof UPNG }).default ?? UPNG;
+
 // This suite exercises the actual browser adapter. It never installs a native
 // WebKit bridge or replaces the PDF preview, importer, saver or PDF engine.
 const out = resolve(process.env.FIGURE_ASSEMBLY_EDGE_OUT ?? 'test-results/edge');
@@ -99,7 +102,7 @@ await context.route('**/*', async (route) => {
 });
 const cell = (row: number, column: number) => page.locator(`[data-row="${row}"][data-column="${column}"]`);
 const occupied = async (row: number, column: number) => Boolean(await cell(row, column).getAttribute('data-asset-id'));
-const idle = () => page.locator('.app-shell[aria-busy="false"]').waitFor();
+const idle = () => page.locator('.app-shell[aria-busy="false"]').waitFor({ state: 'attached' });
 async function shot(name: string) {
   console.log(`Edge acceptance: screenshot ${name}.`);
   if (domDiagnostic) return;
@@ -107,18 +110,32 @@ async function shot(name: string) {
   screenshots.push(name);
 }
 async function importPicker(files: Fixture[]) {
+  console.log('Edge acceptance: opening import file input.');
   const choice = page.waitForEvent('filechooser');
   await page.keyboard.press(`${commandKey}+i`);
   await (await choice).setFiles(files.map((file) => file.path));
+  console.log('Edge acceptance: actual files selected.');
   await idle();
+  console.log('Edge acceptance: import transaction idle.');
 }
-async function sourceDrag(name: string, target: Locator) { await page.getByRole('button', { name: `Place ${name}`, exact: true }).dragTo(target); }
+async function sourceDrag(name: string, target: Locator) {
+  const source = page.getByRole('button', { name: `Place ${name}`, exact: true });
+  if (!domDiagnostic) { await source.dragTo(target); return; }
+  // Explicit BLOCKED diagnostic: exercise the same real HTML drag handlers while
+  // the Mac compositor has no frames for Playwright's pointer-stability check.
+  const transfer = await page.evaluateHandle(() => new DataTransfer());
+  await source.dispatchEvent('dragstart', { dataTransfer: transfer });
+  await target.dispatchEvent('dragover', { dataTransfer: transfer });
+  await target.dispatchEvent('drop', { dataTransfer: transfer });
+  await source.dispatchEvent('dragend', { dataTransfer: transfer });
+  await transfer.dispose();
+}
 async function panelAction(name: string) {
   const button = page.getByRole('button', { name, exact: true });
-  if (await button.isVisible()) await button.click();
+  if (await button.isVisible()) await button.click({ force: domDiagnostic });
   else {
-    await page.locator('.figure-panel.is-selected').first().click({ button: 'right' });
-    await page.getByRole('menuitem', { name: name === 'Split' ? 'Split cells' : 'Move / swap…', exact: true }).click();
+    await page.locator('.figure-panel.is-selected').first().click({ button: 'right', force: domDiagnostic });
+    await page.getByRole('menuitem', { name: name === 'Split' ? 'Split cells' : 'Move / swap…', exact: true }).click({ force: domDiagnostic });
   }
 }
 async function externalDrop(file: { name: string; bytes: Uint8Array }, target: Locator) {
@@ -143,20 +160,20 @@ async function download(action: () => Promise<unknown>, name: string): Promise<U
   return readFile(path);
 }
 async function savedProject(name: string): Promise<{ bytes: Uint8Array; document: AssemblyDocument }> {
-  const bytes = await download(() => page.getByRole('button', { name: 'Save project', exact: true }).click(), name);
+  const bytes = await download(() => page.getByRole('button', { name: 'Save project', exact: true }).click({ force: domDiagnostic }), name);
   await idle();
   return { bytes, document: JSON.parse(new TextDecoder().decode(bytes)) as AssemblyDocument };
 }
 async function assertPreview(locator: Locator) {
   await locator.locator('img.page-preview').first().waitFor();
-  const preview = await locator.locator('img.page-preview').first().evaluate(async (image) => {
+  const preview = await locator.locator('img.page-preview').first().evaluate((image) => {
     const element = image as HTMLImageElement;
-    await element.decode();
-    return { src: element.currentSrc, width: element.naturalWidth, height: element.naturalHeight };
+    return { src: element.currentSrc, width: element.naturalWidth, height: element.naturalHeight, complete: element.complete };
   });
+  assert.equal(preview.complete, true);
   assert.match(preview.src, /^data:image\/png;base64,/);
-  const png = UPNG.decode(Uint8Array.from(Buffer.from(preview.src.split(',')[1], 'base64')).buffer);
-  const pixels = new Uint8Array(UPNG.toRGBA8(png)[0]);
+  const png = pngDecoder.decode(Uint8Array.from(Buffer.from(preview.src.split(',')[1], 'base64')).buffer);
+  const pixels = new Uint8Array(pngDecoder.toRGBA8(png)[0]);
   let nonwhite = 0;
   for (let index = 0; index < pixels.length; index += 4) if (pixels[index + 3] > 0 && Math.min(pixels[index], pixels[index + 1], pixels[index + 2]) < 200) nonwhite++;
   const ink = { width: preview.width, height: preview.height, nonwhite };
@@ -247,9 +264,9 @@ async function privateProjectAcceptance(path: string) {
   assert.equal(await page.locator('.source-item').count(), expected.assets.length);
   assert.equal(await page.locator('.has-source').count(), expected.panels.filter((panel) => panel.assetId).length);
   for (const panel of expected.panels.filter((panel) => panel.assetId)) await assertPreview(cell(panel.row, panel.column));
-  await cell(0, 0).click();
+  await cell(0, 0).click({ force: domDiagnostic });
   const dismiss = page.getByRole('button', { name: 'Dismiss message', exact: true });
-  if (await dismiss.isVisible()) await dismiss.click();
+  if (await dismiss.isVisible()) await dismiss.click({ force: domDiagnostic });
   await shot('04-private-edge-1463x1075.png');
   if (!domDiagnostic) {
     await page.locator('.toolbar').screenshot({ path: join(out, 'private-toolbar.png'), animations: 'disabled', timeout: 10000 });
@@ -257,7 +274,7 @@ async function privateProjectAcceptance(path: string) {
   }
   const saved = await savedProject('private-reopened.figureassembly');
   assert.deepEqual(saved.document, expected);
-  const exported = await download(() => page.getByRole('button', { name: 'Export PDF', exact: true }).click(), 'private-publication.pdf');
+  const exported = await download(() => page.getByRole('button', { name: 'Export PDF', exact: true }).click({ force: domDiagnostic }), 'private-publication.pdf');
   const pdf = await PDFDocument.load(exported);
   assert.equal(pdf.getPageCount(), 1);
   assert.ok(Math.abs(pdf.getPage(0).getWidth() - expected.grid.columns * 60 * mm) < 1e-8);
@@ -312,7 +329,7 @@ try {
   assert.equal(await page.locator('vite-error-overlay, nextjs-portal').count(), 0);
   console.log('Edge acceptance: identity/blank checks passed; fonts:', await page.evaluate(() => document.fonts.status));
   await shot('01-empty-edge-1463x1075.png');
-  checks.push('Actual Microsoft Edge, no native bridge, meaningful blank3×2 app, no framework overlay, no old left rail/footer.');
+  checks.push('Actual Microsoft Edge, no native bridge, meaningful blank 3 × 2 app, no framework overlay, no old left rail/footer.');
   if (!domDiagnostic) {
     glassProof = await proveRefraction();
     checks.push('Actual Edge SVG displacement changes diagnostic pixels; compact groups have nonzero maps and clear foreground, wide tray has no displacement URL.');
@@ -321,31 +338,31 @@ try {
   await importPicker([multipage, oversized, rounded, ...ordinary]);
   assert.equal(await page.locator('.source-item').count(), 11);
   await assertPreview(page.getByRole('button', { name: `Place ${ordinary[0].name}`, exact: true }));
-  checks.push('Real file picker imports11 original PDFs; bundled PDFium renders nonwhite thumbnail pixels without native preview emulation.');
+  checks.push('Real file picker imports 11 original PDFs; bundled PDFium renders nonwhite thumbnail pixels without native preview emulation.');
 
-  await page.getByRole('button', { name: 'Choose grid template' }).click();
-  await page.getByRole('button', { name: '2 × 2', exact: true }).click();
-  await page.getByRole('button', { name: 'Apply grid', exact: true }).click();
+  await page.getByRole('button', { name: 'Choose grid template' }).click({ force: domDiagnostic });
+  await page.getByRole('button', { name: '2 × 2', exact: true }).click({ force: domDiagnostic });
+  await page.getByRole('button', { name: 'Apply grid', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('[data-panel-id]').count(), 4);
-  await cell(0, 0).click();
-  await page.getByRole('button', { name: `Place ${multipage.name}`, exact: true }).click();
+  await cell(0, 0).click({ force: domDiagnostic });
+  await page.getByRole('button', { name: `Place ${multipage.name}`, exact: true }).click({ force: domDiagnostic });
   await page.getByRole('heading', { name: 'Choose a page' }).waitFor();
-  await page.getByRole('button', { name: /^Page 2,/ }).click();
-  await page.getByRole('button', { name: 'Place page 2' }).click();
+  await page.getByRole('button', { name: /^Page 2,/ }).click({ force: domDiagnostic });
+  await page.getByRole('button', { name: 'Place page 2' }).click({ force: domDiagnostic });
   assert.match(await cell(0, 0).getAttribute('aria-label') ?? '', /page 2/);
   await assertPreview(cell(0, 0));
-  checks.push('Explicit multipage choice places page2 at original physical size; actual canvas preview contains ink.');
+  checks.push('Explicit multipage choice places page 2 at original physical size; actual canvas preview contains ink.');
 
-  await cell(0, 1).click({ modifiers: ['Shift'] });
-  await page.getByRole('button', { name: 'Merge', exact: true }).click();
+  await cell(0, 1).click({ modifiers: ['Shift'], force: domDiagnostic });
+  await page.getByRole('button', { name: 'Merge', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('[data-panel-id]').count(), 3);
   await panelAction('Split');
   assert.equal(await page.locator('[data-panel-id]').count(), 4);
   assert.equal(await occupied(0, 0), true);
   await sourceDrag(ordinary[0].name, cell(0, 1));
   assert.equal(await occupied(0, 1), true);
-  await cell(0, 0).click(); await cell(0, 1).click({ modifiers: ['Shift'] });
-  await page.getByRole('button', { name: 'Merge', exact: true }).click();
+  await cell(0, 0).click({ force: domDiagnostic }); await cell(0, 1).click({ modifiers: ['Shift'], force: domDiagnostic });
+  await page.getByRole('button', { name: 'Merge', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('[data-panel-id]').count(), 4);
   assert.match(await page.getByRole('alert').innerText(), /one|source|figure/i);
   checks.push('Adjacent rectangle merge/split retains source; merging two occupied cells refuses atomically. Tray drag places the complete source.');
@@ -353,19 +370,19 @@ try {
   await externalDrop(ordinary[1], cell(1, 0));
   assert.equal(await occupied(1, 0), true);
   await assertPreview(cell(1, 0));
-  await cell(1, 1).click();
-  await page.getByRole('button', { name: `Place ${rounded.name}`, exact: true }).click();
+  await cell(1, 1).click({ force: domDiagnostic });
+  await page.getByRole('button', { name: `Place ${rounded.name}`, exact: true }).click({ force: domDiagnostic });
   await page.getByRole('heading', { name: 'This page needs more room' }).waitFor();
-  await page.getByRole('button', { name: 'Keep original size', exact: true }).click();
+  await page.getByRole('button', { name: 'Keep original size', exact: true }).click({ force: domDiagnostic });
   assert.equal(await occupied(1, 1), false);
-  await page.getByRole('button', { name: `Place ${rounded.name}`, exact: true }).click();
-  await page.getByRole('button', { name: 'Fit whole page to cell (≈99.94%)', exact: true }).click();
+  await page.getByRole('button', { name: `Place ${rounded.name}`, exact: true }).click({ force: domDiagnostic });
+  await page.getByRole('button', { name: 'Fit whole page to cell (≈99.94%)', exact: true }).click({ force: domDiagnostic });
   assert.equal(await occupied(1, 1), true);
-  await page.getByRole('button', { name: 'Labels', exact: true }).click();
+  await page.getByRole('button', { name: 'Labels', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('.panel-letter').count(), 0);
-  await page.getByRole('button', { name: 'Labels', exact: true }).click();
+  await page.getByRole('button', { name: 'Labels', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('.panel-letter').count(), 4);
-  checks.push('External real PDF drop places a whole page; oversized original choice preserves empty cell; explicit≈99.94%fit and panel letters work.');
+  checks.push('External real PDF drop places a whole page; oversized original choice preserves empty cell; explicit ≈99.94% fit and panel letters work.');
 
   const tray = await page.locator('.source-list').evaluate((element) => ({ width: element.clientWidth, scroll: element.scrollWidth }));
   assert.ok(tray.scroll > tray.width, 'Fixture count forces real horizontal tray overflow.');
@@ -387,11 +404,11 @@ try {
   assert.ok(metrics.bar.bottom <= metrics.paper.top || metrics.bar.top >= metrics.paper.bottom, 'Selected controls must not cover the figure.');
   assert.ok(metrics.toolbar.bottom < metrics.paper.top && metrics.paper.bottom <= metrics.tray.top, 'Paper stays between toolbar and horizontal tray.');
   await writeFile(join(out, 'desktop-layout.json'), JSON.stringify(metrics, null, 2));
-  checks.push('Horizontal tray scrolls while import remains visible; top zoom changes only the view; no selection-bar/paper overlap at approved1463×1075viewport.');
+  checks.push('Horizontal tray scrolls while import remains visible; top zoom changes only the view; no selection-bar/paper overlap at approved 1463 × 1075 viewport.');
 
   await page.keyboard.press(`${commandKey}+n`);
   await page.getByRole('heading', { name: 'Keep your changes?' }).waitFor();
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('.has-source').count(), 4);
   let beforeUnload = false;
   const rejectLeave = async (dialog: import('playwright').Dialog) => { assert.equal(dialog.type(), 'beforeunload'); beforeUnload = true; await dialog.dismiss(); };
@@ -419,26 +436,26 @@ try {
   await page.getByLabel('Canvas zoom').selectOption('fit');
   checks.push('Real project download embeds exact original bytes+SHA256, explicit page selection, exact fit ratio; zoom does not alter saved layout.');
 
-  const exported = await download(() => page.getByRole('button', { name: 'Export PDF', exact: true }).click(), 'publication.pdf');
+  const exported = await download(() => page.getByRole('button', { name: 'Export PDF', exact: true }).click({ force: domDiagnostic }), 'publication.pdf');
   await idle(); await checkExport(exported, saved.document);
-  checks.push('Real publication PDF download has exact120×110mmmedia, one Form per complete source, original font byte streams, text operators and thin vector paths.');
+  checks.push('Real publication PDF download has exact 120 × 110 mm media, one Form per complete source, original font byte streams, text operators and thin vector paths.');
 
   await page.keyboard.press(`${commandKey}+n`);
   await page.getByRole('heading', { name: 'Keep your changes?' }).waitFor();
-  await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('.source-item').count(), 0);
   await externalDrop({ name: 'saved.figureassembly', bytes: saved.bytes }, page.locator('.workspace'));
   assert.equal(await page.locator('.has-source').count(), 4);
   await assertPreview(cell(0, 0));
   const reopened = await savedProject('reopened.figureassembly');
   assert.deepEqual(reopened.document, saved.document);
-  await page.getByRole('button', { name: 'Labels', exact: true }).click();
+  await page.getByRole('button', { name: 'Labels', exact: true }).click({ force: domDiagnostic });
   await externalDrop({ name: 'saved.figureassembly', bytes: saved.bytes }, page.locator('.source-tray'));
   await page.getByRole('heading', { name: 'Keep your changes?' }).waitFor();
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('.panel-letter').count(), 0);
   await externalDrop({ name: 'saved.figureassembly', bytes: saved.bytes }, page.locator('.source-tray'));
-  await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).click({ force: domDiagnostic });
   assert.equal(await page.locator('.panel-letter').count(), 4);
   checks.push('Downloaded project reopens from external drop without original paths; dirty project-drop Cancel retains edits, explicit discard restores the package.');
 
@@ -450,7 +467,7 @@ try {
     assert.equal(sizing.body, sizing.width); assert.ok(sizing.exportRight <= sizing.width);
     await shot(`03-edge-${viewport.width}x${viewport.height}.png`);
   }
-  checks.push('1000×700and600×800viewports retain primary export without horizontal page overflow.');
+  checks.push('1000 × 700 and 600 × 800 viewports retain primary export without horizontal page overflow.');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const reducedMotion = await page.evaluate(() => ({ enabled: matchMedia('(prefers-reduced-motion: reduce)').matches,
     transitions: Array.from(document.querySelectorAll('.toolbar-control,.button')).map((element) => getComputedStyle(element).transitionDuration) }));
@@ -473,7 +490,7 @@ try {
   const result = { status, screenshotGate: domDiagnostic ? 'blocked: explicit DOM-only diagnosis does not satisfy screenshot acceptance' : 'passed', browser: 'Actual Microsoft Edge; Browser plugin not available; regular Playwright fallback', executablePath,
     version: browser.version(), userAgent: agent, origin, viewport: { width: 1463, height: 1075 }, nativeBridge: false,
     checks, errors, warnings, externalRequests, requests, screenshots, glassProof, privateAcceptance, fileDelivery,
-    diagnosticPreference: domDiagnostic ? 'reduced motion; SVG engine accessibility gate is off, normal-motion visual acceptance remains BLOCKED' : null,
+    diagnosticPreference: domDiagnostic ? 'Reduced motion; SVG engine accessibility gate is off. Forced real mouse clicks bypass unavailable RAF stability; HTML drag events exercise product handlers. Normal pointer/normal-motion/screenshot acceptance remains BLOCKED.' : null,
     sourceHashes: [multipage, oversized, rounded, ...ordinary].map(({ name, sha256 }) => ({ name, sha256 })),
     exportSha256: sha256(exported), projectSha256: sha256(saved.bytes) };
   await writeFile(join(out, 'result.json'), JSON.stringify(result, null, 2));
