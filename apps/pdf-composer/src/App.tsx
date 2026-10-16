@@ -64,7 +64,12 @@ export default function App() {
     return () => { window.removeEventListener('assembly-menu', menu); window.removeEventListener('keydown', shortcut); };
   }, []);
 
-  return <div className="app-shell" aria-busy={composer.busy}>
+  return <div className="app-shell" aria-busy={composer.busy}
+    onDragOver={(event) => {
+      if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = composer.busy ? 'none' : 'copy'; }
+    }} onDrop={(event) => {
+      if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); void files.handleDrop(Array.from(event.dataTransfer.files)); }
+    }}>
     <style>{`@font-face{font-family:AssemblyLetter;src:url('${labelFontData}') format('truetype');font-display:swap}`}</style>
     <Toolbar title={title} dirty={composer.dirty} zoom={zoom} onZoomChange={setZoom}
       rows={composer.document.grid.rows} columns={composer.document.grid.columns} labels={composer.document.labels.enabled}

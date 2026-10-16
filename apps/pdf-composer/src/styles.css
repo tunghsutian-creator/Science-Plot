@@ -107,9 +107,9 @@ button svg{flex-shrink:0}
 .tray-import>svg{width:31px;height:31px;margin-bottom:3px}
 .tray-import-note{font-size:13px;line-height:20px;color:#777980;letter-spacing:-.2px}
 .tray-import:hover:not(:disabled){background:#ffffff4d}
-.source-tray.is-drop-target{border-radius:inherit;outline:2px solid #f47972;outline-offset:-4px}
+.source-tray.is-drop-target,.source-tray.is-file-drag{border-radius:inherit;outline:2px solid #f47972;outline-offset:-4px}
 .tray-empty{display:flex;flex:1;align-items:center;justify-content:flex-start;padding-left:12px;color:#7f8188;font-size:13px}
-.tray-open{border:0;background:transparent;color:#737780;font-size:12px;padding:0;text-align:left}
+.tray-open{display:none}
 .button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:7px 12px;min-height:33px;border:1px solid #d7d9df;border-radius:9px;background:#fff;box-shadow:0 1px 2px #161b270a;font-size:13px;line-height:18px;white-space:nowrap}
 .button:hover:not(:disabled){border-color:#bfc2cb}
 .button-primary{color:#a9231c;border-color:#fac6c3;background:#ffe7e5}
