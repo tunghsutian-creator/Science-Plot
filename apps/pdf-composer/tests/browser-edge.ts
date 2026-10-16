@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, extname, join, resolve, sep } from 'node:path';
@@ -26,6 +27,12 @@ await access(join(dist, 'index.html')).catch(() => { throw new Error('Build the 
 const fontBytes = await readFile(new URL('../assets/NotoSans-Regular.ttf', import.meta.url));
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const mm = 72 / 25.4;
+const builtHtml = await readFile(join(dist, 'index.html'), 'utf8');
+const builtPaths = ['index.html', ...Array.from(builtHtml.matchAll(/(?:src|href)="(\.\/assets\/[^\"]+)"/g), (match) => match[1].slice(2))];
+const buildHashes = await Promise.all(builtPaths.map(async (path) => ({ path, sha256: sha256(await readFile(join(dist, path))) })));
+let sourceHead: string | null = null;
+try { sourceHead = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { /* Downloaded source archives have no Git identity. */ }
+const testSha256 = sha256(await readFile(new URL(import.meta.url)));
 
 interface Fixture { name: string; path: string; bytes: Uint8Array; sha256: string }
 async function fixture(name: string, pages: [number, number][], color = rgb(0.05, 0.18, 0.75)): Promise<Fixture> {
@@ -489,6 +496,7 @@ try {
   const status = domDiagnostic ? 'blocked' : 'passed';
   const result = { status, screenshotGate: domDiagnostic ? 'blocked: explicit DOM-only diagnosis does not satisfy screenshot acceptance' : 'passed', browser: 'Actual Microsoft Edge; Browser plugin not available; regular Playwright fallback', executablePath,
     version: browser.version(), userAgent: agent, origin, viewport: { width: 1463, height: 1075 }, nativeBridge: false,
+    sourceHead, testSha256, buildHashes,
     checks, errors, warnings, externalRequests, requests, screenshots, glassProof, privateAcceptance, fileDelivery,
     diagnosticPreference: domDiagnostic ? 'Reduced motion; SVG engine accessibility gate is off. Forced real mouse clicks bypass unavailable RAF stability; HTML drag events exercise product handlers. Normal pointer/normal-motion/screenshot acceptance remains BLOCKED.' : null,
     sourceHashes: [multipage, oversized, rounded, ...ordinary].map(({ name, sha256 }) => ({ name, sha256 })),
