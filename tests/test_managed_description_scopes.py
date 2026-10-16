@@ -209,7 +209,7 @@ def test_equal_axis_labels_still_require_stable_ids_and_exact_scientific_context
 
 
 def test_compact_reads_keep_native_stale_and_pending_guards(tmp_path, monkeypatch):
-    service, root, _ = _service(tmp_path, monkeypatch)
+    service, root, document = _service(tmp_path, monkeypatch)
     native = service_module.load_head(root)["binding"]["document"]
     monkeypatch.setattr(service_module, "changed_inputs", lambda _backend, _binding: [native])
     summary = service.describe(root, description={"scope": "summary"})
@@ -222,11 +222,16 @@ def test_compact_reads_keep_native_stale_and_pending_guards(tmp_path, monkeypatc
     assert scoped["next_step"] == summary["next_step"]
 
     monkeypatch.setattr(service_module, "changed_inputs", lambda _backend, _binding: [])
-    monkeypatch.setattr(service_module, "active", lambda _: {"request": {"idempotency_key": "in-progress"},
-                                                              "phase": "needs_review"})
+    transaction = {"request": {"idempotency_key": "in-progress", "base_revision": 0},
+                   "phase": "needs_review", "id": "frozen-decision", "document": document, "before": document,
+                   "binding": {}, "diff": [], "risk": "review",
+                   "review": {"preview": {"path": "/tmp/frozen-preview.png"}, "scientific_audit": {"status": "passed"}}}
+    monkeypatch.setattr(service_module, "active", lambda _: transaction)
     pending = service.describe(root, description={"scope": "summary"})
     assert pending["pending"] == {"idempotency_key": "in-progress", "phase": "needs_review"}
-    assert "next_step" not in pending
+    assert pending["next_step"]["action"] == "plot.decide"
+    assert pending["next_step"]["request"] == {"decision_id": "frozen-decision", "base_revision": 0, "accept": True}
+    assert pending["recovery"]["preview"] == transaction["review"]["preview"]
 
 
 def test_managed_v1_and_legacy_behavior(tmp_path, monkeypatch):

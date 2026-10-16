@@ -40,7 +40,7 @@ def dispatch_plot(args: Any) -> int | None:
     if action in {"open", "describe"} and any(value is not None for value in (args.scope, args.target_id, args.property)):
         params["description"] = {key: value for key, value in
             (("scope", args.scope), ("target", args.target_id), ("property", args.property)) if value is not None}
-    if action in {"create", "patch", "intent", "rollback", "decide", "deliver"}:
+    if action in {"create", "patch", "resume", "intent", "rollback", "decide", "deliver"}:
         params["request"] = _request(args.request)
         if action == "create":
             for field in ("source", "profile", "out"):

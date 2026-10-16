@@ -30,6 +30,7 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         "sciplot_project_open": "project.open", "sciplot_plot_describe": "plot.describe",
         "sciplot_plot_create": "plot.create", "sciplot_plot_patch": "plot.patch",
         "sciplot_plot_intent": "plot.intent",
+        "sciplot_plot_resume": "plot.resume",
         "sciplot_plot_deliver": "plot.deliver",
         "sciplot_plot_render": "plot.render", "sciplot_plot_export": "plot.export",
         "sciplot_plot_rollback": "plot.rollback", "sciplot_plot_decide": "plot.decide",

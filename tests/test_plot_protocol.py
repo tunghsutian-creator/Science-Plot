@@ -47,6 +47,9 @@ class FakeService:
     def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         return self._call("patch", plot, request)
 
+    def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        return self._call("resume", plot, request)
+
     def render(self, plot: Path) -> dict[str, Any]:
         return self._call("render", plot)
 
@@ -169,6 +172,10 @@ def test_uncertain_disconnect_is_not_automatically_replayed() -> None:
             assert error.value.repair is not None
             assert error.value.repair["request_id"] == "same-id"
             assert error.value.repair["action"] == "retry_same_request"
+            assert error.value.repair["idempotency_key"] == "same-key"
+            assert error.value.repair["automatic_retry"] is False
+            assert error.value.repair["next_step"] == {"action": "plot.describe", "plot": "/tmp/plot",
+                                                       "description": {"scope": "summary"}}
 
 
 def test_slow_response_cannot_extend_the_total_exchange_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -412,3 +419,80 @@ def test_default_engine_identity_changes_with_build_but_not_bytecode(
         assert paths.runtime_fingerprint() != updated
     finally:
         paths.runtime_fingerprint.cache_clear()
+
+
+def test_startup_ping_loss_does_not_claim_the_plotting_request_was_sent(monkeypatch):
+    def unavailable(*_args, **_kwargs):
+        raise TransportError("transport_outcome_unknown", "ping reply lost", repair={"method": "engine.ping"})
+
+    monkeypatch.setattr(client, "ensure_server", unavailable)
+    monkeypatch.setattr(client, "_exchange", lambda *_args: pytest.fail("Startup failure sent a plotting request"))
+    params = {"plot": "/tmp/plot", "request": {"plot_id": "original", "base_revision": 3, "idempotency_key": "known"}}
+    with pytest.raises(TransportError) as failed:
+        client.call("plot.resume", params, request_id="resume-id")
+    repair = failed.value.repair
+    assert repair["method"] == "plot.resume" and repair["request_id"] == "resume-id"
+    assert repair["idempotency_key"] == "known" and repair["base_revision"] == 3
+    assert repair["request_sent"] is False and repair["automatic_retry"] is False
+
+
+@pytest.mark.parametrize("response", [
+    {"jsonrpc": "2.0", "id": "foreign", "result": {}},
+    {"jsonrpc": "2.0", "id": "known", "result": []},
+    {"jsonrpc": "2.0", "id": "known", "error": "invalid"},
+    {"jsonrpc": "2.0", "id": "known", "error": {}},
+    {"jsonrpc": "2.0", "id": "known", "error": {"code": -32000, "message": "unusable", "data": []}},
+])
+def test_invalid_response_preserves_original_recovery_binding(response):
+    with tempfile.TemporaryDirectory(prefix="spr-invalid-", dir="/tmp") as temporary:
+        path = Path(temporary) / "socket"
+        requests = []
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            listener.bind(str(path))
+            listener.listen(1)
+
+            def reply_once():
+                connection, _ = listener.accept()
+                with connection:
+                    requests.append(rpc.decode(server.read_frame(connection, rpc.MAX_REQUEST_BYTES)))
+                    connection.sendall(rpc.encode(response))
+
+            thread = threading.Thread(target=reply_once)
+            thread.start()
+            request = {"jsonrpc": "2.0", "id": "known", "method": "plot.patch", "params": {
+                "plot": "/tmp/plot", "request": {"plot_id": "saved", "idempotency_key": "saved-key", "base_revision": 7}}}
+            with pytest.raises(TransportError) as failed:
+                client._exchange(path, request, 3)
+            thread.join(timeout=3)
+            assert not thread.is_alive() and requests == [request]
+            assert failed.value.reason_code == "invalid_engine_response"
+            repair = failed.value.repair
+            assert repair["idempotency_key"] == "saved-key" and repair["base_revision"] == 7
+            assert repair["plot_id"] == "saved" and repair["request_sent"] is True
+            assert repair["automatic_retry"] is False and repair["next_step"]["action"] == "plot.describe"
+
+
+def test_resume_cli_rpc_and_mcp_share_one_closed_schema(monkeypatch, tmp_path, capsys):
+    from sciplot_core import cli
+    from sciplot_core.mcp_server.schemas import tool_definitions
+    from sciplot_core.mcp_server.services import invoke_owner
+    from sciplot_core.plot_engine.contracts import resume_schema, validate_resume
+    from test_task_capabilities import expand
+
+    request = {"plot_id": "saved", "base_revision": 2, "idempotency_key": "original-key"}
+    assert validate_resume(request) == request
+    service = FakeService()
+    monkeypatch.setattr(server, "make_service", lambda: service)
+    path = tmp_path / "resume.json"
+    path.write_text(json.dumps(request))
+    assert cli.main(["plot", "resume", "/tmp/plot", "--request", str(path), "--direct", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["request"] == request
+    assert service.calls == [("resume", Path("/tmp/plot").resolve(), request)]
+    tool = next(item for item in tool_definitions() if item.name == "sciplot_plot_resume")
+    assert expand(tool.input_schema)["properties"]["request"] == resume_schema()
+    assert tool.annotations.idempotent_hint and not tool.annotations.read_only_hint
+    captured = []
+    monkeypatch.setattr(client, "call", lambda method, params: captured.append((method, params)) or {"status": "complete"})
+    params = {"plot": "/tmp/plot", "request": request}
+    assert invoke_owner("sciplot_plot_resume", params) == {"status": "complete"}
+    assert captured == [("plot.resume", params)]

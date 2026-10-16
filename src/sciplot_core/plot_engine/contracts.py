@@ -37,6 +37,11 @@ def rollback_schema() -> dict[str, Any]:
                    "idempotency_key": deepcopy(_KEY)})
 
 
+def resume_schema() -> dict[str, Any]:
+    return closed({"plot_id": deepcopy(_KEY), "base_revision": deepcopy(_REVISION),
+                   "idempotency_key": deepcopy(_KEY)})
+
+
 def decide_schema() -> dict[str, Any]:
     from sciplot_core.task_contract import task_response_schema
 
@@ -55,6 +60,12 @@ def validate_create(value: Any) -> dict[str, Any]:
 
 def validate_rollback(value: Any) -> dict[str, Any]:
     validate_wire(value, rollback_schema(), code="plot_invalid_rollback")
+    assert isinstance(value, dict)
+    return deepcopy(value)
+
+
+def validate_resume(value: Any) -> dict[str, Any]:
+    validate_wire(value, resume_schema(), code="plot_invalid_resume")
     assert isinstance(value, dict)
     return deepcopy(value)
 

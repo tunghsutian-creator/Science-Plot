@@ -117,6 +117,42 @@ If the outcome is uncertain or the binding changed, follow its returned recovery
 guidance. Lower-level preview/apply/Studio commands below are available for
 diagnostics and do not form extra steps in a completed task edit.
 
+## Recover a semantic request after a lost reply
+
+Connection loss or an invalid reply does not prove that a mutation failed.
+Keep the original plot ID, base revision and idempotency key; never make a new
+key merely because the response was lost. Transport repair reports whether the
+plotting request was sent. A startup/ping failure explicitly reports it was not
+sent. The client does not automatically resend mutations.
+
+For an existing semantic plot, follow the returned read-only `plot.describe`
+step. Its `recovery` identifies the frozen transaction and original base versus
+current revision without rendering or applying anything. A pending review includes
+the original preview/audit and exact `plot.decide` request; inspect that preview
+before accepting. Export-pending points to `plot.export`, which preserves the
+committed revision. Changed inputs block continuation and require resolution.
+
+The explicit compact recovery entry accepts only the original three fields:
+
+```json
+{"plot_id":"ORIGINAL_PLOT_ID","base_revision":0,"idempotency_key":"ORIGINAL_KEY"}
+```
+
+```bash
+skill/scripts/sciplot plot resume /absolute/plot --request RESUME.json --json
+```
+
+Use the returned `recovery.resume.request` unchanged. JSON-RPC `plot.resume` and
+MCP `sciplot_plot_resume` take the same `plot` and `request`. This entry loads the
+existing journal and reuses its original guards and apply/export recovery; even a
+large original batch needs no reconstruction. An unknown key never creates an
+edit. Wrong plot/base identity, source/native drift and uncertain native state
+remain guarded. A review is never automatically accepted. A completed operation
+replays its existing revision; a historical replay does not claim current ready
+exports. Creation questions and native reimport retain their original decision
+entries. This is continuation of an existing semantic transaction, not a general
+process-crash or filesystem recovery service.
+
 ## Complete local tasks and MCP
 
 Read `task capabilities --json` for the small capability index (version 2).

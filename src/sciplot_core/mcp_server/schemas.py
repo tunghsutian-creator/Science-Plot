@@ -20,6 +20,7 @@ def tool_definitions() -> list[Tool]:
     from sciplot_core.plot_engine.contracts import (
         create_schema,
         decide_schema,
+        resume_schema,
         rollback_schema,
     )
     from sciplot_core.plot_engine.typed_intent import intent_schema
@@ -78,6 +79,8 @@ def tool_definitions() -> list[Tool]:
         {**semantic_plot, "request": patch_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_intent", "After current ManagedPlot FigureSpec v2 state, plan then apply one literal axis label or annotation text edit. Select an advertised stable target ID or unique exact current label, plot ID, revision and idempotency key. Plan is read-only and returns unit/anchor context; apply uses the existing plot patch transaction. Not for LegacyPlot.",
         {**semantic_plot, "request": intent_schema()}, ["plot", "request"], idempotent=True, destructive=True)
+    add("plot_resume", "Explicitly continue one existing semantic transaction using its original plot ID, base revision and idempotency key after a lost reply or daemon restart. Does not create a transaction or accept a pending review. Original source/native guards and export-only recovery remain active.",
+        {**semantic_plot, "request": resume_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_render", "Render the current semantic document through its native backend; reuses valid current cache and preserves the saved scientific state.",
         semantic_plot, ["plot"], idempotent=True)
     add("plot_export", "Export the committed semantic revision. A prior export failure resumes export without applying a patch again. Handoff requires ready delivery evidence.",

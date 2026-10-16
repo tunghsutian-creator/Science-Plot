@@ -17,6 +17,7 @@ class Service(Protocol):
     def open(self, target: Path, figure_id: str | None = None, *, description: dict[str, Any] | None = None) -> dict[str, Any]: ...
     def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]: ...
     def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
+    def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def render(self, plot: Path) -> dict[str, Any]: ...
     def export(self, plot: Path) -> dict[str, Any]: ...
@@ -91,6 +92,7 @@ def validate_params(method: str, params: dict[str, Any]) -> None:
         "plot.render": ({"plot"}, {"plot"}),
         "plot.export": ({"plot"}, {"plot"}),
         "plot.patch": ({"plot", "request"}, {"plot", "request"}),
+        "plot.resume": ({"plot", "request"}, {"plot", "request"}),
         "plot.intent": ({"plot", "request"}, {"plot", "request"}),
         "plot.rollback": ({"plot", "request"}, {"plot", "request"}),
         "plot.decide": ({"plot", "request"}, {"plot", "request"}),
@@ -139,6 +141,8 @@ def invoke(service: Service, method: str, params: dict[str, Any]) -> dict[str, A
         return service.export(plot)
     if method == "plot.patch":
         return service.patch(plot, params["request"])
+    if method == "plot.resume":
+        return service.resume(plot, params["request"])
     if method == "plot.intent":
         return service.intent(plot, params["request"])
     if method == "plot.rollback":

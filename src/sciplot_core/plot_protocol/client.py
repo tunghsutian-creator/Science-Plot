@@ -38,6 +38,20 @@ def _remaining_timeout(deadline: float) -> float:
     return remaining
 
 
+def _recovery(request: dict[str, Any], *, request_sent: bool) -> dict[str, Any]:
+    """Keep the known semantic binding; recovery is always an explicit call."""
+    params = request.get("params", {})
+    original = params.get("request", {})
+    repair = {"action": "retry_same_request", "method": request["method"], "request_id": request["id"],
+              "request_sent": request_sent, "automatic_retry": False,
+              "preserve": "Keep the original request and idempotency_key; do not create a new operation.",
+              **{key: original[key] for key in ("plot_id", "base_revision", "idempotency_key") if key in original}}
+    if "plot" in params:
+        repair.update(plot=params["plot"], next_step={"action": "plot.describe", "plot": params["plot"],
+                                                     "description": {"scope": "summary"}})
+    return repair
+
+
 def _exchange(path: Path, request: dict[str, Any], timeout: float) -> dict[str, Any]:
     payload = encode(request)
     if len(payload) > MAX_REQUEST_BYTES:
@@ -62,19 +76,22 @@ def _exchange(path: Path, request: dict[str, Any], timeout: float) -> dict[str, 
                     response = decode(bytes(data).split(b"\n", 1)[0])
                     break
         except (OSError, ValueError) as exc:
-            raise TransportError("transport_outcome_unknown", "The connection ended without a confirmed local outcome.", repair={
-                "action": "retry_same_request", "method": request["method"], "request_id": request["id"],
-                "preserve": "Resend the identical request with the original idempotency_key; do not create a new operation.",
-            }) from exc
+            raise TransportError("transport_outcome_unknown", "The connection ended without a confirmed local outcome.",
+                                 repair=_recovery(request, request_sent=True)) from exc
     if (not isinstance(response, dict) or response.get("jsonrpc") != "2.0"
             or response.get("id") != request["id"] or (("result" in response) == ("error" in response))):
-        raise TransportError("invalid_engine_response", "Engine response identity or envelope was invalid; inspect the durable plot outcome.")
+        raise TransportError("invalid_engine_response", "Engine response identity or envelope was invalid; inspect the durable plot outcome.",
+                             repair=_recovery(request, request_sent=True))
     if "error" in response:
-        if not isinstance(response["error"], dict):
-            raise TransportError("invalid_engine_response", "Engine returned an invalid error envelope.")
-        raise RemoteError(response["error"])
+        error = response["error"]
+        if (not isinstance(error, dict) or type(error.get("code")) is not int
+                or not isinstance(error.get("message"), str) or not isinstance(error.get("data", {}), dict)):
+            raise TransportError("invalid_engine_response", "Engine returned an invalid error envelope.",
+                                 repair=_recovery(request, request_sent=True))
+        raise RemoteError(error)
     if not isinstance(response["result"], dict):
-        raise TransportError("invalid_engine_response", "Engine result must be an object.")
+        raise TransportError("invalid_engine_response", "Engine result must be an object.",
+                             repair=_recovery(request, request_sent=True))
     return response["result"]
 
 
@@ -148,9 +165,21 @@ def call(method: str, params: dict[str, Any], *, socket_path: Path | None = None
             raise RemoteError(response["error"])
         result: dict[str, Any] = response["result"]
         return result
-    path = ensure_server(socket_path, request_timeout=timeout)
+    try:
+        path = ensure_server(socket_path, request_timeout=timeout)
+    except TransportError as exc:
+        if exc.reason_code not in {"transport_outcome_unknown", "invalid_engine_response", "engine_start_timeout", "engine_start_failed"}:
+            raise
+        repair = _recovery(request, request_sent=False)
+        if exc.repair:
+            repair["startup"] = exc.repair
+        raise TransportError(exc.reason_code, "The engine did not confirm readiness; the plotting request was not sent.",
+                             repair=repair) from exc
+    except OSError as exc:
+        raise TransportError("engine_unavailable", "The engine could not confirm readiness; the plotting request was not sent.",
+                             repair=_recovery(request, request_sent=False)) from exc
     try:
         return _exchange(path, request, timeout)
     except OSError as exc:
         raise TransportError("engine_unavailable", "The engine could not be reached; the plotting request was not sent.",
-                             repair={"action": "retry_same_request", "method": method}) from exc
+                             repair=_recovery(request, request_sent=False)) from exc

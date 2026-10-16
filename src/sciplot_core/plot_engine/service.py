@@ -20,6 +20,8 @@ from .current import changed_inputs, dependency_state, evidence_current, require
 from .description_scope import require_selector
 from .errors import EngineError
 from .execution import advance, replay
+from .recovery import project_recovery, resume_transaction
+from .recovery import pending_edit_error as _pending_edit_error
 from .storage import (
     active,
     commit,
@@ -33,15 +35,6 @@ from .storage import (
 )
 
 
-def _pending_edit_error(root: Path, pending: dict[str, Any], message: str) -> EngineError:
-    """Point a competing edit at a read, never at replaying another request."""
-    return EngineError(
-        "document_transaction_pending", message,
-        action="plot.describe", plot=str(root), description={"scope": "summary"},
-        pending={"idempotency_key": pending["request"]["idempotency_key"], "phase": pending["phase"]},
-    )
-
-
 class PlotService:
     def __init__(self, backend: PlotBackend | None = None) -> None:
         if backend is None:
@@ -51,6 +44,9 @@ class PlotService:
 
             backend = BackendRouter(VeuszBackend())
         self.backend = backend
+
+    def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        return resume_transaction(plot, request, self.backend, self._patch)
 
     def close(self) -> None:
         close = getattr(self.backend, "close", None)
@@ -151,6 +147,7 @@ class PlotService:
                 "pending": ({"idempotency_key": pending["request"]["idempotency_key"], "phase": pending["phase"]}
                             if pending and pending["phase"] not in {"complete", "rejected"} else None),
                 "document": str(root / "revisions" / f'{document["revision"]:08d}.json')}
+        project_recovery(result, root, pending)
         if document.get("plot_type") == "ManagedPlot":
             from .managed_description import describe_managed
 

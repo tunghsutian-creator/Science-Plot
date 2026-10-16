@@ -233,3 +233,18 @@ def test_task_entry_cannot_pollute_source_or_revision_storage(tmp_path, monkeypa
             edit_task(root, task_dir=entry, font_size="9pt", service=service)
         assert error.value.reason_code == "task_path_overlap"
     assert backend.native_writes == 0 and load_head(root)["document"]["revision"] == 0
+
+
+def test_unrelated_common_edit_preserves_existing_recovery_step(tmp_path, ready):
+    from test_plot_recovery import _legacy
+    from test_plot_engine import request
+
+    service, root, backend, _ = _legacy(tmp_path)
+    reviewed = service.patch(root, request(changes=[{"op": "set", "target": ["title:main"],
+        "property": "title.text", "value": "Previously authorized review"}]))
+    entry = tmp_path / "new-intent-not-executed"
+    result = edit_task(root, task_dir=entry, font_size="9pt", service=service)
+    assert result["reason_code"] == "document_transaction_pending" and result["request_executed"] is False
+    assert result["next_step"] == {**reviewed["next_step"], "plot": str(root)}
+    assert result["recovery"]["idempotency_key"] == "edit-1"
+    assert not entry.exists() and backend.native_writes == 0

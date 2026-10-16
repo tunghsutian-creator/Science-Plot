@@ -313,12 +313,16 @@ def test_foreign_renderer_receipt_does_not_claim_reuse(case, monkeypatch):
 
 
 def test_pending_is_preserved_without_rebuild_advice(case, monkeypatch):
-    _service, _root, _head, _backend, _sources, _native = case
+    _service, _root, head, _backend, _sources, _native = case
     monkeypatch.setattr(service_module, "active", lambda _: {
-        "request": {"idempotency_key": "existing-tx"}, "phase": "needs_review"})
+        "request": {"idempotency_key": "existing-tx", "base_revision": 0}, "phase": "needs_review",
+        "id": "existing-decision", "document": head["document"], "before": head["document"],
+        "binding": {}, "diff": [], "risk": "review",
+        "review": {"preview": {"path": "/tmp/frozen.png"}, "scientific_audit": {"status": "passed"}}})
     summary = _summary(case)
     assert summary["pending"] == {"idempotency_key": "existing-tx", "phase": "needs_review"}
-    assert "next_step" not in summary
+    assert summary["next_step"]["action"] == "plot.decide"
+    assert summary["next_step"]["request"]["decision_id"] == "existing-decision"
     assert summary["rebuild_explanation"]["verified_reused_nodes"] == []
 
 

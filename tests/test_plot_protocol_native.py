@@ -211,3 +211,152 @@ def test_native_mutation_lost_reply_and_daemon_restart_replay_once(tmp_path):
                     os.kill(engine_pid, signal.SIGTERM)
                 except ProcessLookupError:
                     pass
+
+
+@pytest.mark.comprehensive
+def test_native_frozen_recovery_survives_lost_reply_and_restart_via_cli_mcp(tmp_path, monkeypatch):
+    """Only three original binding fields cross the recovery transports."""
+    from managed_plot_helpers import patch, request_for_source
+    from sciplot_core.plot_protocol import client
+    from sciplot_core.plot_protocol.paths import TransportError
+
+    create_request = request_for_source(tmp_path)
+    source = Path(create_request["data_binding"]["data_sources"][0]["path"])
+    source_hash = file_sha256(source)
+    with tempfile.TemporaryDirectory(prefix="spr2-", dir="/tmp") as temporary:
+        socket_path = Path(temporary) / "engine.sock"
+        environment = {**os.environ, "SCIPLOT_ENGINE_SOCKET": str(socket_path)}
+        engine_pid = None
+        discarded = []
+        real_socket = socket_module.socket
+
+        class DropReplySocket:
+            def __init__(self, *args):
+                self.connection = real_socket(*args)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                self.connection.close()
+
+            def connect(self, path):
+                self.connection.connect(path)
+
+            def settimeout(self, value):
+                self.connection.settimeout(value)
+
+            def sendall(self, payload):
+                self.connection.sendall(payload)
+
+            def recv(self, limit):
+                # The real daemon finished its request. Discard its actual
+                # response bytes and close the caller channel before delivery.
+                discarded.append(self.connection.recv(limit))
+                self.connection.close()
+                return b""
+
+        def lose_reply(params):
+            with monkeypatch.context() as controlled:
+                controlled.setattr(client.socket, "socket", DropReplySocket)
+                with pytest.raises(TransportError) as failed:
+                    client._exchange(socket_path, {"jsonrpc": "2.0", "id": "controlled-loss",
+                        "method": "plot.patch", "params": params}, 180)
+            assert failed.value.reason_code == "transport_outcome_unknown"
+            assert failed.value.repair["automatic_retry"] is False
+            assert failed.value.repair["idempotency_key"] == params["request"]["idempotency_key"]
+            assert discarded[-1], "No real daemon response was available to lose."
+            return failed.value.repair
+
+        def cli_resume(root, request):
+            path = tmp_path / "resume.json"
+            path.write_text(json.dumps(request))
+            result = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "plot", "resume", str(root),
+                "--request", str(path), "--json"], env=environment, cwd=REPO_ROOT,
+                capture_output=True, text=True, timeout=180, check=False)
+            assert result.returncode == 0, result.stdout + result.stderr
+            return json.loads(result.stdout)
+
+        def stop_abruptly(pid):
+            os.kill(pid, signal.SIGKILL)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                with real_socket(socket_module.AF_UNIX, socket_module.SOCK_STREAM) as probe:
+                    try:
+                        probe.connect(str(socket_path))
+                    except (ConnectionRefusedError, FileNotFoundError):
+                        return
+                time.sleep(.01)
+            pytest.fail("The owned terminated daemon still accepts connections.")
+
+        try:
+            created = call("plot.create", {"request": create_request}, socket_path=socket_path)
+            assert created["ready_to_use"] and created["revision"] == 0
+            engine_pid = read_owner(socket_path)["pid"]
+            root = Path(created["plot"])
+            described = call("plot.describe", {"plot": str(root)}, socket_path=socket_path)
+            native = Path(load_head(root)["binding"]["document"])
+            initial_native_hash = file_sha256(native)
+            review = patch(described, "lost-review", "axis.limits", [0, 4], "axis:x")
+            lose_reply({"plot": str(root), "request": review})
+            frozen = call("plot.describe", {"plot": str(root), "description": {"scope": "summary"}}, socket_path=socket_path)
+            assert frozen["revision"] == 0 and frozen["pending"]["phase"] == "needs_review"
+            assert frozen["next_step"]["action"] == "plot.decide"
+            assert frozen["recovery"]["preview"]["path"]
+            recovery = {"plot_id": created["plot_id"], "base_revision": 0, "idempotency_key": "lost-review"}
+            assert file_sha256(native) == initial_native_hash and len(list(root.glob("revisions/*.json"))) == 1
+            first_pid = engine_pid
+            stop_abruptly(engine_pid)
+            resumed = cli_resume(root, recovery)
+            engine_pid = read_owner(socket_path)["pid"]
+            assert engine_pid != first_pid
+            assert resumed["status"] == "needs_review" and resumed["preview"] == frozen["recovery"]["preview"]
+            assert file_sha256(native) == initial_native_hash and load_head(root)["document"]["revision"] == 0
+            accepted = call("plot.decide", {"plot": str(root), "request": frozen["next_step"]["request"]}, socket_path=socket_path)
+            assert accepted["ready_to_use"] and accepted["revision"] == 1
+            assert accepted["scientific_hash"] == created["scientific_hash"]
+            described = call("plot.describe", {"plot": str(root)}, socket_path=socket_path)
+            edit = patch(described, "lost-width", "style.line.width", "1.2pt", "series:A")
+            repair = lose_reply({"plot": str(root), "request": edit})
+            summary = call("plot.describe", {"plot": str(root), "description": {"scope": "summary"}}, socket_path=socket_path)
+            assert summary["revision"] == 2 and summary["recovery"]["phase"] == "complete"
+            assert repair["base_revision"] == 1
+            recovery = summary["recovery"]["next_step"]["request"]
+            assert recovery == {"plot_id": created["plot_id"], "base_revision": 1, "idempotency_key": "lost-width"}
+            canonical = [root / "head.json", *root.glob("revisions/*.json")]
+            canonical_hashes = {str(path): file_sha256(path) for path in canonical}
+            native = Path(load_head(root)["binding"]["document"])
+            native_hash = file_sha256(native)
+
+            async def mcp_resume():
+                parameters = StdioServerParameters(command=str(REPO_ROOT / "skill/scripts/sciplot"),
+                    args=["mcp"], cwd=REPO_ROOT, env=environment)
+                async with Client(parameters, read_timeout_seconds=180) as mcp:
+                    result = await mcp.call_tool("sciplot_plot_resume", {"plot": str(root), "request": recovery})
+                    assert not result.is_error, result.content
+                    return result.structured_content
+
+            replayed = anyio.run(mcp_resume)
+            assert replayed["ready_to_use"] and replayed["replayed"] and replayed["revision"] == 2
+            stop_abruptly(engine_pid)
+            restarted = cli_resume(root, recovery)
+            engine_pid = read_owner(socket_path)["pid"]
+            assert restarted["ready_to_use"] and restarted["replayed"] and restarted["revision"] == 2
+            assert len(list(root.glob("revisions/*.json"))) == 3
+            assert {str(path): file_sha256(path) for path in canonical} == canonical_hashes
+            assert file_sha256(native) == native_hash and file_sha256(source) == source_hash
+            evidence = REPO_ROOT / ".tmp_verify/round2-recovery/native-transport.json"
+            evidence.parent.mkdir(parents=True, exist_ok=True)
+            evidence.write_text(json.dumps({"status": "passed", "plot": str(root),
+                "transport": "Actual AF_UNIX cold daemon + CLI resume + official MCP resume",
+                "lost_reply_count": len(discarded), "review_not_auto_accepted": True,
+                "frozen_preview_recovered_after_restart": True, "revision": 2, "revision_count": 3,
+                "semantic_history_unchanged_on_replays": True, "native_unchanged_on_replays": True,
+                "scientific_hash_unchanged": True, "source_unchanged": True,
+                "first_daemon_pid": first_pid, "last_daemon_pid": engine_pid}, indent=2))
+        finally:
+            if engine_pid is not None:
+                try:
+                    os.kill(engine_pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
