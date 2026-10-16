@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4889,
-    "nodeids_sha256": "2ebb1d2e703e34bd09517a08476faa6a8c6c1e7dafb04325a3cb1bf3c6bc95df",
-    "test_sources_sha256": "ab3d1ed5a34a35a10d99c896433b858eb78cb813781098f149cc3f7fc341b81a",
-    "test_source_count": 349,
+    "nodeid_count": 4994,
+    "nodeids_sha256": "78d65399afb11503cd595f777c94adbd034a189050e77f10fb53d253116411a5",
+    "test_sources_sha256": "4cf6f20fcab32d6768afc43c2e5f0249f04c59988930c3270f974fd157b0eebe",
+    "test_source_count": 352,
     "candidate_nodeids": [
       "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[break-on-inf]",
       "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[ignore-0]",
@@ -457,7 +457,113 @@
       "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[dependencies]",
       "tests/test_verification_evidence_scope.py::test_runtime_membership_is_rediscovered_after_command[fonts]",
       "tests/test_verification_evidence_scope.py::test_synthetic_collection_preserves_inherited_plugin_path",
-      "tests/test_verification_evidence_scope.py::test_unrelated_documentation_commit_reuses_executable_evidence"
+      "tests/test_verification_evidence_scope.py::test_unrelated_documentation_commit_reuses_executable_evidence",
+      "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[src/sciplot_core/task_group_contract.py]",
+      "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[src/sciplot_core/task_group_gallery.py]",
+      "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[src/sciplot_core/task_group_review.py]",
+      "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[src/sciplot_core/task_group_storage.py]",
+      "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[src/sciplot_core/task_groups.py]",
+      "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[tests/test_task_groups.py]",
+      "tests/test_changed_scope_selectors.py::test_mcp_adapter_retains_new_public_recovery_schema_and_forwarding_contract",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/cli/task_paper.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_contract.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_delivery.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_native.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_publication.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_selection.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_sources.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_status.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_papers.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[tests/test_task_paper_publication.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[tests/test_task_paper_selection.py]",
+      "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[tests/test_task_papers.py]",
+      "tests/test_changed_scope_selectors.py::test_recovery_source_and_generated_contracts_keep_semantic_engine_consumers[src/sciplot_core/plot_engine/recovery.py]",
+      "tests/test_changed_scope_selectors.py::test_recovery_source_and_generated_contracts_keep_semantic_engine_consumers[tests/test_plot_recovery.py]",
+      "tests/test_changed_scope_selectors.py::test_shared_task_and_parser_changes_keep_broad_existing_consumers[src/sciplot_core/cli/dispatch/tasks.py]",
+      "tests/test_changed_scope_selectors.py::test_shared_task_and_parser_changes_keep_broad_existing_consumers[src/sciplot_core/cli/parsers/tasks.py]",
+      "tests/test_changed_scope_selectors.py::test_shared_task_and_parser_changes_keep_broad_existing_consumers[src/sciplot_core/task_contract.py]",
+      "tests/test_changed_scope_selectors.py::test_shared_task_and_parser_changes_keep_broad_existing_consumers[src/sciplot_core/task_control.py]",
+      "tests/test_changed_scope_selectors.py::test_shared_task_and_parser_changes_keep_broad_existing_consumers[src/sciplot_core/task_storage.py]",
+      "tests/test_changed_verification_evidence.py::test_disconnected_record_reports_unstarted_checks_without_replaying",
+      "tests/test_changed_verification_evidence.py::test_empty_record_is_no_tests_with_nonzero_public_exit",
+      "tests/test_changed_verification_evidence.py::test_record_status_follows_running_original_after_client_disconnect",
+      "tests/test_changed_verification_evidence.py::test_record_status_preserves_actual_failed_original",
+      "tests/test_changed_verification_evidence.py::test_record_status_reads_original_completion_without_launch_or_reuse",
+      "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[alias]",
+      "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[check_alias]",
+      "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[command]",
+      "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[duplicate]",
+      "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[escape]",
+      "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[finish]",
+      "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[log]",
+      "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[request_alias]",
+      "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[unbound]",
+      "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[version]",
+      "tests/test_changed_verification_evidence.py::test_record_status_uses_the_existing_public_status_entry",
+      "tests/test_plot_protocol.py::test_bad_reply_to_malformed_wire_request_keeps_transport_error[7]",
+      "tests/test_plot_protocol.py::test_bad_reply_to_malformed_wire_request_keeps_transport_error[None]",
+      "tests/test_plot_protocol.py::test_bad_reply_to_malformed_wire_request_keeps_transport_error[params2]",
+      "tests/test_plot_protocol.py::test_bad_reply_to_malformed_wire_request_keeps_transport_error[params3]",
+      "tests/test_plot_protocol.py::test_invalid_response_preserves_original_recovery_binding[response0]",
+      "tests/test_plot_protocol.py::test_invalid_response_preserves_original_recovery_binding[response1]",
+      "tests/test_plot_protocol.py::test_invalid_response_preserves_original_recovery_binding[response2]",
+      "tests/test_plot_protocol.py::test_invalid_response_preserves_original_recovery_binding[response3]",
+      "tests/test_plot_protocol.py::test_invalid_response_preserves_original_recovery_binding[response4]",
+      "tests/test_plot_protocol.py::test_public_call_rejects_malformed_request_before_startup[7]",
+      "tests/test_plot_protocol.py::test_public_call_rejects_malformed_request_before_startup[None]",
+      "tests/test_plot_protocol.py::test_resume_cli_rpc_and_mcp_share_one_closed_schema",
+      "tests/test_plot_protocol.py::test_startup_ping_loss_does_not_claim_the_plotting_request_was_sent",
+      "tests/test_plot_protocol_native.py::test_native_frozen_recovery_survives_lost_reply_and_restart_via_cli_mcp",
+      "tests/test_plot_recovery.py::test_explicit_resume_export_pending_preserves_committed_semantic_revision",
+      "tests/test_plot_recovery.py::test_explicit_resume_recovers_uncertain_apply_once",
+      "tests/test_plot_recovery.py::test_guarded_legacy_apply_resume_refuses_external_bytes[native]",
+      "tests/test_plot_recovery.py::test_guarded_legacy_apply_resume_refuses_external_bytes[source]",
+      "tests/test_plot_recovery.py::test_lost_review_summary_returns_frozen_decision_without_native_work",
+      "tests/test_plot_recovery.py::test_resume_binding_mismatch_never_reserves_or_applies[change0-document_transaction_unknown]",
+      "tests/test_plot_recovery.py::test_resume_binding_mismatch_never_reserves_or_applies[change1-document_identity_conflict]",
+      "tests/test_plot_recovery.py::test_resume_binding_mismatch_never_reserves_or_applies[change2-document_revision_conflict]",
+      "tests/test_plot_recovery.py::test_resume_binding_mismatch_never_reserves_or_applies[change3-plot_invalid_resume]",
+      "tests/test_plot_recovery.py::test_resume_binding_mismatch_never_reserves_or_applies[change4-plot_invalid_resume]",
+      "tests/test_plot_recovery.py::test_resume_of_historical_key_does_not_claim_current_delivery",
+      "tests/test_plot_recovery.py::test_review_recovery_refuses_drift_and_summary_cannot_offer_accept[native]",
+      "tests/test_plot_recovery.py::test_review_recovery_refuses_drift_and_summary_cannot_offer_accept[source]",
+      "tests/test_plot_recovery.py::test_uncertain_managed_resume_keeps_original_base_guards[native]",
+      "tests/test_plot_recovery.py::test_uncertain_managed_resume_keeps_original_base_guards[source]",
+      "tests/test_task_common_edits.py::test_unrelated_common_edit_preserves_existing_recovery_step",
+      "tests/test_task_groups.py::test_changed_original_source_removes_preview_acceptance_guidance",
+      "tests/test_task_groups.py::test_changed_preparation_blocks_presentation_without_recreating_or_hiding_other_items[native]",
+      "tests/test_task_groups.py::test_changed_preparation_blocks_presentation_without_recreating_or_hiding_other_items[source]",
+      "tests/test_task_groups.py::test_create_presentations_prepare_once_review_together_and_export_only_after_acceptance",
+      "tests/test_task_groups.py::test_invalid_create_presentation_is_rejected_before_any_creation[combined_batch_overflow]",
+      "tests/test_task_groups.py::test_invalid_create_presentation_is_rejected_before_any_creation[edit_scope]",
+      "tests/test_task_groups.py::test_invalid_create_presentation_is_rejected_before_any_creation[unknown_operation]",
+      "tests/test_task_groups.py::test_missing_current_candidate_evidence_does_not_offer_a_batch_acceptance",
+      "tests/test_task_groups.py::test_presentation_preset_paths_resolve_against_original_group_request",
+      "tests/test_task_groups.py::test_shared_preset_and_explicit_presentation_use_one_batch_for_the_selected_figure",
+      "tests/test_task_groups.py::test_unknown_or_ambiguous_presentation_figure_preserves_prepared_project[None]",
+      "tests/test_task_groups.py::test_unknown_or_ambiguous_presentation_figure_preserves_prepared_project[missing]",
+      "tests/test_task_groups_native.py::test_declared_group_presentation_reviews_prepared_native_before_first_publication",
+      "tests/test_task_paper_publication.py::test_capture_sealed_export_identity_and_full_original_inventory",
+      "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[edited_pdf]",
+      "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[missing_pdf]",
+      "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[native]",
+      "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[new_file]",
+      "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[qa_failed]",
+      "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[request]",
+      "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[spec]",
+      "tests/test_task_paper_selection.py::test_default_order_and_explicit_item_order_capture_versions_once",
+      "tests/test_task_paper_selection.py::test_existing_checkpoint_reads_frozen_selection_without_group_recapture",
+      "tests/test_task_paper_selection.py::test_first_group_completion_returns_fresh_owner_result_and_never_promotes_blocked",
+      "tests/test_task_paper_selection.py::test_group_change_during_capture_blocks_before_start",
+      "tests/test_task_paper_selection.py::test_group_read_is_stable_and_creates_no_original_metadata",
+      "tests/test_task_paper_selection.py::test_incomplete_or_ambiguous_selection_never_reaches_paper[duplicate]",
+      "tests/test_task_paper_selection.py::test_incomplete_or_ambiguous_selection_never_reaches_paper[not_finished]",
+      "tests/test_task_paper_selection.py::test_incomplete_or_ambiguous_selection_never_reaches_paper[pending_child]",
+      "tests/test_task_paper_selection.py::test_incomplete_or_ambiguous_selection_never_reaches_paper[unknown]",
+      "tests/test_task_paper_selection.py::test_only_multi_figure_projects_add_titles_or_necessary_stable_identity",
+      "tests/test_task_paper_selection.py::test_shared_public_cli_routes_group_and_rejects_mixed_request_options",
+      "tests/test_task_papers_native.py::test_native_second_capture_failure_and_exact_retry_only_captures_unsealed_figure",
+      "tests/test_task_papers_native.py::test_public_completed_group_freezes_once_and_reuses_current_native_publications"
     ],
     "synthetic_candidates": [
       {
@@ -1583,9 +1689,433 @@
       {
         "nodeid": "tests/test_verification_evidence_scope.py::test_unrelated_documentation_commit_reuses_executable_evidence",
         "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[src/sciplot_core/task_group_contract.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[src/sciplot_core/task_group_gallery.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[src/sciplot_core/task_group_review.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[src/sciplot_core/task_group_storage.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[src/sciplot_core/task_groups.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_group_leaf_retains_creation_revision_and_public_consumer_regressions[tests/test_task_groups.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_mcp_adapter_retains_new_public_recovery_schema_and_forwarding_contract",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/cli/task_paper.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_contract.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_delivery.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_native.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_publication.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_selection.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_sources.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_paper_status.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[src/sciplot_core/task_papers.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[tests/test_task_paper_publication.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[tests/test_task_paper_selection.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_paper_leaf_retains_selection_package_install_and_public_regressions[tests/test_task_papers.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_recovery_source_and_generated_contracts_keep_semantic_engine_consumers[src/sciplot_core/plot_engine/recovery.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_recovery_source_and_generated_contracts_keep_semantic_engine_consumers[tests/test_plot_recovery.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_shared_task_and_parser_changes_keep_broad_existing_consumers[src/sciplot_core/cli/dispatch/tasks.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_shared_task_and_parser_changes_keep_broad_existing_consumers[src/sciplot_core/cli/parsers/tasks.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_shared_task_and_parser_changes_keep_broad_existing_consumers[src/sciplot_core/task_contract.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_shared_task_and_parser_changes_keep_broad_existing_consumers[src/sciplot_core/task_control.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_shared_task_and_parser_changes_keep_broad_existing_consumers[src/sciplot_core/task_storage.py]",
+        "reason": "Generated source-path strings inspect owner plans and retained consumer targets; no test commands or retained scientific fixtures execute."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_disconnected_record_reports_unstarted_checks_without_replaying",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_empty_record_is_no_tests_with_nonzero_public_exit",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_follows_running_original_after_client_disconnect",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_preserves_actual_failed_original",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_reads_original_completion_without_launch_or_reuse",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[alias]",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[check_alias]",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[command]",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[duplicate]",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[escape]",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[finish]",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[log]",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[request_alias]",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[unbound]",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_rejects_drift_and_aliases_without_running[version]",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification_evidence.py::test_record_status_uses_the_existing_public_status_entry",
+        "reason": "Generated temporary input namespaces and tiny counted Python subprocesses exercise existing durable status, drift, aliases, exact check identity and NO_TESTS; no retained private inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_bad_reply_to_malformed_wire_request_keeps_transport_error[7]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_bad_reply_to_malformed_wire_request_keeps_transport_error[None]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_bad_reply_to_malformed_wire_request_keeps_transport_error[params2]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_bad_reply_to_malformed_wire_request_keeps_transport_error[params3]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_invalid_response_preserves_original_recovery_binding[response0]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_invalid_response_preserves_original_recovery_binding[response1]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_invalid_response_preserves_original_recovery_binding[response2]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_invalid_response_preserves_original_recovery_binding[response3]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_invalid_response_preserves_original_recovery_binding[response4]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_public_call_rejects_malformed_request_before_startup[7]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_public_call_rejects_malformed_request_before_startup[None]",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_resume_cli_rpc_and_mcp_share_one_closed_schema",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol.py::test_startup_ping_loss_does_not_claim_the_plotting_request_was_sent",
+        "reason": "Generated AF_UNIX frames, malformed requests/replies and FakeService or monkeypatched CLI/MCP ports exercise recovery transport binding and closed schemas; no retained scientific dataset is opened."
+      },
+      {
+        "nodeid": "tests/test_plot_protocol_native.py::test_native_frozen_recovery_survives_lost_reply_and_restart_via_cli_mcp",
+        "reason": "The native AF_UNIX/CLI/MCP recovery case creates its CSV under tmp_path through managed_plot_helpers.request_for_source, which replaces all template source paths with generated data. It uses actual Qt/Veusz but no private corpus or native golden fixture."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_explicit_resume_export_pending_preserves_committed_semantic_revision",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_explicit_resume_recovers_uncertain_apply_once",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_guarded_legacy_apply_resume_refuses_external_bytes[native]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_guarded_legacy_apply_resume_refuses_external_bytes[source]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_lost_review_summary_returns_frozen_decision_without_native_work",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_resume_binding_mismatch_never_reserves_or_applies[change0-document_transaction_unknown]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_resume_binding_mismatch_never_reserves_or_applies[change1-document_identity_conflict]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_resume_binding_mismatch_never_reserves_or_applies[change2-document_revision_conflict]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_resume_binding_mismatch_never_reserves_or_applies[change3-plot_invalid_resume]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_resume_binding_mismatch_never_reserves_or_applies[change4-plot_invalid_resume]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_resume_of_historical_key_does_not_claim_current_delivery",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_review_recovery_refuses_drift_and_summary_cannot_offer_accept[native]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_review_recovery_refuses_drift_and_summary_cannot_offer_accept[source]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_uncertain_managed_resume_keeps_original_base_guards[native]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_plot_recovery.py::test_uncertain_managed_resume_keeps_original_base_guards[source]",
+        "reason": "Generated temporary raw/native bytes with FakeBackend and FigureCandidateBackend exercise journal recovery, interrupted applies and source/native drift. Imported helper templates are in-memory/generated controls; no private corpus or native Qt execution is required."
+      },
+      {
+        "nodeid": "tests/test_task_common_edits.py::test_unrelated_common_edit_preserves_existing_recovery_step",
+        "reason": "The added pending-edit control uses test_plot_recovery._legacy and generated temporary journal/source/native bytes; it checks preservation of an existing recovery step without retained scientific inputs."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_changed_original_source_removes_preview_acceptance_guidance",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_changed_preparation_blocks_presentation_without_recreating_or_hiding_other_items[native]",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_changed_preparation_blocks_presentation_without_recreating_or_hiding_other_items[source]",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_create_presentations_prepare_once_review_together_and_export_only_after_acceptance",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_invalid_create_presentation_is_rejected_before_any_creation[combined_batch_overflow]",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_invalid_create_presentation_is_rejected_before_any_creation[edit_scope]",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_invalid_create_presentation_is_rejected_before_any_creation[unknown_operation]",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_missing_current_candidate_evidence_does_not_offer_a_batch_acceptance",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_presentation_preset_paths_resolve_against_original_group_request",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_shared_preset_and_explicit_presentation_use_one_batch_for_the_selected_figure",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_unknown_or_ambiguous_presentation_figure_preserves_prepared_project[None]",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups.py::test_unknown_or_ambiguous_presentation_figure_preserves_prepared_project[missing]",
+        "reason": "Generated tmp_path group/source/project files and monkeypatched task/preview/export ports exercise presentation batching, preparation guards, explicit decisions and stable group selection. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_groups_native.py::test_declared_group_presentation_reviews_prepared_native_before_first_publication",
+        "reason": "The added native group case writes a complete small UVvis CSV under tmp_path and checks review-before-first-publication with actual Qt/Veusz. It does not use private measured data or retained golden files."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_capture_sealed_export_identity_and_full_original_inventory",
+        "reason": "Generated placeholder native/spec/request/publication/QA files under tmp_path exercise sealed-byte capture and missing/drifted publication rejection, with no renderer or retained private dataset."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[edited_pdf]",
+        "reason": "Generated placeholder native/spec/request/publication/QA files under tmp_path exercise sealed-byte capture and missing/drifted publication rejection, with no renderer or retained private dataset."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[missing_pdf]",
+        "reason": "Generated placeholder native/spec/request/publication/QA files under tmp_path exercise sealed-byte capture and missing/drifted publication rejection, with no renderer or retained private dataset."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[native]",
+        "reason": "Generated placeholder native/spec/request/publication/QA files under tmp_path exercise sealed-byte capture and missing/drifted publication rejection, with no renderer or retained private dataset."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[new_file]",
+        "reason": "Generated placeholder native/spec/request/publication/QA files under tmp_path exercise sealed-byte capture and missing/drifted publication rejection, with no renderer or retained private dataset."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[qa_failed]",
+        "reason": "Generated placeholder native/spec/request/publication/QA files under tmp_path exercise sealed-byte capture and missing/drifted publication rejection, with no renderer or retained private dataset."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[request]",
+        "reason": "Generated placeholder native/spec/request/publication/QA files under tmp_path exercise sealed-byte capture and missing/drifted publication rejection, with no renderer or retained private dataset."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_unsealed_or_drifted_publication_blocks_without_repair[spec]",
+        "reason": "Generated placeholder native/spec/request/publication/QA files under tmp_path exercise sealed-byte capture and missing/drifted publication rejection, with no renderer or retained private dataset."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_default_order_and_explicit_item_order_capture_versions_once",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_existing_checkpoint_reads_frozen_selection_without_group_recapture",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_first_group_completion_returns_fresh_owner_result_and_never_promotes_blocked",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_group_change_during_capture_blocks_before_start",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_group_read_is_stable_and_creates_no_original_metadata",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_incomplete_or_ambiguous_selection_never_reaches_paper[duplicate]",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_incomplete_or_ambiguous_selection_never_reaches_paper[not_finished]",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_incomplete_or_ambiguous_selection_never_reaches_paper[pending_child]",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_incomplete_or_ambiguous_selection_never_reaches_paper[unknown]",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_only_multi_figure_projects_add_titles_or_necessary_stable_identity",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_shared_public_cli_routes_group_and_rejects_mixed_request_options",
+        "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
+      },
+      {
+        "nodeid": "tests/test_task_papers_native.py::test_native_second_capture_failure_and_exact_retry_only_captures_unsealed_figure",
+        "reason": "Generated UVvis and FTIR CSVs under tmp_path exercise real native portable capture, sealed-publication packaging, explicit group order and exact recovery. The renamed capture-failure case retains its original retry/protection assertions; no private corpus or retained native goldens are used."
+      },
+      {
+        "nodeid": "tests/test_task_papers_native.py::test_public_completed_group_freezes_once_and_reuses_current_native_publications",
+        "reason": "Generated UVvis and FTIR CSVs under tmp_path exercise real native portable capture, sealed-publication packaging, explicit group order and exact recovery. The renamed capture-failure case retains its original retry/protection assertions; no private corpus or retained native goldens are used."
       }
     ],
-    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion.",
+    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion. 2026-10-16: reviewed all 106 newly collected generated round-2 nodes, including the explicit paper capture-retry rename, and changed test/helper bytes. Exact module-specific dispositions are recorded per added node. All retained lifecycle tiers, 165 private dependencies and 111 original failure responsibilities remain unchanged; no access-completeness promotion.",
     "scope": [
       "real_world",
       "polymer_corpus",
