@@ -34,6 +34,12 @@ declared under `[tool.mypy]` in `pyproject.toml`.
 Its exact scope and strictness belong to `pyproject.toml`.
 Do not weaken checks or remove coverage to pass a gate.
 
+Historical native goldens bind the actual Python binary, Qt and font identities.
+An upgraded Homebrew `opt` link can drift an existing venv. Restore the matching
+runtime in ignored local storage and use the canonical wrapper; preserve golden
+bytes and environment assertions. A relocated framework Python also needs the
+wrapper's loader bootstrap before direct development Python calls.
+
 At handoff, run Doctor for command/runtime changes. Run smoke once at the final
 milestone for changes crossing Studio, worker, export, QA, delivery or runtime.
 Full pytest and ready-rule acceptance are release/merge gates, not every edit.

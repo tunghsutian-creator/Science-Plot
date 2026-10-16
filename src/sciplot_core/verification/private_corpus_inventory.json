@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4883,
-    "nodeids_sha256": "14194598a8ac7f2253ef11f764c60371c833f1541b7ae065800838672d2ba0f9",
-    "test_sources_sha256": "273593c58a16f0480d6f7c5ce2e97914895de5c4d000d716b2135efae0aea44b",
+    "nodeid_count": 4889,
+    "nodeids_sha256": "2ebb1d2e703e34bd09517a08476faa6a8c6c1e7dafb04325a3cb1bf3c6bc95df",
+    "test_sources_sha256": "ab3d1ed5a34a35a10d99c896433b858eb78cb813781098f149cc3f7fc341b81a",
     "test_source_count": 349,
     "candidate_nodeids": [
       "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[break-on-inf]",
@@ -171,6 +171,7 @@
       "tests/test_plan_preview.py::test_plan_preview_activates_registered_real_tensile_plan",
       "tests/test_plan_preview.py::test_source_only_tensile_directory_uses_same_validated_scientific_plan",
       "tests/test_plan_preview.py::test_temperature_preview_keeps_plan_shape_without_fabricating_transform",
+      "tests/test_plot_backend_semantics_native.py::test_right_top_native_legend_overlap_remains_blocked_without_data_changes",
       "tests/test_private_corpus_preflight.py::test_checked_in_inventory_is_explicitly_preliminary",
       "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[bound_nodeid]",
       "tests/test_private_corpus_preflight.py::test_collection_directory_events_are_bounded_and_never_allow_data_open[escape]",
@@ -348,6 +349,11 @@
       "tests/test_scientific_transform_contract.py::test_compact_stress_wide_keeps_normalization_order_and_ragged_lengths",
       "tests/test_scientific_transform_contract.py::test_stress_compact_support_does_not_relabel_relaxation_modulus",
       "tests/test_scientific_transform_contract.py::test_stress_normalizes_unscaled_response_before_log_projection",
+      "tests/test_skill_wrapper_framework.py::test_cold_qt_bootstrap_adds_only_matching_complete_components[False-True]",
+      "tests/test_skill_wrapper_framework.py::test_cold_qt_bootstrap_adds_only_matching_complete_components[True-False]",
+      "tests/test_skill_wrapper_framework.py::test_cold_qt_bootstrap_adds_only_matching_complete_components[True-True]",
+      "tests/test_skill_wrapper_framework.py::test_cold_qt_bootstrap_bundled_runtime_never_falls_back_to_helpers[False]",
+      "tests/test_skill_wrapper_framework.py::test_cold_qt_bootstrap_bundled_runtime_never_falls_back_to_helpers[True]",
       "tests/test_study_model_artifact_binding.py::test_registered_single_curve_plan_replaces_the_generic_study_queue",
       "tests/test_study_model_artifact_binding.py::test_uvvis_recommendation_uses_the_resolved_plan_task_identity",
       "tests/test_suite_verification_cli.py::test_fixed_suite_rejects_inherited_filter_without_clearing_it[--ignore=tests/test_private.py]",
@@ -827,6 +833,10 @@
         "reason": "Generated tmp_path Managed template/Binding/CSV inputs and owned child process-death recovery; no retained private corpus."
       },
       {
+        "nodeid": "tests/test_plot_backend_semantics_native.py::test_right_top_native_legend_overlap_remains_blocked_without_data_changes",
+        "reason": "The test creates its own two-curve UVvis CSV and temporary native project, then asserts the original right/top legend geometry remains export-blocked while native/source bytes and scientific identity stay unchanged. No retained scientific corpus is used."
+      },
+      {
         "nodeid": "tests/test_private_corpus_preflight.py::test_checked_in_inventory_is_explicitly_preliminary",
         "reason": "Reads checked-in public inventory JSON and asserts declared fixture identifiers; no private fixture bytes are opened."
       },
@@ -1255,6 +1265,26 @@
         "reason": "Explicit tiny tmp_path normalized/unscaled wide tables, invalid pair controls and generated directory fixtures; no private corpus input."
       },
       {
+        "nodeid": "tests/test_skill_wrapper_framework.py::test_cold_qt_bootstrap_adds_only_matching_complete_components[False-True]",
+        "reason": "Generated shell control tools, temporary matching/mismatching framework trees and a fake CLI module exercise the canonical wrapper startup. No retained scientific data or private runtime is accessed."
+      },
+      {
+        "nodeid": "tests/test_skill_wrapper_framework.py::test_cold_qt_bootstrap_adds_only_matching_complete_components[True-False]",
+        "reason": "Generated shell control tools, temporary matching/mismatching framework trees and a fake CLI module exercise the canonical wrapper startup. No retained scientific data or private runtime is accessed."
+      },
+      {
+        "nodeid": "tests/test_skill_wrapper_framework.py::test_cold_qt_bootstrap_adds_only_matching_complete_components[True-True]",
+        "reason": "Generated shell control tools, temporary matching/mismatching framework trees and a fake CLI module exercise the canonical wrapper startup. No retained scientific data or private runtime is accessed."
+      },
+      {
+        "nodeid": "tests/test_skill_wrapper_framework.py::test_cold_qt_bootstrap_bundled_runtime_never_falls_back_to_helpers[False]",
+        "reason": "Generated shell control tools, temporary matching/mismatching framework trees and a fake CLI module exercise the canonical wrapper startup. No retained scientific data or private runtime is accessed."
+      },
+      {
+        "nodeid": "tests/test_skill_wrapper_framework.py::test_cold_qt_bootstrap_bundled_runtime_never_falls_back_to_helpers[True]",
+        "reason": "Generated shell control tools, temporary matching/mismatching framework trees and a fake CLI module exercise the canonical wrapper startup. No retained scientific data or private runtime is accessed."
+      },
+      {
         "nodeid": "tests/test_suite_verification_cli.py::test_fixed_suite_rejects_inherited_filter_without_clearing_it[--ignore=tests/test_private.py]",
         "reason": "Existing synthetic suite_case writes mock runtime/fixture bytes in tmp_path and uses explicit stub observer/boundary modules; added lexical root mentions remain generated, not genuine capture proof."
       },
@@ -1555,7 +1585,7 @@
         "reason": "Temporary checkout fixture creates synthetic raw/golden/runtime files and removes inherited SCIPLOT_REFERENCE_DATA; production evidence builders receive that temporary repo. Any explicit relative raw namespace is also created under the same tmp_path checkout."
       }
     ],
-    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged.",
+    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion.",
     "scope": [
       "real_world",
       "polymer_corpus",

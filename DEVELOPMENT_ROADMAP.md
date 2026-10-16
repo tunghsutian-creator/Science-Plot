@@ -21,6 +21,13 @@ the legend. Current geometry, marker extent, unchanged document bytes and a
 still-overlapping negative control must determine the corrected export result;
 the original threshold and generation diagnostic remain intact.
 
+The Mac full trial also exposed a floating Homebrew Python identity and a cold
+QtSvg import that mixed framework versions. Local verification now pins the exact
+historical Python binary. The canonical wrapper admits a complete Qt component
+root only when its QtCore is the same binary selected by the native helper.
+The rollback fixture uses a clear legend preset while retaining an explicit
+negative case for the original curve-over-legend geometry.
+
 Final acceptance must use isolated copies of the real 15-curve input, retain raw
 hashes and per-curve sequence/counts, review both axis variants, and demonstrate
 that later label-only edits preserve science. A native delivery snapshot must
