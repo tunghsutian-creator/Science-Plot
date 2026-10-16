@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { cancelSourceDrag, SOURCE_DRAG_TYPE, startSourceDrag } from '../browserFiles';
 import type { SourceAsset } from '../core/types';
 import { Icon } from './Icon';
@@ -10,6 +10,24 @@ export function SourceTray({ assets, selectedAssetId, busy, onChoose, onImport, 
   onDropFiles: (files: File[]) => void;
 }) {
   const [dropping, setDropping] = useState(false);
+  const sourceList = useRef<HTMLDivElement>(null);
+  const sourceListId = useId();
+  const [scrollState, setScrollState] = useState({ overflow: false, atEnd: true });
+  useEffect(() => {
+    const list = sourceList.current;
+    if (!list) return;
+    const update = () => {
+      const overflow = list.clientWidth > 0 && list.scrollWidth > list.clientWidth + 1;
+      const atEnd = list.scrollLeft + list.clientWidth >= list.scrollWidth - 1;
+      setScrollState((current) => current.overflow === overflow && current.atEnd === atEnd ? current : { overflow, atEnd });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(list);
+    for (const item of list.children) observer.observe(item);
+    list.addEventListener('scroll', update, { passive: true });
+    return () => { observer.disconnect(); list.removeEventListener('scroll', update); };
+  }, [assets]);
   useEffect(() => {
     const cancel = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { cancelSourceDrag(); setDropping(false); }
@@ -33,7 +51,7 @@ export function SourceTray({ assets, selectedAssetId, busy, onChoose, onImport, 
     }}>
     <div className="tray-heading"><h2>Sources</h2><button type="button" className="tray-open" disabled={busy}
       aria-label="Open project" title="Open a saved project" onClick={onOpen}>Open…</button></div>
-    <div className="source-list" aria-label="Source pages">
+    <div ref={sourceList} id={sourceListId} className="source-list" aria-label="Source pages">
       {assets.map((asset) => <button type="button" key={asset.id}
         className={`source-item${selectedAssetId === asset.id ? ' is-selected' : ''}`}
         disabled={busy} draggable={!busy} onClick={() => onChoose(asset)} aria-label={`Place ${asset.name}`}
@@ -46,6 +64,12 @@ export function SourceTray({ assets, selectedAssetId, busy, onChoose, onImport, 
         <span className="source-name">{asset.name}</span>
       </button>)}
     </div>
+    {scrollState.overflow ? <button type="button" className="tray-scroll-next" aria-label="Scroll sources right"
+      aria-controls={sourceListId} title="Show more sources" disabled={busy || scrollState.atEnd} onClick={() => {
+        const list = sourceList.current;
+        if (list) list.scrollBy({ left: Math.max(1, list.clientWidth - 44),
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      }}><Icon name="chevron" size={22} /></button> : null}
     <button type="button" className="tray-import" disabled={busy} onClick={onImport} aria-label="Import PDFs"
       title="Import PDF, PNG or JPEG files, or drop a saved project to reopen it">
       <Icon name="plus" size={30} /><span className="tray-import-label">Import PDFs</span><span className="tray-import-note">Drop PDFs here</span>
