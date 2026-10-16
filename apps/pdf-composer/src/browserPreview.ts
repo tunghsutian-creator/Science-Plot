@@ -29,12 +29,12 @@ export function browserPdfPreview(bytesBase64: string, pageIndex: number, maxPix
         const rendered = await page.render({ scale, colorSpace: 'RGBA', transparent: false });
         const canvas = window.document.createElement('canvas');
         canvas.width = rendered.width; canvas.height = rendered.height;
-        const context = canvas.getContext('2d');
-        if (!context) throw new Error('Edge could not create a canvas for the PDF preview.');
-        context.putImageData(new ImageData(new Uint8ClampedArray(rendered.data), rendered.width, rendered.height), 0, 0);
-        const url = canvas.toDataURL('image/png');
-        canvas.width = 0; canvas.height = 0;
-        return url;
+        try {
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Edge could not create a canvas for the PDF preview.');
+          context.putImageData(new ImageData(new Uint8ClampedArray(rendered.data), rendered.width, rendered.height), 0, 0);
+          return canvas.toDataURL('image/png');
+        } finally { canvas.width = 0; canvas.height = 0; }
       } finally { page.close(); }
     } finally { document.destroy(); }
   };

@@ -14,7 +14,7 @@ const fontBytes = fromBase64(labelFontData.slice(labelFontData.indexOf(',') + 1)
 export function useProjectFiles(composer: Composer) {
   const latest = useRef(composer);
   const operating = useRef(false);
-  const pendingDrop = useRef<{ document: AssemblyDocument; name: string } | null>(null);
+  const pendingDrop = useRef<{ document: AssemblyDocument; name: string; signature: string } | null>(null);
   useLayoutEffect(() => { latest.current = composer; });
   useEffect(() => {
     if (hasNativeBridge() || (!composer.dirty && !composer.busy)) return;
@@ -97,7 +97,7 @@ export function useProjectFiles(composer: Composer) {
         const opened = await readBrowserProject(projects[0]);
         const document = await parseProject(opened.text, bridge.verifyTiff);
         if (latest.current.dirty) {
-          pendingDrop.current = { document, name: opened.name };
+          pendingDrop.current = { document, name: opened.name, signature: latest.current.signature };
           latest.current.setModal({ kind: 'discard', action: 'open' });
         } else latest.current.replaceDocument(document, opened.name);
       } else acceptImports(await inspectFiles(await readBrowserSources(files)), targetId);
@@ -141,6 +141,10 @@ export function useProjectFiles(composer: Composer) {
     const action = latest.current.modal.action, dropped = pendingDrop.current;
     pendingDrop.current = null;
     latest.current.setModal(null);
+    if (dropped && latest.current.signature !== dropped.signature) {
+      latest.current.report(new Error('The current project changed after this open request. Drop the saved project again to review those changes before replacing it.'));
+      return;
+    }
     if (action === 'open') void openNow(dropped ?? undefined); else latest.current.replaceDocument(createDocument());
   }
 

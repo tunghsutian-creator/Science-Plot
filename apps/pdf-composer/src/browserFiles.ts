@@ -16,7 +16,7 @@ export async function readBrowserSources(files: File[]): Promise<ImportedFile[]>
 
 export async function readBrowserProject(file: File): Promise<OpenedProject> {
   // Original bytes are base64 in the portable JSON. Bound the read before allocation.
-  if (file.size > Math.ceil(MAX_TOTAL_BYTES * 4 / 3) + 2 * 1024 * 1024) {
+  if (file.size > Math.ceil(MAX_TOTAL_BYTES * 4 / 3) + 32 * 1024 * 1024) {
     throw new Error('This project exceeds the portable source storage limit.');
   }
   return { name: file.name, text: await file.text(), token: '' };
