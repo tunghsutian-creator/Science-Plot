@@ -19,6 +19,7 @@ from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_group_storage import active_step, step_state
 from sciplot_core.task_group_gallery import write_group_gallery as _write_gallery
+from sciplot_core.task_next_step import task_next_step
 
 
 def _valid_image(image: dict[str, Any]) -> bool:
@@ -65,6 +66,11 @@ def _item_overview(root: Path, item: dict[str, Any]) -> dict[str, Any]:
         result["task"] = {key: child[key] for key in (
             "task_dir", "status", "phase", "question", "blocker", "operation_id",
         ) if key in child}
+        result["task"]["next_step"] = task_next_step(child)
+        result["export_images"] = [export["path"]
+                                   for figure in (child.get("result") or {}).get("figures", [])
+                                   for export in figure.get("exports", [])
+                                   if export.get("format") in {"tiff", "tiff_300", "tiff_600"}]
         if child["request"]["action"] == "edit":
             result["task"]["preview_revision"] = len(child.get("edit_revisions") or []) + 1
         if child.get("preview") and child["status"] == "needs_review":
@@ -105,6 +111,19 @@ def _item_overview(root: Path, item: dict[str, Any]) -> dict[str, Any]:
         except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
             preview["preview_error"] = str(exc)
         result["figures"].append(preview)
+    if child and child["status"] == "needs_review" and (
+            result.get("source_current") is False or (current.get("source") or {}).get("current") is False):
+        result["task"]["next_step"] = {
+            "action": "resolve_source_change",
+            "message": "The original source changed after preview; resolve its scientific revision without accepting the old candidate.",
+        }
+    elif child and child["status"] == "needs_review" and not any(
+            figure.get("scope") == "candidate" and "preview" in figure
+            for figure in result["figures"]):
+        result["task"]["next_step"] = {
+            "action": "resolve_preview_evidence",
+            "message": "The current candidate image or document binding is unavailable; do not accept a stale preview.",
+        }
     return result
 
 
@@ -127,5 +146,35 @@ def group_overview(root: Path, state: dict[str, Any]) -> dict[str, Any]:
               "items": items, "previews": previews,
               "ready_to_use": None, "readiness_evaluated": False, "model_calls_by_sciplot": 0,
               "preview_scope": "Native saved documents or explicitly marked pending candidates; a gallery is not a publication layout."}
+    result["ordered_figures"] = [
+        {"item_id": item["id"], "item_label": item["label"], "project": item["project"],
+         "figure_id": figure["figure_id"], "document_sha256": figure["document_sha256"],
+         "ready_to_use": item.get("ready_to_use")}
+        for item in items if "project" in item for figure in item["figures"]
+    ]
+    if complete:
+        result["next_step"] = {
+            "action": "review_exports_and_deliver_group",
+            "images": [image for item in items for image in item.get("export_images", [])],
+            "paper_cli_argv_template": ["sciplot", "task", "paper", "start", "--group", str(root),
+                                        "--out", "NEW_OUTPUT_DIRECTORY", "--paper-dir", "NEW_PAPER_TASK_DIRECTORY", "--json"],
+            "message": "Review the returned final images and each item's current evidence. An ordered group can be selected locally for paper delivery; completion alone does not certify publication readiness.",
+        }
+    else:
+        steps = [{"item_id": item["id"], "task_dir": item.get("task_dir"),
+                  "next_step": item.get("task", {}).get("next_step", {"action": "inspect_blocker_and_saved_state"})}
+                 for item in items if item["status"] != "complete"]
+        result["next_step"] = {
+            "action": "review_group_items_then_resume",
+            "items": steps,
+            "responses_template": [
+                {"item_id": entry["item_id"], "task_dir": entry["task_dir"],
+                 "response": entry["next_step"]["response_template"]}
+                for entry in steps if "response_template" in entry["next_step"]
+            ],
+            "cli_argv_template": ["sciplot", "task", "group", "resume", str(root),
+                                  "--responses", "RESPONSES_JSON_FILE", "--json"],
+            "message": "Review every candidate image and scientific audit, then answer the bound items together. Keep unanswered scientific questions and rejected candidates pending; no automatic acceptance.",
+        }
     result["overview"] = _write_gallery(root, result)
     return result

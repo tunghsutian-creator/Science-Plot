@@ -13,6 +13,7 @@ from sciplot_core.task_contract import TaskControlError
 from sciplot_core import task_groups as groups, task_group_review as review
 from sciplot_core.task_group_contract import normalize_group_request
 from sciplot_core.task_storage import load_task, save_task
+from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core._paths import REPO_ROOT
 
 
@@ -41,7 +42,7 @@ def case(tmp_path, monkeypatch):
         return {'project': project, 'primary_figure_id': 'f0', 'figures': figures,
                 'ready_to_use': True, 'source': {}, 'qa': {}, 'delivery': {}}
 
-    def start(task, *, task_dir):
+    def start(task, *, task_dir, defer_creation_export=False):
         calls.append(copy.deepcopy(task))
         task_dir.mkdir(parents=True)
         state = {'kind': 'sciplot_task', 'version': 1, 'task_dir': str(task_dir), 'request': task,
@@ -50,7 +51,7 @@ def case(tmp_path, monkeypatch):
             source = Path(task['source'])
             state['source_sha256'] = source_tree_sha256(source)
             if source.stem == 'ask':
-                state.update(status='needs_input', phase='planning', question={'message': 'Choose experiment'})
+                state.update(status='needs_input', phase='planning', question={'field': 'rule_id', 'message': 'Choose experiment'})
             else:
                 project = tmp_path / 'projects' / source.stem
                 project.mkdir(parents=True)
@@ -59,6 +60,11 @@ def case(tmp_path, monkeypatch):
                     path.write_text('test native owner fixture')
                 projects[str(project)] = paths
                 state['project'] = str(project)
+                if defer_creation_export:
+                    state.update(phase='prepared', defer_creation_export=True,
+                                 prepared_creation={'project': str(project), 'source_sha256': state['source_sha256'],
+                                                    'files': file_inventory(project)},
+                                 result={'status': 'prepared', 'export_performed': False, 'ready_to_use': False})
         else:
             state['project'] = task['project']
             if task['action'] == 'edit':
@@ -280,3 +286,134 @@ def test_documented_manifest_uses_the_public_group_contract(tmp_path):
     value = normalize_group_request(json.loads(path.read_text()), base_dir=tmp_path)
     assert len(value['items']) == 2
     assert value['items'][0]['request']['source'] == str(tmp_path / 'inputs/FTIR')
+
+
+def with_presentations(request):
+    for item in request['items']:
+        item['presentation'] = {'figure_id': 'f0', 'operations': [{
+            'op': 'add_annotation', 'id': 'sample_display', 'parent_path': '/page1/graph1',
+            'text': item['label'], 'position': {'mode': 'relative', 'x': 0.1, 'y': 0.86}}]}
+    return request
+
+
+def test_create_presentations_prepare_once_review_together_and_export_only_after_acceptance(case):
+    request, root, calls, _, _ = case
+    with_presentations(request)
+    result = groups.start_group(request, group_dir=root)
+    assert result['counts'] == {'needs_review': 2}
+    assert [call['action'] for call in calls] == ['create', 'edit', 'create', 'edit']
+    assert all(call['export'] is False for call in calls if call['action'] == 'edit')
+    for identifier in ('a', 'b'):
+        prepared = load_task(root / 'tasks' / identifier / 'initial')
+        assert prepared['phase'] == 'prepared' and prepared['result']['export_performed'] is False
+    answers = result['next_step']['responses_template']
+    assert len(answers) == 2
+    assert all(answer['response'] == {'accept_preview': True, 'expected_operation_id': 'c' * 64}
+               for answer in answers)
+    result = groups.resume_group(root, answers)
+    assert result['status'] == 'complete' and result['ready_to_use'] is None
+    assert [call['action'] for call in calls].count('create') == 2
+    assert [call['action'] for call in calls].count('export') == 2
+    assert [(f['item_id'], f['figure_id']) for f in result['ordered_figures']] == [
+        ('a', 'f0'), ('a', 'f1'), ('b', 'f0'), ('b', 'f1')]
+    assert result['next_step']['paper_cli_argv_template'][4:6] == ['--group', str(root)]
+    groups.start_group(request, group_dir=root)
+    groups.resume_group(root)
+    assert len(calls) == 6
+
+
+def test_shared_preset_and_explicit_presentation_use_one_batch_for_the_selected_figure(case):
+    request, root, calls, _, _ = case
+    with_presentations(request)
+    request['sample_style_preset'] = {'preset': '/styles.json', 'expected_preset_sha256': 'd' * 64}
+    groups.start_group(request, group_dir=root)
+    edits = [call for call in calls if call['action'] == 'edit']
+    assert len(edits) == 2
+    assert [op['op'] for op in edits[0]['operations']] == ['apply_sample_style_preset', 'add_annotation']
+    assert edits[0]['figure_id'] == 'f0' and edits[0]['export'] is False
+
+
+@pytest.mark.parametrize('selected', [None, 'missing'])
+def test_unknown_or_ambiguous_presentation_figure_preserves_prepared_project(case, selected):
+    request, root, calls, _, _ = case
+    with_presentations(request)
+    for item in request['items']:
+        if selected is None:
+            del item['presentation']['figure_id']
+        else:
+            item['presentation']['figure_id'] = selected
+    result = groups.start_group(request, group_dir=root)
+    assert result['counts'] == {'blocked': 2}
+    assert all(item['blocker']['reason_code'] == (
+        'group_figure_required' if selected is None else 'group_figure_not_found') for item in result['items'])
+    assert [call['action'] for call in calls] == ['create', 'create']
+    assert load_task(root / 'tasks/a/initial')['result']['export_performed'] is False
+
+
+@pytest.mark.parametrize('changed', ['source', 'native'])
+def test_changed_preparation_blocks_presentation_without_recreating_or_hiding_other_items(case, monkeypatch, changed):
+    request, root, calls, _, _ = case
+    with_presentations(request)
+    original = groups.start_task
+
+    def changed_after_checkpoint(task, **kwargs):
+        result = original(task, **kwargs)
+        if task['action'] == 'create' and Path(task['source']).stem == 'a':
+            path = Path(task['source']) if changed == 'source' else Path(result['project']) / 'f0.vsz'
+            path.write_text('external change after native checkpoint')
+        return result
+
+    monkeypatch.setattr(groups, 'start_task', changed_after_checkpoint)
+    result = groups.start_group(request, group_dir=root)
+    assert result['counts'] == {'blocked': 1, 'needs_review': 1}
+    assert result['items'][0]['blocker']['reason_code'] == (
+        'source_changed' if changed == 'source' else 'prepared_project_changed')
+    assert [call['action'] for call in calls] == ['create', 'create', 'edit']
+
+
+def test_missing_current_candidate_evidence_does_not_offer_a_batch_acceptance(case):
+    request, root, _, _, _ = case
+    with_presentations(request)
+    pending = groups.start_group(request, group_dir=root)
+    image = next(p for p in pending['previews'] if p['item_id'] == 'a' and p['scope'] == 'candidate')
+    Path(image['preview']['path']).write_bytes(b'altered image')
+    current = groups.inspect_group(root)
+    assert current['items'][0]['task']['next_step']['action'] == 'resolve_preview_evidence'
+    assert [answer['item_id'] for answer in current['next_step']['responses_template']] == ['b']
+
+
+def test_changed_original_source_removes_preview_acceptance_guidance(case):
+    request, root, _, _, _ = case
+    with_presentations(request)
+    groups.start_group(request, group_dir=root)
+    Path(request['items'][0]['request']['source']).write_text('changed original measurements')
+    current = groups.inspect_group(root)
+    assert current['items'][0]['source_current'] is False
+    assert current['items'][0]['task']['next_step']['action'] == 'resolve_source_change'
+    assert [answer['item_id'] for answer in current['next_step']['responses_template']] == ['b']
+
+
+@pytest.mark.parametrize('change', ['unknown_operation', 'edit_scope', 'combined_batch_overflow'])
+def test_invalid_create_presentation_is_rejected_before_any_creation(case, change):
+    request, root, calls, _, _ = case
+    with_presentations(request)
+    if change == 'unknown_operation':
+        request['items'][0]['presentation']['operations'][0]['op'] = 'invent_science'
+    elif change == 'edit_scope':
+        request['items'][0]['request'] = {'version': 1, 'action': 'export', 'project': '/saved-project'}
+    else:
+        request['sample_style_preset'] = {'preset': '/styles.json', 'expected_preset_sha256': 'd' * 64}
+        request['items'][0]['presentation']['operations'] *= 100
+    with pytest.raises(ValueError):
+        groups.start_group(request, group_dir=root)
+    assert calls == [] and not root.exists()
+
+
+def test_presentation_preset_paths_resolve_against_original_group_request(case):
+    request, root, _, _, _ = case
+    with_presentations(request)
+    request['items'][0]['presentation']['operations'] = [{
+        'op': 'apply_sample_style_preset', 'preset': 'known-style.json', 'expected_preset_sha256': 'd' * 64}]
+    normalized = normalize_group_request(request, base_dir=root.parent)
+    assert normalized['items'][0]['presentation']['operations'][0]['preset'] == str(root.parent / 'known-style.json')
+    assert request['items'][0]['presentation']['operations'][0]['preset'] == 'known-style.json'

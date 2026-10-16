@@ -109,3 +109,48 @@ def test_experiment_group_native_creation_style_review_and_resume(tmp_path, tran
         later = next(i for i in again['items'] if i['id'] == item['id'])
         assert item['figures'][0]['document_sha256'] == later['figures'][0]['document_sha256']
         assert file_sha256(Path(item['figures'][0]['document'])) == item['figures'][0]['document_sha256']
+
+
+@pytest.mark.comprehensive
+def test_declared_group_presentation_reviews_prepared_native_before_first_publication(tmp_path):
+    from sciplot_core.task_group_storage import load_group, step_state
+    from sciplot_core.studio_core.document_edit_state import run_document_worker
+
+    source = tmp_path / 'UVvis.csv'
+    source.write_text('Wavelength,Absorbance\nnm,a.u.\nE0,E0\n400,1\n450,3\n500,2\n')
+    original = source.read_bytes()
+    request = {'version': 1, 'title': 'Known presentation', 'items': [{
+        'id': 'uvvis', 'label': 'UV–vis',
+        'request': {'version': 1, 'action': 'create', 'source': str(source)},
+        'presentation': {'operations': [
+            {'op': 'set_sample_style', 'samples': ['E0'], 'style': {'width': '1.2pt', 'color': '#7B61A8'}},
+            {'op': 'add_annotation', 'id': 'sample_display', 'parent_path': '/page1/graph1',
+             'text': 'Reviewed sample', 'position': {'mode': 'relative', 'x': 0.1, 'y': 0.9}},
+        ]},
+    }]}
+    group = tmp_path / 'group'
+    pending = cli('task', 'group', 'start', '--request', write(tmp_path / 'request.json', request), '--group-dir', group)
+    assert pending['counts'] == {'needs_review': 1}
+    assert pending['items'][0]['task']['scientific_audit_status'] == 'passed'
+    state = load_group(group)
+    initial = step_state(state['items'][0]['steps'][0])
+    assert initial['phase'] == 'prepared' and initial['result']['export_performed'] is False
+    project = Path(initial['project'])
+    assert not list(project.glob('runs/studio_*'))
+    native = project / 'studio/document.vsz'
+    original_native = file_sha256(native)
+    before = run_document_worker('audit-spec-data', native, native.with_name('spec.json'), '--allow-presentation-edits')
+    assert before['status'] == 'passed'
+    result = cli('task', 'group', 'resume', group, '--responses',
+                 write(tmp_path / 'reviewed.json', pending['next_step']['responses_template']))
+    assert result['status'] == 'complete'
+    assert result['items'][0]['ready_to_use'] is None  # Current inspection is not a fresh publication certificate.
+    assert all(result['items'][0]['current_evidence'][key]['current'] for key in ('source', 'qa', 'delivery'))
+    exported = step_state(load_group(group)['items'][0]['steps'][-1])
+    assert exported['result']['studio_run']['ready_to_use'] is True
+    assert len(list(project.glob('runs/studio_*'))) == 1
+    assert file_sha256(native) != original_native
+    after = run_document_worker('audit-spec-data', native, native.with_name('spec.json'), '--allow-presentation-edits')
+    assert after['status'] == 'passed' and after['units'] == before['units']
+    assert source.read_bytes() == original
+    assert len(result['next_step']['images']) == 1

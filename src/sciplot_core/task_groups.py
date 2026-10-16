@@ -19,13 +19,55 @@ def _step(root: Path, identifier: str, name: str, request: dict[str, Any]) -> di
     return {"name": name, "task_dir": str(root / "tasks" / identifier / name), "request": request}
 
 
+def _presentation_steps(root: Path, state: dict[str, Any], item: dict[str, Any]) -> list[dict[str, Any]]:
+    original = next(entry for entry in state["request"]["items"] if entry["id"] == item["id"])
+    presentation = original.get("presentation")
+    preset = state["request"].get("sample_style_preset")
+    if not presentation and not preset:
+        return []
+    first = step_state(item["steps"][0])
+    assert first is not None
+    if presentation:
+        from sciplot_core.task_prepared_creation import require_prepared_current
+
+        require_prepared_current(first)
+    current = inspect_project(Path(first["project"]))
+    figures = current["figures"]
+    if not figures:
+        raise TaskControlError("group_figures_missing", "项目没有可审阅展示修改的图。")
+    selected = None
+    if presentation:
+        selected = presentation.get("figure_id")
+        if selected is None:
+            if len(figures) != 1:
+                raise TaskControlError("group_figure_required", "presentation needs an explicit figure_id for a multi-figure project.")
+            selected = figures[0]["figure_id"]
+        if selected not in {figure["figure_id"] for figure in figures}:
+            raise TaskControlError("group_figure_not_found", "The declared presentation figure_id is absent from the prepared project.")
+    additions = []
+    for index, figure in enumerate(figures, 1):
+        operations = ([{"op": "apply_sample_style_preset", **preset}] if preset else [])
+        if presentation and figure["figure_id"] == selected:
+            operations.extend(presentation["operations"])
+        if operations:
+            additions.append(_step(root, item["id"], f"style_{index:03}", {
+                "version": 1, "action": "edit", "project": current["project"],
+                "figure_id": figure["figure_id"], "expected_document_sha256": figure["document_sha256"],
+                "export": False, "operations": operations,
+            }))
+    return additions
+
+
 def _advance(root: Path, state: dict[str, Any], item: dict[str, Any]) -> None:
     item.pop("blocker", None)
     while True:
         for step in item["steps"]:
             child = step_state(step)
             if child is None:
-                start_task(step["request"], task_dir=Path(step["task_dir"]))
+                if step.get("defer_creation_export") is True:
+                    start_task(step["request"], task_dir=Path(step["task_dir"]), defer_creation_export=True)
+                else:
+                    start_task(step["request"], task_dir=Path(step["task_dir"]))
                 child = step_state(step)
             elif child["status"] == "running":
                 # The existing owner retains bounded uncertain-outcome recovery.
@@ -37,29 +79,17 @@ def _advance(root: Path, state: dict[str, Any], item: dict[str, Any]) -> None:
                 item["status"] = child["status"]
                 return
         if not item.get("styles_planned"):
-            preset = state["request"].get("sample_style_preset")
-            if preset:
-                first = step_state(item["steps"][0])
-                assert first is not None
-                current = inspect_project(Path(first["project"]))
-                additions = []
-                for index, figure in enumerate(current["figures"], 1):
-                    additions.append(_step(root, item["id"], f"style_{index:03}", {
-                        "version": 1, "action": "edit", "project": current["project"],
-                        "figure_id": figure["figure_id"], "expected_document_sha256": figure["document_sha256"],
-                        "export": False, "operations": [{"op": "apply_sample_style_preset", **preset}],
-                    }))
-                if not additions:
-                    raise TaskControlError("group_figures_missing", "项目没有可套用样品样式的图。")
+            additions = _presentation_steps(root, state, item)
+            item["styles_planned"] = True
+            if additions:
                 item["steps"].extend(additions)
-                item["styles_planned"] = True
                 save_group(root, state)  # Freeze requests before starting any child.
                 continue
-            item["styles_planned"] = True
         if not item.get("export_planned"):
             item["export_planned"] = True
             styles = [step_state(step) for step in item["steps"] if step["name"].startswith("style_")]
-            if any(child and child.get("result", {}).get("status") == "saved" for child in styles):
+            if (item["steps"][0].get("defer_creation_export") is True
+                    or any(child and child.get("result", {}).get("status") == "saved" for child in styles)):
                 first = step_state(item["steps"][0])
                 assert first is not None
                 item["steps"].append(_step(root, item["id"], "export", {
@@ -97,7 +127,8 @@ def start_group(request: dict[str, Any], *, group_dir: Path, base_dir: Path | No
             root.mkdir(mode=0o700)
             state = {"kind": "sciplot_task_group", "version": 1, "group_dir": str(root), "request": request,
                      "items": [{"id": item["id"], "label": item["label"], "status": "pending",
-                                "steps": [_step(root, item["id"], "initial", item["request"])]}
+                                "steps": [{**_step(root, item["id"], "initial", item["request"]),
+                                           **({"defer_creation_export": True} if item.get("presentation") else {})}]}
                                for item in request["items"]]}
             save_group(root, state)
             _run(root, state)

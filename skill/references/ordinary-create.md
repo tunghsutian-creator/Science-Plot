@@ -32,6 +32,18 @@ remain a source error, not a request for AI to select the same rule again.
    its original file SHA, row selections, metadata evidence and XY pairs rather
    than rediscovering the same table. The typed entry does not invent mappings.
 
+   For an already-understood set, one `task group start --request GROUP.json
+   --group-dir NEW_DIRECTORY --json` carries independent create requests with
+   their explicit mappings and linear/log choices. Each create item can include
+   `presentation:{"operations":[...]}` using the existing typed edit operations
+   for sample display text, legend and line styles. Include `figure_id` for a
+   multi-figure project. This reuses native preparation, previews the complete
+   per-figure batch before its first export, and retains scientific validation.
+   Review all returned candidates and audits, then submit the current
+   `next_step.responses_template` together through `task group resume --responses`.
+   Keep later user intents, such as a subsequent label rename, in a later edit
+   group; do not claim fewer calls by removing a separate review or intent.
+
 3. For `needs_input`, use the returned original cells, dimensions, extents and
    rejection reasons. The program repairs a single explicit axis/unit/sample-row
    layout through ordinary validation. Numeric extents are not selected data;

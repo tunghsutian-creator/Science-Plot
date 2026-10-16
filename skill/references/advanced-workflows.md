@@ -109,12 +109,22 @@ edits do not require new analysis, inventory scripts or development tests.
    --group-dir NEW_DIRECTORY --json` and its MCP group tools. The explicit list
    contains ordinary task requests; do not scan a mixed folder and silently pick
    datasets. The optional shared sample preset applies to newly created figures.
+   A create item's optional `presentation` contains existing typed `operations`
+   and an optional `figure_id` (required when preparation yields several figures).
+   It saves a source-bound native preparation checkpoint before first export,
+   combines the preset and explicit changes into one reviewed batch per figure,
+   then exports each project once. It does not infer samples, units or science.
    Inspect the local `overview` and returned PNGs, then pass item/task-bound
    responses through `task group resume`. One pending item does not stop the
    others. Omit responses to continue interrupted work; this never accepts
    previews or chooses scientific answers. Same-project figure edits remain
    sequential under the existing document transaction. Group completion is task
    progress; inspect each project's current source/QA/delivery for handoff.
+   Use the returned bound `next_step.responses_template` and current item evidence
+   without repeating per-figure context discovery. `ordered_figures` is a current
+   selection description, not aggregate publication certification. The completed
+   group's paper command template delegates ordered selection and version capture
+   to the existing paper owner; it does not ask AI to copy version hashes.
 
    For alternatives of the same saved figure, use `task compare start` with
    2–8 labelled operation batches, one explicit figure ID and the saved SHA.
