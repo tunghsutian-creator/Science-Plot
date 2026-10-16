@@ -1,11 +1,12 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import labelFontData from '../../assets/NotoSans-Regular.ttf?inline';
-import { bridge, hasNativeBridge } from '../bridge';
+import { bridge, chooseFolderFiles, hasNativeBridge, importPanelSource } from '../bridge';
 import { readBrowserProject, readBrowserSources } from '../browserFiles';
 import { fromBase64, toBase64 } from '../core/bytes';
 import { createDocument } from '../core/document';
 import { parseProject, serializeProject } from '../core/storage';
 import { composePdf, inspectSource } from '../pdf';
+import { folderImportNotice, inspectFolderSources } from '../folderImport';
 import type { AssemblyDocument, ImportedFile, SourceAsset } from '../core/types';
 import { documentSignature, type Composer } from './useComposer';
 
@@ -14,6 +15,7 @@ const fontBytes = fromBase64(labelFontData.slice(labelFontData.indexOf(',') + 1)
 export function useProjectFiles(composer: Composer) {
   const latest = useRef(composer);
   const operating = useRef(false);
+  const [sourcePaths, setSourcePaths] = useState<Record<string, string>>({});
   const pendingDrop = useRef<{ document: AssemblyDocument; name: string; signature: string } | null>(null);
   useLayoutEffect(() => { latest.current = composer; });
   useEffect(() => {
@@ -53,9 +55,30 @@ export function useProjectFiles(composer: Composer) {
   async function importFiles(replaceTarget?: string) {
     if (!begin()) return;
     try {
-      const files = await bridge.importFiles();
+      const files = await (replaceTarget ? importPanelSource() : bridge.importFiles());
       if (files.length === 0) return;
       acceptImports(await inspectFiles(files), replaceTarget);
+    } catch (error) { latest.current.report(error); }
+    finally { finish(); }
+  }
+
+  async function importFolder() {
+    if (!begin()) return;
+    try {
+      const files = await chooseFolderFiles();
+      if (!files.length) return;
+      const result = await inspectFolderSources(files, latest.current.document.assets);
+      // A folder is a library operation, never an implicit placement operation.
+      if (result.assets.length) {
+        const before = new Set(latest.current.document.assets.map((asset) => asset.id));
+        const next = latest.current.addAssets(result.assets);
+        result.assets = next.assets.filter((asset) => !before.has(asset.id));
+        const paths = result.assets.map((asset) => [asset.id, result.relativePaths[asset.id]] as const);
+        // Presentation hints are session-local and bounded; originals remain portable.
+        setSourcePaths((current) => Object.fromEntries([...Object.entries(current), ...paths].slice(-1000)));
+      }
+      latest.current.setNotice({ text: folderImportNotice(result),
+        error: result.assets.length === 0 && (result.invalid > 0 || result.limited > 0) });
     } catch (error) { latest.current.report(error); }
     finally { finish(); }
   }
@@ -148,7 +171,7 @@ export function useProjectFiles(composer: Composer) {
     if (action === 'open') void openNow(dropped ?? undefined); else latest.current.replaceDocument(createDocument());
   }
 
-  return { importFiles, handleDrop, openProject, newProject, saveProject, exportFile, discardAndContinue };
+  return { importFiles, importFolder, sourcePaths, handleDrop, openProject, newProject, saveProject, exportFile, discardAndContinue };
 }
 
 export { labelFontData };

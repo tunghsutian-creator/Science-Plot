@@ -33,26 +33,43 @@ function invoke<T>(method: string, params: unknown): Promise<T> {
   });
 }
 
-function chooseFiles(accept: string, multiple: boolean): Promise<File[]> {
-  return new Promise((resolve) => {
+function chooseFiles(accept: string, multiple: boolean, directory = false): Promise<File[]> {
+  return new Promise((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file'; input.accept = accept; input.multiple = multiple;
+    if (directory) {
+      if (!('webkitdirectory' in input)) { reject(new Error('Folder import needs Microsoft Edge. Use Import files instead.')); return; }
+      input.webkitdirectory = true;
+    }
     input.hidden = true;
     document.body.append(input);
     let finished = false;
     const finish = () => {
       if (finished) return;
       finished = true;
-      window.removeEventListener('focus', onFocus);
       const files = Array.from(input.files ?? []);
       input.remove(); resolve(files);
     };
-    const onFocus = () => { window.setTimeout(() => { if (!input.files?.length) finish(); }, 400); };
     input.addEventListener('change', finish, { once: true });
     input.addEventListener('cancel', finish, { once: true });
-    window.addEventListener('focus', onFocus, { once: true });
-    input.click();
+    try { input.click(); } catch (error) { input.remove(); reject(error); }
   });
+}
+
+/** A target cell has one source; a user gesture opens a single-file system picker. */
+export async function importPanelSource(): Promise<ImportedFile[]> {
+  if (hasNativeBridge()) {
+    const files = await invoke<ImportedFile[]>('importFiles', {});
+    if (files.length > 1) throw new Error('Choose one source file for this cell. Use Import files to add several sources.');
+    return files;
+  }
+  return readBrowserSources(await chooseFiles('.pdf,.png,.jpg,.jpeg', false));
+}
+
+/** Edge recursively supplies the selected folder through webkitRelativePath. */
+export function chooseFolderFiles(): Promise<File[]> {
+  if (hasNativeBridge()) return Promise.reject(new Error('Folder import is available in the Microsoft Edge workspace. Use Import files in the desktop app.'));
+  return chooseFiles('', true, true);
 }
 
 function download(bytes: BlobPart, name: string, type: string): NativeSaveResult {
