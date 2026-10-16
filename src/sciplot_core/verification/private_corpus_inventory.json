@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 4994,
-    "nodeids_sha256": "78d65399afb11503cd595f777c94adbd034a189050e77f10fb53d253116411a5",
-    "test_sources_sha256": "4cf6f20fcab32d6768afc43c2e5f0249f04c59988930c3270f974fd157b0eebe",
+    "nodeid_count": 5021,
+    "nodeids_sha256": "351c7ed9dcd2eb29be0df19bc1760e166745b007db0ec75b0a95bf142755702c",
+    "test_sources_sha256": "90ed13f08cfed2c51dbee08210ac07154edbff61dfc4e51572ba24baf553b2e5",
     "test_source_count": 352,
     "candidate_nodeids": [
       "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[break-on-inf]",
@@ -563,7 +563,34 @@
       "tests/test_task_paper_selection.py::test_only_multi_figure_projects_add_titles_or_necessary_stable_identity",
       "tests/test_task_paper_selection.py::test_shared_public_cli_routes_group_and_rejects_mixed_request_options",
       "tests/test_task_papers_native.py::test_native_second_capture_failure_and_exact_retry_only_captures_unsealed_figure",
-      "tests/test_task_papers_native.py::test_public_completed_group_freezes_once_and_reuses_current_native_publications"
+      "tests/test_task_papers_native.py::test_public_completed_group_freezes_once_and_reuses_current_native_publications",
+      "tests/test_task_paper_publication.py::test_canonical_rule_blocker_survives_passed_qa_and_finished_publication[pending_review]",
+      "tests/test_task_paper_publication.py::test_canonical_rule_blocker_survives_passed_qa_and_finished_publication[unbound_rule_contract]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[contradictory_gates]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[delivery_blocked]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[failure_reason]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[failure_stage]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[forged_delivery_ready]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[incomplete]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[incomplete_plan]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[manifest_rule_flag]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_complete]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_failure_reason]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_failure_stage]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_gates]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_ready]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_rule_evidence]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_verification]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[nonboolean_complete]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[not_ready]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[package_blocked]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[publishing]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[result_rule_flag]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[semantic_rule_flag]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[unknown_rule]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[unknown_state]",
+      "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[verification_blocked]",
+      "tests/test_task_paper_publication.py::test_replay_checks_current_canonical_rule_without_changing_original_bytes"
     ],
     "synthetic_candidates": [
       {
@@ -2113,9 +2140,117 @@
       {
         "nodeid": "tests/test_task_papers_native.py::test_public_completed_group_freezes_once_and_reuses_current_native_publications",
         "reason": "Generated UVvis and FTIR CSVs under tmp_path exercise real native portable capture, sealed-publication packaging, explicit group order and exact recovery. The renamed capture-failure case retains its original retry/protection assertions; no private corpus or retained native goldens are used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_canonical_rule_blocker_survives_passed_qa_and_finished_publication[pending_review]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_canonical_rule_blocker_survives_passed_qa_and_finished_publication[unbound_rule_contract]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[contradictory_gates]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[delivery_blocked]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[failure_reason]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[failure_stage]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[forged_delivery_ready]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[incomplete]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[incomplete_plan]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[manifest_rule_flag]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_complete]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_failure_reason]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_failure_stage]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_gates]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_ready]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_rule_evidence]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[missing_verification]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[nonboolean_complete]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[not_ready]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[package_blocked]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[publishing]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[result_rule_flag]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[semantic_rule_flag]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[unknown_rule]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[unknown_state]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_qa_passed_but_unfinished_or_contradictory_publication_never_seals[verification_blocked]",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
+      },
+      {
+        "nodeid": "tests/test_task_paper_publication.py::test_replay_checks_current_canonical_rule_without_changing_original_bytes",
+        "reason": "Generated tmp_path publication, request, native-placeholder, PDF/TIFF and QA bytes exercise incomplete or contradictory publication gates and actual source-owned rule-readiness projections. Pending, unknown and unbound rules fail before portable sealing; no retained scientific corpus or native renderer is used."
       }
     ],
-    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion. 2026-10-16: reviewed all 106 newly collected generated round-2 nodes, including the explicit paper capture-retry rename, and changed test/helper bytes. Exact module-specific dispositions are recorded per added node. All retained lifecycle tiers, 165 private dependencies and 111 original failure responsibilities remain unchanged; no access-completeness promotion.",
+    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion. 2026-10-16: reviewed all 106 newly collected generated round-2 nodes, including the explicit paper capture-retry rename, and changed test/helper bytes. Exact module-specific dispositions are recorded per added node. All retained lifecycle tiers, 165 private dependencies and 111 original failure responsibilities remain unchanged; no access-completeness promotion. 2026-10-16: reviewed 27 additional generated publication-completion and canonical-rule rejection cases after the final delivery fix; all earlier dispositions, lifecycle tiers and private responsibilities remain unchanged.",
     "scope": [
       "real_world",
       "polymer_corpus",
