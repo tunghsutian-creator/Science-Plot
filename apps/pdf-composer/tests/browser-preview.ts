@@ -174,8 +174,10 @@ async function assertPopupBounds(popup: Locator, name: string) {
   popupBounds.push({ name, bounds, viewport });
 }
 async function zoom(value: string) {
-  await page.getByRole('button', { name: 'Canvas zoom', exact: true }).click();
+  const trigger = page.getByRole('button', { name: 'Canvas zoom', exact: true });
+  await trigger.click();
   await page.getByRole('menuitemradio', { name: value === 'fit' ? 'Fit to view' : `${value}%`, exact: true }).click();
+  assert.equal(await trigger.evaluate((element) => document.activeElement === element), true, 'Choosing a zoom level returns focus to its trigger.');
 }
 
 try {
@@ -229,6 +231,15 @@ try {
   assert.equal(await page.getByRole('dialog', { name: 'Grid layout', exact: true }).count(), 0);
   assert.equal(await page.getByRole('dialog', { name: 'Panel labels', exact: true }).count(), 1);
   await page.keyboard.press('Escape');
+  const gridApplyTrigger = page.getByRole('button', { name: 'Choose grid template', exact: true });
+  await gridApplyTrigger.click();
+  await page.getByRole('button', { name: 'Apply grid', exact: true }).click();
+  assert.equal(await gridApplyTrigger.evaluate((element) => document.activeElement === element), true, 'Applying a grid returns focus to its trigger.');
+  const projectMenu = page.locator('summary[aria-label="Project menu"]');
+  await page.getByRole('button', { name: 'Labels', exact: true }).click();
+  await projectMenu.click();
+  assert.equal(await projectMenu.evaluate((element) => document.activeElement === element), true, 'Outside dismissal preserves the newly focused outside control.');
+  await projectMenu.click();
   for (const viewport of [{ width: 600, height: 800 }, { width: 390, height: 560 }]) {
     await page.setViewportSize(viewport);
     for (const control of controls) {
@@ -274,6 +285,26 @@ try {
   const newPanel = replaced.panels.find((panel) => panel.id === placedPanel.id)!;
   assert.equal(replaced.assets.find((asset) => asset.id === newPanel.assetId)?.sha256, replacement.sha256);
   assert.equal(replaced.panels.filter((panel) => panel.assetId).length, 1);
+  const scaleTrigger = page.getByRole('button', { name: 'Scale selected panel', exact: true });
+  await cell(1, 1).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move / swap…', exact: true }).click();
+  const movePopup = page.getByRole('dialog', { name: 'Move or swap figure', exact: true });
+  await assertPopupBounds(movePopup, 'Move or swap figure');
+  await page.keyboard.press('Escape');
+  assert.equal(await scaleTrigger.evaluate((element) => document.activeElement === element), true, 'Move Escape returns focus to the usable Scale control in its anchor group.');
+  await scaleTrigger.click();
+  const scalePopup = page.getByRole('dialog', { name: 'Scale whole page', exact: true });
+  await assertPopupBounds(scalePopup, 'Scale whole page');
+  await scalePopup.getByRole('button', { name: 'Cancel', exact: true }).click();
+  assert.equal(await scaleTrigger.evaluate((element) => document.activeElement === element), true, 'Canceling Scale returns focus to Scale.');
+  const exportAnchor = page.locator('summary[aria-label="More options"]');
+  await exportAnchor.click();
+  await page.getByRole('button', { name: 'Export options…', exact: true }).click();
+  const exportPopup = page.getByRole('dialog', { name: 'Export figure', exact: true });
+  await assertPopupBounds(exportPopup, 'Export figure');
+  await page.keyboard.press('Escape');
+  assert.equal(await exportAnchor.evaluate((element) => document.activeElement === element), true, 'Export Escape returns focus to More options.');
+  checks.push('Grid Apply, Zoom choice, Move/Export Escape and Scale Cancel restore usable origin focus; outside dismissal preserves outside focus.');
   await screenshot('04-target-placement-edge.png');
   checks.push('Real empty-cell single-file chooser targets that exact cell; empty choice and Replace cancellation preserve the portable document; occupied click selects and only Replace opens a picker.');
 
