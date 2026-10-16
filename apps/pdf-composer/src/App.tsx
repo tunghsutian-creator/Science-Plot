@@ -78,17 +78,17 @@ export default function App() {
     {composer.notice ? <div className={`notice${composer.notice.error ? ' notice-error' : ''}`} role={composer.notice.error ? 'alert' : 'status'}>
       <span>{composer.notice.text}</span><button className="icon-button" aria-label="Dismiss message" onClick={() => composer.setNotice(null)}><Icon name="close" size={14} /></button></div> : null}
     <div className="editor-body">
+      <GlassSurface className="source-tray-shell">
+        <SourceTray assets={composer.document.assets} selectedAssetId={composer.single?.assetId ?? null} busy={composer.busy}
+          onChoose={(asset) => composer.chooseSource(asset)} onImport={() => void files.importFiles()} onOpen={files.openProject}
+          onDropFiles={(items) => void files.handleDrop(items)} />
+      </GlassSurface>
       <div className="canvas-region"><SelectionBar panels={composer.selectedPanels} busy={composer.busy} onAction={action} />
         <PaperCanvas document={composer.document} selected={composer.selected} busy={composer.busy} zoom={zoom}
           onSelect={composer.selectPanel} onSwap={composer.swap} onAction={action}
           onPlaceSource={(assetId, panelId) => { const asset = composer.document.assets.find((item) => item.id === assetId); if (asset) composer.chooseSource(asset, panelId); }}
           onDropFiles={(items, panelId) => void files.handleDrop(items, panelId)} /></div>
     </div>
-    <GlassSurface className="source-tray-shell">
-      <SourceTray assets={composer.document.assets} selectedAssetId={composer.single?.assetId ?? null} busy={composer.busy}
-        onChoose={(asset) => composer.chooseSource(asset)} onImport={() => void files.importFiles()} onOpen={files.openProject}
-        onDropFiles={(items) => void files.handleDrop(items)} />
-    </GlassSurface>
     <Dialogs composer={composer} onExport={(format, dpi) => void files.exportFile(format, dpi)} onDiscard={files.discardAndContinue} />
   </div>;
 }
