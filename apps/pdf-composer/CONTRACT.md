@@ -84,6 +84,13 @@ right canvas fits and centers the complete paper without changing stored dimensi
 or source scale. The selection controls stay clear of the paper, including the
 600-pixel-wide workbench layout. There is no bottom source tray or footer status text.
 
+The independent Mac browser launcher serves only its hash-verified bundled
+assets over `127.0.0.1`, checks health before opening Microsoft Edge and reuses
+the same healthy service on repeated launches. Foreign port owners are preserved;
+normal AppKit Quit stops only its owned service. The installed app has no Node or
+Python runtime dependency and creates no login item. Launcher lifecycle checks
+are separate from browser pixel acceptance and from the scientific runtime.
+
 Core helpers: `createDocument(rows=2,columns=3)`, `validateDocument(doc)`,
 `placeSource(doc,panelId,asset,pageIndex,scale=1)`, `clearPanel`, `mergePanels`,
 `splitPanel`, `swapPanels`, `setPanelScale`, `resizeGrid`, `toggleLabels`,

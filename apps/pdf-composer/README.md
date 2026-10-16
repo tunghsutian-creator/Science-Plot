@@ -148,6 +148,11 @@ The script refuses an existing output; use `BROWSER_LAUNCHER_OUTPUT_DIR` for a
 fresh output directory. The browser launcher is separate from the native
 `Figure Assembly.app` described below.
 
+Run `bash scripts/install-browser-macos.sh` after packaging to copy the complete
+app to `~/Applications` and create a Desktop link. Existing app or Desktop names
+are preserved; a new numbered name is used. No login item or public listener is
+installed. After restarting the Mac, double-click the same Desktop app again.
+
 Its local startup log is `~/Library/Logs/Figure Assembly Browser/launcher.jsonl`.
 **查看启动日志** in the app or **FA** menu reveals that file. The bundled
 `Contents/MacOS/FigureAssemblyBrowser --status` command reports the checked

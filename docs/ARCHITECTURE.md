@@ -107,6 +107,11 @@ list scrolls vertically above a fixed import area; the right canvas uses the
 remaining space to fit and center the complete paper. Screen fitting never
 changes physical geometry or source scale. The browser
 appearance is verified in Edge, without adding Safari compatibility work.
+A separate `browser-native/` launcher bundles the accepted browser assets and a
+Swift Network server bound only to IPv4 loopback. It verifies bundled hashes,
+reuses its identity-checked healthy instance, waits for readiness and opens Edge
+through LaunchServices. AppKit Quit stops its owned listener; it has no login
+item, upload endpoint or dependency on a development terminal, Node or Python.
 A thin Swift
 shell supplies local file dialogs, conflict-aware atomic saves, verified image
 decoding, preview/raster export and a bundled WebKit UI with network access denied.
