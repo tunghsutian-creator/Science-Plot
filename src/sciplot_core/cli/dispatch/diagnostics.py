@@ -106,6 +106,14 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
                 print("Claim: " + payload.get("claim", "no completion proven"))
                 if payload.get("directory"):
                     print("Directory: " + payload["directory"])
+                if payload.get("kind") == "sciplot_changed_verification_status":
+                    print(f"Checks completed: {payload.get('completed_check_count', 0)}/{payload.get('check_count', 0)}")
+                    for check in payload["checks"]:
+                        print(f"{check['check_id']}: {check['status']}")
+                        if check.get("reason"):
+                            print(f"  {check['reason']}")
+                    if payload.get("reason"):
+                        print(payload["reason"])
                 if payload.get("error"):
                     print(payload["error"]["message"])
             if payload["status"] == "NO_TESTS":

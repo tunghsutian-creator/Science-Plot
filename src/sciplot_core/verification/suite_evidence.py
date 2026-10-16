@@ -135,6 +135,10 @@ def suite_verification_status(directory: Path, *, repo_root: Path | None = None)
     root = (repo_root or Path(os.environ.get("SCIPLOT_REPO", Path.cwd()))).expanduser().resolve()
     try:
         output = _closed_directory(root, directory)
+        if (output / "plan.json").exists() or (output / "plan.json").is_symlink():
+            from sciplot_core.verification.changed_evidence import changed_record_status
+
+            return changed_record_status(output, repo_root=root)
         result = run_status(output)
         selected = result.pop("selected_tests", [])
         scope = result.pop("scope", {})

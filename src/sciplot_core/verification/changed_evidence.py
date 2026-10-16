@@ -13,7 +13,7 @@ from typing import Any
 
 from sciplot_core.verification.durable_runner import artifact_hashes, run_status, start_run
 from sciplot_core.verification.evidence import atomic_json, check_reuse, load_receipt
-from sciplot_core.verification.evidence_identity import capture_identity
+from sciplot_core.verification.evidence_identity import capture_identity, digest
 
 
 def _closed_directory(repo_root: Path, directory: Path) -> Path:
@@ -93,14 +93,17 @@ without restarting missing or interrupted checks.
         elif output.exists():
             raise ValueError("The record directory already exists; inspect or reuse its evidence.")
         specs = _prepare_specs(plan, repo_root, output)
+        recorded_checks = [{"check_id": check["check_id"], "command": spec["command"]}
+                           for check, spec in zip(plan["checks"], specs, strict=True)]
+        for spec in specs:
+            spec["scope"] = {**spec["scope"], "changed_record_checks_sha256": digest(recorded_checks)}
         if not reuse:
             output.mkdir(parents=True, exist_ok=False, mode=0o700)
             atomic_json(output / "plan.json", {
                 "kind": "sciplot_changed_verification_record", "version": 1,
                 "claim": "selected_checks_only", "scientific_acceptance": False,
                 "comparison_provenance": plan["comparison"],
-                "checks": [{"check_id": check["check_id"], "command": spec["command"]}
-                           for check, spec in zip(plan["checks"], specs, strict=True)],
+                "checks": recorded_checks,
             })
         for check, spec in zip(plan["checks"], specs, strict=True):
             check_dir = _closed_directory(repo_root, output / check["check_id"])
@@ -135,3 +138,74 @@ without restarting missing or interrupted checks.
             "reused": reuse and status == "passed",
             "evidence": {"mode": "reuse" if reuse else "record", "directory": str(output),
                          "claim": "selected_checks_only", "scientific_acceptance": False}}
+
+
+def changed_record_status(directory: Path, *, repo_root: Path) -> dict[str, Any]:
+    """Inspect each original recorded check; never collect, launch or claim reuse."""
+    result: dict[str, Any] = {
+        "kind": "sciplot_changed_verification_status", "status": "BLOCKED",
+        "claim": "original_execution_only", "scientific_acceptance": False,
+        "reused": False, "checks_executed": 0, "checks_reused": 0, "checks": [],
+    }
+    try:
+        output = _closed_directory(repo_root, directory)
+        result["directory"] = str(output)
+        if (output / "plan.json").is_symlink():
+            raise ValueError("The recorded plan cannot be a symlink.")
+        plan = load_receipt(output / "plan.json")
+        if (not isinstance(plan, dict) or plan.get("kind") != "sciplot_changed_verification_record"
+                or type(plan.get("version")) is not int or plan["version"] != 1
+                or plan.get("claim") != "selected_checks_only"
+                or plan.get("scientific_acceptance") is not False or not isinstance(plan.get("checks"), list)):
+            raise ValueError("A supported changed-verification record is required.")
+        checks, seen = [], set()
+        for check in plan["checks"]:
+            if (not isinstance(check, dict) or set(check) != {"check_id", "command"}
+                    or not isinstance(check["check_id"], str)
+                    or not re.fullmatch("[a-z][a-z0-9_]*", check["check_id"])
+                    or check["check_id"] in seen
+                    or not isinstance(check["command"], list) or not check["command"]
+                    or not all(isinstance(arg, str) and arg and "\0" not in arg for arg in check["command"])):
+                raise ValueError("The recorded check identity or command is malformed.")
+            seen.add(check["check_id"])
+            check_dir = _closed_directory(repo_root, output / check["check_id"])
+            if not check_dir.exists():
+                current = {"status": "NOT_STARTED", "reason": "check_not_started"}
+            else:
+                if (check_dir / "request.json").is_symlink():
+                    raise ValueError("A recorded request cannot be a symlink.")
+                request = load_receipt(check_dir / "request.json")
+                if not isinstance(request, dict) or request.get("command") != check["command"]:
+                    current = {"status": "BLOCKED", "reason": "recorded_command_mismatch"}
+                elif (not isinstance(request.get("scope"), dict)
+                      or request["scope"].get("changed_record_checks_sha256") != digest(plan["checks"])):
+                    current = {"status": "BLOCKED", "reason": "recorded_plan_mismatch"}
+                else:
+                    current = run_status(check_dir)
+            selected = current.get("selected_tests", [])
+            checks.append({"check_id": check["check_id"], "status": current["status"],
+                           "reason": current.get("reason"), "evidence_directory": str(check_dir),
+                           "selected_test_count": len(selected), "wall_seconds": current.get("wall_seconds")})
+        statuses = {check["status"] for check in checks}
+        result.update(checks=checks, check_count=len(checks),
+                      completed_check_count=sum(check["status"] in {"PASS", "FAIL", "NO_TESTS"} for check in checks),
+                      not_started_check_ids=[check["check_id"] for check in checks if check["status"] == "NOT_STARTED"])
+        if "FAIL" in statuses:
+            result["status"] = "FAIL"
+        elif "BLOCKED" in statuses:
+            result["status"] = "BLOCKED"
+        elif not statuses or "NO_TESTS" in statuses:
+            result["status"] = "NO_TESTS"
+        elif "RUNNING" in statuses:
+            result["status"] = "RUNNING"
+        elif statuses == {"PASS"}:
+            result["status"] = "PASS"
+        if result["not_started_check_ids"] and result["status"] == "BLOCKED":
+            result["reason"] = "record_incomplete_checks_not_started"
+        result["status_semantics"] = (
+            "Original per-check completion only; current-snapshot reuse still requires --changed --reuse. "
+            "Unstarted checks are not passed and status never resumes or repeats them.")
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
+        result.update(status="BLOCKED", error={"reason_code": "verification_record_status_unavailable",
+                                               "message": str(exc)})
+    return result

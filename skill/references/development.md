@@ -29,6 +29,9 @@ worktree, not a different staged-index image. A clean default comparison reports
 `NO_TESTS`, zero executed checks and exit 2; a plan is not a test pass.
 
 Unknown changed owners fail closed; do not compensate with a full-suite fallback.
+Group and paper leaf owners retain their creation/revision, selection/publication
+and public-entry regressions without selecting unrelated task workflows. Changes
+to shared task contracts, storage or CLI parser/dispatch retain the broad task gate.
 Run the scoped static type gate when changing a file
 declared under `[tool.mypy]` in `pyproject.toml`.
 Its exact scope and strictness belong to `pyproject.toml`.
@@ -61,6 +64,15 @@ aliases, exit, session finish and successful selected test bodies. Unknown
 closure, drift, skips or interruption cannot mint a reusable pass. Evidence
 is local and unsigned; keep all requests, logs and private inputs under ignored
 storage. Environment values are hashed, not persisted as credentials.
+
+Use `verify --status .tmp_verify/checkpoint --json` after a lost record reply.
+It lists original per-check completion, running and unstarted checks without
+collecting or launching anything. Missing, interrupted or drifted evidence cannot
+pass; an empty record is `NO_TESTS`. Status is historical completion, not current
+snapshot reuse: only `--changed --reuse` validates fresh content/scope bindings.
+Unstarted checks stay unstarted; status never restarts the plan or falls back to full.
+Each new record seals its complete check list in the existing per-check request;
+older unbound records cannot prove aggregate completion, but retain per-check status.
 
 With a supported active observer, semantic identity excludes only its two
 per-launch parent/child routing nonces. A finite binding retains the exact audit

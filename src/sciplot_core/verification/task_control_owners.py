@@ -4,6 +4,20 @@ from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
 
+GROUP_LEAF_PATHS = frozenset({
+    "src/sciplot_core/task_groups.py", "src/sciplot_core/task_group_contract.py",
+    "src/sciplot_core/task_group_storage.py", "src/sciplot_core/task_group_review.py",
+    "src/sciplot_core/task_group_gallery.py",
+    "tests/test_task_groups.py", "tests/test_task_groups_native.py",
+})
+PAPER_LEAF_PATHS = frozenset({
+    "src/sciplot_core/task_papers.py", "src/sciplot_core/task_paper_contract.py",
+    "src/sciplot_core/task_paper_sources.py", "src/sciplot_core/task_paper_native.py",
+    "src/sciplot_core/task_paper_delivery.py", "src/sciplot_core/cli/task_paper.py",
+    "tests/test_task_papers.py", "tests/test_task_papers_native.py",
+})
+
+
 TASK_CONTROL_OWNERS = (
     ChangedOwner(
         owner_id="current_native_legend_layout",
@@ -72,9 +86,31 @@ TASK_CONTROL_OWNERS = (
         release_gates=("acceptance_rules", "full_pytest"),
     ),
     ChangedOwner(
+        owner_id="task_group_orchestration",
+        exact_paths=GROUP_LEAF_PATHS,
+        pytest_targets=("tests/test_task_groups.py", "tests/test_task_groups_native.py",
+                        "tests/test_task_prepared_creation.py", "tests/test_task_control.py",
+                        "tests/test_task_recovery.py", "tests/test_task_revision_guards.py",
+                        "tests/test_task_preview_revision.py", "tests/test_task_papers.py",
+                        "tests/test_product_task_entries.py", "tests/test_annotation_validation.py",
+                        *ARCHITECTURE_CORE_TARGETS),
+        mypy_required=True, handoff_gates=("doctor",),
+        final_milestone_gates=("smoke",), release_gates=("full_pytest",),
+    ),
+    ChangedOwner(
+        owner_id="task_paper_publication",
+        exact_paths=PAPER_LEAF_PATHS,
+        pytest_targets=("tests/test_task_papers.py", "tests/test_task_papers_native.py",
+                        "tests/test_task_groups.py", "tests/test_product_task_entries.py",
+                        "tests/test_output_package_contract.py", "tests/test_delivery_install.py",
+                        "tests/test_task_saved_work.py", *ARCHITECTURE_CORE_TARGETS),
+        mypy_required=True, handoff_gates=("doctor",),
+        final_milestone_gates=("smoke",), release_gates=("full_pytest",),
+    ),
+    ChangedOwner(
         owner_id="local_task_control",
         path_prefixes=("src/sciplot_core/task_",),
-        excluded_paths=frozenset({"src/sciplot_core/task_common_edits.py"}),
+        excluded_paths=frozenset({"src/sciplot_core/task_common_edits.py"}) | GROUP_LEAF_PATHS | PAPER_LEAF_PATHS,
         exact_paths=frozenset({
             ".github/workflows/minimal-repository.yml",
             "skill/references/experiment-group.json",
