@@ -11,6 +11,13 @@ file dialogs, conflict-aware saves, TIFF verification and auxiliary raster expor
 use Apple system frameworks. The new SVG glass appearance is verified in Edge;
 Safari/WebKit visual parity is outside this browser workbench's scope.
 
+Normal-motion visual and SVG-refraction acceptance has passed in actual Linux
+Edge 155.0.4283.60. On the current Mac test host, both installed Edge 155.0.4283.45
+and an isolated official 155.0.4283.60 build stall frame callbacks and blank-page
+capture before the workbench loads. The cause remains unknown. Local functional
+diagnostics and the separate native app pass, but Mac Edge visual/hardware
+acceptance remains blocked; Linux screenshots do not establish that result.
+
 ## Use
 
 Open the local workbench in Edge, then choose **Import PDFs** in the bottom

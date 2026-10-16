@@ -4,3 +4,4 @@ release/
 test-results/
 .DS_Store
 *.figureassembly
+/design-qa.md

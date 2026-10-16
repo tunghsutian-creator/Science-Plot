@@ -19,6 +19,9 @@ CI workflow. Cross-Mac font/resource identity, signing/notarization and independ
 print/journal acceptance remain separate work. Historical incomplete private
 corpus/access-capture evidence remains BLOCKED, and external AI billed/token
 telemetry remains UNKNOWN; this document tool does not resolve those claims.
+Actual Linux Edge normal-motion visual/refraction checks pass. The current Mac
+host's Edge frame/capture stall also reproduces on an empty page in two official
+versions; its cause and Mac Edge hardware visual acceptance remain open.
 
 ## 2026-10-15 local panel assembly acceptance
 
