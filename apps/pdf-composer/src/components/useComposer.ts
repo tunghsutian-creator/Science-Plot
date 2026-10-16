@@ -15,7 +15,7 @@ export function documentSignature(document: AssemblyDocument): string {
 
 export function useComposer() {
   const [history, setHistory] = useState(() => createHistory(createDocument()));
-  const [selected, setSelected] = useState<string[]>(() => [history.present.panels[0].id]);
+  const [selected, setSelected] = useState<string[]>([]);
   const [modal, setModal] = useState<ComposerModal>(null);
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -138,15 +138,15 @@ export function useComposer() {
   }
 
   function replaceDocument(next: AssemblyDocument, name = 'Untitled.figureassembly', token?: string) {
-    setHistory(createHistory(next)); setSelected([next.panels[0].id]); setModal(null); setNotice(null);
+    setHistory(createHistory(next)); setSelected([]); setModal(null); setNotice(null);
     setSavedSignature(documentSignature(next)); setProjectName(name); setProjectToken(token);
   }
 
   return { document, history, selected, selectedPanels, single, modal, setModal, notice, setNotice, busy, setBusy,
     dirty, projectName, projectToken, setProjectName, setProjectToken, signature, setSavedSignature,
-    report, accept, change, selectPanel, place, chooseSource, addAssets, merge, split, showScale, confirmScale, swap,
+    report, accept, change, selectPanel, deselectPanels: () => setSelected([]), place, chooseSource, addAssets, merge, split, showScale, confirmScale, swap,
     travel, replaceDocument,
-    resize: (rows: number, columns: number) => { if (change(() => resizeGrid(document, rows, columns))) setModal(null); },
+    resize: (rows: number, columns: number) => { const applied = change(() => resizeGrid(document, rows, columns)); if (applied) setModal(null); return applied; },
     labels: () => change(() => toggleLabels(document)),
     clear: () => change(() => selected.reduce((current, id) => clearPanel(current, id), document)),
   };

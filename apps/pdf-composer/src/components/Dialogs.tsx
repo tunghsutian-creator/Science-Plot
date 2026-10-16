@@ -1,13 +1,21 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { hasNativeBridge } from '../bridge';
 import { orderedPanels, PT_PER_MM } from '../core/document';
 import type { SourceAsset } from '../core/types';
 import { Modal } from './Modal';
+import { AnchoredPanel } from './ControlPopover';
 import { PagePreview } from './PagePreview';
 import type { Composer } from './useComposer';
 
 function DialogError({ composer }: { composer: Composer }) {
   return composer.notice?.error ? <p className="dialog-error" role="alert">{composer.notice.text}</p> : null;
+}
+
+function SettingsPanel({ title, anchorSelector, children, onClose }: { title: string; anchorSelector: string; children: ReactNode; onClose: () => void }) {
+  const anchor = document.querySelector<HTMLElement>(anchorSelector) ?? document.querySelector<HTMLElement>('.toolbar');
+  return <AnchoredPanel anchor={anchor} title={title} onClose={onClose} className="settings-popover">
+    <div className="popover-heading">{title}</div>{children}</AnchoredPanel>;
 }
 
 function PagePicker({ asset, onPlace, onClose }: { asset: SourceAsset; onPlace: (index: number) => void; onClose: () => void }) {
@@ -31,7 +39,7 @@ function PagePicker({ asset, onPlace, onClose }: { asset: SourceAsset; onPlace: 
 
 function GridDialog({ composer }: { composer: Composer }) {
   const [rows, setRows] = useState(composer.document.grid.rows), [columns, setColumns] = useState(composer.document.grid.columns);
-  return <Modal title="Grid layout" onClose={() => composer.setModal(null)}>
+  return <SettingsPanel title="Grid layout" anchorSelector='button[aria-label="Choose grid template"]' onClose={() => composer.setModal(null)}>
     <p className="dialog-description">60 × 55 mm cells, with no additional outer margin. Changing containers never resizes a source.</p>
     <div className="template-options">{[[2, 2], [3, 2], [2, 3], [3, 3]].map(([cols, count]) => <button key={`${cols}:${count}`}
       className={`template-choice${columns === cols && rows === count ? ' is-selected' : ''}`} aria-pressed={columns === cols && rows === count}
@@ -43,7 +51,7 @@ function GridDialog({ composer }: { composer: Composer }) {
       <p className="dimension-readout">{columns * 60} × {rows * 55} mm</p><DialogError composer={composer} />
       <div className="modal-actions"><button className="button" type="button" onClick={() => composer.setModal(null)}>Cancel</button><button className="button button-primary">Apply grid</button></div>
     </form>
-  </Modal>;
+  </SettingsPanel>;
 }
 
 function ScaleDialog({ composer }: { composer: Composer }) {
@@ -57,7 +65,7 @@ function ScaleDialog({ composer }: { composer: Composer }) {
   const valid = Number.isFinite(percent) && percent >= 0.1 && percent / 100 <= maximum + 0.000001;
   const exactFit = Math.min(1, maximum);
   const fitPercent = (exactFit * 100).toFixed(2);
-  return <Modal title={modal.intent === 'scale' ? 'Scale whole page' : 'This page needs more room'} onClose={() => composer.setModal(null)}>
+  const content = <>
     <p className="dialog-description">{modal.intent === 'scale' ? 'Scaling is uniform and explicit.' : 'Merge cells for a larger container, or explicitly scale the whole page.'} Original whitespace and page proportions are preserved.</p>
     {page ? <p className="source-readout">{source?.name} · {(page.widthPt / PT_PER_MM).toFixed(2)} × {(page.heightPt / PT_PER_MM).toFixed(2)} mm at 100%</p> : null}
     <form onSubmit={(event) => { event.preventDefault(); if (valid) composer.confirmScale(percent / 100); }}>
@@ -74,14 +82,16 @@ function ScaleDialog({ composer }: { composer: Composer }) {
         <button className="button" type="button" onClick={() => composer.setModal(null)}>Cancel</button>
         <button className="button button-primary" disabled={!valid}>{modal.intent === 'split' ? 'Apply scale & split' : 'Apply scale'}</button></div>
     </form>
-  </Modal>;
+  </>;
+  return modal.intent === 'scale' ? <SettingsPanel title="Scale whole page" anchorSelector=".scale-control" onClose={() => composer.setModal(null)}>{content}</SettingsPanel>
+    : <Modal title="This page needs more room" onClose={() => composer.setModal(null)}>{content}</Modal>;
 }
 
 function MoveDialog({ composer }: { composer: Composer }) {
   const [targetId, setTargetId] = useState('');
   if (composer.modal?.kind !== 'move') return null;
   const originId = composer.modal.panelId;
-  return <Modal title="Move or swap figure" onClose={() => composer.setModal(null)}>
+  return <SettingsPanel title="Move or swap figure" anchorSelector=".selection-bar" onClose={() => composer.setModal(null)}>
     <p className="dialog-description">Choose a destination. If it contains a figure, the two sources swap while keeping their explicit scales.</p>
     <label className="select-field">Destination<select aria-label="Destination" value={targetId} onChange={(event) => setTargetId(event.target.value)} autoFocus>
       <option value="">Choose a panel…</option>{orderedPanels(composer.document).filter((panel) => panel.id !== originId).map((panel) => {
@@ -90,7 +100,7 @@ function MoveDialog({ composer }: { composer: Composer }) {
       })}</select></label><DialogError composer={composer} />
     <div className="modal-actions"><button className="button" onClick={() => composer.setModal(null)}>Cancel</button>
       <button className="button button-primary" disabled={!targetId} onClick={() => composer.swap(originId, targetId)}>Move / swap</button></div>
-  </Modal>;
+  </SettingsPanel>;
 }
 
 function ExportDialog({ composer, onExport }: { composer: Composer; onExport: (format: 'pdf' | 'png' | 'tiff', dpi: number) => void }) {
@@ -102,7 +112,7 @@ function ExportDialog({ composer, onExport }: { composer: Composer; onExport: (f
     return asset && page?.pixelWidth ? [{ name: asset.name, effective: (page.dpi ?? 300) / panel.scale, assumed: page.dpiAssumed }] : [];
   });
   const width = composer.document.grid.columns * 60, height = composer.document.grid.rows * 55;
-  return <Modal title="Export figure" onClose={() => composer.setModal(null)}>
+  return <SettingsPanel title="Export figure" anchorSelector='summary[aria-label="More options"]' onClose={() => composer.setModal(null)}>
     <p className="dialog-description">PDF preserves original text, vectors and source resources.{native ? ' PNG and TIFF render the assembled page at your chosen DPI.' : ''}</p>
     <div className="export-form"><label>Format<select aria-label="Format" value={format} onChange={(event) => setFormat(event.target.value as typeof format)}>
       <option value="pdf">PDF · vector</option>{native ? <><option value="png">PNG · raster</option><option value="tiff">TIFF · raster</option></> : null}</select></label>
@@ -115,7 +125,7 @@ function ExportDialog({ composer, onExport }: { composer: Composer; onExport: (f
       {item.effective < (format === 'pdf' ? 300 : dpi) ? ' · below output target' : ''}</p>)}<p>Higher export DPI cannot add detail to a raster source.</p></div> : null}
     <DialogError composer={composer} /><div className="modal-actions"><button className="button" disabled={composer.busy} onClick={() => composer.setModal(null)}>Cancel</button>
       <button className="button button-primary" disabled={composer.busy} onClick={() => onExport(format, dpi)}>{composer.busy ? 'Exporting…' : `Export ${format.toUpperCase()}`}</button></div>
-  </Modal>;
+  </SettingsPanel>;
 }
 
 export function Dialogs({ composer, onExport, onDiscard }: { composer: Composer;

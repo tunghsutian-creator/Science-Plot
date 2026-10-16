@@ -6,7 +6,6 @@ import { Icon } from './components/Icon';
 import { PaperCanvas } from './components/PaperCanvas';
 import { SelectionBar } from './components/SelectionBar';
 import { SourceTray } from './components/SourceTray';
-import { GlassSurface } from './components/GlassSurface';
 import { Toolbar } from './components/Toolbar';
 import { useComposer } from './components/useComposer';
 import { labelFontData, useProjectFiles } from './components/useProjectFiles';
@@ -29,13 +28,14 @@ export default function App() {
       case 'exportOptions': composer.setModal({ kind: 'export' }); break;
       case 'undo': composer.travel('undo'); break;
       case 'redo': composer.travel('redo'); break;
-      case 'grid': composer.setModal({ kind: 'grid' }); break;
+      case 'grid': window.dispatchEvent(new CustomEvent('assembly-control', { detail: 'grid' })); break;
       case 'labels': composer.labels(); break;
       case 'merge': composer.merge(); break;
       case 'split': composer.split(); break;
       case 'scale': composer.showScale(); break;
       case 'move': if (composer.single?.assetId) composer.setModal({ kind: 'move', panelId: composer.single.id }); break;
       case 'clear': composer.clear(); break;
+      case 'deselect': composer.deselectPanels(); break;
       case 'replace': if (composer.single) void files.importFiles(composer.single.id); break;
     }
   }
@@ -44,6 +44,7 @@ export default function App() {
   useLayoutEffect(() => { events.current = { action, modal: composer.modal !== null, busy: composer.busy }; });
 
   useEffect(() => { void bridge.setDocumentState(title, composer.dirty).catch(() => undefined); }, [title, composer.dirty]);
+  useEffect(() => { if (composer.modal) window.dispatchEvent(new Event('assembly-control-close')); }, [composer.modal]);
   useEffect(() => {
     const menu = (event: Event) => {
       const name = (event as CustomEvent<NativeMenuAction>).detail;
@@ -57,7 +58,7 @@ export default function App() {
       const key = event.key.toLowerCase(), command = event.metaKey || event.ctrlKey;
       const name = command ? ({ i: 'import', o: 'open', n: 'new', s: event.shiftKey ? 'saveAs' : 'save',
         e: 'export', z: event.shiftKey ? 'redo' : 'undo' } as Record<string, string>)[key]
-        : event.key === 'Delete' || event.key === 'Backspace' ? 'clear' : null;
+        : event.key === 'Delete' || event.key === 'Backspace' ? 'clear' : event.key === 'Escape' ? 'deselect' : null;
       if (name) { event.preventDefault(); events.current.action(name); }
     };
     window.addEventListener('assembly-menu', menu); window.addEventListener('keydown', shortcut);
@@ -72,20 +73,21 @@ export default function App() {
     }}>
     <style>{`@font-face{font-family:AssemblyLetter;src:url('${labelFontData}') format('truetype');font-display:swap}`}</style>
     <Toolbar title={title} dirty={composer.dirty} zoom={zoom} onZoomChange={setZoom}
+      onGridChange={composer.resize}
       rows={composer.document.grid.rows} columns={composer.document.grid.columns} labels={composer.document.labels.enabled}
       canUndo={composer.history.past.length > 0} canRedo={composer.history.future.length > 0} busy={composer.busy}
       onAction={action} />
     {composer.notice ? <div className={`notice${composer.notice.error ? ' notice-error' : ''}`} role={composer.notice.error ? 'alert' : 'status'}>
       <span>{composer.notice.text}</span><button className="icon-button" aria-label="Dismiss message" onClick={() => composer.setNotice(null)}><Icon name="close" size={14} /></button></div> : null}
     <div className="editor-body">
-      <GlassSurface className="source-tray-shell">
-        <SourceTray assets={composer.document.assets} selectedAssetId={composer.single?.assetId ?? null} busy={composer.busy}
-          onChoose={(asset) => composer.chooseSource(asset)} onImport={() => void files.importFiles()} onOpen={files.openProject}
+      <div className="source-tray-shell">
+        <SourceTray assets={composer.document.assets} selectedAssetId={composer.single?.assetId ?? null} sourcePaths={files.sourcePaths} busy={composer.busy}
+          onChoose={(asset) => composer.chooseSource(asset)} onImport={() => void files.importFiles()} onImportFolder={() => void files.importFolder()} onOpen={files.openProject}
           onDropFiles={(items) => void files.handleDrop(items)} />
-      </GlassSurface>
+      </div>
       <div className="canvas-region"><SelectionBar panels={composer.selectedPanels} busy={composer.busy} onAction={action} />
         <PaperCanvas document={composer.document} selected={composer.selected} busy={composer.busy} zoom={zoom}
-          onSelect={composer.selectPanel} onSwap={composer.swap} onAction={action}
+          onSelect={composer.selectPanel} onDeselect={composer.deselectPanels} onImportToPanel={(panelId) => void files.importFiles(panelId)} onSwap={composer.swap} onAction={action}
           onPlaceSource={(assetId, panelId) => { const asset = composer.document.assets.find((item) => item.id === assetId); if (asset) composer.chooseSource(asset, panelId); }}
           onDropFiles={(items, panelId) => void files.handleDrop(items, panelId)} /></div>
     </div>

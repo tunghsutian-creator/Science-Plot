@@ -34,8 +34,8 @@ function preview(asset: SourceAsset, pageIndex: number, maxPixels: number): Prom
   return entry.result;
 }
 
-export const PagePreview = memo(function PagePreview({ asset, pageIndex, maxPixels = 1000, label = true }: {
-  asset: SourceAsset; pageIndex: number; maxPixels?: number; label?: boolean;
+export const PagePreview = memo(function PagePreview({ asset, pageIndex, maxPixels = 1000, label = true, onReady }: {
+  asset: SourceAsset; pageIndex: number; maxPixels?: number; label?: boolean; onReady?: () => void;
 }) {
   const [result, setResult] = useState<{ key: string; url: string } | null>(null);
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(null);
@@ -47,7 +47,7 @@ export const PagePreview = memo(function PagePreview({ asset, pageIndex, maxPixe
     }).catch((error: unknown) => { if (current) setFailed({ key, message: error instanceof Error ? error.message : 'Preview unavailable.' }); });
     return () => { current = false; };
   }, [asset, pageIndex, maxPixels, key]);
-  if (result?.key === key) return <img className="page-preview" src={result.url} alt={label ? `${asset.name}, page ${pageIndex + 1}` : ''} draggable={false} />;
+  if (result?.key === key) return <img className="page-preview" src={result.url} alt={label ? `${asset.name}, page ${pageIndex + 1}` : ''} draggable={false} onLoad={onReady} />;
   const message = failed?.key === key ? failed.message : '';
   return <span className="preview-unavailable" title={message || 'Rendering page preview…'} role={message ? 'status' : undefined}>
     <Icon name="file" size={24} /><span>{message ? 'Preview unavailable' : 'Rendering preview…'}</span>

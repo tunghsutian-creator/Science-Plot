@@ -4,9 +4,11 @@ import type { SourceAsset } from '../core/types';
 import { Icon } from './Icon';
 import { PagePreview } from './PagePreview';
 
-export function SourceTray({ assets, selectedAssetId, busy, onChoose, onImport, onOpen, onDropFiles }: {
+export function SourceTray({ assets, selectedAssetId, sourcePaths = {}, busy, onChoose, onImport, onImportFolder, onOpen, onDropFiles }: {
   assets: SourceAsset[]; selectedAssetId: string | null; busy: boolean;
   onChoose: (asset: SourceAsset) => void; onImport: () => void; onOpen: () => void;
+  onImportFolder: () => void;
+  sourcePaths?: Record<string, string>;
   onDropFiles: (files: File[]) => void;
 }) {
   const [dropping, setDropping] = useState(false);
@@ -40,19 +42,21 @@ export function SourceTray({ assets, selectedAssetId, busy, onChoose, onImport, 
     <div ref={sourceList} className="source-list" role="region" aria-label="Source pages" tabIndex={assets.length ? 0 : undefined}>
       {assets.map((asset) => <button type="button" key={asset.id}
         className={`source-item${selectedAssetId === asset.id ? ' is-selected' : ''}`}
-        disabled={busy} draggable={!busy} onClick={() => onChoose(asset)} aria-label={`Place ${asset.name}`}
-        aria-pressed={selectedAssetId === asset.id} title={`${asset.name} · ${asset.pages.length} ${asset.pages.length === 1 ? 'page' : 'pages'}${asset.pages[0]?.dpiAssumed ? ' · DPI unknown, 300 dpi assumed' : ''}`}
+        disabled={busy} draggable={!busy} onClick={() => onChoose(asset)} aria-label={`Place ${sourcePaths[asset.id] ?? asset.name}`}
+        aria-pressed={selectedAssetId === asset.id} title={`${sourcePaths[asset.id] ?? asset.name} · ${asset.pages.length} ${asset.pages.length === 1 ? 'page' : 'pages'}${asset.pages[0]?.dpiAssumed ? ' · DPI unknown, 300 dpi assumed' : ''}`}
         onDragStart={(event) => {
           if (busy) { event.preventDefault(); return; }
           event.dataTransfer.setData(SOURCE_DRAG_TYPE, asset.id); event.dataTransfer.effectAllowed = 'copy'; startSourceDrag(asset.id);
         }} onDragEnd={cancelSourceDrag}>
         <span className="source-thumbnail"><PagePreview asset={asset} pageIndex={0} maxPixels={240} label={false} /></span>
         <span className="source-name">{asset.name}</span>
+        {sourcePaths[asset.id] ? <span className="source-origin">{sourcePaths[asset.id].split('/').slice(0, -1).join('/')}</span> : null}
       </button>)}
     </div>
-    <button type="button" className="tray-import" disabled={busy} onClick={onImport} aria-label="Import PDFs"
+    <div className="tray-import-actions"><button type="button" className="tray-import" disabled={busy} onClick={onImport} aria-label="Import PDFs"
       title="Import PDF, PNG or JPEG files, or drop a saved project to reopen it">
       <Icon name="plus" size={23} /><span className="tray-import-label">Import PDFs</span>
-    </button>
+    </button><button type="button" className="tray-import-folder" disabled={busy} onClick={onImportFolder} title="Import supported PDF, PNG and JPEG files from a folder">
+      <Icon name="folder" size={16} /><span>Import folder</span></button></div>
   </aside>;
 }

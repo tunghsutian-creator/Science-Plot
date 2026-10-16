@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { DragEvent, KeyboardEvent, CSSProperties } from 'react';
 import { orderedPanels, panelLetter, panelSizePt, PT_PER_MM } from '../core/document';
 import type { AssemblyDocument, Panel } from '../core/types';
@@ -6,15 +6,21 @@ import { cancelSourceDrag, isActiveSourceDrag, PANEL_DRAG_TYPE, SOURCE_DRAG_TYPE
 import { Icon } from './Icon';
 import { PagePreview } from './PagePreview';
 
-export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, onAction, onPlaceSource, onDropFiles }: {
+export function PaperCanvas({ document, selected, busy, zoom, onSelect, onDeselect, onImportToPanel, onSwap, onAction, onPlaceSource, onDropFiles }: {
   document: AssemblyDocument; selected: string[]; busy: boolean; zoom: string;
   onSelect: (id: string, range: boolean) => void; onSwap: (first: string, second: string) => void;
+  onDeselect: () => void;
+  onImportToPanel: (id: string) => void;
   onAction: (action: string) => void;
   onPlaceSource: (assetId: string, panelId: string) => void;
   onDropFiles: (files: File[], panelId?: string) => void;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
+  const placements = useRef(new Map<string, HTMLSpanElement>());
+  const previousSources = useRef(new Map<string, string>());
+  const pendingPlacements = useRef(new Set<string>());
+  const liveAnimations = useRef(new Set<Animation>());
   const [available, setAvailable] = useState({ width: 1000, height: 720 });
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -28,6 +34,40 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
   const width = zoom === 'fit' ? fit : widthMm * 96 / 25.4 * Number(zoom) / 100;
   const height = width * heightMm / widthMm;
 
+  useLayoutEffect(() => {
+    const current = new Map(document.panels.map((panel) => [panel.id, `${panel.assetId ?? ''}:${panel.pageIndex}`]));
+    for (const panel of document.panels) {
+      if (panel.assetId && previousSources.current.has(panel.id)
+        && current.get(panel.id) !== previousSources.current.get(panel.id)) {
+        pendingPlacements.current.add(panel.id);
+      }
+      if (!panel.assetId) pendingPlacements.current.delete(panel.id);
+    }
+    for (const id of pendingPlacements.current) if (!current.has(id)) pendingPlacements.current.delete(id);
+    previousSources.current = current;
+  }, [document.panels]);
+  useEffect(() => {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const animations = liveAnimations.current;
+    const stop = () => { if (reduced.matches) for (const animation of animations) animation.cancel(); };
+    reduced.addEventListener('change', stop);
+    return () => { reduced.removeEventListener('change', stop); for (const animation of animations) animation.cancel(); };
+  }, []);
+
+  function placementReady(id: string) {
+    if (!pendingPlacements.current.delete(id) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const element = placements.current.get(id);
+    if (!element) return;
+    // Animate only after the actual PDF preview image has loaded. Never blur,
+    // rescale or alter the original page, its physical layout or export bytes.
+    const animation = element.animate([
+      { transform: 'translate(-50%, calc(-50% + 6px))', opacity: 0.92 },
+      { transform: 'translate(-50%, -50%)', opacity: 1 },
+    ], { duration: 220, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    liveAnimations.current.add(animation);
+    void animation.finished.catch(() => undefined).finally(() => liveAnimations.current.delete(animation));
+  }
+
   useEffect(() => {
     const element = viewport.current;
     if (!element) return;
@@ -39,11 +79,22 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
   }, [menu]);
   useEffect(() => {
     const cancel = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') { setDragging(null); setDropTarget(null); setMenu(null); cancelSourceDrag(); }
+      if (event.key === 'Escape') {
+        if (menu) { event.preventDefault(); event.stopImmediatePropagation(); }
+        setDragging(null); setDropTarget(null); setMenu(null); cancelSourceDrag();
+      }
     };
-    window.addEventListener('keydown', cancel);
-    return () => window.removeEventListener('keydown', cancel);
-  }, []);
+    window.addEventListener('keydown', cancel, true);
+    return () => window.removeEventListener('keydown', cancel, true);
+  }, [menu]);
+  useEffect(() => {
+    if (!menu) return;
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setMenu(null);
+    };
+    window.document.addEventListener('pointerdown', outside, true);
+    return () => window.document.removeEventListener('pointerdown', outside, true);
+  }, [menu]);
 
   function startDrag(event: DragEvent, panel: Panel) {
     if (busy || !panel.assetId) { event.preventDefault(); return; }
@@ -62,7 +113,7 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
     if (target) { buttons.current.get(target.id)?.focus(); onSelect(target.id, event.shiftKey); }
   }
 
-  return <main ref={viewport} className="workspace" aria-label="Figure layout canvas" onClick={() => setMenu(null)}
+  return <main ref={viewport} className="workspace" aria-label="Figure layout canvas" onClick={() => { setMenu(null); onDeselect(); }}
     onDragOver={(event) => {
       if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = busy ? 'none' : 'copy'; }
     }} onDrop={(event) => {
@@ -82,7 +133,7 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
             style={style} disabled={busy} aria-pressed={selected.includes(panel.id)}
             aria-label={`Panel row ${panel.row + 1}, column ${panel.column + 1}${asset ? `, ${asset.name}, page ${panel.pageIndex + 1}` : ', empty'}`}
             data-panel-id={panel.id} data-row={panel.row} data-column={panel.column} data-asset-id={panel.assetId ?? ''}
-            onClick={(event) => { event.stopPropagation(); setMenu(null); onSelect(panel.id, event.shiftKey); }}
+            onClick={(event) => { event.stopPropagation(); setMenu(null); onSelect(panel.id, event.shiftKey); if (!asset && !event.shiftKey) onImportToPanel(panel.id); }}
             onKeyDown={(event) => cellKey(event, panel)} draggable={Boolean(asset) && !busy}
             onDragStart={(event) => startDrag(event, panel)} onDragEnd={() => { setDragging(null); setDropTarget(null); }}
             onDragOver={(event) => {
@@ -107,9 +158,9 @@ export function PaperCanvas({ document, selected, busy, zoom, onSelect, onSwap, 
               const bounds = viewport.current?.getBoundingClientRect();
               setMenu({ x: Math.min(event.clientX - (bounds?.left ?? 0), available.width - 180), y: Math.min(event.clientY - (bounds?.top ?? 0), available.height - 200) });
             }}>
-            {asset && page ? <span className="source-placement" style={{ width: `${page.widthPt * panel.scale / size.width * 100}%`,
-              height: `${page.heightPt * panel.scale / size.height * 100}%` }}><PagePreview asset={asset} pageIndex={panel.pageIndex} /></span> :
-              <span className="empty-panel-hint"><Icon name="plus" size={22} /><span>Drop PDF</span></span>}
+            {asset && page ? <span className="source-placement" ref={(element) => { if (element) placements.current.set(panel.id, element); else placements.current.delete(panel.id); }} style={{ width: `${page.widthPt * panel.scale / size.width * 100}%`,
+              height: `${page.heightPt * panel.scale / size.height * 100}%` }}><PagePreview asset={asset} pageIndex={panel.pageIndex} onReady={() => placementReady(panel.id)} /></span> :
+              <span className="empty-panel-hint"><Icon name="plus" size={22} /><span>Choose or drop file</span></span>}
             {asset && document.labels.enabled ? <span className="panel-letter" style={{
               left: `${document.labels.insetMm / (panel.columnSpan * document.grid.cellWidthMm) * 100}%`,
               top: `${document.labels.insetMm / (panel.rowSpan * document.grid.cellHeightMm) * 100}%`,
