@@ -113,7 +113,8 @@ npm run dev
 For a production build, use `npm run build` and serve `dist/` over a local HTTP
 server (`npm exec vite preview -- --host 127.0.0.1`). PDFium's bundled WASM is
 loaded from that same local origin; opening `dist/index.html` directly with a
-`file:` URL is not the browser delivery. No public deployment is required.
+`file:` URL is also supported by the self-contained build and checked separately.
+No public deployment is required.
 
 Package checks and actual Edge acceptance:
 
@@ -127,7 +128,8 @@ node --import tsx tests/browser-edge.ts
 
 The Edge test requires an installed Microsoft Edge executable; it does not claim
 that Playwright Chromium is Edge. Override its default Mac executable with
-`FIGURE_ASSEMBLY_EDGE_EXECUTABLE`, and send evidence outside the repository with
+`FIGURE_ASSEMBLY_EDGE_EXECUTABLE` if needed; otherwise Playwright uses its
+`msedge` channel on the current platform. Send evidence outside the repository with
 `FIGURE_ASSEMBLY_EDGE_OUT`. It starts a loopback static server, uses actual file
 inputs/downloads, checks PDF preview ink and publication PDF resources, and
 refuses unexpected external requests. The older browser harness separately tests
@@ -158,7 +160,8 @@ The dedicated **Independent PDF compositor** workflow owns this app's CI.
 Research Plots' scientific suite and its incomplete private access-capture audit
 remain separate; this app's PASS cannot close those historical limitations.
 
-Code inherits the repository GPLv2 license. Runtime PDF libraries use MIT/Zlib/
-0BSD licenses and the bundled font uses SIL OFL 1.1. Build-generated notices
-are included in the app. PyMuPDF is not an application dependency; any local
+Code inherits the repository GPLv2 license. The PDF composition libraries use
+MIT/Zlib/0BSD licenses, the PDFium wrapper uses MIT with PDFium's complete upstream
+license notice retained, the pinned liquid-glass engine uses MIT, and the bundled
+font uses SIL OFL 1.1. Build-generated notices are included in the app. PyMuPDF is not an application dependency; any local
 independent development comparison using it is evidence only.

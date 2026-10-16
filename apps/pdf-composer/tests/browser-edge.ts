@@ -4,7 +4,9 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { once } from 'node:events';
+import { pathToFileURL } from 'node:url';
 import fontkit from '@pdf-lib/fontkit';
+import UPNG from '@pdf-lib/upng';
 import { decodePDFRawStream, PDFDict, PDFDocument, PDFName, PDFRawStream, rgb } from 'pdf-lib';
 import { chromium, type Download, type Locator } from 'playwright';
 import type { AssemblyDocument } from '../src/core/types';
@@ -13,10 +15,10 @@ import type { AssemblyDocument } from '../src/core/types';
 // WebKit bridge or replaces the PDF preview, importer, saver or PDF engine.
 const out = resolve(process.env.FIGURE_ASSEMBLY_EDGE_OUT ?? 'test-results/edge');
 const dist = resolve(process.env.FIGURE_ASSEMBLY_EDGE_DIST ?? 'dist');
-const executablePath = process.env.FIGURE_ASSEMBLY_EDGE_EXECUTABLE
-  ?? '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge';
+const executablePath = process.env.FIGURE_ASSEMBLY_EDGE_EXECUTABLE;
+const domDiagnostic = process.env.FIGURE_ASSEMBLY_EDGE_DOM_ONLY === '1';
 await mkdir(out, { recursive: true });
-await access(executablePath);
+if (executablePath) await access(executablePath);
 await access(join(dist, 'index.html')).catch(() => { throw new Error('Build the app before running tests/browser-edge.ts.'); });
 const fontBytes = await readFile(new URL('../assets/NotoSans-Regular.ttf', import.meta.url));
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -62,6 +64,7 @@ const mime: Record<string, string> = { '.html': 'text/html', '.js': 'text/javasc
 const server = createServer(async (request, response) => {
   try {
     const pathname = decodeURIComponent(new URL(request.url ?? '/', 'http://localhost').pathname);
+    if (pathname === '/favicon.ico') { response.writeHead(204).end(); return; }
     const path = resolve(dist, `.${pathname === '/' ? '/index.html' : pathname}`);
     if (path !== dist && !path.startsWith(`${dist}${sep}`)) { response.writeHead(403).end(); return; }
     response.setHeader('Content-Type', mime[extname(path)] ?? 'application/octet-stream');
@@ -73,34 +76,50 @@ await once(server, 'listening');
 const address = server.address();
 assert.ok(address && typeof address !== 'string');
 const origin = `http://127.0.0.1:${address.port}`;
-const browser = await chromium.launch({ executablePath, headless: true });
-const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1463, height: 1075 }, deviceScaleFactor: 1 });
+console.log('Edge acceptance: launching actual Microsoft Edge.');
+const browser = await chromium.launch({ ...(executablePath ? { executablePath } : { channel: 'msedge' }), headless: true });
+console.log('Edge acceptance: browser launched.');
+const deadline = setTimeout(() => { console.error('Edge acceptance exceeded its bounded 120-second deadline.'); void browser.close(); }, 120000);
+const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1463, height: 1075 }, deviceScaleFactor: 1,
+  ...(domDiagnostic ? { reducedMotion: 'reduce' as const } : {}) });
 const page = await context.newPage();
+console.log('Edge acceptance: page created.');
 page.setDefaultTimeout(15000);
+const commandKey = process.platform === 'darwin' ? 'Meta' : 'Control';
 const errors: string[] = [], warnings: string[] = [], externalRequests: string[] = [], checks: string[] = [], screenshots: string[] = [];
+const requests: { method: string; pathname: string; body: boolean }[] = [];
 let glassProof: unknown, privateAcceptance: unknown = { status: 'not supplied', scope: 'Synthetic controls do not certify original-data acceptance.' };
 page.on('pageerror', (error) => errors.push(error.message));
 page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); else if (message.type() === 'warning') warnings.push(message.text()); });
 await context.route('**/*', async (route) => {
   const url = route.request().url();
+  if (/^https?:/.test(url)) requests.push({ method: route.request().method(), pathname: new URL(url).pathname, body: route.request().postData() !== null });
   if (/^https?:/.test(url) && new URL(url).origin !== origin) { externalRequests.push(url); await route.abort(); }
   else await route.continue();
 });
 const cell = (row: number, column: number) => page.locator(`[data-row="${row}"][data-column="${column}"]`);
 const occupied = async (row: number, column: number) => Boolean(await cell(row, column).getAttribute('data-asset-id'));
 const idle = () => page.locator('.app-shell[aria-busy="false"]').waitFor();
-async function shot(name: string) { await page.screenshot({ path: join(out, name), animations: 'disabled' }); screenshots.push(name); }
+async function shot(name: string) {
+  console.log(`Edge acceptance: screenshot ${name}.`);
+  if (domDiagnostic) return;
+  await page.screenshot({ path: join(out, name), animations: 'disabled', timeout: 10000 });
+  screenshots.push(name);
+}
 async function importPicker(files: Fixture[]) {
   const choice = page.waitForEvent('filechooser');
-  await page.keyboard.press('Meta+i');
+  await page.keyboard.press(`${commandKey}+i`);
   await (await choice).setFiles(files.map((file) => file.path));
   await idle();
 }
 async function sourceDrag(name: string, target: Locator) { await page.getByRole('button', { name: `Place ${name}`, exact: true }).dragTo(target); }
 async function panelAction(name: string) {
   const button = page.getByRole('button', { name, exact: true });
-  if (!await button.isVisible()) await page.getByLabel('More panel actions', { exact: true }).click();
-  await button.click();
+  if (await button.isVisible()) await button.click();
+  else {
+    await page.locator('.figure-panel.is-selected').first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: name === 'Split' ? 'Split cells' : 'Move / swap…', exact: true }).click();
+  }
 }
 async function externalDrop(file: { name: string; bytes: Uint8Array }, target: Locator) {
   const transfer = await page.evaluateHandle(({ name, bytes }) => {
@@ -130,16 +149,17 @@ async function savedProject(name: string): Promise<{ bytes: Uint8Array; document
 }
 async function assertPreview(locator: Locator) {
   await locator.locator('img.page-preview').first().waitFor();
-  const ink = await locator.locator('img.page-preview').first().evaluate(async (image) => {
+  const preview = await locator.locator('img.page-preview').first().evaluate(async (image) => {
     const element = image as HTMLImageElement;
     await element.decode();
-    const canvas = document.createElement('canvas'); canvas.width = element.naturalWidth; canvas.height = element.naturalHeight;
-    const paint = canvas.getContext('2d')!; paint.drawImage(element, 0, 0);
-    const pixels = paint.getImageData(0, 0, canvas.width, canvas.height).data;
-    let nonwhite = 0;
-    for (let index = 0; index < pixels.length; index += 4) if (pixels[index + 3] > 0 && Math.min(pixels[index], pixels[index + 1], pixels[index + 2]) < 200) nonwhite++;
-    return { width: canvas.width, height: canvas.height, nonwhite };
+    return { src: element.currentSrc, width: element.naturalWidth, height: element.naturalHeight };
   });
+  assert.match(preview.src, /^data:image\/png;base64,/);
+  const png = UPNG.decode(Uint8Array.from(Buffer.from(preview.src.split(',')[1], 'base64')).buffer);
+  const pixels = new Uint8Array(UPNG.toRGBA8(png)[0]);
+  let nonwhite = 0;
+  for (let index = 0; index < pixels.length; index += 4) if (pixels[index + 3] > 0 && Math.min(pixels[index], pixels[index + 1], pixels[index + 2]) < 200) nonwhite++;
+  const ink = { width: preview.width, height: preview.height, nonwhite };
   assert.ok(ink.width > 20 && ink.height > 20 && ink.nonwhite > 20, `Real PDF preview must contain visible ink: ${JSON.stringify(ink)}`);
 }
 async function fonts(pdf: PDFDocument): Promise<string[]> {
@@ -222,7 +242,7 @@ async function privateProjectAcceptance(path: string) {
   const expected = JSON.parse(original.toString('utf8')) as AssemblyDocument;
   for (const asset of expected.assets) assert.equal(sha256(Buffer.from(asset.bytesBase64, 'base64')), asset.sha256);
   await page.setViewportSize({ width: 1463, height: 1075 });
-  await page.keyboard.press('Meta+n');
+  await page.keyboard.press(`${commandKey}+n`);
   await externalDrop({ name: 'Original-data.figureassembly', bytes: original }, page.locator('.workspace'));
   assert.equal(await page.locator('.source-item').count(), expected.assets.length);
   assert.equal(await page.locator('.has-source').count(), expected.panels.filter((panel) => panel.assetId).length);
@@ -231,8 +251,10 @@ async function privateProjectAcceptance(path: string) {
   const dismiss = page.getByRole('button', { name: 'Dismiss message', exact: true });
   if (await dismiss.isVisible()) await dismiss.click();
   await shot('04-private-edge-1463x1075.png');
-  await page.locator('.toolbar').screenshot({ path: join(out, 'private-toolbar.png'), animations: 'disabled' });
-  await page.locator('.source-tray-shell').screenshot({ path: join(out, 'private-source-tray.png'), animations: 'disabled' });
+  if (!domDiagnostic) {
+    await page.locator('.toolbar').screenshot({ path: join(out, 'private-toolbar.png'), animations: 'disabled', timeout: 10000 });
+    await page.locator('.source-tray-shell').screenshot({ path: join(out, 'private-source-tray.png'), animations: 'disabled', timeout: 10000 });
+  }
   const saved = await savedProject('private-reopened.figureassembly');
   assert.deepEqual(saved.document, expected);
   const exported = await download(() => page.getByRole('button', { name: 'Export PDF', exact: true }).click(), 'private-publication.pdf');
@@ -249,14 +271,38 @@ async function privateProjectAcceptance(path: string) {
   assert.equal(sha256(await readFile(path)), originalHash, 'Authorized original project is untouched.');
   return { status: 'passed', originalProjectSha256: originalHash, assetCount: expected.assets.length,
     sourceHashes: expected.assets.map(({ sha256 }) => sha256), exportSha256: sha256(exported),
-    screenshots: ['04-private-edge-1463x1075.png', 'private-toolbar.png', 'private-source-tray.png'],
+    screenshots: domDiagnostic ? [] : ['04-private-edge-1463x1075.png', 'private-toolbar.png', 'private-source-tray.png'],
     scope: 'Actual authorized portable project opened, previews inspected for ink, original bytes+hashes and exact layout preserved on real download, publication dimensions/font resources verified. No raw package or PDF uploaded.' };
 }
 
+async function fileDeliverySmoke() {
+  const direct = await context.newPage();
+  direct.on('pageerror', (error) => errors.push(`file delivery: ${error.message}`));
+  try {
+    await direct.goto(pathToFileURL(join(dist, 'index.html')).href);
+    await direct.getByRole('button', { name: 'Export PDF', exact: true }).waitFor();
+    const choice = direct.waitForEvent('filechooser');
+    await direct.keyboard.press(`${commandKey}+i`);
+    await (await choice).setFiles(ordinary[0].path);
+    await direct.locator('.app-shell[aria-busy="false"]').waitFor();
+    await assertPreview(direct.getByRole('button', { name: `Place ${ordinary[0].name}`, exact: true }));
+    if (!domDiagnostic) await direct.screenshot({ path: join(out, 'file-delivery-edge.png'), animations: 'disabled', timeout: 10000 });
+    return { status: 'passed', sourceSha256: ordinary[0].sha256, scope: 'Actual built file:// entry imports original PDF and renders nonwhite bundled PDFium preview, with no local HTTP server or remote renderer.' };
+  } finally { await direct.close(); }
+}
+
 try {
+  await page.goto('about:blank');
+  if (!domDiagnostic) {
+    await page.screenshot({ path: join(out, 'edge-about-blank.png'), timeout: 5000 });
+    console.log('Edge acceptance: about:blank screenshot succeeded.');
+  }
   await page.goto(origin);
+  console.log('Edge acceptance: built page navigated.');
   assert.match(await page.title(), /Figure Assembly/);
+  console.log('Edge acceptance: title read.');
   const agent = await page.evaluate(() => navigator.userAgent);
+  console.log('Edge acceptance: user agent read.');
   assert.match(agent, /Edg\//, 'This acceptance must use actual Microsoft Edge.');
   assert.equal(await page.evaluate(() => Boolean(window.webkit?.messageHandlers?.assembly)), false);
   await page.getByRole('button', { name: 'Export PDF', exact: true }).waitFor();
@@ -264,10 +310,13 @@ try {
   assert.equal(await page.locator('.source-item').count(), 0);
   assert.equal(await page.locator('footer.status-bar, .source-rail').count(), 0);
   assert.equal(await page.locator('vite-error-overlay, nextjs-portal').count(), 0);
+  console.log('Edge acceptance: identity/blank checks passed; fonts:', await page.evaluate(() => document.fonts.status));
   await shot('01-empty-edge-1463x1075.png');
   checks.push('Actual Microsoft Edge, no native bridge, meaningful blank3×2 app, no framework overlay, no old left rail/footer.');
-  glassProof = await proveRefraction();
-  checks.push('Actual Edge SVG displacement changes diagnostic pixels; compact groups have nonzero maps and clear foreground, wide tray has no displacement URL.');
+  if (!domDiagnostic) {
+    glassProof = await proveRefraction();
+    checks.push('Actual Edge SVG displacement changes diagnostic pixels; compact groups have nonzero maps and clear foreground, wide tray has no displacement URL.');
+  } else glassProof = { status: 'blocked', reason: 'Explicit DOM-only diagnosis while actual Edge about:blank screenshots time out; pixel refraction proof remains required.' };
 
   await importPicker([multipage, oversized, rounded, ...ordinary]);
   assert.equal(await page.locator('.source-item').count(), 11);
@@ -340,7 +389,7 @@ try {
   await writeFile(join(out, 'desktop-layout.json'), JSON.stringify(metrics, null, 2));
   checks.push('Horizontal tray scrolls while import remains visible; top zoom changes only the view; no selection-bar/paper overlap at approved1463×1075viewport.');
 
-  await page.keyboard.press('Meta+n');
+  await page.keyboard.press(`${commandKey}+n`);
   await page.getByRole('heading', { name: 'Keep your changes?' }).waitFor();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.equal(await page.locator('.has-source').count(), 4);
@@ -374,7 +423,7 @@ try {
   await idle(); await checkExport(exported, saved.document);
   checks.push('Real publication PDF download has exact120×110mmmedia, one Form per complete source, original font byte streams, text operators and thin vector paths.');
 
-  await page.keyboard.press('Meta+n');
+  await page.keyboard.press(`${commandKey}+n`);
   await page.getByRole('heading', { name: 'Keep your changes?' }).waitFor();
   await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
   assert.equal(await page.locator('.source-item').count(), 0);
@@ -410,24 +459,32 @@ try {
   assert.ok(reducedMotion.transitions.every((duration) => duration.split(',').every((value) => Number.parseFloat(value) <= 0.02)), 'Reduced motion disables animated button travel.');
   await writeFile(join(out, 'reduced-motion.json'), JSON.stringify(reducedMotion, null, 2));
   checks.push('Actual Edge reduced-motion media preference disables animated controls.');
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  if (!domDiagnostic) await page.emulateMedia({ reducedMotion: 'no-preference' });
   if (process.env.FIGURE_ASSEMBLY_PRIVATE_PROJECT) {
     privateAcceptance = await privateProjectAcceptance(process.env.FIGURE_ASSEMBLY_PRIVATE_PROJECT);
     checks.push('Authorized original-data portable project opens in real Edge, previews render, exact originals/layout survive download, publication size/fonts retained.');
   }
+  const fileDelivery = await fileDeliverySmoke();
+  checks.push('Built file:// delivery independently imports an original PDF and renders bundled PDFium preview without a local server.');
   assert.deepEqual(externalRequests, []);
+  assert.ok(requests.every((request) => /^(GET|HEAD)$/.test(request.method) && !request.body), 'No application data upload, including to the loopback server.');
   assert.deepEqual(errors, []);
-  const result = { status: 'passed', browser: 'Actual Microsoft Edge; Browser plugin not available; regular Playwright fallback', executablePath,
+  const status = domDiagnostic ? 'blocked' : 'passed';
+  const result = { status, screenshotGate: domDiagnostic ? 'blocked: explicit DOM-only diagnosis does not satisfy screenshot acceptance' : 'passed', browser: 'Actual Microsoft Edge; Browser plugin not available; regular Playwright fallback', executablePath,
     version: browser.version(), userAgent: agent, origin, viewport: { width: 1463, height: 1075 }, nativeBridge: false,
-    checks, errors, warnings, externalRequests, screenshots, glassProof, privateAcceptance, sourceHashes: [multipage, oversized, rounded, ...ordinary].map(({ name, sha256 }) => ({ name, sha256 })),
+    checks, errors, warnings, externalRequests, requests, screenshots, glassProof, privateAcceptance, fileDelivery,
+    diagnosticPreference: domDiagnostic ? 'reduced motion; SVG engine accessibility gate is off, normal-motion visual acceptance remains BLOCKED' : null,
+    sourceHashes: [multipage, oversized, rounded, ...ordinary].map(({ name, sha256 }) => ({ name, sha256 })),
     exportSha256: sha256(exported), projectSha256: sha256(saved.bytes) };
   await writeFile(join(out, 'result.json'), JSON.stringify(result, null, 2));
-  console.log(JSON.stringify({ status: 'passed', checks: checks.length, output: out, version: browser.version() }));
+  console.log(JSON.stringify({ status, checks: checks.length, output: out, version: browser.version() }));
+  if (domDiagnostic) process.exitCode = 2;
 } catch (error) {
   await shot('failure.png').catch(() => undefined);
   await writeFile(join(out, 'result.json'), JSON.stringify({ status: 'failed', completed: checks, error: String(error), errors, warnings, externalRequests, screenshots }, null, 2));
   throw error;
 } finally {
+  clearTimeout(deadline);
   await browser.close();
   await new Promise<void>((done) => server.close(() => done()));
 }

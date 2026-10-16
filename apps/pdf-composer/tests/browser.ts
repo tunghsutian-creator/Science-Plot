@@ -74,8 +74,11 @@ const queueImport = async (file: ImportedFile) => page.evaluate((value) => { win
 const waitIdle = () => page.locator('.app-shell[aria-busy="false"]').waitFor();
 const panelAction = async (name: string) => {
   const button = page.getByRole('button', { name, exact: true });
-  if (!await button.isVisible()) await page.getByLabel('More panel actions', { exact: true }).click();
-  await button.click();
+  if (await button.isVisible()) await button.click();
+  else {
+    await page.locator('.figure-panel.is-selected').first().click({ button: 'right' });
+    await page.getByRole('menuitem', { name: name === 'Split' ? 'Split cells' : 'Move / swap…', exact: true }).click();
+  }
 };
 
 try {
