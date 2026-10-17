@@ -188,7 +188,6 @@ STUDIO_PROJECT_REGISTRY_TYPE_OWNER = ChangedOwner(
 
 WORKFLOW_EXPORT_FORMAT_TYPE_PATHS = frozenset(
     {
-        "src/sciplot_core/workflow/bundle_exports.py",
         "src/sciplot_core/workflow/auto_split.py",
         "src/sciplot_core/workflow/dma_temperature_bundle.py",
         "src/sciplot_core/workflow/impact_bundle.py",

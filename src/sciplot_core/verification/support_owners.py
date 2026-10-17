@@ -1,6 +1,16 @@
-"""Changed owners for documentation and vendored native build support."""
+"""Changed owners for documentation, packaging and supporting workflow helpers."""
 
 from sciplot_core.verification.owner_model import ChangedOwner
+from sciplot_core.verification.type_gate_owners import WORKFLOW_EXPORT_FORMAT_TYPE_OWNER
+
+WORKFLOW_BUNDLE_EXPORT_OWNER = ChangedOwner(
+    owner_id="workflow_bundle_exports",
+    exact_paths=frozenset({"src/sciplot_core/workflow/bundle_exports.py"}),
+    pytest_targets=WORKFLOW_EXPORT_FORMAT_TYPE_OWNER.pytest_targets,
+    handoff_gates=WORKFLOW_EXPORT_FORMAT_TYPE_OWNER.handoff_gates,
+    final_milestone_gates=WORKFLOW_EXPORT_FORMAT_TYPE_OWNER.final_milestone_gates,
+    release_gates=WORKFLOW_EXPORT_FORMAT_TYPE_OWNER.release_gates,
+)
 
 WHEEL_DISTRIBUTION_OWNER = ChangedOwner(
     owner_id="wheel_distribution",

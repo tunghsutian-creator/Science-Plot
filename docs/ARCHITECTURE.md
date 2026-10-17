@@ -1053,6 +1053,8 @@ removed from distribution dependency discovery without uninstalling local
 packages. Tests retain their complete node/parameter set and scientific/security
 assertions; only an uncalled readiness-test helper is removed, with the changed
 test-source bytes rebound in the preliminary corpus inventory.
+The untyped workflow export helper has an exact changed owner that reuses the
+workflow export regressions; the strict type-path sets remain unchanged.
 
 Readiness registry freshness covers rule declarations and render-request policy,
 not current implementation bytes or environment identity. Historical owner

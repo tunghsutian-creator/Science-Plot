@@ -11,7 +11,7 @@ from sciplot_core.verification.plot_owners import PLOT_OWNER, TYPED_INTENT_OWNER
 from sciplot_core.verification.project_integrity_owners import PROJECT_INTEGRITY_OWNERS
 from sciplot_core.verification.project_revision_owners import PROJECT_REVISION_OWNERS
 from sciplot_core.verification.rheology_tts_owner import RHEOLOGY_TTS_OWNER
-from sciplot_core.verification.support_owners import DOCUMENTATION_OWNER, SCIENTIFIC_TEXT_OWNER, VEUSZ_NATIVE_BUILD_OWNER, WHEEL_DISTRIBUTION_OWNER
+from sciplot_core.verification.support_owners import DOCUMENTATION_OWNER, SCIENTIFIC_TEXT_OWNER, VEUSZ_NATIVE_BUILD_OWNER, WHEEL_DISTRIBUTION_OWNER, WORKFLOW_BUNDLE_EXPORT_OWNER
 from sciplot_core.verification.task_control_owners import TASK_CONTROL_OWNERS
 from sciplot_core.verification.terminal_owners import GENERIC_TERMINAL_PREPARATION_OWNER
 from sciplot_core.verification.type_gate_owners import (
@@ -38,6 +38,7 @@ CHANGED_OWNERS = (
     PLOT_OWNER,
     TYPED_INTENT_OWNER,
     DOCUMENTATION_OWNER,
+    WORKFLOW_BUNDLE_EXPORT_OWNER,
     ChangedOwner(
         owner_id="validated_readiness_registry",
         path_prefixes=("src/sciplot_core/readiness/",),
