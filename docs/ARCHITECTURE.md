@@ -30,6 +30,15 @@ raw files + hashes
 - versioned policy and request contracts define constraints;
 - QA reports only checks it actually performs.
 
+State authority and renderer choice are separate. `PlotService` installs the
+Veusz backend router; `ManagedVeuszCompiler` still compiles PlotIR into
+`document.vsz`, and native inspection, canvas editing and PDF/TIFF export use
+Veusz Documents. A Managed VSZ is rebuildable, whereas a Legacy VSZ remains the
+complete visual authority. Neither is an unused file format. The independent
+PDF composer consumes already-rendered pages and does not replace this plotting
+backend. Removing VSZ would require a separately approved rendering, editing,
+scientific-QA and existing-project migration contract.
+
 Frequency response completion belongs to `semantic_sources/rheology_frequency_metrics.py`:
 instrument, confirmed-column and three-header workbook routes share the original
 modulus/positive-frequency derivation and record units/provenance. The frequency
@@ -1027,6 +1036,23 @@ uses a named typed-provider port, retaining boundary aliases and identical error
 behavior. The template validator shares its catalog; the environment factory
 shares its provider owner while public imports and absent-provider behavior stay
 the same.
+
+The unused `studio_core.document_archive` module and private
+`semantic_sources.series_labels._constant_sample_label` helper are retired.
+Manual-edit preservation remains in the live figure-set transaction in
+`figure_set_storage`, including backup hashes, history and rollback; the other
+sample-label helpers retain their existing reader callers. The retired source
+paths remain classified by their existing verification owners so a deletion
+cannot bypass the changed-file guard. Worker entrypoints, registered CLI modes,
+public compatibility ports and persisted implementation references are retained.
+
+The archive module's orphaned generated-hash lookup and unused workflow metric
+and figure-style aliases are also retired; live transaction and rendering owners
+retain their implementations. The unused `statsmodels` base requirement is
+removed from distribution dependency discovery without uninstalling local
+packages. Tests retain their complete node/parameter set and scientific/security
+assertions; only an uncalled readiness-test helper is removed, with the changed
+test-source bytes rebound in the preliminary corpus inventory.
 
 Readiness registry freshness covers rule declarations and render-request policy,
 not current implementation bytes or environment identity. Historical owner

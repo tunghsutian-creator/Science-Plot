@@ -201,6 +201,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/semantic_sources/rheology_temperature_domain.py",
                 "src/sciplot_core/semantic_sources/registered_paired_curve_transform.py",
                 "src/sciplot_core/semantic_sources/scientific_transform.py",
+                "src/sciplot_core/semantic_sources/series_labels.py",
                 "src/sciplot_core/semantic_sources/transform_contract_values.py",
                 "src/sciplot_core/semantic_sources/stress_relaxation_contract.py",
                 "src/sciplot_core/semantic_sources/stress_relaxation_evidence.py",
@@ -345,6 +346,7 @@ CHANGED_OWNERS = (
         exact_paths=frozenset(
             {
                 "src/sciplot_core/studio.py",
+                "src/sciplot_core/studio_core/document_archive.py",
                 "src/sciplot_core/studio_core/figure_set_storage.py",
                 "src/sciplot_core/studio_core/guide_contracts.py",
                 "src/sciplot_core/studio_core/persistence.py",

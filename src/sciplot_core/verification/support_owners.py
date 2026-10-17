@@ -50,6 +50,7 @@ DOCUMENTATION_OWNER = ChangedOwner(
             "OLD_RENDERING_CONTRACT.md",
             "visual_drift_report.md",
             "README.md",
+            "skill/agents/openai.yaml",
             "skill/references/external-control.md",
             "skill/references/advanced-workflows.md",
             "skill/references/saved-figure-edit.md",

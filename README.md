@@ -163,6 +163,13 @@ intent; theme edits preserve scientific identity. Fixed-file external scientific
 executors carry interpreter/script hashes and provenance. Unknown manual Veusz
 changes block rather than enter the canonical document.
 
+You can create, edit and export through the AI assistant and the SciPlot canvas
+without opening a VSZ file yourself. SciPlot still uses Veusz internally:
+ManagedPlot compiles its authoritative document into VSZ for native rendering,
+while a LegacyPlot keeps its saved VSZ as the complete visual baseline. VSZ is
+therefore still part of the current project and editable delivery; a rebuildable
+Managed artifact does not mean the rendering backend has been removed.
+
 New Managed native builds are saved in an owned staging directory, audited and
 previewed before the complete VSZ is published without replacing an existing
 file. An interrupted save can leave diagnostic staging files; retry never
@@ -283,7 +290,7 @@ Each delivery includes the figure and the files needed to revisit it:
 | --- | --- |
 | **Vector PDF** | Manuscripts, presentations, and crisp scaling |
 | **300 dpi TIFF** | Submission workflows that require raster figures |
-| **Editable VSZ** | Further refinement in SciPlot or Veusz, with plotting data embedded |
+| **Editable VSZ** | Native source for SciPlot and optional advanced Veusz editing, with plotting data embedded |
 | **Plotting CSVs** | Inspecting and reusing the source-derived data behind the figure |
 
 Outputs are saved beside your source data in `SOURCE_SciPlot/` by default.
