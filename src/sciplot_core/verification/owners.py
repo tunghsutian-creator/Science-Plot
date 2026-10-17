@@ -47,12 +47,14 @@ CHANGED_OWNERS = (
                 "tests/test_readiness_registry_merge.py",
                 "tests/test_rule_certification.py",
                 "tests/test_human_daily_use_validation.py",
+                "tests/test_studio_rule_readiness_gui.py",
             }
         ),
         pytest_targets=(
             "tests/test_readiness_registry_merge.py",
             "tests/test_human_daily_use_validation.py",
             "tests/test_rule_certification.py",
+            "tests/test_studio_rule_readiness_gui.py",
             "tests/test_cli_surface.py::test_readiness_merge_parser_accepts_base_summary_and_output",
             "tests/test_cli_surface.py::test_readiness_merge_cli_writes_the_same_registry_and_reports_selection",
             *ARCHITECTURE_CORE_TARGETS,
