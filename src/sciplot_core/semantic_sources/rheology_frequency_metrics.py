@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import Any
 
 import pandas as pd
@@ -10,6 +11,100 @@ import pandas as pd
 from sciplot_core.foundation.text_values import clean_text, token
 from sciplot_core.materials_rules.unit_formatting import format_unit_label
 from sciplot_core.semantic_sources.rheology_units import _unit_conversion
+from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit
+
+
+def _quantity_header(value: object) -> str:
+    text = clean_text(value)
+    if explicit_header_unit(text):
+        text = re.sub(r"(?:\([^()]*\)|\[[^\[\]]*\])\s*$", "", text).strip()
+    return text
+
+
+def is_rheology_magnitude_header(header: object, *, metric: str) -> bool:
+    """Recognize an explicit magnitude identity without matching its components."""
+    names = {
+        "complex_viscosity": ("complexviscosity", "|η*|", "|eta*|"),
+        "complex_modulus": ("complexmodulus", "|g*|", "|gstar|"),
+    }
+    if metric not in names:
+        return False
+    text = _quantity_header(header).casefold()
+    name, *symbols = names[metric]
+    compact = re.sub(r"\s+", "", text)
+    identity = token(text)
+    return compact in symbols or identity in {
+        name,
+        f"{name}magnitude",
+        f"magnitude{name}",
+        f"magnitudeof{name}",
+        f"absolute{name}",
+        f"absolutevalueof{name}",
+        f"abs{name}",
+        *(('complexshearmodulus',) if metric == 'complex_modulus' else ()),
+    }
+
+
+def is_rheology_component_header(header: object) -> bool:
+    """Identify real/imaginary viscosity or modulus; neither denotes magnitude."""
+    text = _quantity_header(header).casefold()
+    identity = token(text)
+    named = any(name in identity for name in ('complexviscosity', 'complexmodulus'))
+    return bool(
+        named
+        and (
+            re.search(r"\b(?:imaginary|real|imag|re|im)\b", text)
+            or identity.startswith(('imcomplex', 'recomplex', 'imaginarycomplex', 'realcomplex'))
+        )
+    )
+
+
+def derive_complex_viscosity(
+    omega: float,
+    storage: float,
+    loss: float,
+    *,
+    frequency_unit: str,
+    storage_unit: str,
+    loss_unit: str,
+    output_unit: str = 'Pa s',
+) -> float:
+    """Deterministic |eta*| from original G'/G'' and explicit frequency units."""
+    values = []
+    for value, unit, target in (
+        (omega, frequency_unit, 'rad/s'),
+        (storage, storage_unit, 'Pa'),
+        (loss, loss_unit, 'Pa'),
+    ):
+        _unit, factor, method = _unit_conversion(unit, target)
+        if not unit.strip() or method == 'source_unit_preserved':
+            raise ValueError('Complex viscosity requires explicit supported frequency and modulus units.')
+        values.append(value * factor)
+    normalized_omega, normalized_storage, normalized_loss = values
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError('Complex viscosity requires finite original frequency and moduli.')
+    return _viscosity_from_modulus(
+        normalized_omega,
+        math.hypot(normalized_storage, normalized_loss),
+        output_unit=output_unit,
+    )
+
+
+def _viscosity_from_modulus(omega: float, modulus: float, *, output_unit: str) -> float:
+    if (
+        not math.isfinite(omega) or omega <= 0
+        or not math.isfinite(modulus) or modulus < 0
+    ):
+        raise ValueError(
+            'Complex viscosity requires positive finite angular frequency and a finite nonnegative modulus at every selected row.'
+        )
+    output = re.sub(r'\s+', '·', format_unit_label(output_unit))
+    if output not in {'Pa·s', 'mPa·s'}:
+        raise ValueError('Complex viscosity output unit must be Pa·s or mPa·s.')
+    value = modulus / omega * (1000. if output == 'mPa·s' else 1.)
+    if not math.isfinite(value):
+        raise ValueError('Derived complex viscosity is not finite.')
+    return value
 
 
 def complete_sweep_metrics(
@@ -25,6 +120,8 @@ def complete_sweep_metrics(
         "complex_modulus" not in units
         and {"storage_modulus", "loss_modulus"} <= units.keys()
     ):
+        if any(units[key] != 'Pa' for key in ('storage_modulus', 'loss_modulus')):
+            raise ValueError('Complex modulus derivation requires both modulus inputs normalized to Pa.')
         units["complex_modulus"] = "Pa"
         for row in rows:
             if "storage_modulus" in row and "loss_modulus" in row:
@@ -64,10 +161,9 @@ def complete_sweep_metrics(
             raise ValueError(
                 "Complex viscosity requires positive finite angular frequency and a finite nonnegative modulus at every selected row."
             )
-        value = modulus / omega * 1000.0
-        if not math.isfinite(value):
-            raise ValueError("Derived complex viscosity is not finite.")
-        row["complex_viscosity"] = value
+        row["complex_viscosity"] = _viscosity_from_modulus(
+            omega, modulus, output_unit='mPa·s'
+        )
     units["complex_viscosity"] = "mPa·s"
     conversions["complex_viscosity"] = {
         "method": "derived_complex_modulus_over_angular_frequency",

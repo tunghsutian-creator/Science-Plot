@@ -11,7 +11,11 @@ from sciplot_core.foundation.text_values import (
 )
 from sciplot_core.semantic_sources.rheology_units import _unit_conversion as _unit_conversion
 from sciplot_core.materials_rules.unit_formatting import format_unit_label
-from sciplot_core.semantic_sources.rheology_frequency_metrics import complete_sweep_metrics
+from sciplot_core.semantic_sources.rheology_frequency_metrics import (
+    complete_sweep_metrics,
+    is_rheology_magnitude_header,
+)
+from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit
 
 
 from sciplot_core.semantic_sources.models import (
@@ -87,15 +91,18 @@ def _find_rheology_sweep_headers(
         tuple[str, str, tuple[str, ...], str], ...
     ] = _RHEOLOGY_SWEEP_METRICS,
 ) -> list[int]:
-    metric_alias_groups = tuple(metric[2] for metric in metrics)
-
     def is_sweep_header(row_index: int) -> bool:
         headers = [_clean_text(value) for value in raw.iloc[row_index].tolist()]
         try:
             _find_column(headers, x_aliases)
             return any(
-                any(_axis_match(header, aliases) for header in headers)
-                for aliases in metric_alias_groups
+                any(
+                    is_rheology_magnitude_header(header, metric=key)
+                    if key in {'complex_viscosity', 'complex_modulus'}
+                    else _axis_match(header, aliases)
+                    for header in headers
+                )
+                for key, _label, aliases, _unit in metrics
             )
         except ValueError:
             return False
@@ -122,6 +129,39 @@ def _find_rheology_sweep_headers(
     if matches:
         return matches
     raise ValueError("Could not find rheology sweep X and requested response columns.")
+
+
+def _sweep_metric_column(headers: list[str], key: str, aliases: tuple[str, ...]) -> int:
+    if key not in {'complex_viscosity', 'complex_modulus'}:
+        try:
+            return _find_column(headers, aliases)
+        except ValueError as exc:
+            raise LookupError(f'No {key} column.') from exc
+    matches = [
+        index for index, header in enumerate(headers)
+        if is_rheology_magnitude_header(header, metric=key)
+    ]
+    if len(matches) > 1:
+        raise ValueError(f'Ambiguous explicit {key} magnitude columns.')
+    if not matches:
+        raise LookupError(f'No explicit {key} magnitude column.')
+    return matches[0]
+
+
+def _sweep_source_unit(
+    headers: list[str], units: list[str], index: int, default: str, *, explicit: bool,
+) -> tuple[str, str]:
+    adjacent = _clean_text(units[index]).strip('[]() ') if index < len(units) else ''
+    header = explicit_header_unit(headers[index])
+    if adjacent and header and format_unit_label(adjacent) != format_unit_label(header):
+        raise ValueError(f'Conflicting explicit unit evidence for `{headers[index]}`.')
+    if adjacent:
+        return format_unit_label(adjacent), 'adjacent_unit_row'
+    if header:
+        return format_unit_label(header), 'header'
+    if explicit:
+        raise ValueError(f'Missing explicit source unit for `{headers[index]}`.')
+    return _unit_for(units, index, default), 'default_due_to_missing_unit_row'
 
 
 
@@ -172,8 +212,8 @@ def _read_rheology_sweep_sample(
     metric_indexes: dict[str, int] = {}
     for key, _label, aliases, _default_unit in metrics:
         try:
-            metric_index = _find_column(headers, aliases)
-        except ValueError:
+            metric_index = _sweep_metric_column(headers, key, aliases)
+        except LookupError:
             continue
         metric_indexes[key] = metric_index
     if not metric_indexes:
@@ -183,7 +223,10 @@ def _read_rheology_sweep_sample(
         header_index=header_index,
         columns=(x_index, *metric_indexes.values()),
     )
-    source_x_unit = _unit_for(units, x_index, default_x_unit)
+    explicit_units = _token(x_label) == 'angularfrequency'
+    source_x_unit, x_unit_authority = _sweep_source_unit(
+        headers, units, x_index, default_x_unit, explicit=explicit_units,
+    )
     x_unit, x_factor, x_method = _unit_conversion(source_x_unit, default_x_unit)
     if x_method == "source_unit_preserved":
         raise ValueError(
@@ -197,7 +240,9 @@ def _read_rheology_sweep_sample(
         metric_index = metric_indexes.get(key)
         if metric_index is None:
             continue
-        source_unit = _unit_for(units, metric_index, default_unit)
+        source_unit, unit_authority = _sweep_source_unit(
+            headers, units, metric_index, default_unit, explicit=explicit_units,
+        )
         output_unit, factor, method = _unit_conversion(source_unit, default_unit)
         if method == "source_unit_preserved":
             raise ValueError(
@@ -212,6 +257,9 @@ def _read_rheology_sweep_sample(
             "output_unit": output_unit,
             "factor": factor,
             "method": method,
+            'source_header': headers[metric_index],
+            'source_column': metric_index,
+            'source_unit_authority': unit_authority,
         }
     decimal_comma = selected_columns_use_decimal_comma(
         raw,
@@ -256,6 +304,9 @@ def _read_rheology_sweep_sample(
             "output_unit": x_unit,
             "factor": x_factor,
             "method": x_method,
+            'source_header': headers[x_index],
+            'source_column': x_index,
+            'source_unit_authority': x_unit_authority,
         },
         metric_conversions=metric_conversions,
     )
