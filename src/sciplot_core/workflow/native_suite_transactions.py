@@ -14,9 +14,9 @@ from sciplot_core.plot_engine.contracts import validate_decide, validate_resume
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.workflow.native_suite_objects import capture_object, descriptor, require_object, native_identity, selected_spec
-from sciplot_core.workflow.native_suite_preview import baseline_files, prepare_preview
+from sciplot_core.workflow.native_suite_preview import baseline_files, check_acceptance, prepare_preview
 from sciplot_core.workflow.native_suite_storage import (
-    operation_path, operation_paths, read_operation, require_idle, result_for, save_operation,
+    operation_path, operation_paths, read_operation, recorded_decision, require_idle, result_for, save_operation,
 )
 
 
@@ -55,7 +55,14 @@ def _changes(context: dict[str, Any], request: dict[str, Any]) -> tuple[list[Any
 
 
 def _advance(context: dict[str, Any], record: dict[str, Any], path: Path, *, replayed: bool = False) -> dict[str, Any]:
-    if record["phase"] in {"complete", "rejected", "needs_review"}:
+    if record["phase"] in {"complete", "rejected"}:
+        return _result(context, record, path, replayed=replayed)
+    if recorded_decision(context, record, path) is True:
+        if record.get("accepted") is not True or record["phase"] != "prepared":
+            record.update(accepted=True, phase="prepared")
+            save_operation(path, record)
+        return _finish_acceptance(context, record, path, replayed=replayed)
+    if record["phase"] == "needs_review":
         return _result(context, record, path, replayed=replayed)
     try:
         record = prepare_preview(context, record, path)
@@ -73,14 +80,31 @@ def _current_exports(context: dict[str, Any], native_sha: str) -> list[dict[str,
     receipt = next((item for item in receipts if Path(item["document"]).stem == context["figure_id"]), None)
     if receipt is None or receipt["document_sha256"] != native_sha:
         return []
-    exports = receipt["exports"]
+    exports = deepcopy(receipt["exports"])
     folder = _figure_folder(Path(context["delivery"]), context["figure_id"])
     expected = {folder / f"{context['figure_id']}{suffix}" for suffix in (".pdf", "_300dpi.tiff", "_300dpi.png")}
+    native = Path(context["plot"])
+    initial = Path(context["workspace"]) / "initial_render"
+    if Path(receipt["document"]) != native:
+        if (Path(receipt["document"]) != initial / native.name
+                or context["document"]["sha256"] != native_sha
+                or {Path(name) for name in context["document"]["exports"]} != expected):
+            return []
+        suffixes = {"pdf": ".pdf", "tiff_300": "_300dpi.tiff", "png_300": "_300dpi.png"}
+        for item in exports:
+            suffix = suffixes.get(item["format"])
+            if suffix is None or Path(item["path"]) != initial / f"{context['figure_id']}{suffix}":
+                return []
+            item["path"] = str(folder / Path(item["path"]).name)
     if (len(exports) != 3 or {item["format"] for item in exports} != {"pdf", "tiff_300", "png_300"}
             or {Path(item["path"]) for item in exports} != expected):
         return []
-    if any(not Path(item["path"]).is_file() or file_sha256(Path(item["path"])) != item["sha256"] for item in exports):
-        return []
+    for item in exports:
+        artifact = Path(item["path"])
+        if (not artifact.is_file() or artifact.is_symlink() or file_sha256(artifact) != item["sha256"]
+                or ("exists" in item and item["exists"] is not True)
+                or ("size_bytes" in item and item["size_bytes"] != artifact.stat().st_size)):
+            return []
     return deepcopy(exports)
 
 
@@ -167,17 +191,33 @@ def decide_native(target: Path, request: dict[str, Any]) -> dict[str, Any]:
 
 
 def _decide_locked(context: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
-    from sciplot_core.workflow.rheology_tts_style_update import apply_suite_style
-
     path, record = _decision_record(context, request)
+    accepted = recorded_decision(context, record, path)
+    if accepted is not None and accepted != request["accept"]:
+        raise EngineError("document_decision_conflict", "This transaction already has a different decision.")
     if record["phase"] in {"complete", "rejected"}:
         return _result(context, record, path, replayed=True)
+    if accepted is True:
+        if record.get("accepted") is not True or record["phase"] != "prepared":
+            record.update(accepted=True, phase="prepared")
+            save_operation(path, record)
+        return _finish_acceptance(context, record, path, replayed=True)
     if not request["accept"]:
-        record.update(phase="rejected")
+        record.update(accepted=False, phase="rejected")
         save_operation(path, record)
         return result_for(record, path)
     if record["phase"] != "needs_review":
         raise EngineError("document_preview_unavailable", "Resume the saved edit to obtain its native preview first.")
+    check_acceptance(context, record, path)
+    record.update(accepted=True, phase="prepared")
+    save_operation(path, record)
+    return _finish_acceptance(context, record, path)
+
+
+def _finish_acceptance(context: dict[str, Any], record: dict[str, Any], path: Path, *,
+                       replayed: bool = False) -> dict[str, Any]:
+    from sciplot_core.workflow.rheology_tts_style_update import apply_suite_style
+
     applied = apply_suite_style(Path(context["workspace"]), Path(record["preview"]),
                                 native_display=True, _session_held=True)
     # Read no native document a second time: exact reviewed candidate bytes have
@@ -192,7 +232,7 @@ def _decide_locked(context: dict[str, Any], request: dict[str, Any]) -> dict[str
     record.update(phase="complete", revision=identity["revision"], presentation_hash=native_sha,
                   exports=receipt["exports"], publication=applied)
     save_operation(path, record)
-    return _result(current, record, path)
+    return _result(current, record, path, replayed=replayed)
 
 
 def _verified_native_sha(context: dict[str, Any]) -> str:

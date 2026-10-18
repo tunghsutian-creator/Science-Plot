@@ -348,7 +348,8 @@ def test_native_save_after_successful_owner_cannot_mint_a_verified_revision(suit
     assert file_sha256(native) != receipt["document_sha256"]
     record = json.loads(Path(preview["evidence"]).read_text())
     if stage == "apply":
-        assert record["phase"] == "needs_review" and "revision" not in record
+        assert record["phase"] == "prepared" and record["accepted"] is True
+        assert "revision" not in record
     else:
         assert record["revision"] == decided["revision"]
 
