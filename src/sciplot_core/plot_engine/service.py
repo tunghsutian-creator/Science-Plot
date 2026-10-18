@@ -30,7 +30,6 @@ from .storage import (
     load_head,
     persist,
     read,
-    reserve,
     transaction_path,
 )
 
@@ -217,20 +216,9 @@ class PlotService:
     def _patch(self, root: Path, request: dict[str, Any], *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:
         saved = transaction_path(root, request["idempotency_key"])
         if saved.exists():
-            transaction = read(saved)
-            if transaction["request_hash"] != digest(request):
-                raise EngineError("document_idempotency_conflict", "This key already belongs to a different request.",
-                                  action="use_original_request")
-            if transaction["phase"] not in {"complete", "rejected"}:
-                pending = active(root)
-                if pending and pending["id"] != transaction["id"] and pending["phase"] not in {"complete", "rejected"}:
-                    raise _pending_edit_error(root, pending, "A different transaction is pending.")
-                head = load_head(root)
-                if (head["document"]["revision"] != request["base_revision"]
-                        and head["transaction"] != transaction["id"]):
-                    raise EngineError("document_revision_conflict", "The interrupted transaction no longer starts at the current revision.")
-                reserve(root, transaction)
-            return replay(root, transaction, self.backend)
+            from .publication_repair import prepare_saved
+
+            return replay(root, prepare_saved(root, read(saved), request, self.backend), self.backend)
         head = load_head(root)
         binding = head["binding"]
         scientific_update = False
@@ -244,18 +232,18 @@ class PlotService:
         else:
             document, diff, risk = apply_patch(head["document"], request)
         require_current(self.backend, binding)
-        pending = active(root)
-        if pending and pending["phase"] not in {"complete", "rejected"}:
-            raise _pending_edit_error(root, pending, "Finish or reject the pending transaction first.")
+        from .publication_repair import authorize_pending, reserve_repair
+
+        repair = authorize_pending(root, head, request, document, diff, risk, scientific_update, self.backend)
         if diff:
             document["revision"] += 1
             document = seal_document(document)
         tx = {"id": digest(request["idempotency_key"]), "request": request, "request_hash": digest(request),
               "before": head["document"], "document": document, "binding": binding,
-              "diff": diff, "risk": risk, "phase": "resolving" if scientific_update and diff else "planned"}
+              "diff": diff, "risk": "review" if repair else risk, "phase": "resolving" if scientific_update and diff else "planned"}
         if rollback_request is not None:
             tx["rollback_request"] = rollback_request
-        reserve(root, tx)
+        reserve_repair(root, tx, repair, self.backend)
         if not diff:
             cached = self._cached_export(root, head)
             if cached:

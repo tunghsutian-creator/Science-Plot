@@ -212,6 +212,10 @@ def advance(root: Path, tx: dict[str, Any], backend: PlotBackend) -> dict[str, A
 
 
 def replay(root: Path, tx: dict[str, Any], backend: PlotBackend) -> dict[str, Any]:
+    if tx.get("superseded_by"):
+        from .publication_repair import superseded_receipt
+
+        return superseded_receipt(root, tx)
     if tx["phase"] == "complete":
         head = load_head(root)
         if head["document"]["revision"] != tx["document"]["revision"]:

@@ -28,7 +28,9 @@ def project_recovery(result: dict[str, Any], root: Path, transaction: dict[str, 
     """Read a frozen receipt without rendering, applying, or accepting a preview."""
     if transaction is None:
         return
-    saved = receipt(root, transaction)
+    from .publication_repair import superseded_receipt
+
+    saved = superseded_receipt(root, transaction) if transaction.get("superseded_by") else receipt(root, transaction)
     request = transaction["request"]
     resume = {"action": "plot.resume", "plot": str(root), "request": {
         "plot_id": transaction["document"]["plot_id"], "base_revision": request["base_revision"],
@@ -82,6 +84,10 @@ def resume_transaction(plot: Path, request: dict[str, Any], backend: PlotBackend
         if (original["base_revision"] != request["base_revision"]
                 or transaction["document"]["plot_id"] != request["plot_id"]):
             raise EngineError("document_revision_conflict", "Use the original plot and base revision for this key.", action="plot.describe")
+        if transaction.get("superseded_by"):
+            from .publication_repair import superseded_receipt
+
+            return superseded_receipt(root, transaction)
         if "changes" not in original or transaction.get("mode") == "reimport":
             raise EngineError("document_resume_unsupported", "Continue this lifecycle through its original decision entry.",
                               action="plot.decide")
