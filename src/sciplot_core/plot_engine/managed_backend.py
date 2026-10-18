@@ -107,7 +107,7 @@ class ManagedBackend:
         ir, native = self._ensure(candidate)
         output.mkdir(parents=True, exist_ok=True)
         preview = self.compiler.render_ir(ir, native, output / "preview.png")
-        return {"scientific_audit": self.compiler.audit_ir(ir, native), "preview": preview.get("preview", preview),
+        return {"scientific_audit": preview["scientific_audit"], "preview": preview.get("preview", preview),
                 "_managed_binding": candidate}
 
     def apply(self, binding: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:

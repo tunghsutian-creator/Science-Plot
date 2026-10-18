@@ -138,4 +138,5 @@ class ManagedVeuszCompiler:
         if (result["document"]["sha256"] != before["document_sha256"]
                 or file_sha256(document) != before["document_sha256"]):
             raise ValueError("Managed native artifact changed between audit and preview.")
-        return {**result, **({"publication_qa": before["publication_qa"]} if "publication_qa" in before else {})}
+        return {**result, "scientific_audit": before["scientific_audit"],
+                **({"publication_qa": before["publication_qa"]} if "publication_qa" in before else {})}
