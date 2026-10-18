@@ -12,6 +12,7 @@ def frequency_axis(role: str, coordinate: dict[str, Any], unit: str, values: lis
     from sciplot_core.materials_rules.unit_formatting import format_unit_label
     from sciplot_core.policy.axis_defaults import RHEOLOGY_FREQUENCY_X_LABEL, anchored_log_decade_ticks
     from sciplot_core.source_tables.text_normalization import normalize_label
+    from sciplot_core.studio_render.axis_limits import compute_axis_limits
     from sciplot_core.task_semantic_figure import _domain, _ticks
 
     quantity = coordinate["quantity"]
@@ -28,8 +29,9 @@ def frequency_axis(role: str, coordinate: dict[str, Any], unit: str, values: lis
         return domain, _ticks(domain), label, "linear"
     if not values or any(not math.isfinite(value) or value <= 0 for value in values):
         _error("semantic_frequency_log_domain", "Frequency logarithmic axes require strictly positive finite observations; no scientific point is clipped or dropped.", quantity=quantity)
-    low, high = min(values), max(values)
-    domain = [float(coordinate.get("minimum", low / 1.05)), float(coordinate.get("maximum", high * 1.05))]
+    limits = compute_axis_limits([values], kind="line", x_values=[values], xscale="log", yscale="log")
+    automatic = limits.xlim if role == "x" else limits.ylim
+    domain = [float(coordinate.get("minimum", automatic[0])), float(coordinate.get("maximum", automatic[1]))]
     if not 0 < domain[0] < domain[1]:
         _error("semantic_frequency_log_domain", "Declared frequency logarithmic axis bounds must be positive and strictly increasing.", quantity=quantity)
     ticks = [value for value in anchored_log_decade_ticks(values) if domain[0] <= value <= domain[1]]
@@ -43,7 +45,9 @@ def build_frequency_request(state: dict[str, Any]) -> dict[str, Any]:
     if intent["x"]["quantity"] != "angular_frequency" or intent.get("secondary_y") or intent.get("stages"):
         _error("semantic_frequency_intent_unsupported", "Original frequency intervals retain distinct conditions. Use angular_frequency and one response, without cumulative time stages or a secondary axis.")
     executor = builtin_executor()
-    sources, records, nodes = [], [], []
+    sources: list[dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
+    nodes: list[dict[str, Any]] = []
     datasets: dict[str, Any] = {}
 
     def transform(kind: str, source_id: str, parameters: dict[str, Any]) -> str:

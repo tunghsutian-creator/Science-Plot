@@ -194,3 +194,32 @@ def test_frequency_axis_unit_and_nonpositive_values_remain_explicit():
     with pytest.raises(TaskControlError) as rejected:
         frequency_axis("x", {"quantity": "angular_frequency"}, "rad/s", [0, 10])
     assert rejected.value.reason_code == "semantic_frequency_log_domain"
+
+
+@pytest.mark.parametrize("role,quantity", [("x", "angular_frequency"), ("y", "complex_viscosity")])
+def test_frequency_auto_log_bounds_use_shared_log_space_padding(role, quantity):
+    from sciplot_core.task_semantic_frequency import frequency_axis
+    from sciplot_core.studio_render.axis_limits import compute_axis_limits
+
+    values = [1.0, 10.0, 1e6]
+    original = list(values)
+    domain, _ticks, _label, scale = frequency_axis(role, {"quantity": quantity}, "rad/s" if role == "x" else "Pa s", values)
+    limits = compute_axis_limits([values], kind="line", x_values=[values], xscale="log", yscale="log")
+    assert domain == pytest.approx(limits.xlim if role == "x" else limits.ylim)
+    # A fixed arithmetic factor such as1.05 gives only0.021decades and
+    # cannot retain a physical marker radius as the log span grows.
+    log_span = math.log10(max(values)) - math.log10(min(values))
+    assert (math.log10(min(values)) - math.log10(domain[0])) / log_span >= .05
+    assert (math.log10(domain[1]) - math.log10(max(values))) / log_span >= .08
+    assert scale == "log" and values == original
+
+
+@pytest.mark.parametrize("bounds", [{"minimum": 2.0}, {"maximum": 50.0}, {"minimum": 2.0, "maximum": 50.0}])
+def test_frequency_log_padding_preserves_each_explicit_scientific_bound(bounds):
+    from sciplot_core.task_semantic_frequency import frequency_axis
+
+    values = [1.0, 10.0, 100.0]
+    automatic, *_ = frequency_axis("y", {"quantity": "complex_viscosity"}, "Pa s", values)
+    domain, *_ = frequency_axis("y", {"quantity": "complex_viscosity", **bounds}, "Pa s", values)
+    assert domain == [bounds.get("minimum", automatic[0]), bounds.get("maximum", automatic[1])]
+    assert values == [1.0, 10.0, 100.0]
