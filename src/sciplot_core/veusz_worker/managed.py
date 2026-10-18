@@ -73,7 +73,7 @@ def compile_plot_ir(ir_path: Path, document: Path, preview: Path) -> dict[str, A
         if result.get("publication_qa", {}).get("status", "passed") != "passed":
             from sciplot_core.plot_document import DocumentError
 
-            error = DocumentError("publication_qa_failed", "Native publication text exceeds its resolved layout bounds.",
+            error = DocumentError("publication_qa_failed", "Managed Figure publication QA failed: native text exceeds its resolved layout bounds.",
                                   issues=result["publication_qa"].get("hard", []))
             error.repair = {"action": "correct_layout", "issues": error.issues,
                             "publication_qa": result["publication_qa"], "native_stage": "publication_qa",
