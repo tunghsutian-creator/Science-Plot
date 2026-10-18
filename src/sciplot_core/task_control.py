@@ -40,7 +40,13 @@ def _finished_call(root: Path, state: dict[str, Any]) -> dict[str, Any]:
     result = _current_result(state) if state["status"] == "complete" else None
     finish_timing(state)
     save_task(root, state)
-    return {**(result if "intent" in state["request"] and result is not None else task_summary(state)), **({key: result[key] for key in ("status", "blocker", "current_project", "next_step") if key in result} if result else {})}
+    if "intent" in state["request"] and result is not None:
+        # Current-evidence checks belong inside this call's timing. Their
+        # earlier summary must receive the metadata saved after those checks.
+        return {**result, **{key: state[key] for key in ("updated_at", "local_timing") if key in state}}
+    return {**task_summary(state), **({key: result[key] for key in (
+        "status", "blocker", "current_project", "next_step",
+    ) if key in result} if result else {})}
 
 
 def _current_result(state: dict[str, Any]) -> dict[str, Any]:
