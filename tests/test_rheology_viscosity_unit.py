@@ -10,6 +10,7 @@ from sciplot_core.semantic_sources.rheology_frequency_metrics import (
     derive_complex_viscosity,
     is_rheology_component_header,
     is_rheology_magnitude_header,
+    validate_complex_viscosity_units,
 )
 from sciplot_core.semantic_sources.rheology_sweep_sources import (
     _read_rheology_frequency_comparison_samples,
@@ -223,3 +224,21 @@ def test_imaginary_modulus_is_not_used_to_derive_viscosity(tmp_path: Path) -> No
     assert sample.metric_conversions['complex_modulus']['method'] == (
         'derived_from_storage_and_loss_modulus'
     )
+
+
+def test_viscosity_unit_preflight_requires_no_observation_or_fabricated_point() -> None:
+    assert validate_complex_viscosity_units(
+        frequency_unit='Hz', storage_unit='kPa', loss_unit='MPa', output_unit='mPa s',
+    ) == (2. * math.pi, 1000., 1_000_000.)
+
+
+@pytest.mark.parametrize(
+    'change',
+    [dict(frequency_unit=''), dict(storage_unit=''), dict(loss_unit=''),
+     dict(frequency_unit='s'), dict(storage_unit='Pa·s'), dict(output_unit='Pa')],
+)
+def test_viscosity_unit_preflight_rejects_unsupported_units_without_data(change: dict) -> None:
+    units = dict(frequency_unit='rad/s', storage_unit='Pa', loss_unit='Pa', output_unit='Pa s')
+    units.update(change)
+    with pytest.raises(ValueError):
+        validate_complex_viscosity_units(**units)
