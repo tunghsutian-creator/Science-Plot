@@ -20,6 +20,8 @@ from .current import changed_inputs, dependency_state, evidence_current, require
 from .description_scope import require_selector
 from .errors import EngineError
 from .execution import advance, replay
+from .object_operations import attach_object_operations
+from .prepared_routing import native_dispatch
 from .recovery import project_recovery, resume_transaction
 from .recovery import pending_edit_error as _pending_edit_error
 from .storage import (
@@ -45,6 +47,8 @@ class PlotService:
         self.backend = backend
 
     def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        if (result := native_dispatch("resume", canonical_path(plot), request=request)) is not None:
+            return result
         return resume_transaction(plot, request, self.backend, self._patch)
 
     def close(self) -> None:
@@ -54,6 +58,8 @@ class PlotService:
 
     def open(self, target: Path, figure_id: str | None = None, *,
              description: dict[str, Any] | None = None) -> dict[str, Any]:
+        if (result := native_dispatch("describe", canonical_path(target), figure_id=figure_id, description=require_selector(description))) is not None:
+            return result
         return self._open(target, figure_id=figure_id, description=require_selector(description))
 
     def open_created(self, target: Path, *, series_ids: dict[str, str], recipe: dict[str, Any],
@@ -127,6 +133,8 @@ class PlotService:
     def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
         description = require_selector(description)
         root = canonical_path(plot)
+        if (result := native_dispatch("describe", root, description=description)) is not None:
+            return result
         with external_project_session(root):
             return self._describe(root, description=description)
 
@@ -152,7 +160,7 @@ class PlotService:
             from .export_status import current_export
 
             result["export_current"] = current_export(root, head, eligible=not changed and result["pending"] is None, cached_export=self._cached_export)
-            return describe_managed(root, head, result, self.backend, description=description)
+            return attach_object_operations(describe_managed(root, head, result, self.backend, description=description), document)
         from .external_mutation import authority_status
 
         if description is not None and description["scope"] == "edit":
@@ -165,11 +173,13 @@ class PlotService:
             next_step = offer(self.backend, head, changed)
             if next_step is not None:
                 result["next_step"] = next_step
-        return result
+        return attach_object_operations(result, document)
 
     def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         request = validate_patch(request)
         root = canonical_path(plot)
+        if (result := native_dispatch("patch", root, request=request)) is not None:
+            return result
         with external_project_session(root):
             return self._patch(root, request)
 
@@ -260,6 +270,8 @@ class PlotService:
 
         request = validate_decide(request)
         root = canonical_path(plot)
+        if (result := native_dispatch("decide", root, request=request)) is not None:
+            return result
         if request.get("reimport") is True and (root / "head.json").is_file():
             if load_head(root)["document"].get("plot_type") == "ManagedPlot":
                 raise EngineError("managed_external_mutation", "Managed artifacts cannot be adopted through legacy reimport.",
@@ -349,6 +361,8 @@ class PlotService:
 
     def export(self, plot: Path) -> dict[str, Any]:
         root = canonical_path(plot)
+        if (result := native_dispatch("export", root)) is not None:
+            return result
         with external_project_session(root):
             tx = active(root)
             if tx and tx["phase"] not in {"complete", "rejected"}:
