@@ -220,7 +220,8 @@ state, including data/reference/custom-definition state. Unsupported backend
 capabilities fail explicitly. Scientific/IR identity excludes renderer timestamps;
 compiler/runtime fingerprints and actual artifact byte seals are separate.
 
-`plot_transforms/` owns typed select/rename/scale/normalize nodes and a fixed-file
+`plot_transforms/` owns typed select/rename/scale/normalize, original-row selection,
+explicit multi-input time concatenation and physical unit conversion, plus a fixed-file
 external executor protocol. Node intent and execution provenance jointly record
 stable IDs, parameters, input/output dataset IDs and hashes, executor identity,
 determinism and status. External execution binds interpreter/script bytes and
@@ -228,6 +229,13 @@ closed parameters; existing scientific algorithms remain external owners.
 Non-deterministic declarations are representable but execution is unsupported.
 There is no client-supplied code-string evaluation. Original sample/column/row
 lineage is checked through supported transforms, with missing values retained.
+
+Display interpolation belongs to the presentation side of FigureSpec marks.
+Its deterministic PCHIP arrays and interval lineage are compiled separately from
+the original datasets. Native line geometry binds those arrays; measured points
+and marker geometry retain the source-bound scientific arrays. Gaps and duplicate
+coordinates cannot silently become a fitted continuation. This reuses PlotIR,
+native compilation and exact array audits without a second scientific ledger.
 
 `plot_backends/` owns current-native import and the Veusz translation. Imported
 projects are `legacy_shadow`, never falsely fully represented: unmodeled objects,
@@ -356,6 +364,14 @@ saved-project queries, native edits, exact-current export and continuation.
 It calls existing local domain services without starting an internal provider.
 `task_control` orchestrates bounded create/edit/export requests over those owners;
 task receipts live outside active projects and do not define scientific readiness.
+
+The semantic task adapter accepts multiple source attachments and a small closed
+coordinate intent. Local source evidence supplies current tables, columns, units
+and reset-time segments; the source-bound plan exposes real ambiguity before
+expanding existing FigureTemplate/Binding contracts. Scientific authority remains
+the ManagedDocument. The task checkpoint owns only process state and immutable
+attempt references. Revising a draft and retrying a committed attempt are distinct
+operations; retry cannot recommit science or execute transforms again.
 
 The `edit` CLI opens the default post-delivery human editing surface for an existing
 saved figure. `Open_in_SciPlot.command` opens its bound delivery through this CLI;

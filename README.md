@@ -37,6 +37,26 @@ Once the data and intent are clear, one local task carries the figure through to
 export. If samples, units, or worksheet choices are ambiguous, SciPlot asks for
 clarification before proceeding.
 
+A task can also accept several attachments and a small explicit coordinate
+intent, including a secondary axis. The program reads the source tables and
+expands their current facts into the existing Managed figure contract. It returns
+one source-bound plan for unresolved scientific choices, such as temperature
+column roles or how reset-time stages join. Experiment identity does not depend
+on which coordinate is selected for a particular view.
+
+Confirmed phase concatenation records original row lineage and its boundary
+policy. Unit conversion records both units and the exact conversion. Optional
+PCHIP interpolation creates a separate display curve through the measured knots;
+all measured points remain available in the native document and marker binding.
+It does not smooth away noise or add measurements. Reference images guide
+presentation and cannot supply missing numerical values or elapsed time.
+
+Correct an uncommitted intent in the same task. Once an attempt commits, its
+scientific request stays immutable; retry continues its export and a revised
+intent creates another bound attempt. Receipts distinguish semantic commit,
+native audit, rendering and completed delivery. Failed native attempts retain
+their command, exit code and streams in separate local diagnostic files.
+
 For an understood group of figures, include the requested presentation batch in
 each `task group start` create item. One group response returns all bound
 candidates and the acceptance template; review them together and continue with
@@ -184,7 +204,9 @@ scientific mapping checks gate export; soft layout warnings remain explicit.
 Arbitrary native features and non-deterministic execution remain unsupported.
 New FigureTemplate documents pin the extracted `sciplot-house-style-v1` visual
 contract. Omitted layout uses the original 60 × 55 mm panel and fixed physical
-margins; theme/figure/view/layer/mark overrides stay explicit. Existing unbound
+margins; decorated right/top axes reserve additional space before native
+compilation. The resolved layout records that policy. Single-axis defaults and
+theme/figure/view/layer/mark overrides stay explicit. Existing unbound
 Managed revisions and fully explicit Cartesian v1 templates retain their saved
 presentation. Old-versus-new visual regression is independent of rebuild QA.
 See [rendering contract](docs/DESIGN_RENDERING_CONTRACT.md),
@@ -197,12 +219,14 @@ and ManagedPlot must pass native structure, data, environment and raster checks.
 See [research compatibility profiles and evidence](docs/RESEARCH_COMPATIBILITY_PROFILES.md)
 for exact coverage, the bounded mechanical antialias difference, and unsupported cases.
 
-Ordinary raw-data entry (`task create`, source-only `plot.create`, and their MCP
-routes) keeps the existing production workflow: scientific recognition, the
+Ordinary raw-data entry without an explicit semantic coordinate intent
+(`task create`, source-only `plot.create`, and their MCP routes) keeps the
+existing production workflow: scientific recognition, the
 family's FigurePlan and templates, then shared house policy plus family rules and
 supported explicit overrides. `render --auto` uses that same workflow; plain
 `render --template` remains a low-level plot-ready operation. FigureTemplate v2
-is an explicitly composed Managed route, not the automatic raw-data default.
+supports both explicit low-level composition and the local task adapter for a
+semantic coordinate intent. It is not the automatic source-only default.
 Its RenderingStyleContract is extracted from production policy; unverified
 family compatibility is not a reason to silently switch ordinary plots to it.
 
