@@ -43,9 +43,13 @@ def _figure_guide(guides: list[dict[str, Any]]) -> dict[str, Any] | None:
 def solve_layout(layout: dict[str, Any], views: list[dict[str, Any]], axes: list[dict[str, Any]],
                  guides: list[dict[str, Any]] | None = None,
                  annotations: list[dict[str, Any]] | None = None,
-                 panel_margins_mm: dict[str, float] | None = None) -> dict[str, Any]:
+                 panel_margins_mm: dict[str, float] | None = None,
+                 secondary_axis_policy: str | None = None) -> dict[str, Any]:
     """Resolve millimetres, top-left origin; no native coordinates are accepted."""
     del annotations  # Annotation scientific anchors are resolved by the semantic compiler.
+    if secondary_axis_policy not in {None, "decorated_secondary_sides_v1"}:
+        fail("figure_layout_policy_invalid", "Unknown secondary-axis layout policy.",
+             "/axis_layout_policy", "known_policy")
     # The public solver historically defaults omitted spans to one. Closed
     # FigureSpec/assembly wire schemas still require their explicit fields.
     layout = {**layout, "cells": [{"row_span": 1, "column_span": 1, **cell} for cell in layout["cells"]]}
@@ -65,7 +69,8 @@ def solve_layout(layout: dict[str, Any], views: list[dict[str, Any]], axes: list
         # text QA still rejects overflow and the renderer never moves a frame.
         for view_id, budget in budgets.items():
             resolved = {**panel_margins_mm, "min_width": 1.0, "min_height": 1.0}
-            for side, opposite in (("right", "left"), ("top", "bottom")):
+            sides = (("right", "left"), ("top", "bottom")) if secondary_axis_policy is not None else ()
+            for side, opposite in sides:
                 decorated = [axis for axis in axes if axis["view_id"] == view_id and axis["side"] == side
                              and axis["visible"] and axis["id"] not in hidden
                              and (axis["ticks"] or axis["label_visible"] and axis["label"])]
