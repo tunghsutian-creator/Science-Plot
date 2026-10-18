@@ -17,6 +17,7 @@ from sciplot_core.studio_render.series_option_context import effective_render_op
 from sciplot_core.studio_render.series_options import resolve_series_encodings
 from sciplot_core.studio_render.style_contract import _veusz_style_contract
 from sciplot_core.studio_render.value_parsing import _size_mm, _string_list
+from sciplot_core.workflow.rheology_tts_prepared_contract import prepared_plan_contract
 
 
 POLICY_ID = "shared_template_roles_v1"
@@ -65,8 +66,6 @@ _METHOD_LABELS = {
 
 def tts_presentation_capabilities() -> dict:
     """Project the live owners; this is not a second catalog of style defaults."""
-    from sciplot_core.workflow.rheology_tts_contract import prepared_plan_contract
-
     contract = load_plot_contract()
     palette = resolve_palette_authority({}, template_id="point_line")
     return {"policy": dict(POLICY), "roles": deepcopy(_ROLES),

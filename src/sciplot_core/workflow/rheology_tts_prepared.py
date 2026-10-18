@@ -10,8 +10,8 @@ from sciplot_core.studio_core.source_update_commit import reject_symlink_path
 from sciplot_core.workflow.rheology_tts_contract import (
     rheology_capabilities,
     validate_creation_request,
-    validate_prepared_plan_provenance,
 )
+from sciplot_core.workflow.rheology_tts_prepared_contract import validate_prepared_plan_provenance
 from sciplot_core.workflow.rheology_tts_suite import _check_sources, _output_paths
 
 
