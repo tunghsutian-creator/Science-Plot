@@ -71,4 +71,7 @@ def validate_intent(value: Any) -> dict[str, Any]:
         exc.issues = [{"path": "/intent/" + "/".join(str(part) for part in error.absolute_path),
                        "constraint": error.validator, "message": error.message}]
         raise exc
+    from sciplot_core.task_semantic_temperature import temperature_selector
+
+    temperature_selector(value)
     return dict(deepcopy(value))

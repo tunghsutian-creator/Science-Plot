@@ -115,18 +115,24 @@ def prepare_plan(paths: list[Path], intent: dict[str, Any]) -> dict[str, Any]:
     for source in sources:
         for candidate in source["candidates"]:
             _stage_evidence(source, candidate)
-    decisions: list[dict[str, Any]] = _coordinate_decisions(sources, intent)
+    return {"sources": sources, "selection": selection, "intent": intent, "decisions": _plan_decisions(sources, intent),
+            "authority": "Preparation evidence only. Confirmed source facts compile into the existing Managed document; original bytes stay immutable.",
+            "raw_data": "original bytes retained; selected original blocks and explicit exclusions are recorded; source row bounds are zero-based and data_end_row is exclusive",
+            "interpolation": "Display interpolation retains raw marker points; gaps and non-increasing time boundaries remain separate runs."}
+
+
+def _plan_decisions(sources: list[dict[str, Any]], intent: dict[str, Any]) -> list[dict[str, Any]]:
+    from sciplot_core.task_semantic_temperature import temperature_decisions, temperature_selector
+
+    temperature_selector(intent)
     multiple = {source["source_id"]: [candidate["candidate_id"] for candidate in source["candidates"]]
                 for source in sources if len(source["candidates"]) > 1}
     if multiple:
-        decisions.append({"field": "tables", "options": multiple,
-                          "message": "Choose one exact original table candidate for each listed source."})
-    headers = sorted(set(column["header"] for source in sources for candidate in source["candidates"]
-                         for column in candidate["columns"] if column["quantity"] == "temperature"))
+        return [{"field": "tables", "options": multiple,
+                 "message": "Choose one exact original table candidate for every listed source before coordinate validation. No alternative was silently excluded."}]
+    decisions = _coordinate_decisions(sources, intent)
     segmented = any(len(candidate["stages"]) > 1 for source in sources for candidate in source["candidates"])
-    if (intent.get("secondary_y") or segmented) and headers and not intent.get("temperature_header") and len(headers) > 1:
-        decisions.append({"field": "temperature_header", "options": headers,
-                          "message": "Select the original temperature role. Equal numbers do not make Ts and Tr interchangeable scientific identities."})
+    decisions.extend(temperature_decisions(sources, intent, segmented))
     if intent.get("secondary_y") and len(sources) > 1 and "temperature_source" not in intent:
         decisions.append({"field": "temperature_source", "options": [source["source_id"] for source in sources],
                           "message": "Choose the exact recorded attachment for the right-axis temperature; other schedules are not assumed equal."})
@@ -143,7 +149,16 @@ def prepare_plan(paths: list[Path], intent: dict[str, Any]) -> dict[str, Any]:
         if "boundary" not in intent.get("stages", {}):
             decisions.append({"field": "time_boundary", "options": ["preserve_endpoint", "next_sample"],
                 "message": "preserve_endpoint retains both boundary points at equal cumulative time; next_sample also retains both and advances by the entering stage's first measured positive sample interval. Neither policy invents measurements."})
-    return {"sources": sources, "selection": selection, "intent": intent, "decisions": decisions,
-            "authority": "Preparation evidence only. Confirmed source facts compile into the existing Managed document; original bytes stay immutable.",
-            "raw_data": "original bytes retained; selected original blocks and explicit exclusions are recorded; source row bounds are zero-based and data_end_row is exclusive",
-            "interpolation": "Display interpolation retains raw marker points; gaps and non-increasing time boundaries remain separate runs."}
+    return decisions
+
+
+def selected_table_plan(plan: dict[str, Any], intent: dict[str, Any], choices: dict[str, Any]) -> dict[str, Any]:
+    """Replan after an explicit table answer without rereading or dropping evidence."""
+    from copy import deepcopy
+    from sciplot_core.task_semantic_figure import _source_candidate
+
+    selected = deepcopy(plan)
+    selected["sources"] = [{**source, "candidates": [_source_candidate(source, choices)]}
+                           for source in selected["sources"]]
+    selected["decisions"] = _plan_decisions(selected["sources"], intent)
+    return selected

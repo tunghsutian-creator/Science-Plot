@@ -112,7 +112,9 @@ def _original_samples(source: dict[str, Any], rule_id: str, selection: dict[str,
 
 def build_request(state: dict[str, Any]) -> dict[str, Any]:
     intent, plan, choices = state["request"]["intent"], state["semantic_plan"], state.get("semantic_choices", {})
-    temperature_header = intent.get("temperature_header", choices.get("temperature_header"))
+    from sciplot_core.task_semantic_temperature import temperature_column, temperature_selector
+
+    selector = temperature_selector(intent, choices)
     temperature_source = (f'source:{intent["temperature_source"]}' if "temperature_source" in intent
                           else choices.get("temperature_source", plan["sources"][0]["source_id"]))
     if temperature_source not in {source["source_id"] for source in plan["sources"]}:
@@ -147,7 +149,11 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
                                  "table_selection": candidate["table_selection"]})
             raw_document = {"scientific": {"data_sources": [data_sources[-1]], "mappings": {}, "transforms": []}}
             datasets.update(load_sources(raw_document, _rule_id(intent)))
-        stages = _ordered_stages(candidate, intent, choices, temperature_header)
+        header = selector.get("header")
+        if header is None and "column_id" in selector:
+            observed = {temperature_column(candidate, block, selector)["header"] for block in candidate["blocks"]}
+            header = next(iter(observed)) if len(observed) == 1 else None
+        stages = _ordered_stages(candidate, intent, choices, header)
         pieces = []
         units: dict[str, str] = {}
         raw_samples: set[str] = set()
@@ -161,7 +167,7 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
                 _error("semantic_coordinate_conflict", "X and Y must bind distinct original columns; no source is duplicated as another scientific quantity.")
             selected = {"x": x, "y": y}
             if intent.get("secondary_y") or intent.get("stages", {}).get("order", choices.get("stage_order")) == "temperature_continuity":
-                selected["temperature"] = _select_column(candidate, block, "temperature", header=temperature_header)
+                selected["temperature"] = temperature_column(candidate, block, selector)
             columns = list(dict.fromkeys(column["column_id"] for column in selected.values()))
             if explicit_selection:
                 stage_source = source_id + ":" + stage["stage_id"]

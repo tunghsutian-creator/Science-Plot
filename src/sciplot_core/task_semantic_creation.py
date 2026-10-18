@@ -48,13 +48,14 @@ def prepare_plan(paths: list[Path], intent: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_managed_request(state: dict[str, Any]) -> dict[str, Any]:
-    if any(candidate.get("format") == "rheology_frequency_intervals"
-           for source in state["semantic_plan"]["sources"] for candidate in source["candidates"]):
+    from sciplot_core.task_semantic_figure import _source_candidate, build_request
+
+    candidates = [_source_candidate(source, state.get("semantic_choices", {}))
+                  for source in state["semantic_plan"]["sources"]]
+    if any(candidate.get("format") == "rheology_frequency_intervals" for candidate in candidates):
         from sciplot_core.task_semantic_frequency import build_frequency_request
 
         return build_frequency_request(state)
-    from sciplot_core.task_semantic_figure import build_request
-
     return build_request(state)
 
 
@@ -64,6 +65,14 @@ def execute_managed(state: dict[str, Any], request: dict[str, Any]) -> dict[str,
     # The established local RPC port owns serialization and lost-reply safety.
     # It does not import the server/PlotService back into the task coordinator.
     return call("plot.create", {"request": request})
+
+
+def _ask_plan(root: Path, state: dict[str, Any]) -> None:
+    question = {"field": "semantic_plan", "intent_revision": state["intent_revision"],
+                "plan": state["semantic_plan"], "message": "Resolve the listed scientific choices in this same task; no native work has started."}
+    question["question_id"] = canonical_json_sha256(question)
+    state.update(status="needs_input", phase="scientific_choice", question=question, semantic_plan_confirmed=False)
+    save_task(root, state)
 
 
 def run_creation(root: Path, state: dict[str, Any]) -> None:
@@ -86,11 +95,7 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         state["semantic_plan"] = plan
         state.pop("blocker", None)
         if plan.get("decisions"):
-            question = {"field": "semantic_plan", "intent_revision": state["intent_revision"],
-                        "plan": plan, "message": "Resolve the listed scientific choices together in this same task; no native work has started."}
-            question["question_id"] = canonical_json_sha256(question)
-            state.update(status="needs_input", phase="scientific_choice", question=question)
-            save_task(root, state)
+            _ask_plan(root, state)
             return
         state.update(semantic_plan_confirmed=True, semantic_choices={},
                      plan_confirmation={"mode": "explicit_intent_and_unambiguous_source_evidence"})
@@ -200,7 +205,19 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
         raise TaskControlError("stale_task_question", "This response belongs to a different source-bound plan.")
     choices = response.get("choices", {})
     _validate_choices(state["semantic_plan"], choices)
-    state.update(semantic_choices=deepcopy(choices), semantic_plan_confirmed=True)
+    accumulated = {**state.get("semantic_choices", {}), **deepcopy(choices)}
+    if "tables" in choices:
+        from sciplot_core.task_semantic_plan import selected_table_plan
+
+        plan = selected_table_plan(state["semantic_plan"], state["request"]["intent"], accumulated)
+        answered = [decision for decision in plan["decisions"] if decision["field"] in accumulated]
+        _validate_choices({"decisions": answered}, {decision["field"]: accumulated[decision["field"]] for decision in answered})
+        plan["decisions"] = [decision for decision in plan["decisions"] if decision["field"] not in accumulated]
+        state.update(semantic_plan=plan, semantic_choices=accumulated)
+        if plan["decisions"]:
+            _ask_plan(root, state)
+            return
+    state.update(semantic_choices=accumulated, semantic_plan_confirmed=True)
     state.pop("question", None)
     save_task(root, state)
     run_creation(root, state)
