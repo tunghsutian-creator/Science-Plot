@@ -305,6 +305,55 @@ def test_publication_reply_loss_recovers_exact_installed_candidate_without_reapp
 
 
 @pytest.mark.comprehensive
+@pytest.mark.parametrize("stage", ["apply", "export"])
+def test_native_save_after_successful_owner_cannot_mint_a_verified_revision(suite, monkeypatch, stage):
+    from sciplot_core.workflow import rheology_tts_style_update as style
+    from sciplot_core.workflow import rheology_tts_suite as suite_owner
+
+    workspace, _delivery, _source, _prepared, manifest = suite
+    native = Path(manifest["documents"][0]["path"])
+    description = describe_native_object(native, description={"scope": "summary"})
+    request = _request(description)
+    preview = patch_native_object(native, request)
+
+    def native_save():
+        _native_settings(native, edits=[("/page1/graph1/x/label", "Concurrent native save")])
+
+    if stage == "apply":
+        apply = style.apply_suite_style
+
+        def save_after_apply(*args, **kwargs):
+            result = apply(*args, **kwargs)
+            native_save()
+            return result
+
+        monkeypatch.setattr(style, "apply_suite_style", save_after_apply)
+        with pytest.raises(EngineError, match="changed after verified"):
+            decide_native_object(native, _accept(preview))
+    else:
+        decided = decide_native_object(native, _accept(preview))
+        assert decided["ready_to_use"] is True
+        export = suite_owner._export_saved_suite
+
+        def save_after_export(*args, **kwargs):
+            result = export(*args, **kwargs)
+            native_save()
+            return result
+
+        monkeypatch.setattr(suite_owner, "_export_saved_suite", save_after_export)
+        with pytest.raises(EngineError, match="changed after verified"):
+            export_native_object(native)
+    updated = json.loads((workspace / "suite.json").read_text())
+    receipt = next(item for item in updated["last_export"] if Path(item["document"]) == native)
+    assert file_sha256(native) != receipt["document_sha256"]
+    record = json.loads(Path(preview["evidence"]).read_text())
+    if stage == "apply":
+        assert record["phase"] == "needs_review" and "revision" not in record
+    else:
+        assert record["revision"] == decided["revision"]
+
+
+@pytest.mark.comprehensive
 def test_backend_owns_foreground_role_order_without_reordering_science_or_legend(tmp_path):
     from sciplot_core.rheology_tts_render import inspect_tts_display, render_tts_figures
     from sciplot_core.rheology_tts_style import prepare_tts_presentation

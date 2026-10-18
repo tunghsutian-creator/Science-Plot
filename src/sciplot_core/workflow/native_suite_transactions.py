@@ -184,7 +184,7 @@ def _decide_locked(context: dict[str, Any], request: dict[str, Any]) -> dict[str
     # already passed numerical/unowned-state audits and guarded publication.
     current = require_object(Path(context["plot"]))
     spec, _ = selected_spec(current)
-    native_sha = file_sha256(Path(context["plot"]))
+    native_sha = _verified_native_sha(current)
     identity = native_identity(context["workspace"], context["figure_id"],
         current["manifest"]["sources"], file_sha256(spec), native_sha)
     receipt = next(item for item in current["manifest"]["last_export"]
@@ -192,7 +192,19 @@ def _decide_locked(context: dict[str, Any], request: dict[str, Any]) -> dict[str
     record.update(phase="complete", revision=identity["revision"], presentation_hash=native_sha,
                   exports=receipt["exports"], publication=applied)
     save_operation(path, record)
-    return result_for(record, path)
+    return _result(current, record, path)
+
+
+def _verified_native_sha(context: dict[str, Any]) -> str:
+    native = Path(context["plot"])
+    receipt = next((item for item in context["manifest"].get("last_export", [])
+                    if Path(item["document"]) == native), None)
+    if receipt is None or file_sha256(native) != receipt["document_sha256"]:
+        raise EngineError("native_export_revision_conflict",
+            "Native figure changed after verified publication/export; preserve the current native save and inspect it.",
+            action="plot.describe", plot=context["plot"])
+    expected: str = receipt["document_sha256"]
+    return expected
 
 
 def export_native(target: Path) -> dict[str, Any]:
@@ -205,8 +217,9 @@ def export_native(target: Path) -> dict[str, Any]:
         result = _export_saved_suite(Path(context["workspace"]), figure_ids=(context["figure_id"],))
         current = require_object(target)
         spec, _ = selected_spec(current)
+        native_sha = _verified_native_sha(current)
         identity = native_identity(context["workspace"], context["figure_id"],
-            current["manifest"]["sources"], file_sha256(spec), file_sha256(Path(context["plot"])))
+            current["manifest"]["sources"], file_sha256(spec), native_sha)
     return {**result, "kind": "sciplot_plot_result", "version": 1, "status": "complete",
             **identity, "plot": context["plot"], "plot_type": "LegacyPlot", "ready_to_use": True,
             "scope": "single_figure", "scientific_hash_changed": False}
