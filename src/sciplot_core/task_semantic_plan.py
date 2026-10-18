@@ -61,9 +61,13 @@ def _coordinate_decisions(sources: list[dict[str, Any]], intent: dict[str, Any])
         for source in sources:
             for candidate in source["candidates"]:
                 for block in candidate["blocks"]:
-                    columns = [column for column in candidate["columns"] if column["column_index"] in block["column_indices"]]
+                    columns = block.get("columns") or [column for column in candidate["columns"] if column["column_index"] in block["column_indices"]]
                     eligible = [column for column in columns if column["quantity"] == coordinate["quantity"]]
-                    if not eligible and role == "y":
+                    derived = block.get("derived_coordinates", {}).get(coordinate["quantity"])
+                    has_selector = any(field in coordinate for field in ("header", "column_id"))
+                    if not eligible and derived and not has_selector:
+                        eligible = [derived]
+                    elif not eligible and role == "y":
                         eligible = [column for column in columns if column["quantity"] is None and column["column_id"] in block["response_columns"]]
                     for field in ("header", "column_id"):
                         if field in coordinate:

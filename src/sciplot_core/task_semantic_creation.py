@@ -48,6 +48,11 @@ def prepare_plan(paths: list[Path], intent: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_managed_request(state: dict[str, Any]) -> dict[str, Any]:
+    if any(candidate.get("format") == "rheology_frequency_intervals"
+           for source in state["semantic_plan"]["sources"] for candidate in source["candidates"]):
+        from sciplot_core.task_semantic_frequency import build_frequency_request
+
+        return build_frequency_request(state)
     from sciplot_core.task_semantic_figure import build_request
 
     return build_request(state)

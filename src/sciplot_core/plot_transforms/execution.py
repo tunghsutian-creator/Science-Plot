@@ -15,6 +15,7 @@ from .schema import ordered_nodes, validate_node
 from .identity import builtin_executor, require_builtin_runtime_current
 from .series import run_series_builtin
 from .units import run_unit_builtin
+from .rheology import run_rheology_builtin
 
 
 def digest(value: Any) -> str:
@@ -42,6 +43,8 @@ def execute_node(node: Any, inputs: dict[str, dict[str, Any]], *,
         result, details = run_series_builtin(node, sources)
     elif node["kind"] in {"convert_unit", "time_offset"}:
         result, details = run_unit_builtin(node, source)
+    elif node["kind"] == "rheology_complex_viscosity":
+        result, details = run_rheology_builtin(node, source)
     else:
         result, details = run_builtin(node, source)
     result["provenance"] = deepcopy(result["provenance"])

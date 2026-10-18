@@ -1,5 +1,6 @@
 """Compile a confirmed semantic task into the existing Binding/FigureSpec contracts."""
 from copy import deepcopy
+from collections.abc import Callable
 import math
 from pathlib import Path
 from typing import Any, NoReturn
@@ -188,7 +189,8 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list[dict[str, Any]],
-             transforms: list[dict[str, Any]], datasets: dict[str, Any], temperature_source: str) -> dict[str, Any]:
+             transforms: list[dict[str, Any]], datasets: dict[str, Any], temperature_source: str,
+             *, axis_policy: Callable[[str, dict[str, Any], str, list[float]], tuple[list[float], list[float], str, str]] | None = None) -> dict[str, Any]:
     intent = state["request"]["intent"]
     scales, axes, layers, slots = [], [], [], {}
     coordinates = [("x", intent["x"], "bottom"), ("y", intent["y"], "left")]
@@ -201,17 +203,21 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
             _error("semantic_unit_ambiguous", "All series on an axis require one declared unit.", role=role, units=sorted(units))
         unit = next(iter(units))
         values = [value for record in selected for value in datasets[record["dataset_id"]]["columns"][role]["values"] if value is not None]
-        domain = _domain(values, coordinate)
-        scales.append({"id": "scale:" + role, "dimension": "x" if role == "x" else "y", "transform": "linear",
+        if axis_policy is not None:
+            domain, ticks, label, scale_transform = axis_policy(role, coordinate, unit, values)
+        else:
+            domain = _domain(values, coordinate)
+            ticks, scale_transform = _ticks(domain), "linear"
+            label_unit = "°C" if unit == "C" else unit
+            label = coordinate["quantity"].title() + (f" ({label_unit})" if unit else "")
+        scales.append({"id": "scale:" + role, "dimension": "x" if role == "x" else "y", "transform": scale_transform,
                        "domain": domain, "unit": unit, "quantity": coordinate["quantity"], "direction": "ascending"})
-        label_unit = "°C" if unit == "C" else unit
         axes.append({"id": "axis:" + role, "scale_id": "scale:" + role, "side": side,
-                     "label": coordinate["quantity"].title() + (f" ({label_unit})" if unit else ""),
-                     "visible": True, "label_visible": True, "ticks": _ticks(domain), "style": {}})
+                     "label": label, "visible": True, "label_visible": True, "ticks": ticks, "style": {}})
     def layer(record: dict[str, Any], index: int, *, temperature: bool = False) -> None:
         role = "temperature" if temperature else "y"
         identifier = "layer:temperature" if temperature else f"layer:response:{index}"
-        label = "Temperature" if temperature else (intent.get("labels", [])[index] if index < len(intent.get("labels", [])) else record["sample"])
+        label = "Temperature" if temperature else (intent.get("labels", [])[index] if index < len(intent.get("labels", [])) else record.get("label", record["sample"]))
         line = {"id": identifier + ":line", "type": "line", "style": {"line_color": "#888888", "line_style": "dash"} if temperature else {}}
         display = intent.get("display", {})
         if not temperature and display.get("interpolation"):

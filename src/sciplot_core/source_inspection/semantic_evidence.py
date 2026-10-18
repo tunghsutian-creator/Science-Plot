@@ -29,6 +29,12 @@ _QUANTITIES = {
     'wavelength': {'wavelength', '波长'},
     'absorbance': {'absorbance', '吸光度'},
     'transmittance': {'transmittance', '透过率'},
+    'angular_frequency': {'angular frequency', 'angularfrequency', 'frequency', 'omega', 'ω'},
+    'storage_modulus': {'storage modulus', 'storagemodulus', "g'", 'g′'},
+    'loss_modulus': {'loss modulus', 'lossmodulus', 'g"', 'g″'},
+    'complex_viscosity': {'complex viscosity', 'complexviscosity', '|η*|', '|eta*|'},
+    'imaginary_complex_viscosity': {'im(complex viscosity)', 'imaginary complex viscosity'},
+    'real_complex_viscosity': {'re(complex viscosity)', 'real complex viscosity'},
 }
 
 
@@ -41,7 +47,15 @@ def _finite(value: Any) -> float | None:
 
 
 def _quantity(header: str) -> str | None:
-    token = _UNIT_SUFFIX.sub('', header).strip().casefold()
+    # A component's parentheses are part of its quantity, not a unit suffix.
+    from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit
+    from sciplot_core.semantic_sources.rheology_frequency_metrics import is_rheology_component_header, is_rheology_magnitude_header
+
+    token = (_UNIT_SUFFIX.sub('', header) if explicit_header_unit(header) else header).strip().casefold()
+    if is_rheology_component_header(header):
+        return next((name for name, aliases in _QUANTITIES.items() if token in aliases), 'rheology_component')
+    if is_rheology_magnitude_header(header, metric='complex_viscosity'):
+        return 'complex_viscosity'
     return next((name for name, aliases in _QUANTITIES.items() if token in aliases), None)
 
 
@@ -57,9 +71,14 @@ def _header_candidate(frame: pd.DataFrame) -> tuple[int, int | None] | None:
         if sum(bool(header) and _finite(header) is None for header in headers) < 2:
             continue
         inline = sum(bool(explicit_header_unit(header)) for header in headers)
-        adjacent = (sum(bool(_unit(value)) for value in frame.iloc[row + 1]) if row + 1 < len(frame) else 0)
-        if adjacent >= 2:
-            return row, row + 1
+        for offset in (1, 2):
+            if row + offset >= len(frame):
+                break
+            if offset == 2 and any(cell_text(value) for value in frame.iloc[row + 1]):
+                break
+            adjacent = (sum(bool(_unit(value)) for value in frame.iloc[row + offset]) if row + offset < len(frame) else 0)
+            if adjacent >= 2:
+                return row, row + offset
         if inline >= 2:
             return row, None
     return None
@@ -180,7 +199,12 @@ def inspect_semantic_tables(path: str | Path, *, rule_id: str | None = None) -> 
         if not table['row_count']:
             continue
         frame = read_original_table(source, table['sheet'], digest)
-        candidate = _candidate(frame, table['sheet'], position)
+        from sciplot_core.source_inspection.rheology_evidence import instrument_frequency_candidate
+
+        candidate = instrument_frequency_candidate(frame, sheet=table['sheet'], position=position, source=source,
+            column_reader=_column, finite=_finite, unit_reader=_unit)
+        if candidate is None:
+            candidate = _candidate(frame, table['sheet'], position)
         if candidate is not None:
             candidates.append(candidate)
     if file_sha256(source) != digest:

@@ -115,6 +115,7 @@ def _rheology_unit_conversion_inventory(
             "source": str(sample.source),
             "x": sample.x_conversion,
             "metrics": sample.metric_conversions or {},
+            **({"source_interval": sample.source_interval} if sample.source_interval else {}),
         }
         for sample in samples
     ]

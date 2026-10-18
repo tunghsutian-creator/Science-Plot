@@ -28,6 +28,8 @@ def run_unit_builtin(node: dict[str, Any], source: dict[str, Any]) -> tuple[dict
     if node["kind"] == "convert_unit":
         declared, target = parameters["from_unit"], parameters["to_unit"]
         original, canonical = canonical_unit_token(declared), canonical_unit_token(target)
+        viscosity_aliases = {"Pa·s": "Pa.s", "Pa s": "Pa.s", "mPa·s": "mPa.s", "mPa s": "mPa.s"}
+        original, canonical = viscosity_aliases.get(original, original), viscosity_aliases.get(canonical, canonical)
         try:
             offset = convert_value(0, original, canonical)
             factor = convert_value(1, original, canonical) - offset

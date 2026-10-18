@@ -117,7 +117,9 @@ def test_external_mixed_sample_inputs_need_explicit_lineage_or_prior_selection(t
 def test_builtin_identity_exposes_every_bound_implementation_file():
     files = builtin_files()
     assert {Path(name).name for name in files} == {"builtins.py", "datasets.py", "execution.py", "schema.py", "identity.py",
-                                                "series.py", "lineage.py", "units.py", "unit_conversion.py", "unit_data.py"}
+                                                "series.py", "lineage.py", "units.py", "unit_conversion.py", "unit_data.py",
+                                                "rheology.py", "rheology_frequency_metrics.py", "rheology_units.py", "unit_formatting.py",
+                                                "text_values.py", "paired_curve_table_metadata.py", "frame_export.py"}
     assert all(Path(name).is_absolute() and file_sha256(Path(name)) == value for name, value in files.items())
 
 

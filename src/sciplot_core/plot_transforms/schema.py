@@ -29,6 +29,9 @@ def transform_schema() -> dict[str, Any]:
                                 "to_unit": {"type": "string", "minLength": 1}}),
         "time_offset": closed({"time_column": IDENTIFIER, "offset": {"type": "number"},
                                "unit": {"type": "string", "minLength": 1}}),
+        "rheology_complex_viscosity": closed({"frequency_column": IDENTIFIER, "storage_column": IDENTIFIER,
+                                             "loss_column": IDENTIFIER, "output_column": IDENTIFIER,
+                                             "output_unit": {"enum": ["Pa s", "Pa·s", "mPa s", "mPa·s"]}}),
         "external": {"type": "object"},
     }
     variants = []

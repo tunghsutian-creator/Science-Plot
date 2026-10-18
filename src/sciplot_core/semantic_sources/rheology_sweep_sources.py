@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import replace
+import re
 from typing import Any
 import pandas as pd
 from sciplot_core.foundation.text_values import (
@@ -186,6 +188,53 @@ def _rheology_sweep_units(
     return [_clean_text(value) for value in raw.iloc[best_index].tolist()]
 
 
+def _frequency_result_sections(
+    raw: pd.DataFrame, sample: str,
+) -> list[tuple[str, pd.DataFrame, dict[str, Any] | None]]:
+    """Keep explicitly temperature-labelled instrument results as distinct traces.
+
+    A measured temperature column can drift during a sweep. Only the literal
+    Result metadata establishes the nominal condition; no measured values are
+    rounded or regrouped into temperatures. Other sweep formats keep their
+    existing interval interpretation.
+    """
+    results: list[tuple[int, str, str, float]] = []
+    for index in range(len(raw)):
+        if _token(raw.iat[index, 0]) != "result":
+            continue
+        text = _clean_text(raw.iat[index, 1]) if raw.shape[1] > 1 else ""
+        temperature = re.fullmatch(r"(?:FS|Frequency\s+Sweep)\s+([+-]?\d+(?:\.\d+)?)\s*(?:°C|℃)", text, flags=re.IGNORECASE)
+        if temperature is None:
+            continue
+        results.append((index, text, temperature[1], float(temperature[1])))
+    all_results = [index for index in range(len(raw)) if _token(raw.iat[index, 0]) == "result"]
+    if results and len(all_results) != len(results):
+        raise ValueError("Mixed frequency Result metadata cannot be silently merged; bind each original result explicitly.")
+    if len(results) <= 1:
+        return [(sample, raw, None)]
+    sections = []
+    for position, (start, text, nominal_text, nominal) in enumerate(results):
+        stop = results[position + 1][0] if position + 1 < len(results) else len(raw)
+        block = raw.iloc[start:stop]
+        header_indexes = _find_rheology_sweep_headers(block, x_aliases=("angularfrequency", "frequency", "omega", "ω"), metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS)
+        if len(header_indexes) != 1:
+            raise ValueError("Each temperature-labelled frequency Result must contain exactly one original interval.")
+        header = header_indexes[0]
+        headers = [_clean_text(value) for value in block.iloc[header].tolist()]
+        x_index = _find_column(headers, ("angularfrequency", "frequency", "omega", "ω"))
+        numeric = [index for index in range(header + 1, len(block)) if _float(block.iat[index, x_index]) is not None]
+        if not numeric:
+            raise ValueError("A temperature-labelled frequency Result contains no numeric observations.")
+        label = f"{sample} · {nominal_text} °C"
+        sections.append((label, block, {"sample": sample, "result": text,
+            "result_row": int(raw.index[start]), "nominal_temperature": nominal,
+            "nominal_temperature_unit": "°C", "header_row": int(block.index[header]),
+            "data_start_row": int(block.index[numeric[0]]), "data_end_row": int(block.index[numeric[-1]]) + 1,
+            "point_count": len(numeric), "interval_index": position + 1,
+            "interval_count": len(results), "basis": "literal original Result metadata; measured temperatures retained"}))
+    return sections
+
+
 def _read_rheology_sweep_sample(
     source: Path,
     *,
@@ -334,18 +383,23 @@ def _read_rheology_sweep_comparison_samples(
                 raw,
                 fallback=_source_display_sample(candidate),
             ):
-                samples.append(
-                    _read_rheology_sweep_sample(
+                sections = (_frequency_result_sections(block, sample) if x_label == "Angular Frequency" else [(sample, block, None)])
+                for label, section, evidence in sections:
+                    parsed = _read_rheology_sweep_sample(
                         candidate,
                         x_aliases=x_aliases,
                         x_label=x_label,
                         default_x_unit=default_x_unit,
                         interval_selection=interval_selection,
                         metrics=metrics,
-                        raw=block,
-                        sample=sample,
+                        raw=section,
+                        sample=label,
                     )
-                )
+                    if evidence is not None:
+                        parsed = replace(parsed, interval_count=evidence["interval_count"],
+                            selected_interval_index=evidence["interval_index"],
+                            interval_selection_policy="explicit_result_temperature", source_interval=evidence)
+                    samples.append(parsed)
         except (OSError, ValueError) as exc:
             errors.append(f"{candidate.name}: {exc}")
     if errors and strict_scope:
@@ -356,6 +410,10 @@ def _read_rheology_sweep_comparison_samples(
         )
     if not samples and strict_scope:
         raise ValueError(f"No rheology sweep exports found under {source}.")
+    # Explicit result conditions already have an authoritative acquisition
+    # order. Sorting by measured modulus must not reorder those conditions.
+    if any(sample.source_interval is not None for sample in samples):
+        return samples
     return sorted(samples, key=_sweep_sample_order_key)
 
 

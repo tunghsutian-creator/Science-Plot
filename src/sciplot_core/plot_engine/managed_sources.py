@@ -12,6 +12,24 @@ from sciplot_core.plot_transforms import ordered_nodes
 from .errors import EngineError
 
 
+def _selected_original_columns(document: dict[str, Any], source_id: str) -> set[str] | None:
+    """Only an exclusively selecting source boundary may omit unrelated columns."""
+    if any(mapping[axis]["source_id"] == source_id for mapping in document["scientific"]["mappings"].values() for axis in ("x", "y")):
+        return None
+    consumers = [node for node in document["scientific"]["transforms"] if source_id in node["inputs"]]
+    if not consumers or any(node["kind"] != "select" or node["inputs"] != [source_id] for node in consumers):
+        return None
+    # Validate the original typed nodes, including executor descriptors, before
+    # treating their declared columns as a source loading restriction.
+    from sciplot_core.plot_transforms import builtin_executor, validate_node
+
+    for node in consumers:
+        validate_node(node)
+        if node["executor"] != builtin_executor() or node["determinism"] != "deterministic":
+            raise EngineError("managed_source_select_invalid", "Original column selection requires the current deterministic builtin executor.")
+    return {name for node in consumers for name in node["parameters"]["columns"]}
+
+
 @with_table_reads
 def load_sources(document: dict[str, Any], rule_id: str) -> dict[str, dict[str, Any]]:
     datasets: dict[str, dict[str, Any]] = {}
@@ -29,6 +47,12 @@ def load_sources(document: dict[str, Any], rule_id: str) -> dict[str, dict[str, 
         if snapshot is None:
             raise EngineError("managed_source_unsupported", "This source format does not support explicit original-table binding.")
         selected = select_table(snapshot, source["table_selection"], source.get("metadata_confirmations"))
+        required_columns = _selected_original_columns(document, source["source_id"])
+        if required_columns is not None:
+            available = {f"column:{column['index']}" for column in selected["columns"]}
+            if not required_columns <= available:
+                raise EngineError("managed_source_select_invalid", "An original column selection references an absent source column.")
+            selected["columns"] = [column for column in selected["columns"] if f"column:{column['index']}" in required_columns]
         selection = selected["table_selection"]
         frame = read_original_table(path, selection["sheet"], source["sha256"])
         start, end = selection["data_start_row"], selection["data_end_row"]
@@ -132,6 +156,12 @@ def _require_sample_lineage(document: dict[str, Any], raw: dict[str, dict[str, s
             if any(name not in columns for name in node["parameters"]["columns"]):
                 raise EngineError("managed_column_lineage_missing", "A transform selects an absent original column.")
             columns = {name: columns[name] for name in node["parameters"]["columns"]}
+        elif node["kind"] == "rheology_complex_viscosity":
+            parameters = node["parameters"]
+            inputs = [parameters[role + "_column"] for role in ("frequency", "storage", "loss")]
+            if any(name not in columns for name in inputs):
+                raise EngineError("managed_column_lineage_missing", "Viscosity derivation requires each original input column.")
+            columns[parameters["output_column"]] = set().union(*(columns[name] for name in inputs))
         elif node["kind"] == "rename":
             renames = node["parameters"]["columns"]
             if any(name not in columns for name in renames):
