@@ -215,7 +215,7 @@ def recognize_source(
 
     if any(pd.to_numeric(compact[column], errors="coerce").notna().any() for column in compact):
         return RecognizedSource(model="unbound_table", raw=raw)
-    raise ValueError("The table contains no supported numeric measurement layout.")
+    raise ValueError("Could not recognize this file: the table contains no supported numeric measurement layout.")
 
 
 def looks_like_nmr(curves: tuple[CurveSeries, ...]) -> bool:
