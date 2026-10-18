@@ -61,6 +61,14 @@ Exact-current file comparison rehashes the full bytes and rejects identity,
 mode, size, modification-time or content changes. A ctime-only metadata update
 between two individually stable snapshots does not invalidate identical data.
 
+`task_semantic_selection.py` projects exact observed Test and qualified
+source/table/block selections before coordinate decisions and builders. The
+original block IDs/order, physical Test/Result/data rows, counts and raw SHA stay
+in available/selected/excluded provenance. Both predicates intersect; all
+references resolve and the result must be nonempty. Omission keeps the existing
+all-block behavior. Selection never creates a filtered source file or another
+scientific executor; both builders consume selected copies in the existing plan.
+
 Lifecycle success, provenance, artifact QA, human review, and journal
 compliance are separate evidence claims.
 
@@ -103,6 +111,23 @@ Failure before publication preserves the visible set; ordinary publication
 exceptions roll back replacements. The workspace lease serializes CLI operations,
 while native GUI saves are detected by fingerprints. This does not provide
 automatic process-crash recovery or a second document authority.
+
+Bound native suite figures also share `plot.open/describe/patch/decide/resume/export`
+through `plot_engine/prepared_routing.py` and `workflow/native_suite_operations.py`.
+They retain LegacyPlot/native authority and advertise only actual existing
+legend and relative-note fields. `native_suite_objects` binds the selected
+spec/native/source bytes to a stable figure ID and opaque content-bound revision;
+descriptions read current native values. Recognized invalid bindings fail closed
+before ordinary importing. `native_suite_preview/storage/transactions` reuse
+suite `style_previews`, exact native state audits, snapshots and guarded
+publication. They retain original requests for key replay and export-only
+continuation, preserving opaque native settings and scientific evidence.
+Selected export validates and executes only the chosen figure; unselected
+optional native/spec/export files are not prerequisites. Whole-suite export and
+the older separated-layout style guard retain their compatibility boundaries.
+Creation handles project in-memory successful metadata without another native
+inspection. The native backend owns role painting order while scientific and
+legend order remain as declared.
 
 ## External control and native document boundary
 

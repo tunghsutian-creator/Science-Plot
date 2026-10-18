@@ -49,6 +49,8 @@ def register_task_commands(subparsers: Any) -> None:
     create.add_argument("source", type=Path, nargs="?", help="Original input; omit when using repeated --source attachments.")
     create.add_argument("--source", dest="sources", type=Path, action="append", help="Exact original table attachment; repeat to combine sources in this same task.")
     create.add_argument("--intent", type=Path, metavar="JSON_FILE", help="Optional small semantic intent JSON file, mutually exclusive with semantic flags; never a FigureTemplate.")
+    create.add_argument("--test-name", dest="test_names", action="append", help="Select an exact observed Test value; repeat for multiple names. Original source rows and excluded blocks remain recorded.")
+    create.add_argument("--source-block", dest="source_blocks", action="append", metavar="SOURCE/TABLE/BLOCK", help="Select an inspected block, such as source:0/table:0/block:1; repeat for multiple blocks. Intersects --test-name when both are given.")
     create.add_argument("--x", help="Requested scientific X quantity, such as time or wavelength; independent of experiment identity.")
     create.add_argument("--x-header", help="Exact original header when several X candidates exist; source facts are not rewritten.")
     create.add_argument("--y-header", help="Exact original header when several response candidates exist; source facts are not rewritten.")

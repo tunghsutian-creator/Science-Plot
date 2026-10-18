@@ -67,6 +67,13 @@ adoption, uncertain external-execution reconciliation and background file
 observation also need separate durable contracts. Do not silently promote a
 partial import or restyle old native documents.
 
+The current bound-suite adapter covers existing native legends and relative
+notes through per-figure transactions and exact export. Added widgets, arbitrary
+native setters, scientific changes and automatic adoption remain outside that
+coverage. Expand only with exact native-state preservation and selected-object
+recovery evidence. Keep the caller's semantic/legend order independent from the
+backend's painting policy.
+
 The bounded text-intent route and read-only dependency explanation already
 exist. A theme intent remains a proposal. Before extending them, compare exact
 targets, stale revisions, native preview/recovery and unchanged science against
@@ -113,6 +120,12 @@ unit conversion and presentation interpolation. Broader experiment/coordinate
 combinations still require their own exact source and native acceptance; this
 bounded adapter does not replace the retained family workflows. Native snapshot
 delivery and the original local Managed registry remain distinct authorities.
+
+Exact literal Test/qualified-block selection retains original SHA, physical rows
+and explicit exclusions before formal transforms. Broader instrument formats,
+source revisions and missing/ambiguous scientific metadata still need independent
+original-data acceptance; do not substitute inferred sample names or rewrite raw
+tables to make a selection pass.
 
 Worksheet/region selection, multirow/merged metadata, shared-X/multiple-XY and
 per-pair/cross-sheet mappings already use the source-bound task/DataMapping

@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 5196,
-    "nodeids_sha256": "508d2f4cab441f0c948581fb5a33df969050fb8c5c14973985164a1e840771dd",
-    "test_sources_sha256": "f4b28d2a40fda596f55c079dbde682b560c23fee00afe20602ed89dbce0549d7",
-    "test_source_count": 367,
+    "nodeid_count": 5247,
+    "nodeids_sha256": "d5e23c29a57e966feca9b64ef006844fc4c62c55a4173d1ed51e82d5458fa0a4",
+    "test_sources_sha256": "91b5ca21005c47e3c3fc21ef776d476fe2d9e9d598b25745f1e02d4b9182b87f",
+    "test_source_count": 373,
     "candidate_nodeids": [
       "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[break-on-inf]",
       "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[ignore-0]",

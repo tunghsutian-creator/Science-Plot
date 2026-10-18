@@ -93,6 +93,9 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         "automatic_repairs", "automatic_corrections", "output_selection", "intent_revision", "delivery_result",
     )
     summary = {key: state[key] for key in keys if key in state}
+    handles = (state.get("result") or {}).get("plot_objects")
+    if isinstance(handles, list):
+        summary["plot_objects"] = handles
     if "intent" in state["request"] and "semantic_plan" in state:
         summary["source_plan"] = {"evidence": {"path": str(Path(state["task_dir"]) / "task.json"), "json_pointer": "/semantic_plan"},
                                   "sources": [{key: source[key] for key in ("source_id", "path", "sha256")}

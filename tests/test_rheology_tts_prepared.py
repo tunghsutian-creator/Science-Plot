@@ -220,6 +220,25 @@ def test_prepared_plot_preserves_order_values_and_native_roles_without_analysis(
 
     compact = _compact_creation_result(result)
     assert "native_result" not in compact
+    handle = compact["plot_objects"][0]
+    assert handle["figure_id"] == "Custom" and handle["plot"] == str(native_path)
+    assert handle["plot_type"] == "LegacyPlot"
+    assert handle["authority"]["visual"] == "saved_vsz"
+    assert handle["object_operations"]["revision_semantics"] == "content_bound"
+    # This figure explicitly has neither a legend nor notes. Its handle must
+    # advertise exact export while refusing an absent presentation edit target.
+    assert handle["object_operations"]["patch"]["supported"] is False
+    assert handle["object_operations"]["patch"]["reason_code"] == "object_no_editable_targets"
+    assert handle["object_operations"]["export"]["supported"] is True
+    from sciplot_core.plot_engine.service import PlotService
+
+    with_service = PlotService()
+    try:
+        opened = with_service.open(native_path, description={"scope": "summary"})
+    finally:
+        with_service.close()
+    assert (handle["plot_id"], handle["revision"]) == (opened["plot_id"], opened["revision"])
+    assert opened["object_operations"] == handle["object_operations"]
     assert compact["review"]["figures"][0]["document_sha256"] == file_sha256(native_path)
     assert Path(compact["review"]["figures"][0]["preview"]).is_file()
     assert json.loads(Path(compact["full_evidence_path"]).read_text())["native_result"] == result["native_result"]

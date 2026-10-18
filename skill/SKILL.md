@@ -40,6 +40,10 @@ and recovery detail only when the live response and chosen route leave a specifi
   follow the stated continuation. Do not change valid operations for a worker
   timeout. Long diagnostics stay local; open their reference only when the short
   response cannot explain the failure. Local preview timeout recovery is bounded.
+- Reuse creation `plot_objects` for later edits. Read their advertised capabilities
+  and current values, then submit only supported deltas. A selected prepared
+  figure keeps native authority and can export independently; do not resend
+  arrays, repeat scientific analysis or recreate optional figures for that edit.
 - Batch the complete authorized change. Let the local transaction own source,
   native document, scientific audit, QA and publication validation.
 - For a known ManagedPlot, start with a compact summary, then read only the

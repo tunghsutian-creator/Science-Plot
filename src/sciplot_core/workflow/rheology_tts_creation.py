@@ -140,12 +140,15 @@ def _install_delivery(candidate: Path, delivery: Path) -> None:
     install_new_delivery(candidate, delivery)
 
 
-def _result(manifest: dict, *, resumed: bool) -> dict:
+def _result(manifest: dict, *, compiled: dict, resumed: bool) -> dict:
+    from sciplot_core.workflow.rheology_tts_creation_handles import created_object_handles
+
     return {"status": "ready", "delivery": manifest["delivery"], "workspace": manifest["workspace"],
         "figures": len(manifest["documents"]), "numerical_processing": False,
         "prepared_plan_sha256": manifest["prepared_input"]["sha256"],
         "manual_edit": str(Path(manifest["delivery"]) / "Open_in_SciPlot.command"),
         "native_result": manifest["native_result"], "scientific_scope": manifest["scientific_scope"],
+        "plot_objects": created_object_handles(manifest, compiled),
         **({"resumed": True} if resumed else {})}
 
 
@@ -216,7 +219,7 @@ def _finish(workspace: Path, delivery: Path, checkpoint: dict, compiled: dict, *
         raise ValueError("Installed prepared delivery changed before completion.")
     checkpoint["phase"] = "completed"
     atomic_write_json(workspace / CHECKPOINT, checkpoint)
-    return _result(manifest, resumed=resumed)
+    return _result(manifest, compiled=compiled, resumed=resumed)
 
 
 def _build_publication(workspace: Path, delivery: Path, spec: dict, native: dict, binding: dict,

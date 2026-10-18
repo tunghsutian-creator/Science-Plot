@@ -10,8 +10,10 @@ from sciplot_core.studio_core.project_session import external_project_session
 from .backend import PlotBackend
 from .errors import EngineError
 from .exports import export_head
+from .external_mutation import authority_status
 from .managed_resolution import resolve_science, resolved_metadata
 from .managed_state import make_binding
+from .object_operations import plot_object_handle
 from .storage import commit, digest, load_head, read, write
 
 
@@ -55,4 +57,6 @@ def create_managed(request: dict[str, Any], backend: PlotBackend) -> dict[str, A
         result = export_head(root, head, backend)
         result.update({"plot_type": "ManagedPlot", "ir_hash": head["binding"]["ir_hash"],
                        "creation_evidence": str(path)})
+        result["plot_objects"] = [plot_object_handle(result, document=head["document"],
+                                                    authority=authority_status("ManagedPlot"))]
         return result

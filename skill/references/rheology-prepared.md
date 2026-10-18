@@ -63,6 +63,30 @@ simplicity. Preserve raw inputs and all source-bound scientific limitations.
 
 ## Saved style corrections and exports
 
+Creation returns one `plot_objects` handle per actual figure. For a later
+legend or existing-note correction, use its exact `plot` target and returned
+`next_step` to read `object_operations` and current targets. A suite path needs
+an explicit `plot open WORKSPACE --figure FIGURE_ID`; an exact returned editable
+VSZ already selects one figure. This preserves native VSZ authority.
+
+When advertised, read `plot describe PLOT --scope edit --target-id ID --property
+NAME --json`, then submit `plot patch PLOT --request DELTA.json --json` using
+the existing plot ID, base revision and stable idempotency key. The bounded
+adapter covers `legend.location` and an existing annotation's `text`, `x`, `y`
+properties. Use the exact advertised property names; note coordinates are
+relative within `[0,1]`. Legend corners use `top-left`, `top-right`,
+`bottom-left`, `bottom-right`. Do not resend coordinates, prepared plans or
+scientific analysis for these edits. The program preserves untargeted native
+settings, source evidence, arrays and transform ledger.
+
+Review a returned `needs_review` candidate and scientific audit, then submit
+its exact `plot.decide` request. Reuse the original key and base revision after
+a lost reply; `plot.resume` continues the same transaction. Native revisions
+are opaque content-bound integers; use the returned value without incrementing
+it. `plot export PLOT --json` exports only this selected current native figure.
+Other optional figures need no regeneration or native execution. Request only
+the figures the user wants, and review each selected final export.
+
 For an authorized template-style correction:
 
 ```bash

@@ -44,6 +44,11 @@ one source-bound plan for unresolved scientific choices, such as temperature
 column roles or how reset-time stages join. Experiment identity does not depend
 on which coordinate is selected for a particular view.
 
+Mixed instrument tables can select exact observed Test values or qualified source
+blocks in that same task. The source plan retains selected and excluded original
+rows, counts and reasons, while the original file and its hash remain intact.
+Selection happens before scientific coordinate derivation and unit conversion.
+
 Confirmed phase concatenation records original row lineage and its boundary
 policy. Unit conversion records both units and the exact conversion. Optional
 PCHIP interpolation creates a separate display curve through the measured knots;
@@ -113,6 +118,16 @@ scientific intent. Template creation separates the format, theme and explicit
 data binding, then produces one final export. A saved native-only change can return
 one audited reimport preview; source or mapping changes still require their
 scientific workflow. The local service reuses its native worker between operations.
+
+Creation replies include `plot_objects` handles for supported continuation.
+Prepared rheology figures use the same describe/patch/decide/resume/export surface
+for advertised legend and existing-note edits, retaining saved VSZ authority.
+The program reads current native values, checks unchanged scientific evidence and
+preserves unrelated native settings. Each selected figure can be edited and
+exported independently of optional suite figures; a presentation delta does not
+resubmit numerical arrays or repeat the scientific analysis. Inspect the returned
+capabilities before choosing an operation. Native revisions are content-bound
+identities, while Managed revisions retain their existing revision sequence.
 
 For a common presentation change, use one bounded local entry:
 

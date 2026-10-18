@@ -1,6 +1,7 @@
 """Thin CLI adapter to deterministic tasks; no model invocation."""
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +38,7 @@ def _object(path: Path) -> dict[str, Any]:
 
 def _semantic_intent(args: Any) -> dict[str, Any] | None:
     flags = ("x", "x_header", "y_header", "x_unit", "y", "y_unit", "y_min", "y_max", "secondary_y", "secondary_y_unit",
-             "stages", "stage_order", "time_boundary", "temperature_header", "temperature_source", "labels", "marker_every", "interpolation")
+             "stages", "stage_order", "time_boundary", "temperature_header", "temperature_source", "labels", "marker_every", "interpolation", "test_names", "source_blocks")
     has_flags = any(getattr(args, key, None) is not None for key in flags)
     if args.intent is not None:
         if has_flags:
@@ -48,6 +49,18 @@ def _semantic_intent(args: Any) -> dict[str, Any] | None:
     if not args.x or not args.y:
         raise TaskControlError("invalid_semantic_intent", "Attachment plotting needs --x QUANTITY and --y QUANTITY; original columns, units and row IDs are expanded by the program.")
     intent: dict[str, Any] = {"x": {"quantity": args.x}, "y": {"quantity": args.y}}
+    selection: dict[str, Any] = {}
+    if getattr(args, "test_names", None) is not None:
+        selection["test_names"] = args.test_names
+    if getattr(args, "source_blocks", None) is not None:
+        blocks = []
+        for value in args.source_blocks:
+            if not re.fullmatch(r"source:[0-9]+/table:[0-9]+/block:[0-9]+", value):
+                raise TaskControlError("invalid_semantic_intent", "--source-block requires an exact inspected source:N/table:N/block:N reference.")
+            blocks.append(dict(zip(("source_id", "table_id", "block_id"), value.split("/"), strict=True)))
+        selection["blocks"] = blocks
+    if selection:
+        intent["selection"] = selection
     for coordinate in ("x", "y"):
         if getattr(args, coordinate + "_header") is not None:
             intent[coordinate]["header"] = getattr(args, coordinate + "_header")

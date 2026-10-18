@@ -65,13 +65,13 @@ def tool_definitions() -> list[Tool]:
         object_schema({"scope": {"const": "summary"}}, ["scope"]),
         object_schema({"scope": {"const": "edit"}, "target": string, "property": string},
                       ["scope", "target", "property"]),
-    ], "description": "For a previously identified ManagedPlot, request summary first, then edit for one advertised stable target ID/property. Omit for unknown or LegacyPlot authority, or when the full response is needed. Omission preserves the unchanged full response."}
-    semantic_plot = {"plot": {**semantic_path, "description": "Stable absolute local plot document directory returned by project_open or plot_create."}}
+    ], "description": "Use summary or edit only when object_operations advertises that scope. Edit selects one advertised stable target/property. Omit for unknown authority or a full response; LegacyPlot native coverage remains explicit."}
+    semantic_plot = {"plot": {**semantic_path, "description": "Exact absolute plot target returned in plot_objects or project_open: a document directory or a supported bound native figure VSZ."}}
     add("plot_deliver", "Package an ordered list of exact current ManagedPlot revisions into a new native-snapshot delivery and ZIP. Reuses per-plot audited export and native Save, retains original source bytes, reports partial completion and resumes the identical request. Never replaces an existing destination or claims a portable ManagedPlot registry. Local semantic continuation and independent native editing remain distinct.",
         {"request": managed_delivery_schema()}, ["request"], idempotent=True)
-    add("project_open", "Open one existing saved figure. For a known ManagedPlot, pass description scope summary to get currentness, revision and edit targets without the full schema; for unknown or LegacyPlot authority omit description. Legacy remains under its native coverage. Does not overwrite the figure.",
+    add("project_open", "Open one existing saved figure. Known ManagedPlot or supported bound native suite objects advertise summary/edit scopes and legal deltas in object_operations. A multi-figure suite requires figure_id or its exact returned VSZ. Unknown authority uses full open. Does not overwrite or promote native coverage.",
         {"target": semantic_path, "figure_id": string, "description": description}, ["target"], idempotent=True)
-    add("plot_describe", "Read current saved state without rebuilding science. After a ManagedPlot summary, pass description scope edit with one advertised target/property for its current value, exact schema and risk. Omit description for the full response. Stale/native changes and pending work remain explicit.",
+    add("plot_describe", "Read current object capabilities and values without rebuilding science. When advertised, use scope edit for one target/property and its exact schema. Supported native suite values come from the current selected VSZ. Omit description for full state; stale inputs and pending work remain explicit.",
         {**semantic_plot, "description": description}, ["plot"], read_only=True)
     add("plot_create", "Expert Template/Binding creation through the existing semantic lifecycle; ordinary attachment plotting uses task_start sources+intent. Source-only compatibility remains. Keep idempotency_key unchanged on retry; unresolved scientific choices return a decision.",
         {"request": create_schema()}, ["request"], idempotent=True, destructive=True)
@@ -83,7 +83,7 @@ def tool_definitions() -> list[Tool]:
         {**semantic_plot, "request": resume_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_render", "Render the current semantic document through its native backend; reuses valid current cache and preserves the saved scientific state.",
         semantic_plot, ["plot"], idempotent=True)
-    add("plot_export", "Export the committed semantic revision. A prior export failure resumes export without applying a patch again. Handoff requires ready delivery evidence.",
+    add("plot_export", "Export the current selected object through its authority owner. A supported bound native figure exports independently of optional suite figures. A prior export failure continues without applying a patch again. Handoff requires ready evidence.",
         semantic_plot, ["plot"], idempotent=True, destructive=True)
     add("plot_rollback", "Restore an explicit historical presentation as a new revision, bound to base_revision and idempotency_key. Preserves revision history and scientific state.",
         {**semantic_plot, "request": rollback_schema()}, ["plot", "request"], idempotent=True, destructive=True)

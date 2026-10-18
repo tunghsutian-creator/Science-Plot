@@ -217,6 +217,24 @@ pointing to a component cannot declare it a magnitude. Correct that small intent
 in the same task using the returned `draft_revision_template`, then resume through
 the existing task entry. Preserve the original CSV and all scientific points.
 
+For a mixed source, add `--test-name 'Exact observed Test value'` to this same
+command. Repeat it for several literal Test values. `--source-block
+source:0/table:0/block:1` selects an exact block advertised by the source plan;
+repeat it for several blocks. Both selectors intersect when supplied. Test
+names come from original Test cells, including case; filenames and display
+labels do not establish them. Unknown references or an empty intersection
+return a correctable draft error. Omission retains the all-block behavior.
+The compact `source_plan.selection` records selected/excluded block identities,
+original Test/Result rows, point counts and reasons. It does not contain numeric
+arrays. Selection precedes coordinate decisions and the existing formal
+magnitude/unit transforms, without rewriting the source CSV.
+
+A successful semantic creation returns `plot_objects` with an exact plot target
+and `next_step` for its current description. Use that existing object for a later
+legend or annotation change. Read its advertised property/current-value contract,
+then send a delta through `plot.patch`; do not repeat source coordinates or
+create another figure for a supported presentation edit.
+
 ## Stress-relaxation paired wide tables
 
 The stress owner recognizes the explicit compact pairs
