@@ -98,6 +98,11 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
                                   "sources": [{key: source[key] for key in ("source_id", "path", "sha256")}
                                               for source in state["semantic_plan"].get("sources", [])],
                                   "confirmation": state.get("plan_confirmation", {"mode": "explicit_source_bound_answers"})}
+        if "selection" in state["semantic_plan"]:
+            from sciplot_core.task_semantic_selection import selection_summary
+
+            summary["source_plan"]["selection"] = selection_summary(
+                state["semantic_plan"]["selection"], state.get("semantic_choices", {}))
     question = summary.get("question")
     if isinstance(question, dict) and question.get("mapping_candidates"):
         question = {**question, "mapping_candidates": [

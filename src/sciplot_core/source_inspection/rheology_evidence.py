@@ -33,8 +33,11 @@ def instrument_frequency_candidate(frame: pd.DataFrame, *, sheet: str | None, po
     all_columns = []
     for index, (_original_label, section, interval) in enumerate(sections):
         header = headers[index]
-        sample = next((clean_text(frame.iat[row, 1]) for row in range(header - 1, -1, -1)
-                       if token(frame.iat[row, 0]) == "test" and frame.shape[1] > 1), source.stem)
+        test_row = next((row for row in range(header - 1, -1, -1)
+                         if token(frame.iat[row, 0]) == "test" and frame.shape[1] > 1), None)
+        sample = clean_text(frame.iat[test_row, 1]) if test_row is not None else source.stem
+        result_row = next((row for row in range(header - 1, -1, -1)
+                           if token(frame.iat[row, 0]) == "result" and frame.shape[1] > 1), None)
         if interval is not None:
             bound_interval = {**interval, "sample": sample}
             label = f"{sample} · {interval['nominal_temperature']:g} °C"
@@ -65,6 +68,10 @@ def instrument_frequency_candidate(frame: pd.DataFrame, *, sheet: str | None, po
                  "response_columns": [column["column_id"] for column in columns
                     if column["unit"] and column["quantity"] not in {"temperature", "angular_frequency"}],
                  "table_selection": selection, "sample": sample, "label": label, "source_interval": bound_interval}
+        if test_row is not None:
+            block.update(test_name=sample, test_row=test_row)
+        if result_row is not None:
+            block.update(result=clean_text(frame.iat[result_row, 1]), result_row=result_row)
         magnitude = [column for column in columns if column["quantity"] == "complex_viscosity"]
         storage = [column for column in columns if column["quantity"] == "storage_modulus"]
         loss = [column for column in columns if column["quantity"] == "loss_modulus"]

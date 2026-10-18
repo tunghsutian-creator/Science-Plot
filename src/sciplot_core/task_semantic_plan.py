@@ -108,9 +108,13 @@ def prepare_plan(paths: list[Path], intent: dict[str, Any]) -> dict[str, Any]:
         source = {"source_id": f"source:{index}", "path": str(path), "name": path.name,
                   "sha256": evidence["sha256"], "candidates": evidence["candidates"],
                   "scientific_identity": evidence["scientific_identity"]}
+        sources.append(source)
+    from sciplot_core.task_semantic_selection import select_source_blocks
+
+    sources, selection = select_source_blocks(sources, intent.get("selection"))
+    for source in sources:
         for candidate in source["candidates"]:
             _stage_evidence(source, candidate)
-        sources.append(source)
     decisions: list[dict[str, Any]] = _coordinate_decisions(sources, intent)
     multiple = {source["source_id"]: [candidate["candidate_id"] for candidate in source["candidates"]]
                 for source in sources if len(source["candidates"]) > 1}
@@ -139,7 +143,7 @@ def prepare_plan(paths: list[Path], intent: dict[str, Any]) -> dict[str, Any]:
         if "boundary" not in intent.get("stages", {}):
             decisions.append({"field": "time_boundary", "options": ["preserve_endpoint", "next_sample"],
                 "message": "preserve_endpoint retains both boundary points at equal cumulative time; next_sample also retains both and advances by the entering stage's first measured positive sample interval. Neither policy invents measurements."})
-    return {"sources": sources, "intent": intent, "decisions": decisions,
+    return {"sources": sources, "selection": selection, "intent": intent, "decisions": decisions,
             "authority": "Preparation evidence only. Confirmed source facts compile into the existing Managed document; original bytes stay immutable.",
-            "raw_data": "all original rows retained; source row bounds are zero-based and data_end_row is exclusive",
+            "raw_data": "original bytes retained; selected original blocks and explicit exclusions are recorded; source row bounds are zero-based and data_end_row is exclusive",
             "interpolation": "Display interpolation retains raw marker points; gaps and non-increasing time boundaries remain separate runs."}

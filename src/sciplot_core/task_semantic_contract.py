@@ -12,8 +12,18 @@ def intent_schema() -> dict[str, Any]:
                          "column_id": {"type": "string", "pattern": "^column:[0-9]+$"}}, ["quantity"])
     interpolation = closed({"method": {"const": "pchip"}, "subdivisions": {"type": "integer", "minimum": 2, "maximum": 32},
                             "purpose": {"const": "display"}, "boundary": {"const": "preserve_gaps"}})
+    blocks = {"type": "array", "minItems": 1, "maxItems": 512, "uniqueItems": True,
+              "items": closed({"source_id": {"type": "string", "pattern": "^source:[0-9]+$"},
+                               "table_id": {"type": "string", "pattern": "^table:[0-9]+$"},
+                               "block_id": {"type": "string", "pattern": "^block:[0-9]+$"}},
+                              ["source_id", "table_id", "block_id"])}
+    selection = closed({"test_names": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": True,
+                                        "items": {"type": "string", "minLength": 1, "maxLength": 512}},
+                        "blocks": blocks}, [])
+    selection["minProperties"] = 1
     return closed({"x": coordinate, "y": coordinate, "secondary_y": {**coordinate, "properties": {**coordinate["properties"], "quantity": {"const": "temperature"}}},
                    "rule_id": {"type": "string", "minLength": 1},
+                   "selection": selection,
                    "labels": {"type": "array", "minItems": 1, "maxItems": 32,
                               "items": {"type": "string", "minLength": 1, "maxLength": 160}},
                    "stages": closed({"mode": {"enum": ["source_order", "concatenate"]},

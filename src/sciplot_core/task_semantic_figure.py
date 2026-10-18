@@ -267,12 +267,17 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
             layout_attempts.append({"width_mm": width, "status": "no_space", "reason_code": getattr(exc, "reason_code", "")})
     else:
         _error("semantic_layout_no_space", "No declared house size preset fits the confirmed axes and legend. Preserve scientific content and choose an explicit supported composition.", attempts=layout_attempts)
-    binding = {"kind": "sciplot_binding", "schema_version": 1, "template_id": template,
+    binding: dict[str, Any] = {"kind": "sciplot_binding", "schema_version": 1, "template_id": template,
                "data_sources": sources, "slots": slots, "transforms": transforms, "guards": {},
                "provenance": {"semantic_task": {"task": state["task_dir"], "intent_revision": state["intent_revision"],
                    "intent": deepcopy(intent), "choices": deepcopy(state.get("semantic_choices", {})),
                    "layout_selection": {"policy": "first_fitting_house_width", "attempts": layout_attempts},
                    "stages": {record["source_id"]: record["stages"] for record in records}}}}
+    if "selection" in state["semantic_plan"]:
+        from sciplot_core.task_semantic_selection import selection_for_choices
+
+        binding["provenance"]["semantic_task"]["selection"] = selection_for_choices(
+            state["semantic_plan"]["selection"], state.get("semantic_choices", {}))
     request = {"idempotency_key": key, "template_definition": {"kind": "sciplot_figure_template", "schema_version": 2,
                    "template_id": template, "figure_spec": figure}, "data_binding": binding,
                "rule_id": _rule_id(intent)}
