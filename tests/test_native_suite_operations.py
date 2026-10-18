@@ -142,6 +142,7 @@ def test_prepared_same_object_display_delta_preserves_science_native_and_optiona
     assert historical["status"] == "complete" and historical["replayed"] is True
     assert historical["ready_to_use"] is False and historical["current_state_matches"] is False
     assert historical["export_status"] == "unknown"
+    assert historical["exports"] == []
     assert len(calls) == calls_before
 
 
@@ -161,8 +162,10 @@ def test_selected_export_and_edit_ignore_missing_optional_native_and_spec(suite,
     Path(manifest["native_result"]["figures"][1]["spec_path"]).unlink()
     original_optional = snapshot([Path(path) for path in manifest["documents"][1]["exports"]])
     description = describe_native_object(native, description={"scope": "summary"})
-    preview = patch_native_object(native, _request(description))
-    assert decide_native_object(native, _accept(preview))["status"] == "complete"
+    request = _request(description)
+    preview = patch_native_object(native, request)
+    decided = decide_native_object(native, _accept(preview))
+    assert decided["status"] == "complete"
     calls, dispatch = [], rheology_tts_render._dispatch
 
     def record(request):
@@ -174,6 +177,13 @@ def test_selected_export_and_edit_ignore_missing_optional_native_and_spec(suite,
     assert result["selected_figures"] == ["Main"] and result["scope"] == "single_figure"
     assert len(calls) == 1 and calls[0]["action"] == "export_batch"
     assert [item["figure"]["id"] for item in calls[0]["documents"]] == ["Main"]
+    resumed = resume_native_object(native, {key: request[key] for key in (
+        "plot_id", "base_revision", "idempotency_key")})
+    assert resumed["replayed"] is True and resumed["ready_to_use"] is True
+    assert resumed["exports"] == result["exports"]
+    for exported in resumed["exports"]:
+        assert exported["sha256"] == file_sha256(Path(exported["path"]))
+    assert len(calls) == 1  # replay checks current receipts, never executes the native worker
     assert snapshot([Path(path) for path in original_optional]) == original_optional
     assert not optional.exists()
     Path(manifest["documents"][0]["exports"][0]).unlink()
@@ -181,6 +191,7 @@ def test_selected_export_and_edit_ignore_missing_optional_native_and_spec(suite,
     unchanged = patch_native_object(native, _request(current, key="no-op-missing-export"))
     assert unchanged["changed"] is False and unchanged["ready_to_use"] is False
     assert unchanged["export_status"] == "pending" and unchanged["next_step"]["action"] == "plot.export"
+    assert unchanged["exports"] == []
 
 
 @pytest.mark.comprehensive

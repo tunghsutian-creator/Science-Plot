@@ -98,6 +98,7 @@ def _result(context: dict[str, Any], record: dict[str, Any], path: Path, *, repl
             and all(Path(source["path"]).is_file() and file_sha256(Path(source["path"])) == source["sha256"]
                     for source in record["sources"]))
         exports = _current_exports(context, record["presentation_hash"]) if current else []
+        result["exports"] = exports
         result["current_state_matches"] = current
         result["ready_to_use"] = bool(exports)
         if not exports:
