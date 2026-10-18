@@ -74,6 +74,96 @@ def _request(tmp_path: Path) -> tuple[Path, dict, dict]:
     return request_path, request, plan
 
 
+def test_public_prepared_contract_supplies_executable_provenance_and_unit_example(
+    tmp_path: Path, capsys: pytest.CaptureFixture,
+) -> None:
+    from jsonschema import Draft202012Validator
+
+    from sciplot_core.cli.dispatch.rheology import dispatch_rheology
+    from sciplot_core.cli.parsers import build_parser
+    from sciplot_core.rheology_tts_spec import compile_tts_spec
+    from sciplot_core.rheology_tts_style import prepare_tts_presentation
+
+    assert dispatch_rheology(build_parser().parse_args(["rheology", "capabilities", "--json"])) == 0
+    capabilities = json.loads(capsys.readouterr().out)
+    contract = capabilities["prepared_plan"]
+    assert contract["required"] == capabilities["presentation"]["processed_plan"]["required"]
+    assert "transform_ledger" in contract["required"]
+    assert "first bound source" in contract["output"]
+    assert "not" in contract["units"]["validation_scope"]
+    assert "magnitude" in contract["units"]["quantity_identity"]
+
+    plan = deepcopy(contract["example"])
+    source = tmp_path / "caller-values.csv"
+    source.write_text("omega,eta_magnitude\n10,12.5\n1,80.25\n", encoding="utf-8")
+    plan["source_binding"]["sources"] = [{"path": str(source), "sha256": file_sha256(source)}]
+    before = deepcopy(plan)
+    validator = Draft202012Validator(contract["provenance_schema"])
+    validator.validate(plan)
+    compiled = compile_tts_spec(prepare_tts_presentation(plan))
+    original = plan["figures"][0]["panels"][0]["series"][0]
+    actual = compiled["figures"][0]["panels"][0]["series"][0]
+    assert actual["x_values"] == original["x"] and actual["y_values"] == original["y"]
+    assert compiled["source_binding"] == plan["source_binding"]
+    assert compiled["transform_ledger"] == plan["transform_ledger"]
+    assert plan == before
+
+    invalid = deepcopy(plan)
+    invalid.pop("transform_ledger")
+    assert not validator.is_valid(invalid)
+    invalid = deepcopy(plan)
+    invalid["source_binding"]["sources"][0]["column"] = "eta_magnitude"
+    assert not validator.is_valid(invalid)  # Source records bind bytes, not an invented column schema.
+    invalid["source_binding"]["sources"][0].pop("column")
+    invalid["source_binding"]["sources"][0]["path"] = "caller-values.csv"
+    assert not validator.is_valid(invalid)
+
+
+def test_missing_prepared_ledger_points_back_to_public_contract_before_side_effects(
+    tmp_path: Path, prohibit_prepared_creation: None,
+) -> None:
+    request_path, request, plan = _request(tmp_path)
+    plan.pop("transform_ledger")
+    _write_json(Path(request["prepared_plan"]), plan)
+    with pytest.raises(ValueError) as error:
+        plot_prepared_suite(request_path)
+    assert str(error.value).startswith("Invalid prepared plan at transform_ledger:")
+    assert "rheology capabilities --json" in str(error.value)
+    assert not Path(request["out"]).exists() and not (tmp_path / ".sciplot").exists()
+
+
+def test_advertised_provenance_keeps_historical_nonempty_ledger_forms(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jsonschema import Draft202012Validator
+
+    from sciplot_core.workflow import rheology_tts_creation
+    from sciplot_core.workflow.rheology_tts_contract import rheology_capabilities
+
+    request_path, request, plan = _request(tmp_path)
+    validator = Draft202012Validator(rheology_capabilities()["prepared_plan"]["provenance_schema"])
+    accepted = []
+
+    def capture(_request_path, _request, spec, compiled, *_args, **_kwargs):
+        assert spec["transform_ledger"] == compiled["transform_ledger"]
+        accepted.append(deepcopy(spec["transform_ledger"]))
+        return {"status": "ready"}
+
+    monkeypatch.setattr(rheology_tts_creation, "create_prepared_suite", capture)
+    ledgers = ["Identity; supplied values and units unchanged.", ["Previously declared processing"],
+               {"units": {"x": "rad/s", "y": "Pa s"}, "operation": "caller-supplied values"}]
+    for ledger in ledgers:
+        plan["transform_ledger"] = ledger
+        validator.validate(plan)
+        _write_json(Path(request["prepared_plan"]), plan)
+        assert plot_prepared_suite(request_path)["status"] == "ready"
+    assert accepted == ledgers
+    for empty in (None, False, 0, "", [], {}):
+        plan["transform_ledger"] = empty
+        assert not validator.is_valid(plan)
+    assert not Path(request["out"]).exists() and not (tmp_path / ".sciplot").exists()
+
+
 @pytest.mark.comprehensive
 def test_prepared_plot_preserves_order_values_and_native_roles_without_analysis(tmp_path: Path) -> None:
     request_path, request, input_plan = _request(tmp_path)

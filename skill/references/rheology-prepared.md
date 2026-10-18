@@ -9,13 +9,40 @@ with governed templates. Its `plot` entry point must not analyze or refit data.
 
 ## Create and review
 
-Use the advertised closed request and plan contracts. A request contains
+Use `prepared_request_schema` for the closed request and `prepared_plan` for the
+plan's enforced provenance schema, complete minimal example and scientific
+disclosure guidance. `presentation.processed_plan` and `presentation.roles`
+describe the figure/panel/series fields and supported roles. A request contains
 `version:1`, absolute `prepared_plan` JSON path, and optional `out` and
 `expected_contract_sha256`:
 
 ```bash
 skill/scripts/sciplot rheology plot --request REQUEST.json --json
 ```
+
+The plan requires `version:1`, `source_binding`, `transform_ledger` and `figures`.
+`source_binding.sources` is a nonempty ordered array; each record contains exactly
+an absolute original local `path` and its unchanged file-byte `sha256`. Bind all
+inputs used for the prepared result. Put field/row selections, transformations
+or an explicit declaration of none, exclusions and scientific limitations in the
+nonempty `transform_ledger`. A structured ledger is recommended; existing
+nonempty text/list disclosures remain supported. The program adds the plan-file
+binding itself; do not invent a different source-binding or series-unit schema.
+
+Declare final units in panel `x_label`/`y_label` and source/output units plus any
+conversions in the ledger, per figure/series when needed. A real or imaginary
+viscosity component is distinct from complex-viscosity magnitude. The caller
+must supply the correctly defined final quantity with its derivation and unit
+evidence. This plotting entry preserves those declarations and values; it does
+not infer units, convert coordinates or verify the scientific calculation.
+
+Omit `out` by default. The delivery belongs beside the **first bound source**;
+an explicit destination may also be a new revision inside an existing
+source-bound sibling suite. If that check fails, use the source-adjacent
+destination; do not relabel or relocate source bindings to bypass it. If a plan
+is structurally rejected, correct the named field using `prepared_plan` in the
+live capabilities. Refresh `expected_contract_sha256` after reviewing a changed
+contract, without changing already approved coordinates or scientific choices.
 
 Creation replies are compact; complete native evidence remains at
 `full_evidence_path`. Read that file for a missing detail instead of creating the

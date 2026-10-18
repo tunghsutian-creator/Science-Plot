@@ -65,6 +65,8 @@ _METHOD_LABELS = {
 
 def tts_presentation_capabilities() -> dict:
     """Project the live owners; this is not a second catalog of style defaults."""
+    from sciplot_core.workflow.rheology_tts_contract import prepared_plan_contract
+
     contract = load_plot_contract()
     palette = resolve_palette_authority({}, template_id="point_line")
     return {"policy": dict(POLICY), "roles": deepcopy(_ROLES),
@@ -86,7 +88,7 @@ def tts_presentation_capabilities() -> dict:
         "palette": {"id": palette.palette_id, "colors": list(palette.colors), "source": palette.source},
         "processed_plan": {
             "owner": "AI or caller completes scientific processing before plotting",
-            "version": 1, "required": ["version", "source_binding", "figures"],
+            "version": 1, "required": prepared_plan_contract()["required"],
             "figure_required": ["id", "panels"],
             "panel_required": ["id", "x_label", "y_label", "series"],
             "series_required": ["role", "label", "x", "y"],
