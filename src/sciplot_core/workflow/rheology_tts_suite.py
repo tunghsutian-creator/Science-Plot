@@ -178,11 +178,27 @@ def create_suite(request_path: Path) -> dict:
             "scientific_scope": manifest["scientific_scope"]}
 
 
-def _compiled_figures(manifest: dict) -> dict:
+def _selected_documents(manifest: dict, figure_ids: tuple[str, ...] | None = None) -> list[dict]:
+    documents = manifest["documents"]
+    identifiers = [document["id"] for document in documents]
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError("Saved document identities are not unique.")
+    if figure_ids is None:
+        return documents
+    if (not isinstance(figure_ids, tuple) or not figure_ids or len(set(figure_ids)) != len(figure_ids)
+            or any(identifier not in identifiers for identifier in figure_ids)):
+        raise ValueError("Select exact, unique existing figure IDs before native execution.")
+    return [document for document in documents if document["id"] in figure_ids]
+
+
+def _compiled_figures(manifest: dict, *, figure_ids: tuple[str, ...] | None = None) -> dict:
     """Read creation-bound numeric baselines without accepting edited spec bytes."""
     by_id = {}
+    selected = {document["id"] for document in _selected_documents(manifest, figure_ids)}
     receipts = manifest.get("presentation_revision", {}).get("figures") or manifest["native_result"]["figures"]
     for receipt in receipts:
+        if receipt["id"] not in selected:
+            continue
         path = Path(receipt["spec_path"])
         digest = receipt.get("spec_sha256")
         if not digest:
@@ -198,21 +214,20 @@ def _compiled_figures(manifest: dict) -> dict:
         if spec["source_binding"].get("sources") != manifest["sources"]:
             raise ValueError("Compiled figure source bindings disagree with suite sources.")
         by_id[identifier] = spec["figure"]
-    document_ids = [d["id"] for d in manifest["documents"]]
-    if len(set(document_ids)) != len(document_ids) or set(by_id) != set(document_ids):
+    if set(by_id) != selected:
         raise ValueError("Saved document identities disagree with compiled figure receipts.")
     return by_id
 
 
-def export_suite(workspace: Path) -> dict:
+def export_suite(workspace: Path, *, figure_ids: tuple[str, ...] | None = None) -> dict:
     from sciplot_core.studio_core.project_session import external_project_session
 
     workspace = workspace.expanduser().resolve()
     with external_project_session(workspace):
-        return _export_saved_suite(workspace)
+        return _export_saved_suite(workspace, figure_ids=figure_ids)
 
 
-def _export_saved_suite(workspace: Path) -> dict:
+def _export_saved_suite(workspace: Path, *, figure_ids: tuple[str, ...] | None = None) -> dict:
     from sciplot_core.rheology_tts_render import export_tts_documents
     from sciplot_core.studio_core.source_update_commit import reject_symlink_path
     from sciplot_core.workflow.rheology_tts_style_storage import check_snapshot, publish_files, snapshot
@@ -228,11 +243,14 @@ def _export_saved_suite(workspace: Path) -> dict:
     baseline.update(snapshot([visible_manifest]))
     if json.loads(visible_manifest.read_text(encoding="utf-8")) != manifest:
         raise ValueError("Visible and hidden suite manifests disagree.")
-    by_id = _compiled_figures(manifest)
+    documents = _selected_documents(manifest, figure_ids)
+    by_id = (_compiled_figures(manifest) if figure_ids is None
+             else _compiled_figures(manifest, figure_ids=figure_ids))
     receipts = manifest.get("presentation_revision", {}).get("figures") or manifest["native_result"]["figures"]
+    receipts = [receipt for receipt in receipts if receipt["id"] in by_id]
     dependencies = [Path(source["path"]) for source in manifest["sources"]]
     dependencies.extend(Path(receipt["spec_path"]) for receipt in receipts)
-    for document in manifest["documents"]:
+    for document in documents:
         path = Path(document["path"])
         if path.resolve() != delivery / "editable" / f"{document['id']}.vsz":
             raise ValueError("Native document path is outside the bound visible editable directory.")
@@ -254,9 +272,9 @@ def _export_saved_suite(workspace: Path) -> dict:
     reject_symlink_path(stage)
     native_results = export_tts_documents([
         (Path(document["path"]), stage / "exports" / document["id"], by_id[document["id"]])
-        for document in manifest["documents"]])
+        for document in documents])
     results, updates, candidates = [], [], {}
-    for document, result in zip(manifest["documents"], native_results, strict=True):
+    for document, result in zip(documents, native_results, strict=True):
         path = Path(document["path"])
         identifier = document["id"]
         if (Path(result["document"]).resolve() != path.resolve()
@@ -286,11 +304,17 @@ def _export_saved_suite(workspace: Path) -> dict:
         results.append(result)
     _check_sources(manifest["sources"])
     check_snapshot(baseline, label="suite export baseline")
-    manifest["last_export"] = results
+    current = {Path(item["document"]).stem: item for item in
+               manifest.get("last_export", manifest["native_result"]["figures"])}
+    current.update({Path(item["document"]).stem: item for item in results})
+    manifest["last_export"] = [current[document["id"]] for document in manifest["documents"]]
     staged_manifest = stage / "suite.json"
     write_json(staged_manifest, manifest)
     candidates.update(snapshot([staged_manifest]))
     updates.extend([(staged_manifest, manifest_path), (staged_manifest, visible_manifest)])
     publish_files(updates, stage / "backup", expected=baseline, candidates=candidates,
                   allowed_roots=(workspace, delivery))
-    return {"status": "ready", "delivery": str(delivery), "figures": len(results), "exact_saved_export": True}
+    return {"status": "ready", "delivery": str(delivery), "figures": len(results), "exact_saved_export": True,
+            "selected_figures": [document["id"] for document in documents],
+            "exports": [exported for result in results for exported in result["exports"]],
+            "transform_execution": {"executed": [], "reused": []}}

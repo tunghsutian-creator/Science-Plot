@@ -81,6 +81,18 @@ def export_tts_document(
     )
 
 
+def inspect_tts_display(path: Path, figure: dict[str, Any]) -> dict[str, Any]:
+    """Read covered values from the actual current source-bound native figure."""
+    return _dispatch({"action": "display_state", "path": str(path.resolve()), "figure": figure})
+
+
+def patch_tts_display(path: Path, out: Path, figure: dict[str, Any], changes: list[dict],
+                      expected_sha256: str) -> dict[str, Any]:
+    """Prepare one closed display delta; retain native authority and all arrays."""
+    return _dispatch({"action": "display_patch", "path": str(path.resolve()), "out_path": str(out.resolve()),
+                      "figure": figure, "changes": changes, "expected_sha256": expected_sha256})
+
+
 def export_tts_documents(
     documents: list[tuple[Path, Path, dict[str, Any]]],
 ) -> list[dict[str, Any]]:
@@ -211,7 +223,7 @@ def _worker_result(request: dict[str, Any]) -> dict[str, Any]:
 def _run_native(request: dict[str, Any]) -> dict[str, Any]:
     action = request.get("action")
     batch = _validate_export_batch(request) if action == "export_batch" else None
-    if action not in {"audit", "export", "export_batch", "restyle", "render"}:
+    if action not in {"audit", "export", "export_batch", "restyle", "render", "display_state", "display_patch"}:
         raise ValueError("Unknown native TTS operation.")
     from sciplot_core.studio_core.runtime import _ensure_veusz_on_path
 
@@ -234,6 +246,15 @@ def _run_native(request: dict[str, Any]) -> dict[str, Any]:
     try:
         if batch is not None:
             return {"status": "completed", "results": _export_batch(batch)}
+        if action == "display_state":
+            from sciplot_core.rheology_tts_native_display import read_display_state
+
+            return read_display_state(Path(request["path"]), request["figure"])
+        if action == "display_patch":
+            from sciplot_core.rheology_tts_native_display import patch_display_document
+
+            return patch_display_document(Path(request["path"]), Path(request["out_path"]),
+                request["figure"], request["changes"], request["expected_sha256"])
         if action == "audit":
             path = Path(request["path"])
             before = file_sha256(path)
