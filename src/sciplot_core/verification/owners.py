@@ -84,6 +84,10 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/cli/entrypoint.py",
                 "src/sciplot_core/cli/value_io.py",
                 "src/sciplot_core/source_inspection/model_recognition.py",
+                "src/sciplot_core/source_inspection/__init__.py",
+                "src/sciplot_core/source_inspection/input_errors.py",
+                "src/sciplot_core/source_inspection/inspection.py",
+                "src/sciplot_core/source_inspection/semantic_evidence.py",
                 "src/sciplot_core/cli/dispatch/rendering.py",
                 "src/sciplot_core/cli/parsers/rendering.py",
                 "src/sciplot_core/materials_rules/catalog.py",
@@ -103,6 +107,8 @@ CHANGED_OWNERS = (
         owned_test_paths=frozenset(
             {
                 "tests/test_autoplot_run.py",
+                "tests/test_source_identity_evidence.py",
+                "tests/test_managed_metadata_issues.py",
                 "tests/test_cli_runtime_error_payload.py",
                 "tests/test_cli_surface.py",
                 "tests/test_swelling_adapter_dispatch.py",
@@ -113,6 +119,8 @@ CHANGED_OWNERS = (
             }
         ),
         pytest_targets=(
+            "tests/test_source_identity_evidence.py",
+            "tests/test_managed_metadata_issues.py",
             "tests/test_cli_runtime_error_payload.py",
             "tests/test_cli_surface.py",
             "tests/test_swelling_adapter_dispatch.py",

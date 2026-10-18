@@ -204,8 +204,10 @@ scientific mapping checks gate export; soft layout warnings remain explicit.
 Arbitrary native features and non-deterministic execution remain unsupported.
 New FigureTemplate documents pin the extracted `sciplot-house-style-v1` visual
 contract. Omitted layout uses the original 60 × 55 mm panel and fixed physical
-margins; decorated right/top axes reserve additional space before native
-compilation. The resolved layout records that policy. Single-axis defaults and
+margins. New semantic tasks select a versioned presentation policy that reserves
+additional space for decorated right/top axes before native compilation. Older
+saved figures retain their layout interpretation. The resolved layout records
+the selected policy. Single-axis defaults and
 theme/figure/view/layer/mark overrides stay explicit. Existing unbound
 Managed revisions and fully explicit Cartesian v1 templates retain their saved
 presentation. Old-versus-new visual regression is independent of rebuild QA.

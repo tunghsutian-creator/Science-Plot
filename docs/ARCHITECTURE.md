@@ -181,6 +181,14 @@ solver rejects impossible constraints; native text fitting never resizes the
 prescribed frame. Historical unbound revisions retain their previous compiler
 interpretation and are not automatically restyled.
 
+New semantic tasks explicitly select `axis_layout_policy=decorated_secondary_sides_v1`.
+It allocates conservative additional right/top decoration space before sealing
+PlotIR and records base versus resolved margins. Omitted policy retains the
+saved historical layout interpretation, including existing multi-axis figures.
+The task adapter tries declared house size presets against the same pure layout
+checks; it records the first fitting width rather than reducing fonts or dropping
+content. Native text QA remains a separate final check.
+
 `panel_assembly/` composes existing figures and images through that physical
 solver, with explicit sparse cells and row/column spans. The pure `document`
 leaf, public `model`, `operations`,
