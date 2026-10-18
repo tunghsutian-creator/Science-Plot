@@ -199,6 +199,24 @@ create`. It shares the same Managed lifecycle and typed edit contract; it is not
 an extra step for attachment plotting. Legacy projects retain their complete
 saved VSZ authority and are never silently promoted by this route.
 
+## Instrument frequency sweeps
+
+For complex-viscosity magnitude from an original instrument frequency table:
+
+```bash
+skill/scripts/sciplot task create /absolute/raw.csv --rule rheology_frequency_sweep --x angular_frequency --y complex_viscosity --x-unit rad/s --y-unit 'Pa s' --task-dir /absolute/new-task --json
+```
+
+Explicit temperature-labelled `Result` intervals remain separate series with
+their source identities, actual point counts and order; measured temperatures
+are retained. `Im(Complex Viscosity)` and real viscosity are components, not
+`|eta*|`. When no magnitude column exists, original G′, G″ and frequency with
+supported unit evidence allow the program's formal magnitude derivation; the
+source bindings and transform evidence remain recorded. An exact header selector
+pointing to a component cannot declare it a magnitude. Correct that small intent
+in the same task using the returned `draft_revision_template`, then resume through
+the existing task entry. Preserve the original CSV and all scientific points.
+
 ## Stress-relaxation paired wide tables
 
 The stress owner recognizes the explicit compact pairs
