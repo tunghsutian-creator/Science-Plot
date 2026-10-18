@@ -100,7 +100,7 @@ def _scoped_description(result: dict[str, Any], document: dict[str, Any], bindin
     kept = ("kind", "version", "status", "plot_type", "plot", "plot_id", "revision",
             "scientific_hash", "presentation_hash", "coverage", "authority", "changed_inputs",
             "pending", "ir_hash", "artifact", "artifact_status", "plot_ir_version",
-            "next_step", "recovery", "external_mutation", "external_mutation_unavailable")
+            "next_step", "recovery", "external_mutation", "external_mutation_unavailable", "export_current")
     compact = {key: result[key] for key in kept if key in result}
     compact["dependencies"] = {"invalidated": result["dependencies"]["invalidated"]}
     objects = document["presentation"]["objects"]

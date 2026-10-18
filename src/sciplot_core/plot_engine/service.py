@@ -149,7 +149,9 @@ class PlotService:
         project_recovery(result, root, pending)
         if document.get("plot_type") == "ManagedPlot":
             from .managed_description import describe_managed
+            from .export_status import current_export
 
+            result["export_current"] = current_export(root, head, eligible=not changed and result["pending"] is None, cached_export=self._cached_export)
             return describe_managed(root, head, result, self.backend, description=description)
         from .external_mutation import authority_status
 
