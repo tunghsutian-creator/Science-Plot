@@ -98,6 +98,18 @@ def _ticks(domain: list[float]) -> list[float]:
     return [round(first + index * step, 12) for index in range(12) if first + index * step <= high + step * 1e-9]
 
 
+def _original_samples(source: dict[str, Any], rule_id: str, selection: dict[str, Any],
+                      columns: list[str] | None = None) -> set[str]:
+    from sciplot_core.data_mapping.table_choice import source_table_snapshot, select_table
+
+    snapshot = source_table_snapshot(Path(source["path"]), rule_id=rule_id)
+    if snapshot is None:
+        return set()
+    metadata = select_table(snapshot, selection)
+    return {column["sample"] for column in metadata["columns"] if column["sample"]
+            and (columns is None or f"column:{column['index']}" in columns)}
+
+
 def build_request(state: dict[str, Any]) -> dict[str, Any]:
     intent, plan, choices = state["request"]["intent"], state["semantic_plan"], state.get("semantic_choices", {})
     temperature_header = intent.get("temperature_header", choices.get("temperature_header"))
@@ -123,14 +135,18 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
     for source in plan["sources"]:
         candidate = _source_candidate(source, choices)
         source_id = source["source_id"]
-        data_sources.append({"source_id": source_id, "path": source["path"], "sha256": source["sha256"],
-                             "table_selection": candidate["table_selection"]})
         # Load through the existing Managed source adapter, including its exact
         # metadata and scientific lineage checks. This is preparation only.
         from sciplot_core.plot_engine.managed_sources import load_sources
 
-        raw_document = {"scientific": {"data_sources": [data_sources[-1]], "mappings": {}, "transforms": []}}
-        datasets.update(load_sources(raw_document, _rule_id(intent)))
+        explicit_selection = "selection" in intent
+        if not explicit_selection:
+            # Retain the original source identities and graph for saved and
+            # omitted-selection requests. Explicit selection binds below first.
+            data_sources.append({"source_id": source_id, "path": source["path"], "sha256": source["sha256"],
+                                 "table_selection": candidate["table_selection"]})
+            raw_document = {"scientific": {"data_sources": [data_sources[-1]], "mappings": {}, "transforms": []}}
+            datasets.update(load_sources(raw_document, _rule_id(intent)))
         stages = _ordered_stages(candidate, intent, choices, temperature_header)
         pieces = []
         units: dict[str, str] = {}
@@ -147,10 +163,27 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
             if intent.get("secondary_y") or intent.get("stages", {}).get("order", choices.get("stage_order")) == "temperature_continuity":
                 selected["temperature"] = _select_column(candidate, block, "temperature", header=temperature_header)
             columns = list(dict.fromkeys(column["column_id"] for column in selected.values()))
-            current = transform("select", [source_id], {"columns": columns})
-            origin = candidate["table_selection"]["data_start_row"]
-            current = transform("row_slice", [current], {"start": stage["data_start_row"] - origin,
-                                                         "end": stage["data_end_row"] - origin})
+            if explicit_selection:
+                stage_source = source_id + ":" + stage["stage_id"]
+                region = {**deepcopy(candidate["table_selection"]),
+                          "data_start_row": stage["data_start_row"], "data_end_row": stage["data_end_row"]}
+                binding = {"source_id": stage_source, "path": source["path"], "sha256": source["sha256"],
+                           "table_selection": region}
+                # The same validated select persisted in the Managed graph
+                # restricts numeric loading before any coordinate transform.
+                first_select = {"id": f"transform:{len(transforms)}", "kind": "select", "inputs": [stage_source],
+                                "output": f"derived:{len(transforms)}", "parameters": {"columns": columns},
+                                "executor": executor, "determinism": "deterministic"}
+                raw_document = {"scientific": {"data_sources": [binding], "mappings": {}, "transforms": [first_select]}}
+                raw_samples.update(_original_samples(source, _rule_id(intent), region, columns))
+                datasets.update(load_sources(raw_document, _rule_id(intent)))
+                data_sources.append(binding)
+                current = transform("select", [stage_source], {"columns": columns})
+            else:
+                current = transform("select", [source_id], {"columns": columns})
+                origin = candidate["table_selection"]["data_start_row"]
+                current = transform("row_slice", [current], {"start": stage["data_start_row"] - origin,
+                                                             "end": stage["data_end_row"] - origin})
             current = transform("rename", [current], {"columns": {column["column_id"]: {
                 "id": role, "label": intent["x" if role == "x" else "y"]["quantity"].title() if role != "temperature" else "Temperature"}
                 for role, column in selected.items()}})
@@ -175,12 +208,8 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
         else:
             current = pieces[0]
         # Original sample metadata, when present, remains the scientific sample.
-        from sciplot_core.data_mapping.table_choice import source_table_snapshot, select_table
-
-        snapshot = source_table_snapshot(Path(source["path"]), rule_id=_rule_id(intent))
-        if snapshot is not None:
-            metadata = select_table(snapshot, candidate["table_selection"])
-            raw_samples = {column["sample"] for column in metadata["columns"] if column["sample"]}
+        if not explicit_selection:
+            raw_samples = _original_samples(source, _rule_id(intent), candidate["table_selection"])
         if len(raw_samples) > 1:
             _error("semantic_sample_ambiguous", "One attachment contains multiple original samples; choose their distinct supported mapping rather than merging them.")
         records.append({"source_id": source_id, "dataset_id": current, "units": units,
