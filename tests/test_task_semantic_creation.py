@@ -250,3 +250,33 @@ def test_managed_failure_owner_action_is_not_converted_to_blind_retry(action):
     step = blocked_next_step(state)
     assert step["action"] == action and step["diagnostic"]["path"] == "/diagnostic.json"
     assert "response_template" not in step and "cli_argv" not in step
+
+
+def test_lost_creation_reply_cannot_replace_an_already_committed_attempt(tmp_path, monkeypatch):
+    from sciplot_core import task_control as control, task_semantic_creation as semantic
+    from sciplot_core.plot_engine.storage import digest
+    source = tmp_path / "original.csv"
+    source.write_text("Time,Mass\ns,%\n0,100\n1,99\n")
+    original = source.read_bytes()
+    monkeypatch.setattr(semantic, "prepare_plan", lambda paths, intent: {"sources": [], "decisions": []})
+    wire = {"idempotency_key": "frozen-attempt", "data_binding": {"data_sources": [{"path": str(source)}]}}
+    monkeypatch.setattr(semantic, "build_managed_request", lambda state: deepcopy(wire))
+    calls = []
+    def commit_without_reply(state, request):
+        calls.append(request)
+        owner = source.parent / ".sciplot_documents" / "managed" / digest(request["idempotency_key"])
+        owner.mkdir(parents=True)
+        (owner / "head.json").write_text("{}")
+        raise OSError("lost reply after commit")
+    monkeypatch.setattr(semantic, "execute_managed", commit_without_reply)
+    task = tmp_path / "task"
+    result = control.start_task(request(source), task_dir=task)
+    assert result["status"] == "blocked" and len(calls) == 1
+    changed = deepcopy(request(source)["intent"])
+    changed["y"]["minimum"] = 90
+    before = (task / "task.json").read_bytes()
+    with pytest.raises(TaskControlError) as rejected:
+        control.resume_task(task, {"expected_intent_revision": 1, "revise_intent": changed})
+    assert rejected.value.reason_code == "task_not_revisable"
+    assert (task / "task.json").read_bytes() == before and source.read_bytes() == original
+    assert len(calls) == 1
