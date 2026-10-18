@@ -41,13 +41,15 @@ def temperature_column(candidate: dict[str, Any], block: dict[str, Any], selecto
     return dict(columns[0])
 
 
-def temperature_decisions(sources: list[dict[str, Any]], intent: dict[str, Any], segmented: bool) -> list[dict[str, Any]]:
-    selector = temperature_selector(intent)
+def temperature_decisions(sources: list[dict[str, Any]], intent: dict[str, Any], segmented: bool,
+                          choices: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    selector = temperature_selector(intent, choices)
+    order = intent.get("stages", {}).get("order", (choices or {}).get("stage_order"))
+    if not intent.get("secondary_y") and not (segmented and order == "temperature_continuity"):
+        return []
     groups = [{"source_id": source["source_id"], "table_id": candidate["candidate_id"],
                "block_id": block["block_id"], "columns": temperature_columns(candidate, block, selector)}
               for source in sources for candidate in source["candidates"] for block in candidate["blocks"]]
-    if not intent.get("secondary_y") and not (segmented and any(group["columns"] for group in groups)):
-        return []
     if selector:
         if any(len(group["columns"]) != 1 for group in groups):
             _reject("semantic_temperature_mapping_required", "The explicit temperature selectors must resolve uniquely in every selected original block.",

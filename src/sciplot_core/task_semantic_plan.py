@@ -121,10 +121,10 @@ def prepare_plan(paths: list[Path], intent: dict[str, Any]) -> dict[str, Any]:
             "interpolation": "Display interpolation retains raw marker points; gaps and non-increasing time boundaries remain separate runs."}
 
 
-def _plan_decisions(sources: list[dict[str, Any]], intent: dict[str, Any]) -> list[dict[str, Any]]:
+def _plan_decisions(sources: list[dict[str, Any]], intent: dict[str, Any], choices: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     from sciplot_core.task_semantic_temperature import temperature_decisions, temperature_selector
 
-    temperature_selector(intent)
+    temperature_selector(intent, choices)
     multiple = {source["source_id"]: [candidate["candidate_id"] for candidate in source["candidates"]]
                 for source in sources if len(source["candidates"]) > 1}
     if multiple:
@@ -132,7 +132,7 @@ def _plan_decisions(sources: list[dict[str, Any]], intent: dict[str, Any]) -> li
                  "message": "Choose one exact original table candidate for every listed source before coordinate validation. No alternative was silently excluded."}]
     decisions = _coordinate_decisions(sources, intent)
     segmented = any(len(candidate["stages"]) > 1 for source in sources for candidate in source["candidates"])
-    decisions.extend(temperature_decisions(sources, intent, segmented))
+    decisions.extend(temperature_decisions(sources, intent, segmented, choices))
     if intent.get("secondary_y") and len(sources) > 1 and "temperature_source" not in intent:
         decisions.append({"field": "temperature_source", "options": [source["source_id"] for source in sources],
                           "message": "Choose the exact recorded attachment for the right-axis temperature; other schedules are not assumed equal."})
@@ -160,5 +160,5 @@ def selected_table_plan(plan: dict[str, Any], intent: dict[str, Any], choices: d
     selected = deepcopy(plan)
     selected["sources"] = [{**source, "candidates": [_source_candidate(source, choices)]}
                            for source in selected["sources"]]
-    selected["decisions"] = _plan_decisions(selected["sources"], intent)
+    selected["decisions"] = _plan_decisions(selected["sources"], intent, choices)
     return selected

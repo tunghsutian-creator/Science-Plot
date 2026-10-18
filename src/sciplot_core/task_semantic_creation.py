@@ -206,7 +206,7 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
     choices = response.get("choices", {})
     _validate_choices(state["semantic_plan"], choices)
     accumulated = {**state.get("semantic_choices", {}), **deepcopy(choices)}
-    if "tables" in choices:
+    if {"tables", "stage_order"} & set(choices):
         from sciplot_core.task_semantic_plan import selected_table_plan
 
         plan = selected_table_plan(state["semantic_plan"], state["request"]["intent"], accumulated)
