@@ -143,7 +143,8 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
         views.append(result)
     guides = _guides(spec, views, scopes, resolver)
     layout_input, panel_margins = resolved_layout_input(spec)
-    layout = solve_layout({**spec["composition"], **layout_input}, spec["views"], flat_axes, guides, panel_margins_mm=panel_margins)
+    layout = solve_layout({**spec["composition"], **layout_input}, spec["views"], flat_axes, guides,
+                          panel_margins_mm=panel_margins, secondary_axis_policy=spec.get("axis_layout_policy"))
     if resolver.binding is not None:
         resolve_house_legends(spec, guides, datasets, layout)
     axes = {axis["id"]: axis for axis in resolve_axis_text(layout, flat_axes, spec["scales"])}
@@ -182,7 +183,7 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
         resolver.trace["figure:panel_margins_mm"] = {"value": panel_margins, "source": "RenderingStyleContract"}
         additional = []
         assert panel_margins is not None  # A bound house layout has explicit physical margins.
-        for panel in layout["panels"]:
+        for panel in layout["panels"] if spec.get("axis_layout_policy") == "decorated_secondary_sides_v1" else []:
             cx, cy, cw, ch = panel["cell_mm"]
             px, py, pw, ph = panel["plot_mm"]
             margins = {"left": px - cx, "top": py - cy, "right": cx + cw - px - pw, "bottom": cy + ch - py - ph}

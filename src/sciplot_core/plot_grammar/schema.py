@@ -144,4 +144,5 @@ def figure_spec_schema() -> dict[str, Any]:
         "guides": {"type": "array", "items": guide_schema()}, "annotations": {"type": "array", "items": annotation_schema()},
         "rendering_contract": rendering_binding_schema("sciplot-house-style-v1"),
         "composition_policy": rendering_binding_schema("sciplot-figure-composition-v1")}
-    return closed(fields, [key for key in fields if key not in {"rendering_contract", "composition_policy"}])
+    fields["axis_layout_policy"] = {"const": "decorated_secondary_sides_v1"}
+    return closed(fields, [key for key in fields if key not in {"rendering_contract", "composition_policy", "axis_layout_policy"}])

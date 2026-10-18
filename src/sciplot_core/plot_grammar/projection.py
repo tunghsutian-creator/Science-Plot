@@ -20,7 +20,7 @@ def split_figure_spec(value: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     science: dict[str, Any] = {"kind": "sciplot_figure_science", "schema_version": 2,
         "id": spec["id"], "scales": spec["scales"], "views": [], "data_annotations": []}
     presentation: dict[str, Any] = {"kind": "sciplot_figure_presentation", "schema_version": 2,
-        **_take(spec, ("id", "composition", "layout", "theme", "guides", "rendering_contract", "composition_policy")), "views": [], "annotations": []}
+        **_take(spec, ("id", "composition", "layout", "theme", "guides", "rendering_contract", "composition_policy", "axis_layout_policy")), "views": [], "annotations": []}
     for view in spec["views"]:
         scientific_view: dict[str, Any] = {"id": view["id"], "layers": []}
         visual_view = {**_take(view, ("id", "panel_label", "style", "axes")), "layers": []}
@@ -54,7 +54,7 @@ def merge_figure_spec(science: Any, presentation: Any) -> dict[str, Any]:
                 or science["schema_version"] != 2 or presentation["schema_version"] != 2 or science["id"] != presentation["id"]):
             raise ValueError("projection identity")
         result: dict[str, Any] = {"kind": "sciplot_figure_spec", "schema_version": 2,
-            **_take(presentation, ("id", "composition", "layout", "theme", "guides", "rendering_contract", "composition_policy")),
+            **_take(presentation, ("id", "composition", "layout", "theme", "guides", "rendering_contract", "composition_policy", "axis_layout_policy")),
             "scales": deepcopy(science["scales"]), "views": [], "annotations": []}
         scientific_views = _index(science["views"])
         for visual_view in presentation["views"]:
