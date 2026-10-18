@@ -130,9 +130,13 @@ this is not a guarantee against every possible native collision.
 When there are unresolved scientific choices, the first response returns one
 `semantic_plan` question with original file names,
 SHA, exact table candidates, columns/units, per-stage row bounds, counts and
-observed time/temperature endpoints. All unresolved decisions appear together:
-original temperature role (for example Ts versus Tr), right-axis source,
-stage order and elapsed-time boundary. Equal Ts/Tr values do not establish the
+observed time/temperature endpoints. Ambiguous worksheets first produce a table
+choice. After that answer, the same task returns any remaining choices for the
+selected tables, with a new bound question ID; retain its accumulated answers.
+Those choices include the original temperature role (for example Ts versus Tr),
+right-axis source, stage order and elapsed-time boundary. An unchosen worksheet
+cannot determine the builder or block coordinates in a chosen table.
+Equal Ts/Tr values do not establish the
 same scientific role. Source order is not automatically acquisition chronology.
 A temperature-continuity suggestion is source-evidenced and still needs explicit
 confirmation. A completely explicit intent with unambiguous original evidence executes directly;
@@ -150,6 +154,12 @@ request already establish a choice, the corresponding explicit flag
 `--time-boundary` can include it in the first request. Its plan still shows the
 bound actual attachment and SHA. Ask the user only about unresolved scientific
 meaning; never silently choose a role or drop a stage to finish a figure.
+
+For a JSON semantic intent, `secondary_y.header` and `secondary_y.column_id`
+identify the actual original temperature column. They intersect when both are
+given; legacy `temperature_header` must agree with an explicit secondary header.
+Source-order stage concatenation without a secondary temperature axis does not
+require an otherwise unused temperature column.
 
 `preserve_endpoint` keeps both adjacent stage boundary measurements at the same
 cumulative time. `next_sample` also keeps both measurements, advancing by the

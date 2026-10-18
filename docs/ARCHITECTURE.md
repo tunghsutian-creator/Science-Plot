@@ -69,6 +69,16 @@ references resolve and the result must be nonempty. Omission keeps the existing
 all-block behavior. Selection never creates a filtered source file or another
 scientific executor; both builders consume selected copies in the existing plan.
 
+Ambiguous tables are resolved before coordinate validation. The existing task
+question journal then replans only the selected source facts, retaining earlier
+answers and complete available/selected/excluded provenance under a new question
+identity. Format dispatch reads those same selected candidates.
+`task_semantic_temperature.py` owns the intersection of explicit secondary
+header/column ID, legacy temperature header and confirmed role. Planning and
+Managed binding consume that one selector; disagreements fail before creation.
+Unused temperature metadata does not become a prerequisite for source-order
+stage concatenation.
+
 Lifecycle success, provenance, artifact QA, human review, and journal
 compliance are separate evidence claims.
 
@@ -128,6 +138,20 @@ the older separated-layout style guard retain their compatibility boundaries.
 Creation handles project in-memory successful metadata without another native
 inspection. The native backend owns role painting order while scientific and
 legend order remain as declared.
+
+The selected figure's existing native-audit sidecar participates in the same
+guarded preview baseline as its document and exports. A decision is persisted
+before publication; contradictory decisions are refused, and accepted recovery
+reuses the existing publication owner without reapplying native edits. Creation
+export receipts may establish currentness only when the canonical visible files
+match their byte seals. A no-op still inspects current native display state and
+does no native mutation, rendering or export.
+
+Managed previews return the scientific audit already passed by their render
+stage, after checking the preview receipt and current native SHA. The backend
+consumes that same-stage result once. Independent apply/export and source/native
+drift checks retain their own boundaries; this introduces no cross-stage audit
+cache or new authority.
 
 ## External control and native document boundary
 

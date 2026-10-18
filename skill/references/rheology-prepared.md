@@ -81,7 +81,12 @@ settings, source evidence, arrays and transform ledger.
 
 Review a returned `needs_review` candidate and scientific audit, then submit
 its exact `plot.decide` request. Reuse the original key and base revision after
-a lost reply; `plot.resume` continues the same transaction. Native revisions
+a lost reply; `plot.resume` continues the same transaction. The operation
+persists the accepted decision before publication, so recovery must repeat that
+decision rather than reverse it after an uncertain response. After a completed
+edit, read the current revision for the next delta. Existing selected audit
+sidecars stay bound alongside the native file and exports.
+Native revisions
 are opaque content-bound integers; use the returned value without incrementing
 it. `plot export PLOT --json` exports only this selected current native figure.
 Other optional figures need no regeneration or native execution. Request only

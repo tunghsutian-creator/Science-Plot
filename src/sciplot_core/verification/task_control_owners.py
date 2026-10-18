@@ -28,6 +28,8 @@ SEMANTIC_TASK_TESTS = (
     "tests/test_task_selection_cli.py",
     "tests/test_task_semantic_selection.py",
     "tests/test_task_semantic_selection_loading.py",
+    "tests/test_task_secondary_coordinate.py",
+    "tests/test_task_selected_table_routing.py",
     "tests/test_task_semantic_delivery.py",
 )
 

@@ -135,8 +135,10 @@ FTIR acceptance records remain in [metadata](docs/SCIENTIFIC_METADATA_ACCEPTANCE
 [table ranges](docs/TABLE_RANGE_ACCEPTANCE.md) and
 [source updates](docs/TABLE_SOURCE_UPDATE_ACCEPTANCE.md).
 
-Extend untouched real-case coverage for changed-value cross-sheet revisions,
-externally documented units and scientific statements. Current automated
+Extend untouched real-case coverage for alternate secondary-temperature roles,
+incompatible unused worksheets, changed-value cross-sheet revisions,
+externally documented units and scientific statements. Generated selector and
+table-choice regressions do not replace that independent source evidence. Current automated
 changed-value coverage is not that independent source evidence. Never infer a
 quantity or unit merely to make a source pass: the rule-selection answer must
 not encode arbitrary scientific facts. Extend reusable profiles only when

@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 5249,
-    "nodeids_sha256": "7bef2719fc0a906f7378a69c763f0c4859fad7fe1bbd9b01a0eb78115ce5620e",
-    "test_sources_sha256": "e8f586f251d2979d257ef525558bbcfd28cea63dbe7e4fe011f5611d28e836f5",
-    "test_source_count": 373,
+    "nodeid_count": 5306,
+    "nodeids_sha256": "296a9524352092e5e15aa314c6872781a257a8e15e1591273963263acd58bbb1",
+    "test_sources_sha256": "7a1e9cf83e14d4c0cc63966a76e5ca94f56cdcbf5a901655b9e7b711fefeee7b",
+    "test_source_count": 378,
     "candidate_nodeids": [
       "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[break-on-inf]",
       "tests/test_current_layout_review.py::test_current_geometry_respects_nan_breaks_and_checks_whole_visible_segment[ignore-0]",
@@ -593,7 +593,64 @@
       "tests/test_task_paper_publication.py::test_replay_checks_current_canonical_rule_without_changing_original_bytes",
       "tests/test_task_groups.py::test_old_group_answers_recheck_every_original_before_any_mutation_and_resume_when_restored",
       "tests/test_task_groups.py::test_raw_drift_blocks_group_continuation_or_explicit_retry_before_running_child[False]",
-      "tests/test_task_groups.py::test_raw_drift_blocks_group_continuation_or_explicit_retry_before_running_child[True]"
+      "tests/test_task_groups.py::test_raw_drift_blocks_group_continuation_or_explicit_retry_before_running_child[True]",
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/task_semantic_temperature.py]",
+      "tests/test_managed_preview_audit_reuse.py::test_backend_preview_consumes_render_audit_without_reinspection",
+      "tests/test_managed_preview_audit_reuse.py::test_failed_exact_science_or_publication_audit_never_renders[publication-publication_qa_failed]",
+      "tests/test_managed_preview_audit_reuse.py::test_failed_exact_science_or_publication_audit_never_renders[science-external_mutation]",
+      "tests/test_managed_preview_audit_reuse.py::test_real_width_patch_keeps_four_independent_inspections",
+      "tests/test_managed_preview_audit_reuse.py::test_render_returns_the_actual_passed_scientific_audit",
+      "tests/test_managed_preview_audit_reuse.py::test_reused_audit_cannot_bless_native_or_preview_identity_drift[native_bytes]",
+      "tests/test_managed_preview_audit_reuse.py::test_reused_audit_cannot_bless_native_or_preview_identity_drift[preview_receipt]",
+      "tests/test_native_suite_continuation.py::test_followup_edit_binds_existing_selected_audit_and_preserves_other_figures[edit]",
+      "tests/test_native_suite_continuation.py::test_followup_edit_binds_existing_selected_audit_and_preserves_other_figures[export]",
+      "tests/test_native_suite_continuation.py::test_fresh_noop_reports_only_verified_visible_exports[fresh-changed]",
+      "tests/test_native_suite_continuation.py::test_fresh_noop_reports_only_verified_visible_exports[fresh-intact]",
+      "tests/test_native_suite_continuation.py::test_fresh_noop_reports_only_verified_visible_exports[fresh-missing]",
+      "tests/test_native_suite_continuation.py::test_fresh_noop_reports_only_verified_visible_exports[other_edited-intact]",
+      "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[artifact_hash]",
+      "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[artifact_path]",
+      "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[inventory]",
+      "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[native_path]",
+      "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[native_sha]",
+      "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[none]",
+      "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[size]",
+      "tests/test_native_suite_continuation.py::test_selected_audit_drift_is_closed_and_exact_restoration_can_resume",
+      "tests/test_native_suite_decision_recovery.py::test_accepted_decision_survives_failure_and_resumes_without_republication[before_publication]",
+      "tests/test_native_suite_decision_recovery.py::test_accepted_decision_survives_failure_and_resumes_without_republication[completion_record]",
+      "tests/test_native_suite_decision_recovery.py::test_failed_decision_write_does_not_mutate_and_allows_a_real_rejection",
+      "tests/test_native_suite_decision_recovery.py::test_older_pending_publication_evidence_cannot_be_rejected_and_resumes[applied]",
+      "tests/test_native_suite_decision_recovery.py::test_older_pending_publication_evidence_cannot_be_rejected_and_resumes[intent]",
+      "tests/test_native_suite_decision_recovery.py::test_older_terminal_records_replay_only_their_truthful_decision[complete]",
+      "tests/test_native_suite_decision_recovery.py::test_older_terminal_records_replay_only_their_truthful_decision[rejected]",
+      "tests/test_task_secondary_coordinate.py::test_answered_continuity_requires_its_temperature_role_before_creation",
+      "tests/test_task_secondary_coordinate.py::test_column_identity_also_chooses_the_temperature_continuity_role",
+      "tests/test_task_secondary_coordinate.py::test_contradictory_explicit_temperature_selectors_fail_closed[secondary0-Ts]",
+      "tests/test_task_secondary_coordinate.py::test_contradictory_explicit_temperature_selectors_fail_closed[secondary1-None]",
+      "tests/test_task_secondary_coordinate.py::test_contradictory_explicit_temperature_selectors_fail_closed[secondary2-Ts]",
+      "tests/test_task_secondary_coordinate.py::test_duplicate_temperature_header_needs_the_intersecting_column_identity",
+      "tests/test_task_secondary_coordinate.py::test_exact_secondary_selector_determines_numbers_without_redundant_question[selector0]",
+      "tests/test_task_secondary_coordinate.py::test_exact_secondary_selector_determines_numbers_without_redundant_question[selector1]",
+      "tests/test_task_secondary_coordinate.py::test_exact_secondary_selector_determines_numbers_without_redundant_question[selector2]",
+      "tests/test_task_secondary_coordinate.py::test_explicit_temperature_continuity_still_requires_every_consumed_temperature",
+      "tests/test_task_secondary_coordinate.py::test_legacy_temperature_header_and_equal_new_header_remain_compatible",
+      "tests/test_task_secondary_coordinate.py::test_secondary_unit_conversion_uses_same_selected_column_and_formal_operator",
+      "tests/test_task_secondary_coordinate.py::test_source_order_never_requires_an_unconsumed_auxiliary_temperature",
+      "tests/test_task_secondary_coordinate.py::test_tables_then_source_order_answers_do_not_invent_a_temperature_question",
+      "tests/test_task_secondary_coordinate.py::test_unmatched_secondary_selector_cannot_fall_back_to_another_temperature[selector0]",
+      "tests/test_task_secondary_coordinate.py::test_unmatched_secondary_selector_cannot_fall_back_to_another_temperature[selector1]",
+      "tests/test_task_secondary_coordinate.py::test_unresolved_stage_order_retains_source_order_without_requiring_temperature",
+      "tests/test_task_secondary_coordinate.py::test_unselected_block_temperature_does_not_create_a_false_choice",
+      "tests/test_task_secondary_coordinate.py::test_unselected_temperature_choice_remains_explicit_and_cannot_override_new_selector",
+      "tests/test_task_secondary_coordinate.py::test_unsupported_secondary_unit_cannot_be_relabelled_as_a_valid_temperature",
+      "tests/test_task_selected_table_routing.py::test_actual_mixed_selected_formats_still_refuse_without_silent_route_change",
+      "tests/test_task_selected_table_routing.py::test_complete_multisource_table_answer_binds_each_original_selected_table",
+      "tests/test_task_selected_table_routing.py::test_legacy_saved_combined_question_can_answer_tables_and_coordinates_once",
+      "tests/test_task_selected_table_routing.py::test_partial_multisource_table_answer_is_rejected_without_silently_selecting_rest",
+      "tests/test_task_selected_table_routing.py::test_selected_table_chooses_its_actual_existing_builder[table:0-Instrument-1]",
+      "tests/test_task_selected_table_routing.py::test_selected_table_chooses_its_actual_existing_builder[table:1-Canonical-1]",
+      "tests/test_task_selected_table_routing.py::test_table_answer_replans_only_selected_facts_and_keeps_stale_reply_safe",
+      "tests/test_task_selected_table_routing.py::test_unresolved_alternative_table_cannot_block_a_valid_explicit_coordinate"
     ],
     "synthetic_candidates": [
       {
@@ -2263,9 +2320,237 @@
       {
         "nodeid": "tests/test_task_groups.py::test_raw_drift_blocks_group_continuation_or_explicit_retry_before_running_child[True]",
         "reason": "Generated tmp_path group requests, CSVs and native-placeholder bytes with the existing monkeypatched task/preview/export ports test whole-batch original-source revalidation before bound answers, explicit retry or continuation. Restoring the generated source permits exact resume; no retained private scientific inputs or native renderer are used."
+      },
+      {
+        "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/task_semantic_temperature.py]",
+        "reason": "The new declared temperature leaf adds one generated strict-type ownership parameter; this structural policy check reads no private scientific input."
+      },
+      {
+        "nodeid": "tests/test_managed_preview_audit_reuse.py::test_backend_preview_consumes_render_audit_without_reinspection",
+        "reason": "Generated Managed source tables/candidates exercise same-stage passed-audit reuse, actual native command counts and scientific/publication/SHA refusals; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_managed_preview_audit_reuse.py::test_failed_exact_science_or_publication_audit_never_renders[publication-publication_qa_failed]",
+        "reason": "Generated Managed source tables/candidates exercise same-stage passed-audit reuse, actual native command counts and scientific/publication/SHA refusals; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_managed_preview_audit_reuse.py::test_failed_exact_science_or_publication_audit_never_renders[science-external_mutation]",
+        "reason": "Generated Managed source tables/candidates exercise same-stage passed-audit reuse, actual native command counts and scientific/publication/SHA refusals; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_managed_preview_audit_reuse.py::test_real_width_patch_keeps_four_independent_inspections",
+        "reason": "Generated Managed source tables/candidates exercise same-stage passed-audit reuse, actual native command counts and scientific/publication/SHA refusals; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_managed_preview_audit_reuse.py::test_render_returns_the_actual_passed_scientific_audit",
+        "reason": "Generated Managed source tables/candidates exercise same-stage passed-audit reuse, actual native command counts and scientific/publication/SHA refusals; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_managed_preview_audit_reuse.py::test_reused_audit_cannot_bless_native_or_preview_identity_drift[native_bytes]",
+        "reason": "Generated Managed source tables/candidates exercise same-stage passed-audit reuse, actual native command counts and scientific/publication/SHA refusals; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_managed_preview_audit_reuse.py::test_reused_audit_cannot_bless_native_or_preview_identity_drift[preview_receipt]",
+        "reason": "Generated Managed source tables/candidates exercise same-stage passed-audit reuse, actual native command counts and scientific/publication/SHA refusals; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_followup_edit_binds_existing_selected_audit_and_preserves_other_figures[edit]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_followup_edit_binds_existing_selected_audit_and_preserves_other_figures[export]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_fresh_noop_reports_only_verified_visible_exports[fresh-changed]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_fresh_noop_reports_only_verified_visible_exports[fresh-intact]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_fresh_noop_reports_only_verified_visible_exports[fresh-missing]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_fresh_noop_reports_only_verified_visible_exports[other_edited-intact]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[artifact_hash]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[artifact_path]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[inventory]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[native_path]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[native_sha]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[none]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_initial_export_projection_requires_bound_receipt_and_actual_visible_bytes[size]",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_continuation.py::test_selected_audit_drift_is_closed_and_exact_restoration_can_resume",
+        "reason": "Generated source bytes and prepared numerical plans exercise selected native consecutive edits, audit-sidecar drift and exact visible export seals; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_decision_recovery.py::test_accepted_decision_survives_failure_and_resumes_without_republication[before_publication]",
+        "reason": "Generated source-bound prepared native candidates exercise durable accepted decisions and publication/write fault recovery without native reapplication; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_decision_recovery.py::test_accepted_decision_survives_failure_and_resumes_without_republication[completion_record]",
+        "reason": "Generated source-bound prepared native candidates exercise durable accepted decisions and publication/write fault recovery without native reapplication; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_decision_recovery.py::test_failed_decision_write_does_not_mutate_and_allows_a_real_rejection",
+        "reason": "Generated source-bound prepared native candidates exercise durable accepted decisions and publication/write fault recovery without native reapplication; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_decision_recovery.py::test_older_pending_publication_evidence_cannot_be_rejected_and_resumes[applied]",
+        "reason": "Generated source-bound prepared native candidates exercise durable accepted decisions and publication/write fault recovery without native reapplication; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_decision_recovery.py::test_older_pending_publication_evidence_cannot_be_rejected_and_resumes[intent]",
+        "reason": "Generated source-bound prepared native candidates exercise durable accepted decisions and publication/write fault recovery without native reapplication; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_decision_recovery.py::test_older_terminal_records_replay_only_their_truthful_decision[complete]",
+        "reason": "Generated source-bound prepared native candidates exercise durable accepted decisions and publication/write fault recovery without native reapplication; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_native_suite_decision_recovery.py::test_older_terminal_records_replay_only_their_truthful_decision[rejected]",
+        "reason": "Generated source-bound prepared native candidates exercise durable accepted decisions and publication/write fault recovery without native reapplication; no private measured/golden fixture is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_answered_continuity_requires_its_temperature_role_before_creation",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_column_identity_also_chooses_the_temperature_continuity_role",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_contradictory_explicit_temperature_selectors_fail_closed[secondary0-Ts]",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_contradictory_explicit_temperature_selectors_fail_closed[secondary1-None]",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_contradictory_explicit_temperature_selectors_fail_closed[secondary2-Ts]",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_duplicate_temperature_header_needs_the_intersecting_column_identity",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_exact_secondary_selector_determines_numbers_without_redundant_question[selector0]",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_exact_secondary_selector_determines_numbers_without_redundant_question[selector1]",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_exact_secondary_selector_determines_numbers_without_redundant_question[selector2]",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_explicit_temperature_continuity_still_requires_every_consumed_temperature",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_legacy_temperature_header_and_equal_new_header_remain_compatible",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_secondary_unit_conversion_uses_same_selected_column_and_formal_operator",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_source_order_never_requires_an_unconsumed_auxiliary_temperature",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_tables_then_source_order_answers_do_not_invent_a_temperature_question",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_unmatched_secondary_selector_cannot_fall_back_to_another_temperature[selector0]",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_unmatched_secondary_selector_cannot_fall_back_to_another_temperature[selector1]",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_unresolved_stage_order_retains_source_order_without_requiring_temperature",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_unselected_block_temperature_does_not_create_a_false_choice",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_unselected_temperature_choice_remains_explicit_and_cannot_override_new_selector",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_secondary_coordinate.py::test_unsupported_secondary_unit_cannot_be_relabelled_as_a_valid_temperature",
+        "reason": "Generated tmp_path tables with deliberately distinct temperature roles exercise explicit selector intersections, units and unchanged original cells; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_selected_table_routing.py::test_actual_mixed_selected_formats_still_refuse_without_silent_route_change",
+        "reason": "Generated multi-sheet workbooks/tables and source-bound questions exercise selected format dispatch, staged choices, original lineage and unchanged raw bytes; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_selected_table_routing.py::test_complete_multisource_table_answer_binds_each_original_selected_table",
+        "reason": "Generated multi-sheet workbooks/tables and source-bound questions exercise selected format dispatch, staged choices, original lineage and unchanged raw bytes; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_selected_table_routing.py::test_legacy_saved_combined_question_can_answer_tables_and_coordinates_once",
+        "reason": "Generated multi-sheet workbooks/tables and source-bound questions exercise selected format dispatch, staged choices, original lineage and unchanged raw bytes; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_selected_table_routing.py::test_partial_multisource_table_answer_is_rejected_without_silently_selecting_rest",
+        "reason": "Generated multi-sheet workbooks/tables and source-bound questions exercise selected format dispatch, staged choices, original lineage and unchanged raw bytes; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_selected_table_routing.py::test_selected_table_chooses_its_actual_existing_builder[table:0-Instrument-1]",
+        "reason": "Generated multi-sheet workbooks/tables and source-bound questions exercise selected format dispatch, staged choices, original lineage and unchanged raw bytes; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_selected_table_routing.py::test_selected_table_chooses_its_actual_existing_builder[table:1-Canonical-1]",
+        "reason": "Generated multi-sheet workbooks/tables and source-bound questions exercise selected format dispatch, staged choices, original lineage and unchanged raw bytes; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_selected_table_routing.py::test_table_answer_replans_only_selected_facts_and_keeps_stale_reply_safe",
+        "reason": "Generated multi-sheet workbooks/tables and source-bound questions exercise selected format dispatch, staged choices, original lineage and unchanged raw bytes; no retained scientific corpus is used."
+      },
+      {
+        "nodeid": "tests/test_task_selected_table_routing.py::test_unresolved_alternative_table_cannot_block_a_valid_explicit_coordinate",
+        "reason": "Generated multi-sheet workbooks/tables and source-bound questions exercise selected format dispatch, staged choices, original lineage and unchanged raw bytes; no retained scientific corpus is used."
       }
     ],
-    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion. 2026-10-16: reviewed all 106 newly collected generated round-2 nodes, including the explicit paper capture-retry rename, and changed test/helper bytes. Exact module-specific dispositions are recorded per added node. All retained lifecycle tiers, 165 private dependencies and 111 original failure responsibilities remain unchanged; no access-completeness promotion. 2026-10-16: reviewed 27 additional generated publication-completion and canonical-rule rejection cases after the final delivery fix; all earlier dispositions, lifecycle tiers and private responsibilities remain unchanged. 2026-10-16: synchronized the final group raw-source guard before collection; all 2177 tracked file bytes matched the integration snapshot. Reviewed three new generated focused group continuation cases and strengthened existing native-case source-drift assertions, with no new native node or old tier change. Earlier private and synthetic dispositions remain unchanged. 2026-10-16: direct collection in the actual integration root after the existing generated MCP stdio discovery case was corrected to require all 43 unique tools and the closed resume schema. No node, lifecycle tier, input classification, private responsibility or earlier synthetic disposition changed.",
+    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion. 2026-10-16: reviewed all 106 newly collected generated round-2 nodes, including the explicit paper capture-retry rename, and changed test/helper bytes. Exact module-specific dispositions are recorded per added node. All retained lifecycle tiers, 165 private dependencies and 111 original failure responsibilities remain unchanged; no access-completeness promotion. 2026-10-16: reviewed 27 additional generated publication-completion and canonical-rule rejection cases after the final delivery fix; all earlier dispositions, lifecycle tiers and private responsibilities remain unchanged. 2026-10-16: synchronized the final group raw-source guard before collection; all 2177 tracked file bytes matched the integration snapshot. Reviewed three new generated focused group continuation cases and strengthened existing native-case source-drift assertions, with no new native node or old tier change. Earlier private and synthetic dispositions remain unchanged. 2026-10-16: direct collection in the actual integration root after the existing generated MCP stdio discovery case was corrected to require all 43 unique tools and the closed resume schema. No node, lifecycle tier, input classification, private responsibility or earlier synthetic disposition changed. 2026-10-18: independent post-push contracts/lifecycle review and root inspection of generated secondary-selector, table-question, native continuation/decision and Managed same-stage audit controls; exact new node dispositions retained. All old nodes, tiers, private responsibilities and incomplete access-capture status remain unchanged.",
     "scope": [
       "real_world",
       "polymer_corpus",

@@ -41,7 +41,11 @@ A task can also accept several attachments and a small explicit coordinate
 intent, including a secondary axis. The program reads the source tables and
 expands their current facts into the existing Managed figure contract. It returns
 one source-bound plan for unresolved scientific choices, such as temperature
-column roles or how reset-time stages join. Experiment identity does not depend
+column roles or how reset-time stages join. When worksheets are ambiguous, the
+task first asks which original tables to use, then asks only the remaining
+questions for those tables. Explicit secondary-temperature selectors bind the
+actual original column; conflicting selectors stop before plotting.
+Experiment identity does not depend
 on which coordinate is selected for a particular view.
 
 Mixed instrument tables can select exact observed Test values or qualified source
