@@ -22,19 +22,32 @@ def node(kind, parameters, inputs=("raw",), output="derived"):
             "parameters": parameters, "executor": builtin_executor(), "determinism": "deterministic"}
 
 
-def test_time_reset_segments_are_candidates_with_original_rows_and_no_automatic_order():
-    from sciplot_core.source_tables.segmented_series import segment_candidates
+def test_production_source_candidates_preserve_reset_missing_and_duplicate_row_evidence(tmp_path):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.source_inspection.semantic_evidence import inspect_semantic_tables
 
-    raw = dataset(times=(0, 2, 4, 0, 2, None, 0, 3), values=tuple(range(8)))
-    before = deepcopy(raw)
-    result = segment_candidates(raw, time_column="time")
-    assert [(s["start_index"], s["end_index"]) for s in result["segments"]] == [(0, 3), (3, 5), (6, 8)]
-    assert [s["source_rows"] for s in result["segments"]] == [[2, 3, 4], [5, 6], [8, 9]]
-    assert result["unassigned_indices"] == [5]
-    assert result["questions"][0]["field"] == "stage_order"
-    assert "boundary" in {q["field"] for q in result["questions"]}
-    assert result["segments"][1]["reason"] == "time_reset"
-    assert raw == before
+    source = tmp_path / "different-structure.csv"
+    content = "Time,Mass\ns,%\n0,100\n2,99\n4,98\n0,97\n0,96\n2,95\n,94\n0,93\n3,92\n"
+    source.write_text(content)
+    before = file_sha256(source)
+    result = inspect_semantic_tables(source)
+    candidate = result["candidates"][0]
+    stages = candidate["blocks"][0]["segments"]
+    assert [(stage["data_start_row"], stage["data_end_row"]) for stage in stages] == [(2, 5), (5, 8), (9, 11)]
+    assert [stage["point_count"] for stage in stages] == [3, 3, 2]
+    assert [(stage["time_start"], stage["time_end"]) for stage in stages] == [(0, 4), (0, 2), (0, 3)]
+    assert candidate["table_selection"]["data_start_row"] == 2
+    assert candidate["table_selection"]["data_end_row"] == 11
+    assert [column["numeric"]["point_count"] for column in candidate["columns"]] == [8, 9]
+    assert result["scientific_identity"]["confirmed"] is False
+    assert result["sha256"] == before == file_sha256(source)
+    assert source.read_text() == content
+    # The duplicate at original rows 5/6 remains three measurements. A formal
+    # cumulative-time transform rejects it rather than deduplicating silently.
+    duplicate = dataset(times=(0, 0, 2), values=(97, 96, 95))
+    with pytest.raises(DocumentError) as error:
+        execute_node(node("concat_time", {"time_column": "time", "boundary": "preserve_endpoint", "first_origin": "zero"}), {"raw": duplicate})
+    assert error.value.reason_code == "transform_stage_time_invalid"
 
 
 def test_slice_concatenate_and_convert_retains_duplicate_endpoints_and_original_lineage():
@@ -120,3 +133,18 @@ def test_multi_input_graph_cache_binds_both_sources_and_complete_execution_prove
     third = resolve_transforms(seal_document(first["document"]), changed, cache=first["cache"])
     assert third["executed"] == ["joined"] and not third["reused"]
     assert third["datasets"]["joined"]["columns"]["column:1"]["values"][-3:] == [9, 2, 3]
+
+
+@pytest.mark.parametrize("parameters", [
+    {"start": 0.0, "end": 2}, {"start": 0, "end": 2.0},
+    {"start": False, "end": 2}, {"start": 0, "end": True},
+    {"start": 0.5, "end": 2}, {"start": 0, "end": 2.5},
+])
+def test_row_slice_rejects_nonliteral_integer_indices_with_structured_diagnostics(parameters):
+    with pytest.raises(DocumentError) as error:
+        execute_node(node("row_slice", parameters), {"raw": dataset()})
+    assert error.value.issues
+    assert any(issue["path"].startswith("/parameters/") or issue["path"] == "/" for issue in error.value.issues)
+    if any(type(value) is float and value.is_integer() for value in parameters.values()):
+        assert error.value.reason_code == "transform_row_index_invalid"
+        assert error.value.issues[0]["constraint"] == "integer_literal"

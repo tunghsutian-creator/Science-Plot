@@ -51,6 +51,11 @@ def transform_schema() -> dict[str, Any]:
 def validate_node(value: Any) -> dict[str, Any]:
     validate_wire(value, transform_schema(), code="transform_node_invalid")
     assert isinstance(value, dict)
+    if value["kind"] == "row_slice":
+        for field in ("start", "end"):
+            if type(value["parameters"][field]) is not int:
+                fail("transform_row_index_invalid", "Row indices require integer literals; fractional, boolean and floating-point values cannot index source rows.",
+                     "/parameters/" + field, "integer_literal", actual=value["parameters"][field])
     if value["kind"] == "normalize":
         if (value["parameters"]["method"] == "constant") != ("constant" in value["parameters"]):
             fail("transform_parameter_conflict", "Only constant normalization requires an explicit constant.",
