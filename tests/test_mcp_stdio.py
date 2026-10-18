@@ -91,7 +91,14 @@ def test_official_stdio_client_discovery_and_error_recovery():
             index = await _call(client, "sciplot_task_capabilities", {})
             definition = await _call(client, "sciplot_task_capabilities", {
                 "section": "request", "name": "create", "expected_contract_sha256": index["contract_sha256"]})
-            assert definition["schema"]["properties"]["action"]["const"] == "create"
+            variants = definition["schema"]["oneOf"]
+            assert len(variants) == 2
+            assert all(item["properties"]["action"]["const"] == "create"
+                       and item["additionalProperties"] is False for item in variants)
+            assert {frozenset(item["required"]) for item in variants} == {
+                frozenset({"version", "action", "source"}),
+                frozenset({"version", "action", "sources", "intent"}),
+            }
             stale = await client.call_tool("sciplot_task_capabilities", {
                 "section": "request", "name": "create", "expected_contract_sha256": "0" * 64})
             assert stale.is_error
