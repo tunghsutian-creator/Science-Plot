@@ -13,6 +13,8 @@ from .datasets import dataset_hash, numeric_hash, validate_dataset
 from .external import ExternalExecutor, executor_files, run_external
 from .schema import ordered_nodes, validate_node
 from .identity import builtin_executor, require_builtin_runtime_current
+from .series import run_series_builtin
+from .units import run_unit_builtin
 
 
 def digest(value: Any) -> str:
@@ -28,16 +30,21 @@ def execute_node(node: Any, inputs: dict[str, dict[str, Any]], *,
         fail("transform_executor_changed", "Builtin executor bytes changed; bind the current registered implementation.", "/executor", "exact_executor_identity")
     if node["kind"] != "external":
         require_builtin_runtime_current()
-    if node["inputs"][0] not in inputs:
+    if any(name not in inputs for name in node["inputs"]):
         fail("transform_input_missing", "The named input dataset has not been resolved.", "/inputs", "existing_dataset")
-    source = validate_dataset(inputs[node["inputs"][0]])
-    input_hashes = [dataset_hash(source)]
+    sources = [validate_dataset(inputs[name]) for name in node["inputs"]]
+    source = sources[0]
+    input_hashes = [dataset_hash(value) for value in sources]
     key = digest({"node": node, "inputs": input_hashes})
     if node["kind"] == "external":
         result, details = run_external(node, source, external_executors or {})
+    elif node["kind"] in {"row_slice", "concat_time"}:
+        result, details = run_series_builtin(node, sources)
+    elif node["kind"] in {"convert_unit", "time_offset"}:
+        result, details = run_unit_builtin(node, source)
     else:
         result, details = run_builtin(node, source)
-    result["provenance"] = deepcopy(source["provenance"])
+    result["provenance"] = deepcopy(result["provenance"])
     result["provenance"]["transforms"].append({"node_id": node["id"], "cache_key": key,
         "executor_hash": digest(node["executor"]), "input_hashes": input_hashes,
         "output_hash": numeric_hash(result), "parameters": deepcopy(node["parameters"]), "details": details})

@@ -20,6 +20,15 @@ def transform_schema() -> dict[str, Any]:
         "normalize": closed({"columns": columns, "method": {"enum": ["max_abs", "first", "constant"]},
                              "constant": {"type": "number"}, "output_unit": {"const": "1"}},
                             ["columns", "method", "output_unit"]),
+        "row_slice": closed({"start": {"type": "integer", "minimum": 0},
+                             "end": {"type": "integer", "minimum": 1}}),
+        "concat_time": closed({"time_column": IDENTIFIER,
+                               "boundary": {"enum": ["preserve_endpoint", "next_sample"]},
+                               "first_origin": {"enum": ["preserve", "zero"]}}),
+        "convert_unit": closed({"columns": columns, "from_unit": {"type": "string", "minLength": 1},
+                                "to_unit": {"type": "string", "minLength": 1}}),
+        "time_offset": closed({"time_column": IDENTIFIER, "offset": {"type": "number"},
+                               "unit": {"type": "string", "minLength": 1}}),
         "external": {"type": "object"},
     }
     variants = []
@@ -32,7 +41,8 @@ def transform_schema() -> dict[str, Any]:
                             "protocol_version": {"const": 1}}) if kind == "external" else
                     closed({"kind": {"const": "builtin"}, "version": {"const": BUILTIN_VERSION}, "content_hash": DIGEST}))
         variants.append(closed({"id": IDENTIFIER, "kind": {"const": kind},
-            "inputs": {"type": "array", "minItems": 1, "maxItems": 1, "items": IDENTIFIER},
+            "inputs": {"type": "array", "minItems": 1, "maxItems": 64 if kind == "concat_time" else 1,
+                       "uniqueItems": True, "items": IDENTIFIER},
             "output": IDENTIFIER, "parameters": params, "executor": executor,
             "determinism": {"enum": ["deterministic", "non_deterministic"]}}))
     return {"oneOf": variants}
