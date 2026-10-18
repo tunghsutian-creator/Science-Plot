@@ -19,6 +19,7 @@ from sciplot_core.source_inspection.recommendation_building import (
     template_recommendation,
 )
 from sciplot_core.source_inspection.source_plans import recommendation_plan
+from sciplot_core.source_inspection.input_errors import require_source_file
 
 
 MODEL_LABELS = {
@@ -48,9 +49,9 @@ def _mapping(
             ),
         )
     if recognized.replicate_groups:
-        first = recognized.replicate_groups[0]
+        first_group = recognized.replicate_groups[0]
         return (
-            {"group": "sample", "value": first.value_label},
+            {"group": "sample", "value": first_group.value_label},
             (
                 "group:"
                 + ", ".join(group.group for group in recognized.replicate_groups[:3]),
@@ -96,6 +97,13 @@ def _experiment_family(recognized: RecognizedSource) -> str | None:
 
 def _inspect_uncached(source: Path, sheet: str | int) -> InputInspection:
     recognized = recognize_source(source, sheet)
+    if recognized.model == "unbound_table":
+        return InputInspection(
+            model="unbound_table", model_label="Unbound numeric table",
+            recommendation_summary="Table structure is readable; scientific quantities and view bindings need confirmation.",
+            warnings=("Numeric columns alone do not establish scientific identity or statistical replicates.",),
+            signals=("Original table cells remain available for explicit source binding.",),
+        )
     plan = recommendation_plan(source, recognized)
     mapping, role_hints = _mapping(recognized)
     family = _experiment_family(recognized)
@@ -169,6 +177,7 @@ def inspect_input_file(
     """Inspect one source file and rank only currently supported templates."""
 
     source = Path(input_path)
+    require_source_file(source)
     return _inspect_cached(str(source.resolve()), source.stat().st_mtime_ns, sheet)
 
 

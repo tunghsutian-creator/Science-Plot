@@ -11,11 +11,13 @@ from sciplot_core.source_inspection.models import (
     SourceIntent,
     TemplateRecommendation,
 )
+from sciplot_core.source_inspection.input_errors import SourceInputError
 
 
 __all__ = [
     "InputInspection",
     "SourceIntent",
+    "SourceInputError",
     "TemplateRecommendation",
     "clear_inspection_cache",
     "inspect_input_file",

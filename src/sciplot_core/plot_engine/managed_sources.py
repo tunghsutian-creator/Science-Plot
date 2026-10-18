@@ -47,15 +47,40 @@ def load_sources(document: dict[str, Any], rule_id: str) -> dict[str, dict[str, 
                     raise EngineError("managed_source_nonfinite", "Infinite numeric values cannot be represented as finite managed data.")
                 values.append(number)
             columns[f"column:{column['index']}"] = {"label": column["header"], "unit": column["unit"], "values": values}
-        for mapping in document["scientific"]["mappings"].values():
+        issues: list[dict[str, Any]] = []
+        for mapping_id, mapping in document["scientific"]["mappings"].items():
             for axis in ("x", "y"):
                 coordinate = mapping.get(axis, {})
                 if coordinate.get("source_id") != source["source_id"]:
                     continue
                 index = coordinate.get("column_index")
                 column = next((item for item in selected["columns"] if item["index"] == index), None)
-                if column is None or column["header"] != coordinate["column"] or column["unit"] != mapping[axis + "_unit"]:
-                    raise EngineError("managed_metadata_conflict", "Bindings must preserve exact original column quantities and units.")
+                context = {"source_id": source["source_id"], "source": str(path), "sheet": selection["sheet"],
+                           "mapping_id": mapping_id, "coordinate": axis, "column_index": index}
+                if column is None:
+                    issues.append({**context, "field": "column_index", "expected": [item["index"] for item in selected["columns"]],
+                                   "actual": index})
+                    continue
+                for problem in column["metadata_conflicts"]:
+                    field = problem["field"]
+                    original = column["raw_metadata"]["header" if field == "quantity" else field]
+                    issues.append({**context, "field": field, "expected": problem.get("original", original),
+                                   "actual": problem.get("declared", problem.get("values", problem)),
+                                   "code": problem["code"], "cell_evidence": column["cell_evidence"]})
+                for field, expected, actual in (("column", column["header"], coordinate["column"]),
+                                                ("unit", column["unit"], mapping[axis + "_unit"])):
+                    if expected != actual:
+                        issues.append({**context, "field": field, "expected": expected, "actual": actual,
+                                       "cell_evidence": column["cell_evidence"]})
+        if issues:
+            error = EngineError(
+                "managed_metadata_conflict", "Bindings must preserve exact original column quantities and units.",
+                action="correct_binding", source_id=source["source_id"], source=str(path), issues=issues,
+                allowed_changes=["binding_column", "binding_unit", "metadata_confirmation", "explicit_transform", "display_label"],
+            )
+            error.repair["message"] = "Correct the binding to the observed source metadata. Unit conversion requires an explicit scientific transform; display labels do not rename raw quantities."
+            error.issues = issues
+            raise error
         if file_sha256(path) != source["sha256"]:
             raise EngineError("managed_source_changed", "The source changed during original-table reading.")
         identifier = source["source_id"]
