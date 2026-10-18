@@ -16,6 +16,25 @@ from sciplot_core.studio_core.export_execution import export_studio_document
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
+def _domain_failure(stderr: str | bytes | None) -> DocumentError | None:
+    text = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr
+    for line in reversed((text or "").splitlines()):
+        try:
+            value = json.loads(line)
+        except ValueError:
+            continue
+        if (not isinstance(value, dict) or value.get("kind") != "sciplot_worker_failure"
+                or value.get("version") != 1 or not isinstance(value.get("reason_code"), str)
+                or not isinstance(value.get("message"), str) or not isinstance(value.get("issues"), list)
+                or not all(isinstance(issue, dict) for issue in value["issues"])
+                or not isinstance(value.get("repair"), dict)):
+            continue
+        error = DocumentError(value["reason_code"], value["message"], issues=value["issues"])
+        error.repair = value["repair"]
+        return error
+    return None
+
+
 def compiler_identity() -> dict[str, str]:
     # Reuse the native runtime's byte identity, including shared helpers,
     # vendored Veusz, interpreter/packages and relevant renderer environment.
@@ -37,10 +56,18 @@ class ManagedVeuszCompiler:
         return self._worker.activate() if self._worker else nullcontext()
 
     def _run(self, arguments: list[str]) -> dict[str, Any]:
-        with self._scope():
-            result = run_worker([sys.executable, "-m", "sciplot_core.veusz_worker", *arguments],
-                                text=True, capture_output=True, check=True, timeout=120,
-                                env=veusz_worker_environment(), cold_runner=subprocess.run)
+        try:
+            with self._scope():
+                result = run_worker([sys.executable, "-m", "sciplot_core.veusz_worker", *arguments],
+                                    text=True, capture_output=True, check=True, timeout=120,
+                                    env=veusz_worker_environment(), cold_runner=subprocess.run)
+        except subprocess.CalledProcessError as exc:
+            # The full original streams remain on the subprocess cause. Only a
+            # closed worker-domain envelope is promoted to a corrective reply.
+            error = _domain_failure(exc.stderr)
+            if error is not None:
+                raise error from exc
+            raise
         payload: dict[str, Any] = json.loads(result.stdout)
         return payload
 

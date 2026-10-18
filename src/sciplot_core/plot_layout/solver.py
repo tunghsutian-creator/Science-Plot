@@ -58,9 +58,20 @@ def solve_layout(layout: dict[str, Any], views: list[dict[str, Any]], axes: list
         panel_label_height_mm=float(layout["panel_label_height_mm"]),
         has_label=bool(by_id[cell["view_id"]].get("panel_label"))) for cell in layout["cells"]}
     if panel_margins_mm is not None:
-        # House geometry is fixed. Native text QA rejects overflow; no auto-resize.
-        budgets = {view_id: {**panel_margins_mm, "min_width": 1.0, "min_height": 1.0}
-                   for view_id in budgets}
+        # Keep the established single bottom/left house frame byte-stable.
+        # Additional decorated sides require an explicit semantic allocation:
+        # mirror the house decoration minimum, then reserve the conservative
+        # axis budget when larger. This occurs before the IR is sealed; native
+        # text QA still rejects overflow and the renderer never moves a frame.
+        for view_id, budget in budgets.items():
+            resolved = {**panel_margins_mm, "min_width": 1.0, "min_height": 1.0}
+            for side, opposite in (("right", "left"), ("top", "bottom")):
+                decorated = [axis for axis in axes if axis["view_id"] == view_id and axis["side"] == side
+                             and axis["visible"] and axis["id"] not in hidden
+                             and (axis["ticks"] or axis["label_visible"] and axis["label"])]
+                if decorated:
+                    resolved[side] = max(resolved[side], panel_margins_mm[opposite], budget[side])
+            budgets[view_id] = resolved
     # Shared grid edges use the largest decoration in that row/column.
     horizontal = [{side: max((budgets[cell["view_id"]][side] for cell in layout["cells"]
                     if cell["column"] + (cell["column_span"] - 1 if side == "right" else 0) == column), default=0.0)

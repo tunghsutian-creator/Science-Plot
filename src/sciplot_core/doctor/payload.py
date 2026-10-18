@@ -164,6 +164,13 @@ def doctor_payload() -> dict[str, Any]:
     return {
         "kind": "sciplot_doctor",
         "status": "ready" if not required_failures else "blocked",
+        "readiness_scope": {
+            "installation": "ready" if not required_failures else "blocked",
+            "checks": "static_contracts_and_local_dependency_loading",
+            "native_launch": "not_run", "requested_figure": "not_run",
+            "delivery_verified": False,
+            "next_validation": "Run the requested task; native compile, scientific audit, publication QA and actual files determine delivery readiness.",
+        },
         "repo_root": str(REPO_ROOT),
         "execution_identity": execution_identity(),
         "normal_mode": {

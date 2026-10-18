@@ -35,7 +35,7 @@ def project_recovery(result: dict[str, Any], root: Path, transaction: dict[str, 
         "idempotency_key": request["idempotency_key"]}}
     phase = transaction["phase"]
     step = {**saved["next_step"], "plot": str(root)}
-    if phase in {"committed", "exporting", "export_pending"}:
+    if phase in {"committed", "exporting", "export_pending"} and not transaction.get("error"):
         step = {"action": "plot.export", "plot": str(root)}
     elif step["action"] == "retry_same_request" or phase == "complete":
         step = resume

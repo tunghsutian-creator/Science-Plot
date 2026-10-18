@@ -113,7 +113,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def _execute(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     if args.command == "font-families":
         from sciplot_core.veusz_worker.font_catalog import font_families
@@ -190,3 +190,20 @@ def main(argv: list[str] | None = None) -> int:
         )
     print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Keep native traceback and typed domain rejection on the same transport."""
+    import sys
+    import traceback
+
+    from sciplot_core.plot_document import DocumentError
+
+    try:
+        return _execute(argv)
+    except DocumentError as exc:
+        traceback.print_exc()
+        print(json.dumps({"kind": "sciplot_worker_failure", "version": 1,
+                          "reason_code": exc.reason_code, "message": str(exc),
+                          "issues": exc.issues, "repair": exc.repair}, ensure_ascii=False), file=sys.stderr)
+        return 1

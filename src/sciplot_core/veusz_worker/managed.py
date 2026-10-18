@@ -71,7 +71,15 @@ def compile_plot_ir(ir_path: Path, document: Path, preview: Path) -> dict[str, A
         if result["status"] != "unchanged" or result["scientific_audit"]["status"] != "passed":
             raise ValueError(f"Saved managed artifact failed native fidelity: {result}")
         if result.get("publication_qa", {}).get("status", "passed") != "passed":
-            raise ValueError(f"Managed Figure publication QA failed: {result['publication_qa']}")
+            from sciplot_core.plot_document import DocumentError
+
+            error = DocumentError("publication_qa_failed", "Native publication text exceeds its resolved layout bounds.",
+                                  issues=result["publication_qa"].get("hard", []))
+            error.repair = {"action": "correct_layout", "issues": error.issues,
+                            "publication_qa": result["publication_qa"], "native_stage": "publication_qa",
+                            "save_completed": True, "scientific_audit_status": result["scientific_audit"]["status"],
+                            "preview_rendered": False, "canonical_document_published": False}
+            raise error
         audited_hash = result["document_sha256"]
         if file_sha256(candidate) != audited_hash:
             raise ValueError("Managed native document changed after its compilation audit.")
