@@ -232,6 +232,7 @@ files = [
   "src/sciplot_core/task_semantic_contract.py",
   "src/sciplot_core/task_semantic_plan.py",
   "src/sciplot_core/task_semantic_figure.py",
+  "src/sciplot_core/task_semantic_frequency.py",
   "src/sciplot_core/task_semantic_creation.py",
   "src/sciplot_core/task_semantic_delivery.py",
   "src/sciplot_core/task_semantic_next_step.py",

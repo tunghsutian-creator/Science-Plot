@@ -232,6 +232,13 @@ semantic coordinate intent. It is not the automatic source-only default.
 Its RenderingStyleContract is extracted from production policy; unverified
 family compatibility is not a reason to silently switch ordinary plots to it.
 
+Frequency instrument exports preserve explicitly labelled temperature Results as
+separate traces. Complex-viscosity magnitude is distinct from a recorded real or
+imaginary component. With original G′, G″, frequency and compatible unit evidence,
+SciPlot can derive the missing magnitude through its recorded deterministic
+transform. The [ordinary creation guide](skill/references/ordinary-create.md)
+shows the small public coordinate intent; original measurements stay unchanged.
+
 ## Gallery
 
 These figures were rendered by **SciPlot / Veusz** from synthetic demonstration

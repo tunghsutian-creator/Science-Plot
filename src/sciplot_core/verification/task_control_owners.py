@@ -22,6 +22,7 @@ PAPER_LEAF_PATHS = frozenset({
 
 
 SEMANTIC_TASK_TESTS = (
+    "tests/test_frequency_interval_binding.py",
     "tests/test_task_semantic_creation.py",
     "tests/test_task_semantic_cli.py",
     "tests/test_task_semantic_delivery.py",

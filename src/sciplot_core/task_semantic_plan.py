@@ -73,7 +73,8 @@ def _coordinate_decisions(sources: list[dict[str, Any]], intent: dict[str, Any])
                         if field in coordinate:
                             eligible = [column for column in eligible if column[field] == coordinate[field]]
                     groups.append({"source_id": source["source_id"], "table_id": candidate["candidate_id"],
-                                   "block_id": block["block_id"], "columns": eligible})
+                                   "block_id": block["block_id"], "columns": eligible,
+                                   **({"available_derivation": derived} if derived else {})})
         if all(len(group["columns"]) == 1 for group in groups):
             continue
         common = set.intersection(*(set(column["header"] for column in group["columns"]) for group in groups)) if groups else set()
@@ -86,6 +87,12 @@ def _coordinate_decisions(sources: list[dict[str, Any]], intent: dict[str, Any])
         error.issues = [{"path": "/intent/" + role, "constraint": "unique_original_coordinate", "source_blocks": groups}]
         error.repair = {"action": "choose_original_coordinate", "supported_selectors": ["intent." + role + ".header", "intent." + role + ".column_id"],
                         "existing_mapping_route": "task start create.mapping for ordinary single-source XY, or expert plot create with source Binding for differently selected original blocks"}
+        derivations = [group for group in groups if "available_derivation" in group]
+        if derivations:
+            error.repair["available_derivations"] = derivations
+            error.repair["draft_correction"] = {
+                "action": "revise_intent", "omit_fields": ["intent." + role + ".header", "intent." + role + ".column_id"],
+                "message": "To request the advertised source-derived quantity, retain its quantity/unit and omit a selector naming a different measured component. Revise this same task with its current expected_intent_revision; never relabel a real or imaginary component as magnitude."}
         raise error
     return decisions
 

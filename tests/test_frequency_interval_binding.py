@@ -106,6 +106,10 @@ def test_imaginary_component_cannot_be_selected_as_magnitude_by_exact_header(tmp
     with pytest.raises(TaskControlError) as rejected:
         prepare_plan([source], value)
     assert rejected.value.reason_code == "semantic_coordinate_mapping_required"
+    assert len(rejected.value.repair["available_derivations"]) == 4
+    assert rejected.value.repair["draft_correction"]["omit_fields"] == ["intent.y.header", "intent.y.column_id"]
+    assert all(item["available_derivation"]["quantity"] == "complex_viscosity"
+               for item in rejected.value.repair["available_derivations"])
 
 
 def test_managed_text_source_requires_exclusively_formal_selected_columns(tmp_path):

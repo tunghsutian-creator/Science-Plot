@@ -100,6 +100,13 @@ configuration, with distribution identity and documented recovery verified.
 
 ## Independent original-data acceptance for table choices
 
+Continue independent instrument-frequency acceptance across original formats,
+condition metadata and explicit coordinate selections. Generated regressions now
+distinguish viscosity magnitude from components, retain temperature-labelled
+Results and bind formal source/unit/transform evidence. A correct local magnitude
+figure does not establish a viscosity TTS model or validate caller-prepared shifts;
+keep those scientific decisions and existing frozen plans separate.
+
 The explicit semantic task adapter now reuses Managed creation for multiple
 attachments, independent coordinate intent, formal reset-time stage assembly,
 unit conversion and presentation interpolation. Broader experiment/coordinate

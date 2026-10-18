@@ -45,6 +45,18 @@ modulus/positive-frequency derivation and record units/provenance. The frequency
 plan defaults to viscosity and admits complex modulus only through an explicit
 queue entry. Creep preparation, rule axes and study defaults share original
 shear strain versus time, preserving selected interval order and counts.
+`rheology_sweep_columns.py` shares exact magnitude identities and explicit unit
+evidence across the original sweep reader. Real/imaginary components cannot bind
+the magnitude. Literal temperature-labelled frequency Results remain separate
+conditions, with their original sample, row bounds, nominal-condition evidence
+and point order retained; measured temperatures are never rounded into groups.
+`source_inspection/rheology_evidence.py` projects those original intervals for
+the semantic task adapter. `task_semantic_frequency.py` binds each interval into
+the existing Managed graph and its typed `rheology_complex_viscosity` transform;
+the shared metric owner computes `hypot(Gprime, Gdoubleprime) / omega` only with
+explicit compatible units. An original source may omit unrelated text columns
+from numeric loading only when every direct consumer is a validated deterministic
+`select`; selected metadata, complete source hashes and physical rows remain bound.
 Exact-current file comparison rehashes the full bytes and rejects identity,
 mode, size, modification-time or content changes. A ctime-only metadata update
 between two individually stable snapshots does not invalidate identical data.
