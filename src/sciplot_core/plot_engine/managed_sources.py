@@ -48,6 +48,15 @@ def load_sources(document: dict[str, Any], rule_id: str) -> dict[str, dict[str, 
                 values.append(number)
             columns[f"column:{column['index']}"] = {"label": column["header"], "unit": column["unit"], "values": values}
         issues: list[dict[str, Any]] = []
+        for column in selected["columns"]:
+            for problem in column["metadata_conflicts"]:
+                field = problem["field"]
+                original = column["raw_metadata"]["header" if field == "quantity" else field]
+                issues.append({"source_id": source["source_id"], "source": str(path), "sheet": selection["sheet"],
+                               "column_index": column["index"], "field": field,
+                               "expected": problem.get("original", original),
+                               "actual": problem.get("declared", problem.get("values", problem)),
+                               "code": problem["code"], "cell_evidence": column["cell_evidence"]})
         for mapping_id, mapping in document["scientific"]["mappings"].items():
             for axis in ("x", "y"):
                 coordinate = mapping.get(axis, {})
@@ -61,12 +70,6 @@ def load_sources(document: dict[str, Any], rule_id: str) -> dict[str, dict[str, 
                     issues.append({**context, "field": "column_index", "expected": [item["index"] for item in selected["columns"]],
                                    "actual": index})
                     continue
-                for problem in column["metadata_conflicts"]:
-                    field = problem["field"]
-                    original = column["raw_metadata"]["header" if field == "quantity" else field]
-                    issues.append({**context, "field": field, "expected": problem.get("original", original),
-                                   "actual": problem.get("declared", problem.get("values", problem)),
-                                   "code": problem["code"], "cell_evidence": column["cell_evidence"]})
                 for field, expected, actual in (("column", column["header"], coordinate["column"]),
                                                 ("unit", column["unit"], mapping[axis + "_unit"])):
                     if expected != actual:
@@ -102,6 +105,17 @@ def _require_sample_lineage(document: dict[str, Any], raw: dict[str, dict[str, s
         source, output = node["inputs"][0], node["output"]
         columns = dict(known.get(source, {}))
         unresolved = unknown.get(source)
+        if node["kind"] == "concat_time":
+            inputs = node["inputs"]
+            if any(name in unknown for name in inputs):
+                unknown[output] = set().union(*(unknown[name] if name in unknown else
+                                               set().union(*known[name].values()) for name in inputs))
+                known[output] = {}
+                continue
+            if any(set(known[name]) != set(columns) for name in inputs):
+                raise EngineError("managed_column_lineage_missing", "Every concatenated stage must preserve the same original column identities.")
+            known[output] = {column: set().union(*(known[name][column] for name in inputs)) for column in columns}
+            continue
         if node["kind"] == "external":
             # An arbitrary fixed executor has no declared column lineage. A
             # unique original sample remains unambiguous; mixed samples cannot
