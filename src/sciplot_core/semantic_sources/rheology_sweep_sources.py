@@ -12,6 +12,7 @@ from sciplot_core.foundation.text_values import (
     token as _token,
 )
 from sciplot_core.semantic_sources.rheology_units import _unit_conversion as _unit_conversion
+from sciplot_core.materials_rules.unit_formatting import format_unit_label
 from sciplot_core.semantic_sources.rheology_frequency_metrics import (
     complete_sweep_metrics,
 )
