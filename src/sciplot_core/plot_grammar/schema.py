@@ -31,11 +31,15 @@ def mark_schema(*, resolved: bool = False) -> dict[str, Any]:
         fields: dict[str, Any] = {"id": IDENTIFIER, "type": {"const": kind}, "style": style_schema(kind, resolved=resolved)}
         if kind == "bar":
             fields.update(baseline=NUMBER, width_data=POSITIVE)
+        elif kind == "line":
+            fields["interpolation"] = closed({"method": {"const": "pchip"},
+                "subdivisions": {"type": "integer", "minimum": 1, "maximum": 32},
+                "purpose": {"const": "display"}, "boundary": {"const": "preserve_gaps"}})
         elif kind == "rule":
             fields["orientation"] = {"enum": ["vertical", "horizontal"]}
         elif kind == "text":
             fields["text"] = {"type": "string", "minLength": 1, "maxLength": 500}
-        branches.append(closed(fields))
+        branches.append(closed(fields, [key for key in fields if key != "interpolation"]))
     return {"oneOf": branches}
 
 

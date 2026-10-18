@@ -3,7 +3,7 @@
 from math import log10
 from typing import Any
 
-from sciplot_core.plot_backends.native_primitives import dataset_name, native_name, number_unit, _text
+from sciplot_core.plot_backends.native_primitives import dataset_name, display_dataset_name, native_name, number_unit, _text
 
 
 def graph_path(view_id: str) -> str:
@@ -35,6 +35,8 @@ def mark_geometry(ir: dict[str, Any], view: dict[str, Any], layer: dict[str, Any
     """Explicit mark geometry retains original source ordering and missing breaks."""
     data = coordinates(ir, layer)
     kind = mark["type"]
+    if kind == "line" and "interpolation" in mark:
+        return [{"xData": display_dataset_name(mark["id"], "x"), "yData": display_dataset_name(mark["id"], "y")}]
     if kind in {"line", "point"}:
         return [{"xData": dataset_name(layer["dataset_id"], layer["mappings"]["x"]),
                  "yData": dataset_name(layer["dataset_id"], layer["mappings"]["y"])}]

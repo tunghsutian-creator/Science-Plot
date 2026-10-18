@@ -29,7 +29,7 @@ def split_figure_spec(value: Any) -> tuple[dict[str, Any], dict[str, Any]]:
             visual_layer = {**_take(layer, _PRES_LAYER), "marks": []}
             for mark in layer["marks"]:
                 scientific_layer["marks"].append(_take(mark, ("id", "type", "baseline", "width_data", "orientation")))
-                visual_layer["marks"].append(_take(mark, ("id", "style", "text")))
+                visual_layer["marks"].append(_take(mark, ("id", "style", "text", "interpolation")))
             scientific_view["layers"].append(scientific_layer)
             visual_view["layers"].append(visual_layer)
         science["views"].append(scientific_view)

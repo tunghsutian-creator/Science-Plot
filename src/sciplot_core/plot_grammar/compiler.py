@@ -12,6 +12,7 @@ from .styles import MARK_TYPES
 from .house_legends import resolve_house_legends
 from .house import StyleResolver, axis_flow, resolved_layout_input
 from .validation import validate_bound_data, validate_figure_spec
+from .display import resolve_display_curves
 
 
 def _fraction(value: float, scale: dict[str, Any]) -> float:
@@ -179,10 +180,24 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
             else "composition policy" if "composition_policy" in spec else "RenderingStyleContract"}
             for key, value in layout_input.items()}
         resolver.trace["figure:panel_margins_mm"] = {"value": panel_margins, "source": "RenderingStyleContract"}
+        additional = []
+        assert panel_margins is not None  # A bound house layout has explicit physical margins.
+        for panel in layout["panels"]:
+            cx, cy, cw, ch = panel["cell_mm"]
+            px, py, pw, ph = panel["plot_mm"]
+            margins = {"left": px - cx, "top": py - cy, "right": cx + cw - px - pw, "bottom": cy + ch - py - ph}
+            if margins["right"] > panel_margins["right"] + 1e-9 or margins["top"] > panel_margins["top"] + 1e-9:
+                additional.append({"view_id": panel["view_id"], "margins_mm": margins})
+        if additional:
+            resolver.trace["figure:additional_axis_layout"] = {"policy": "decorated_secondary_sides_v1",
+                "source": "resolved axis decoration budgets", "base_margins_mm": panel_margins,
+                "panels": additional, "native_text_verified": False}
+    display = resolve_display_curves(views, datasets)
     return seal_ir_v2({"kind": "sciplot_plot_ir", "schema_version": 2, "scientific_hash": scientific_hash,
         "presentation_hash": presentation_hash, "figure": {"id": spec["id"], "background_color": spec["theme"].get("background_color", background).lower()},
         "datasets": deepcopy(datasets), "scales": deepcopy(spec["scales"]), "views": views,
         "layout": layout, "guides": guides, "annotations": annotations, "layout_qa": qa,
+        **({"display_curves": display} if display else {}),
         **({"rendering_contract": resolver.binding, "style_provenance": resolver.trace,
             **({"composition_policy": spec["composition_policy"]} if "composition_policy" in spec else {})}
            if resolver.binding is not None else {})})
