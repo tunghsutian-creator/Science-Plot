@@ -62,6 +62,8 @@ def test_semantic_plan_is_one_question_before_any_render(tmp_path, monkeypatch):
 
 
 def test_task_owns_retry_key_and_scientific_rejection_can_revise(tmp_path, monkeypatch):
+    from sciplot_core import task_semantic_delivery
+    monkeypatch.setattr(task_semantic_delivery, "execute_delivery", lambda wire: {"status": "complete", "ready_to_use": True, "delivery": {"native_launcher": "/mock/launcher"}})
     from sciplot_core import task_control as control, task_semantic_creation as semantic
     source = tmp_path / "source.csv"
     source.write_text("t,Mass\ns,%\n0,100\n1,99\n")
@@ -75,7 +77,7 @@ def test_task_owns_retry_key_and_scientific_rejection_can_revise(tmp_path, monke
         keys.append(wire["idempotency_key"])
         if len(keys) == 1:
             raise ValueError("scientific refusal before commit")
-        return {"status": "complete", "ready_to_use": True, "plot": str(tmp_path / "managed"), "exports": [{"path": "/mock/export.pdf"}]}
+        return {"status": "complete", "ready_to_use": True, "plot": str(tmp_path / "managed"), "plot_id": "plot:test", "revision": 0, "exports": [{"path": "/mock/export.pdf"}]}
     monkeypatch.setattr(semantic, "execute_managed", execute)
     monkeypatch.setattr(semantic, "current_result", lambda state: {**__import__("sciplot_core.task_storage", fromlist=["task_summary"]).task_summary(state), "ready_to_use": True})
     task = tmp_path / "task"
@@ -180,13 +182,15 @@ def test_semantic_directory_error_is_not_an_experiment_question(tmp_path):
 
 
 def test_explicit_unambiguous_intent_does_not_add_a_confirmation_round(tmp_path, monkeypatch):
+    from sciplot_core import task_semantic_delivery
+    monkeypatch.setattr(task_semantic_delivery, "execute_delivery", lambda wire: {"status": "complete", "ready_to_use": True, "delivery": {"native_launcher": "/mock/launcher"}})
     from sciplot_core import task_control as control, task_semantic_creation as semantic
     source = tmp_path / "data.csv"
     source.write_text("Time,Mass\ns,%\n0,100\n1,99\n")
     monkeypatch.setattr(semantic, "prepare_plan", lambda paths, intent: {"sources": [], "decisions": []})
     monkeypatch.setattr(semantic, "build_managed_request", lambda state: {"idempotency_key": "locally-owned"})
     calls = []
-    monkeypatch.setattr(semantic, "execute_managed", lambda state, wire: calls.append(wire) or {"status": "complete", "ready_to_use": True, "plot": "/mock/managed", "exports": [{"path": "/mock/export.pdf"}]})
+    monkeypatch.setattr(semantic, "execute_managed", lambda state, wire: calls.append(wire) or {"status": "complete", "ready_to_use": True, "plot": "/mock/managed", "plot_id": "plot:test", "revision": 0, "exports": [{"path": "/mock/export.pdf"}]})
     monkeypatch.setattr(semantic, "current_result", lambda state: __import__("sciplot_core.task_storage", fromlist=["task_summary"]).task_summary(state))
     result = control.start_task(request(source), task_dir=tmp_path / "task")
     assert result["status"] == "complete" and len(calls) == 1
@@ -242,7 +246,7 @@ def test_secondary_quantity_is_closed_to_implemented_temperature(tmp_path):
 
 @pytest.mark.parametrize("action", ["inspect_diagnostic", "correct_layout", "refresh_scientific_binding"])
 def test_managed_failure_owner_action_is_not_converted_to_blind_retry(action):
-    from sciplot_core.task_semantic_creation import blocked_next_step
+    from sciplot_core.task_semantic_next_step import blocked_next_step
     state = {"task_dir": "/task", "project": "/managed", "status": "blocked", "phase": "exporting",
              "request": {"action": "create", "intent": {}}, "intent_revision": 1,
              "blocker": {"reason_code": "native_failure", "recovery_action": action,

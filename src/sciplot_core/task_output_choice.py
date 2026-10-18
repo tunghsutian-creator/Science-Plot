@@ -16,12 +16,12 @@ def creation_output(state: dict[str, Any]) -> str | None:
 
 
 def require_available_output(state: dict[str, Any]) -> bool:
-    layout = resolve_user_output_layout(state["request"]["source"], requested_delivery_root=creation_output(state))
+    layout = resolve_user_output_layout(state["request"].get("source", state["request"].get("sources", [None])[0]), requested_delivery_root=creation_output(state))
     occupied = [str(p) for p in (layout.delivery_root, layout.workspace_root) if p.exists()]
     if not occupied:
         return True
     question = {"field": "out", "reason_code": "output_exists", "occupied_paths": occupied,
-                "source_sha256": state["source_sha256"],
+                **({"source_hashes": state["source_hashes"]} if "source_hashes" in state else {"source_sha256": state["source_sha256"]}),
                 "message": "Choose a new out in this task, or inspect the existing task/project. Do not move or overwrite existing outputs. Native creation has not started."}
     question["question_id"] = canonical_json_sha256(question)
     state.update(status="needs_input", phase="output_choice", question=question)

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.data_mapping.table_choice import read_original_table
-from sciplot_core.task_contract import TaskControlError
+from sciplot_core.task_errors import TaskControlError
 
 
 def _endpoints(frame: Any, column: int, start: int, end: int) -> list[float | None]:

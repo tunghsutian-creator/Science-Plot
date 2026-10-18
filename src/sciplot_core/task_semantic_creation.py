@@ -6,7 +6,7 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.studio_core.project_query_paths import canonical_path
-from sciplot_core.task_contract import TaskControlError
+from sciplot_core.task_errors import TaskControlError
 from sciplot_core.task_storage import save_task, task_summary
 
 
@@ -54,23 +54,29 @@ def build_managed_request(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def execute_managed(state: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
-    from sciplot_core.plot_engine.service import PlotService
+    from sciplot_core.plot_protocol.socket_client import call
 
-    service = PlotService()
-    try:
-        # create_managed already freezes request identity before scientific
-        # resolution and resumes a committed export instead of creating twice.
-        return service.create(request)
-    finally:
-        service.close()
+    # The established local RPC port owns serialization and lost-reply safety.
+    # It does not import the server/PlotService back into the task coordinator.
+    return call("plot.create", {"request": request})
 
 
 def run_creation(root: Path, state: dict[str, Any]) -> None:
     assert_sources_current(state)
+    if "delivery_request" in state:
+        from sciplot_core.task_semantic_delivery import finish_delivery
+
+        finish_delivery(root, state)
+        return
     state.setdefault("intent_revision", 1)
     if "semantic_plan" not in state:
         state.update(status="running", phase="planning")
         save_task(root, state)
+        from sciplot_core.task_output_choice import require_available_output
+
+        if not require_available_output(state):
+            save_task(root, state)
+            return
         plan = prepare_plan([Path(value) for value in state["request"]["sources"]], state["request"]["intent"])
         state["semantic_plan"] = plan
         state.pop("blocker", None)
@@ -108,6 +114,10 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
                             "owner_next_step": deepcopy(result.get("next_step", {})),
                             **({"diagnostic": result["error"]} if result.get("error") else {})}
     save_task(root, state)
+    if complete:
+        from sciplot_core.task_semantic_delivery import finish_delivery
+
+        finish_delivery(root, state)
 
 
 def _validate_choices(plan: dict[str, Any], choices: dict[str, Any]) -> None:
@@ -133,6 +143,12 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
     from sciplot_core.task_semantic_contract import semantic_response_schemas, validate_intent
 
     assert_sources_current(state)
+    if "out" in response:
+        from sciplot_core.task_output_choice import accept_output_response
+
+        accept_output_response(state, response)
+        run_creation(root, state)
+        return
     if "revise_intent" in response:
         if not Draft202012Validator(semantic_response_schemas()[1]).is_valid(response):
             raise TaskControlError("invalid_task_response", "Revise the complete semantic intent with its current intent_revision.")
@@ -161,6 +177,11 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
         run_creation(root, state)
         return
     if response == {"retry": True}:
+        if state.get("delivery_request") or (state.get("project") and (state.get("result") or {}).get("status") == "complete"):
+            from sciplot_core.task_semantic_delivery import finish_delivery
+
+            finish_delivery(root, state)
+            return
         if state.get("semantic_plan_confirmed"):
             run_creation(root, state)
             return
@@ -183,62 +204,42 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
 def current_result(state: dict[str, Any]) -> dict[str, Any]:
     summary = task_summary(state)
     if state.get("project") and state["status"] == "complete":
-        from sciplot_core.plot_engine.service import PlotService
+        from sciplot_core.plot_protocol.socket_client import call
 
-        service = PlotService()
         try:
-            current = service.describe(Path(state["project"]), description={"scope": "summary"})
+            current = call("plot.describe", {"plot": state["project"], "description": {"scope": "summary"}})
         except (ValueError, OSError, RuntimeError) as exc:
             summary.update(status="blocked", ready_to_use=False, current_project={"status": "unknown", "message": str(exc)})
             return summary
-        finally:
-            service.close()
         summary["current_project"] = current
         exports = (state.get("result") or {}).get("exports", [])
-        from sciplot_core.plot_engine.current import evidence_current
-        from sciplot_core.plot_engine.cache_identity import build_key
-        from sciplot_core.plot_engine.storage import load_head, read
+        from sciplot_core.task_semantic_delivery import delivery_current
 
-        cache_path = Path(state["project"]) / "export-cache.json"
-        cache = read(cache_path) if cache_path.is_file() else {}
-        head = load_head(Path(state["project"]))
-        exported = (state.get("result") or {})
+        native_delivery_current = delivery_current(state)
+        exported = state.get("result") or {}
         identities_match = all(current.get(key) == exported.get(key) for key in ("revision", "scientific_hash", "presentation_hash"))
-        ready = (current["status"] == "current" and current.get("pending") is None and identities_match
-                 and bool(exports) and cache.get("build_key") == build_key(head["document"], head["binding"])
-                 and evidence_current(cache.get("artifact_files", {}), cache.get("evidence_inventories", {})))
+        export_current = current.get("export_current") or {}
+        # Only the execution owner can compare its actual render recipe. The
+        # client process has a different startup/environment identity.
+        ready = (native_delivery_current and current["status"] == "current" and current.get("pending") is None
+                 and identities_match and bool(exports) and export_current.get("current") is True
+                 and export_current.get("byte_inventory_verified") is True)
         summary.update(ready_to_use=ready, readiness_evaluated=True)
         if ready:
+            from sciplot_core.task_semantic_delivery import handoff_paths
+
             summary["next_step"] = {"action": "review_exports_and_deliver", "task": state["task_dir"],
-                "images": [item["path"] for item in exports if "tiff" in item.get("format", "")],
-                "editable_native": {"document": current.get("artifact"),
-                                    "command": ["sciplot", "studio", current.get("artifact")],
-                                    "authority": "Managed scientific document remains authoritative; native changes require explicit reconciliation."},
+                **handoff_paths(state),
+                "delivery": state["delivery_result"]["delivery"],
+                "manual_edit": {"launcher": state["delivery_result"]["delivery"]["native_launcher"],
+                                "scope": "Independent native snapshot; does not replace Managed scientific authority."},
                 "message": "Review the actual exported images. The Managed document is the scientific authority; retain original attachments and its .sciplot_documents directory."}
+        elif not native_delivery_current:
+            summary.update(status="blocked", next_step={"action": "finish_native_delivery", "task": state["task_dir"],
+                "cli_argv": ["sciplot", "task", "resume", state["task_dir"], "--retry", "--json"],
+                "response_template": {"retry": True},
+                "message": "The original export is preserved, but the final native snapshot/data/launcher delivery is missing or changed. Resume this same task; packaging never recreates or edits the plot."})
         else:
             summary.update(status="blocked", next_step={"action": "resolve_current_evidence", "task": state["task_dir"],
                 "message": "Historical task completion does not certify current source, native or delivery files. Inspect the returned current state and preserve this task."})
     return summary
-
-
-def blocked_next_step(state: dict[str, Any]) -> dict[str, Any]:
-    """Retain the Managed owner's corrective action; never turn an unknown failure into retry."""
-    blocker = state.get("blocker") or {}
-    owner = blocker.get("owner_next_step") or {}
-    repair = blocker.get("repair") or {}
-    action = owner.get("action") or repair.get("action") or blocker.get("recovery_action") or "inspect_diagnostic"
-    step: dict[str, Any] = {"action": action, "task": state["task_dir"], "reason_code": blocker.get("reason_code"),
-                            "owner_next_step": owner, "diagnostic": blocker.get("diagnostic", repair),
-                            "message": "Follow the actual owner diagnosis. Unknown or scientific/layout failures are not retryable merely because export failed; preserve this task and all prior evidence."}
-    if action in {"retry_same_request", "retry_export", "plot.export", "retry_same_task", "release_project_then_retry"}:
-        step.update(action="retry_same_task", response_template={"retry": True},
-                    cli_argv=["sciplot", "task", "resume", state["task_dir"], "--retry", "--json"])
-    elif state.get("project"):
-        step["inspect_cli_argv"] = ["sciplot", "plot", "describe", state["project"], "--scope", "summary", "--json"]
-        if action == "correct_layout":
-            step["layout_contract_cli_argv"] = ["sciplot", "plot", "describe", state["project"], "--scope", "edit",
-                                                "--target-id", "figure:main", "--property", "layout", "--json"]
-    if not state.get("project"):
-        step["draft_revision_template"] = {"expected_intent_revision": state["intent_revision"],
-                                            "revise_intent": state["request"]["intent"]}
-    return step

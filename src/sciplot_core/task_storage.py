@@ -90,7 +90,7 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         "kind", "version", "task_dir", "status", "phase", "updated_at", "question",
         "blocker", "result", "preview", "operation_id", "profile", "profile_unavailable", "project", "edit_outcome",
         "mapping_error", "data_mapping", "revision_id", "previews", "source_update_outcome", "annotation_error", "local_timing",
-        "automatic_repairs", "automatic_corrections", "output_selection", "intent_revision",
+        "automatic_repairs", "automatic_corrections", "output_selection", "intent_revision", "delivery_result",
     )
     summary = {key: state[key] for key in keys if key in state}
     if "intent" in state["request"] and "semantic_plan" in state:
@@ -132,7 +132,7 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         "next_step": task_next_step(state),
         "model_calls_by_sciplot": 0,
         "external_model_tokens": None,
-        "ready_to_use": False if prepared else None,
+        "ready_to_use": False if prepared or "intent" in state["request"] else None,
         "readiness_evaluated": False,
         "completion_scope": (
             "prepared_project" if prepared else

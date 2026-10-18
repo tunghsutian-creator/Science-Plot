@@ -6,7 +6,7 @@ from typing import Any, NoReturn
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.plot_transforms import builtin_executor, execute_node
-from sciplot_core.task_contract import TaskControlError
+from sciplot_core.task_errors import TaskControlError
 
 
 def _error(code: str, message: str, **facts: Any) -> NoReturn:
@@ -270,6 +270,9 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
     request = {"idempotency_key": key, "template_definition": {"kind": "sciplot_figure_template", "schema_version": 2,
                    "template_id": template, "figure_spec": figure}, "data_binding": binding,
                "rule_id": _rule_id(intent)}
-    if state["request"].get("out"):
-        request["out"] = state["request"]["out"]
+    from sciplot_core.output_contract import resolve_user_output_layout
+    from sciplot_core.task_output_choice import creation_output
+
+    output = resolve_user_output_layout(Path(sources[0]["path"]), requested_delivery_root=creation_output(state))
+    request["out"] = str(output.workspace_root / "managed-artifacts" / canonical_json_sha256([state["task_dir"], state["intent_revision"]]))
     return request

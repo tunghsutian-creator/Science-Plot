@@ -53,7 +53,7 @@ def semantic_response_schemas() -> list[dict[str, Any]]:
 def validate_intent(value: Any) -> dict[str, Any]:
     from copy import deepcopy
     from jsonschema import Draft202012Validator
-    from sciplot_core.task_contract import TaskControlError
+    from sciplot_core.task_errors import TaskControlError
 
     error = next(Draft202012Validator(intent_schema()).iter_errors(value), None)
     if error is not None:

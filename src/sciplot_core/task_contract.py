@@ -6,14 +6,7 @@ import json
 from typing import Any
 from sciplot_core.task_choice_schema import annotation_response_schema, column_mapping_schema, table_response_schema, metadata_response_schema, initial_mapping_schema, mapping_response_schema, mapping_candidate_response_schema
 
-
-class TaskControlError(ValueError):
-    def __init__(self, reason_code: str, message: str) -> None:
-        super().__init__(message)
-        self.reason_code = reason_code
-        self.repair: dict[str, Any] | None = None
-        self.issues: list[dict[str, Any]] | None = None
-
+from sciplot_core.task_errors import TaskControlError as TaskControlError
 
 _FIELDS = {
     "create": {"source", "rule_id", "template", "out", "profile", "choose_columns", "mapping", "xscale"},

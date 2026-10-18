@@ -173,7 +173,14 @@ A rejected draft can be corrected in this same task using the returned
 internal key. Do not invent or change a plot idempotency key. After commit or an
 uncertain reply, `task resume TASK --retry --json` continues that frozen attempt
 and its export; it cannot replace committed science or create another figure.
-Only actual verified outputs can produce `review_exports_and_deliver`. View the
+The task automatically packages its verified export through the existing
+Managed native-snapshot delivery owner. Final delivery includes plotted CSV,
+source copies, portable VSZ, PDF/TIFF, ZIP and the actual native launcher.
+Hidden artifacts and final `--out` are distinct; an existing destination is never
+overwritten. The package request is frozen before publication. A packaging
+interruption resumes only that same delivery, never creation or scientific
+transforms. Only its complete current byte inventory can produce
+`review_exports_and_deliver`. View the
 returned TIFF and keep the original sources and `.sciplot_documents` authority.
 Managed saved edits use guarded task edit/plot patch; the ordinary browser canvas
 does not currently open a Managed document root. Its returned VSZ can be opened

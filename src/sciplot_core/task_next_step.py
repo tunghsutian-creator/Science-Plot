@@ -16,7 +16,7 @@ def task_next_step(state: dict[str, Any]) -> dict[str, Any]:
                 "cli": "task resume TASK --response ANSWER_JSON_FILE --json",
                 "message": "Confirm exact attachments, stages, coordinate quantities and any listed decisions together; the program expands source hashes, row/column IDs, units and its standard layout locally."}
     if "intent" in state["request"] and status == "blocked":
-        from sciplot_core.task_semantic_creation import blocked_next_step
+        from sciplot_core.task_semantic_next_step import blocked_next_step
 
         return blocked_next_step(state)
     if state.get("defer_creation_export") is True and phase == "prepared" and status == "complete":
