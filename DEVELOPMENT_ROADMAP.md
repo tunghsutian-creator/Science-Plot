@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-17. External AI is the task interface. Current behavior belongs
+Status: 2026-10-18. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -99,6 +99,13 @@ Exit: independent users complete the supported lifecycle on a clean supported
 configuration, with distribution identity and documented recovery verified.
 
 ## Independent original-data acceptance for table choices
+
+The explicit semantic task adapter now reuses Managed creation for multiple
+attachments, independent coordinate intent, formal reset-time stage assembly,
+unit conversion and presentation interpolation. Broader experiment/coordinate
+combinations still require their own exact source and native acceptance; this
+bounded adapter does not replace the retained family workflows. Native snapshot
+delivery and the original local Managed registry remain distinct authorities.
 
 Worksheet/region selection, multirow/merged metadata, shared-X/multiple-XY and
 per-pair/cross-sheet mappings already use the source-bound task/DataMapping

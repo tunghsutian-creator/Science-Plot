@@ -279,6 +279,22 @@ cannot accept a preview, invent a missing request, rebind changed inputs or
 advance a historical transaction as current. Transport failure guidance retains
 the original key and distinguishes a request not sent from a lost reply.
 
+A failed Managed export-only transaction with an exact native publication-QA
+layout rejection may be superseded by a nonempty typed presentation correction.
+The guard binds the current head, unchanged science, sources and known native
+bytes. Unknown/transient failures, stale or scientific changes and untracked
+native files remain blocked. The original transaction keeps its error and
+diagnostics plus a durable supersession reference; its old key cannot reclaim
+active work. The new correction uses the existing preview, decision and export
+phases rather than a parallel recovery workflow.
+
+Managed descriptions expose `export_current` from the service's existing recipe
+and exact byte-inventory validator. Clients consume this read-only evidence in
+the owning process environment; they do not reconstruct its renderer identity
+from a different process. Missing or uncertain evidence is false/unknown and
+does not trigger native work. This is separate from a task's final package
+inventory and from the installation readiness reported by Doctor.
+
 Large imported scientific provenance values are interned once into immutable
 content-addressed JSON blobs before revision zero. References seal exact bytes;
 revision/journal writes retain their hashes rather than copying numerical arrays.
@@ -380,6 +396,13 @@ expanding existing FigureTemplate/Binding contracts. Scientific authority remain
 the ManagedDocument. The task checkpoint owns only process state and immutable
 attempt references. Revising a draft and retrying a committed attempt are distinct
 operations; retry cannot recommit science or execute transforms again.
+
+Task-to-Managed calls cross the existing local AF_UNIX protocol. Its
+`plot_protocol/socket_client` leaf owns the shared validated transport without
+importing the concrete service. The compatible direct/socket facade retains the
+explicit direct path. This keeps the task orchestrator independent of
+`PlotService`, whose source-only compatibility entry can still use ordinary
+tasks. A common lower error leaf preserves the public task exception identity.
 
 The `edit` CLI opens the default post-delivery human editing surface for an existing
 saved figure. `Open_in_SciPlot.command` opens its bound delivery through this CLI;

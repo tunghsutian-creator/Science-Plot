@@ -21,6 +21,12 @@ PAPER_LEAF_PATHS = frozenset({
 })
 
 
+SEMANTIC_TASK_TESTS = (
+    "tests/test_task_semantic_creation.py",
+    "tests/test_task_semantic_cli.py",
+    "tests/test_task_semantic_delivery.py",
+)
+
 TASK_CONTROL_OWNERS = (
     ChangedOwner(
         owner_id="current_native_legend_layout",
@@ -126,8 +132,8 @@ TASK_CONTROL_OWNERS = (
             "src/sciplot_core/studio_core/project_receipt.py",
             "src/sciplot_core/studio_core/project_capabilities.py",
         }),
-        owned_test_paths=frozenset({"tests/test_task_saved_work.py", "tests/test_task_saved_work_native.py", "tests/test_task_papers.py", "tests/test_task_papers_native.py", "tests/test_product_task_entries.py", "tests/test_task_prepared_creation.py", "tests/test_task_protocol_repair.py", "tests/test_task_initial_mapping.py", "tests/test_task_result_projection.py", "tests/test_task_capabilities.py", "tests/test_task_edit_context.py", "tests/test_task_shortcuts.py", "tests/test_task_ingress.py", "tests/test_task_local_recovery.py", "tests/test_task_error_feedback.py", "tests/test_task_transport_io.py", "tests/test_task_source_update.py", "tests/test_task_source_control.py", "tests/test_task_source_control_native.py", "tests/test_task_review_gallery.py", "tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_revision_guards.py", "tests/test_task_discovery.py", "tests/test_task_groups.py", "tests/test_task_groups_native.py", "tests/test_task_comparisons.py", "tests/test_task_comparisons_native.py"}),
-        pytest_targets=("tests/test_task_saved_work.py", "tests/test_task_saved_work_native.py", "tests/test_task_papers.py", "tests/test_task_papers_native.py", "tests/test_product_task_entries.py", "tests/test_task_prepared_creation.py", "tests/test_task_protocol_repair.py", "tests/test_task_initial_mapping.py", "tests/test_task_result_projection.py", "tests/test_task_review_gallery.py", "tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_discovery.py",
+        owned_test_paths=frozenset({*SEMANTIC_TASK_TESTS, "tests/test_task_saved_work.py", "tests/test_task_saved_work_native.py", "tests/test_task_papers.py", "tests/test_task_papers_native.py", "tests/test_product_task_entries.py", "tests/test_task_prepared_creation.py", "tests/test_task_protocol_repair.py", "tests/test_task_initial_mapping.py", "tests/test_task_result_projection.py", "tests/test_task_capabilities.py", "tests/test_task_edit_context.py", "tests/test_task_shortcuts.py", "tests/test_task_ingress.py", "tests/test_task_local_recovery.py", "tests/test_task_error_feedback.py", "tests/test_task_transport_io.py", "tests/test_task_source_update.py", "tests/test_task_source_control.py", "tests/test_task_source_control_native.py", "tests/test_task_review_gallery.py", "tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_revision_guards.py", "tests/test_task_discovery.py", "tests/test_task_groups.py", "tests/test_task_groups_native.py", "tests/test_task_comparisons.py", "tests/test_task_comparisons_native.py"}),
+        pytest_targets=(*SEMANTIC_TASK_TESTS, "tests/test_task_saved_work.py", "tests/test_task_saved_work_native.py", "tests/test_task_papers.py", "tests/test_task_papers_native.py", "tests/test_product_task_entries.py", "tests/test_task_prepared_creation.py", "tests/test_task_protocol_repair.py", "tests/test_task_initial_mapping.py", "tests/test_task_result_projection.py", "tests/test_task_review_gallery.py", "tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_discovery.py",
                         "tests/test_task_revision_guards.py", "tests/test_task_groups.py", "tests/test_task_groups_native.py",
                         "tests/test_task_comparisons.py", "tests/test_task_comparisons_native.py",
                         "tests/test_project_create_cli.py", "tests/test_task_column_mapping.py", "tests/test_task_column_mapping_native.py",
