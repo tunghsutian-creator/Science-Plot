@@ -65,7 +65,9 @@ def task_request_schema() -> dict[str, Any]:
         if action == "create":
             variant["dependentSchemas"] = {"mapping": {"required": ["rule_id"], "not": {"required": ["profile"]}}}
         variants.append(variant)
-    return {"oneOf": variants}
+    from sciplot_core.task_semantic_contract import semantic_request_schema
+
+    return {"oneOf": [*variants, semantic_request_schema()]}
 
 
 def task_response_schema() -> dict[str, Any]:
@@ -75,8 +77,11 @@ def task_response_schema() -> dict[str, Any]:
                     "description": "Current preview operation_id. Required for revisions and for accepting or rejecting a revised preview."}
     replacement = {**annotation_operation_capabilities()["operations_schema"],
                    "description": "Replace the whole batch against the same saved document; this does not append to the old preview."}
+    from sciplot_core.task_semantic_contract import semantic_response_schemas
+
     return {
         "oneOf": [
+            *semantic_response_schemas(),
             {"type": "object", "additionalProperties": False,
              "properties": {"expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
                             "out": {"type": "string", "minLength": 1}},
@@ -123,6 +128,16 @@ def validate_task_request(value: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise TaskControlError("invalid_task_request", "任务请求必须是 JSON 对象。")
     action = value.get("action")
+    if action == "create" and ("sources" in value or "intent" in value):
+        from jsonschema import Draft202012Validator
+        from sciplot_core.task_semantic_contract import semantic_request_schema, validate_intent
+
+        validate_intent(value.get("intent"))
+        if not Draft202012Validator(semantic_request_schema()).is_valid(value):
+            raise TaskControlError("invalid_task_fields", "Semantic create needs sources and intent, without source/profile/template/mapping overrides.")
+        if "labels" in value["intent"] and len(value["intent"]["labels"]) != len(value["sources"]):
+            raise TaskControlError("invalid_semantic_intent", "Display labels must match the complete attachment count and order.")
+        return dict(json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False)))
     if type(value.get("version")) is not int or value["version"] != 1:
         raise TaskControlError("unsupported_task_version", "任务接口版本必须为 1。")
     if not isinstance(action, str) or action not in _FIELDS:

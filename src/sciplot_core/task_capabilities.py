@@ -14,7 +14,9 @@ def _schemas() -> dict[str, Any]:
     from sciplot_core.task_common_edits import common_edit_schema
     from sciplot_core.task_paper_contract import paper_request_schema
 
-    return {"request": task_request_schema(), "response": task_response_schema(),
+    from sciplot_core.task_semantic_contract import intent_schema
+
+    return {"semantic_intent": intent_schema(), "request": task_request_schema(), "response": task_response_schema(),
             "table_region": table_region_schema(),
             "common_edit": common_edit_schema(), "paper_request": paper_request_schema(),
             "operations": annotation_operation_capabilities()["operations_schema"]}
@@ -80,7 +82,8 @@ def task_capabilities(*, section: str | None = None, name: str | None = None,
             response["capabilities"] = common_edit_capabilities()
         return response
     return {**base, "sections": {
-        "request": [item["properties"]["action"]["const"] for item in schemas["request"]["oneOf"]],
+        "request": list(dict.fromkeys(item["properties"]["action"]["const"] for item in schemas["request"]["oneOf"])),
+        "semantic_intent": "Semantic coordinates, stages and display choices.",
         "response": list(dict.fromkeys(key for item in schemas["response"]["oneOf"] for key in item["required"] if not key.startswith("expected_"))),
         "operations": [item["properties"]["op"]["const"] for item in schemas["operations"]["items"]["oneOf"]],
         "common_edit": "Bounded presentation intents; coverage-specific.",
@@ -91,17 +94,18 @@ def task_capabilities(*, section: str | None = None, name: str | None = None,
                         "full_cli": "task capabilities --full --json"},
         "saved_edit_context": {
             "cli": "task edit-context TASK_OR_PROJECT --operation NAME [--operation NAME ...] [--figure FIGURE_ID] --json",
-            "scope": "Read runtime, current saved targets and selected edit schemas once; no task or project mutation."},
+            "scope": "Read current targets and selected edit schemas together."},
         "typed_entries": {
             "edit": "task edit TARGET --intent EXACT --task-dir STABLE_PATH --json",
             "continue": "task continue SOURCE [--search-root ROOT --target EXACT] --json",
             "paper": "task paper capabilities [--project PROJECT --figure ID] --json",
             "create": "task create SOURCE [--rule RULE --template TEMPLATE --profile PATH --out PATH] --json",
+            "semantic_create": "task create --source FILE ... --x time --y mass ... --json",
             "style": "task style TARGET (--all-samples | --sample EXACT ...) [--width WIDTH] [--color COLOR] [--figure FIGURE_ID] --json",
             "accept_preview": "task resume TASK --accept-preview --expected-operation-id CURRENT_ID --json",
             "retry": "task resume TASK --retry --json",
-            "scope": "Entries reuse existing runtime/transaction guards; inspect pending previews."},
+            "scope": "Existing guards apply; review previews."},
         "specialized_routes": {"rheology_tts": {
             "cli": "rheology capabilities --json",
-            "scope": "AI-prepared source-bound TTS plotting, exact saved export and revision-bound native style restoration; analysis is a legacy compatibility route."}},
-        "validation": "Standalone schemas retain complete server and revision validation."}
+            "scope": "AI-prepared TTS, saved export and bound style restoration; analysis is compatibility."}},
+        "validation": "Complete validation remains active."}

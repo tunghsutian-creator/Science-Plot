@@ -24,6 +24,14 @@ It preserves scientific questions and accepts explicit `--rule`, `--template`,
 `--profile`, `--out` and `--task-dir`. Require returned Doctor `status=ready`;
 reuse that readiness within an unchanged session. Structured `task start` remains
 available for advanced known mappings; only then read missing named schemas.
+For multiple table attachments or explicit coordinates/right axis/stages, keep
+the same task with repeated `--source`, `--x`, `--y` and the small optional stage/
+display flags in the Create route. Review its one source plan, answer listed
+scientific choices, and use `revise_intent` to correct a rejected draft. The
+program manages attempt keys and expands Managed contracts. `--query`,
+`--request`, `--response` and `--intent` are JSON file paths on CLI; MCP takes
+objects. Do not use MCP/schema discovery to write a low-level template for this
+ordinary intent.
 Do not rerun a saved project's raw source to make an edit. Before applying an
 external edit, close every writable native Veusz window for that project,
 including a clean window with no unsaved changes. Save any intended native

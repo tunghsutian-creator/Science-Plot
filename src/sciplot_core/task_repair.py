@@ -51,6 +51,9 @@ def wire_issues(value: Any, *, section: str) -> list[dict[str, Any]]:
     if isinstance(value, dict):
         if section == "request":
             selected = [s for s in variants if s["properties"]["action"]["const"] == value.get("action")]
+            if value.get("action") == "create":
+                semantic = "intent" in value or "sources" in value
+                selected = [s for s in selected if ("sources" in s["required"]) == semantic]
         else:
             selected = [s for s in variants if any(k in value for k in s["required"] if not k.startswith("expected_"))]
         if selected:

@@ -40,7 +40,8 @@ def find_tasks(source: Path, *, tasks_root: Path | None = None, limit: int = 20)
                 raise TaskControlError("task_record_too_large", "任务记录过大，请单独检查。")
             state = load_task(record.parent)
             request = state["request"]
-            if request["action"] != "create" or canonical_path(Path(request["source"])) != source:
+            source_paths = request.get("sources", [request.get("source")])
+            if request["action"] != "create" or str(source) not in {str(canonical_path(Path(value))) for value in source_paths if isinstance(value, str)}:
                 continue
             selected = state.get("selection") or {}
             if (
@@ -54,7 +55,7 @@ def find_tasks(source: Path, *, tasks_root: Path | None = None, limit: int = 20)
                 "task_dir": state["task_dir"], "status": state["status"], "phase": state["phase"],
                 "updated_at": state.get("updated_at"), "project": state.get("project"),
                 "rule_id": selected.get("rule_id") or request.get("rule_id"),
-                "recorded_source_sha256": state.get("source_sha256"),
+                "recorded_source_sha256": state.get("source_hashes", {}).get(str(source), state.get("source_sha256")),
             })
         except (OSError, ValueError, TypeError, KeyError) as exc:
             skipped += 1

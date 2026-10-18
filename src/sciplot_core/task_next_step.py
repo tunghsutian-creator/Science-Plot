@@ -8,6 +8,17 @@ from sciplot_core.task_recovery_policy import recovery_action, refresh_context_a
 def task_next_step(state: dict[str, Any]) -> dict[str, Any]:
     status, phase = state["status"], state["phase"]
     task = state.get("task_dir")
+    if "intent" in state["request"] and status == "needs_input" and state.get("question", {}).get("field") == "semantic_plan":
+        return {"action": "confirm_source_plan", "task": task,
+                "response_template": {"expected_question_id": state["question"]["question_id"], "confirm_plan": True,
+                                      "choices": {decision["field"]: "CHOOSE ONE ADVERTISED OPTION" for decision in state["semantic_plan"].get("decisions", [])}},
+                "revise_template": {"expected_intent_revision": state["intent_revision"], "revise_intent": state["request"]["intent"]},
+                "cli": "task resume TASK --response ANSWER_JSON_FILE --json",
+                "message": "Confirm exact attachments, stages, coordinate quantities and any listed decisions together; the program expands source hashes, row/column IDs, units and its standard layout locally."}
+    if "intent" in state["request"] and status == "blocked":
+        from sciplot_core.task_semantic_creation import blocked_next_step
+
+        return blocked_next_step(state)
     if state.get("defer_creation_export") is True and phase == "prepared" and status == "complete":
         return {"action": "continue_template_creation", "task": task,
                 "message": "The exact native project is prepared but has not been published; its semantic creation owner must continue styling/export."}

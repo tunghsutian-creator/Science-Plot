@@ -40,10 +40,14 @@ def _finished_call(root: Path, state: dict[str, Any]) -> dict[str, Any]:
     result = _current_result(state) if state["status"] == "complete" else None
     finish_timing(state)
     save_task(root, state)
-    return {**task_summary(state), **({key: result[key] for key in ("status", "blocker", "current_project", "next_step") if key in result} if result else {})}
+    return {**(result if "intent" in state["request"] and result is not None else task_summary(state)), **({key: result[key] for key in ("status", "blocker", "current_project", "next_step") if key in result} if result else {})}
 
 
 def _current_result(state: dict[str, Any]) -> dict[str, Any]:
+    if "intent" in state["request"]:
+        from sciplot_core.task_semantic_creation import current_result
+
+        return current_result(state)
     summary = task_summary(state)
     if state.get("defer_creation_export") is True and "prepared_creation" in state:
         from sciplot_core.task_prepared_creation import require_prepared_current
@@ -110,7 +114,13 @@ def start_task(
     except (TaskControlError, AnnotationOperationError) as exc:
         exc.repair = request_repair(original_request, exc)
         raise
-    if request["action"] in {"create", "update_source"}:
+    source_hashes = None
+    if "intent" in request:
+        from sciplot_core.task_semantic_creation import normalize_sources
+
+        source_hashes = normalize_sources(request)
+        digest = None
+    elif request["action"] in {"create", "update_source"}:
         source = canonical_path(Path(request["source"]))
         digest = source_tree_sha256(source)
         if digest is None:
@@ -137,7 +147,7 @@ def start_task(
                 # after the shortcut's initial read. Its original bound request
                 # remains authoritative; never replace it with today's SHA.
                 return _current_result(state) if state["status"] == "complete" else task_summary(state)
-            if state["request"] != request:
+            if state["request"] != request and state.get("initial_request") != request:
                 raise TaskControlError("task_already_exists", "此任务目录已用于其他请求。")
             return _current_result(state) if state["status"] == "complete" else task_summary(state)
         root.mkdir(parents=True, mode=0o700)
@@ -145,6 +155,7 @@ def start_task(
             "kind": "sciplot_task", "version": 1, "task_dir": str(root),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "request": request, "source_sha256": digest,
+            **({"source_hashes": source_hashes, "intent_revision": 1, "initial_request": deepcopy(request)} if source_hashes is not None else {}),
             "status": "running", "phase": "starting",
             **({"entry_intent": deepcopy(entry_intent)} if entry_intent is not None else {}),
             **({"defer_creation_export": True} if defer_creation_export else {}),
@@ -152,7 +163,11 @@ def start_task(
         }
         save_task(root, state)
         try:
-            if request["action"] == "create":
+            if "intent" in request:
+                from sciplot_core.task_semantic_creation import run_creation as run_semantic
+
+                run_semantic(root, state)
+            elif request["action"] == "create":
                 run_creation(root, state)
             elif request["action"] == "edit":
                 run_edit_preview(root, state)
@@ -172,6 +187,11 @@ def inspect_task(task: Path) -> dict[str, Any]:
 
 
 def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
+    if "intent" in state["request"]:
+        from sciplot_core.task_semantic_creation import resume
+
+        resume(root, state, response)
+        return
     if state.get("defer_creation_export") is True and "prepared_creation" in state and response == {"retry": True}:
         from sciplot_core.task_prepared_creation import complete_prepared
 
@@ -322,7 +342,12 @@ def resume_task(task: Path, response: dict[str, Any]) -> dict[str, Any]:
     root = task_path(task)
     with external_project_session(root):
         state = load_task(root)
-        if state["status"] in {"complete", "cancelled"} and "revise_operations" not in response:
+        if "intent" in state["request"] and state["status"] == "complete" and response == {"retry": True}:
+            current = _current_result(state)
+            if current.get("ready_to_use") is True:
+                return current
+        semantic_continuation = ("intent" in state["request"] and (response == {"retry": True} or "revise_intent" in response))
+        if state["status"] in {"complete", "cancelled"} and "revise_operations" not in response and not semantic_continuation:
             return _current_result(state) if state["status"] == "complete" else task_summary(state)
         original_revision = state["state_sha256"]
         try:

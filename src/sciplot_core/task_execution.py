@@ -181,6 +181,7 @@ def record_failure(root: Path, state: dict[str, Any], exc: Exception) -> None:
     code = "task_worker_timeout" if timed_out else getattr(exc, "reason_code", "task_execution_failed")
     action = recovery_action(state, code)
     issues = getattr(exc, "issues", None)
+    repair = getattr(exc, "repair", None)
     state.update({
         "status": "blocked",
         "blocker": {
@@ -189,6 +190,7 @@ def record_failure(root: Path, state: dict[str, Any], exc: Exception) -> None:
             "recovery_action": action,
             **({"timeout_seconds": exc.timeout} if isinstance(exc, TimeoutExpired) else {}),
             **({"issues": issues} if issues else {}),
+            **({"repair": repair} if isinstance(repair, dict) else {}),
             "recovery": (
                 "可重试原操作；需改正操作时，用当前 preview_revision 作为 expected_preview_revision 提交 revise_operations。"
                 if action == "revise_operations"

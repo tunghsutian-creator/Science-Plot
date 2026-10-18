@@ -73,7 +73,7 @@ def tool_definitions() -> list[Tool]:
         {"target": semantic_path, "figure_id": string, "description": description}, ["target"], idempotent=True)
     add("plot_describe", "Read current saved state without rebuilding science. After a ManagedPlot summary, pass description scope edit with one advertised target/property for its current value, exact schema and risk. Omit description for the full response. Stale/native changes and pending work remain explicit.",
         {**semantic_plot, "description": description}, ["plot"], read_only=True)
-    add("plot_create", "Create a source-bound semantic plot from an exact source and explicit optional rule/template/profile. Keep idempotency_key unchanged when retrying; unresolved scientific choices return a decision.",
+    add("plot_create", "Expert Template/Binding creation through the existing semantic lifecycle; ordinary attachment plotting uses task_start sources+intent. Source-only compatibility remains. Keep idempotency_key unchanged on retry; unresolved scientific choices return a decision.",
         {"request": create_schema()}, ["request"], idempotent=True, destructive=True)
     add("plot_patch", "Apply one atomic semantic change batch to exact stable object IDs and base_revision. Local engine classifies risk, checks scientific invariants and compiles/exports. Reuse the identical idempotency_key after a lost reply; never swap data bindings through a presentation patch.",
         {**semantic_plot, "request": patch_schema()}, ["plot", "request"], idempotent=True, destructive=True)
@@ -96,9 +96,9 @@ def tool_definitions() -> list[Tool]:
     add("compose", "Create, inspect, arrange or export a local panel layout. Add/replace binds exact existing figures/images locally; apply requires expected_revision. Export reflows supported native panels at target mm, preserves text sizes and rejects source drift. Dragging and spacing use the same deterministic local owner.",
         {"request": composition_request_schema()}, ["request"], destructive=True)
     add("task_capabilities", "Read a small task capability index or one exact schema. Pass its contract_sha256 as expected_contract_sha256 when fetching sections; server validation remains complete.",
-        {"section": {"enum": ["request", "response", "operations", "table_region", "common_edit", "paper_request"]}, "name": string,
+        {"section": {"enum": ["request", "response", "operations", "table_region", "common_edit", "paper_request", "semantic_intent"]}, "name": string,
          "expected_contract_sha256": sha, "full": {"type": "boolean"}}, [], read_only=True)
-    add("task_start", "Start one authorized local create/edit/export/update_source task. Answer source-bound column questions; inspect all returned source-update or edit candidate PNGs before resuming.",
+    add("task_start", "Start one authorized local create/edit/export/update_source task. Semantic create uses sources+small intent, returns one original-source plan and scientific decisions; the program expands Binding/FigureSpec locally. Answer source-bound column questions; inspect all returned source-update or edit candidate PNGs before resuming.",
         {"request": task_request_schema(), "task_dir": string, "full": full}, ["request"])
     common_schema = common_edit_schema()
     add("task_edit", "Execute exact common palette, typography or supported legend clauses through the existing plot transaction. Preserve data/scientific state. For recovery after a lost first reply, choose a stable task_dir before the first call and reuse it with identical intent. Existing pending/review/export continuations remain authoritative; unavailable properties are rejected.",
@@ -122,7 +122,7 @@ def tool_definitions() -> list[Tool]:
         {"source": string, "tasks_root": string, "search_roots": {"type": "array", "minItems": 1, "maxItems": 20, "items": string},
          "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
         ["source"], read_only=True)
-    add("task_resume", "Continue a saved task. Column answers require expected_question_id; source-update decisions require expected_revision_id. Style previews use expected_operation_id and blocked preview corrections use expected_preview_revision. Existing user intent authorizes the requested work.",
+    add("task_resume", "Continue a saved task. Semantic confirm_plan uses expected_question_id and listed choices; revise_intent uses the current intent_revision and retains prior attempts. Retry resumes the same frozen attempt/export. Column answers require expected_question_id; source-update decisions require expected_revision_id. Style previews use expected_operation_id and blocked preview corrections use expected_preview_revision. Existing user intent authorizes the requested work.",
         {"task": string, "response": task_response_schema(), "full": full}, ["task", "response"])
     add("group_start", "Run 1–32 independent experiment tasks from an explicit list. Optional shared sample_style_preset applies to each created figure through ordinary reviewed edits. One item needing judgment does not stop others. Returns a local overview and native PNG resources; no model calls.",
         {"request": group_request_schema(), "group_dir": string}, ["request", "group_dir"])

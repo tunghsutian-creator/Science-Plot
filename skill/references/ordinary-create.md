@@ -102,26 +102,95 @@ Shared XY recovery supports ordinary paired curves and FTIR. Specialized scienti
 adapters retain their own contracts; never convert their data into another
 experiment to pass validation. Preserve raw rows, units and provenance throughout.
 
-## Declarative ManagedPlot figures
+## Multiple attachments, coordinate choices and stages
 
-For an explicitly composed multi-view, multiple-scale or layered figure, use the
-existing `plot create --request REQUEST.json --json` (MCP `sciplot_plot_create`)
-with `sciplot_figure_template` v2 plus explicit original-source Binding. Its live
-create schema is also the MCP tool input schema. The [Figure grammar contract](../../docs/DESIGN_FIGURE_GRAMMAR.md#implemented-wire-contracts-and-use)
-defines fields, precedence and supported capabilities. Source-only `task create`
-above remains the ordinary compatibility route; it does not promote native state.
+Use this same task entry when the goal names coordinates, multiple attachments,
+a right axis, segmented acquisition or display interpolation. Supply only the
+scientific/view intent; the program expands source SHA, original headers, units,
+row/column IDs, Binding and FigureSpec locally. Experiment identity (`--rule`)
+and coordinate choice are separate. Do not switch experiments merely to obtain a
+time axis, write a low-level FigureTemplate, or create a one-off plotting script.
 
-Declare semantic Scale IDs, layer/dataset/column bindings and physical layout
-constraints; let the local compiler solve panel coordinates and native objects.
-Preserve source hashes, sample/units and raw rows. Reuse immutable transform outputs
-when scientific preparation is already complete. Unsupported capabilities and
-hard layout errors return explicit constraints rather than native fallbacks.
-After creation, `plot describe` returns the exact FigureSpec and typed
-`figure_edit_contract`; batch edits through the same `plot patch` transaction.
-Retain raw source and `.sciplot_documents`; `plot export` reconstructs deleted
-VSZ/IR/render/export products. Deliver only `ready_to_use` exports with passed hard
-QA; inspect soft warnings separately. No Veusz path discovery or per-chart CLI is
-needed for this route.
+For example, replace the paths and choices with the user's actual intent:
+
+```bash
+skill/scripts/sciplot task create --source /absolute/first.xlsx --source /absolute/second.xlsx --x time --x-unit min --y mass --y-min 95 --secondary-y temperature --stages concatenate --marker-every 120 --interpolation pchip --task-dir /absolute/new-task --json
+```
+
+These are small closed flags, not a natural-language parser. `--y mass` explicitly
+declares the response meaning; `%` alone does not prove mass. Known original
+quantity/units remain source evidence. `--label` may be repeated once per
+attachment for authorized display names; it does not rewrite scientific samples.
+`--y-min 95` sets only the displayed lower bound in its axis unit. The omitted
+upper bound fits actual observations, including values above 100. Standard house
+fonts, colors and layout remain local. Multiple-axis figures use an explicit
+bottom-right legend and the first house width that passes deterministic layout;
+this is not a guarantee against every possible native collision.
+
+When there are unresolved scientific choices, the first response returns one
+`semantic_plan` question with original file names,
+SHA, exact table candidates, columns/units, per-stage row bounds, counts and
+observed time/temperature endpoints. All unresolved decisions appear together:
+original temperature role (for example Ts versus Tr), right-axis source,
+stage order and elapsed-time boundary. Equal Ts/Tr values do not establish the
+same scientific role. Source order is not automatically acquisition chronology.
+A temperature-continuity suggestion is source-evidenced and still needs explicit
+confirmation. A completely explicit intent with unambiguous original evidence executes directly;
+there is no additional mechanical approval round. Review a returned question, then use its exact
+`next_step.response_template` in one small answer file:
+
+```bash
+skill/scripts/sciplot task resume TASK --response ANSWER.json --json
+```
+
+Do not invent IDs: choose only advertised values from that receipt. Original
+point arrays never travel through this answer. When the original sources or
+request already establish a choice, the corresponding explicit flag
+`--temperature-header`, zero-based `--temperature-source`, `--stage-order`, or
+`--time-boundary` can include it in the first request. Its plan still shows the
+bound actual attachment and SHA. Ask the user only about unresolved scientific
+meaning; never silently choose a role or drop a stage to finish a figure.
+
+`preserve_endpoint` keeps both adjacent stage boundary measurements at the same
+cumulative time. `next_sample` also keeps both measurements, advancing by the
+entering stage's first measured positive sampling interval. Neither policy adds
+measurements or forces a reference-image duration. Unit conversion uses a formal
+registered transform. Original, derived and display data remain distinct.
+Multiple coordinate candidates are answered by advertised original headers.
+`--x-header`/`--y-header` or small intent coordinate `header`/`column_id` selectors
+can state a known choice. Incompatible selectors return exact source-block
+evidence and the existing mapping route; they do not select by column position.
+`--marker-every N` renders every Nth original point while keeping every source
+measurement. Explicit PCHIP uses four display subdivisions per interval by default
+(`--interpolation-subdivisions 2..32`). It is shape preserving, splits at missing
+and duplicate-X boundaries without deleting or sorting points, and rejects
+backwards time until the declared stage transform resolves it. These are display
+samples, not additional measurements or denoised scientific estimates.
+
+A rejected draft can be corrected in this same task using the returned
+`draft_revision_template` (`expected_intent_revision` and the full small
+`revise_intent`). The program retains the old attempt and assigns the next draft's
+internal key. Do not invent or change a plot idempotency key. After commit or an
+uncertain reply, `task resume TASK --retry --json` continues that frozen attempt
+and its export; it cannot replace committed science or create another figure.
+Only actual verified outputs can produce `review_exports_and_deliver`. View the
+returned TIFF and keep the original sources and `.sciplot_documents` authority.
+Managed saved edits use guarded task edit/plot patch; the ordinary browser canvas
+does not currently open a Managed document root. Its returned VSZ can be opened
+through the existing native `studio VSZ` route for advanced editing, preferably
+as an independent copy. An external native save does not replace Managed
+scientific authority; explicit reconciliation or semantic editing is required.
+
+CLI `--intent`, `--request`, `--response` and `task table-region --query` take
+**JSON file paths**, never inline JSON text. MCP takes the corresponding JSON
+objects directly. Do not start an MCP process solely to discover a missing
+ordinary option; use the returned task continuation, or one named capability
+section if a contract detail is missing.
+
+Explicit expert template/library construction remains available through `plot
+create`. It shares the same Managed lifecycle and typed edit contract; it is not
+an extra step for attachment plotting. Legacy projects retain their complete
+saved VSZ authority and are never silently promoted by this route.
 
 ## Stress-relaxation paired wide tables
 

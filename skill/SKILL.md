@@ -4,7 +4,6 @@ description: Create, edit, export and continue source-bound scientific figures t
 ---
 
 # SciPlot Materials Analysis
-
 External AI interprets original data and user intent; SciPlot validates and plots locally without calling a model. Use `skill/scripts/sciplot` and its public contracts.
 Keep ordinary plotting work within that interface.
 
@@ -47,7 +46,8 @@ and recovery detail only when the live response and chosen route leave a specifi
   chosen edit contract or plan an exact text intent. Reuse its plot ID/revision
   and batch other edits in one patch. For unknown or LegacyPlot authority, open
   full; never convert legacy state for this route. `task style` uses this engine.
-- Use `task create` for ordinary raw-data plotting and legacy `task style` for explicit
+- Use `task create` for raw-data plotting. Repeated `--source` with small coordinate/stage/display flags keeps composed table work in that same task; the program expands source facts and Managed contracts. Confirm the returned source plan and scientific choices, and correct a rejected draft with `revise_intent` in the same task. Never transcribe a FigureTemplate to reproduce ordinary or multiple-axis defaults.
+- Use legacy `task style` for explicit
   sample width/color changes. These entries construct requests and bind current
   state locally; use returned continuation arguments after reviewing a pending preview.
   No schema/context discovery or JSON file is needed.
@@ -81,7 +81,7 @@ actual native audits. External native saves invalidate the binding. Never patch
 VSZ text, automate Veusz clicks, replace raw files, create a one-off plotting script,
 or silently promote an incomplete import to full semantic authority.
 
-Managed Template/Binding/Theme creation uses document authority. FigureTemplate v2 composes Views/Scales/Layers/Marks in physical mm; `plot.describe` returns its typed edit contract. Retain raw inputs and `.sciplot_documents`; rebuild disposable artifacts with `plot.export`. Source/transform/executor or scale-domain edits need scientific intent. Reject unknown native state; source-only `task create` remains compatibility.
+Managed Template/Binding/Theme creation uses document authority. FigureTemplate v2 composes Views/Scales/Layers/Marks in physical mm; `plot.describe` returns its typed edit contract. Retain raw inputs and `.sciplot_documents`; rebuild disposable artifacts with `plot.export`. Source/transform/executor or scale-domain edits need scientific intent. Reject unknown native state; source-only `task create` remains compatible; its semantic attachment route compiles into this same Managed authority.
 
 For raw-input plotting, omit `--out` by default. Deliveries belong beside the original source in `SOURCE_SciPlot/`; hidden `.sciplot/` holds internal evidence.
 Do not put user plotting deliveries inside the SciPlot repository or its `outputs/`.
