@@ -411,7 +411,7 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
     )
 
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS
-    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 177
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 178
     assert {
         "src/sciplot_core/task_semantic_contract.py",
         "src/sciplot_core/task_semantic_plan.py",
@@ -830,7 +830,7 @@ def test_explicit_type_gate_scopes_are_pairwise_disjoint() -> None:
         STUDIO_FIGURE_SET_EXECUTION_TYPE_PATHS,
     )
 
-    assert tuple(map(len, scopes)) == (177, 4, 7, 10, 5, 5)
+    assert tuple(map(len, scopes)) == (178, 4, 7, 10, 5, 5)
     assert all(
         scope.isdisjoint(other)
         for index, scope in enumerate(scopes)

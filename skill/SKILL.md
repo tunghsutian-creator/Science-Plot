@@ -40,10 +40,8 @@ and recovery detail only when the live response and chosen route leave a specifi
   follow the stated continuation. Do not change valid operations for a worker
   timeout. Long diagnostics stay local; open their reference only when the short
   response cannot explain the failure. Local preview timeout recovery is bounded.
-- Reuse creation `plot_objects` for later edits. Read their advertised capabilities
-  and current values, then submit only supported deltas. A selected prepared
-  figure keeps native authority and can export independently; do not resend
-  arrays, repeat scientific analysis or recreate optional figures for that edit.
+- Reuse creation `plot_objects`: inspect capabilities/current values and send legal deltas.
+  Export selected prepared figures independently with native authority; do not resend arrays, repeat analysis or recreate optional figures.
 - Batch the complete authorized change. Let the local transaction own source,
   native document, scientific audit, QA and publication validation.
 - For a known ManagedPlot, start with a compact summary, then read only the
@@ -51,10 +49,8 @@ and recovery detail only when the live response and chosen route leave a specifi
   and batch other edits in one patch. For unknown or LegacyPlot authority, open
   full; never convert legacy state for this route. `task style` uses this engine.
 - Use `task create` for raw-data plotting. Repeated `--source` with small coordinate/stage/display flags keeps composed table work in that same task; the program expands source facts and Managed contracts. Confirm the returned source plan and scientific choices, and correct a rejected draft with `revise_intent` in the same task. Never transcribe a FigureTemplate to reproduce ordinary or multiple-axis defaults.
-- Use legacy `task style` for explicit
-  sample width/color changes. These entries construct requests and bind current
-  state locally; use returned continuation arguments after reviewing a pending preview.
-  No schema/context discovery or JSON file is needed.
+- `task style` binds explicit sample width/color edits locally; no discovery or JSON file is needed.
+  Review a pending preview and use its returned continuation.
 - Use `task edit` for a closed common palette/typography/supported legend intent.
   Keep a stable first-call `--task-dir` for reply-loss recovery; retain pending intents.
   Current semantic/native coverage determines supported edits.

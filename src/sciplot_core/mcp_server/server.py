@@ -51,7 +51,7 @@ INSTRUCTIONS = (
     "Creation plot_objects also continues supported bound native suite figures: "
     "inspect object_operations and current advertised values, then send only legal "
     "presentation deltas. Do not resend coordinates or recreate unselected figures. "
-    "If authority is unknown, use the full open; retain its native "
+    "If authority is unknown or LegacyPlot without advertised scoped support, use the full open; retain its native "
     "coverage, never convert it just for compact reads. Check status, changed "
     "inputs and pending work before editing. Use returned stable IDs and revision; "
     "keep idempotency_key unchanged on retry. Follow local decision and export "

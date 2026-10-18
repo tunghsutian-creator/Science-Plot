@@ -81,6 +81,7 @@ def test_native_object_delta_and_selected_export_share_public_transports(suite, 
             resumed = json.loads(replay.stdout)
             assert resumed["replayed"] is True and resumed["revision"] == committed["revision"]
             assert resumed["ready_to_use"] is True
+            assert all(file_sha256(Path(item["path"])) == item["sha256"] for item in resumed["exports"])
             assert {name: file_sha256(Path(name)) for name in protected} == protected
         finally:
             if engine_pid is None and socket.exists():
