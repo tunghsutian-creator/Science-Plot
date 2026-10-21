@@ -70,8 +70,16 @@ implementation/tests, original process streams and the audited root's genuine
 external wait/exit. Missing startup/finish, lost observations, unrecorded waits,
 unsupported native ports or ambient Git inputs remain BLOCKED. Bounded Mac
 native-inspector evidence closes only its declared diagnostic boundary.
+Keep the access boundary finite: reuse the existing observer, source-owned
+Popen lifecycle and engine socket, one OS exclusion per actual launch, and one
+primary native exit sensor. Do not grow a general broker or policy registry to
+absorb unknown ports. Final wiring still needs its real generated native control
+and then the original unfiltered frozen full run; static and component successes
+cannot close that gate. A blocked native action stays blocked until the exact
+required approval is obtained; retain the original execution or non-execution evidence.
 Historical interrupted/failed epochs and the original scientific files stay intact.
-Only adequate fresh closure evidence may change the completeness flag.
+Only validated fresh closure evidence may derive completeness; keep the preliminary
+inventory flag false rather than editing it to manufacture a current access pass.
 
 Exit: a reviewer can trace every declared private responsibility and original
 child process to complete current evidence without substituting synthetic

@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
 
 import pytest
 
@@ -167,7 +166,10 @@ def test_actual_nonzero_and_signal_outcomes_are_retained(generated, code, expect
 
 @pytest.fixture
 def short_socket_directory():
-    with tempfile.TemporaryDirectory(prefix="sp-central-", dir="/private/tmp") as directory:
+    from socket_fixture_helpers import socket_directory
+
+    with socket_directory(prefix="sp-central-", dir="/private/tmp",
+            endpoints=("cold-engine.sock", "engine.sock")) as directory:
         yield Path(directory).resolve()
 
 

@@ -11,7 +11,7 @@ import stat
 from typing import Any, Mapping, Sequence
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.verification.evidence_runtime import runtime_loader_environment
+from sciplot_core.verification.private_process_boundaries import runtime_loader_environment
 
 _active: ContextVar[ExcludedInvocation | None] = ContextVar("sciplot_private_launch", default=None)
 

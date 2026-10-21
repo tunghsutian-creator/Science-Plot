@@ -16,8 +16,8 @@ import sys
 from typing import Any, Mapping, Sequence
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.verification.evidence_runtime import runtime_loader_environment
-from sciplot_core.verification.public_input_guard import forbidden_roots
+from sciplot_core.verification.private_process_boundaries import runtime_loader_environment
+from sciplot_core.verification.private_process_boundaries import forbidden_roots
 from sciplot_core.verification.process_private_launch import bound_source_invocation, hold_stdio, launch_facts, launch_prefix, socket_scope_facts, validate_stdio
 from sciplot_core.verification.process_private_launch import ExcludedInvocation as ExcludedInvocation
 from sciplot_core.verification.process_private_launch import original_stdio_facts as original_stdio_facts
@@ -92,7 +92,7 @@ def _identity() -> dict[str, Any]:
             "interpreter": _tool(Path(sys.executable)),
             "os": {"release": uname.release, "version": uname.version, "machine": uname.machine},
             "sources": [_tool(Path(__file__)), _tool(Path(__file__).with_name("public_input_guard.py")),
-                        _tool(Path(__file__).with_name("evidence_runtime.py")),
+                        _tool(Path(__file__).with_name("private_process_boundaries.py")),
                         _tool(Path(__file__).with_name("process_private_launch.py"))]}
 
 

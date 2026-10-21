@@ -1,6 +1,6 @@
 """Pytest session evidence in the same supported observer stream."""
 import os
-from typing import Any, Callable, Iterator, cast
+from typing import Any, Callable, Iterator
 import pytest
 
 from sciplot_core.verification.private_observer import current_observer
@@ -35,7 +35,7 @@ def _phase(item: Any, phase: str) -> Iterator[None]:
 
 
 def _wrapper(function: Callable[[Any], Iterator[None]]) -> Callable[[Any], Iterator[None]]:
-    return cast(Callable[[Any], Iterator[None]], pytest.hookimpl(hookwrapper=True, tryfirst=True)(function))
+    return pytest.hookimpl(hookwrapper=True, tryfirst=True)(function)
 
 
 @_wrapper

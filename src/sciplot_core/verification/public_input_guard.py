@@ -14,6 +14,8 @@ from pathlib import Path
 import sys
 from typing import Any
 
+from sciplot_core.verification.private_process_boundaries import forbidden_roots as forbidden_roots
+
 ENVIRONMENT_KEY = "SCIPLOT_PUBLIC_INPUT_GUARD"
 BOOTSTRAP_KEY = "SCIPLOT_PUBLIC_GUARD_BOOTSTRAP"
 _installed: tuple[Path, ...] | None = None
@@ -46,18 +48,6 @@ def _owned_bootstrap(first: Path, child_paths: list[str], child_cwd: Path) -> bo
         return True
     return (first.read_bytes() == public.read_bytes() and adjacent.is_file()
             and hashlib.sha256(adjacent.read_bytes()).digest() == hashlib.sha256(Path(__file__).read_bytes()).digest())
-
-
-def forbidden_roots(root: Path, environment: dict[str, str] | None = None) -> list[Path]:
-    values = os.environ if environment is None else environment
-    raw = Path(values.get("SCIPLOT_REFERENCE_DATA", str(root / ".local/reference_data"))).expanduser()
-    if not raw.is_absolute():
-        raw = root / raw
-    paths = [root / "tests/fixtures" / name for name in
-             ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")]
-    paths.extend(raw / name for name in ("real_world", "polymer_corpus", "archived_sources"))
-    # Keep lexical aliases too: a forbidden symlink must not escape the guard.
-    return list(dict.fromkeys([*paths, *(path.resolve() for path in paths)]))
 
 
 def install() -> None:

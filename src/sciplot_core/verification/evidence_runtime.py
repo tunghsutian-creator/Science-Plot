@@ -14,9 +14,10 @@ import site
 import subprocess
 import sys
 import sysconfig
-from typing import Any, Mapping
+from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.verification.private_process_boundaries import runtime_loader_environment as runtime_loader_environment
 from sciplot_core.verification.evidence_identity import digest
 from sciplot_core.verification.native_probe_boundary import inspector_path, probe_environment, system_identity
 
@@ -65,14 +66,6 @@ def _native_entrypoint(name: str) -> bool:
 def _expand_loader(path: str, binary: Path, executable: Path) -> Path:
     return Path(path.replace("@loader_path", str(binary.parent))
                 .replace("@executable_path", str(executable.parent)))
-
-
-def runtime_loader_environment(environment: Mapping[str, str]) -> dict[str, str]:
-    """The existing reviewed loader override; never restore unknown loaders."""
-    if any(environment.get(key) for key in environment
-           if key.startswith(("DYLD_", "LD_")) and key != "DYLD_FRAMEWORK_PATH"):
-        raise ValueError("native loader overrides have no reviewed closure policy")
-    return {"DYLD_FRAMEWORK_PATH": environment["DYLD_FRAMEWORK_PATH"]} if "DYLD_FRAMEWORK_PATH" in environment else {}
 
 
 def native_dependencies(files: list[str], *, executable: Path,

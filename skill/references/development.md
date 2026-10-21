@@ -183,6 +183,15 @@ and actual successful wait. Host metadata comes from the bound system plist and
 kernel fields. This closes those diagnostic inputs only; their Python event
 counters remain unknown. Ambient Git configuration and other unsupported native
 ports still block complete capture rather than inheriting this exception.
+The opt-in Mac exclusion path reuses that observer and actual source-owned
+launches. Its generated descriptor tests leave the canonical adapter unchanged;
+their isolated module copy shares the launch context, restored on exit,
+and cannot mint native capability. Finite socket composition intersects actual
+permissions. The primary native exit sensor records kernel status separately
+from a genuine parent wait and process finish. Unsupported nested sandbox
+installation, endpoint lineage or missing registration/exit remains BLOCKED.
+Complete this finite boundary before adding another mechanism; component PASS
+does not replace one frozen unfiltered full capture and its original root wait.
 
 Runtime readiness, native fidelity, real-client efficiency, human usability and
 journal acceptance are separate claims. Read the advanced guide's test-tier
