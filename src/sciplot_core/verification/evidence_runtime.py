@@ -14,7 +14,7 @@ import site
 import subprocess
 import sys
 import sysconfig
-from typing import Any
+from typing import Any, Mapping
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.verification.evidence_identity import digest
@@ -67,15 +67,21 @@ def _expand_loader(path: str, binary: Path, executable: Path) -> Path:
                 .replace("@executable_path", str(executable.parent)))
 
 
+def runtime_loader_environment(environment: Mapping[str, str]) -> dict[str, str]:
+    """The existing reviewed loader override; never restore unknown loaders."""
+    if any(environment.get(key) for key in environment
+           if key.startswith(("DYLD_", "LD_")) and key != "DYLD_FRAMEWORK_PATH"):
+        raise ValueError("native loader overrides have no reviewed closure policy")
+    return {"DYLD_FRAMEWORK_PATH": environment["DYLD_FRAMEWORK_PATH"]} if "DYLD_FRAMEWORK_PATH" in environment else {}
+
+
 def native_dependencies(files: list[str], *, executable: Path,
                         environment: dict[str, str], bindings: dict[str, str] | None = None,
                         aliases: dict[str, str] | None = None, repo_root: Path | None = None) -> list[Path]:
     """Resolve the linked non-system native closure, rejecting unknown loaders."""
     if sys.platform != "darwin":
         raise ValueError("default native evidence currently requires macOS")
-    if any(environment.get(key) for key in environment
-           if key.startswith(("DYLD_", "LD_")) and key != "DYLD_FRAMEWORK_PATH"):
-        raise ValueError("native loader overrides have no reviewed closure policy")
+    runtime_loader_environment(environment)
     queue = [Path(name) for name in files if _native_entrypoint(name)]
     tool = inspector_path()
     queue.extend((executable.resolve(), tool))

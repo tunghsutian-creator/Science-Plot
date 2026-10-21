@@ -1,0 +1,156 @@
+"""Actual Mac generated process controls; no private inputs or Qt rendering."""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+
+import pytest
+
+from sciplot_core.verification.process_private_exclusion import (
+    prepare_private_exclusion,
+    validate_private_exclusion,
+    wrap_private_exclusion,
+)
+
+pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="Actual Mac process boundary control")
+
+
+@pytest.fixture
+def generated(tmp_path):
+    origin = tmp_path / "movable-origin"
+    private = origin / "tests/fixtures/real_world"
+    private.mkdir(parents=True)
+    canary = private / "literal.txt"
+    canary.write_bytes(b"literal generated protected bytes\n")
+    public = tmp_path / "public"
+    public.mkdir()
+    allowed = public / "allowed.txt"
+    allowed.write_bytes(b"literal generated public bytes\n")
+    alias = public / "symlink"
+    alias.symlink_to(canary)
+    audit = tmp_path / "outer-audit"
+    audit.mkdir()
+    evidence = audit / "existing.jsonl"
+    evidence.write_bytes(b"literal generated evidence\n")
+    witness = tmp_path / "primary-receipt.json"
+    witness.write_text("original witness")
+    frozen = prepare_private_exclusion(origin, {}, audit_directory=audit, evidence_paths=[witness])
+    return origin, canary, public, allowed, alias, audit, evidence, witness, frozen
+
+
+def execute(frozen, code, arguments=(), *, environment=None, stdin=subprocess.DEVNULL, input_bytes=None):
+    with wrap_private_exclusion(frozen, ["/usr/bin/python3", "-I", "-c", code, *map(str, arguments)],
+            environment=dict(os.environ) if environment is None else environment,
+            stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as invocation:
+        process = subprocess.Popen(invocation.argv, env=invocation.environment, stdin=invocation.stdio[0],
+            stdout=invocation.stdio[1], stderr=invocation.stdio[2], close_fds=True)
+        stdout, stderr = process.communicate(input=input_bytes, timeout=15)
+        assert process.returncode is not None
+        validate_private_exclusion(frozen)
+        return process.pid, process.returncode, stdout, stderr
+
+
+def test_actual_strong_boundary_blocks_namespace_alias_and_evidence_mutations(generated):
+    origin, canary, public, allowed, alias, audit, evidence, witness, frozen = generated
+    code = """
+import errno,json,os,subprocess,sys
+from pathlib import Path
+origin,canary,public,allowed,alias,audit,evidence,witness=map(Path,sys.argv[1:])
+out={"pid":os.getpid(),"allowed":allowed.read_bytes()==b'literal generated public bytes\\n'}
+def refused(name,operation):
+    try: operation()
+    except OSError as error: out[name]=error.errno in (errno.EPERM,errno.EACCES)
+    else: out[name]=False
+refused('direct',canary.read_bytes)
+refused('symlink',alias.read_bytes)
+refused('new_hardlink',lambda:os.link(canary,public/'hardlink'))
+refused('file_rename',lambda:os.rename(canary,public/'moved-file'))
+refused('root_rename',lambda:os.rename(canary.parent,public/'moved-root'))
+refused('ancestor_rename',lambda:os.rename(origin,public/'moved-origin'))
+refused('audit_overwrite',lambda:evidence.write_text('forged'))
+refused('audit_create',lambda:(audit/'forged.jsonl').write_text('forged'))
+refused('audit_rename',lambda:os.rename(audit,public/'moved-audit'))
+refused('witness_overwrite',lambda:witness.write_text('forged'))
+refused('witness_rename',lambda:os.rename(witness,public/'moved-witness'))
+native=subprocess.run(['/bin/cat',str(canary)],stdin=subprocess.DEVNULL,capture_output=True,close_fds=True)
+out['native']=native.returncode==1 and not native.stdout
+inner="import subprocess,sys; p=subprocess.run(['/bin/cat',sys.argv[1]],capture_output=True,close_fds=True); raise SystemExit(0 if p.returncode==1 and not p.stdout else 2)"
+child=subprocess.run([sys.executable,'-I','-c',inner,str(canary)],env={},stdin=subprocess.DEVNULL,capture_output=True,close_fds=True)
+out['clear_env_grandchild']=child.returncode==0
+print(json.dumps(out))
+"""
+    pid, returncode, stdout, stderr = execute(frozen, code, generated[:8])
+    assert returncode == 0, stderr
+    observed = json.loads(stdout)
+    assert observed.pop("pid") == pid
+    assert observed == dict.fromkeys(("allowed", "direct", "symlink", "new_hardlink", "file_rename", "root_rename",
+        "ancestor_rename", "audit_overwrite", "audit_create", "audit_rename", "witness_overwrite", "witness_rename",
+        "native", "clear_env_grandchild"), True)
+    assert canary.read_bytes() == b"literal generated protected bytes\n"
+    assert evidence.read_bytes() == b"literal generated evidence\n"
+    assert witness.read_text() == "original witness"
+
+
+def test_actual_pipe_protocol_and_post_kernel_environment_projection(generated):
+    frozen = generated[-1]
+    environment = dict(os.environ, SCIPLOT_PRIVATE_AUDIT_DIR="generated-outer-routing", GENERATED_KEEP="kept")
+    code = "import os,sys;assert 'SCIPLOT_PRIVATE_AUDIT_DIR' not in os.environ;assert os.environ['GENERATED_KEEP']=='kept';sys.stdout.buffer.write(sys.stdin.buffer.read()[::-1])"
+    with wrap_private_exclusion(frozen, ["/usr/bin/python3", "-I", "-c", code], environment=environment,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            drop_environment=["SCIPLOT_PRIVATE_AUDIT_DIR"]) as invocation:
+        assert invocation.environment == environment  # The launcher receives the original environment.
+        process = subprocess.Popen(invocation.argv, env=invocation.environment, stdin=invocation.stdio[0],
+            stdout=invocation.stdio[1], stderr=invocation.stdio[2], close_fds=True)
+        output, error = process.communicate(b"literal stdin protocol\n", timeout=15)
+        assert process.returncode == 0 and error is None
+        assert output == b"\nlocotorp nidts laretil"
+    validate_private_exclusion(frozen)
+
+
+def test_actual_close_fds_and_devnull_do_not_inherit_generated_raw_descriptor(generated):
+    _, canary, *_, frozen = generated
+    descriptor = os.open(canary, os.O_RDONLY)
+    os.set_inheritable(descriptor, True)
+    value = os.fstat(descriptor)
+    code = """
+import errno,json,os,sys
+try:
+    row=os.fstat(int(sys.argv[1])); closed=(row.st_dev,row.st_ino)!=(int(sys.argv[2]),int(sys.argv[3]))
+except OSError as error: closed=error.errno==errno.EBADF
+print(json.dumps({'private_fd_not_inherited':closed,'stdin_eof':os.read(0,1)==b''}))
+"""
+    try:
+        _, result, stdout, stderr = execute(frozen, code, (descriptor, value.st_dev, value.st_ino))
+    finally:
+        os.close(descriptor)
+    assert result == 0, stderr
+    assert json.loads(stdout) == {"private_fd_not_inherited": True, "stdin_eof": True}
+
+
+def test_pinned_interpreter_loader_environment_is_preserved(generated):
+    environment = dict(os.environ, SCIPLOT_PRIVATE_AUDIT_DIR="generated-outer-routing")
+    expected_loader = environment["DYLD_FRAMEWORK_PATH"]
+    code = "import hashlib,json,os,sys;value=hashlib.sha256(json.dumps(dict(os.environ),sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest();print(json.dumps({'environment_sha256':value,'loader':os.environ.get('DYLD_FRAMEWORK_PATH'),'executable':sys.executable,'version':list(sys.version_info[:3])}))"
+    with wrap_private_exclusion(generated[-1], [sys.executable, "-I", "-c", code], environment=environment,
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            drop_environment=["SCIPLOT_PRIVATE_AUDIT_DIR"]) as invocation:
+        process = subprocess.Popen(invocation.argv, env=invocation.environment, stdin=invocation.stdio[0],
+            stdout=invocation.stdio[1], stderr=invocation.stdio[2], close_fds=True)
+        stdout, stderr = process.communicate(timeout=15)
+        assert process.returncode == 0, stderr
+        expected_environment = invocation.proof["actual"]["target_environment_sha256"]
+    observed = json.loads(stdout)
+    assert observed["version"] == list(sys.version_info[:3])
+    assert observed["loader"] == expected_loader, observed
+    assert os.path.samefile(observed["executable"], sys.executable), observed
+    assert observed["environment_sha256"] == expected_environment, observed
+    print(json.dumps({"actual_pinned_target": observed, "pid": process.pid, "exit": process.returncode}, sort_keys=True))
+
+
+@pytest.mark.parametrize("code,expected", [("import os;os._exit(79)", 79),
+    ("import os,signal;os.kill(os.getpid(),signal.SIGTERM)", -15)])
+def test_actual_nonzero_and_signal_outcomes_are_retained(generated, code, expected):
+    _, actual, _, _ = execute(generated[-1], code)
+    assert actual == expected
