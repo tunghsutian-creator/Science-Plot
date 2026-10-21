@@ -12,7 +12,7 @@ import pytest
 
 from sciplot_core.verification.evidence_environment import POLICY, ROUTING
 from sciplot_core.verification.evidence_identity import capture_identity, digest, identity_valid
-from sciplot_core.verification.private_observer import write_bootstrap
+from sciplot_core.verification.private_observer import AUDIT_KEYS, write_bootstrap
 from sciplot_core.verification.public_input_guard import (
     BOOTSTRAP_KEY, ENVIRONMENT_KEY, _owned_bootstrap, configure_environment, rebind_bootstrap,
 )
@@ -30,13 +30,14 @@ def test_actual_observer_projects_only_routing_and_keeps_other_identity_bindings
     plugin = root / "generated-bootstrap"
     write_bootstrap(plugin)
     environment = dict(os.environ)
-    if not environment.get("SCIPLOT_PRIVATE_AUDIT_DIR") or not environment.get("SCIPLOT_PRIVATE_AUDIT_ROOTS"):
-        output = root / "generated-observation"
-        output.mkdir()
-        watched = root / "generated-watched"
-        watched.mkdir()
-        environment.update(SCIPLOT_PRIVATE_AUDIT_DIR=str(output), SCIPLOT_PRIVATE_AUDIT_ROOTS=json.dumps([str(watched)]),
-                           SCIPLOT_PRIVATE_AUDIT_RUN="generated-semantic-environment-control")
+    for key in AUDIT_KEYS:
+        environment.pop(key, None)
+    output = root / "generated-observation"
+    output.mkdir()
+    watched = root / "generated-watched"
+    watched.mkdir()
+    environment.update(SCIPLOT_PRIVATE_AUDIT_DIR=str(output), SCIPLOT_PRIVATE_AUDIT_ROOTS=json.dumps([str(watched)]),
+                       SCIPLOT_PRIVATE_AUDIT_RUN="generated-semantic-environment-control")
     if ENVIRONMENT_KEY in environment:
         environment = rebind_bootstrap(environment, plugin)
     else:

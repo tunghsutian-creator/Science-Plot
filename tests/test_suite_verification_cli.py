@@ -104,6 +104,8 @@ def test_suite_profile_selects_only_the_known_command(suite_case, monkeypatch, s
 @pytest.mark.parametrize("configured_raw", [None, "~/sciplot-test-private-data", "relative-private-data"])
 def test_frozen_audit_attachment_binds_plugins_and_separate_outputs(suite_case, monkeypatch, configured_raw):
     root, _counter, _commands = suite_case
+    inherited_path = os.pathsep.join(filter(None, [".", "src", "tests", os.environ.get("PYTHONPATH", "")]))
+    monkeypatch.setenv("PYTHONPATH", inherited_path)
     plugin = root / ".tmp_verify/frozen-audit-plugin"
     plugin.mkdir(parents=True)
     for name in ("sitecustomize.py", "sciplot_closure_audit.py"):
@@ -120,6 +122,11 @@ def test_frozen_audit_attachment_binds_plugins_and_separate_outputs(suite_case, 
     assert result["status"] == "RUNNING" and audit.is_dir()
     environment = captured[0]["spec"]["environment"]
     assert str(plugin) in environment["PYTHONPATH"].split(os.pathsep)
+    python_path = environment["PYTHONPATH"].split(os.pathsep)
+    plugin_index = python_path.index(str(plugin))
+    assert python_path[plugin_index:plugin_index + 2] == [str(plugin), str(root / "src")]
+    assert (root / "src").is_absolute()
+    assert python_path[plugin_index + 2:] == inherited_path.split(os.pathsep)
     assert "sciplot_closure_audit" in environment["PYTEST_PLUGINS"].split(",")
     assert environment["SCIPLOT_PRIVATE_AUDIT_DIR"] == str(audit)
     assert result["audit_root_pid"] == os.getpid()

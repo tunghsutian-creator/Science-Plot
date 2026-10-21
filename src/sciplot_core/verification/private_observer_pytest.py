@@ -19,19 +19,32 @@ def _record(value: dict[str, Any]) -> None:
 
 def _phase(item: Any, phase: str) -> Iterator[None]:
     observer = current_observer()
+    activation_error: BaseException | None = None
     if observer is not None:
         if phase == "setup":
             start_node(observer, item)
-        begin_phase(observer, item, phase)
+        try:
+            begin_phase(observer, item, phase)
+        except BaseException as exc:
+            if phase != "teardown":
+                raise
+            activation_error = exc
     try:
         yield
     finally:
-        if observer is not None:
-            try:
-                if phase == "teardown":
-                    finish_node(observer, item)
-            finally:
-                end_phase(observer, item, phase)
+        try:
+            if observer is not None:
+                try:
+                    if phase == "teardown":
+                        finish_node(observer, item)
+                finally:
+                    end_phase(observer, item, phase)
+        except BaseException as cleanup_error:
+            if activation_error is not None:
+                raise activation_error from cleanup_error
+            raise
+        if activation_error is not None:
+            raise activation_error
 
 
 def _wrapper(function: Callable[[Any], Iterator[None]]) -> Callable[[Any], Iterator[None]]:

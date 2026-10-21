@@ -30,7 +30,7 @@ from sciplot_core.veusz_worker.document_edit import loaded_native_document
 def test_public_ordinary_curve_intent_cold_continuation_native_arrays_and_replay(tmp_path, monkeypatch, mode):
     source, intent = mass_source(tmp_path) if mode == 'same_file' else paired_quantities(tmp_path)
     original = source.read_bytes()
-    with socket_directory(prefix='spcurve-', dir='/tmp') as temporary:
+    with socket_directory(prefix='spcurve-', dir='/tmp', endpoints=('engine.sock', 'cold.sock')) as temporary:
         socket = Path(temporary) / 'engine.sock'
         monkeypatch.setenv('SCIPLOT_ENGINE_SOCKET', str(socket))
         server_pid = None

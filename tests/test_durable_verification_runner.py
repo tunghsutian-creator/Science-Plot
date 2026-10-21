@@ -51,9 +51,11 @@ def test_detached_completion_survives_launch_process_exit(run_spec):
     spec_file = root / "launch-spec.json"
     run_spec["command"] = [sys.executable, "-c", "import time; time.sleep(.2); print('one execution')"]
     spec_file.write_text(json.dumps(run_spec))
-    code = ("import json; from pathlib import Path; "
+    code = ("import json, os; from pathlib import Path; "
             "from sciplot_core.verification.durable_runner import start_run; "
-            f"start_run(directory=Path({str(directory)!r}), spec=json.loads(Path({str(spec_file)!r}).read_text()))")
+            f"spec=json.loads(Path({str(spec_file)!r}).read_text()); "
+            "spec['environment']=dict(os.environ); "
+            f"start_run(directory=Path({str(directory)!r}), spec=spec)")
     completed = subprocess.run([sys.executable, "-c", code], env=run_spec["environment"], capture_output=True, text=True)
     assert completed.returncode == 0, completed.stderr
     result = await_completion(directory)
@@ -182,6 +184,65 @@ def test_supervisor_environment_drift_blocks_before_command(run_spec, monkeypatc
     assert supervise(directory, file_sha256(directory / "request.json")) == 1
     assert run_status(directory)["status"] == "BLOCKED"
     assert not (directory / "command.log").exists()
+
+
+def test_public_prepare_and_reuse_bind_the_same_actual_environment(run_spec, monkeypatch):
+    from types import SimpleNamespace
+    from sciplot_core.verification import changed_evidence, private_exclusion_boundary as boundary, private_observer
+    from sciplot_core.verification.durable_runner import _capture, artifact_hashes, prepare_run
+    from sciplot_core.verification.evidence import make_receipt
+
+    root = Path(run_spec["repo_root"])
+    directory = root / ".tmp_verify" / "pure-environment-contract"
+    roots = json.dumps(boundary.watch_roots(boundary.REPO, {}))
+    observer = SimpleNamespace(directory=root / "generated-audit", run="generated-run",
+        wrapper_environment={private_observer.ROOTS: roots},
+        root_scope=boundary.root_scope(boundary.watch_roots(boundary.REPO, {})),
+        _exclusion_phase={"sha256": "generated-source-bound-phase"}, epoch="generated-parent", reserved={})
+    environment = run_spec["environment"]
+    environment.update({key: "generated-routing" for key in private_observer.AUDIT_KEYS})
+    environment.pop(private_observer.CONTINUATION)
+    environment.update({private_observer.DIRECTORY: str(observer.directory), private_observer.RUN: observer.run,
+                        private_observer.ROOTS: roots,
+                        "SCIPLOT_VERIFY_FINISH": str(directory / "finish.json")})
+    monkeypatch.setattr(private_observer, "current_observer", lambda: observer)
+    _, effective, _ = prepare_run(directory=directory, spec=run_spec)
+    request = load_receipt(directory / "request.json")
+    assert request["environment_sha256"] == digest(effective)
+    assert not set(private_observer.AUDIT_KEYS) & effective.keys() and observer.reserved == {}
+    before = _capture(request, effective)
+    # Generated receipt inputs test comparison only; no process execution is claimed.
+    finish = {"complete": True, "exit_code": 0, "selected_tests": run_spec["selected_tests"]}
+    (directory / "command.log").write_text("generated comparison fixture, no command executed\n")
+    atomic_json(directory / "finish.json", finish)
+    atomic_json(directory / "completion.json", {"generated_comparison_only": True})
+    receipt = make_receipt(before=before, after=before, exit_code=0, session_finish=finish,
+                           wall_seconds=0, artifacts=artifact_hashes(directory))
+    atomic_json(directory / "receipt.json", receipt)
+    assert changed_evidence._reuse_check(root, directory, run_spec)["status"] == "PASS"
+    assert observer.reserved == {}
+    environment["SCIPLOT_TEST_SECRET"] += "-drift"
+    assert changed_evidence._reuse_check(root, directory, run_spec)["status"] == "BLOCKED"
+    environment["SCIPLOT_TEST_SECRET"] = effective["SCIPLOT_TEST_SECRET"]
+    for changed_roots in (roots + " ", None):
+        if changed_roots is None:
+            environment.pop(private_observer.ROOTS)
+        else:
+            environment[private_observer.ROOTS] = changed_roots
+        with pytest.raises(ValueError, match="requested audit roots differ"):
+            changed_evidence._reuse_check(root, directory, run_spec)
+        refused = root / ".tmp_verify" / ("missing-roots" if changed_roots is None else "changed-roots")
+        with pytest.raises(ValueError, match="requested audit roots differ"):
+            prepare_run(directory=refused, spec=run_spec)
+        assert not refused.exists() and observer.reserved == {}
+    environment[private_observer.ROOTS] = roots
+    environment[private_observer.CONTINUATION] = "generated-exec-predecessor"
+    with pytest.raises(ValueError, match="exec continuation"):
+        changed_evidence._reuse_check(root, directory, run_spec)
+    refused = root / ".tmp_verify" / "stale-continuation"
+    with pytest.raises(ValueError, match="exec continuation"):
+        prepare_run(directory=refused, spec=run_spec)
+    assert not refused.exists() and observer.reserved == {}
 
 
 def test_status_between_launch_and_first_state_is_running_only(tmp_path, monkeypatch):

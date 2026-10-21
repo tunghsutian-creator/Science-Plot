@@ -19,7 +19,7 @@ from sciplot_core.verification.private_process_boundaries import diagnostic_owne
 from sciplot_core.verification.private_process_boundaries import ZERO as ZERO, frame_digest as frame_digest, source_hashes as source_hashes
 
 from sciplot_core.verification.native_probe_boundary import native_probe_call
-from sciplot_core.verification.private_exclusion_boundary import excluded_launch, final_launch
+from sciplot_core.verification.private_exclusion_boundary import effective_child_environment, excluded_launch, final_launch, public_phase
 from sciplot_core.verification.private_audit_runtime import server_call, hold_server, install_socket_ports
 
 VERSION = 2
@@ -198,11 +198,11 @@ def current_observer() -> Observer | None:
     return _observer
 
 
-def reserve_child_environment(environment: dict[str, str]) -> dict[str, str]:
-    """Bind launch propagation before an owner hashes the effective environment."""
+def reserve_child_environment(environment: dict[str, str], *, reserve: bool = True) -> dict[str, str]:
+    """Bind the real target environment; reuse previews never reserve a token."""
     observer = current_observer()
-    result = dict(environment)
-    if observer is not None and result.get(DIRECTORY) == str(observer.directory):
+    result = effective_child_environment(observer, environment, AUDIT_KEYS)
+    if reserve and observer is not None and result.get(DIRECTORY) == str(observer.directory):
         token = uuid4().hex
         result.update({PARENT: observer.epoch, CHILD: token})
         observer.reserved[token] = frame_digest(result)
@@ -248,6 +248,8 @@ def _install_process_ports(observer: Observer) -> None:
                 and bound.arguments.get("start_new_session") is True):
             transfer = None
         with excluded_launch(observer, bound, AUDIT_KEYS) as exclusion:
+            if transfer is not None and public_phase(observer) is not None and exclusion is None:
+                raise ValueError("Public durable transfer requires its actual native exclusion proof.")
             fields: dict[str, Any] = {}
             launch_args, launch_kwargs = bound.args, bound.kwargs
             if exclusion is not None:

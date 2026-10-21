@@ -118,6 +118,17 @@ arbitrary or historical observation plugins cannot establish supported closure.
 Review the original raw streams, process ownership and durable completion;
 never supply a self-asserted `capture_complete` flag as evidence.
 
+Audit attachment pins the current absolute source path before inherited Python
+paths, so changing a child working directory cannot select another editable
+checkout. Seal durable identity against the actual public target environment;
+the same source-bound phase decision applies to launch and reuse, and reuse
+previews reserve no child token. Matching audit routing requires the original
+roots and cannot inherit an exec continuation. The real launch still requires
+its native exclusion proof. During teardown, an observation activation failure
+must allow fixture restoration and original cleanup before reporting the same
+failure; it never supplies a missing phase or a successful receipt. Keep no-I/O
+test replacements scoped to the product call they assert.
+
 Input scope is independent of lifecycle depth. For a public source checkout use
 `pytest -q --input-scope public-focused`. The public comprehensive CI entry is
 `python -m sciplot_core.verification.public_stage --profile public-comprehensive

@@ -109,20 +109,50 @@ def _root_listing(observer: Any, bound: inspect.BoundArguments) -> dict[str, str
     return owned_caller("evidence_scope.py", "_repository_inputs")
 
 
+def public_phase(observer: Any) -> dict[str, Any] | None:
+    """Use only the primary's already source-bound public phase."""
+    active: dict[str, Any] | None = getattr(observer, "_exclusion_phase", None)
+    if active is not None and observer.root_scope != root_scope(watch_roots(REPO, observer.wrapper_environment)):
+        raise ValueError("Public launch root scope changed before execution.")
+    return active
+
+
+def _routing_drop(observer: Any, environment: dict[str, str], audit_keys: tuple[str, ...]) -> tuple[str, ...]:
+    if (environment.get("SCIPLOT_PRIVATE_AUDIT_DIR") != str(observer.directory)
+            or environment.get("SCIPLOT_PRIVATE_AUDIT_RUN") != observer.run):
+        return ()
+    roots = observer.wrapper_environment.get("SCIPLOT_PRIVATE_AUDIT_ROOTS")
+    if not isinstance(roots, str) or not roots or environment.get("SCIPLOT_PRIVATE_AUDIT_ROOTS") != roots:
+        raise ValueError("Public launch requested audit roots differ from their source-bound owner.")
+    if "SCIPLOT_PRIVATE_AUDIT_CONTINUATION" in environment:
+        raise ValueError("Public subprocess cannot inherit an exec continuation.")
+    return audit_keys
+
+
+def effective_child_environment(observer: Any, environment: dict[str, str],
+                                audit_keys: tuple[str, ...]) -> dict[str, str]:
+    """Project the real public target environment before identity/reservation.
+
+    This decision grants no exclusion proof. The actual held launch must still
+    establish the native boundary before starting its target.
+    """
+    dropped = _routing_drop(observer, environment, audit_keys) if observer is not None and public_phase(observer) is not None else ()
+    return {key: value for key, value in environment.items() if key not in dropped}
+
+
 @contextmanager
 def excluded_launch(observer: Any, bound: inspect.BoundArguments, audit_keys: tuple[str, ...]) -> Iterator[tuple[dict[str, Any], ExclusionSnapshot, tuple[str, ...]] | None]:
-    active = getattr(observer, "_exclusion_phase", None)
+    active = public_phase(observer)
     command = bound.arguments.get("args")
     baseline = observer.wrapper_environment
     root_listing = _root_listing(observer, bound)
     if ((active is None and root_listing is None) or not isinstance(command, (list, tuple)) or not command
             or not all(isinstance(value, str) for value in command)
-            or observer.root_scope != root_scope(watch_roots(REPO, baseline))):
+            or (active is None and observer.root_scope != root_scope(watch_roots(REPO, baseline)))):
         yield None
         return
     environment = bound.arguments["env"]
-    dropped = audit_keys if (environment.get("SCIPLOT_PRIVATE_AUDIT_DIR") == str(observer.directory)
-                            and environment.get("SCIPLOT_PRIVATE_AUDIT_RUN") == observer.run) else ()
+    dropped = _routing_drop(observer, environment, audit_keys)
     # Reject unsupported invocation semantics before enumerating any raw roots.
     if (bound.arguments.get("shell", False) is not False or bound.arguments.get("executable") is not None
             or bound.arguments.get("close_fds", True) is not True or bound.arguments.get("pass_fds", ())

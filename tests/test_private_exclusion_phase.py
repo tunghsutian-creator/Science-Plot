@@ -3,9 +3,13 @@ from pathlib import Path
 from types import SimpleNamespace
 import json
 import os
+import sys
+
+import pytest
 
 from sciplot_core.verification.input_scope import load_manifest
 from sciplot_core.verification import private_exclusion_boundary as boundary
+from sciplot_core.verification import private_observer as observation
 
 
 class Observer:
@@ -69,3 +73,173 @@ def test_a_different_durable_primary_pid_cannot_activate_known_public_item(tmp_p
     boundary.begin_phase(observer, item(node), "call")
     assert observer._exclusion_collection is None and observer._exclusion_phase is None
     assert not observer.frames
+
+
+@pytest.mark.parametrize("mode", ["public", "private", "wrong_run", "wrong_directory", "root_drift",
+                                 "roots_string_drift", "roots_missing", "continuation", "empty_continuation"])
+def test_effective_environment_uses_bound_phase_and_exact_routing(tmp_path, monkeypatch, mode):
+    roots = json.dumps(boundary.watch_roots(boundary.REPO, {}))
+    observer = SimpleNamespace(directory=tmp_path, run="generated-run",
+        wrapper_environment={observation.ROOTS: roots},
+        root_scope=boundary.root_scope(boundary.watch_roots(boundary.REPO, {})),
+        _exclusion_phase={"sha256": "generated-source-bound-phase"}, epoch="generated-parent", reserved={})
+    environment = {key: "generated-routing" for key in observation.AUDIT_KEYS}
+    environment.pop(observation.CONTINUATION)
+    environment.update({observation.DIRECTORY: str(tmp_path), observation.RUN: observer.run,
+                        observation.ROOTS: roots,
+                        "SCIPLOT_PRIVATE_AUDIT_UNKNOWN": "retained", "ordinary": "retained"})
+    original = dict(environment)
+    if mode == "private":
+        observer._exclusion_phase = None
+        environment[observation.CONTINUATION] = "generated-exec-predecessor"
+    elif mode == "wrong_run":
+        environment[observation.RUN] += "-different"
+    elif mode == "wrong_directory":
+        environment[observation.DIRECTORY] += "-different"
+    elif mode == "root_drift":
+        observer.root_scope = {"lexical": [], "canonical": []}
+    elif mode == "roots_string_drift":
+        environment[observation.ROOTS] += " "
+    elif mode == "roots_missing":
+        environment.pop(observation.ROOTS)
+    elif mode in {"continuation", "empty_continuation"}:
+        environment[observation.CONTINUATION] = "generated-exec-predecessor" if mode == "continuation" else ""
+    monkeypatch.setattr(observation, "current_observer", lambda: observer)
+    if mode in {"root_drift", "roots_string_drift", "roots_missing", "continuation", "empty_continuation"}:
+        message = ("root scope changed" if mode == "root_drift" else "exec continuation"
+                   if mode in {"continuation", "empty_continuation"} else "requested audit roots differ")
+        with pytest.raises(ValueError, match=message):
+            observation.reserve_child_environment(environment, reserve=False)
+        with pytest.raises(ValueError, match=message):
+            observation.reserve_child_environment(environment)
+        assert observer.reserved == {}
+    else:
+        preview = observation.reserve_child_environment(environment, reserve=False)
+        assert observer.reserved == {}
+        if mode == "public":
+            assert preview == {key: value for key, value in environment.items() if key not in observation.AUDIT_KEYS}
+            assert observation.reserve_child_environment(preview) == preview
+            assert observer.reserved == {}
+        else:
+            assert preview == environment
+    assert original["ordinary"] == environment["ordinary"]
+    assert environment["SCIPLOT_PRIVATE_AUDIT_UNKNOWN"] == "retained"
+
+
+@pytest.mark.parametrize("mode", ["missing_proof", "roots_drift", "roots_missing", "continuation"])
+def test_public_durable_transfer_without_native_proof_never_calls_original_init(tmp_path, monkeypatch, mode):
+    from contextlib import nullcontext
+
+    class NoProcess:
+        def __init__(self, args, *, env, cwd, stdin, stdout, stderr, close_fds, start_new_session):
+            pytest.fail("A public durable transfer fell back to an unobserved original launch")
+
+        def wait(self):
+            pytest.fail("No process exists to wait for")
+
+        def poll(self):
+            pytest.fail("No process exists to poll")
+
+    observer = SimpleNamespace(directory=tmp_path, run="generated-run",
+        wrapper_environment={observation.ROOTS: json.dumps(boundary.watch_roots(boundary.REPO, {}))},
+        root_scope=boundary.root_scope(boundary.watch_roots(boundary.REPO, {})),
+        _exclusion_phase={"sha256": "generated-source-bound-phase"}, epoch="generated-parent", reserved={},
+        nodeid="generated-public-durable-transfer")
+    monkeypatch.setattr(observation, "subprocess", SimpleNamespace(Popen=NoProcess))
+    monkeypatch.setattr(observation, "install_socket_ports", lambda _: None)
+    monkeypatch.setattr(observation, "server_call", lambda *_: None)
+    monkeypatch.setattr(observation, "executable_hash", lambda *_, **__: None)
+    monkeypatch.setattr(observation, "owned_caller", lambda *_: {"owner": "generated exact durable caller"})
+    for name in ("uname_call", "wrapper_call", "native_probe_call"):
+        monkeypatch.setattr(observation, name, lambda *_: None)
+    environment = {}
+    if mode == "missing_proof":
+        monkeypatch.setattr(observation, "excluded_launch", lambda *_: nullcontext(None))
+        message = "actual native exclusion proof"
+    else:
+        environment.update({observation.DIRECTORY: str(tmp_path), observation.RUN: observer.run,
+                            observation.ROOTS: observer.wrapper_environment[observation.ROOTS]})
+        if mode == "roots_missing":
+            environment.pop(observation.ROOTS)
+        elif mode == "roots_drift":
+            environment[observation.ROOTS] += " "
+        else:
+            environment[observation.CONTINUATION] = "generated-exec-predecessor"
+        message = "exec continuation" if mode == "continuation" else "requested audit roots differ"
+    for name in ("waitpid", "execve", "execvpe"):
+        monkeypatch.setattr(observation.os, name, getattr(observation.os, name))
+    observation._install_process_ports(observer)
+    with pytest.raises(ValueError, match=message):
+        NoProcess([sys.executable, "-m", "sciplot_core.verification.durable_runner", str(tmp_path), "a" * 64],
+                  env=environment, cwd=tmp_path, stdin=-3, stdout=-1, stderr=-2, close_fds=True, start_new_session=True)
+
+
+@pytest.mark.parametrize("kind,cleanup", [("exception", "none"), ("failed", "none"),
+    ("failed", "finish"), ("failed", "end"), ("failed", "both")])
+def test_teardown_activation_failure_yields_restores_and_reraises_same_error(monkeypatch, kind, cleanup):
+    from sciplot_core.verification import private_observer_pytest as plugin
+
+    calls = []
+    original = RuntimeError("generated activation failure") if kind == "exception" else pytest.fail.Exception("generated activation failure")
+    finish_error = OSError("generated finish failure")
+    end_error = LookupError("generated end failure")
+    if kind == "failed":
+        assert isinstance(original, BaseException) and not isinstance(original, Exception)
+
+    def begin(*_):
+        calls.append("begin")
+        raise original
+
+    def finish(*_):
+        calls.append("finish")
+        if cleanup in {"finish", "both"}:
+            raise finish_error
+
+    def end(*_):
+        calls.append("end")
+        if cleanup in {"end", "both"}:
+            raise end_error
+
+    with monkeypatch.context() as control:
+        control.setattr(plugin, "current_observer", object)
+        control.setattr(plugin, "begin_phase", begin)
+        control.setattr(plugin, "finish_node", finish)
+        control.setattr(plugin, "end_phase", end)
+        phase = plugin._phase(object(), "teardown")
+        assert next(phase) is None and calls == ["begin"]
+        calls.append("fixture_restored")
+        with pytest.raises(type(original)) as result:
+            next(phase)
+    assert result.value is original
+    assert calls == ["begin", "fixture_restored", "finish", "end"]
+    if cleanup == "none":
+        assert original.__cause__ is None
+    else:
+        assert original.__cause__ is (finish_error if cleanup == "finish" else end_error)
+        if cleanup == "both":
+            assert end_error.__context__ is finish_error
+
+
+@pytest.mark.parametrize("phase_name", ["setup", "call"])
+@pytest.mark.parametrize("kind", ["exception", "failed"])
+def test_setup_and_call_activation_failures_still_refuse_before_yield(monkeypatch, phase_name, kind):
+    from sciplot_core.verification import private_observer_pytest as plugin
+
+    calls = []
+    original = RuntimeError("generated activation failure") if kind == "exception" else pytest.fail.Exception("generated activation failure")
+
+    def begin(*_):
+        calls.append("begin")
+        raise original
+
+    with monkeypatch.context() as control:
+        control.setattr(plugin, "current_observer", object)
+        control.setattr(plugin, "start_node", lambda *_: calls.append("start"))
+        control.setattr(plugin, "begin_phase", begin)
+        control.setattr(plugin, "finish_node", lambda *_: pytest.fail("Pre-yield failure cannot finish a node"))
+        control.setattr(plugin, "end_phase", lambda *_: pytest.fail("Pre-yield failure cannot manufacture a phase exit"))
+        generator = plugin._phase(object(), phase_name)
+        with pytest.raises(type(original)) as result:
+            next(generator)
+    assert result.value is original
+    assert calls == (["start", "begin"] if phase_name == "setup" else ["begin"])

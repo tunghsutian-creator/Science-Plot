@@ -61,8 +61,9 @@ def test_creation_handle_projects_in_memory_coverage_without_file_access(tmp_pat
     result = {"status": "complete", "plot": str(tmp_path / "plot"), "plot_id": document["plot_id"],
               "revision": document["revision"], "coordinates": [1, 2, 3], "diagnostic": "private detail"}
     authority = {"mode": "LegacyPlot", "source_of_truth": "saved_native_document"}
-    monkeypatch.setattr(Path, "read_bytes", lambda _: pytest.fail("Creation handle must not inspect files"))
-    handle = plot_object_handle(result, document=document, authority=authority)
+    with monkeypatch.context() as no_io:
+        no_io.setattr(Path, "read_bytes", lambda _: pytest.fail("Creation handle must not inspect files"))
+        handle = plot_object_handle(result, document=document, authority=authority)
     assert handle["plot_type"] == "LegacyPlot"
     assert handle["object_operations"]["patch"]["available"] is True
     assert "coordinates" not in handle and "diagnostic" not in handle

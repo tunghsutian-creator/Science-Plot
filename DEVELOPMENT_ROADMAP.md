@@ -73,9 +73,12 @@ native-inspector evidence closes only its declared diagnostic boundary.
 Keep the access boundary finite: reuse the existing observer, source-owned
 Popen lifecycle and engine socket, one OS exclusion per actual launch, and one
 primary native exit sensor. Do not grow a general broker or policy registry to
-absorb unknown ports. Final wiring still needs its real generated native control
-and then the original unfiltered frozen full run; static and component successes
-cannot close that gate. A blocked native action stays blocked until the exact
+absorb unknown ports. Complete the original unfiltered frozen full run and resolve
+its actual failures. Static and generated native component successes cannot close
+that gate. Preserve one environment identity across intent sealing and actual
+launch, bind the current source across child working directories, declare each
+generated socket endpoint, and retain fixture cleanup when observation fails.
+A blocked native action stays blocked until the exact
 required approval is obtained; retain the original execution or non-execution evidence.
 Historical interrupted/failed epochs and the original scientific files stay intact.
 Only validated fresh closure evidence may derive completeness; keep the preliminary

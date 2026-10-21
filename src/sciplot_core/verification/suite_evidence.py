@@ -44,7 +44,9 @@ def _audit_environment(
         raise ValueError("The audit output must be separate from the durable execution directory.")
     if audit.exists():
         raise ValueError("The audit output already exists; inspect the original observation.")
-    environment["PYTHONPATH"] = os.pathsep.join(filter(None, [str(plugin), environment.get("PYTHONPATH", "")]))
+    environment["PYTHONPATH"] = os.pathsep.join(filter(None, [
+        str(plugin), str(root / "src"), environment.get("PYTHONPATH", ""),
+    ]))
     plugins = environment.get("PYTEST_PLUGINS", "").split(",")
     environment["PYTEST_PLUGINS"] = ",".join(dict.fromkeys(filter(None, [*plugins, "sciplot_closure_audit"])))
     environment["SCIPLOT_PRIVATE_AUDIT_DIR"] = str(audit)
