@@ -25,6 +25,18 @@ PLATFORM_SKIPS = {
     "tests/test_verification_evidence_runtime.py::test_relative_runtime_environment_binds_real_child_inputs": ("setup", "Skipped: default runtime policy binds the actual macOS build"),
     "tests/test_private_observer_native.py::test_actual_mac_qt_reexec_is_sealed_and_continued": ("call", "Skipped: The actual Qt framework reexec path belongs to macOS."),
     "tests/test_native_probe_boundary.py::test_actual_clt_inspector_uses_closed_environment_and_bound_native_target": ("setup", "Skipped: finite CLT inspector is macOS-specific"),
+    'tests/test_process_private_exclusion_generated.py::test_actual_close_fds_and_devnull_do_not_inherit_generated_raw_descriptor': ("setup", "Skipped: Actual Mac process boundary control"),
+    'tests/test_process_private_exclusion_generated.py::test_actual_nonzero_and_signal_outcomes_are_retained[import os,signal;os.kill(os.getpid(),signal.SIGTERM)--15]': ("setup", "Skipped: Actual Mac process boundary control"),
+    'tests/test_process_private_exclusion_generated.py::test_actual_nonzero_and_signal_outcomes_are_retained[import os;os._exit(79)-79]': ("setup", "Skipped: Actual Mac process boundary control"),
+    'tests/test_process_private_exclusion_generated.py::test_actual_pipe_protocol_and_post_kernel_environment_projection': ("setup", "Skipped: Actual Mac process boundary control"),
+    'tests/test_process_private_exclusion_generated.py::test_actual_strong_boundary_blocks_namespace_alias_and_evidence_mutations': ("setup", "Skipped: Actual Mac process boundary control"),
+    'tests/test_process_private_exclusion_generated.py::test_pinned_interpreter_loader_environment_is_preserved': ("setup", "Skipped: Actual Mac process boundary control"),
+    "tests/test_process_private_exclusion_generated.py::test_actual_same_launch_composition_preserves_two_finite_socket_endpoints": ("setup", "Skipped: Actual Mac process boundary control"),
+    "tests/test_native_exit_boundary.py::test_late_and_wrong_identity_do_not_register": ("setup", "Skipped: Darwin public kqueue/libproc capability"),
+    "tests/test_native_exit_boundary.py::test_missing_event_and_closed_watcher_remain_unknown": ("setup", "Skipped: Darwin public kqueue/libproc capability"),
+    "tests/test_native_exit_boundary.py::test_real_nonparent_status_matches_original_parent_wait[0-0-0]": ("setup", "Skipped: Darwin public kqueue/libproc capability"),
+    "tests/test_native_exit_boundary.py::test_real_nonparent_status_matches_original_parent_wait[79-20224-79]": ("setup", "Skipped: Darwin public kqueue/libproc capability"),
+    "tests/test_native_exit_boundary.py::test_real_nonparent_status_matches_original_parent_wait[sigterm-15--15]": ("setup", "Skipped: Darwin public kqueue/libproc capability"),
 }
 _reports: list[dict[str, Any]] = []
 

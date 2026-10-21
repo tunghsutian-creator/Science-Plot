@@ -53,7 +53,10 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
             "tests/test_public_workflow_behavior.py",
             "tests/test_private_observer.py",
             "tests/test_private_observer_native.py", "tests/test_private_observer_runtime.py",
+            "tests/test_process_private_exclusion.py", "tests/test_process_private_exclusion_generated.py",
+            "tests/test_process_private_composition.py",
             "tests/test_native_probe_boundary.py", "tests/test_verification_environment.py",
+            "tests/test_native_exit_boundary.py",
         }
     ),
     pytest_targets=(
@@ -76,7 +79,10 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
         "tests/test_public_workflow_behavior.py",
         "tests/test_private_observer.py",
         "tests/test_private_observer_native.py", "tests/test_private_observer_runtime.py",
+        "tests/test_process_private_exclusion.py", "tests/test_process_private_exclusion_generated.py",
+        "tests/test_process_private_composition.py",
         "tests/test_native_probe_boundary.py", "tests/test_verification_environment.py",
+        "tests/test_native_exit_boundary.py",
         "tests/test_architecture_boundaries.py::test_non_probe_source_has_no_exact_duplicate_function_implementations",
         "tests/test_architecture_boundaries.py::test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint",
         *ARCHITECTURE_CORE_TARGETS,
