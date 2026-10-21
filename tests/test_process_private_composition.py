@@ -9,11 +9,17 @@ import subprocess
 import pytest
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.verification import process_private_exclusion as boundary
+from process_private_descriptor_support import descriptor_boundary
 
 
 @pytest.fixture
-def domains(tmp_path):
+def boundary(tmp_path):
+    with descriptor_boundary(tmp_path) as module:
+        yield module
+
+
+@pytest.fixture
+def domains(tmp_path, boundary):
     result = []
     for name in ("outer", "inner"):
         root = tmp_path / name
@@ -35,9 +41,9 @@ def finite_socket_scope(tmp_path):
         "initial_absent": True}
 
 
-def test_active_source_is_exact_and_caller_target_facts_are_separate(domains):
+def test_active_source_is_exact_and_caller_target_facts_are_separate(domains, boundary):
     outer, inner = domains
-    target = ("/usr/bin/true", "literal-target")
+    target = (str(boundary.DESCRIPTOR_TARGET), "literal-target")
     environment = {"INNER_ROUTING": "inner", "OUTER_ROUTING": "old", "KEEP": "literal"}
     with boundary.wrap_private_exclusion(inner, target, environment=environment, stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, drop_environment=["INNER_ROUTING"]) as source:
@@ -45,7 +51,7 @@ def test_active_source_is_exact_and_caller_target_facts_are_separate(domains):
         inputs = dict(stdio=source.stdio, drop_environment=["OUTER_ROUTING"])
         reference = boundary.source_private_exclusion(source.argv, changed, **inputs)
         assert reference is not None and reference[1] == ("INNER_ROUTING",)
-        assert boundary.source_private_exclusion(("/usr/bin/true",), changed, **inputs) is None
+        assert boundary.source_private_exclusion((str(boundary.DESCRIPTOR_TARGET),), changed, **inputs) is None
         caller = boundary.actual_launch_facts(reference[0], source.argv, changed, stdio=source.stdio,
             drop_environment=reference[1])
         with boundary.wrap_private_exclusion(outer, source.argv, environment=changed, stdin=source.stdio[0],
@@ -53,13 +59,13 @@ def test_active_source_is_exact_and_caller_target_facts_are_separate(domains):
             descriptor = boundary.invocation_snapshot(combined)
             actual = boundary.actual_launch_facts(descriptor, combined.argv, combined.environment,
                 stdio=combined.stdio, drop_environment=["INNER_ROUTING", "OUTER_ROUTING"])
-            assert combined.argv.count("/usr/bin/sandbox-exec") == 1
+            assert combined.argv.count(str(boundary.SANDBOX)) == 1
             assert combined.argv[-2:] == target
             assert actual["suffix_sha256"] != canonical_json_sha256(list(source.argv))
             assert set(descriptor.to_dict()["roots"]) == set(outer.to_dict()["roots"]) | set(inner.to_dict()["roots"])
             arguments = dict(expected_snapshot=outer, original_argv_sha256=canonical_json_sha256(list(source.argv)),
                 original_environment_sha256=canonical_json_sha256(changed), original_cwd=str(Path.cwd()),
-                original_executable_sha256=hashlib.sha256(Path("/usr/bin/sandbox-exec").read_bytes()).hexdigest(),
+                original_executable_sha256=hashlib.sha256(boundary.SANDBOX.read_bytes()).hexdigest(),
                 original_stdio=boundary.original_stdio_facts(*source.stdio), actual_launch=actual,
                 caller_launch=caller, drop_environment=["OUTER_ROUTING"])
             boundary.validate_excluded_proof(combined.proof, **arguments)
@@ -73,8 +79,8 @@ def test_active_source_is_exact_and_caller_target_facts_are_separate(domains):
 
 
 @pytest.mark.parametrize("change", ["environment", "stdio", "cwd"])
-def test_matching_source_argv_cannot_hide_changed_inputs(domains, change):
-    with boundary.wrap_private_exclusion(domains[1], ["/usr/bin/true"], environment={"KEEP": "one"},
+def test_matching_source_argv_cannot_hide_changed_inputs(domains, change, boundary):
+    with boundary.wrap_private_exclusion(domains[1], [str(boundary.DESCRIPTOR_TARGET)], environment={"KEEP": "one"},
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as source:
         environment, stdio, cwd = source.environment, source.stdio, None
         if change == "environment":
@@ -87,14 +93,14 @@ def test_matching_source_argv_cannot_hide_changed_inputs(domains, change):
             boundary.source_private_exclusion(source.argv, environment, stdio=stdio, cwd=cwd)
 
 
-def test_inactive_prefix_is_not_a_source_owned_launch(domains):
-    with boundary.wrap_private_exclusion(domains[1], ["/usr/bin/true"], environment={},
+def test_inactive_prefix_is_not_a_source_owned_launch(domains, boundary):
+    with boundary.wrap_private_exclusion(domains[1], [str(boundary.DESCRIPTOR_TARGET)], environment={},
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as source:
         saved = source.argv
     assert boundary.source_private_exclusion(saved, {}, stdio=source.stdio) is None
 
 
-def test_finite_socket_literals_and_mutation_rule_match_the_actual_probed_contract(tmp_path):
+def test_finite_socket_literals_and_mutation_rule_match_the_actual_probed_contract(tmp_path, boundary):
     scope = finite_socket_scope(tmp_path)
     descriptor = boundary.prepare_private_exclusion(tmp_path / "origin", {}, socket_scope=scope)
     value = descriptor.to_dict()
@@ -111,8 +117,36 @@ def test_finite_socket_literals_and_mutation_rule_match_the_actual_probed_contra
     assert boundary.compose_private_exclusion(descriptor, without).to_dict()["socket_scope"] is None
 
 
+@pytest.mark.parametrize("case,expected", [("subset", ["cold-engine.sock", "engine.sock"]),
+    ("partial", ["engine.sock"]), ("disjoint", []), ("other_directory", [])])
+def test_finite_permissions_intersect_within_the_same_attested_namespace(tmp_path, boundary, case, expected):
+    left = finite_socket_scope(tmp_path)
+    directory = Path(left["sockets"][0]).parent
+    right = copy.deepcopy(left)
+    if case == "subset":
+        left["sockets"].append(str(directory / "extra-engine.sock"))
+    elif case == "partial":
+        right["sockets"] = [str(directory / "engine.sock"), str(directory / "extra-engine.sock")]
+    elif case == "disjoint":
+        left["sockets"], right["sockets"] = [str(directory / "cold-engine.sock")], [str(directory / "engine.sock")]
+    else:
+        (tmp_path / "other").mkdir()
+        right = finite_socket_scope(tmp_path / "other")
+    outer = boundary.prepare_private_exclusion(tmp_path / "outer", {}, socket_scope=left)
+    inner = boundary.prepare_private_exclusion(tmp_path / "inner", {}, socket_scope=right)
+    for first, second in ((outer, inner), (inner, outer)):
+        composed = boundary.compose_private_exclusion(first, second)
+        boundary.validate_private_exclusion(composed)
+        actual = composed.to_dict()["socket_scope"]
+        if not expected:
+            assert actual is None
+        else:
+            assert actual == {"sockets": [str(directory / name) for name in expected],
+                "directory": left["directory"], "initial_absent": True}
+
+
 @pytest.mark.parametrize("change", ["newness", "mode", "inode", "uid", "outside", "duplicate", "symlink", "ordinary_file"])
-def test_unknown_existing_or_replaced_socket_scope_fails_closed(tmp_path, change):
+def test_unknown_existing_or_replaced_socket_scope_fails_closed(tmp_path, change, boundary):
     scope = finite_socket_scope(tmp_path)
     directory = Path(scope["sockets"][0]).parent
     if change == "newness":

@@ -193,7 +193,14 @@ def compose_private_exclusion(primary: ExclusionSnapshot | Mapping[str, Any], se
     for key in ("roots", "write_protected_paths"):
         result[key] = sorted(set(result[key]) | set(parts[1][key]))
     result["parameters"] = {"components": parts}
-    result["socket_scope"] = result["socket_scope"] if result["socket_scope"] == parts[1]["socket_scope"] else None
+    left, right = result["socket_scope"], parts[1]["socket_scope"]
+    result["socket_scope"] = None
+    if (left is not None and right is not None and left["directory"] == right["directory"]
+            and left["initial_absent"] is True and right["initial_absent"] is True
+            and Path(left["sockets"][0]).parent == Path(right["sockets"][0]).parent):
+        names = sorted(set(left["sockets"]) & set(right["sockets"]))
+        if names:
+            result["socket_scope"] = dict(left, sockets=names)
     result["profile"] = _profile(result["roots"], result["write_protected_paths"], result["ancestors"], result["socket_scope"])
     return ExclusionSnapshot(json.dumps(result, sort_keys=True, separators=(",", ":"), allow_nan=False))
 

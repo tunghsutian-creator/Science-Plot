@@ -7,11 +7,17 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 
 import pytest
 
-from sciplot_core.verification import process_private_exclusion as boundary
+from sciplot_core.verification import process_private_exclusion as runtime
+from process_private_descriptor_support import descriptor_boundary
+
+
+@pytest.fixture
+def boundary(tmp_path):
+    with descriptor_boundary(tmp_path) as module:
+        yield module
 
 
 @pytest.fixture
@@ -28,7 +34,7 @@ def resources(tmp_path):
     return origin, canary, audit, evidence
 
 
-def snapshot(resources):
+def snapshot(resources, boundary):
     origin, _, audit, _ = resources
     return boundary.prepare_private_exclusion(origin, {}, audit_directory=audit)
 
@@ -37,18 +43,18 @@ def sha(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
 
 
-def validate(invocation, frozen, *, drop=(), stdio=(subprocess.DEVNULL, subprocess.PIPE, subprocess.PIPE), actual=None):
+def validate(boundary, invocation, frozen, *, drop=(), stdio=(subprocess.DEVNULL, subprocess.PIPE, subprocess.PIPE), actual=None):
     descriptor = frozen if isinstance(frozen, boundary.ExclusionSnapshot) else boundary.ExclusionSnapshot(json.dumps(frozen))
     launch = boundary.actual_launch_facts(descriptor, invocation.argv if actual is None else actual,
         invocation.environment, stdio=invocation.stdio, drop_environment=drop)
     boundary.validate_excluded_proof(invocation.proof, expected_snapshot=frozen,
-        original_argv_sha256=sha(["/usr/bin/true"]), original_environment_sha256=sha({}),
+        original_argv_sha256=sha([str(boundary.DESCRIPTOR_TARGET)]), original_environment_sha256=sha({}),
         original_stdio=boundary.original_stdio_facts(*stdio), actual_launch=launch,
-        original_executable_sha256=hashlib.sha256(Path("/usr/bin/true").read_bytes()).hexdigest(), original_cwd=str(Path.cwd()),
+        original_executable_sha256=hashlib.sha256(boundary.DESCRIPTOR_TARGET.read_bytes()).hexdigest(), original_cwd=str(Path.cwd()),
         drop_environment=drop)
 
 
-def test_exact_origin_stage_domains_missing_roots_and_metadata_only(resources, tmp_path, monkeypatch):
+def test_exact_origin_stage_domains_missing_roots_and_metadata_only(resources, tmp_path, monkeypatch, boundary):
     origin, canary, audit, _ = resources
     stage = tmp_path / "stage"
     stage.mkdir()
@@ -71,9 +77,9 @@ def test_exact_origin_stage_domains_missing_roots_and_metadata_only(resources, t
 
 
 @pytest.mark.parametrize("change", ["same_bytes", "new_member", "new_root", "inode", "hardlink"])
-def test_complete_membership_and_same_byte_identity_drift_refused(resources, tmp_path, change):
+def test_complete_membership_and_same_byte_identity_drift_refused(resources, tmp_path, change, boundary):
     origin, canary, _, _ = resources
-    frozen = snapshot(resources)
+    frozen = snapshot(resources, boundary)
     content = canary.read_bytes()
     if change == "same_bytes":
         canary.write_bytes(content)
@@ -92,16 +98,16 @@ def test_complete_membership_and_same_byte_identity_drift_refused(resources, tmp
         boundary.validate_private_exclusion(frozen)
 
 
-def test_preexisting_hardlink_is_admission_failure(resources, tmp_path):
+def test_preexisting_hardlink_is_admission_failure(resources, tmp_path, boundary):
     _, canary, _, _ = resources
     os.link(canary, tmp_path / "outside-readable-alias")
     assert canary.stat().st_nlink == 2
     with pytest.raises(ValueError, match="single-link"):
-        snapshot(resources)
+        snapshot(resources, boundary)
 
 
 @pytest.mark.parametrize("location", ["member", "ancestor"])
-def test_internal_and_ancestor_symlinks_fail_closed(resources, tmp_path, location):
+def test_internal_and_ancestor_symlinks_fail_closed(resources, tmp_path, location, boundary):
     origin, canary, audit, _ = resources
     if location == "member":
         (canary.parent / "escape").symlink_to(tmp_path)
@@ -114,59 +120,59 @@ def test_internal_and_ancestor_symlinks_fail_closed(resources, tmp_path, locatio
 
 
 @pytest.mark.parametrize("options", [
-    {"shell": True}, {"executable": "/usr/bin/false"}, {"close_fds": False},
+    {"shell": True}, {"executable": "unreviewed-executable"}, {"close_fds": False},
     {"pass_fds": (7,)}, {"preexec_fn": lambda: None}, {"stdin": subprocess.STDOUT},
 ])
-def test_unsafe_or_nonpreserved_popen_forms_rejected(resources, options):
-    frozen = snapshot(resources)
+def test_unsafe_or_nonpreserved_popen_forms_rejected(resources, options, boundary):
+    frozen = snapshot(resources, boundary)
     with pytest.raises(ValueError, match="Unsupported|unsafe"):
-        boundary.wrap_private_exclusion(frozen, ["/usr/bin/true"], environment={}, **options)
+        boundary.wrap_private_exclusion(frozen, [str(boundary.DESCRIPTOR_TARGET)], environment={}, **options)
 
 
 @pytest.mark.parametrize("target", ["raw", "audit"])
 @pytest.mark.parametrize("endpoint", ["stdin", "stdout", "stderr"])
-def test_every_bound_endpoint_refuses_raw_or_outer_evidence_inode(resources, target, endpoint):
+def test_every_bound_endpoint_refuses_raw_or_outer_evidence_inode(resources, target, endpoint, boundary):
     _, canary, _, evidence = resources
-    frozen = snapshot(resources)
+    frozen = snapshot(resources, boundary)
     with (canary if target == "raw" else evidence).open("rb") as stream:
         with pytest.raises(ValueError, match="protected"):
-            boundary.wrap_private_exclusion(frozen, ["/usr/bin/true"], environment={}, **{endpoint: stream})
+            boundary.wrap_private_exclusion(frozen, [str(boundary.DESCRIPTOR_TARGET)], environment={}, **{endpoint: stream})
 
 
-def test_duplicate_is_the_actual_checked_endpoint_and_is_closed(resources, tmp_path):
+def test_duplicate_is_the_actual_checked_endpoint_and_is_closed(resources, tmp_path, boundary):
     first, second = tmp_path / "first", tmp_path / "second"
     first.write_bytes(b"first")
     second.write_bytes(b"second")
     with first.open("ab") as original, second.open("ab") as replacement:
         expected = os.fstat(original.fileno()).st_ino
-        with boundary.wrap_private_exclusion(snapshot(resources), ["/usr/bin/true"], environment={},
+        with boundary.wrap_private_exclusion(snapshot(resources, boundary), [str(boundary.DESCRIPTOR_TARGET)], environment={},
                 stdin=subprocess.DEVNULL, stdout=original, stderr=subprocess.PIPE) as invocation:
             actual_fd = invocation.stdio[1]
             os.dup2(replacement.fileno(), original.fileno())
             assert os.fstat(actual_fd).st_ino == expected
             assert os.fstat(original.fileno()).st_ino == second.stat().st_ino
-            validate(invocation, invocation.proof["snapshot"], stdio=(subprocess.DEVNULL, original, subprocess.PIPE))
+            validate(boundary, invocation, invocation.proof["snapshot"], stdio=(subprocess.DEVNULL, original, subprocess.PIPE))
         with pytest.raises(OSError):
             os.fstat(actual_fd)
 
 
-def test_none_inheritance_is_held_and_pipe_sentinels_preserve_semantics(resources):
-    with boundary.wrap_private_exclusion(snapshot(resources), ["/usr/bin/true"], environment={}) as invocation:
+def test_none_inheritance_is_held_and_pipe_sentinels_preserve_semantics(resources, boundary):
+    with boundary.wrap_private_exclusion(snapshot(resources, boundary), [str(boundary.DESCRIPTOR_TARGET)], environment={}) as invocation:
         assert all(row["kind"] == "inherit" for row in invocation.proof["original"]["stdio"])
         assert all(row["kind"] == "bound_fd" for row in invocation.proof["actual"]["stdio"])
         assert all(os.fstat(fd) for fd in invocation.stdio)
-    with boundary.wrap_private_exclusion(snapshot(resources), ["/usr/bin/true"], environment={},
+    with boundary.wrap_private_exclusion(snapshot(resources, boundary), [str(boundary.DESCRIPTOR_TARGET)], environment={},
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as invocation:
         assert invocation.stdio == (subprocess.PIPE, subprocess.PIPE, subprocess.STDOUT)
 
 
-def test_closed_proof_serialization_and_independent_literal_bindings(resources):
-    frozen = snapshot(resources)
-    with boundary.wrap_private_exclusion(frozen, ["/usr/bin/true"], environment={},
+def test_closed_proof_serialization_and_independent_literal_bindings(resources, boundary):
+    frozen = snapshot(resources, boundary)
+    with boundary.wrap_private_exclusion(frozen, [str(boundary.DESCRIPTOR_TARGET)], environment={},
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as invocation:
-        validate(invocation, frozen)
-        assert invocation.argv[0] == "/usr/bin/sandbox-exec"
-        assert invocation.argv[-2:] == ("--", "/usr/bin/true")
+        validate(boundary, invocation, frozen)
+        assert invocation.argv[0] == str(boundary.SANDBOX)
+        assert invocation.argv[-2:] == ("--", str(boundary.DESCRIPTOR_TARGET))
         for change in ("extra", "profile", "original", "actual", "fd", "drop", "executable", "cwd"):
             corrupt = copy.deepcopy(invocation.proof)
             if change == "extra":
@@ -188,30 +194,30 @@ def test_closed_proof_serialization_and_independent_literal_bindings(resources):
             original = invocation.proof
             invocation.proof = corrupt
             with pytest.raises(ValueError):
-                validate(invocation, frozen)
+                validate(boundary, invocation, frozen)
             invocation.proof = original
 
 
-def test_plaintext_argument_and_environment_values_not_in_proof(resources):
+def test_plaintext_argument_and_environment_values_not_in_proof(resources, boundary):
     secret = "GENERATED_SECRET_VALUE_NEVER_PERSIST_THIS"
-    with boundary.wrap_private_exclusion(snapshot(resources), ["/usr/bin/true", secret], environment={"TOKEN": secret},
+    with boundary.wrap_private_exclusion(snapshot(resources, boundary), [str(boundary.DESCRIPTOR_TARGET), secret], environment={"TOKEN": secret},
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as invocation:
         assert secret not in json.dumps(invocation.proof)
 
 
-def test_synchronized_total_hash_cannot_replace_the_kernel_prefix(resources):
-    frozen = snapshot(resources)
-    with boundary.wrap_private_exclusion(frozen, ["/usr/bin/true"], environment={},
+def test_synchronized_total_hash_cannot_replace_the_kernel_prefix(resources, boundary):
+    frozen = snapshot(resources, boundary)
+    with boundary.wrap_private_exclusion(frozen, [str(boundary.DESCRIPTOR_TARGET)], environment={},
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as invocation:
-        invocation.proof["actual"]["argv_sha256"] = sha(["/usr/bin/true"])
+        invocation.proof["actual"]["argv_sha256"] = sha([str(boundary.DESCRIPTOR_TARGET)])
         with pytest.raises(ValueError):
-            validate(invocation, frozen, actual=("/usr/bin/true",))
+            validate(boundary, invocation, frozen, actual=(str(boundary.DESCRIPTOR_TARGET),))
 
 
 @pytest.mark.parametrize("corruption", ["sentinel", "inode", "flags", "target_environment", "prefix", "suffix"])
-def test_actual_bound_facts_are_independent_of_synchronized_proof_fields(resources, corruption):
-    frozen = snapshot(resources)
-    with boundary.wrap_private_exclusion(frozen, ["/usr/bin/true"], environment={},
+def test_actual_bound_facts_are_independent_of_synchronized_proof_fields(resources, corruption, boundary):
+    frozen = snapshot(resources, boundary)
+    with boundary.wrap_private_exclusion(frozen, [str(boundary.DESCRIPTOR_TARGET)], environment={},
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as invocation:
         actual = invocation.proof["actual"]
         if corruption == "sentinel":
@@ -224,43 +230,43 @@ def test_actual_bound_facts_are_independent_of_synchronized_proof_fields(resourc
         else:
             actual[corruption + "_sha256"] = "0" * 64
         with pytest.raises(ValueError):
-            validate(invocation, frozen)
+            validate(boundary, invocation, frozen)
 
 
 @pytest.mark.parametrize("options", [{"close_fds": False}, {"pass_fds": (1,)}, {"shell": True},
-    {"executable": "/usr/bin/true"}, {"preexec_fn": lambda: None}])
-def test_actual_launch_facts_refuse_unsafe_final_flags(resources, options):
+    {"executable": "unreviewed-executable"}, {"preexec_fn": lambda: None}])
+def test_actual_launch_facts_refuse_unsafe_final_flags(resources, options, boundary):
     with pytest.raises(ValueError, match="Unsafe actual"):
-        boundary.actual_launch_facts(snapshot(resources), ("/usr/bin/true",), {},
+        boundary.actual_launch_facts(snapshot(resources, boundary), (str(boundary.DESCRIPTOR_TARGET),), {},
             stdio=(subprocess.DEVNULL, subprocess.PIPE, subprocess.PIPE), **options)
 
 
-def test_reviewed_runtime_loader_owner_is_shared_and_unknown_overrides_refused(resources):
+def test_reviewed_runtime_loader_owner_is_shared_and_unknown_overrides_refused(resources, boundary):
     from sciplot_core.verification.evidence_runtime import runtime_loader_environment
     assert runtime_loader_environment({"DYLD_FRAMEWORK_PATH": "literal/frameworks", "KEEP": "value"}) == {"DYLD_FRAMEWORK_PATH": "literal/frameworks"}
     for key in ("DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"):
         with pytest.raises(ValueError, match="loader overrides"):
             runtime_loader_environment({key: "unreviewed"})
         with pytest.raises(ValueError, match="loader projection"):
-            boundary.actual_launch_facts(snapshot(resources), ("/usr/bin/true",), {key: ""},
+            boundary.actual_launch_facts(snapshot(resources, boundary), (str(boundary.DESCRIPTOR_TARGET),), {key: ""},
                 stdio=(subprocess.DEVNULL, subprocess.PIPE, subprocess.PIPE))
 
 
-def test_launch_and_target_environment_bind_drops_and_restoration_separately(resources):
+def test_launch_and_target_environment_bind_drops_and_restoration_separately(resources, boundary):
     environment = {"DYLD_FRAMEWORK_PATH": "literal/frameworks", "ROUTING": "outer", "KEEP": "yes"}
-    frozen = snapshot(resources)
-    with boundary.wrap_private_exclusion(frozen, ["/usr/bin/true"], environment=environment,
+    frozen = snapshot(resources, boundary)
+    with boundary.wrap_private_exclusion(frozen, [str(boundary.DESCRIPTOR_TARGET)], environment=environment,
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, drop_environment=["ROUTING"]) as invocation:
         actual = boundary.actual_launch_facts(frozen, invocation.argv, invocation.environment,
             stdio=invocation.stdio, drop_environment=["ROUTING"])
         assert actual["launch_environment_sha256"] == sha(environment)
         assert actual["target_environment_sha256"] == sha({"DYLD_FRAMEWORK_PATH": "literal/frameworks", "KEEP": "yes"})
-        assert invocation.argv[-2:] == ("DYLD_FRAMEWORK_PATH=literal/frameworks", "/usr/bin/true")
-        assert actual["suffix_sha256"] == sha(["/usr/bin/true"])
+        assert invocation.argv[-2:] == ("DYLD_FRAMEWORK_PATH=literal/frameworks", str(boundary.DESCRIPTOR_TARGET))
+        assert actual["suffix_sha256"] == sha([str(boundary.DESCRIPTOR_TARGET)])
 
 
-def test_protected_executable_rejected_without_opening_data(resources, monkeypatch):
-    frozen = snapshot(resources)
+def test_protected_executable_rejected_without_opening_data(resources, monkeypatch, boundary):
+    frozen = snapshot(resources, boundary)
     canary = resources[1]
     original = Path.read_bytes
     def read(path):
@@ -272,11 +278,14 @@ def test_protected_executable_rejected_without_opening_data(resources, monkeypat
         boundary.wrap_private_exclusion(frozen, [str(canary)], environment={})
 
 
-def test_unknown_platform_and_missing_capability_are_refused(resources, monkeypatch):
-    with monkeypatch.context() as patch:
-        patch.setattr(sys, "platform", "unproved-platform")
-        with pytest.raises(ValueError, match="actual Mac"):
-            snapshot(resources)
+def test_synthetic_snapshot_is_rejected_by_actual_runtime_admission(resources, boundary):
+    frozen = snapshot(resources, boundary)
+    assert frozen.to_dict()["identity"]["adapter"].startswith("synthetic descriptor")
+    with pytest.raises(ValueError):
+        runtime.validate_private_exclusion(frozen.to_dict())
+
+
+def test_missing_synthetic_capability_is_refused(resources, monkeypatch, boundary):
     monkeypatch.setattr(boundary, "SANDBOX", resources[0] / "absent-sandbox")
     with pytest.raises((OSError, ValueError)):
-        snapshot(resources)
+        snapshot(resources, boundary)
