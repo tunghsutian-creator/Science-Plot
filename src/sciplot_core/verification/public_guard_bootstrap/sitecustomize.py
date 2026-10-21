@@ -16,20 +16,19 @@ try:
         os.environ["SCIPLOT_PUBLIC_GUARD_BOOTSTRAP"] = json.dumps({
             "path": str(actual), "sha256": hashlib.sha256(actual.read_bytes()).hexdigest(),
         })
+    # Every owned startup pins its adjacent dependencies, even when the
+    # caller deliberately omits the package path from PYTHONPATH.
+    source = Path(__file__).resolve().parents[3]
+    owner = source / "sciplot_core/__init__.py"
+    locations = [os.curdir, *os.environ.get("PYTHONPATH", "").split(os.pathsep)]
+    explicit = PathFinder.find_spec("sciplot_core", locations)
+    if explicit is not None and explicit.origin is not None and Path(explicit.origin).resolve() != owner:
+        raise ValueError("Public startup has an unknown explicit source owner.")
+    sys.path.insert(0, str(source))
+    import sciplot_core
+    if Path(sciplot_core.__file__).resolve() != owner:
+        raise ValueError("Public startup has an unknown loaded source owner.")
     if os.environ.get("SCIPLOT_PRIVATE_AUDIT_DIR") and os.environ.get("SCIPLOT_PRIVATE_AUDIT_ROOTS"):
-        # Audit composition needs the observer belonging to this owned startup,
-        # including when a guard control intentionally omits the source path.
-        source = Path(__file__).resolve().parents[3]
-        owner = source / "sciplot_core/__init__.py"
-        locations = [os.curdir, *os.environ.get("PYTHONPATH", "").split(os.pathsep)]
-        explicit = PathFinder.find_spec("sciplot_core", locations)
-        if explicit is not None and explicit.origin is not None and Path(explicit.origin).resolve() != owner:
-            raise ValueError("Public observation has an unknown explicit source owner.")
-        sys.path.insert(0, str(source))
-        import sciplot_core
-
-        if Path(sciplot_core.__file__).resolve() != owner:
-            raise ValueError("Public observation has an unknown loaded source owner.")
         from sciplot_core.verification.private_observer import install as install_observer
 
         install_observer()

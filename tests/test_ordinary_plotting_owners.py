@@ -124,6 +124,17 @@ NATIVE_PRESENTATION_STRICT_ADDITIONS = frozenset(
      "src/sciplot_core/studio_core/axis_presentation.py",
      "src/sciplot_core/studio_core/series_encoding_contract.py"}
 )
+VERIFICATION_CAPTURE_STRICT_ADDITIONS = frozenset(
+    {
+        "src/sciplot_core/verification/evidence_runtime.py",
+        "src/sciplot_core/verification/native_exit_boundary.py",
+        "src/sciplot_core/verification/private_audit_runtime.py",
+        "src/sciplot_core/verification/private_exclusion_boundary.py",
+        "src/sciplot_core/verification/private_native_exit_port.py",
+        "src/sciplot_core/verification/process_private_exclusion.py",
+        "src/sciplot_core/verification/process_private_launch.py",
+    }
+)
 FINAL_STRICT_ADDITIONS = (
     ROUND2_STRICT_ADDITIONS
     | CATEGORICAL_EDIT_STRICT_ADDITIONS
@@ -133,6 +144,7 @@ FINAL_STRICT_ADDITIONS = (
     | SOURCE_DOMAIN_STRICT_ADDITIONS
     | SOURCE_IDENTITY_STRICT_ADDITIONS
     | NATIVE_PRESENTATION_STRICT_ADDITIONS
+    | VERIFICATION_CAPTURE_STRICT_ADDITIONS
 )
 
 
@@ -346,6 +358,7 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
         SOURCE_DOMAIN_STRICT_ADDITIONS,
         SOURCE_IDENTITY_STRICT_ADDITIONS,
         NATIVE_PRESENTATION_STRICT_ADDITIONS,
+        VERIFICATION_CAPTURE_STRICT_ADDITIONS,
     )
     assert all(
         scope.isdisjoint(other)
