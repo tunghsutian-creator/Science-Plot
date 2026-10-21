@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import socket
 import sys
 import threading
 import time
@@ -15,8 +16,11 @@ from typing import Any, NoReturn
 from uuid import uuid4
 
 from sciplot_core.verification.private_process_boundaries import diagnostic_owner, executable_hash, owned_caller, root_scope, runtime_identity, uname_call, wrapper_call, wrapper_inputs
+from sciplot_core.verification.private_process_boundaries import ZERO as ZERO, frame_digest as frame_digest, source_hashes as source_hashes
 
 from sciplot_core.verification.native_probe_boundary import native_probe_call
+from sciplot_core.verification.private_exclusion_boundary import excluded_launch, final_launch
+from sciplot_core.verification.private_audit_runtime import server_call, hold_server, install_socket_ports
 
 VERSION = 2
 DIRECTORY = "SCIPLOT_PRIVATE_AUDIT_DIR"
@@ -25,31 +29,17 @@ RUN = "SCIPLOT_PRIVATE_AUDIT_RUN"
 PARENT = "SCIPLOT_PRIVATE_AUDIT_PARENT"
 CHILD = "SCIPLOT_PRIVATE_AUDIT_CHILD"
 CONTINUATION = "SCIPLOT_PRIVATE_AUDIT_CONTINUATION"
-ZERO = "0" * 64
+AUDIT_KEYS = tuple(sorted((DIRECTORY, ROOTS, RUN, PARENT, CHILD, CONTINUATION)))
 _SITE = ("import os\ntry:\n"
-         "    from sciplot_core.verification.private_observer import install\n    install()\n"
+         "    from sciplot_core.verification.private_observer import install\n    observer = install()\n"
+         "    if observer is None:\n"
+         "        from sciplot_core.verification.private_audit_runtime import install_actor_cleanup\n"
+         "        install_actor_cleanup()\n"
          "    if os.environ.get('SCIPLOT_PUBLIC_INPUT_GUARD'):\n"
          "        from sciplot_core.verification.public_input_guard import install as install_guard\n"
          "        install_guard()\nexcept Exception:\n    os._exit(78)\n")
 _PYTEST = "from sciplot_core.verification.private_observer_pytest import *\n"
 _observer: Observer | None = None
-
-
-def frame_digest(value: dict[str, Any]) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
-                                     allow_nan=False).encode()).hexdigest()
-
-
-def source_hashes() -> dict[str, str]:
-    names = ["private_observer.py", "private_observer_pytest.py", "private_capture.py", "private_process_boundaries.py",
-             "suite_evidence.py", "durable_runner.py", "evidence_identity.py", "private_corpus.py",
-             "native_probe_boundary.py", "evidence_runtime.py", "evidence_environment.py"]
-    public = Path(__file__).parent / "public_guard_bootstrap/sitecustomize.py"
-    if public.is_file():
-        names.append("public_guard_bootstrap/sitecustomize.py")
-    result = {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest() for name in names}
-    result["repository:skill/scripts/sciplot"] = hashlib.sha256((Path(__file__).parents[3] / "skill/scripts/sciplot").read_bytes()).hexdigest()
-    return result
 
 
 def bootstrap_sources() -> dict[str, str]:
@@ -182,6 +172,9 @@ class Observer:
     def observe(self, event: str, args: tuple[Any, ...]) -> None:
         if getattr(self.guard, "active", False):
             return
+        if (event == "socket.connect" and args and getattr(args[0], "family", None) == socket.AF_UNIX
+                and not getattr(self.guard, "socket_port", False)):
+            self.record({"event": "untracked_socket_connect"})
         if event in {"open", "os.scandir", "os.listdir"} and args:
             value = args[0]
             if isinstance(value, (str, bytes, os.PathLike)):
@@ -217,6 +210,7 @@ def reserve_child_environment(environment: dict[str, str]) -> dict[str, str]:
 
 
 def _install_process_ports(observer: Observer) -> None:
+    install_socket_ports(observer)
     original_init, original_wait, original_poll = subprocess.Popen.__init__, subprocess.Popen.wait, subprocess.Popen.poll
     spawn_signature = inspect.signature(original_init)
     children: dict[int, tuple[str, subprocess.Popen[Any]]] = {}
@@ -237,6 +231,7 @@ def _install_process_ports(observer: Observer) -> None:
         # removed audit path, plugin or run identity on behalf of a caller.
         bound.arguments["env"] = environment
         command = bound.arguments.get("args")
+        actor = server_call(command, environment)
         target = bound.arguments.get("executable") or (command[0] if isinstance(command, (list, tuple)) else command)
         target_hash = executable_hash(target, cwd=bound.arguments.get("cwd"), environment=environment) if isinstance(target, (str, bytes, os.PathLike)) else None
         # Evaluate the finite boundary against original invocation inputs, before
@@ -252,23 +247,33 @@ def _install_process_ports(observer: Observer) -> None:
                 and command[:3] == [sys.executable, "-m", "sciplot_core.verification.durable_runner"]
                 and bound.arguments.get("start_new_session") is True):
             transfer = None
-        observer.record({"event": "spawn_attempt", "child_token": token, "expected_executable_sha256": target_hash,
-                         "argv_sha256": frame_digest({"argv": [os.fsdecode(value) for value in command]}) if isinstance(command, (list, tuple)) else None,
-                         "same_capture_scope": same_scope, "input_boundary": input_boundary,
-                         "durable_transfer_owner": transfer,
-                         "request_sha256": command[-1] if transfer and isinstance(command, list) else None,
-                         "directory_sha256": frame_digest({"directory": str(Path(command[-2]).resolve())}) if transfer and isinstance(command, list) else None})
-        observer.guard.spawning = True
-        try:
-            original_init(*bound.args, **bound.kwargs)
-        except BaseException as exc:
-            observer.record({"event": "spawn_failed", "child_token": token, "error_class": type(exc).__name__})
-            raise
-        finally:
-            observer.guard.spawning = False
+        with excluded_launch(observer, bound, AUDIT_KEYS) as exclusion:
+            fields: dict[str, Any] = {}
+            launch_args, launch_kwargs = bound.args, bound.kwargs
+            if exclusion is not None:
+                input_boundary, snapshot, effective_drop = exclusion
+                # These facts come from the immutable actual call, not proof.actual.
+                launch_args, launch_kwargs, target_hash, fields = final_launch(bound, spawn_signature, snapshot, input_boundary, effective_drop)
+            observer.record({"event": "spawn_attempt", "child_token": token, "expected_executable_sha256": target_hash,
+                             "argv_sha256": frame_digest({"argv": [os.fsdecode(value) for value in command]}) if isinstance(command, (list, tuple)) else None,
+                             "same_capture_scope": same_scope,
+                             "same_observer_routing": same_scope and environment.get(RUN) == observer.run,
+                             "input_boundary": input_boundary, **fields,
+                             "durable_transfer_owner": transfer,
+                             "request_sha256": command[-1] if transfer and isinstance(command, list) else None,
+                             "directory_sha256": frame_digest({"directory": str(Path(command[-2]).resolve())}) if transfer and isinstance(command, list) else None})
+            observer.guard.spawning = True
+            try:
+                original_init(*launch_args, **launch_kwargs)
+            except BaseException as exc:
+                observer.record({"event": "spawn_failed", "child_token": token, "error_class": type(exc).__name__})
+                raise
+            finally:
+                observer.guard.spawning = False
         process.__dict__["_sciplot_audit_child"] = token
         children[process.pid] = token, process
         observer.record({"event": "child_spawn", "child_token": token, "child_pid": process.pid})
+        hold_server(observer, process, token, actor)
         observed_exit(process, process.returncode)
 
     def observed_exit(process: subprocess.Popen[Any], code: int | None) -> None:

@@ -11,6 +11,7 @@ import pytest
 
 from sciplot_core.verification.private_observer import CHILD, CONTINUATION, PARENT, RUN, frame_digest, write_bootstrap
 from private_observer_support import execute_observed
+from socket_fixture_helpers import audited_socket_directory as audited_socket_directory
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -76,7 +77,7 @@ def test_actual_mac_qt_reexec_is_sealed_and_continued(tmp_path: Path) -> None:
 @pytest.mark.comprehensive
 @pytest.mark.parametrize("termination", ["SIGTERM", "SIGKILL"])
 def test_daemon_normal_termination_closes_native_worker_and_hardkill_stays_unsealed(
-    tmp_path: Path, termination: str,
+    tmp_path: Path, termination: str, audited_socket_directory: Path,
 ) -> None:
     from managed_plot_helpers import request_for_source
 
@@ -93,11 +94,12 @@ def test_daemon_normal_termination_closes_native_worker_and_hardkill_stays_unsea
     environment.update(PYTHONPATH=os.pathsep.join((str(plugin), str(ROOT / "src"), environment.get("PYTHONPATH", ""))),
                        SCIPLOT_PRIVATE_AUDIT_DIR=str(output), SCIPLOT_PRIVATE_AUDIT_ROOTS=json.dumps([str(watch)]))
     environment[RUN] = uuid4().hex
-    code = f"""import json,signal,subprocess,sys,tempfile,time
+    environment["SCIPLOT_ENGINE_SOCKET"] = str(audited_socket_directory / "engine.sock")
+    code = f"""import json,os,signal,subprocess,sys,tempfile,time
 from pathlib import Path
 from sciplot_core.plot_protocol.client import _ping,call
 with tempfile.TemporaryDirectory(prefix='spterm-',dir='/tmp') as temporary:
-    path=Path(temporary)/'engine.sock'
+    path=Path(os.environ.get('SCIPLOT_ENGINE_SOCKET',str(Path(temporary)/'engine.sock')))
     entry=('import signal;from sciplot_core.plot_protocol.server import main;'
            'previous=signal.getsignal(signal.SIGTERM);main();'
            'assert signal.getsignal(signal.SIGTERM) is previous')

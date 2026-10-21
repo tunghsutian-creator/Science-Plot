@@ -1,11 +1,12 @@
 """Real CLI creation and official MCP replay through one persistent native engine."""
 
+from socket_fixture_helpers import socket_directory
+
 import json
 import os
 import signal
 import socket as socket_module
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 from time import perf_counter
@@ -41,7 +42,7 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
                       "E2,E2,E4,E4\n400,1,400,2\n450,2,450,3\n500,3,500,4\n")
     source_hash = file_sha256(source)
     measurements = []
-    with tempfile.TemporaryDirectory(prefix="spnative-", dir="/tmp") as temporary:
+    with socket_directory(prefix="spnative-", dir="/tmp") as temporary:
         socket = Path(temporary) / "engine.sock"
         environment = {**os.environ, "SCIPLOT_ENGINE_SOCKET": str(socket)}
         engine_pid = None
@@ -149,7 +150,7 @@ def test_native_mutation_lost_reply_and_daemon_restart_replay_once(tmp_path):
     create_request = request_for_source(tmp_path)
     source = Path(create_request["data_binding"]["data_sources"][0]["path"])
     source_hash = file_sha256(source)
-    with tempfile.TemporaryDirectory(prefix="sprecovery-", dir="/tmp") as temporary:
+    with socket_directory(prefix="sprecovery-", dir="/tmp") as temporary:
         socket_path = Path(temporary) / "engine.sock"
         engine_pid = None
         try:
@@ -223,7 +224,7 @@ def test_native_frozen_recovery_survives_lost_reply_and_restart_via_cli_mcp(tmp_
     create_request = request_for_source(tmp_path)
     source = Path(create_request["data_binding"]["data_sources"][0]["path"])
     source_hash = file_sha256(source)
-    with tempfile.TemporaryDirectory(prefix="spr2-", dir="/tmp") as temporary:
+    with socket_directory(prefix="spr2-", dir="/tmp") as temporary:
         socket_path = Path(temporary) / "engine.sock"
         environment = {**os.environ, "SCIPLOT_ENGINE_SOCKET": str(socket_path)}
         engine_pid = None

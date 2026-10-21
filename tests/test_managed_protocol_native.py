@@ -1,12 +1,13 @@
 """Managed authority survives artifact deletion through the public thin clients."""
 
+from socket_fixture_helpers import socket_directory
+
 import json
 import os
 from pathlib import Path
 import shutil
 import signal
 import subprocess
-import tempfile
 from time import perf_counter
 
 import anyio
@@ -33,7 +34,7 @@ def test_public_cli_create_and_mcp_rebuild_from_canonical_document(tmp_path, fig
     request_file = tmp_path / "managed-create.json"
     request_file.write_text(json.dumps(request))
     timings = []
-    with tempfile.TemporaryDirectory(prefix="spmanaged-", dir="/tmp") as temporary:
+    with socket_directory(prefix="spmanaged-", dir="/tmp") as temporary:
         socket = Path(temporary) / "engine.sock"
         environment = {**os.environ, "SCIPLOT_ENGINE_SOCKET": str(socket)}
         engine_pid = None

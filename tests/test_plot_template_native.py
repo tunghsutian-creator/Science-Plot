@@ -1,5 +1,7 @@
 """A reusable template and fresh cell bindings create real editable Veusz figures."""
 
+from socket_fixture_helpers import socket_directory
+
 from copy import deepcopy
 from collections import Counter
 import json
@@ -7,7 +9,6 @@ import os
 from pathlib import Path
 import signal
 import subprocess
-import tempfile
 from time import perf_counter
 
 import pytest
@@ -33,7 +34,7 @@ def test_template_create_two_sources_through_one_public_command_each(tmp_path):
     assert requests[0]["template_definition"] == requests[1]["template_definition"]
     assert requests[0]["theme"] == requests[1]["theme"]
     results, measurements = [], []
-    with tempfile.TemporaryDirectory(prefix="sptmpl-", dir="/tmp") as temporary:
+    with socket_directory(prefix="sptmpl-", dir="/tmp") as temporary:
         socket = Path(temporary) / "engine.sock"
         environment = {**os.environ, "SCIPLOT_ENGINE_SOCKET": str(socket)}
         pid = None

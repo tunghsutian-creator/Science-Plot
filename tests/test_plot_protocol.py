@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from socket_fixture_helpers import socket_directory
+
 import json
 import os
 import signal
 import socket
-import tempfile
 import threading
 import time
 from collections.abc import Iterator
@@ -65,7 +66,7 @@ class FakeService:
 
 @pytest.fixture
 def engine() -> Iterator[tuple[Path, FakeService]]:
-    with tempfile.TemporaryDirectory(prefix="spp-", dir="/tmp") as temporary:
+    with socket_directory(prefix="spp-", dir="/tmp", endpoints=("engine.sock", "socket")) as temporary:
         path = Path(temporary) / "engine.sock"
         service = FakeService()
         stop = threading.Event()
@@ -148,7 +149,7 @@ def test_cli_and_socket_use_identical_service_call(monkeypatch: pytest.MonkeyPat
 
 
 def test_uncertain_disconnect_is_not_automatically_replayed() -> None:
-    with tempfile.TemporaryDirectory(prefix="spp-", dir="/tmp") as temporary:
+    with socket_directory(prefix="spp-", dir="/tmp", endpoints=("engine.sock", "socket")) as temporary:
         path = Path(temporary) / "socket"
         calls: list[dict[str, Any]] = []
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
@@ -224,7 +225,7 @@ def test_slow_response_cannot_extend_the_total_exchange_deadline(monkeypatch: py
 
 
 def test_simultaneous_client_start_and_crash_reconnect_keep_owned_socket() -> None:
-    with tempfile.TemporaryDirectory(prefix="spp-", dir="/tmp") as temporary:
+    with socket_directory(prefix="spp-", dir="/tmp", endpoints=("engine.sock", "socket")) as temporary:
         path = Path(temporary) / "engine.sock"
         live_pid: int | None = None
         try:
@@ -249,7 +250,7 @@ def test_simultaneous_client_start_and_crash_reconnect_keep_owned_socket() -> No
 
 
 def test_foreign_or_nonprivate_socket_paths_are_preserved(tmp_path: Path) -> None:
-    with tempfile.TemporaryDirectory(prefix="spp-", dir="/tmp") as temporary:
+    with socket_directory(prefix="spp-", dir="/tmp", endpoints=("engine.sock", "socket")) as temporary:
         directory = Path(temporary)
         directory.chmod(0o755)
         with pytest.raises(TransportError, match="private directory"):
@@ -444,7 +445,7 @@ def test_startup_ping_loss_does_not_claim_the_plotting_request_was_sent(monkeypa
     {"jsonrpc": "2.0", "id": "known", "error": {"code": -32000, "message": "unusable", "data": []}},
 ])
 def test_invalid_response_preserves_original_recovery_binding(response):
-    with tempfile.TemporaryDirectory(prefix="spr-invalid-", dir="/tmp") as temporary:
+    with socket_directory(prefix="spr-invalid-", dir="/tmp", endpoints=("socket",)) as temporary:
         path = Path(temporary) / "socket"
         requests = []
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
@@ -501,7 +502,7 @@ def test_resume_cli_rpc_and_mcp_share_one_closed_schema(monkeypatch, tmp_path, c
 @pytest.mark.parametrize("params", [None, 7, {"plot": "/tmp/plot", "request": None},
                                          {"plot": "/tmp/plot", "request": 7}])
 def test_bad_reply_to_malformed_wire_request_keeps_transport_error(params):
-    with tempfile.TemporaryDirectory(prefix="spr-malformed-", dir="/tmp") as temporary:
+    with socket_directory(prefix="spr-malformed-", dir="/tmp", endpoints=("socket",)) as temporary:
         path = Path(temporary) / "socket"
         received = []
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:

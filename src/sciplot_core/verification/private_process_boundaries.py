@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import ctypes
 import inspect
+import json
 import os
 from pathlib import Path
 import shutil
@@ -11,9 +12,51 @@ import stat
 import sys
 import sysconfig
 from types import CodeType
-from typing import Any
+from typing import Any, Mapping
 
 _PLATFORM_SOURCE = Path(sysconfig.get_path("stdlib")) / "platform.py"
+ZERO = "0" * 64
+
+
+def frame_digest(value: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
+
+
+def source_hashes() -> dict[str, str]:
+    names = ["private_observer.py", "private_observer_pytest.py", "private_capture.py", "private_process_boundaries.py",
+             "suite_evidence.py", "evidence_scope.py", "durable_runner.py", "evidence_identity.py", "private_corpus.py",
+             "native_probe_boundary.py", "evidence_runtime.py", "evidence_environment.py",
+             "process_private_exclusion.py", "process_private_launch.py", "private_exclusion_boundary.py", "private_audit_runtime.py",
+             "private_native_exit_port.py", "native_exit_boundary.py",
+             "../plot_protocol/socket_client.py", "../plot_protocol/paths.py", "../plot_protocol/server.py",
+             "input_scope.py", "input_scope_manifest.json"]
+    public = Path(__file__).parent / "public_guard_bootstrap/sitecustomize.py"
+    if public.is_file():
+        names.append("public_guard_bootstrap/sitecustomize.py")
+    result = {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest() for name in names}
+    result["repository:skill/scripts/sciplot"] = hashlib.sha256((Path(__file__).parents[3] / "skill/scripts/sciplot").read_bytes()).hexdigest()
+    return result
+
+
+def runtime_loader_environment(environment: Mapping[str, str]) -> dict[str, str]:
+    """The existing reviewed loader override; never restore unknown loaders."""
+    if any(environment.get(key) for key in environment
+           if key.startswith(("DYLD_", "LD_")) and key != "DYLD_FRAMEWORK_PATH"):
+        raise ValueError("native loader overrides have no reviewed closure policy")
+    return {"DYLD_FRAMEWORK_PATH": environment["DYLD_FRAMEWORK_PATH"]} if "DYLD_FRAMEWORK_PATH" in environment else {}
+
+
+def forbidden_roots(root: Path, environment: dict[str, str] | None = None) -> list[Path]:
+    values = os.environ if environment is None else environment
+    raw = Path(values.get("SCIPLOT_REFERENCE_DATA", str(root / ".local/reference_data"))).expanduser()
+    if not raw.is_absolute():
+        raw = root / raw
+    paths = [root / "tests/fixtures" / name for name in
+             ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")]
+    paths.extend(raw / name for name in ("real_world", "polymer_corpus", "archived_sources"))
+    # Keep lexical aliases too: a forbidden symlink must not escape the guard.
+    return list(dict.fromkeys([*paths, *(path.resolve() for path in paths)]))
 
 
 def _linux_core_hashes(addresses: list[int], mappings: str) -> list[str]:
@@ -252,6 +295,10 @@ def wrapper_call(bound: inspect.BoundArguments, environment: dict[str, str],
 
 
 _OWNERS = {"evidence_runtime.py": {"native_dependencies"}, "suite_evidence.py": {"_audit_environment"}, "durable_runner.py": {"start_run"},
+           "private_audit_runtime.py": {"start_node", "reserve_socket_fixture"}, "socket_client.py": {"ensure_server"},
+           "evidence_scope.py": {"_repository_inputs"},
+           "private_exclusion_boundary.py": {"begin_phase"},
+           "process_private_exclusion.py": {"_members", "_ancestors", "_metadata", "_evidence_inodes"},
            "evidence_identity.py": {"_stable_file", "_members"},
            "private_corpus.py": {"_readable_nonempty_file", "_listed_source_issues", "_case_dependencies"}}
 
@@ -259,7 +306,8 @@ _OWNERS = {"evidence_runtime.py": {"native_dependencies"}, "suite_evidence.py": 
 def owner_identity(filename: str, function: str) -> dict[str, str]:
     if function not in _OWNERS.get(filename, set()):
         return {}
-    path = Path(__file__).with_name(filename)
+    path = (Path(__file__).parents[1] / "plot_protocol/socket_client.py"
+            if filename == "socket_client.py" else Path(__file__).with_name(filename))
     source = path.read_bytes()
     module = compile(source, str(path), "exec", dont_inherit=True, optimize=sys.flags.optimize)
     code = next(c for c in module.co_consts if isinstance(c, CodeType) and c.co_name == function)
@@ -269,7 +317,8 @@ def owner_identity(filename: str, function: str) -> dict[str, str]:
 
 def owned_caller(filename: str, function: str) -> dict[str, str] | None:
     frame = inspect.currentframe()
-    path = Path(__file__).with_name(filename)
+    path = (Path(__file__).parents[1] / "plot_protocol/socket_client.py"
+            if filename == "socket_client.py" else Path(__file__).with_name(filename))
     try:
         while frame is not None:
             if frame.f_code.co_name == function and Path(frame.f_code.co_filename).resolve() == path.resolve():
@@ -284,6 +333,6 @@ def owned_caller(filename: str, function: str) -> dict[str, str] | None:
 
 
 def diagnostic_owner() -> dict[str, str] | None:
-    return next((value for filename in ("evidence_identity.py", "private_corpus.py")
+    return next((value for filename in ("evidence_identity.py", "private_corpus.py", "process_private_exclusion.py")
                  for function in _OWNERS[filename]
                  if (value := owned_caller(filename, function)) is not None), None)

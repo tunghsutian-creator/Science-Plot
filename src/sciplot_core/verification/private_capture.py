@@ -11,7 +11,11 @@ from typing import Any
 
 from sciplot_core.verification.durable_runner import run_status
 from sciplot_core.verification.evidence_identity import digest, identity_valid
-from sciplot_core.verification.private_observer import VERSION, ZERO, bootstrap_hashes, frame_digest, source_hashes
+from sciplot_core.verification.private_observer import AUDIT_KEYS, VERSION, ZERO, bootstrap_hashes, frame_digest, source_hashes
+from sciplot_core.verification.private_exclusion_boundary import excluded_bound, metadata_diagnostic
+from sciplot_core.verification.private_exclusion_boundary import _scope
+from sciplot_core.verification.private_audit_runtime import review_sockets
+from sciplot_core.verification.private_native_exit_port import validated_exits
 
 from sciplot_core.verification.private_process_boundaries import executable_hash, owner_identity, root_scope, runtime_identity, uname_boundary, wrapper_boundary, wrapper_inputs
 
@@ -108,7 +112,7 @@ def _durable_context(proof: dict[str, Any], *, root: bool = False) -> dict[str, 
     source = Path(__file__).with_name("durable_runner.py").resolve()
     if receipt["before"]["inputs"]["implementation"].get("files", {}).get(digest(str(source)), {}).get("sha256") != source_hashes()["durable_runner.py"]:
         raise ValueError("original execution witness does not bind its actual supervisor implementation")
-    return {"state": state, "exit_code": receipt["exit_code"], "command_sha256": frame_digest({"arguments": receipt["before"]["command"][1:]}),
+    return {"state": state, "directory": str(directory), "exit_code": receipt["exit_code"], "command_sha256": frame_digest({"arguments": receipt["before"]["command"][1:]}),
             "command_executable_sha256": executable_hash(receipt["before"]["command"][0]),
             "request_sha256": hashlib.sha256(request_bytes).hexdigest(),
             "directory_sha256": frame_digest({"directory": str(directory.resolve())}),
@@ -137,6 +141,8 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
     """A missing/abrupt process, successor, event or sensor remains BLOCKED."""
     issues: list[str] = []
     bounded_auxiliary: list[dict[str, Any]] = []
+    excluded_snapshots: list[dict[str, Any]] = []
+    native_exits: dict[str, dict[str, Any]] = {}
     diagnostics: list[dict[str, Any]] = []
     frames: list[dict[str, Any]] = []
     epochs: dict[str, list[dict[str, Any]]] = {}
@@ -163,6 +169,7 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
         primary = proof.get("primary_pid")
         if type(primary) is not int or not any(records[0]["pid"] == primary for records in epochs.values()):
             raise ValueError("actual primary process startup is absent")
+        native_exits = validated_exits(frames, primary=primary)
         starts = [records[0] for records in epochs.values()]
         durable = _durable_context(proof)
         if durable is None:
@@ -269,14 +276,19 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
                     and attempt.get("directory_sha256") == durable["directory_sha256"]
                     and outcome.get("child_pid") == durable["state"]["supervisor_pid"])
                 native_probe = bool(durable and native_probe_bound(attempt.get("input_boundary"), durable["native_records"], attempt))
-                auxiliary = attempt.get("input_boundary") == uname_boundary() or native_probe
+                excluded = excluded_bound(attempt.get("input_boundary"), attempt, records,
+                    primary=primary, expected_nodeids=expected_nodeids, directory=directory, durable=durable,
+                    suite_start=roots[0], audit_keys=AUDIT_KEYS, root_pid=proof["root_pid"], caller=caller)
+                auxiliary = attempt.get("input_boundary") == uname_boundary() or native_probe or excluded
                 if (attempt.get("input_boundary") is not None and not auxiliary
                         and attempt["input_boundary"] != wrapper_boundary()):
                     issues.append(f"unsupported process input boundary:{epoch}:{token}")
                 if auxiliary:
+                    if excluded:
+                        excluded_snapshots.append(attempt["input_boundary"]["process_proof"]["snapshot"])
                     bounded_auxiliary.append({"parent_epoch": epoch, "child_pid": outcome["child_pid"],
                                               "input_boundary": attempt["input_boundary"],
-                                              "terminal_counters": "not_observed_non_python_macho_inspector" if native_probe else "not_observed_non_python_kernel_query"})
+                                              "terminal_counters": "UNKNOWN" if excluded else "not_observed_non_python_macho_inspector" if native_probe else "not_observed_non_python_kernel_query"})
                     if child_starts:
                         issues.append(f"native auxiliary boundary unexpectedly starts Python:{epoch}:{token}")
                 elif len(child_starts) != 1 or child_starts[0]["pid"] != outcome.get("child_pid") or (child_starts[0]["parent_pid"] != records[0]["pid"] and not transferred):
@@ -286,9 +298,14 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
                 elif child_starts[0]["monotonic_ns"] <= attempt["monotonic_ns"]:
                     issues.append(f"child startup precedes successful launch attempt:{epoch}:{token}")
                 exits = [r for r in records if r["event"] == "child_exit" and r.get("child_token") == token]
-                if not exits or len(exits) > 1 or any(type(r.get("returncode")) is not int or r["returncode"] < 0 or r["returncode"] in {78, 79} or r.get("child_pid") != outcome.get("child_pid") for r in exits):
+                kernel_exit = native_exits.get(epoch + ":" + token)
+                if not exits and kernel_exit is not None and kernel_exit["returncode"] == 0:
+                    pass  # Genuine kernel status is a separate kind, never a parent wait.
+                elif not exits or len(exits) > 1 or any(type(r.get("returncode")) is not int or (not excluded and (r["returncode"] < 0 or r["returncode"] in {78, 79})) or r.get("child_pid") != outcome.get("child_pid") for r in exits):
                     issues.append(f"child signalled or exit ledger invalid:{epoch}:{token}")
-                elif auxiliary and exits[0]["returncode"] != 0:
+                elif kernel_exit is not None and exits[0]["returncode"] != kernel_exit["returncode"]:
+                    issues.append(f"parent wait and genuine kernel status disagree:{epoch}:{token}")
+                elif auxiliary and not excluded and exits[0]["returncode"] != 0:
                     issues.append(f"native auxiliary query did not complete successfully:{epoch}:{token}")
         for start in starts:
             if start.get("continuation") is not None:
@@ -311,6 +328,12 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
                     or sessions[0].get("exitstatus") not in {0, 1} or actual != expected_phases
                     or any(r.get("outcome") not in {"passed", "failed"} for r in reports)):
                 issues.append("complete primary collection/report/session evidence is absent")
+            if roots[0].get("activation") == owner_identity("suite_evidence.py", "_audit_environment"):
+                node_scope = _scope(sorted(expected_nodeids))
+                if node_scope is not None:
+                    node_scope["suite_root_sha256"] = roots[0]["sha256"]
+                issues.extend(review_sockets(frames, primary=primary, scope=node_scope,
+                    records=durable["records"] if durable else {}, native_exits=native_exits))
         actors = {proof["root_pid"]}
         if durable:
             actors.add(durable["state"]["supervisor_pid"])
@@ -321,9 +344,11 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
                     and not any(r["event"] == "pytest_report" for r in records)):
                 actors.add(records[0]["pid"])
         diagnostics = [r for r in frames if r["event"] in {"open", "os.scandir", "os.listdir"}
-                       and not r["nodeid"] and _diagnostic_bound(r, durable, actors)]
+                       and ((not r["nodeid"] and _diagnostic_bound(r, durable, actors))
+                            or (r["pid"] in {primary, proof["root_pid"]} and metadata_diagnostic(r, excluded_snapshots)))]
         fatal_pids = {frame["child_pid"] for frame in frames if frame["event"] == "child_exit"
                       and frame.get("returncode") in {78, 79}}
+        fatal_pids.update(fact["identity"]["pid"] for fact in native_exits.values() if fact["returncode"] in {78, 79})
         if root_exit != 0:
             fatal_pids.add(proof["root_pid"])
         closed_finishes.difference_update(epoch for epoch, records in epochs.items() if records[0]["pid"] in fatal_pids)
@@ -333,6 +358,7 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
     return {"status": "BLOCKED" if issues else "COMPLETE", "capture_complete": not issues,
             "issues": issues, "frames": frames, "epoch_count": len(epochs),
             "bounded_auxiliary": bounded_auxiliary,
+            "kernel_exit_observations": list(native_exits.values()),
             "diagnostic_observations": diagnostics,
             "raw_terminal_frame_count": sum(record["event"] == "process_finish" for record in frames),
             "root_actual_exit": root_exit,

@@ -1,11 +1,12 @@
 """Bound native figures continue through CLI, official MCP and the UNIX engine."""
 
+from socket_fixture_helpers import socket_directory
+
 import json
 import os
 from pathlib import Path
 import signal
 import subprocess
-import tempfile
 
 import anyio
 from mcp import Client
@@ -27,7 +28,7 @@ def test_native_object_delta_and_selected_export_share_public_transports(suite, 
     protected = {name: file_sha256(Path(name)) for name in [str(source), str(prepared),
         *manifest["documents"][1]["exports"], str(tmp_path / "parked_optional.vsz"),
         str(tmp_path / "parked_optional.spec.json")]}
-    with tempfile.TemporaryDirectory(prefix="sp-native-", dir="/tmp") as temporary:
+    with socket_directory(prefix="sp-native-", dir="/tmp") as temporary:
         socket = Path(temporary) / "engine.sock"
         environment = {**os.environ, "SCIPLOT_ENGINE_SOCKET": str(socket)}
         engine_pid = None

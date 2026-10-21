@@ -1,8 +1,12 @@
 """Pytest session evidence in the same supported observer stream."""
 import os
-from typing import Any
+from typing import Any, Callable, Iterator, cast
+import pytest
 
 from sciplot_core.verification.private_observer import current_observer
+from sciplot_core.verification.private_exclusion_boundary import bind_collection, begin_phase, end_phase
+from sciplot_core.verification.private_audit_runtime import start_node, finish_node
+from sciplot_core.verification.private_native_exit_port import start_port, close_port
 
 _parent_nodeid = os.environ.get("PYTEST_CURRENT_TEST", "")
 
@@ -13,18 +17,47 @@ def _record(value: dict[str, Any]) -> None:
         observer.record({**value, "nested_session": bool(_parent_nodeid), "parent_nodeid": _parent_nodeid})
 
 
-def _context(item: Any) -> None:
+def _phase(item: Any, phase: str) -> Iterator[None]:
     observer = current_observer()
     if observer is not None:
-        observer.nodeid = _parent_nodeid or item.nodeid
+        if phase == "setup":
+            start_node(observer, item)
+        begin_phase(observer, item, phase)
+    try:
+        yield
+    finally:
+        if observer is not None:
+            try:
+                if phase == "teardown":
+                    finish_node(observer, item)
+            finally:
+                end_phase(observer, item, phase)
 
 
-pytest_runtest_setup = _context
-pytest_runtest_call = _context
-pytest_runtest_teardown = _context
+def _wrapper(function: Callable[[Any], Iterator[None]]) -> Callable[[Any], Iterator[None]]:
+    return cast(Callable[[Any], Iterator[None]], pytest.hookimpl(hookwrapper=True, tryfirst=True)(function))
+
+
+@_wrapper
+def pytest_runtest_setup(item: Any) -> Iterator[None]:
+    yield from _phase(item, "setup")
+
+
+@_wrapper
+def pytest_runtest_call(item: Any) -> Iterator[None]:
+    yield from _phase(item, "call")
+
+
+@_wrapper
+def pytest_runtest_teardown(item: Any) -> Iterator[None]:
+    yield from _phase(item, "teardown")
 
 
 def pytest_collection_finish(session: Any) -> None:
+    observer = current_observer()
+    if observer is not None:
+        bind_collection(observer, [item.nodeid for item in session.items])
+        start_port(observer)
     _record({"event": "pytest_collection", "nodeids": [item.nodeid for item in session.items]})
 
 
@@ -36,3 +69,6 @@ def pytest_runtest_logreport(report: Any) -> None:
 def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
     _record({"event": "pytest_session_finish", "exitstatus": int(exitstatus),
              "testsfailed": session.testsfailed, "testscollected": session.testscollected})
+    observer = current_observer()
+    if observer is not None:
+        close_port(observer)

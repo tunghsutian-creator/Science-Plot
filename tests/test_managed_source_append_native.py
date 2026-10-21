@@ -1,5 +1,7 @@
 """Generated real native append acceptance through cold public CLI processes."""
 
+from socket_fixture_helpers import socket_directory
+
 from copy import deepcopy
 import json
 import math
@@ -8,7 +10,6 @@ from pathlib import Path
 import signal
 import shutil
 import subprocess
-import tempfile
 
 import pytest
 from test_figure_document import request_for_figure
@@ -198,7 +199,7 @@ def test_public_ordinary_cooling_task_cold_append_keeps_source_and_native_arrays
     request_file = tmp_path / 'ordinary-cooling.json'
     request_file.write_text(json.dumps({'version': 1, 'action': 'create', 'sources': [str(source_a)],
         'intent': intent, 'summary_statistic': 'raw_only', 'curve_display': 'raw_overlay'}))
-    with tempfile.TemporaryDirectory(prefix='spappend-', dir='/tmp') as temporary:
+    with socket_directory(prefix='spappend-', dir='/tmp', endpoints=('engine.sock', 'cold-engine.sock')) as temporary:
         socket = Path(temporary) / 'engine.sock'
         monkeypatch.setenv('SCIPLOT_ENGINE_SOCKET', str(socket))
         server_pid = None
