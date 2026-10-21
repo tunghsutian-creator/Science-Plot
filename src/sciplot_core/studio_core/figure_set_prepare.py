@@ -28,6 +28,7 @@ from sciplot_core.studio_core.figure_requests import (
 )
 from sciplot_core.studio_core.figure_source_request import figure_source_request
 from sciplot_core.studio_core.figure_task_evidence import (
+    single_render_figure_queue_from_plan,
     figure_task_from_queue_item,
     validate_figure_queue_against_plan,
     validate_veusz_spec_figure_task,
@@ -93,6 +94,7 @@ def _prepare_studio_figure_set(
             figure_plan=figure_plan,
         )
     )
+    queue = queue or single_render_figure_queue_from_plan(figure_plan)
     task_aware_queue = any(
         isinstance(item, dict) and "resolved_figure_task" in item for item in queue
     )

@@ -26,6 +26,8 @@ class Profile:
     manifest_path: Path
     manifest: dict
     files: dict
+    baseline_path: Path | None = None
+    baseline_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -167,6 +169,9 @@ def _assert_authority(profile, accepted):
     fresh = load_profile(profile.manifest_path)
     if fresh.manifest != profile.manifest:
         raise AssertionError("Profile manifest changed during its regression run")
+    if profile.baseline_path is not None:
+        from rendering_profile_baselines import validate_baseline
+        validate_baseline(profile)
     if accepted.capture.get("document_sha256") != profile.manifest["files"]["accepted_vsz"]["sha256"]:
         raise AssertionError("Accepted-route snapshot did not reopen the immutable accepted VSZ")
 
@@ -240,6 +245,8 @@ def assert_three_way(profile, accepted, legacy, managed, *, output_dir):
               "status": "passed" if all(item["status"] == "passed" for item in gates.values()) else "failed",
               "manifest_sha256": file_sha256(profile.manifest_path), "gates": gates,
               "identity": profile.manifest["identity"], "unsupported": profile.manifest["unsupported"]}
+    if profile.baseline_path is not None:
+        report["baseline_descriptor"] = {"path": str(profile.baseline_path), "sha256": profile.baseline_sha256}
     _write(output / "three-way-report.json", report)
     assert report["status"] == "passed", f"Three-way profile failed: {output / 'three-way-report.json'}"
     return report

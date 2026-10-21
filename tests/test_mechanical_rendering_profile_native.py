@@ -3,11 +3,14 @@
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
 import pytest
 
 from rendering_profile_mechanical import mechanical_document, replay_legacy
 from rendering_profile_mechanical_projection import mechanical_projection
+from rendering_profile_baselines import select_baseline
 from rendering_profiles_helpers import assert_accepted_golden, assert_three_way, capture_native, load_profile
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
 from sciplot_core.plot_engine.managed_sources import load_sources
@@ -19,6 +22,114 @@ from sciplot_core.studio_core.document_edit_state import run_document_worker
 
 
 _FIXTURE = Path(__file__).parent / "fixtures/rendering_profiles/mechanical-v1"
+
+
+@pytest.mark.comprehensive
+def test_wide_category_native_labels_fit_and_clipped_rotation_cannot_commit(tmp_path):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio import prepare_studio_document
+    from sciplot_core.studio_core.document_edit import preview_document_edit
+
+    labels = [f"Material {index}" for index in range(10)]
+    raw = tmp_path / "impact.csv"
+    raw.write_text("\n".join([",".join(["Re"] * len(labels)), ",".join(["kJ/m²"] * len(labels)),
+        ",".join(labels), *[",".join(str(10 + index + row) for index in range(len(labels))) for row in range(4)]]) + "\n")
+    prepared = prepare_studio_document(raw, output_root=tmp_path / "projects", rule_id="impact_metric", template="box_strip")
+    project, document = Path(prepared["project_dir"]), Path(prepared["document"])
+    spec_path = document.with_name("spec.json")
+    spec = json.loads(spec_path.read_text())
+    captured = capture_native(document, tmp_path / "wide-capture", lambda payload: {"pages": payload["geometry"]["pages"]})
+    assert captured.inventory["/page1/graph1/x"]["settings"]["TickLabels/rotate"] == "0"
+    assert captured.datasets["category_axis_labels"]["data"] == labels
+    texts = captured.capture["painted_text"]
+    for label in [*labels, spec["axes"]["x"]["label"]]:
+        assert sum(item["text"] == label for item in texts) == 1
+    width, height = spec["size_mm"]
+    for item in texts:
+        left, top, right, bottom = item["bounds_mm"]
+        assert left >= -.30 and top >= -.30 and right <= width + .30 and bottom <= height + .30
+    before = {path: path.read_bytes() for path in (raw, document, spec_path)}
+    with pytest.raises(ValueError, match="Category label layout"):
+        preview_document_edit(project, [{"object_path": "/page1/graph1/x", "setting_path": "/page1/graph1/x/TickLabels/rotate",
+            "expected_value": "0", "value": "45"}], output_dir=tmp_path / "clipped-preview",
+            expected_document_sha256=file_sha256(document), figure_id=spec["source_request"]["resolved_figure_task"]["figure_id"])
+    assert {path: path.read_bytes() for path in before} == before
+
+
+@pytest.mark.comprehensive
+def test_long_category_native_painters_release_and_clipping_still_blocks(tmp_path):
+    from sciplot_core.veusz_runtime import veusz_worker_environment
+
+    profile = load_profile(_FIXTURE / "manifest.json")
+    spec = json.loads(profile.files["legacy_spec"].read_text())
+    labels = ["E0 2MM", "6-66 2 ADR", "E3 2MM", "E4 2MM"]
+    spec["axes"]["x"]["category_labels"] = labels
+    for label, group, series in zip(labels, spec["categorical"]["groups"], spec["series"], strict=True):
+        group["label"] = series["label"] = label
+    spec_path = tmp_path / "long-labels.json"
+    spec_path.write_text(json.dumps(spec))
+    script = r'''
+import gc
+import json
+import sys
+from pathlib import Path
+from weakref import ref
+from sciplot_core.studio_core.runtime import _ensure_veusz_on_path
+_ensure_veusz_on_path()
+from PyQt6 import QtWidgets
+from veusz import document, utils
+from sciplot_core.studio_core.veusz_axis_apply import validate_category_display
+from sciplot_core.studio_core.veusz_save import save_veusz_document_from_spec
+
+app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+spec_path, output = map(Path, sys.argv[1:])
+spec = json.loads(spec_path.read_text())
+original = utils.Renderer
+renderer_refs = []
+def tracked(*args, **kwargs):
+    renderer = original(*args, **kwargs)
+    renderer_refs.append(ref(renderer))
+    return renderer
+utils.Renderer = tracked
+was_enabled = gc.isenabled()
+gc.disable()
+try:
+    for index in range(3):
+        native = output / f'long-{index}.vsz'
+        save_veusz_document_from_spec(native, spec, spec_path=spec_path)
+        assert native.is_file() and renderer_refs
+        assert all(renderer_ref() is None for renderer_ref in renderer_refs)
+        loaded = document.Document()
+        loaded.load(str(native))
+        display = list(loaded.data['category_axis_display_labels'].data)
+        validate_category_display(loaded, display, spec['axes']['x']['label'], spec['size_mm'])
+        assert all(renderer_ref() is None for renderer_ref in renderer_refs)
+        for expected, size, message in [(display, [1,1], 'exceeds the fixed page'),
+                                        (display[:-1], spec['size_mm'], 'suppressed text')]:
+            try:
+                validate_category_display(loaded, expected, spec['axes']['x']['label'], size)
+            except ValueError as exc:
+                assert message in str(exc), str(exc)
+            else:
+                raise AssertionError('Native invalid category layout was accepted')
+            assert all(renderer_ref() is None for renderer_ref in renderer_refs)
+    print(json.dumps({'status':'passed', 'native_repetitions':3,
+        'cycle_gc_disabled':True, 'native_renderer_count':len(renderer_refs),
+        'all_native_renderers_released':True, 'clipping_rejections':3,
+        'missing_text_rejections':3}))
+finally:
+    utils.Renderer = original
+    if was_enabled:
+        gc.enable()
+'''
+    process = subprocess.run([sys.executable, "-c", script, str(spec_path), str(tmp_path)],
+                             env=veusz_worker_environment(), capture_output=True, text=True, check=False, timeout=120)
+    assert process.returncode == 0, process.stdout + process.stderr
+    evidence = json.loads(process.stdout)
+    assert evidence["native_repetitions"] == 3 and evidence["all_native_renderers_released"]
+    assert evidence["clipping_rejections"] == evidence["missing_text_rejections"] == 3
+    (tmp_path / "category-painter-lifetime.json").write_text(json.dumps(evidence, indent=2) + "\n")
+    assert load_profile(_FIXTURE / "manifest.json").manifest == profile.manifest
 
 
 @pytest.mark.comprehensive
@@ -68,7 +179,9 @@ def test_long_instrument_category_labels_remain_visible_in_fixed_production_fram
     short_document = replay_legacy(_FIXTURE, tmp_path / "short-replay")
     short = capture_native(short_document, tmp_path / "short-capture", projection)
     assert short.inventory["/page1/graph1/x"]["settings"]["TickLabels/rotate"] == "0"
-    assert_accepted_golden(profile, capture_native(profile.files["accepted_vsz"], tmp_path / "accepted", projection),
+    accepted = capture_native(profile.files["accepted_vsz"], tmp_path / "accepted", projection)
+    profile = select_baseline(profile, accepted.environment)
+    assert_accepted_golden(profile, accepted,
                            output_dir=tmp_path / "accepted-gate")
     from sciplot_core.qa.rendering_regression import compare_rasters, structural_diff
     diff = structural_diff(short.structure, json.loads(profile.files["golden_structure"].read_text()))
@@ -81,6 +194,7 @@ def test_mechanical_delivery_three_way_golden_and_disposable_backend(tmp_path):
     profile = load_profile(_FIXTURE / "manifest.json")
     legacy_projection = mechanical_projection(profile.manifest["roles"]["accepted"])
     accepted = capture_native(profile.files["accepted_vsz"], tmp_path / "accepted-current", legacy_projection)
+    profile = select_baseline(profile, accepted.environment)
     # This must run before either fresh renderer: both can drift together.
     assert_accepted_golden(profile, accepted, output_dir=tmp_path / "accepted-first-gate")
     legacy_vsz = replay_legacy(_FIXTURE, tmp_path / "legacy-replay")

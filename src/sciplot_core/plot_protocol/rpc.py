@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Protocol
 
+from sciplot_core.plot_engine.description_scope import selector_issues
 from sciplot_core.task_error_feedback import exception_feedback
 
 MAX_REQUEST_BYTES = 1024 * 1024
@@ -13,13 +14,16 @@ MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 
 
 class Service(Protocol):
-    def open(self, target: Path, figure_id: str | None = None) -> dict[str, Any]: ...
-    def describe(self, plot: Path) -> dict[str, Any]: ...
+    def open(self, target: Path, figure_id: str | None = None, *, description: dict[str, Any] | None = None) -> dict[str, Any]: ...
+    def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]: ...
     def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
+    def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
+    def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def render(self, plot: Path) -> dict[str, Any]: ...
     def export(self, plot: Path) -> dict[str, Any]: ...
     def rollback(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def create(self, request: dict[str, Any]) -> dict[str, Any]: ...
+    def deliver(self, request: dict[str, Any]) -> dict[str, Any]: ...
     def decide(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
 
 
@@ -81,12 +85,15 @@ def validate_call(value: Any) -> tuple[str | int, str, dict[str, Any]]:
 
 def validate_params(method: str, params: dict[str, Any]) -> None:
     fields: dict[str, tuple[set[str], set[str]]] = {
-        "project.open": ({"target"}, {"target", "figure_id"}),
+        "project.open": ({"target"}, {"target", "figure_id", "description"}),
         "plot.create": ({"request"}, {"request"}),
-        "plot.describe": ({"plot"}, {"plot"}),
+        "plot.deliver": ({"request"}, {"request"}),
+        "plot.describe": ({"plot"}, {"plot", "description"}),
         "plot.render": ({"plot"}, {"plot"}),
         "plot.export": ({"plot"}, {"plot"}),
         "plot.patch": ({"plot", "request"}, {"plot", "request"}),
+        "plot.resume": ({"plot", "request"}, {"plot", "request"}),
+        "plot.intent": ({"plot", "request"}, {"plot", "request"}),
         "plot.rollback": ({"plot", "request"}, {"plot", "request"}),
         "plot.decide": ({"plot", "request"}, {"plot", "request"}),
     }
@@ -106,6 +113,8 @@ def validate_params(method: str, params: dict[str, Any]) -> None:
             issues.append({"path": f"/params/{key}", "constraint": "absolute_path"})
     if "request" in params and not isinstance(params["request"], dict):
         issues.append({"path": "/params/request", "constraint": "object"})
+    if "description" in params:
+        issues.extend(selector_issues(params["description"], path="/params/description"))
     if issues:
         raise ProtocolError(-32602, "invalid_rpc_params", "Correct the indicated method parameters.", issues=issues)
 
@@ -113,11 +122,18 @@ def validate_params(method: str, params: dict[str, Any]) -> None:
 def invoke(service: Service, method: str, params: dict[str, Any]) -> dict[str, Any]:
     validate_params(method, params)
     if method == "project.open":
-        return service.open(Path(params["target"]).expanduser().resolve(), figure_id=params.get("figure_id"))
+        target = Path(params["target"]).expanduser().resolve()
+        if "description" in params:
+            return service.open(target, figure_id=params.get("figure_id"), description=params["description"])
+        return service.open(target, figure_id=params.get("figure_id"))
     if method == "plot.create":
         return service.create(params["request"])
+    if method == "plot.deliver":
+        return service.deliver(params["request"])
     plot = Path(params["plot"]).expanduser().resolve()
     if method == "plot.describe":
+        if "description" in params:
+            return service.describe(plot, description=params["description"])
         return service.describe(plot)
     if method == "plot.render":
         return service.render(plot)
@@ -125,6 +141,10 @@ def invoke(service: Service, method: str, params: dict[str, Any]) -> dict[str, A
         return service.export(plot)
     if method == "plot.patch":
         return service.patch(plot, params["request"])
+    if method == "plot.resume":
+        return service.resume(plot, params["request"])
+    if method == "plot.intent":
+        return service.intent(plot, params["request"])
     if method == "plot.rollback":
         return service.rollback(plot, params["request"])
     return service.decide(plot, params["request"])
@@ -152,5 +172,5 @@ def handle(service: Service, value: Any) -> dict[str, Any]:
     try:
         request_id, method, params = validate_call(value)
         return {"jsonrpc": "2.0", "id": request_id, "result": invoke(service, method, params)}
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - the RPC boundary must encode all owner failures
         return error_response(request_id, exc)

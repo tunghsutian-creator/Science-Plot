@@ -32,6 +32,7 @@ class RheologySweepSample:
     source_x_unit: str = ""
     x_conversion: dict[str, Any] | None = None
     metric_conversions: dict[str, dict[str, Any]] | None = None
+    source_interval: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

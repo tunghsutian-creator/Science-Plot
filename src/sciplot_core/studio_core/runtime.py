@@ -15,6 +15,7 @@ from sciplot_core.policy import (
     canonical_export_format,
     normalize_export_formats,
 )
+from sciplot_core.veusz_runtime import bundled_qt_library, configure_qt_loader_environment
 
 
 def upstream_status() -> dict[str, Any]:
@@ -42,11 +43,9 @@ def maybe_reexec_with_qt_runtime(original_argv: list[str]) -> None:
     framework_paths = _qt_framework_paths()
     if not framework_paths:
         return
-    joined = ":".join(str(path) for path in framework_paths)
-    for key in ("DYLD_FRAMEWORK_PATH", "DYLD_LIBRARY_PATH"):
-        current = env.get(key)
-        env[key] = f"{joined}:{current}" if current else joined
-    env["SCIPLOT_STUDIO_QT_RUNTIME"] = "1"
+    configure_qt_loader_environment(
+        env, framework_paths, bundled=bundled_qt_library() is not None,
+    )
     os.execvpe(
         sys.executable, [sys.executable, "-m", "sciplot_core.cli", *original_argv], env
     )
@@ -90,12 +89,9 @@ def _capture_process_stderr(log_path: Path):
 
 
 def _qt_framework_paths() -> list[Path]:
-    bundled = os.environ.get("SCIPLOT_BUNDLED_QT_LIB")
-    if bundled:
-        directory = Path(bundled)
-        if not directory.is_dir():
-            raise ValueError("The bundled Qt library directory is missing; repair this installation.")
-        return [directory]
+    bundled = bundled_qt_library()
+    if bundled is not None:
+        return [bundled]
     candidates = [
         Path("/opt/homebrew/opt/qtbase/lib"),
         Path("/opt/homebrew/opt/qt/lib"),

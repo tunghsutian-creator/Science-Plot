@@ -77,6 +77,14 @@ def test_style_plan_rejects_unit_change_and_ambiguous_labels() -> None:
     assert all(item["reason"] == "new_or_ambiguous_series_identity" for item in skipped)
 
 
+def test_style_plan_leaves_new_groups_with_their_new_source_style() -> None:
+    operations, skipped = _style_plan(_spec(("A",)), _spec(("C", "A")),
+                                     _xy_widgets(("red",)), _xy_widgets(("green", "black")))
+    assert not any(item["current_widget"] == "/page1/graph1/series_1" for item in operations)
+    assert {item["after"] for item in operations if item["setting"] == "PlotLine/color"} == {"red"}
+    assert any(item.get("identity") == ["C", "curve"] for item in skipped)
+
+
 def test_style_plan_keeps_condition_color_encoding_and_generated_legend_layout() -> (
     None
 ):
@@ -158,6 +166,8 @@ def test_native_style_transfer_keeps_new_values_and_moves_styles_with_sample(
 ) -> None:
     old, old_spec = _render(tmp_path / "old")
     new, new_spec = _render(tmp_path / "new", changed=True)
+    initial = json.loads(new_spec.read_text())
+    old_spec_bytes = old_spec.read_bytes()
     code = f"""
 from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
 from sciplot_core.studio_core.qt_compat import ensure_veusz_loader_compat
@@ -167,7 +177,7 @@ from veusz import document,widgets,dataimport
 from veusz.document import CommandInterface
 app=QtWidgets.QApplication([])
 d=document.Document();d.load({str(old)!r});i=CommandInterface(d)
-i.To('/page1/graph1/x');i.Set('Label/size','9pt');i.Set('min',0.0)
+i.To('/page1/graph1/x');i.Set('Label/size','9pt');i.Set('Label/font','Times New Roman');i.Set('min',0.0)
 i.To('/page1/graph1/series_1');i.Set('PlotLine/color','#A020F0');i.Set('PlotLine/width','2.4pt')
 i.Save({str(old)!r})
 """
@@ -186,9 +196,11 @@ i.Save({str(old)!r})
     )
     assert receipt["applied_count"] > 0
     assert file_sha256(old) == old_hash
+    assert old_spec.read_bytes() == old_spec_bytes
     after = _worker("inspect-document-state", str(new))
     current_widgets = after["widgets"]
     assert current_widgets["/page1/graph1/x"]["settings"]["Label/size"] == "9pt"
+    assert current_widgets["/page1/graph1/x"]["settings"]["Label/font"] == "Times New Roman"
     assert (
         current_widgets["/page1/graph1/x"]["settings"]["min"]
         == before["widgets"]["/page1/graph1/x"]["settings"]["min"]
@@ -196,12 +208,31 @@ i.Save({str(old)!r})
     series = current_widgets["/page1/graph1/series_2"]["settings"]
     assert series["PlotLine/color"] == "#A020F0"
     assert series["PlotLine/width"] == "2.4pt"
+    current = json.loads(new_spec.read_text())
+    assert current["axes"]["x"]["label_size_pt"] == 9.0
+    assert current["style"]["font_family"] == initial["style"]["font_family"]
+    assert current["series"][1]["color"] == "#A020F0"
+    assert current["series"][1]["encoding"]["line"]["color"] == "#A020F0"
+    assert current["series"][1]["line_width_pt"] == 2.4
+    assert current["series"][1]["encoding"]["line"]["width_pt"] == 2.4
+    for before_series, after_series in zip(initial["series"], current["series"], strict=True):
+        for field in ("x_values", "y_values", "source_artifacts", "source_binding"):
+            assert json.dumps(after_series.get(field), sort_keys=True) == json.dumps(before_series.get(field), sort_keys=True)
+    assert current["axes"]["x"]["label"] == "Wavelength (nm)"
     assert (
         _worker(
-            "audit-spec-data", str(new), str(new_spec), "--allow-presentation-edits"
+            "audit-spec-data", str(new), str(new_spec)
         )["status"]
         == "passed"
     )
+    stale_spec = tmp_path / "stale-presentation.spec.json"
+    stale_spec.write_text(json.dumps(initial))
+    rejected = subprocess.run(
+        [sys.executable, "-m", "sciplot_core.veusz_worker", "audit-spec-data", str(new), str(stale_spec)],
+        capture_output=True, text=True, env=veusz_worker_environment(), timeout=90,
+    )
+    assert rejected.returncode != 0
+    assert "Exact-current Veusz x/y axis" in rejected.stderr
 
 
 @pytest.mark.comprehensive

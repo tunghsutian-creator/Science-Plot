@@ -755,10 +755,10 @@ def test_radar_payload_uses_declared_directional_bounds() -> None:
     assert pa6["filled_polygon"] is False
     assert len(pa6["radii"]) == 4
     assert payload["axis_labels"] == [
-        "Density",
-        "Specific impact strength",
-        "Tensile strength",
-        "Elongation at break",
+        "Density\n(g cm⁻³; 0.8–1.6) ↓",
+        "Specific impact strength\n(kJ m⁻²; 0–120) ↑",
+        "Tensile strength\n(MPa; 0–180) ↑",
+        "Elongation at break\n(%; 0–120) ↑",
     ]
     spec = build_performance_veusz_spec(
         payload=payload,
@@ -805,8 +805,11 @@ def test_radar_multiline_axis_label_uses_separate_6pt_native_labels(
         if str(item["name"]).startswith("performance_radar_axis_label_2_line_")
     ]
     assert [item["label"] for item in labels] == [
-        "Specific impact strength",
+        "Specific impact",
+        "strength",
         "(kJ m⁻² kg⁻¹)",
+        "(kJ m⁻²; 0–120)",
+        "↑",
     ]
     assert all(item["text_size_pt"] == 6.0 for item in labels)
     assert labels[0]["y"] > labels[1]["y"]

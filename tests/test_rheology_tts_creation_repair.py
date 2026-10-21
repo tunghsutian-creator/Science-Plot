@@ -291,8 +291,12 @@ def test_direct_and_child_native_busy_both_require_inspection(prepared_case, mon
     if worker:
         assert type(caught.value) is RuntimeError
         assert caught.value.native_reason_code == "project_busy"
-        assert str(caught.value).startswith("Native TTS figure operation failed:\nTraceback")
-        assert "ProjectSessionBusy" in str(caught.value)
+        message = str(caught.value)
+        assert message.startswith("Native TTS figure operation failed:\n")
+        assert "\nTraceback (most recent call last):\n" in message
+        assert message.rstrip().splitlines()[-1].startswith(
+            f"{ProjectSessionBusy.__module__}.{ProjectSessionBusy.__name__}: "
+        )
     else:
         assert caught.value.reason_code == "project_busy"
     assert not case.out.exists() and not case.saves and not case.exports

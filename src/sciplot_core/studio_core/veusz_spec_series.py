@@ -24,6 +24,7 @@ def build_veusz_series_specs(
     categorical_contract: dict[str, Any] | None,
     categorical_visual_style: dict[str, Any],
     style: _VeuszStyleContract,
+    source_bindings: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Convert typed Studio series into serializable Veusz series entries."""
 
@@ -36,6 +37,7 @@ def build_veusz_series_specs(
             categorical_contract=categorical_contract,
             categorical_visual_style=categorical_visual_style,
             style=style,
+            source_binding=(source_bindings or {}).get(item.x_name),
         )
         for index, item in enumerate(series, start=1)
         if item.presentation_kind != "scalar_field"
@@ -51,6 +53,7 @@ def _build_veusz_series_spec(
     categorical_contract: dict[str, Any] | None,
     categorical_visual_style: dict[str, Any],
     style: _VeuszStyleContract,
+    source_binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     raw_points_visible = _raw_points_visible(item, categorical_contract)
     encoding = build_series_encoding_resolution(
@@ -63,7 +66,8 @@ def _build_veusz_series_spec(
     line = encoding["line"]
     marker = encoding["marker"]
     return {
-        "name": f"series_{index}",
+        "name": source_binding["source_id"] if source_binding else f"series_{index}",
+        **({"source_binding": dict(source_binding)} if source_binding else {}),
         "label": item.label,
         "legend_key": (
             ""

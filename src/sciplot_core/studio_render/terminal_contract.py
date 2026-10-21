@@ -97,6 +97,8 @@ def derive_terminal_render_data_contract(
     *,
     request: dict[str, Any],
     terminal_sources: list[Path],
+    legacy_numeric_parser: bool = False,
+    source_artifact_origins: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Replay terminal tables into the numeric units the renderer must consume."""
 
@@ -145,8 +147,14 @@ def derive_terminal_render_data_contract(
         _validate_log_domain_series(series, render_options=overlay_options)
     else:
         for source in resolved_sources:
-            frames.extend(_read_source_frame_records(source, request=request))
+            frames.extend(_read_source_frame_records(
+                source, request=request, legacy_numeric_parser=legacy_numeric_parser,
+                source_artifact_origin=(source_artifact_origins or {}).get(str(source)),
+            ))
         series, axis_info = _series_from_frame_records(request, frames=frames)
+    from sciplot_core.studio_render.paired_source_identity import display_prepared_pairs
+
+    series = display_prepared_pairs(series, request, axis_info.get("source_bindings"))
     series, _legend_label_mapping = _compact_replicate_series_labels(series)
     render_options = _resolved_domain_render_options(
         request=request,
@@ -165,6 +173,7 @@ def derive_terminal_render_data_contract(
         series,
         template_id=template_id,
         render_options=render_options,
+        source_bindings=axis_info.get("source_bindings"),
     )
     style = _veusz_style_contract(render_options)
     scalar_contract = _scalar_field_plot_contract(
@@ -208,11 +217,13 @@ def derive_terminal_render_data_contract(
         series = _reindex_categorical_series(
             series,
             render_options=render_options,
+            source_bindings=axis_info.get("source_bindings"),
         )
     categorical = _categorical_plot_contract(
         series,
         template_id=template_id,
         render_options=render_options,
+        source_bindings=axis_info.get("source_bindings"),
     )
     axis_contract, _visual_extent_diagnostics = _expand_axis_for_visual_extents(
         base_axis_contract,
@@ -237,6 +248,8 @@ def derive_terminal_render_data_contract(
         render_options=render_options,
         series_count=len(series),
     )
+    from sciplot_core.studio_render.source_group_series import source_group_key_visible
+    show_key = show_key or source_group_key_visible(series, axis_info.get("source_bindings"), render_options, request=request)
     show_direct_labels = _show_veusz_direct_labels(
         template_id=template_id,
         render_options=render_options,
@@ -289,10 +302,12 @@ def derive_terminal_render_data_contract(
     else:
         for index, item in enumerate(series, start=1):
             group = categorical_groups.get(item.y_name)
+            binding = (axis_info.get("source_bindings") or {}).get(item.x_name)
             units.append(
                 {
                     "kind": "series",
-                    "name": f"series_{index}",
+                    "name": binding["source_id"] if binding else f"series_{index}",
+                    **({"source_binding": dict(binding)} if binding else {}),
                     "label": item.label,
                     "x_name": item.x_name,
                     "y_name": item.y_name,

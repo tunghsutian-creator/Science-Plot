@@ -27,6 +27,7 @@ def _stress_relaxation_contract(
     *,
     selected_sources: tuple[Path, ...],
     automatic_visual_ordering: bool,
+    xscale: str = "log",
 ) -> ScientificTransformContract:
     x_unit = _uniform_series_value(series_list, lambda item: item.x_unit, "x unit")
     y_unit = _uniform_series_value(series_list, lambda item: item.y_unit, "y unit")
@@ -104,6 +105,10 @@ def _stress_relaxation_contract(
             {
                 "sample": series.sample,
                 "point_count": len(series.points),
+                "pre_display_point_count": diagnostics.get("pre_display_point_count", len(series.points)),
+                "pre_display_first_point": diagnostics.get("pre_display_first_point", list(series.points[0])),
+                "active_display_scale": xscale,
+                "display_excluded_point_count": diagnostics.get("display_excluded_point_count", 0),
                 "retained_point_count": len(series.points),
                 "source_point_count": source_point_count,
                 "candidate_point_counts": candidate_point_counts,
@@ -172,7 +177,7 @@ def _stress_relaxation_contract(
         retain_anchor=retain_anchor,
         axis_compatibility={
             "x": {
-                "registered_scale": "log",
+                "registered_scale": xscale,
                 "finite_compatible": x_finite,
                 "log_compatible": x_finite and x_nonpositive == 0,
                 "nonpositive_count": x_nonpositive,

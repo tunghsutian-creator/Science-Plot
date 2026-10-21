@@ -6,7 +6,7 @@ The external AI owns data processing and scientific decisions. The local plottin
 program validates the prepared plan, applies its governed templates, and exports
 the supplied coordinates faithfully. This entry point does not run TTS analysis,
 shift fitting or Arrhenius regression. Ordinary frequency-sweep tasks retain
-their existing `task start` route.
+their existing `task create` route.
 
 Before preparing a new suite or changing its presentation, read the live contract:
 
@@ -25,7 +25,9 @@ generic-curve example into a measured frequency sweep, or restate marker sizes
 and line widths independently in each AI-generated figure plan. Explicit user
 style requests remain the authority for an intentional exception.
 
-The live capabilities response includes the closed plotting-request schema and
+The live capabilities response includes the closed `prepared_request_schema`,
+the `prepared_plan` provenance schema, minimal complete plan example, source
+binding, unit and ledger guidance, plus the shared `presentation` contracts and
 its `contract_sha256`. Copy that hash into the optional
 `expected_contract_sha256` request field to reject a changed contract. Plotting
 does not accept arbitrary appearance fields; custom native edits remain
@@ -41,6 +43,31 @@ authoritative on exact re-export.
 
 Use the current advertised prepared-plan contract, including its source binding,
 final numerical arrays, units, transform ledger and role/template declarations.
+The required top-level fields are `version:1`, `source_binding`,
+`transform_ledger` and `figures`. The enforced `prepared_plan.provenance_schema`
+is the same schema used before source checks or native allocation; it does not
+claim to replace the subsequent figure, role and coordinate validators.
+
+`source_binding.sources` is a nonempty ordered array of records containing
+exactly `path` and `sha256`. Each path must be absolute and local, and the hash
+must match its unchanged original file bytes. Bind all inputs actually used,
+including prepared tables and scientific processing evidence. Declare field/row
+selection and transformations in the nonempty `transform_ledger`, with source
+and output units and any conversions. A structured object is recommended;
+historical nonempty text/list disclosures remain supported. Final axis units
+belong in panel `x_label`/`y_label`, with per-figure/series ledger entries for
+mixed units. There is no separate series `unit` field. The plot command preserves
+these declarations and coordinates; it does not infer units, perform conversion
+or certify the scientific processing.
+
+Omit `out` to use a dedicated delivery folder beside the **first bound source**.
+An explicit output must also be a sibling of that source, or a new revision
+inside an existing source-bound sibling suite. Correct a rejected destination;
+do not change source identities to make an unrelated output path pass. A field
+error points back to `rheology capabilities --json` for the executable provenance
+shape and example. After reviewing a changed contract, update the optional
+expected hash while retaining approved scientific values and choices.
+
 Do not send raw instrument files to this command expecting it to choose a model
 or calculate a master curve. The AI inspects the data and calculation evidence,
 writes the processed plan, then runs the plotting command and reviews the native

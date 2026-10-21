@@ -4,19 +4,21 @@ from __future__ import annotations
 
 import math
 from typing import Any
-from sciplot_core.policy import (
+from sciplot_core.policy.categorical import (
     CATEGORICAL_BAR_MAX_ERROR_FRACTION,
     CATEGORICAL_BAR_TARGET_MEAN_FRACTION,
     CATEGORICAL_BOX_MIN_MARKER_DIAMETERS,
     CATEGORICAL_BOX_MIN_PHYSICAL_ASPECT_RATIO,
     CATEGORICAL_STACK_TARGET_TOTAL_FRACTION,
-    DEFAULT_FIGURE_SIZE,
     MIN_BOX_REPLICATES,
+    categorical_box_width_mm,
+    categorical_slot_width_mm,
+)
+from sciplot_core.policy import (
+    DEFAULT_FIGURE_SIZE,
     UNIFIED_MARKER_SIZE_PT,
     UNIFIED_BOTTOM_MARGIN_MM,
     UNIFIED_TOP_MARGIN_MM,
-    categorical_box_width_mm,
-    categorical_slot_width_mm,
     compact_linear_axis,
 )
 
@@ -117,6 +119,7 @@ def _apply_categorical_box_aspect_width(
     updated = dict(render_options)
     if (
         template_id not in {"box", "box_strip"}
+        or updated.get("summary_statistic") == "raw_only"
         or _axis_scale(updated, "y") != "linear"
         or axis_contract.y_min is None
         or axis_contract.y_max is None

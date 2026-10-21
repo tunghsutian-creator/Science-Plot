@@ -15,10 +15,10 @@ from sciplot_core.project_manifest import locked_intake_project_manifest
 from sciplot_core.source_coverage.document_audit import _audit_exact_document_data
 from sciplot_core.source_coverage.file_snapshots import (
     _assert_snapshot_current,
-    _stable_file_snapshot,
+    stable_file_snapshot,
 )
 from sciplot_core.source_coverage.managed_documents import (
-    _source_records,
+    source_records,
     _verify_prepared_data,
 )
 from sciplot_core.studio_core.delivery_recovery_state import (
@@ -36,8 +36,8 @@ def _audit_candidate(
         native_audit=native_audit,
     )
     snapshots = [
-        _stable_file_snapshot(path, label="recovery prepared source")
-        for path in _source_records(spec)
+        stable_file_snapshot(path, label="recovery prepared source")
+        for path in source_records(spec)
     ]
     derived = _verify_prepared_data(spec, snapshots)
     for snapshot in snapshots:
@@ -148,9 +148,9 @@ def _apply_delivery_recovery_locked(
         raise ValueError(
             "Recovery inputs changed before adoption; no files were replaced."
         )
-    original = _stable_file_snapshot(document, label="recovery managed document")
+    original = stable_file_snapshot(document, label="recovery managed document")
     original_mode = document.stat().st_mode & 0o777
-    adopted = _stable_file_snapshot(candidate, label="recovery visible document")
+    adopted = stable_file_snapshot(candidate, label="recovery visible document")
     if (
         original["sha256"] != state["hashes"]["document"]
         or adopted["sha256"] != state["hashes"]["candidate"]

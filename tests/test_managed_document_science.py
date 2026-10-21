@@ -290,6 +290,7 @@ def test_current_audit_rejects_scientific_changes(
 @pytest.mark.comprehensive
 def test_current_audit_rederives_spec_from_prepared_csv(tmp_path: Path) -> None:
     result, document, spec = _render_curve(tmp_path)
+    assert spec["source_numeric_encoding"] == "decimal_float64_round_trip_v1"
     spec["series"][0]["y_values"] = [0.3, 0.2, 0.1]
     Path(result["veusz_specs"][0]).write_text(json.dumps(spec))
     _edit_native(document, "i.SetData('y_1_1', [0.3, 0.2, 0.1])")
@@ -321,6 +322,8 @@ def test_current_audit_preserves_supported_chart_families(
             "tests/fixtures/performance_comparison/material_performance_long.csv"
         ).resolve()
         context = {"rule_id": "performance_comparison"}
+        if template == "polar_curve":
+            options["size"] = "120x55"
     elif template == "heatmap":
         source.write_text("x,y,z\n0,0,1\n1,0,2\n0,1,3\n1,1,4\n")
         options.update(

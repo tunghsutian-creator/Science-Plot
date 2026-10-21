@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
-from sciplot_core._paths import resolve_fixture_path
+
+from sciplot_core._paths import local_reference_root, resolve_fixture_path
 from sciplot_core.publication import (
     get_publication_profile,
     list_composite_layouts,
@@ -17,7 +18,7 @@ def _publication_layout_inventory_available() -> bool:
     try:
         layouts = list_composite_layouts()
         profile = get_publication_profile("sciplot_composite_183_v1")
-    except Exception:
+    except Exception:  # noqa: BLE001 - A broken layout is a failed optional check.
         return False
     return (
         len(layouts) == 5
@@ -39,15 +40,19 @@ def _ready_rule_fixtures_exist(rules: list[Any]) -> tuple[bool, str]:
             or not resolve_fixture_path(str(rule.fixture_path)).exists()
         )
     ]
-    return not missing, ", ".join(
-        missing
-    ) if missing else "all local acceptance fixtures are available"
+    if not missing:
+        return True, "all local acceptance fixtures are available"
+    return False, (
+        f"missing {len(missing)} rule fixtures ({', '.join(missing)}). "
+        f"Restore the existing private corpus under {local_reference_root()} "
+        "or set SCIPLOT_REFERENCE_DATA to its reference-data root."
+    )
 
 
 def _validated_envelope_summary() -> tuple[bool, str, dict[str, Any]]:
     try:
         payload = validated_envelope_status()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - Preserve diagnostic instead of crashing.
         return (
             False,
             f"{type(exc).__name__}: {exc}",

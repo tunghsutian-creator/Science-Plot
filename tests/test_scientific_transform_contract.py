@@ -548,10 +548,12 @@ def test_already_normalized_source_marks_anchor_not_applicable(
 
     contract = resolve_stress_relaxation_transform(source).contract.to_payload()
 
+    # Original sample metadata outranks the materialized/source filename.
+    assert contract["output"]["series_order"] == ["E0"]
     assert contract["retain_anchor"] is None
     assert contract["anchor"]["selections"] == [
         {
-            "sample": "normalized",
+            "sample": "E0",
             "selector": "none_source_already_normalized",
             "applicable": False,
             "retained": None,
@@ -597,3 +599,84 @@ def test_resolved_stress_snapshot_materializes_without_a_second_parse(
     assert prepared["transform_steps"][0]["parameters"][
         "scientific_transform"
     ] == resolved.transform.contract.to_payload()
+
+
+def test_compact_stress_wide_keeps_normalization_order_and_ragged_lengths(tmp_path):
+    from sciplot_core.semantic_sources.stress_relaxation_transform import resolve_stress_relaxation_transform
+
+    source = tmp_path / 'relaxation.csv'
+    source.write_text('A|t_s,A|sigma_over_sigma0,B|t_s,B|sigma_over_sigma0\n0,1,0,1\n2,0.8,1,0.7\n1,0.7,2,0.6\n3,0.5,,\n')
+    raw = source.read_bytes()
+    linear = resolve_stress_relaxation_transform(source, xscale='linear')
+    log = resolve_stress_relaxation_transform(source)
+    assert [curve.sample for curve in linear.series] == ['A', 'B']
+    assert [len(curve.points) for curve in linear.series] == [4, 3]
+    assert linear.series[0].points == ((0, 1), (2, 0.8), (1, 0.7), (3, 0.5))
+    assert [len(curve.points) for curve in log.series] == [3, 2]
+    assert log.series[0].points[0] == (2, 0.8)
+    assert log.contract.output['series'][0]['source_point_count'] == 4
+    assert log.contract.output['series'][0]['pre_display_first_point'] == [0, 1]
+    assert log.contract.output['series'][0]['display_excluded_point_count'] == 1
+    assert linear.contract.axis_compatibility['x']['registered_scale'] == 'linear'
+    assert log.contract.axis_compatibility['x']['registered_scale'] == 'log'
+    assert all(not curve.diagnostics['normalization_applied'] for curve in log.series)
+    assert source.read_bytes() == raw
+
+
+def test_stress_normalizes_unscaled_response_before_log_projection(tmp_path):
+    from sciplot_core.semantic_sources.stress_relaxation_transform import resolve_stress_relaxation_transform
+
+    source = tmp_path / 'relaxation.csv'
+    source.write_text('Time,Shear stress\ns,Pa\nA,A\n0,10\n1,8\n2,5\n')
+    log = resolve_stress_relaxation_transform(source)
+    linear = resolve_stress_relaxation_transform(source, xscale='linear')
+    assert log.series[0].points == ((1, 0.8), (2, 0.5))
+    assert linear.series[0].points == ((0, 1), (1, 0.8), (2, 0.5))
+    assert log.contract.anchor['selections'][0]['source_time'] == 0
+    assert log.contract.anchor['selections'][0]['retained'] is False
+
+
+@pytest.mark.parametrize('content', [
+    'A|t_s,B|sigma_over_sigma0\n0,1\n1,.8\n',
+    'A|t_s,A|sigma_over_sigma0\n0,1\n,.8\n2,.7\n',
+    'A|t_s,A|sigma_over_sigma0\n0,1\n,\n2,.7\n',
+    'A|t_s,A|sigma_over_sigma0\n0,1\n1,inf\n',
+])
+def test_compact_stress_invalid_pair_has_recoverable_source_evidence(tmp_path, content):
+    from sciplot_core.semantic_sources.stress_relaxation_transform import resolve_stress_relaxation_transform
+    from sciplot_core.semantic_sources.stress_relaxation_wide import StressSourceBindingError
+
+    source = tmp_path / 'relaxation.csv'
+    source.write_text(content)
+    with pytest.raises(StressSourceBindingError) as raised:
+        resolve_stress_relaxation_transform(source, xscale='linear')
+    issue = raised.value.issues[0]
+    assert set(issue) >= {'source_id', 'column', 'expected', 'observed', 'continuation'}
+    assert issue['continuation']['same_task'] is True
+    assert issue['continuation']['preserve_raw'] is True
+
+
+def test_stress_compact_support_does_not_relabel_relaxation_modulus(tmp_path):
+    from sciplot_core.semantic_sources.stress_relaxation_transform import resolve_stress_relaxation_transform
+
+    source = tmp_path / 'relaxation.csv'
+    source.write_text('Time,Relaxation modulus\ns,Pa\nA,A\n0,10\n1,8\n2,5\n')
+    with pytest.raises(ValueError, match='separate G/G0'):
+        resolve_stress_relaxation_transform(source, xscale='linear')
+
+
+def test_compact_stress_directory_keeps_structured_binding_failure(tmp_path):
+    from sciplot_core.semantic_sources.stress_relaxation_transform import resolve_stress_relaxation_transform
+    from sciplot_core.semantic_sources.stress_relaxation_wide import StressSourceBindingError
+
+    source = tmp_path / 'sources'
+    source.mkdir()
+    (source / 'a-valid.csv').write_text('A|t_s,A|sigma_over_sigma0\n0,1\n1,.8\n2,.5\n')
+    (source / 'b-invalid.csv').write_text('B|t_s,B|sigma_over_sigma0\n0,1\n1,\n2,.5\n')
+    before = {p.name: p.read_bytes() for p in source.iterdir()}
+    with pytest.raises(StressSourceBindingError) as raised:
+        resolve_stress_relaxation_transform(source, xscale='linear')
+    issue = raised.value.issues[0]
+    assert issue['source_id'] == 'B' and issue['column'] == 1 and issue['row'] == 2
+    assert issue['continuation']['same_task'] is True
+    assert {p.name: p.read_bytes() for p in source.iterdir()} == before

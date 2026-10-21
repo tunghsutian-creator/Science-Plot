@@ -6,11 +6,12 @@ from dataclasses import dataclass
 from io import StringIO
 import csv
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 import pandas as pd
 from sciplot_core.foundation.text_files import decode_text
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.source_tables.read_session import read_table_once
+from sciplot_core.source_tables.parsing import coerce_numeric_series
 from sciplot_core.mapping_contract import (
     DataColumnMapping,
     DataMappingProposal,
@@ -62,6 +63,10 @@ def _cell_text(value: object) -> str:
     except (TypeError, ValueError):
         pass
     return str(value).strip()
+
+
+def _original_text(value: object) -> str:
+    return "" if value is None or pd.isna(cast(Any, value)) else str(value)
 
 
 def _normalize_missing(value: object) -> object:
@@ -225,7 +230,7 @@ def _numeric_series(
 ) -> pd.Series:
     _require_columns(frame, [column], operation=operation)
     source = frame[column]
-    numeric = pd.to_numeric(source, errors="coerce")
+    numeric = coerce_numeric_series(source)
     invalid = source.notna() & numeric.isna()
     if invalid.any():
         rows = [int(index) for index in source.index[invalid].tolist()[:8]]

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.plot_transforms import ExternalExecutor, resolve_transforms
+from sciplot_core.plot_transforms.graph import dependency_graph
 
 from .content_store import intern_document, resolve_document_content
 from .errors import EngineError
@@ -44,9 +45,17 @@ def resolve_science(root: Path, document: dict[str, Any]) -> tuple[dict[str, Any
 
     result = resolve_transforms(document, load_sources(document, marker["rule_id"]), cache=cache,
                                 external_executors=registry, before_execute=before_execute, on_result=on_result)
-    require_inputs(result["document"])
-    return intern_document(root, result["document"]), {
-        "executed": result["executed"], "reused": result["reused"], "graph": result["graph"]}
+    from sciplot_core.plot_grammar.current_view import is_current_view, resolve_current_view
+    from sciplot_core.plot_ir.figure_document import figure_spec, is_figure, store_spec
+
+    resolved = result["document"]
+    if is_figure(resolved) and is_current_view(figure_spec(resolved)):
+        resolved = store_spec(resolved, resolve_current_view(figure_spec(resolved), result["datasets"]))
+    require_inputs(resolved)
+    canonical = intern_document(root, resolved)
+    return canonical, {
+        "executed": result["executed"], "reused": result["reused"],
+        "graph": dependency_graph(canonical, result["datasets"])}
 
 
 def resolve_transaction(root: Path, tx: dict[str, Any]) -> None:

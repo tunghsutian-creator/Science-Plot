@@ -1,3 +1,3 @@
 display_name: SciPlot Materials Analysis
-short_description: Turn materials data into editable Veusz projects through the primary SciPlot Studio workflow.
-default_prompt: Inspect this materials dataset, use the SciPlot Studio command family to prepare an editable Veusz project, export headlessly only when requested, verify exact-current QA and delivery, and summarize evidence without treating automated orchestration as a separate renderer.
+short_description: Create and refine editable scientific figures with the local CLI.
+default_prompt: Use the current SKILL.md route and public local task/plot CLI to turn this materials dataset and intent into editable scientific figures. Complete the requested PDF/TIFF/data export and delivery locally through SciPlot's Veusz backend, preserving raw inputs and the figure's saved authority. Review bound previews and current QA, then use the returned continuation. Open an advanced or compatibility route only when the requested workflow needs it.

@@ -46,10 +46,15 @@ def build_plan_preview(
     input_path: Path,
     *,
     request: dict[str, Any],
+    _replay_categorical: bool = False,
 ) -> PlanPreviewPayload:
     """Resolve semantic intent and selected tasks without rendering or writes."""
 
     source = input_path.expanduser().resolve()
+    if "categorical_binding" in request:
+        from sciplot_core.categorical_plan import categorical_preview
+
+        return categorical_preview(source, request=request, current_identity=not _replay_categorical)
     if "data_mapping_execution" in request or "data_mapping_proposal_id" in request:
         return _build_mapped_plan_preview(source, request=request)
     request_snapshot = deepcopy(request)
@@ -172,6 +177,13 @@ def build_plan_preview(
             reason_code="plan_source_inspection_failed",
             message=str(inspection_error),
         )
+    from sciplot_core.plan_source_options import validate_source_options
+
+    try:
+        options = validate_source_options(source, request_snapshot, rule_id=rule_id, template=template)
+    except ValueError as exc:
+        return _blocked_preview(source=source, rule_id=rule_id, template=template,
+            reason_code="plan_source_option_invalid", message=str(exc))
     study_model = study_model_from_request(
         request=request_snapshot,
         semantic=semantic,
@@ -192,6 +204,7 @@ def build_plan_preview(
             template=template,
             reason_code=exc.reason_code,
             message=str(exc),
+            issues=getattr(exc, "issues", None),
         )
     transform = (
         resolved_scientific_source.transform
@@ -250,6 +263,8 @@ def build_plan_preview(
         "scientific_transform": scientific_transform,
         "blocker": None,
     }
+    if options:
+        payload["source_options"] = options
     assert source_hash is not None
     payload["preview_identity"] = preview_identity_for(
         dict(payload), source_sha256=source_hash
@@ -264,10 +279,9 @@ def _build_mapped_plan_preview(
 
     try:
         canonical_request, binding = resolve_mapping_plan_request(source, request)
-        effective_request = deepcopy(canonical_request)
-        effective_request.pop("data_mapping_execution", None)
-        effective_request.pop("data_mapping_proposal_id", None)
-        effective_request["input"] = binding["effective_input"]
+        from sciplot_core.data_mapping.plan_binding import mapped_preview_request
+
+        effective_request = mapped_preview_request(canonical_request, binding)
         payload = build_plan_preview(
             Path(binding["effective_input"]), request=effective_request
         )
@@ -330,6 +344,10 @@ def verify_expected_plan(
         "rule_id": rule_id if rule_id is not None else expected.get("rule_id"),
         "template": template if template is not None else expected.get("template"),
     }
+    if "source_options" in expected:
+        from sciplot_core.plan_source_options import expected_source_options
+
+        selected.update(expected_source_options(expected["source_options"]))
     mapping = expected.get("data_mapping")
     if mapping is not None:
         if not isinstance(mapping, dict):
@@ -341,6 +359,7 @@ def verify_expected_plan(
     current = build_plan_preview(
         source,
         request={key: value for key, value in selected.items() if value is not None},
+        _replay_categorical=True,
     )
     if current["status"] == "blocked":
         blocker = current.get("blocker")

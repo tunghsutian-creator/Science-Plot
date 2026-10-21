@@ -13,6 +13,7 @@ from sciplot_core.performance_veusz.contracts import (
     performance_polygon_contracts,
     performance_line_contracts,
     performance_label_contracts,
+    performance_literal_text,
 )
 
 from sciplot_core.performance_veusz.widget_apply import (
@@ -51,6 +52,8 @@ def apply_performance_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     interface.Set("Background/color", "white")
     interface.Set("Background/hide", False)
     labels = performance_label_contracts(spec)
+    for label in labels:
+        label["literal_label"] = performance_literal_text(spec, label["label"])
     polygons = performance_polygon_contracts(spec)
     for label in labels:
         if label["parent"] == "page":
@@ -73,7 +76,16 @@ def apply_performance_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         if label["parent"] == "graph":
             _add_label(interface, label)
     for item in spec["series"]:
-        _add_xy_series(interface, item, style)
+        _add_xy_series(
+            interface,
+            {
+                **item,
+                "literal_legend_key": performance_literal_text(
+                    spec, item["legend_key"]
+                ),
+            },
+            style,
+        )
     for item in polygons:
         if item.get("parent") != "page":
             _add_polygon(interface, item)

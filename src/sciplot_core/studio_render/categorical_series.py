@@ -6,12 +6,13 @@ import re
 from dataclasses import replace
 from typing import Any
 import pandas as pd
-from sciplot_core.policy import (
+from sciplot_core.policy.categorical import (
     CATEGORICAL_BOX_FILL_FRACTION,
     DEFAULT_RAW_POINT_JITTER_FRACTION,
     categorical_raw_point_half_spread,
-    normalize_raw_point_jitter_fraction,
 )
+from sciplot_core.policy.render_options import normalize_raw_point_jitter_fraction
+from sciplot_core.source_tables.parsing import coerce_numeric_series
 
 from sciplot_core.studio_render.models import (
     DEFAULT_PALETTE,
@@ -33,6 +34,7 @@ from sciplot_core.studio_render.categorical_components import (
 
 from sciplot_core.studio_render.categorical_groups import (
     _categorical_grouped_series_from_frames,
+    source_group_positions, source_group_width_fraction,
 )
 
 
@@ -57,14 +59,19 @@ def _categorical_series_from_frames(
         if frame.shape[0] < 3:
             continue
         for column in frame.columns:
-            values = pd.to_numeric(frame[column].iloc[2:], errors="coerce").dropna()
-            if values.empty:
+            original = frame[column].iloc[2:]
+            # Unversioned saved specifications replay their original parser;
+            # current source encodings retain correctly rounded decimal cells.
+            numeric_values = (pd.to_numeric(original, errors="coerce")
+                              if frame.attrs.get("sciplot_legacy_numeric_parser") is True
+                              else coerce_numeric_series(original)).dropna()
+            if numeric_values.empty:
                 continue
             sample = (
                 _clean_studio_cell(frame[column].iloc[1]) or source_label or str(column)
             )
             grouped.setdefault(sample, []).extend(
-                float(value) for value in values.tolist()
+                float(value) for value in numeric_values.tolist()
             )
             grouped_artifacts.setdefault(sample, set()).add(
                 (str(source_frame.path), source_frame.sha256)
@@ -136,13 +143,21 @@ def _reindex_categorical_series(
     series: list[StudioSeries],
     *,
     render_options: dict[str, Any],
+    source_bindings: dict[str, Any] | None = None,
 ) -> list[StudioSeries]:
+    bindings = source_bindings or {}
+    positions = source_group_positions(series, bindings) if bindings else {}
+    def position(index: int, item: StudioSeries) -> float:
+        return positions[bindings[item.x_name]["source_id"]] if bindings else float(index)
     adaptive = render_options.get("_categorical_raw_point_layout") == "adaptive"
     box_fraction = float(
         render_options.get(
             "_categorical_box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION
         )
     )
+    group_width = source_group_width_fraction(series, bindings) if bindings else None
+    if group_width is not None:
+        box_fraction = min(box_fraction, group_width)
     category_slot_width_mm = float(
         render_options.get("_categorical_slot_width_mm") or 0.0
     )
@@ -150,7 +165,7 @@ def _reindex_categorical_series(
         replace(
             item,
             x_values=_deterministic_category_positions(
-                float(index),
+                position(index, item),
                 len(item.y_values),
                 fraction=(
                     categorical_raw_point_half_spread(
@@ -166,9 +181,9 @@ def _reindex_categorical_series(
                         )
                     )
                 ),
-                seed_key=item.label,
+                seed_key=bindings[item.x_name]["source_id"] if bindings else item.label,
             ),
-            category_position=float(index),
+            category_position=position(index, item),
         )
         for index, item in enumerate(series, start=1)
     ]

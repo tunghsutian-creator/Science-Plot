@@ -7,7 +7,6 @@ from pathlib import Path
 
 from sciplot_core.verification.owner_model import ChangedOwner
 
-
 ARCHITECTURE_CORE_TARGETS = (
     "tests/test_architecture_boundaries.py::test_ordinary_source_files_stay_within_the_size_boundary",
     "tests/test_architecture_boundaries.py::test_first_party_import_graph_is_acyclic",
@@ -22,24 +21,62 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
             "src/sciplot_core/cli/parsers/builder.py",
             "src/sciplot_core/cli/parser_errors.py",
             "src/sciplot_core/cli/dispatch/diagnostics.py",
-            "src/sciplot_core/doctor/payload.py",
+            "src/sciplot_core/doctor/payload.py", "src/sciplot_core/doctor/execution_identity.py",
             "src/sciplot_core/doctor/actions.py",
+            "src/sciplot_core/doctor/runtime_checks.py",
+            "src/sciplot_core/doctor/readiness_checks.py",
+            "src/sciplot_core/studio_core/lifecycle_contract.py",
+            "tests/public_curve_inputs.py",
+            "tests/public_multitask_inputs.py",
+            "tests/private_observer_support.py",
         }
     ),
     owned_test_paths=frozenset(
         {
-            "tests/test_changed_verification.py",
+            "tests/test_changed_verification.py", "tests/test_ordinary_plotting_owners.py",
             "tests/test_external_ai_verification.py",
             "tests/test_architecture_boundaries.py",
             "tests/test_cli_surface.py",
-            "tests/test_doctor_contract_topology.py",
+            "tests/test_doctor_contract_topology.py", "tests/test_doctor_execution_identity.py",
+            "tests/test_lifecycle_capability_contract.py",
+            "tests/test_private_corpus_preflight.py",
+            "tests/test_verification_evidence.py",
+            "tests/test_durable_verification_runner.py",
+            "tests/test_verification_evidence_runtime.py",
+            "tests/test_verification_evidence_scope.py",
+            "tests/test_changed_scope_selectors.py",
+            "tests/test_changed_verification_evidence.py",
+            "tests/test_suite_verification_cli.py",
+            "tests/test_input_scope.py",
+            "tests/test_public_stage.py", "tests/test_public_verification_identity.py",
+            "tests/test_public_source_behavior.py",
+            "tests/test_public_workflow_behavior.py",
+            "tests/test_private_observer.py",
+            "tests/test_private_observer_native.py", "tests/test_private_observer_runtime.py",
+            "tests/test_native_probe_boundary.py", "tests/test_verification_environment.py",
         }
     ),
     pytest_targets=(
-        "tests/test_changed_verification.py",
+        "tests/test_changed_verification.py", "tests/test_ordinary_plotting_owners.py",
         "tests/test_external_ai_verification.py",
         "tests/test_cli_surface.py",
-        "tests/test_doctor_contract_topology.py",
+        "tests/test_doctor_contract_topology.py", "tests/test_doctor_execution_identity.py",
+        "tests/test_lifecycle_capability_contract.py",
+        "tests/test_private_corpus_preflight.py",
+        "tests/test_verification_evidence.py",
+        "tests/test_durable_verification_runner.py",
+        "tests/test_verification_evidence_runtime.py",
+        "tests/test_verification_evidence_scope.py",
+        "tests/test_changed_scope_selectors.py",
+        "tests/test_changed_verification_evidence.py",
+        "tests/test_suite_verification_cli.py",
+        "tests/test_input_scope.py",
+        "tests/test_public_stage.py", "tests/test_public_verification_identity.py",
+        "tests/test_public_source_behavior.py",
+        "tests/test_public_workflow_behavior.py",
+        "tests/test_private_observer.py",
+        "tests/test_private_observer_native.py", "tests/test_private_observer_runtime.py",
+        "tests/test_native_probe_boundary.py", "tests/test_verification_environment.py",
         "tests/test_architecture_boundaries.py::test_non_probe_source_has_no_exact_duplicate_function_implementations",
         "tests/test_architecture_boundaries.py::test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint",
         *ARCHITECTURE_CORE_TARGETS,
@@ -278,11 +315,11 @@ def _configured_additional_mypy_scope() -> tuple[frozenset[str], tuple[str, ...]
     project = tomllib.loads(project_path.read_text(encoding="utf-8"))
     configured_value: object = project["tool"]["mypy"]["files"]
     if not isinstance(configured_value, list):
-        raise ValueError("[tool.mypy].files must be a list of paths")
+        raise TypeError("[tool.mypy].files must be a list of paths")
     configured: list[str] = []
     for value in configured_value:
         if not isinstance(value, str):
-            raise ValueError("[tool.mypy].files must be a list of paths")
+            raise TypeError("[tool.mypy].files must be a list of paths")
         configured.append(value)
     additional_files: set[str] = set()
     additional_prefixes: set[str] = set()

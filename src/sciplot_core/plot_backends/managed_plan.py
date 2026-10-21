@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from sciplot_core.style_values import normalize_line_style
+
 from .native_primitives import (native_name as native_name, dataset_name as dataset_name, number_unit as number_unit,
                                 _text as _text, native_datasets as native_datasets)
 
@@ -82,7 +84,7 @@ def drawing_plan(ir: dict[str, Any]) -> list[dict[str, Any]]:
             "yData": dataset_name(series["dataset_id"], series["y_column"]),
             "key": _text(series["label"]), "xAxis": "x", "yAxis": "y", "hide": False,
             "PlotLine/color": style["line_color"], "PlotLine/width": number_unit(style["line_width_pt"], "pt"),
-            "PlotLine/style": {"solid": "solid", "dash": "dashed", "dot": "dotted"}[style["line_style"]],
+            "PlotLine/style": normalize_line_style(style["line_style"]),
             "PlotLine/joinStyle": style["line_join"], "PlotLine/hide": not style["line_visible"],
             "marker": style["marker"], "markerSize": number_unit(style["marker_size_pt"], "pt"),
             "MarkerFill/color": style["marker_color"], "MarkerLine/color": style["marker_color"],

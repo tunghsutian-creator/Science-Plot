@@ -20,6 +20,7 @@ from sciplot_core.terminal_source_binding_wire import (
     TERMINAL_SOURCE_PREPARED_ENV,
     sealed_terminal_source_binding_from_payload,
 )
+from sciplot_core.studio_render.models import StudioPreparationBlocked
 
 
 def _veusz_target_base(
@@ -77,11 +78,22 @@ def _render_studio_exports(
         )
     if _terminal_source_prepared:
         environment[TERMINAL_SOURCE_PREPARED_ENV] = "1"
-    result = subprocess.run(
-        command,
-        text=True,
-        capture_output=True,
-        check=True,
-        env=environment,
-    )
-    return json.loads(result.stdout)
+    try:
+        result = subprocess.run(command, text=True, capture_output=True, check=True, env=environment)
+    except subprocess.CalledProcessError as exc:
+        try:
+            failure = json.loads(exc.stderr or "")
+        except (ValueError, TypeError):
+            raise exc from None
+        if (exc.returncode == 1 and isinstance(failure, dict)
+                and set(failure) == {"kind", "version", "reason_code", "message"}
+                and failure["kind"] == "sciplot_worker_preparation_blocked"
+                and type(failure["version"]) is int and failure["version"] == 1
+                and isinstance(failure["reason_code"], str) and failure["reason_code"]
+                and isinstance(failure["message"], str) and failure["message"]):
+            raise StudioPreparationBlocked(failure["reason_code"], failure["message"]) from exc
+        raise
+    payload = json.loads(result.stdout)
+    if not isinstance(payload, dict):
+        raise ValueError("Native export worker must return one result object.")
+    return payload

@@ -47,8 +47,8 @@ def test_excel_selection_keeps_original_cells_and_shared_and_paired_x(tmp_path):
         selected, pairs=[{"x_column": 0, "y_column": 1}, {"x_column": 0, "y_column": 3}, {"x_column": 4, "y_column": 5}],
         request_path=request, proposal_id="excel", created_at="2026-09-10T08:00:00+00:00")
     _, frames, _, _, _ = _prepare_mapping_frames(proposal, source_root=tmp_path)
-    assert frames["series_001"].values.tolist() == [[400, 2], [450, 6], [500, 3], [550, 1]]
-    assert frames["series_002"].values.tolist() == [[405, 3], [455, 5], [505, 4], [555, 2]]
+    assert frames[proposal.sources[1].source_id].values.tolist() == [[400, 2], [450, 6], [500, 3], [550, 1]]
+    assert frames[proposal.sources[2].source_id].values.tolist() == [[405, 3], [455, 5], [505, 4], [555, 2]]
     receipt = create_data_mapping_confirmation(proposal, source_root=tmp_path, request_path=request,
         output_root=tmp_path / "execution", confirmed_by="test")
     executed = execute_data_mapping_proposal(proposal, receipt, source_root=tmp_path, request_path=request, output_root=tmp_path / "execution")
@@ -94,7 +94,8 @@ def test_multirow_header_x_sample_and_float_precision_are_preserved(tmp_path):
         request_path=request, proposal_id="precision", created_at="2026-09-10T08:00:00+00:00")
     _, frames, _, _, _ = _prepare_mapping_frames(proposal, source_root=tmp_path)
     rows = list(csv.reader(io.StringIO(paired_table_text(proposal, frames))))
-    assert rows[2] == ["Sample-A", "Sample-A"]
+    assert rows[2] == [proposal.sources[0].source_id] * 2
+    assert list(proposal.sample_labels.values()) == ["Sample-A"]
     assert rows[3:] == list(csv.reader(io.StringIO(source.read_text())))[4:]
     assert source.read_bytes() == before
 
@@ -112,6 +113,21 @@ def test_new_table_precision_does_not_invalidate_legacy_csv_serialization(tmp_pa
     assert legacy.read_text() == "value\n1.23456789012346\n"
     assert file_sha256(modern) == _mapped_csv_sha256(frame, full_precision=True)
     assert file_sha256(legacy) == _mapped_csv_sha256(frame)
+
+    # Numeric mapping operations must not truncate accepted decimal source text
+    # before the already-exact native writer receives it.
+    from sciplot_core.data_mapping.raw_tables import _numeric_series
+
+    source = pd.DataFrame({"value": ["0.12345678901234567890", "0.00000000000000012345678901234567", None]})
+    original = source.copy(deep=True)
+    parsed = _numeric_series(source, "value", operation="precision-control")
+    assert [value.hex() for value in parsed.iloc[:2]] == [
+        "0x1.f9add3746f65fp-4", "0x1.1cac067affebcp-53",
+    ]
+    assert pd.isna(parsed.iloc[2])
+    pd.testing.assert_frame_equal(source, original)
+    with pytest.raises(ValueError, match="non-numeric"):
+        _numeric_series(pd.DataFrame({"value": ["not a measurement"]}), "value", operation="precision-control")
 
 
 @pytest.mark.comprehensive
@@ -137,6 +153,7 @@ def test_native_excel_task_selection_correction_and_export(tmp_path):
 def test_mapped_annotated_update_rechecks_reordered_columns_and_rebinds_peak(tmp_path, monkeypatch):
     import json
     from openpyxl import load_workbook
+    from test_table_ranges import literal_curve_path
     from sciplot_core.task_control import start_task, resume_task, inspect_task
     from sciplot_core.studio_core.project_query import resolve_project_figure
     from sciplot_core.studio_core.peak_analysis import inspect_peak_candidates
@@ -161,9 +178,14 @@ def test_mapped_annotated_update_rechecks_reordered_columns_and_rebinds_peak(tmp
     assert first["status"] == "complete", first
     project = Path(first["project"])
     selected = resolve_project_figure(project, None)
+    spec = json.loads(Path(selected["spec"]).read_text())
+    curve_path = literal_curve_path(spec, source, "Measured", 4, 8, [0, 1], sample="A",
+        points=[[400, 1], [450, 4], [500, 2], [550, 1]])
     document = Path(selected["document"])
-    peaks = inspect_peak_candidates(project, figure_id=selected["figure_id"], object_path="/page1/graph1/series_1",
+    peaks = inspect_peak_candidates(project, figure_id=selected["figure_id"], object_path=curve_path,
         window={"min": 400, "max": 550, "unit": "nm"}, polarity="maximum", expected_document_sha256=file_sha256(document))
+    assert [(item["object_path"], item["sample"], item["x"], item["y"])
+            for item in peaks["candidates"]] == [(curve_path, "A", 450, 4)]
     edit_task = tmp_path / "edit"
     edit = start_task({"version": 1, "action": "edit", "project": str(project), "expected_document_sha256": file_sha256(document),
         "operations": [{"op": "add_peak_label", "id": "peakA", "candidate": peaks["candidates"][0]},

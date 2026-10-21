@@ -613,6 +613,28 @@ def test_fresh_impact_prepare_commits_editable_canonical_figure_plan(
         for outcome in outcomes
         for artifact in outcome["artifacts"]
     )
+    if template == "bar":
+        # A plain replicate table has one selected task and no workbook
+        # condition queue. Its primary must still commit a complete registry.
+        from sciplot_core.studio_core.figure_set_state import _studio_figure_set_export_scope
+        from sciplot_core.studio_figure_set_contract import is_full_figure_set_export_scope
+
+        table = tmp_path / "impact.csv"
+        table.write_text("Re,Re\nkJ/m²,kJ/m²\nE0,E2\n1,2\n1.1,\n1.2,2.2\n")
+        single = prepare_studio_document(table, output_root=tmp_path / "single",
+            rule_id="impact_metric", template="box_strip")
+        single_project = Path(single["project_dir"])
+        request = json.loads((single_project / "plot_request.json").read_text())
+        plan = ResolvedFigurePlan.from_payload(request["resolved_figure_plan"])
+        assert plan.selection_policy == "single_render_request" and len(plan.tasks) == 1
+        single_registry = _read_studio_figure_set(single_project, expected_plan=plan, require_ready_artifacts=True)
+        assert single_registry is not None and single_registry["version"] == 2
+        assert [entry["figure_id"] for entry in single_registry["figures"]] == list(plan.selected_figure_ids)
+        assert single_registry["resolved_figure_plan"]["outcomes"][0]["status"] == "editable"
+        assert is_full_figure_set_export_scope(_studio_figure_set_export_scope(single_project, request=request))
+        before = (single_project / "studio/document.vsz").read_bytes()
+        assert prepare_studio_document(single_project)["preserved_existing_document"] is True
+        assert (single_project / "studio/document.vsz").read_bytes() == before
 
 
 @pytest.mark.parametrize("template", ["bar", "box", "box_strip", "point_line"])

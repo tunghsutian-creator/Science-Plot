@@ -7,6 +7,31 @@ from typing import Any
 from sciplot_core.studio_core.annotation_axes import axis_unit, require_scope
 from sciplot_core.studio_core.annotation_legend import require_native_legend
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError
+from sciplot_core.style_values import normalize_physical_size
+
+
+def series_properties(obj: dict[str, Any], target: dict[str, Any], widget: dict[str, Any], spec: dict[str, Any], series: dict[str, Any]) -> None:
+    from sciplot_core.studio_core.series_display import require_series_display
+    from sciplot_core.studio_core.series_presentation import selected_series_order
+    from sciplot_core.studio_core.series_request import veusz_literal_text
+
+    try:
+        require_series_display(spec)
+    except AnnotationOperationError:
+        return
+    label = str(series.get("legend_key", series["label"]))
+    visible = series["label"] in selected_series_order(spec)
+    settings = widget.get("settings", {})
+    if settings.get("key") != veusz_literal_text(label) or settings.get("hide") != (not visible):
+        return
+    target["source_label"] = series["label"]
+    for prop, value, kind, capability in (
+        ("series.display_label", label, "series_display_label", {"type": "string", "risk": "review", "min_length": 1, "max_length": 500, "non_blank": True}),
+        ("series.visible", visible, "series_visibility", {"type": "boolean", "risk": "review"}),
+    ):
+        obj["properties"][prop] = value
+        obj["capabilities"][prop] = capability
+        target["properties"][prop] = {"kind": kind, "current_value": value}
 
 
 def axis_properties(obj: dict[str, Any], target: dict[str, Any],
@@ -53,6 +78,29 @@ def legend_properties(obj: dict[str, Any], target: dict[str, Any],
     obj["properties"]["legend.visible"] = legend["show"]
     obj["capabilities"]["legend.visible"] = {"type": "boolean", "risk": "review"}
     target["properties"]["legend.visible"] = {"kind": "legend_visibility", "current_value": legend["show"]}
+    column_field = next((field for field in widget["editable_fields"] if field["setting_path"] == target["object_path"] + "/columns" and field.get("editor") == "integer"), None)
+    columns = column_field["current_value"] if column_field is not None else None
+    if type(columns) is int and 1 <= columns <= 32:
+        assert column_field is not None
+        maximum = min(32, int(column_field.get("maximum") or 32))
+        obj["properties"]["legend.columns"] = columns
+        obj["capabilities"]["legend.columns"] = {"type": "number", "risk": "presentation", "enum": list(range(1, maximum + 1))}
+        target["properties"]["legend.columns"] = {"kind": "setting", "setting_path": target["object_path"] + "/columns", "current_value": columns}
+    field = next((field for field in widget["editable_fields"]
+                  if field["setting_path"] == target["object_path"] + "/keyLength"
+                  and field.get("editor") == "distance"), None)
+    if field is not None:
+        try:
+            normalize_physical_size(field["current_value"])
+            capability = {"type": "physical_size", "risk": "presentation"}
+        except ValueError:
+            pass  # An unsupported native length remains opaque legacy state.
+        else:
+            obj["properties"]["legend.sample_length"] = field["current_value"]
+            obj["capabilities"]["legend.sample_length"] = capability
+            target["properties"]["legend.sample_length"] = {
+                "kind": "setting", "setting_path": field["setting_path"],
+                "current_value": field["current_value"]}
     names = ("horzPosn", "vertPosn", "horzManual", "vertManual")
     fields = {field["setting_path"] for field in widget["editable_fields"]}
     if any(name not in settings or target["object_path"] + "/" + name not in fields for name in names):

@@ -65,18 +65,42 @@ def _target_error(code: str, message: str, context: dict[str, Any], sample: str 
 
 
 def create_task(
-    source: Path, *, rule_id: str | None = None, template: str | None = None,
+    source: Path | None, *, rule_id: str | None = None, template: str | None = None,
     profile: Path | None = None, out: Path | None = None, task_dir: Path | None = None,
+    xscale: str | None = None, choose_columns: bool = False,
+    sources: list[Path] | None = None, intent: dict[str, Any] | None = None,
+    curve_display: str | None = None, summary_statistic: str | None = None,
 ) -> dict[str, Any]:
     """Start from original input; scientific choices stay with ordinary creation."""
-    request: dict[str, Any] = {"version": 1, "action": "create", "source": str(source)}
-    for key, value in (("rule_id", rule_id), ("template", template), ("profile", profile), ("out", out)):
-        if value is not None:
+    if intent is not None:
+        if template is not None or profile is not None or choose_columns or xscale is not None:
+            raise TaskControlError("invalid_semantic_intent", "Semantic attachment creation cannot also select an ordinary template/profile/XY discovery route.")
+        if source is not None and sources:
+            raise TaskControlError("invalid_semantic_sources", "Use the positional source or repeated --source, not both.")
+        paths = sources or ([source] if source is not None else [])
+        request: dict[str, Any] = {"version": 1, "action": "create", "sources": [str(path) for path in paths], "intent": intent}
+        if out is not None:
+            request["out"] = str(out)
+    else:
+        if source is None:
+            raise TaskControlError("source_not_found", "Provide the original source or repeat --source with semantic coordinates.")
+        request = {"version": 1, "action": "create", "source": str(source)}
+    for key, value in (("rule_id", rule_id), ("template", template), ("profile", profile), ("out", out), ("xscale", xscale)):
+        if value is not None and (intent is None or key == "out"):
             request[key] = str(value)
+    if choose_columns:
+        request["choose_columns"] = True
+    for key, value in (("curve_display", curve_display), ("summary_statistic", summary_statistic)):
+        if value is not None:
+            request[key] = value
     request = validate_task_request(request)
     runtime = doctor_payload()
     doctor = {"kind": runtime["kind"], "status": runtime["status"],
               "failed_checks": [item for item in runtime["checks"] if item.get("status") != "passed"]}
+    if isinstance(runtime.get("execution_identity"), dict):
+        doctor["execution_identity"] = {key: runtime["execution_identity"][key] for key in (
+            "source_package_root", "source_git_head", "runtime_repo_root", "python_executable", "native_execution_verified",
+        ) if key in runtime["execution_identity"]}
     if runtime["status"] != "ready":
         return {"kind": "sciplot_task_shortcut", "version": 1, "status": "blocked",
                 "reason_code": "runtime_not_ready", "doctor": doctor,

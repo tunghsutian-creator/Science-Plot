@@ -57,6 +57,10 @@ def export_project_document(
     exporter = export_document or export_studio_document
     publisher = publish_export or publish_studio_export_run
     export_options = {"audit_spec_path": _veusz_spec_path(document)} if export_document is None else {}
+    if export_document is None:
+        from sciplot_core.studio_core.categorical_display_preflight import require_categorical_display_current
+
+        require_categorical_display_current(document, export_options["audit_spec_path"])
     exported = exporter(document, formats=formats, **export_options)
     document_hash = str(exported["document_sha256"])
     run = publisher(

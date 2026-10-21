@@ -60,6 +60,10 @@ def _free_text(
     return text
 
 
+# Shared typed/model-provider text port; retain the existing internal seam.
+free_text = _free_text
+
+
 def _uuid_text(value: object, label: str) -> str:
     text = _required_text(value, label)
     try:

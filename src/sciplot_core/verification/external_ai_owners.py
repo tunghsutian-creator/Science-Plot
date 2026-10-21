@@ -3,8 +3,39 @@
 from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
-
 EXTERNAL_AI_OWNERS = (
+    ChangedOwner(
+        owner_id="openai_assistant_provider",
+        path_prefixes=("src/sciplot_core/openai_provider/", "src/sciplot_core/assistant_provider/"),
+        exact_paths=frozenset({"src/sciplot_core/openai_provider_probe.py"}),
+        owned_test_paths=frozenset({"tests/test_compatibility_facades.py"}),
+        pytest_targets=(
+            "tests/test_compatibility_facades.py",
+            "tests/test_assistant_contract.py",
+            "tests/test_automation_baseline.py::test_external_model_call_guard_counts_and_blocks_the_production_adapter",
+            *ARCHITECTURE_CORE_TARGETS,
+        ),
+        handoff_gates=("doctor",),
+        final_milestone_gates=("smoke",),
+        release_gates=("full_pytest",),
+    ),
+    ChangedOwner(
+        owner_id="presentation_style_contract",
+        path_prefixes=("src/sciplot_core/style_contract/",),
+        exact_paths=frozenset({"src/sciplot_core/presentation_identity.py"}),
+        owned_test_paths=frozenset({"tests/test_compatibility_facades.py"}),
+        pytest_targets=(
+            "tests/test_compatibility_facades.py",
+            "tests/test_style_template_contract.py",
+            "tests/test_unified_style_contract.py",
+            "tests/test_palette_authority.py",
+            "tests/test_studio_presentation_identity.py",
+            *ARCHITECTURE_CORE_TARGETS,
+        ),
+        handoff_gates=("doctor",),
+        final_milestone_gates=("smoke",),
+        release_gates=("acceptance_rules", "full_pytest"),
+    ),
     ChangedOwner(
         owner_id="automation_baseline_evidence",
         exact_paths=frozenset(
@@ -94,6 +125,7 @@ EXTERNAL_AI_OWNERS = (
                 "src/sciplot_core/studio_core/document_edit_state.py",
                 "src/sciplot_core/veusz_worker/document_edit.py",
                 "src/sciplot_core/veusz_worker/cli.py",
+                "src/sciplot_core/veusz_worker/font_evidence.py",
                 "src/sciplot_core/veusz_worker/operations.py",
                 "src/sciplot_gui/studio_assistant/proposal_application.py",
                 "src/sciplot_gui/studio_assistant/selection.py",
@@ -105,6 +137,7 @@ EXTERNAL_AI_OWNERS = (
                 "tests/test_document_edit_native.py",
                 "tests/test_document_edit_policy.py",
                 "tests/test_native_document_edit.py",
+                "tests/test_native_font_evidence.py",
                 "tests/test_assistant_contract.py",
             }
         ),
@@ -113,6 +146,7 @@ EXTERNAL_AI_OWNERS = (
             "tests/test_document_edit_native.py",
             "tests/test_document_edit_policy.py",
             "tests/test_native_document_edit.py",
+            "tests/test_native_font_evidence.py",
             "tests/test_project_query.py",
             "tests/test_assistant_contract.py",
             *ARCHITECTURE_CORE_TARGETS,

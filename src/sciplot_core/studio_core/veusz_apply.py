@@ -81,7 +81,7 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     # Add guides after data plotters so reverse painting puts them behind data.
     _add_veusz_reference_guides(interface, spec)
     finish_veusz_export_canvas(interface)
-    if label_dataset == "category_axis_display_labels":
+    if categorical is not None:
         from sciplot_core.studio_core.veusz_axis_apply import validate_category_display
 
         validate_category_display(interface.document, list(interface.document.data[label_dataset].data),

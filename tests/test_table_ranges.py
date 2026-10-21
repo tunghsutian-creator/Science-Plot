@@ -4,6 +4,7 @@ from copy import deepcopy
 import csv
 from dataclasses import replace
 import io
+import hashlib
 import json
 from pathlib import Path
 
@@ -13,10 +14,33 @@ from openpyxl import Workbook
 from sciplot_core.data_mapping import create_data_mapping_confirmation, execute_data_mapping_proposal
 from sciplot_core.data_mapping.output_files import paired_table_text
 from sciplot_core.data_mapping.source_mapping import _prepare_mapping_frames
-from sciplot_core.data_mapping.table_choice import proposal_for_table_columns, select_table, table_choice_snapshot
+from sciplot_core.data_mapping.table_choice import proposal_for_table_columns, select_table, table_choice_snapshot, verify_table_confirmation
 from sciplot_core.semantic_sources.registered_paired_curve_transform import resolve_registered_paired_curve_transform
 from sciplot_core.materials_rules import get_rule
+from sciplot_core.mapping_contract import DataMappingProposal
 from sciplot_core.task_control import start_task, resume_task, inspect_task
+
+
+def literal_view_id(source, sheet, start, end, columns):
+    """Bind the expected ID to literal physical selectors independently of mint."""
+    payload = {"source_namespace": str(source.resolve()), "sheet": sheet,
+               "data_start_row": start, "data_end_row": end, "columns": columns}
+    return "group_" + hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False,
+        separators=(",", ":")).encode()).hexdigest()[:32]
+
+
+def literal_curve_path(spec, source, sheet, start, end, columns, *, sample, points):
+    """Select only the independently expected physical view, never its label/order."""
+    expected_id = literal_view_id(source, sheet, start, end, columns)
+    matches = [item for item in spec["series"]
+               if item.get("source_binding", {}).get("source_id") == expected_id]
+    assert len(matches) == 1
+    curve = matches[0]
+    assert curve["source_binding"] == {"version": 1, "source_id": expected_id,
+        "source_namespace": str(source.resolve()), "category": sample, "condition": None, "sample": sample}
+    assert curve["name"] == expected_id and curve["presentation_kind"] == "curve"
+    assert list(map(list, zip(curve["x_values"], curve["y_values"], strict=True))) == points
+    return "/page1/graph1/" + curve["name"]
 
 
 def selection(sheet="Measured", end=7):
@@ -62,27 +86,53 @@ def proposal(tmp_path, *, separate=False):
 
 @pytest.mark.parametrize("separate", [False, True])
 def test_independent_ranges_survive_composite_and_scientific_adapter(tmp_path, separate):
-    source, values, _, request, selected = proposal(tmp_path, separate=separate)
+    source, values, snapshot, request, current = proposal(tmp_path, separate=separate)
     before = source.read_bytes()
-    _, frames, _, _, _ = _prepare_mapping_frames(selected, source_root=tmp_path)
-    assert [frame.values.tolist() for frame in frames.values()] == list(values.values())
-    rows = list(csv.reader(io.StringIO(paired_table_text(selected, frames))))
-    assert list(map(float, rows[-1][:2])) == [550, 1]
-    assert rows[-1][2:] == ["", ""]
-    root = tmp_path / "mapping"
-    confirmation = create_data_mapping_confirmation(selected, source_root=tmp_path,
-        request_path=request, output_root=root, confirmed_by="automated_test")
-    execution = execute_data_mapping_proposal(selected, confirmation, source_root=tmp_path,
-        request_path=request, output_root=root)
-    assert [item["rows"] for item in execution["outputs"]] == [4, 3]
-    transformed = resolve_registered_paired_curve_transform(Path(execution["effective_input"]), rule=get_rule("uvvis_spectrum"))
-    assert {item.sample: [list(p) for p in item.points] for item in transformed.series} == values
-    assert source.read_bytes() == before
-    # A signed confirmation cannot conceal changing one curve's range.
-    binding = deepcopy(selected.table_confirmation)
-    binding["pairs"][1]["table_selection"]["data_end_row"] = 5
-    with pytest.raises(ValueError, match="reproduce"):
-        _prepare_mapping_frames(replace(selected, table_confirmation=binding), source_root=tmp_path)
+    expected_regions = [("Measured", 3, 7), ("Other" if separate else "Measured", 3, 6)]
+    current_ids = [literal_view_id(source, "Measured", 3, 7, [0, 1]),
+                   literal_view_id(source, "Other" if separate else "Measured", 3, 6,
+                                   [0, 1] if separate else [2, 3])]
+    for structured in (True, False):
+        selected = current if structured else proposal_for_table_columns(snapshot,
+            pairs=pairs(separate=separate), request_path=request, proposal_id="ranges_legacy",
+            created_at="2026-09-10T08:00:00Z", structured_identity=False)
+        ids = current_ids if structured else ["series_000", "series_001"]
+        assert [reference.source_id for reference in selected.sources] == ids
+        assert selected.sample_labels == {ids[0]: "A", ids[1]: "B"}
+        assert [(reference.sheet, reference.data_start_row, reference.data_end_row)
+                for reference in selected.sources] == expected_regions
+        payload = selected.to_dict()
+        if not structured:
+            assert "display_labels" not in payload and all("identity" not in item for item in payload["sources"])
+        selected = DataMappingProposal.from_dict(json.loads(json.dumps(payload)))
+        assert selected.to_dict() == payload
+        verify_table_confirmation(selected, source)
+        _, frames, _, _, _ = _prepare_mapping_frames(selected, source_root=tmp_path)
+        assert {key: frames[key].values.tolist() for key in ids} == dict(zip(ids, values.values(), strict=True))
+        rows = list(csv.reader(io.StringIO(paired_table_text(selected, frames))))
+        metadata_keys = ids if structured else ["A", "B"]
+        assert rows[2] == [key for key in metadata_keys for _ in range(2)]
+        assert list(map(float, rows[-1][:2])) == [550, 1]
+        assert rows[-1][2:] == ["", ""]
+        root = tmp_path / ("mapping" if structured else "mapping_legacy")
+        confirmation = create_data_mapping_confirmation(selected, source_root=tmp_path,
+            request_path=request, output_root=root, confirmed_by="automated_test")
+        execution = execute_data_mapping_proposal(selected, confirmation, source_root=tmp_path,
+            request_path=request, output_root=root)
+        assert [item["rows"] for item in execution["outputs"]] == [4, 3]
+        assert [item["sample_label"] for item in execution["outputs"]] == ["A", "B"]
+        transformed = resolve_registered_paired_curve_transform(Path(execution["effective_input"]), rule=get_rule("uvvis_spectrum"))
+        keys = ids if structured else ["A", "B"]
+        assert {item.sample: [list(point) for point in item.points] for item in transformed.series} == dict(zip(keys, values.values(), strict=True))
+        assert {item.sample: [[float(value).hex() for value in point] for point in item.points]
+                for item in transformed.series} == {key: [[float(value).hex() for value in point]
+                    for point in points] for key, points in zip(keys, values.values(), strict=True)}
+        assert source.read_bytes() == before
+        # A signed confirmation cannot conceal changing one curve's range.
+        binding = deepcopy(selected.table_confirmation)
+        binding["pairs"][1]["table_selection"]["data_end_row"] = 5
+        with pytest.raises(ValueError, match="reproduce"):
+            _prepare_mapping_frames(replace(selected, table_confirmation=binding), source_root=tmp_path)
 
 
 @pytest.mark.parametrize("change", [
@@ -166,12 +216,23 @@ def test_disjoint_vertical_pairs_keep_distinct_original_sample_rows(tmp_path):
     snap = select_table(table_choice_snapshot(source, "uvvis_spectrum"), first)
     request = tmp_path / "request.json"
     request.write_text("{}")
-    result = proposal_for_table_columns(snap, pairs=[{"x_column": 0, "y_column": 1},
-        {"x_column": 0, "y_column": 1, "table_selection": second}], request_path=request,
-        proposal_id="vertical", created_at="2026-09-10T08:00:00Z")
-    _, frames, _, _, _ = _prepare_mapping_frames(result, source_root=tmp_path)
-    assert result.sample_labels == {"series_000": "A", "series_001": "B"}
-    assert [len(frame) for frame in frames.values()] == [3, 2]
+    choices = [{"x_column": 0, "y_column": 1}, {"x_column": 0, "y_column": 1, "table_selection": second}]
+    current_ids = [literal_view_id(source, None, 3, 6, [0, 1]), literal_view_id(source, None, 9, 11, [0, 1])]
+    for structured in (True, False):
+        result = proposal_for_table_columns(snap, pairs=choices, request_path=request,
+            proposal_id="vertical", created_at="2026-09-10T08:00:00Z", structured_identity=structured)
+        ids = current_ids if structured else ["series_000", "series_001"]
+        assert [reference.source_id for reference in result.sources] == ids
+        assert result.sample_labels == {ids[0]: "A", ids[1]: "B"}
+        assert [(reference.sheet, reference.data_start_row, reference.data_end_row)
+                for reference in result.sources] == [(None, 3, 6), (None, 9, 11)]
+        assert result.sources[0].cell_evidence["2,0"] == "A"
+        assert result.sources[1].cell_evidence["8,0"] == "B"
+        verify_table_confirmation(result, source)
+        _, frames, _, _, _ = _prepare_mapping_frames(result, source_root=tmp_path)
+        assert [len(frames[key]) for key in ids] == [3, 2]
+        assert frames[ids[0]].values.tolist() == [["400", "1"], ["450", "3"], ["500", "2"]]
+        assert frames[ids[1]].values.tolist() == [["405", "2"], ["455", "6"]]
 
 
 def test_older_degree_confirmation_keeps_its_original_mapped_header(tmp_path):
@@ -225,9 +286,12 @@ def test_native_unequal_revision_cross_sheet_annotation_and_export(tmp_path):
     figure = resolve_project_figure(project, None)
     spec = json.loads(Path(figure["spec"]).read_text())
     assert {item["label"]: list(map(list, zip(item["x_values"], item["y_values"], strict=True))) for item in spec["series"]} == original_values
+    curve_path = literal_curve_path(spec, source, "Measured", 3, 7, [0, 1], sample="A", points=original_values["A"])
     document = Path(figure["document"])
-    peaks = inspect_peak_candidates(project, figure_id=figure["figure_id"], object_path="/page1/graph1/series_1",
+    peaks = inspect_peak_candidates(project, figure_id=figure["figure_id"], object_path=curve_path,
         window={"min": 400, "max": 550, "unit": "nm"}, polarity="maximum", expected_document_sha256=file_sha256(document))
+    assert [(item["object_path"], item["sample"], item["x"], item["y"])
+            for item in peaks["candidates"]] == [(curve_path, "A", 450, 4)]
     edit_task = tmp_path / "edit"
     edit = start_task({"version": 1, "action": "edit", "project": str(project),
         "expected_document_sha256": file_sha256(document), "export": False,

@@ -5,14 +5,20 @@ from __future__ import annotations
 from typing import Any
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.studio_core.veusz_numeric_persistence import FLOAT64_ENCODING, NUMERIC_ENCODING_KEY
+from sciplot_core.studio_core.veusz_numeric_persistence import (
+    FLOAT64_ENCODING,
+    NUMERIC_ENCODING_KEY,
+)
+from sciplot_core.source_tables.parsing import (
+    DECIMAL_ROUND_TRIP_ENCODING,
+    SOURCE_NUMERIC_ENCODING_KEY,
+)
 from sciplot_core.performance_comparison import (
     PERFORMANCE_RADAR_TEMPLATE_ID,
     PERFORMANCE_SCATTER_TEMPLATE_ID,
 )
-from sciplot_core.policy import (
-    FIXED_PUBLICATION_FRAME_POLICY,
-)
+from sciplot_core.performance_comparison.radar import validate_radar_presentation_size
+from sciplot_core.policy.layout_policy import FIXED_PUBLICATION_FRAME_POLICY
 
 from sciplot_core.performance_veusz.style import (
     _RADAR_AXIS_LIMIT,
@@ -21,6 +27,7 @@ from sciplot_core.performance_veusz.style import (
     _expanded_axis_bounds,
     _performance_render_options,
     _inside_legend_contract,
+    _literal_text,
 )
 
 from sciplot_core.performance_veusz.geometry import (
@@ -34,6 +41,23 @@ from sciplot_core.performance_veusz.labels import (
 )
 
 
+def _selected_axis_label(payload: dict[str, Any], axis: str) -> str:
+    label = str(payload[f"{axis}_label"])
+    metric = payload[f"{axis}_metric"]
+    if metric["metric_id"] not in payload.get("literal_metric_labels", []):
+        return label
+    display_label = str(metric["display_label"])
+    if not label.startswith(display_label):
+        raise ValueError(
+            "Selected performance axis label does not match its original Metric ID."
+        )
+    # Escape only an implicit original identifier. The unit suffix and any
+    # explicitly declared DisplayLabel retain their scientific typesetting.
+    return (
+        _literal_text(display_label, format_units=False) + label[len(display_label) :]
+    )
+
+
 def build_performance_veusz_spec(
     *,
     payload: dict[str, Any],
@@ -44,6 +68,7 @@ def build_performance_veusz_spec(
 
     template = str(payload["template"])
     layout = payload["layout"]
+    validate_radar_presentation_size(payload, request)
     margins = layout["graph_margins_mm"]
     style = _style_payload(margins)
     if template == PERFORMANCE_SCATTER_TEMPLATE_ID:
@@ -59,13 +84,13 @@ def build_performance_veusz_spec(
         )
         axes = {
             "x": _axis_payload(
-                label=str(payload["x_label"]),
+                label=_selected_axis_label(payload, "x"),
                 minimum=x_minimum,
                 maximum=x_maximum,
                 hidden=False,
             ),
             "y": _axis_payload(
-                label=str(payload["y_label"]),
+                label=_selected_axis_label(payload, "y"),
                 minimum=y_minimum,
                 maximum=y_maximum,
                 hidden=False,
@@ -88,6 +113,14 @@ def build_performance_veusz_spec(
         }
     else:
         raise ValueError(f"Unsupported performance template: {template}")
+    if template == PERFORMANCE_SCATTER_TEMPLATE_ID:
+        for name in ("x", "y"):
+            if payload[f"{name}_metric"]["metric_id"] in payload.get(
+                "literal_metric_labels", []
+            ):
+                axes[name]["label_text_policy"] = (
+                    "literal_identifier_with_formatted_unit"
+                )
     render_options = {
         **_performance_render_options(payload, request),
         "size": "x".join(f"{float(value):g}" for value in layout["page_size_mm"]),
@@ -115,6 +148,11 @@ def build_performance_veusz_spec(
         "kind": "sciplot_veusz_plot_spec",
         "version": 1,
         NUMERIC_ENCODING_KEY: FLOAT64_ENCODING,
+        **(
+            {SOURCE_NUMERIC_ENCODING_KEY: DECIMAL_ROUND_TRIP_ENCODING}
+            if "performance_selection" in payload
+            else {}
+        ),
         "created_at": utc_now_iso(),
         "render_engine": "veusz",
         "qa_target": "veusz_export",

@@ -14,13 +14,15 @@ class ChangedOwner:
     exact_paths: frozenset[str] = frozenset()
     path_prefixes: tuple[str, ...] = ()
     owned_test_paths: frozenset[str] = frozenset()
+    # Exact leaf owners can carve out a prefix without enumerating future files.
+    excluded_paths: frozenset[str] = frozenset()
     mypy_required: bool = False
     handoff_gates: tuple[str, ...] = ()
     final_milestone_gates: tuple[str, ...] = ()
     release_gates: tuple[str, ...] = ()
 
     def matches(self, path: str) -> bool:
-        return (
+        return path not in self.excluded_paths and (
             path in self.exact_paths
             or path in self.owned_test_paths
             or path.startswith(self.path_prefixes)

@@ -26,7 +26,7 @@ def _safe_output_name(
     *,
     used: set[str],
 ) -> str:
-    label = (
+    label = reference.source_id if reference.identity else (
         proposal.sample_labels.get(reference.source_id)
         or Path(reference.relative_path).stem
         or reference.source_id
@@ -72,12 +72,14 @@ def _mapped_csv_sha256(frame: pd.DataFrame, *, full_precision: bool = False) -> 
 
 
 def paired_table_text(proposal: DataMappingProposal, frames: dict[str, pd.DataFrame]) -> str:
-    """Compose selected pairs as the existing three-metadata-row adapter contract."""
+    """Compose selected source views in the existing three-metadata-row format."""
     headers, units, labels, series = [], [], [], []
     for reference in proposal.sources:
         columns = [column for column in proposal.columns if column.source_id == reference.source_id]
-        if [column.role for column in columns] != ["x", "y"]:
-            raise ValueError("Explicit table choice requires one ordered x/y pair per source view.")
+        roles = [column.role for column in columns]
+        expected_roles = ["value"] if "replicates" in proposal.table_confirmation else ["x", "y"]
+        if roles != expected_roles:
+            raise ValueError("Explicit table choice requires the declared XY pair or replicate value per source view.")
         frame = frames[reference.source_id]
         for column in columns:
             unit = proposal.unit_overrides[column.output_column]
@@ -86,11 +88,19 @@ def paired_table_text(proposal: DataMappingProposal, frames: dict[str, pd.DataFr
                 header = header[:-(len(unit) + 3)]
             headers.append(header)
             units.append(unit)
-            label = proposal.sample_labels[reference.source_id]
+            # In current pairs this legacy metadata slot carries a logical
+            # view key, not a new user sample fact. The verified proposal keeps
+            # the original sample and aliases separately; no scientific
+            # adapter may pool two selected physical views by sample text.
+            label = (reference.source_id if reference.identity and "pairs" in proposal.table_confirmation
+                     else proposal.sample_labels[reference.source_id])
             if proposal.table_confirmation.get("sample_row_encoding") == "explicit_json_v1":
                 label = "@sample:" + json.dumps(label, ensure_ascii=False)
             labels.append(label)
-            series.append(frame[column.output_column].tolist())
+            values = frame[column.output_column].tolist()
+            if "replicates" in proposal.table_confirmation:
+                values = ["" if pd.isna(value) else value for value in values]
+            series.append(values)
     buffer = StringIO(newline="")
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerows([headers, units, labels])

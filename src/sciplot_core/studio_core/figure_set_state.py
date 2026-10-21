@@ -330,28 +330,6 @@ def _figure_set_export_review_note(scope: dict[str, Any]) -> str:
     )
 
 
-def _registered_figure_generated_hash(
-    project_dir: Path,
-    document_path: Path,
-) -> str | None:
-    registry = _read_studio_figure_set(project_dir)
-    if registry is None:
-        return None
-    resolved = document_path.expanduser().resolve()
-    for figure in registry.get("figures", []):
-        if not isinstance(figure, dict):
-            continue
-        value = figure.get("document")
-        if not isinstance(value, str) or not value.strip():
-            continue
-        if Path(value).expanduser().resolve() != resolved:
-            continue
-        generated_hash = figure.get("generated_hash")
-        if isinstance(generated_hash, str) and generated_hash.strip():
-            return generated_hash
-    return None
-
-
 def _replace_studio_figure_set_path(source: Path, target: Path) -> None:
     """Replace one canonical figure-set member through an injectable boundary."""
 

@@ -6,13 +6,12 @@ on:
 
 jobs:
   runtime-integrity:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONNOUSERSITE: "1"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
       - name: Enforce minimal runtime distribution
         shell: bash
         run: |
@@ -24,9 +23,9 @@ jobs:
               examples example tmp tools outputs figures ftir_output .tmp_verify \
               .superpowers sciplot-main .DS_Store AGENTS.md DEVELOPMENT_LOG.md Makefile \
               Launch_SciPlot_App.command
-            git ls-files docs | grep -Ev \
-              '^docs/(ARCHITECTURE|THIRD_PARTY_NOTICES)\.md$' \
-              || true
+            # The curated docs and public showcase are explicitly unignored in
+            # .gitignore. The tracked-ignored check above still rejects any
+            # local-only docs without duplicating that allowlist here.
             git ls-files \
               third_party/veusz/tests \
               third_party/veusz/examples \
@@ -45,12 +44,85 @@ jobs:
           fi
       - name: Compile SciPlot-owned Python
         run: python3 -m compileall -q src/sciplot_core src/sciplot_gui src/sciplot_recipes
-      - name: Install Veusz build toolchain
+      - name: Install matching system Python and Qt toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends build-essential qt6-base-dev
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential qt6-base-dev qt6-image-formats-plugins python3-dev python3-venv zsh \
+            python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev pyqt6-dev-tools \
+            fonts-noto-cjk
+          # Ubuntu's PyQt6 and qmake use the same distribution Qt libraries.
+          # A PyPI PyQt6 wheel carries a separate Qt runtime, so keep the
+          # distribution interpreter and expose its bindings to this venv.
+          /usr/bin/python3 -m venv --system-site-packages .venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python -m pip install --upgrade pip setuptools wheel
       - name: Install local runtime
         run: python3 -m pip install -e '.[studio,dev,mcp]'
+      - name: Verify Qt build and runtime identity
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          import shutil
+          import sys
+          import json
+          import sysconfig
+          import tempfile
+          from pathlib import Path
+          import PyQt6
+          from PyQt6 import QtCore, QtGui, QtWidgets, QtPrintSupport, QtSvg, QtSvgWidgets, sip, uic
+          from PyQt6.uic import loadUi
+
+          qmake = subprocess.check_output(["qmake6", "-query", "QT_VERSION"], text=True).strip()
+          runtime = QtCore.qVersion()
+          binding = Path(PyQt6.__file__).resolve()
+          assert sys.version_info[:2] == (3, 12), sys.version
+          assert binding.is_relative_to("/usr/lib/python3/dist-packages"), binding
+          assert qmake == runtime, (qmake, runtime)
+          assert (binding.parent / "bindings/QtCore/QtCore.toml").is_file(), binding
+          assert Path(uic.__file__).resolve().is_relative_to(binding.parent), uic.__file__
+          assert callable(loadUi) and all((QtGui, QtWidgets, QtPrintSupport, QtSvg, QtSvgWidgets, sip))
+          assert shutil.which("zsh"), "Delivery launchers require zsh"
+          formats = {bytes(name).decode("ascii").lower() for name in QtGui.QImageWriter.supportedImageFormats()}
+          assert {"png", "tiff"} <= formats, sorted(formats)
+          with tempfile.TemporaryDirectory(prefix="sciplot-qt-tiff-") as temporary:
+              path = Path(temporary) / "probe.tiff"
+              image = QtGui.QImage(1, 1, QtGui.QImage.Format.Format_RGB32)
+              image.fill(QtGui.QColor("red"))
+              writer = QtGui.QImageWriter(str(path), b"tiff")
+              assert writer.write(image), writer.errorString()
+              assert path.is_file() and path.stat().st_size > 0
+              reopened = QtGui.QImage(str(path))
+              assert not reopened.isNull() and (reopened.width(), reopened.height()) == (1, 1)
+              assert reopened.pixelColor(0, 0) == image.pixelColor(0, 0)
+          print(f"Python {sys.version.split()[0]}; PyQt {QtCore.PYQT_VERSION_STR}; Qt build/runtime {runtime}; {binding}")
+          from sciplot_core.verification.private_process_boundaries import executable_hash, runtime_identity
+          observation_runtime = runtime_identity()
+          executable_sha256 = executable_hash(sys.executable)
+          assert executable_sha256 is not None
+          print(json.dumps({
+              "observation_runtime": observation_runtime,
+              "python_executable_sha256": executable_sha256,
+              "executable_owns_observation_core": executable_sha256 in observation_runtime["loaded_core_sha256"],
+              "py_enable_shared_build_flag": sysconfig.get_config_var("Py_ENABLE_SHARED"),
+          }, sort_keys=True))
+          PY
+      - name: Verify Chinese glyph fallback in the system Qt runtime
+        run: |
+          python3 - <<'PYFONT'
+          from PyQt6.QtGui import QFont, QGuiApplication, QTextLayout
+          app = QGuiApplication([])
+          text = "\u4f4e\u6e29\u6297\u51b2\u51fb\u80fd\u529b"
+          layout = QTextLayout(text, QFont("Arial", 8))
+          layout.beginLayout()
+          line = layout.createLine()
+          layout.endLayout()
+          runs = layout.glyphRuns()
+          assert runs and all(index != 0 for run in runs for index in run.glyphIndexes()), "Missing Chinese glyph fallback"
+          print({"text": text, "fallback_families": [run.rawFont().familyName() for run in runs]})
+          PYFONT
+      - name: Run lint gate
+        run: python3 -m ruff check src tests
       - name: Run scoped static type gate
         run: python3 -m mypy
       - name: Build vendored Veusz helpers
@@ -67,10 +139,34 @@ jobs:
           python3 -m pip wheel . --no-deps --no-build-isolation \
             --wheel-dir /tmp/sciplot-wheel
           python3 tests/test_wheel_surface.py /tmp/sciplot-wheel/*.whl
-      - name: Run focused tests
-        run: python3 -m pytest -q -m focused
-      - name: Run comprehensive tests
-        run: python3 -m pytest -q -m comprehensive
+      - name: Run reviewed public focused behavior
+        run: python3 -m pytest -q --input-scope public-focused
+      - name: Run reviewed public comprehensive behavior
+        # Original generated observer negatives genuinely disable Python hooks.
+        # Execute every public comprehensive node in a bound source-only stage;
+        # raw/golden private namespaces remain outside its input closure.
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Stream the original generated-only log while preserving the stage's
+          # exit status and its complete source/runtime/selected-body checks.
+          (
+            until [[ -f .tmp_verify/ci_public_comprehensive/command.log ]]; do
+              sleep 1
+            done
+            exec tail -n +1 --follow=name --retry .tmp_verify/ci_public_comprehensive/command.log
+          ) &
+          progress_pid=$!
+          trap 'kill "$progress_pid" 2>/dev/null || true; wait "$progress_pid" 2>/dev/null || true' EXIT
+          stage_status=0
+          python3 -m sciplot_core.verification.public_stage --profile public-comprehensive --out .tmp_verify/ci_public_comprehensive || stage_status=$?
+          kill "$progress_pid" 2>/dev/null || true
+          wait "$progress_pid" 2>/dev/null || true
+          trap - EXIT
+          if [[ "$stage_status" -ne 0 && -f .tmp_verify/ci_public_comprehensive/command.log ]]; then
+            tail -n 120 .tmp_verify/ci_public_comprehensive/command.log || true
+          fi
+          exit "$stage_status"
       - name: Verify source-checkout wrapper bootstrap
         run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
       - name: Run readiness check

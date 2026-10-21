@@ -161,7 +161,7 @@ def build_studio_publication_evidence(
         qa=qa,
         semantic=semantic,
         publication_qa=publication_qa,
-        layout_quality=_studio_layout_quality_from_spec(document_path),
+        layout_quality=_studio_layout_quality_from_spec(document_path, qa=qa),
     )
 
 

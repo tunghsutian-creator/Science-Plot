@@ -8,8 +8,8 @@ from sciplot_core.policy import (
     PERFORMANCE_ENVELOPE_FILL_TRANSPARENCY,
     PERFORMANCE_ENVELOPE_LINE_TRANSPARENCY,
     PERFORMANCE_REFERENCE_ENVELOPE_FILL_TRANSPARENCY,
-    categorical_fill_color,
 )
+from sciplot_core.policy.categorical import categorical_fill_color
 
 from sciplot_core.performance_comparison.models import (
     PERFORMANCE_SCATTER_TEMPLATE_ID,
@@ -56,6 +56,7 @@ def build_performance_scatter_payload(
     plotted_x_values, visual_data_transforms = _deterministic_scatter_x_values(
         comparison,
         x_metric=x_metric,
+        preserve_original=(comparison.selection is not None and comparison.selection["scatter_x_display"] == "preserve_original"),
     )
     x_values = [
         plotted_x_values[material.material_id] for material in comparison.materials

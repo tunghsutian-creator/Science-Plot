@@ -30,6 +30,27 @@ def test_worker_error_preserves_runtime_error_and_trusts_only_closed_busy_marker
     assert not hasattr(caught.value, "reason_code")
 
 
+@pytest.mark.parametrize("wire", [BUSY, {**BUSY, "native_reason_code": "unknown_reason"},
+    {**BUSY, "extra": "project_busy"}, "not JSON"])
+def test_worker_warning_before_traceback_preserves_full_stderr_and_closed_reason(monkeypatch, wire):
+    stderr = (
+        "\x1b[33mDependency warning: optional device discovery was unavailable\x1b[0m\n"
+        "Traceback (most recent call last):\n"
+        '  File "worker.py", line 7, in <module>\n'
+        '    raise ProjectSessionBusy("original busy detail")\n'
+        "sciplot_core.studio_core.project_session.ProjectSessionBusy: original busy detail\n"
+    )
+    monkeypatch.setattr(render, "needs_veusz_worker_process", lambda: True)
+    monkeypatch.setattr(render.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a[0], 1, stdout=wire if isinstance(wire, str) else json.dumps(wire), stderr=stderr))
+    with pytest.raises(RuntimeError) as caught:
+        render._dispatch({"action": "render"})
+    assert type(caught.value) is RuntimeError
+    assert caught.value.args == ("Native TTS figure operation failed:\n" + stderr,)
+    assert getattr(caught.value, "native_reason_code", None) == ("project_busy" if wire == BUSY else None)
+    assert not hasattr(caught.value, "reason_code")
+
+
 @pytest.mark.parametrize("busy", [False, True])
 def test_worker_marker_does_not_wrap_or_rewrite_original_exception(monkeypatch, capsys, busy):
     error = ProjectSessionBusy("original busy detail") if busy else ValueError("original native failure")

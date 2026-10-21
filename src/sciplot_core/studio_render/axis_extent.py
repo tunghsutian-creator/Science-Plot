@@ -25,6 +25,26 @@ from sciplot_core.studio_render.domain_defaults import (
 from sciplot_core.studio_render.axis_scale import (
     _axis_scale,
 )
+from sciplot_core.studio_core.models import MARKER_MAP
+
+
+def _marker_extent_pt(marker: str, size_pt: float, line_width_pt: float) -> float:
+    """Bound Veusz compat-level-0 paths and their native miter-joined stroke.
+
+    Veusz utils/points.py gives diamonds a 1.414 radius and triangles a
+    1.2 radius. Their corner strokes extend farther than a circle's half
+    line width; using the circle radius for every shape clips auto axes.
+    """
+    radius, stroke = {
+        "diamond": (1.414, math.sqrt(2.0)),
+        # Rounded native triangle vertices slightly exceed an exact 2x miter.
+        "triangle": (1.2, 2.001),
+        "triangledown": (1.2, 2.001),
+        "triangleleft": (1.2, 2.001),
+        "triangleright": (1.2, 2.001),
+        "cross": (1.1028, math.sqrt(2.0)),
+    }.get(marker, (1.0, 1.0))
+    return size_pt * radius + line_width_pt * 0.5 * stroke
 
 
 def _expand_axis_for_visual_extents(
@@ -64,11 +84,16 @@ def _expand_axis_for_visual_extents(
         finite_y = [float(value) for value in item.y_values if math.isfinite(value)]
         x_values.extend(finite_x)
         y_values.extend(finite_y)
-        marker = str(item.marker or "none").strip().casefold()
+        marker = str(MARKER_MAP.get(item.marker, item.marker or "none")).strip().casefold()
         if item.presentation_kind not in CATEGORICAL_SERIES_KINDS and marker != "none":
             item_marker_size = float(item.marker_size or style.marker_size_pt)
+            item_marker_line_width = (
+                style.marker_line_width_pt
+                if item.marker_line_width is None
+                else float(item.marker_line_width)
+            )
             item_extent_mm = (
-                item_marker_size + style.marker_line_width_pt * 0.5
+                _marker_extent_pt(marker, item_marker_size, item_marker_line_width)
             ) * point_to_mm + MIN_VISUAL_EXTENT_CLEARANCE_MM
             x_extent_mm = max(x_extent_mm, item_extent_mm)
             y_extent_mm = max(y_extent_mm, item_extent_mm)

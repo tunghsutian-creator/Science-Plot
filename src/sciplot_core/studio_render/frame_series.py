@@ -77,7 +77,20 @@ def _series_from_frame_records(
     template_id = _request_template(request)
     raw_series: list[StudioSeries] = []
     axis_info: dict[str, Any] = {"x_label": "x", "y_label": "y"}
-    if template_id in SCALAR_FIELD_TEMPLATE_IDS:
+    if frames and frames[0].frame.attrs.get("sciplot_source_group"):
+        from sciplot_core.studio_render.source_group_series import source_group_series
+
+        raw_series, axis_info = source_group_series(frames)
+    elif "categorical_binding" in request:
+        from sciplot_core.studio_render.categorical_bound_series import bound_categorical_series, categorical_style_request
+
+        binding = request["categorical_binding"]
+        expected_template = "point_line" if binding["mode"] == "given_values" else "bar"
+        if template_id != expected_template or request.get("rule_id"):
+            raise StudioPreparationBlocked("categorical_template_mismatch", "Ordinary categorical bindings use their declared point_line or mean/sample-SD bar template without a registered experimental identity.")
+        raw_series, axis_info = bound_categorical_series(frames, missing_values=request.get("missing_values"))
+        request = categorical_style_request(request, series=raw_series, axis_info=axis_info)
+    elif template_id in SCALAR_FIELD_TEMPLATE_IDS:
         raw_series, axis_info = _scalar_field_from_frames(
             frames,
             render_options=render_options,
@@ -185,6 +198,11 @@ def _series_from_frame_records(
             "tables; no placeholder data were generated.",
         )
 
+    from sciplot_core.studio_render.paired_source_identity import bind_prepared_pairs
+
+    raw_series, pair_bindings = bind_prepared_pairs(raw_series, request)
+    if pair_bindings:
+        axis_info["source_bindings"] = pair_bindings
     axis_info["series_count"] = len(raw_series)
     render_options = _resolved_domain_render_options(
         request,
@@ -193,7 +211,8 @@ def _series_from_frame_records(
     )
     _validate_log_domain_series(raw_series, render_options=render_options)
     styled = resolve_series_encodings(
-        raw_series, render_options=render_options, request=request
+        raw_series, render_options=render_options, request=request,
+        source_bindings=axis_info.get("source_bindings"),
     )
     axis_info["series_count"] = len(styled)
     render_options = _resolved_domain_render_options(
@@ -201,7 +220,14 @@ def _series_from_frame_records(
         axis_info=axis_info,
         series=styled,
     )
-    if axis_info.get("presentation_kind") == "categorical_replicates":
+    if axis_info.get("source_bindings") and axis_info.get("presentation_kind") == "categorical_replicates":
+        styled = _reindex_categorical_series(styled, source_bindings=axis_info["source_bindings"], render_options=render_options)
+        categories = list(dict.fromkeys(axis_info["source_bindings"][item.x_name]["category"] for item in styled))
+        aliases = (request.get("categorical_binding") or {}).get("category_aliases", {})
+        axis_info["category_labels"] = [_category_axis_label(aliases.get(category, category)) for category in categories]
+        axis_info["category_positions"] = [float(index + 1) for index in range(len(categories))]
+        axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
+    elif axis_info.get("presentation_kind") == "categorical_replicates":
         styled = _reindex_categorical_series(styled, render_options=render_options)
         axis_info["category_labels"] = [
             _category_axis_label(item.label) for item in styled
@@ -210,6 +236,9 @@ def _series_from_frame_records(
             float(index) for index in range(1, len(styled) + 1)
         ]
         axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
+        if "categorical_binding" in request:
+            aliases = request["categorical_binding"].get("category_aliases", {})
+            axis_info["category_labels"] = [aliases.get(item.label, item.label) for item in styled]
     styled = _apply_template_series_transforms(
         styled, request=request, render_options=render_options
     )

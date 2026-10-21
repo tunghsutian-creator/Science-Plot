@@ -8,6 +8,7 @@ from sciplot_core.plot_document.errors import fail
 from sciplot_core.plot_document.schema import DIGEST, IDENTIFIER, closed
 from sciplot_core.plot_document.validation import validate_wire
 from sciplot_core.plot_transforms.datasets import dataset_schema, validate_dataset
+from sciplot_core.style_values import LINE_STYLE_VALUES
 
 NUMBER = {"type": "number"}
 POSITIVE = {"type": "number", "exclusiveMinimum": 0}
@@ -18,7 +19,7 @@ FONT = {"font_family": {"type": "string", "minLength": 1}, "font_size_pt": POSIT
 
 def style_schema() -> dict[str, Any]:
     return closed({"line_color": COLOR, "line_width_pt": POSITIVE,
-        "line_style": {"enum": ["solid", "dash", "dot"]}, "line_join": {"enum": ["bevel", "round", "miter"]},
+        "line_style": {"enum": list(LINE_STYLE_VALUES)}, "line_join": {"enum": ["bevel", "round", "miter"]},
         "marker": {"enum": ["circle", "square", "diamond", "triangle", "cross", "plus", "none"]},
         "marker_size_pt": POSITIVE, "marker_color": COLOR, "marker_line_width_pt": POSITIVE,
         "line_visible": {"type": "boolean"}, "marker_visible": {"type": "boolean"}})

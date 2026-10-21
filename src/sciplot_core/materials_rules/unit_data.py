@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import math
 from dataclasses import dataclass
 
 
@@ -26,6 +27,8 @@ _UNIT_RULES = {
     ("GPa", "Pa"): UnitRule("GPa", "Pa", 1e9),
     ("mPa.s", "Pa.s"): UnitRule("mPa.s", "Pa.s", 1e-3),
     ("Pa.s", "mPa.s"): UnitRule("Pa.s", "mPa.s", 1e3),
+    ("Hz", "rad/s"): UnitRule("Hz", "rad/s", 2 * math.pi),
+    ("rad/s", "Hz"): UnitRule("rad/s", "Hz", 1 / (2 * math.pi)),
     ("ms", "s"): UnitRule("ms", "s", 1e-3),
     ("min", "s"): UnitRule("min", "s", 60.0),
     ("h", "s"): UnitRule("h", "s", 3600.0),

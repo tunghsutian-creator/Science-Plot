@@ -3,13 +3,14 @@ from copy import deepcopy
 from typing import Any
 
 from sciplot_core.plot_document.schema import closed
+from sciplot_core.style_values import LINE_STYLE_VALUES
 
 NUMBER = {"type": "number"}
 POSITIVE = {"type": "number", "exclusiveMinimum": 0}
 NONNEGATIVE = {"type": "number", "minimum": 0}
 COLOR = {"type": "string", "pattern": "^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{12})$"}
 FONT = {"font_family": {"type": "string", "minLength": 1}, "font_size_pt": POSITIVE, "color": COLOR}
-LINE = {"line_color": COLOR, "line_width_pt": POSITIVE, "line_style": {"enum": ["solid", "dash", "dot"]},
+LINE = {"line_color": COLOR, "line_width_pt": POSITIVE, "line_style": {"enum": list(LINE_STYLE_VALUES)},
         "line_join": {"enum": ["bevel", "round"]}}
 FILL = {"fill_color": COLOR, "fill_opacity": {"type": "number", "minimum": 0, "maximum": 1},
         "border_color": COLOR, "border_width_pt": NONNEGATIVE}

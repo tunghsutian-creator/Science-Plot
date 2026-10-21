@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 
 from rendering_profiles_helpers import assert_accepted_golden, assert_three_way, capture_native, load_profile
+from rendering_profile_baselines import select_baseline
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_engine.storage import load_head
@@ -54,6 +55,7 @@ def run_profile(case_id, output):
     source_evidence = audit_source_points(profile)
     roles = profile.manifest["roles"]
     accepted = capture_native(profile.files["accepted_vsz"], output / "accepted", roles["accepted"])
+    profile = select_baseline(profile, accepted.environment)
     assert_accepted_golden(profile, accepted, output_dir=output / "accepted-first-gate")
 
     # A fresh legacy native is built from the original saved spec plus its

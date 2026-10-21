@@ -61,6 +61,12 @@ def audit_spec_data(
             raise ValueError("Unsupported native one-dimensional numeric encoding.")
         loaded_document._sciplot_exact_1d = encoding == FLOAT64_ENCODING
         visible_spec = effective_series_presentation(spec)
+        from sciplot_core.studio_core.categorical_display import effective_presentation
+
+        visible_spec = effective_presentation(visible_spec)
+        from sciplot_core.veusz_worker.categorical_display import audit_presentation
+
+        audit_presentation(loaded_document, spec)
         from sciplot_core.veusz_worker.annotations import audit_native_annotations
 
         audit_native_annotations(loaded_document, visible_spec)

@@ -1,20 +1,29 @@
 """Additive Figure grammar authority shares existing Binding, storage and revisions."""
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
+from test_figure_grammar import example
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.plot_document import DocumentError, seal_document, build_keys
+from sciplot_core.plot_document import DocumentError, build_keys, seal_document
 from sciplot_core.plot_engine.content_store import intern_document
 from sciplot_core.plot_engine.contracts import validate_create
+from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.managed_updates import prepare_update
-from sciplot_core.plot_ir import create_managed_document, compile_document, validate_managed
+from sciplot_core.plot_engine.service import PlotService
+from sciplot_core.plot_engine.storage import load_head, read
+from sciplot_core.plot_ir import (
+    compile_document,
+    create_managed_document,
+    validate_managed,
+)
+from sciplot_core.plot_ir.figure_document import figure_spec, store_spec
 from sciplot_core.plot_transforms.graph import dependency_graph
-from test_figure_grammar import example
 
 
 def request_for_figure(tmp_path):
-    spec, datasets = example()
+    spec, _datasets = example()
     source = tmp_path / 'figure.csv'
     source.write_text('Frequency,Modulus\nHz,Pa\n0,1\n5,5\n10,15\n')
     selection = {'sheet': None, 'header_rows': [0], 'unit_row': 1, 'data_start_row': 2, 'data_end_row': 5}
@@ -63,9 +72,143 @@ def test_scale_domain_invalidates_compile_without_reexecuting_science(tmp_path):
         prepare_update(doc, patch)
 
 
+def test_position_batch_preserves_science_and_rejects_wrong_space_or_scope(tmp_path):
+    request = request_for_figure(tmp_path)
+    spec = request['template_definition']['figure_spec']
+    spec['annotations'] = [
+        {'id': 'annotation:sample', 'space': 'view', 'view_id': 'view:A',
+         'x': .2, 'y': .9, 'text': 'Sample 0.3', 'visible': True, 'style': {}},
+        {'id': 'annotation:figure', 'space': 'figure',
+         'x': .1, 'y': .1, 'text': 'Figure', 'visible': True, 'style': {}},
+        {'id': 'annotation:peak', 'space': 'data', 'view_id': 'view:A',
+         'x_scale': 'scale:x', 'y_scale': 'scale:y',
+         'x': 5, 'y': 15, 'text': 'Peak', 'visible': True, 'style': {}},
+    ]
+    document = create_managed_document(request['template_definition'], request['data_binding'], plot_id='test')
+    document['scientific']['provenance']['datasets'] = example()[1]
+    document = seal_document(document)
+    source = tmp_path / 'figure.csv'
+    original_bytes = source.read_bytes()
+    patch = {'plot_id': 'test', 'base_revision': 0, 'idempotency_key': 'position-batch',
+        'intent_class': 'presentation', 'changes': [
+            {'op': 'set', 'target': ['guide:legend'], 'property': 'legend.location', 'value': 'bottom-right'},
+            {'op': 'set', 'target': ['annotation:sample'], 'property': 'annotation.text', 'value': 'P0.3/0.7'},
+            {'op': 'set', 'target': ['annotation:sample', 'annotation:figure'], 'property': 'annotation.x', 'value': .7},
+            {'op': 'set', 'target': ['annotation:sample'], 'property': 'annotation.y', 'value': .8},
+        ]}
+    updated, diff, risk, execute = prepare_update(document, patch)
+    assert len(diff) == 5 and {item['risk'] for item in diff} == {'presentation'}
+    assert risk == 'presentation' and not execute
+    assert updated['scientific'] == document['scientific']
+    assert updated['scientific_hash'] == document['scientific_hash']
+    assert updated['presentation_hash'] != document['presentation_hash']
+    before_ir, after_ir = compile_document(document), compile_document(updated)
+    assert after_ir['datasets'] == before_ir['datasets']
+    assert after_ir['guides'][0]['location'] == 'bottom-right'
+    assert after_ir['annotations'][0]['text'] == 'P0.3/0.7'
+    assert after_ir['annotations'][0]['position_mm'] != before_ir['annotations'][0]['position_mm']
+    assert figure_spec(document) == spec | {'rendering_contract': figure_spec(document)['rendering_contract']}
+    assert source.read_bytes() == original_bytes
+    repeated, repeated_diff, repeated_risk, _ = prepare_update(updated, patch)
+    assert repeated == updated and repeated_diff == [] and repeated_risk == 'presentation'
+
+    def rejected(target, prop, value, intent='presentation', code='figure_edit_invalid_value'):
+        bad = deepcopy(patch)
+        bad.update(intent_class=intent, changes=[{'op': 'set', 'target': [target], 'property': prop, 'value': value}])
+        original = deepcopy(document)
+        with pytest.raises(ValueError) as error:
+            prepare_update(document, bad)
+        assert error.value.reason_code == code
+        assert document == original
+
+    rejected('guide:legend', 'legend.location', 'left')
+    rejected('annotation:sample', 'annotation.x', 1.1)
+    rejected('annotation:figure', 'annotation.y', -.1)
+    rejected('annotation:sample', 'annotation.x', True)
+    rejected('axis:xb', 'legend.location', 'top-left', code='document_unknown_target')
+    rejected('annotation:peak', 'annotation.x', 6, code='figure_scientific_intent_required')
+    rejected('annotation:peak', 'annotation.x', 5, code='figure_scientific_intent_required')
+    rejected('annotation:peak', 'annotation.x', True, intent='scientific')
+    duplicate = deepcopy(patch)
+    duplicate['changes'].append(deepcopy(patch['changes'][0]))
+    with pytest.raises(EngineError) as error:
+        prepare_update(document, duplicate)
+    assert error.value.reason_code == 'document_duplicate_change'
+
+    # Scope-specific location contracts match actual grammar validation.
+    figure = figure_spec(document)
+    figure['guides'][0].update(scope='figure', location='top')
+    figure['guides'][0].pop('view_id')
+    figure_document = store_spec(document, figure)
+    patch['changes'] = [{'op': 'set', 'target': ['guide:legend'], 'property': 'legend.location', 'value': 'left'}]
+    moved, _, risk, _ = prepare_update(figure_document, patch)
+    assert risk == 'presentation' and moved['scientific_hash'] == figure_document['scientific_hash']
+    assert figure_spec(moved)['guides'][0]['location'] == 'left'
+
+
+def test_data_anchor_position_requires_scientific_intent_without_running_transforms(tmp_path):
+    request = request_for_figure(tmp_path)
+    request['template_definition']['figure_spec']['annotations'] = [
+        {'id': 'annotation:peak', 'space': 'data', 'view_id': 'view:A',
+         'x_scale': 'scale:x', 'y_scale': 'scale:y',
+         'x': 5, 'y': 15, 'text': 'Peak', 'visible': True, 'style': {}},
+    ]
+    document = create_managed_document(request['template_definition'], request['data_binding'], plot_id='test')
+    datasets = example()[1]
+    document['scientific']['provenance']['datasets'] = datasets
+    document = seal_document(document)
+    patch = {'plot_id': 'test', 'base_revision': 0, 'idempotency_key': 'data-anchor', 'intent_class': 'scientific',
+        'changes': [{'op': 'set', 'target': ['annotation:peak'], 'property': 'annotation.x', 'value': 6},
+                    {'op': 'set', 'target': ['annotation:peak'], 'property': 'annotation.y', 'value': 14}]}
+    updated, diff, risk, execute = prepare_update(document, patch)
+    assert risk == 'scientific' and not execute and len(diff) == 2
+    assert {item['risk'] for item in diff} == {'scientific'}
+    assert updated['scientific_hash'] != document['scientific_hash']
+    assert updated['presentation_hash'] == document['presentation_hash']
+    before, after = (build_keys(dependency_graph(item, datasets)) for item in (document, updated))
+    assert {key for key in before if before[key] != after[key]} == {'compile', 'render', 'export'}
+    assert compile_document(updated)['datasets'] == compile_document(document)['datasets']
+
+
+def test_v2_source_revision_recompiles_explicit_changed_values_and_units(tmp_path):
+    from sciplot_core.plot_engine.managed_resolution import (
+        resolve_science,
+        resolved_metadata,
+    )
+    from sciplot_core.plot_engine.managed_state import resolved_ir
+
+    request = request_for_figure(tmp_path)
+    source = tmp_path / 'figure.csv'
+    document = create_managed_document(request['template_definition'], request['data_binding'], plot_id='test')
+    document = resolved_metadata(document, rule_id=request['rule_id'], executors={})
+    document, _ = resolve_science(tmp_path, document)
+    before = resolved_ir(tmp_path, document)
+    assert before['datasets']['raw:A']['columns']['column:1']['values'] == [1, 5, 15]
+
+    source.write_text(source.read_text().replace('5,5\n', '5,7\n'))
+    revised_bytes = source.read_bytes()
+    patch = {'plot_id': 'test', 'base_revision': 0, 'idempotency_key': 'v2-source-revision',
+        'intent_class': 'scientific', 'changes': [{'op': 'set', 'target': ['source:raw:A'],
+            'property': 'source.sha256', 'value': file_sha256(source)}]}
+    updated, diff, risk, execute = prepare_update(document, patch)
+    assert diff and risk == 'scientific' and execute
+    updated, _ = resolve_science(tmp_path, updated)
+    after = resolved_ir(tmp_path, updated)
+    assert after['schema_version'] == 2 and after['ir_hash'] != before['ir_hash']
+    assert after['scientific_hash'] != before['scientific_hash']
+    assert after['presentation_hash'] == before['presentation_hash']
+    assert after['datasets']['raw:A']['columns']['column:0'] == before['datasets']['raw:A']['columns']['column:0']
+    values = after['datasets']['raw:A']['columns']['column:1']
+    assert values['values'] == [1, 7, 15] and values['unit'] == 'Pa'
+    repeated, repeated_diff, _, _ = prepare_update(updated, patch)
+    assert repeated == updated and repeated_diff == []
+    assert resolved_ir(tmp_path, repeated)['ir_hash'] == after['ir_hash']
+    assert source.read_bytes() == revised_bytes
+
+
 def test_layer_consumes_existing_normalization_executor_output(tmp_path):
-    from sciplot_core.plot_transforms import builtin_executor, resolve_transforms
     from sciplot_core.plot_engine.managed_sources import load_sources
+    from sciplot_core.plot_transforms import builtin_executor, resolve_transforms
 
     request = request_for_figure(tmp_path)
     spec = request['template_definition']['figure_spec']
@@ -86,3 +229,86 @@ def test_layer_consumes_existing_normalization_executor_output(tmp_path):
     assert ir['views'][0]['layers'][0]['dataset_id'] == 'normalized'
     assert ir['datasets']['normalized']['columns']['column:1']['values'] == [1/15, 5/15, 1]
     assert ir['datasets']['normalized']['provenance']['transforms'][0]['node_id'] == 'normalize'
+
+
+@pytest.mark.comprehensive
+def test_figure_service_patch_and_source_refresh_keep_scientific_authority(tmp_path):
+    """Synthetic v2 data: edit display, then explicitly accept changed source bytes."""
+    request = request_for_figure(tmp_path)
+    request['template_definition']['figure_spec']['annotations'] = [{
+        'id': 'annotation:sample', 'space': 'view', 'view_id': 'view:A',
+        'x': .2, 'y': .9, 'text': 'Sample 0.3', 'visible': True, 'style': {},
+    }]
+    source = tmp_path / 'figure.csv'
+    service = PlotService()
+    try:
+        created = service.create(request)
+        assert created['ready_to_use'], created
+        root = Path(created['plot'])
+        initial = load_head(root)
+        initial_ir = read(Path(initial['binding']['ir_path']))
+        assert initial_ir['datasets']['raw:A']['columns']['column:1']['values'] == [1, 5, 15]
+
+        def change(description, key, prop, value, target, intent='presentation'):
+            return {'plot_id': description['plot_id'], 'base_revision': description['revision'],
+                'idempotency_key': key, 'intent_class': intent,
+                'changes': [{'op': 'set', 'target': [target], 'property': prop, 'value': value}]}
+
+        label = change(created, 'axis-label', 'axis.label', 'Frequency, Hz', 'axis:xb')
+        label['changes'].extend([
+            {'op': 'set', 'target': ['guide:legend'], 'property': 'legend.location', 'value': 'bottom-right'},
+            {'op': 'set', 'target': ['annotation:sample'], 'property': 'annotation.x', 'value': .65},
+            {'op': 'set', 'target': ['annotation:sample'], 'property': 'annotation.y', 'value': .15},
+            {'op': 'set', 'target': ['annotation:sample'], 'property': 'annotation.text', 'value': 'P0.3/0.7'},
+        ])
+        edited = service.patch(root, label)
+        assert edited['ready_to_use'] and edited['revision'] == 1, edited
+        assert edited['scientific_hash'] == created['scientific_hash']
+        assert edited['presentation_hash'] != created['presentation_hash']
+        edited_head = load_head(root)
+        edited_ir = read(Path(edited_head['binding']['ir_path']))
+        assert edited_head['binding']['ir_hash'] != initial['binding']['ir_hash']
+        assert edited_ir['datasets'] == initial_ir['datasets']
+        assert edited_ir['guides'][0]['location'] == 'bottom-right'
+        assert edited_ir['annotations'][0]['x'] == .65 and edited_ir['annotations'][0]['y'] == .15
+        assert edited_ir['annotations'][0]['text'] == 'P0.3/0.7'
+        replayed = service.patch(root, label)
+        assert replayed == {**edited, 'replayed': True}
+        assert load_head(root)['binding'] == edited_head['binding']
+
+        no_op = service.patch(root, change(edited, 'same-axis-label', 'axis.label',
+                                           'Frequency, Hz', 'axis:xb'))
+        assert no_op['ready_to_use'] and no_op['changed'] is False and no_op['revision'] == 1
+        assert no_op['scientific_hash'] == edited['scientific_hash']
+        assert no_op['presentation_hash'] == edited['presentation_hash']
+        assert load_head(root)['binding'] == edited_head['binding']
+
+        source.write_text(source.read_text().replace('5,5\n', '5,7\n'))
+        revised_bytes = source.read_bytes()
+        assert service.describe(root)['status'] == 'stale'
+        with pytest.raises(EngineError) as stale:
+            service.patch(root, change(edited, 'stale-axis-label', 'axis.label',
+                                       'Revised frequency', 'axis:xb'))
+        assert stale.value.reason_code == 'document_inputs_changed'
+        assert load_head(root)['document']['revision'] == 1
+
+        refreshed = service.patch(root, change(edited, 'source-revision', 'source.sha256',
+                                               file_sha256(source), 'source:raw:A', 'scientific'))
+        assert refreshed['ready_to_use'] and refreshed['revision'] == 2, refreshed
+        assert refreshed['scientific_hash'] != edited['scientific_hash']
+        assert refreshed['presentation_hash'] == edited['presentation_hash']
+        final = load_head(root)
+        current_ir = read(Path(final['binding']['ir_path']))
+        assert current_ir['schema_version'] == 2
+        columns = current_ir['datasets']['raw:A']['columns']
+        assert columns['column:0']['values'] == [0, 5, 10]
+        assert columns['column:0']['unit'] == 'Hz'
+        assert columns['column:1']['values'] == [1, 7, 15]
+        assert columns['column:1']['unit'] == 'Pa'
+        assert final['document']['scientific']['data_sources'][0]['sha256'] == file_sha256(source)
+        assert read(Path(refreshed['evidence']))['export']['scientific_audit']['status'] == 'passed'
+        assert current_ir['views'] == edited_ir['views']
+        assert source.read_bytes() == revised_bytes
+        assert service.describe(root)['status'] == 'current'
+    finally:
+        service.close()

@@ -39,18 +39,16 @@ def import_veusz_spec_data(
     groups = [
         group for group in categorical.get("groups", []) if isinstance(group, dict)
     ]
-    x_axis = axes.get("x") if isinstance(axes.get("x"), dict) else {}
-    category_labels = (
-        x_axis.get("category_labels")
-        if isinstance(x_axis.get("category_labels"), list)
-        else []
-    )
-    category_positions = (
-        x_axis.get("category_positions")
-        if isinstance(x_axis.get("category_positions"), list)
-        else []
-    )
+    axis_value = axes.get("x")
+    x_axis = axis_value if isinstance(axis_value, dict) else {}
+    category_labels = x_axis.get("category_labels")
+    if not isinstance(category_labels, list):
+        category_labels = []
+    category_positions = x_axis.get("category_positions")
+    if not isinstance(category_positions, list):
+        category_positions = []
     grouped_bar = categorical.get("presentation_kind") == "grouped_bar_error"
+    axis_anchors = grouped_bar or categorical.get("summary_statistic") == "raw_only"
     original_labels = [_veusz_literal_text(str(label)) for label in category_labels]
     interface.SetDataText("category_axis_labels", original_labels)
     label_dataset = "category_axis_labels"
@@ -65,7 +63,7 @@ def import_veusz_spec_data(
             f"{float(position):.17g}"
             for position in (
                 category_positions
-                if grouped_bar
+                if axis_anchors
                 else [group["position"] for group in groups]
             )
         ),
@@ -74,7 +72,7 @@ def import_veusz_spec_data(
         "category_axis_y(numeric)",
         (
             "\n".join("0" for _position in category_positions)
-            if grouped_bar
+            if axis_anchors
             else "\n".join(
                 f"{float(group['descriptive_statistics']['median']):.17g}"
                 for group in groups

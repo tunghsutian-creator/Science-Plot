@@ -12,7 +12,7 @@ from typing import Any
 from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadata
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.output_contract import requested_delivery_root
-from sciplot_core.source_coverage.managed_documents import _source_records
+from sciplot_core.source_coverage.managed_documents import source_records
 from sciplot_core.studio_core.delivery_recovery import _audit_candidate
 from sciplot_core.studio_core.delivery_recovery_state import canonical_path
 from sciplot_core.studio_core.source_update_commit import (
@@ -84,6 +84,9 @@ def run_document_worker(*arguments: object) -> dict[str, Any]:
         env=veusz_worker_environment(), cold_runner=subprocess.run,
     )
     if completed.returncode:
+        from sciplot_core.studio_core.categorical_display_errors import raise_categorical_worker_rejection
+
+        raise_categorical_worker_rejection(completed.returncode, completed.stderr)
         detail = completed.stderr.strip().splitlines()
         raise ValueError(
             "Native document operation failed: "
@@ -99,7 +102,7 @@ def audit_edited_document(
     document: Path, spec: Path, *, native_audit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     specification = spec.read_bytes()
-    records = _source_records(json.loads(specification))
+    records = source_records(json.loads(specification))
 
     def verify_sources() -> None:
         if spec.read_bytes() != specification or any(

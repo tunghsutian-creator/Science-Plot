@@ -314,7 +314,11 @@ def _validate_source_facts(
         _fail(
             "mechanical_summary_metric_missing",
             "The complete mechanical figure set needs unavailable specimen metrics. "
-            "Preserved curve endpoints do not establish fracture. " + details,
+            "Preserved curve endpoints do not establish fracture. The current ordinary "
+            "mechanical route has no independent raw-curve-only figure-set contract; "
+            "changing templates or selecting columns cannot supply missing reported "
+            "break facts. Retain the raw curves and report this unsupported scope "
+            "rather than inventing fracture, elongation, or toughness. " + details,
         )
 
 

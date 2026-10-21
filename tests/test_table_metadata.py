@@ -63,7 +63,8 @@ def test_merged_metadata_is_explicit_and_preserves_original_empty_cells(tmp_path
     composite.write_text(paired_table_text(proposal, frames))
     series = _scan_curve_series_source(composite, x_aliases=("Wavelength",), y_aliases=("Absorbance",),
         x_label="Wavelength", y_label="Absorbance", default_x_unit="nm", default_y_unit="a.u.", sample_prefix="wrong")
-    assert [item.sample for item in series] == ["8", "009"]
+    assert [item.sample for item in series] == [reference.source_id for reference in proposal.sources]
+    assert list(proposal.sample_labels.values()) == ["8", "009"]
     assert [len(item.points) for item in series] == [3, 3]
     assert series[0].points[0] == (400.1234567890123, 0.1234567890123457)
     assert source.read_bytes() == before
@@ -264,9 +265,9 @@ def test_mapping_replays_evidence_and_rejects_metadata_tampering(tmp_path):
         request_path=request, proposal_id="metadata", created_at="2026-09-10T08:00:00+00:00")
     frozen = DataMappingProposal.from_dict(proposal.to_dict())
     _, frames, _, _, _ = _prepare_mapping_frames(frozen, source_root=tmp_path)
-    assert frames["series_000"].iloc[0].tolist() == [400, 0.1234567890123456]
+    assert frames[frozen.sources[0].source_id].iloc[0].tolist() == [400, 0.1234567890123456]
     with pytest.raises(ValueError, match="does not reproduce"):
-        _prepare_mapping_frames(replace(frozen, sample_labels={"series_000": "Invented"}), source_root=tmp_path)
+        _prepare_mapping_frames(replace(frozen, sample_labels={frozen.sources[0].source_id: "Invented"}), source_root=tmp_path)
     mutated = deepcopy(frozen.table_confirmation)
     mutated["metadata_confirmations"][0]["evidence"]["text"] = "Invented"
     with pytest.raises(ValueError, match="cell text"):

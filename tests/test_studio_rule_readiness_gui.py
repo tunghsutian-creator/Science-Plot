@@ -14,20 +14,6 @@ _FULL_HASH = "a" * 64
 _SEMANTIC_HASH = "b" * 64
 
 
-def _current_binding() -> dict[str, Any]:
-    return {
-        "kind": "sciplot_studio_rule_contract_binding",
-        "version": 1,
-        "rule_id": "swelling_curve",
-        "prepared_rule_contract_sha256": _FULL_HASH,
-        "prepared_rule_semantic_contract_sha256": _SEMANTIC_HASH,
-        "certification_status": "current",
-        "certified_rule_contract_sha256": _FULL_HASH,
-        "certified_rule_semantic_contract_sha256": _SEMANTIC_HASH,
-        "certification_reasons": [],
-    }
-
-
 def _current_contract_snapshot() -> dict[str, Any]:
     return {
         "rule_id": "swelling_curve",

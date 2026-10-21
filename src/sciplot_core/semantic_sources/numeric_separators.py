@@ -5,9 +5,12 @@ from __future__ import annotations
 import re
 import math
 import numbers
-from typing import Literal
+from collections.abc import Callable
+from typing import Literal, cast
 
 import pandas as pd
+
+from sciplot_core.foundation.text_values import clean_text as _clean_text
 
 
 SeparatorEvidence = Literal["point", "comma", "ambiguous", "malformed"]
@@ -16,6 +19,27 @@ _NUMBER_TOKEN = re.compile(
     r"^[+-]?(?P<mantissa>(?:\d+(?:[.,]\d+)*|[.,]\d+))"
     r"(?:[Ee][+-]?\d+)?$"
 )
+
+
+def parse_numeric_cell(value: object, *, decimal_comma: bool = False) -> float | None:
+    if type(value) is float:
+        return None if math.isnan(value) else value
+    text = (
+        _clean_text(value).replace("\u00a0", "").replace("\u202f", "").replace(" ", "")
+    )
+    if not text:
+        return None
+    if decimal_comma:
+        if "," in text and "." in text:
+            text = text.replace(".", "")
+        text = text.replace(",", ".")
+    else:
+        text = text.replace(",", "")
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
 
 
 def selected_columns_use_decimal_comma(
@@ -75,10 +99,10 @@ def numeric_cell_syntax(value: object) -> Literal[
 ]:
     """Classify numeric syntax without choosing point or comma locale."""
 
-    if isinstance(value, numbers.Real) and not isinstance(value, bool):
+    if not isinstance(value, bool) and isinstance(value, numbers.Real):
         return "numeric_candidate" if math.isfinite(float(value)) else "nonfinite"
     if not isinstance(value, str):
-        return "empty" if pd.isna(value) else "nonnumeric"
+        return "empty" if cast(Callable[[object], object], pd.isna)(value) else "nonnumeric"
     compact = (
         value.strip()
         .replace("\u00a0", "")
@@ -125,6 +149,7 @@ def _separator_evidence(value: object) -> SeparatorEvidence | None:
 
 
 __all__ = [
+    "parse_numeric_cell",
     "numeric_cell_syntax",
     "selected_columns_use_decimal_comma",
     "selected_rows_use_decimal_comma",

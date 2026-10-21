@@ -25,6 +25,8 @@ from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.figure_plan.source_binding import source_tree_sha256
 from sciplot_core.figure_plan.task import FigureTask
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.performance_comparison.selected_scatter import build_selected_scatter_payload
+from sciplot_core.performance_comparison.selection import performance_selection_from_request
 
 
 _PERFORMANCE_SCATTER_FIGURE_ID = "performance_scatter"
@@ -38,7 +40,7 @@ def resolve_performance_plan(
 ) -> ResolvedFigurePlan:
     """Resolve selected performance tasks from one stable source snapshot."""
 
-    explicit = request.get("explicit_template_selection") is True
+    explicit = request.get("explicit_template_selection") is True or "performance_selection" in request
     templates = (
         (_explicit_template(request),)
         if explicit
@@ -54,7 +56,11 @@ def resolve_performance_plan(
                 "performance_source_unavailable",
                 "SciPlot could not fingerprint the performance-comparison source.",
             )
-        comparison = load_performance_comparison(input_path)
+        selection = performance_selection_from_request(request)
+        if selection is not None and templates != (PERFORMANCE_SCATTER_TEMPLATE_ID,):
+            raise PerformanceComparisonError("performance_selection_template_invalid", "Explicit X/Y metric selection supports the scatter template.")
+        comparison = (load_performance_comparison(input_path) if selection is None
+                      else load_performance_comparison(input_path, selection=selection))
         source_sha256 = source_tree_sha256(input_path)
         if (
             source_sha256 != source_sha256_before
@@ -118,7 +124,10 @@ def _task_for_template(
     material_order: tuple[str, ...],
 ) -> FigureTask:
     if template == PERFORMANCE_SCATTER_TEMPLATE_ID:
-        build_performance_scatter_payload(comparison)
+        payload = (build_selected_scatter_payload(comparison) if comparison.selection is not None
+                   else build_performance_scatter_payload(comparison))
+        if comparison.selection is not None:
+            material_order = tuple(str(item["label"]) for item in payload["series"])
         x_metric, y_metric = comparison.scatter_metrics
         return FigureTask.with_metric_binding(
             figure_id=_PERFORMANCE_SCATTER_FIGURE_ID,

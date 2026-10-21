@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from sciplot_core import cli
+from sciplot_core._paths import resolve_fixture_path
 import sciplot_core.autoplot.run as autoplot_module
 import sciplot_core.plan_preview as preview_module
 from sciplot_core.foundation.source_tree import source_tree_sha256
@@ -248,8 +249,8 @@ def test_real_uvvis_cli_expected_plan_accepts_current_and_rejects_changed_source
     tmp_path,
 ):
     repo = Path(__file__).resolve().parents[1]
-    original = (
-        repo / ".local/reference_data/real_world/uvvis_spectrum/pda_uvvis_spectra.csv"
+    original = resolve_fixture_path(
+        "tests/fixtures/real_world/uvvis_spectrum/pda_uvvis_spectra.csv"
     )
     if not original.is_file():
         pytest.skip("Local real UV-vis fixture is not installed")

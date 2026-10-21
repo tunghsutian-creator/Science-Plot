@@ -22,7 +22,12 @@ def _add_label(interface: Any, item: dict[str, Any]) -> None:
     interface.Set("yAxis", item["y_axis"])
     interface.Set("xPos", [float(item["x"])])
     interface.Set("yPos", [float(item["y"])])
-    interface.Set("label", _literal_text(item["label"]))
+    interface.Set(
+        "label",
+        item["literal_label"]
+        if "literal_label" in item
+        else _literal_text(item["label"]),
+    )
     interface.Set("alignHorz", item["align"])
     interface.Set("alignVert", item["valign"])
     interface.Set("angle", float(item["angle_degrees"]))
@@ -55,7 +60,12 @@ def _add_axis(
 ) -> None:
     interface.Add("axis", name=name, autoadd=False)
     interface.To(name)
-    interface.Set("label", format_plot_text_units(axis["label"]))
+    interface.Set(
+        "label",
+        axis["label"]
+        if axis.get("label_text_policy") == "literal_identifier_with_formatted_unit"
+        else format_plot_text_units(axis["label"]),
+    )
     if name == "y":
         interface.Set("direction", "vertical")
     interface.Set("autoMirror", False)
@@ -170,7 +180,12 @@ def _add_xy_series(
     interface.To(item["name"])
     interface.Set("xData", item["x_name"])
     interface.Set("yData", item["y_name"])
-    interface.Set("key", _literal_text(item["legend_key"]))
+    interface.Set(
+        "key",
+        item["literal_legend_key"]
+        if "literal_legend_key" in item
+        else _literal_text(item["legend_key"]),
+    )
     interface.Set("ErrorBarLine/hide", True)
     interface.Set("PlotLine/color", item["color"])
     interface.Set("PlotLine/style", item["line_style"])

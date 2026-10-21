@@ -71,6 +71,9 @@ def prepare_studio_run_sources(
 ) -> StudioRunSources:
     """Snapshot request/input lineage and derive metrics without mutating source."""
 
+    from sciplot_core.source_coverage.replicate_disclosure import verify_published_replicate_disclosures
+
+    verify_published_replicate_disclosures(request, veusz_documents if veusz_documents is not None else [document_path])
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "request_snapshot.json").write_text(
         json.dumps(json_safe(request), indent=2, ensure_ascii=False),
@@ -124,6 +127,7 @@ def prepare_studio_run_sources(
             project_dir=project_dir,
             documents=veusz_documents,
             existing_sources=snapshot_sources,
+            data_mapping_application=data_mapping_application,
         )
     snapshot_source = snapshot_sources[0] if snapshot_sources else None
     processed_source = (
@@ -149,6 +153,7 @@ def prepare_studio_run_sources(
             processed_source=metric_source,
             semantic=semantic,
             output_dir=output_dir,
+            summary_statistic=request.get("summary_statistic"),
         )
         if metric_source is not None and semantic.get("rule_id")
         else []

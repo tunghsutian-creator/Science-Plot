@@ -26,7 +26,8 @@ def _stat_identity(value: os.stat_result) -> dict[str, int]:
     }
 
 
-def _stable_file_snapshot(path: Path, *, label: str) -> dict[str, Any]:
+def stable_file_snapshot(path: Path, *, label: str) -> dict[str, Any]:
+    """Capture exact bytes and file identity, rejecting concurrent source changes."""
     resolved = path.expanduser().resolve()
     flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
@@ -61,6 +62,10 @@ def _stable_file_snapshot(path: Path, *, label: str) -> dict[str, Any]:
         "bytes": payload,
         "sha256": digest,
     }
+
+
+# Preserve the historical snapshot-current monkeypatch seam.
+_stable_file_snapshot = stable_file_snapshot
 
 
 def _assert_snapshot_current(snapshot: dict[str, Any], *, label: str) -> None:

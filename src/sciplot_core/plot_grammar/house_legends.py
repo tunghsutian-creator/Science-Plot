@@ -8,8 +8,9 @@ from .house import require_legacy_semantics
 def resolve_house_legends(spec: dict[str, Any], guides: list[dict[str, Any]], datasets: dict[str, Any],
                           layout: dict[str, Any]) -> None:
     require_legacy_semantics(spec["rendering_contract"])
-    from sciplot_core.studio_render.legend_placement import _auto_inside_legend_placement, manual_anchor_fraction
-    from sciplot_core.studio_render.models import StudioSeries
+    from sciplot_core.rendering_contract.legacy_algorithms import (
+        StudioSeries, auto_inside_legend_placement, manual_anchor_fraction,
+    )
 
     views = {view["id"]: view for view in spec["views"]}
     scales = {scale["id"]: scale for scale in spec["scales"]}
@@ -38,7 +39,7 @@ def resolve_house_legends(spec: dict[str, Any], guides: list[dict[str, Any]], da
                 pairs = [(x, y) for x, y in zip(columns[layer["mappings"]["x"]]["values"],
                     columns[layer["mappings"]["y"]]["values"], strict=True) if x is not None and y is not None]
                 series.append(StudioSeries(entry["label"], "x", "y", tuple(x for x, _ in pairs), tuple(y for _, y in pairs), "#000000"))
-            placement = _auto_inside_legend_placement(series, options, template_id="curve")
+            placement = auto_inside_legend_placement(series, options, template_id="curve")
             guide["position_fraction"] = manual_anchor_fraction(placement)
             guide["location"] = {"upper_right": "top-right", "upper_left": "top-left",
                                  "lower_right": "bottom-right", "lower_left": "bottom-left"}[placement["position"]]

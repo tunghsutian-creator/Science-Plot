@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -57,6 +58,15 @@ def assert_wheel_matches_source(wheel_path: Path) -> None:
 
 @pytest.mark.comprehensive
 def test_built_wheel_matches_the_current_source_tree(tmp_path: Path) -> None:
+    # Setuptools writes build/ and src/*.egg-info. Build the same public source
+    # bytes in a separate checkout so validation cannot mutate its own inputs.
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    shutil.copy2(REPO_ROOT / "pyproject.toml", checkout / "pyproject.toml")
+    shutil.copytree(SOURCE_ROOT, checkout / "src",
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info"))
+    before = {path.relative_to(SOURCE_ROOT).as_posix(): path.read_bytes()
+              for path in SOURCE_ROOT.rglob("*") if path.is_file() and "__pycache__" not in path.parts}
     result = subprocess.run(
         [
             sys.executable,
@@ -69,7 +79,7 @@ def test_built_wheel_matches_the_current_source_tree(tmp_path: Path) -> None:
             "--wheel-dir",
             str(tmp_path),
         ],
-        cwd=REPO_ROOT,
+        cwd=checkout,
         check=False,
         capture_output=True,
         text=True,
@@ -78,6 +88,9 @@ def test_built_wheel_matches_the_current_source_tree(tmp_path: Path) -> None:
     wheels = list(tmp_path.glob("*.whl"))
     assert len(wheels) == 1
     assert_wheel_matches_source(wheels[0])
+    after = {path.relative_to(SOURCE_ROOT).as_posix(): path.read_bytes()
+             for path in SOURCE_ROOT.rglob("*") if path.is_file() and "__pycache__" not in path.parts}
+    assert after == before
 
 
 if __name__ == "__main__":

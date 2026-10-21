@@ -29,8 +29,15 @@ class DataSourceReference:
     data_start_row: int | None = None
     data_end_row: int | None = None
     cell_evidence: dict[str, str] = field(default_factory=dict)
+    identity: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if not isinstance(self.identity, dict):
+            raise ValueError("Source identity must be an object.")
+        if self.identity:
+            from sciplot_core.mapping_contract.source_identity import validate_source_identity
+
+            validate_source_identity(self.identity)
         object.__setattr__(self, "source_id", _safe_id(self.source_id, "source_id"))
         object.__setattr__(
             self, "relative_path", _relative_source_path(self.relative_path)
@@ -71,7 +78,7 @@ class DataSourceReference:
             raise ValueError("cell_evidence needs zero-based row,column keys and original text values.")
 
     def to_dict(self) -> dict[str, Any]:
-        result = {
+        result: dict[str, Any] = {
             "source_id": self.source_id,
             "relative_path": self.relative_path,
             "sha256": self.sha256,
@@ -87,6 +94,8 @@ class DataSourceReference:
             result["data_end_row"] = self.data_end_row
         if self.cell_evidence:
             result["cell_evidence"] = dict(self.cell_evidence)
+        if self.identity:
+            result["identity"] = dict(self.identity)
         return result
 
     @classmethod
@@ -101,7 +110,7 @@ class DataSourceReference:
                 "header_row",
                 "delimiter",
                 "decimal",
-                "data_start_row", "data_end_row", "cell_evidence",
+                "data_start_row", "data_end_row", "cell_evidence", "identity",
             },
             label="DataSourceReference",
         )
@@ -120,6 +129,7 @@ class DataSourceReference:
             data_start_row=payload.get("data_start_row"),
             data_end_row=payload.get("data_end_row"),
             cell_evidence=payload.get("cell_evidence", {}),
+            identity=payload.get("identity", {}),
             delimiter=(
                 _required_text(payload["delimiter"], "source delimiter")
                 if "delimiter" in payload

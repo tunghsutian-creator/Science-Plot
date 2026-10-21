@@ -75,6 +75,9 @@ def _series_from_request(
     _prepared_transform_steps: list[dict[str, Any]] | None = None,
     _resolved_scientific_source: ResolvedScientificSource | None = None,
 ) -> tuple[list[StudioSeries], dict[str, Any], list[dict[str, Any]], Path]:
+    from sciplot_core.mapping_contract.categorical import validate_categorical_context
+
+    validate_categorical_context(request)
     if any(
         field in request
         for field in ("_terminal_source_binding", "_terminal_source_prepared")
@@ -124,13 +127,17 @@ def _series_from_request(
             prepare_performance_comparison,
         )
         from sciplot_core.performance_veusz import performance_series_records
+        from sciplot_core.performance_comparison.radar import validate_radar_presentation_size
+        from sciplot_core.performance_comparison.selection import performance_selection_from_request
 
         template_id = _request_template(request)
         try:
             payload = prepare_performance_comparison(
                 source,
                 template_id=template_id,
+                selection=performance_selection_from_request(request),
             )
+            validate_radar_presentation_size(payload, request)
         except PerformanceComparisonError as exc:
             raise StudioPreparationBlocked(exc.reason_code, str(exc)) from exc
         performance_task = validate_performance_payload_task(
@@ -307,13 +314,20 @@ def _series_from_request(
     )
     if _terminal_source_binding is not None:
         _terminal_source_binding.validate_series(styled)
-    axis_info["semantic_terminal_series_order"] = [item.label for item in styled]
+    axis_info["semantic_terminal_series_order"] = [
+        axis_info["source_bindings"][item.x_name]["source_id"]
+        if (request.get("categorical_binding") or {}).get("source_identity_version") == 1
+        or (axis_info.get("source_bindings") and axis_info.get("presentation_kind") == "categorical_replicates")
+        else item.label for item in styled]
     if mapping_application is not None:
         axis_info["data_mapping_coverage"] = _mapping_series_coverage(
             styled,
             mapping_application=mapping_application,
             request=request,
         )
+    from sciplot_core.studio_render.paired_source_identity import display_prepared_pairs
+
+    styled = display_prepared_pairs(styled, request, axis_info.get("source_bindings"))
     return styled, axis_info, transform_steps, source_root
 
 

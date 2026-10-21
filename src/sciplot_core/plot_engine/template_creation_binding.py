@@ -39,7 +39,7 @@ def prepare(request: dict[str, Any]) -> tuple[Path, dict[str, Any], dict[str, An
         fail("template_table_selection_required", "Supply original worksheet, metadata rows and explicit data row bounds.",
              "/data_binding/data_sources/0/table_selection", "explicit_original_region")
     try:
-        snapshot = table_choice_snapshot(path, request["rule_id"])
+        snapshot = table_choice_snapshot(path, request["rule_id"], sheets=[source["table_selection"]["sheet"]])
     except ValueError as exc:
         fail("template_rule_unsupported", "The native mapping owner rejected the selected scientific rule.",
              "/rule_id", "supported_rule", detail=short_error_message(str(exc)))

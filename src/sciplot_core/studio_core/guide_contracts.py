@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import math
 from typing import Any
-from sciplot_core.policy import (
+from sciplot_core.policy.categorical import (
     CATEGORICAL_BAR_LINE_WIDTH_PT,
     CATEGORICAL_BAR_WIDTH_FRACTION,
     CATEGORICAL_BOX_FILL_FRACTION,
     CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
+    categorical_keyline_color,
+)
+from sciplot_core.policy.frame_export import (
     UNIFIED_FOREGROUND_COLOR,
     UNIFIED_LINE_WIDTH_PT,
-    categorical_keyline_color,
 )
 
 
@@ -136,11 +138,8 @@ def _categorical_line_contracts(spec: dict[str, Any]) -> list[dict[str, Any]]:
     categorical = spec.get("categorical")
     if not isinstance(categorical, dict):
         return []
-    style = (
-        categorical.get("visual_style")
-        if isinstance(categorical.get("visual_style"), dict)
-        else {}
-    )
+    style_value = categorical.get("visual_style")
+    style = style_value if isinstance(style_value, dict) else {}
     groups = [
         group for group in categorical.get("groups", []) if isinstance(group, dict)
     ]
@@ -265,30 +264,29 @@ def _categorical_line_contracts(spec: dict[str, Any]) -> list[dict[str, Any]]:
             position = float(group["position"])
             mean = float(group["bar_mean"])
             error = float(group["bar_error"])
-            if not math.isfinite(error) or error <= 0.0:
-                continue
-            low = mean - error
-            high = mean + error
-            append_segments(
-                f"categorical_bar_error_{bar_index}",
-                (
-                    (position, low, position, high),
+            if math.isfinite(error) and error > 0.0:
+                low = mean - error
+                high = mean + error
+                append_segments(
+                    f"categorical_bar_error_{bar_index}",
                     (
-                        position - error_cap_half_width,
-                        high,
-                        position + error_cap_half_width,
-                        high,
+                        (position, low, position, high),
+                        (
+                            position - error_cap_half_width,
+                            high,
+                            position + error_cap_half_width,
+                            high,
+                        ),
+                        (
+                            position - error_cap_half_width,
+                            low,
+                            position + error_cap_half_width,
+                            low,
+                        ),
                     ),
-                    (
-                        position - error_cap_half_width,
-                        low,
-                        position + error_cap_half_width,
-                        low,
-                    ),
-                ),
-                color=UNIFIED_FOREGROUND_COLOR,
-                width_pt=error_width,
-            )
+                    color=UNIFIED_FOREGROUND_COLOR,
+                    width_pt=error_width,
+                )
             left = position - bar_width / 2.0
             right = position + bar_width / 2.0
             keyline_color = str(

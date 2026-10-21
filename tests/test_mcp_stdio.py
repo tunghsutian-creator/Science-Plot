@@ -3,9 +3,9 @@ from __future__ import annotations
 import base64
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import anyio
 import pytest
@@ -22,7 +22,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 def _parameters(*, cli=False):
     return StdioServerParameters(command=str(REPO_ROOT / "skill/scripts/sciplot") if cli else sys.executable,
         args=["mcp"] if cli else ["-m", "sciplot_core.mcp_server"], cwd=REPO_ROOT,
-        env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")})
+        env={**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, (str(REPO_ROOT / "src"), os.environ.get("PYTHONPATH", ""))))})
 
 
 async def _call(client, name, arguments):
@@ -32,18 +32,75 @@ async def _call(client, name, arguments):
 
 
 @pytest.mark.comprehensive
+def test_stdio_composition_intents_reopen_and_preserve_generated_image(tmp_path):
+    from PIL import Image
+
+    image = tmp_path / "generated micrograph.png"
+    Image.new("RGB", (60, 40), "#8ba6a6").save(image)
+    original = image.read_bytes()
+    layout = tmp_path / "figure layout.json"
+
+    async def scenario():
+        async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
+            capabilities = await _call(client, "sciplot_compose_capabilities", {})
+            assert capabilities["authority"]["legacy"] == "exact saved VSZ"
+            created = await _call(client, "sciplot_compose", {"request": {"action": "new", "layout": str(layout)}})
+            assert created["revision"] == 0
+            selected = await _call(client, "sciplot_compose", {"request": {
+                "action": "apply", "layout": str(layout), "expected_revision": 0,
+                "operations": [{"op": "add_panel", "panel": {"id": "panel:a", "row": 0, "column": 0,
+                                "source": {"kind": "image", "path": str(image)}}}]}})
+            assert selected["revision"] == 1 and selected["panels"][0]["source_kind"] == "image"
+            spaced = await _call(client, "sciplot_compose", {"request": {
+                "action": "apply", "layout": str(layout), "expected_revision": 1,
+                "operations": [{"op": "set_spacing", "gap_x_mm": 7, "gap_y_mm": 8}]}})
+            assert spaced["revision"] == 2 and spaced["layout"]["gap_y_mm"] == 8
+            stale = await client.call_tool("sciplot_compose", {"request": {
+                "action": "apply", "layout": str(layout), "expected_revision": 1,
+                "operations": [{"op": "set_label", "id": "panel:a", "label": "OLD"}]}})
+            assert stale.is_error and stale.structured_content["error"]["code"] == "assembly_revision_conflict"
+        async with Client(_parameters(), read_timeout_seconds=60) as client:
+            reopened = await _call(client, "sciplot_compose", {"request": {
+                "action": "inspect", "layout": str(layout), "check_sources": True}})
+            assert reopened["revision"] == 2 and reopened["source_validation"] == "current"
+            assert reopened["panels"][0]["label"] is None
+
+    anyio.run(scenario)
+    assert image.read_bytes() == original
+
+
+@pytest.mark.comprehensive
 def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 32
+            assert len(tools.tools) == 43
+            discovered = {tool.name: tool for tool in tools.tools}
+            assert len(discovered) == 43
+            assert "sciplot_plot_intent" in discovered
+            recovery = discovered["sciplot_plot_resume"].input_schema
+            assert recovery["additionalProperties"] is False
+            assert set(recovery["required"]) == {"plot", "request"}
+            request = recovery["properties"]["request"]
+            assert request["additionalProperties"] is False
+            assert set(request["properties"]) == set(request["required"]) == {
+                "plot_id", "base_revision", "idempotency_key"}
             caps = await _call(client, "sciplot_capabilities", {})
             assert caps["transport"] == "mcp_stdio"
             assert caps["model_configuration_required"] is False
             index = await _call(client, "sciplot_task_capabilities", {})
             definition = await _call(client, "sciplot_task_capabilities", {
                 "section": "request", "name": "create", "expected_contract_sha256": index["contract_sha256"]})
-            assert definition["schema"]["properties"]["action"]["const"] == "create"
+            variants = definition["schema"]["oneOf"]
+            assert all(item["properties"]["action"]["const"] == "create"
+                       and item["additionalProperties"] is False for item in variants)
+            required_variants = {frozenset(item["required"]) for item in variants}
+            assert len(variants) == len(required_variants)
+            assert required_variants == {
+                frozenset({"version", "action", "source"}),
+                frozenset({"version", "action", "sources", "intent"}),
+                frozenset({"version", "action", "source", "categorical"}),
+            }
             stale = await client.call_tool("sciplot_task_capabilities", {
                 "section": "request", "name": "create", "expected_contract_sha256": "0" * 64})
             assert stale.is_error
@@ -62,7 +119,7 @@ def test_stdio_native_preview_style_apply_export_and_new_connection(tmp_path):
     raw = source.read_bytes()
     setup = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "studio", str(source),
         "--out", str(tmp_path / "Visible"), "--rule", "uvvis_spectrum", "--export", "pdf,tiff_300", "--json"],
-        cwd=REPO_ROOT, capture_output=True, text=True, timeout=180)
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=180, check=False)
     assert setup.returncode == 0, setup.stdout + setup.stderr
     created = json.loads(setup.stdout)
     project, document = created["project_dir"], Path(created["document"])
@@ -125,14 +182,25 @@ def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tm
             assert found["matches"][0]["project"] == project and found["matches"][0]["source_current"] is True
             failure_query = await _call(client, "sciplot_task_inspect", {"task": created["task_dir"]})
             failure_figure = failure_query["current_project"]["figures"][0]
-            failed_call = await client.call_tool("sciplot_task_start", {"request": {
+            invalid_task = tmp_path / "invalid_width"
+            invalid_width = await client.call_tool("sciplot_task_start", {"request": {
                 "version": 1, "action": "edit", "project": project, "export": False,
                 "expected_document_sha256": failure_figure["document_sha256"],
                 "operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2"}}]},
+                "task_dir": str(invalid_task)})
+            assert invalid_width.is_error and not invalid_task.exists()
+            assert invalid_width.structured_content["error"]["code"] == "invalid_sample_style"
+            assert invalid_width.structured_content["repair"]["issues"][0]["constraint"] == "positive_physical_size"
+            assert file_sha256(Path(failure_figure["document"])) == failure_figure["document_sha256"]
+            failed_call = await client.call_tool("sciplot_task_start", {"request": {
+                "version": 1, "action": "edit", "project": project, "export": False,
+                "expected_document_sha256": failure_figure["document_sha256"],
+                "operations": [{"op": "set_sample_style", "samples": ["Missing A"], "style": {"width": "2pt"}}]},
                 "task_dir": str(tmp_path / "failed_preview")})
             assert failed_call.is_error
             failed_preview = failed_call.structured_content
             assert failed_preview["status"] == "blocked" and failed_preview["phase"] == "previewing"
+            assert failed_preview["blocker"]["reason_code"] == "unknown_sample_style_target"
             corrected = await _call(client, "sciplot_task_resume", {"task": failed_preview["task_dir"], "response": {
                 "expected_preview_revision": failed_preview["preview_revision"],
                 "revise_operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2.5pt"}}]}})

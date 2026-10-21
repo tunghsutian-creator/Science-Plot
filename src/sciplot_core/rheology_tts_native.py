@@ -151,7 +151,15 @@ def _panel(interface: Any, panel: dict[str, Any], width: float, height: float) -
             float(note["y"]),
             size=style["legend_font_size_pt"],
         )
-    for item in panel["series"]:
+    # Semantic/data/legend order stays in the compiled plan. Native siblings are
+    # painted in reverse order, so foreground role widgets are created first.
+    priority = {"fitting_region_points": 0, "observed_shift": 0, "master_points": 0,
+                "regression_fit": 1, "context_curve": 2}
+    drawing_order = sorted(enumerate(panel["series"]),
+                           key=lambda pair: (priority.get(pair[1].get("role"), 1), pair[0]))
+    if panel["legend"] and [index for index, _ in drawing_order] != list(range(len(drawing_order))):
+        interface.Set("key1/order", ",".join(item["name"] for item in panel["series"]))
+    for _index, item in drawing_order:
         if item["kind"] == "bar":
             _bar(interface, item, axes)
         else:

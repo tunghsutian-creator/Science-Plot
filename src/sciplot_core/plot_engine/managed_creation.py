@@ -4,17 +4,22 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.plot_ir import create_managed_document
+from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.project_session import external_project_session
 
 from .backend import PlotBackend
 from .errors import EngineError
+from .current_unit_admission import admit_current_units
 from .exports import export_head
+from .external_mutation import authority_status
 from .managed_resolution import resolve_science, resolved_metadata
 from .managed_state import make_binding
+from .object_operations import plot_object_handle
 from .storage import commit, digest, load_head, read, write
 
 
+@with_table_reads
 def create_managed(request: dict[str, Any], backend: PlotBackend) -> dict[str, Any]:
     sources = request["data_binding"]["data_sources"]
     if not sources:
@@ -38,6 +43,7 @@ def create_managed(request: dict[str, Any], backend: PlotBackend) -> dict[str, A
             document = create_managed_document(request["template_definition"], request["data_binding"],
                                                plot_id=identifier, theme=request.get("theme"))
             document = resolved_metadata(document, rule_id=request["rule_id"], executors=request.get("scientific_executors", {}))
+            admit_current_units(root, document)
             state = {"request_hash": digest(request), "request": request, "document": document,
                      "output": str(output), "phase": "resolving"}
             write(path, state)
@@ -55,4 +61,6 @@ def create_managed(request: dict[str, Any], backend: PlotBackend) -> dict[str, A
         result = export_head(root, head, backend)
         result.update({"plot_type": "ManagedPlot", "ir_hash": head["binding"]["ir_hash"],
                        "creation_evidence": str(path)})
+        result["plot_objects"] = [plot_object_handle(result, document=head["document"],
+                                                    authority=authority_status("ManagedPlot"))]
         return result

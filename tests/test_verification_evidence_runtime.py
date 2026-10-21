@@ -1,0 +1,245 @@
+"""Native discovery and logical loader closure regressions without native execution."""
+from pathlib import Path
+import sys
+from types import SimpleNamespace
+
+import pytest
+
+from sciplot_core.verification import evidence_runtime as runtime
+from sciplot_core.verification.evidence_identity import digest, discover_files
+
+
+@pytest.fixture(autouse=True)
+def synthetic_inspector(tmp_path, monkeypatch):
+    # Discovery unit tests mock subprocess output; bind their generated tool too.
+    tool = binary(tmp_path / "inspector")
+    monkeypatch.setattr(runtime, "inspector_path", lambda: tool)
+
+
+def binary(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\xcf\xfa\xed\xfe" + b"test native bytes")
+    return path
+
+
+def test_native_logical_alias_and_absent_loader_candidates_are_bound(tmp_path, monkeypatch):
+    main = binary(tmp_path / "main.so")
+    old = binary(tmp_path / "old/lib.dylib")
+    new = binary(tmp_path / "new/lib.dylib")
+    alias = tmp_path / "current"
+    alias.symlink_to(old.parent, target_is_directory=True)
+    absent = tmp_path / "preferred"
+    monkeypatch.setattr(runtime.sys, "platform", "darwin")
+    def otool(command, **kwargs):
+        if Path(command[-1]) == main:
+            output = (f"{main} (architecture arm64):\n\t@rpath/lib.dylib (compatibility version 1)\n"
+                      f"{main} (architecture x86_64):\n\t@rpath/lib.dylib (compatibility version 1)\n")
+            loads = f"cmd LC_RPATH\ncmdsize 40\npath {absent} (offset 12)\ncmd LC_RPATH\ncmdsize 40\npath {alias} (offset 12)\n"
+        else:
+            output, loads = f"{command[-1]}:\n", ""
+        return SimpleNamespace(stdout=output if command[1] == "-L" else loads)
+    monkeypatch.setattr(runtime.subprocess, "run", otool)
+    bindings, aliases = {}, {}
+    roots = runtime.native_dependencies([str(main)], executable=main, environment={}, bindings=bindings, aliases=aliases)
+    assert alias / "lib.dylib" in roots and absent / "lib.dylib" in roots
+    assert aliases[digest(str(alias / "lib.dylib"))] == digest(str(old))
+    before = discover_files(roots, allow_missing=True)
+    alias.unlink()
+    alias.symlink_to(new.parent, target_is_directory=True)
+    assert before != discover_files(roots, allow_missing=True)
+    binary(absent / "lib.dylib")
+    assert before != discover_files(roots, allow_missing=True)
+
+
+def test_unknown_native_dependency_blocks(tmp_path, monkeypatch):
+    main = binary(tmp_path / "main.so")
+    monkeypatch.setattr(runtime.sys, "platform", "darwin")
+    for key in ("DYLD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES", "LD_LIBRARY_PATH"):
+        with pytest.raises(ValueError, match="loader overrides have no reviewed closure policy"):
+            runtime.native_dependencies([str(main)], executable=main, environment={key: str(tmp_path)})
+    monkeypatch.setattr(runtime.subprocess, "run", lambda command, **kwargs: SimpleNamespace(
+        stdout=f"{main}:\n\t@rpath/unknown.dylib (compatibility version 1)\n" if command[1] == "-L" else ""))
+    with pytest.raises(ValueError, match="unresolved"):
+        runtime.native_dependencies([str(main)], executable=main, environment={})
+
+
+def test_unused_qml_is_byte_input_but_not_supported_native_entrypoint():
+    assert not runtime._native_entrypoint("/site/PyQt6/Qt6/plugins/qmltooling/libunused.dylib")
+    assert runtime._native_entrypoint("/site/PyQt6/Qt6/plugins/platforms/libqcocoa.dylib")
+    assert runtime._native_entrypoint("/site/PyQt6/QtSvg.abi3.so")
+
+
+@pytest.mark.parametrize("source", ["from PyQt6 import QtQuick", "import importlib\nimportlib.import_module('PyQt6.QtQuick')"])
+def test_new_unsupported_static_or_dynamic_qt_import_blocks(tmp_path, source):
+    (tmp_path / "new.py").write_text(source)
+    with pytest.raises(ValueError, match="Qt imports"):
+        runtime.qt_import_bindings([tmp_path])
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="default runtime policy binds the actual macOS build")
+def test_runtime_keeps_logical_roots_and_missing_enabled_usersite(tmp_path, monkeypatch):
+    old, new = tmp_path / "old", tmp_path / "new"
+    for directory in [old, new]:
+        directory.mkdir()
+        (directory / "bytes").write_text(directory.name)
+    alias = tmp_path / "current"
+    alias.symlink_to(old, target_is_directory=True)
+    executable = tmp_path / "python"
+    executable.symlink_to(old / "bytes")
+    site = tmp_path / "site"
+    (site / "PyQt6").mkdir(parents=True)
+    usersite = tmp_path / "absent-user-site"
+    monkeypatch.setattr(runtime.site, "getsitepackages", lambda: [str(site)])
+    monkeypatch.setattr(runtime.site, "ENABLE_USER_SITE", True)
+    monkeypatch.setattr(runtime.site, "getusersitepackages", lambda: str(usersite))
+    monkeypatch.setattr(runtime.sysconfig, "get_path", lambda name: str(tmp_path / "stdlib"))
+    monkeypatch.setattr(runtime.sys, "path", [str(alias)])
+    monkeypatch.setattr(runtime.sys, "executable", str(executable))
+    domains, _ = runtime.runtime_inputs(repo_root=tmp_path, environment={
+        "SCIPLOT_VEUSZ_ROOT": str(alias), "PYTHONPATH": str(alias), "DYLD_FRAMEWORK_PATH": str(alias)})
+    assert domains["python"][0] == executable
+    assert domains["native"][0] == alias and domains["native"][-1] == alias
+    assert alias in domains["dependencies"] and usersite in domains["dependencies"]
+    before = discover_files([alias, executable, usersite], allow_missing=True)
+    alias.unlink()
+    alias.symlink_to(new, target_is_directory=True)
+    executable.unlink()
+    executable.symlink_to(new / "bytes")
+    assert before != discover_files([alias, executable, usersite], allow_missing=True)
+
+
+def test_real_session_finish_blocks_unreviewed_dynamically_loaded_qt(tmp_path, monkeypatch):
+    import json
+    from sciplot_core.verification import pytest_finish
+    finish = tmp_path / "finish.json"
+    monkeypatch.setenv("SCIPLOT_VERIFY_FINISH", str(finish))
+    monkeypatch.setenv("SCIPLOT_VERIFY_QT_MODULES", json.dumps(sorted(runtime.QT_MODULES)))
+    monkeypatch.setitem(sys.modules, "PyQt6.QtQuick", SimpleNamespace())
+    pytest_finish.pytest_sessionfinish(SimpleNamespace(items=[]), 0)
+    assert json.loads(finish.read_text())["complete"] is False
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="default runtime policy binds the actual macOS build")
+def test_relative_runtime_environment_binds_real_child_inputs(tmp_path, monkeypatch):
+    import os
+    import subprocess
+    caller, repo = tmp_path / "caller", tmp_path / "project/repo"
+    caller.mkdir()
+    repo.mkdir(parents=True)
+    child_source = repo.parent / "external"
+    child_source.mkdir()
+    module = child_source / "scientific_input.py"
+    module.write_text("VALUE = 1\n")
+    wrong_parent_source = tmp_path / "external"
+    wrong_parent_source.mkdir()
+    (wrong_parent_source / module.name).write_text("VALUE = 99\n")
+    site = tmp_path / "site"
+    (site / "PyQt6").mkdir(parents=True)
+    for name in ("runtime/third_party/veusz", "plugins", "frameworks", "fonts", "parent-extra"):
+        (repo / name).mkdir(parents=True)
+    alias = repo / "import-current"
+    alias.symlink_to(child_source, target_is_directory=True)
+    monkeypatch.chdir(caller)
+    monkeypatch.setattr(runtime.site, "getsitepackages", lambda: [str(site)])
+    monkeypatch.setattr(runtime.site, "ENABLE_USER_SITE", False)
+    monkeypatch.setattr(runtime.sysconfig, "get_path", lambda name: str(tmp_path / "stdlib"))
+    # This fixture models a finite parent runtime. A real checkout ancestor of
+    # repo-local basetemp would legitimately cover/deduplicate every child path.
+    monkeypatch.setattr(runtime.sys, "path", [str(site), "parent-extra"])
+    env = {"PYTHONPATH": os.pathsep.join(("../external:import-current:~/extras", os.environ.get("PYTHONPATH", ""))), "SCIPLOT_RUNTIME_REPO": "runtime",
+           "QT_PLUGIN_PATH": "plugins",
+           "DYLD_FRAMEWORK_PATH": os.pathsep.join(("frameworks", os.environ.get("DYLD_FRAMEWORK_PATH", ""))),
+           "QT_QPA_FONTDIR": "fonts"}
+    domains, _ = runtime.runtime_inputs(repo_root=repo, environment=env)
+    assert repo / "../external" in domains["dependencies"]
+    assert alias in domains["dependencies"]
+    assert repo / "~/extras" in domains["dependencies"]
+    assert caller / "parent-extra" in domains["dependencies"]
+    assert domains["native"][0] == repo / "runtime/third_party/veusz"
+    assert repo / "plugins" in domains["qt"] and repo / "frameworks" in domains["native"]
+    assert repo / "fonts" in domains["fonts"]
+    command = [sys.executable, "-B", "-c", "import scientific_input; assert scientific_input.VALUE == 1"]
+    assert subprocess.run(command, cwd=repo, env={**os.environ, **env}).returncode == 0
+    inputs = [path for path in domains["dependencies"] if path in {repo / "../external", alias}]
+    from sciplot_core.verification.evidence_identity import DOMAINS, capture_inputs
+    bindings = {domain: {"paths": [str(path) for path in inputs], "symlinks": "resolve", "allow_missing": True} for domain in DOMAINS}
+    before = capture_inputs(bindings, repo_root=repo)
+    module.write_text("VALUE = 2\n")
+    assert before != capture_inputs(bindings, repo_root=repo)
+    assert subprocess.run(command, cwd=repo, env={**os.environ, **env}, capture_output=True).returncode != 0
+
+
+@pytest.mark.parametrize("install", ["missing_absolute", "existing_absolute", "rpath", "system", "nested"])
+def test_framework_overrides_precede_install_name_in_declared_order(tmp_path, monkeypatch, install):
+    import os
+    main = binary(tmp_path / "python3.14")
+    suffix = "Python.framework/Versions/3.14/Python"
+    original = tmp_path / "old-install" / suffix
+    if install == "existing_absolute":
+        binary(original)
+    name = {"rpath": "@rpath/" + suffix,
+            "system": "/System/Library/Frameworks/" + suffix,
+            "nested": "/old/Outer.framework/Frameworks/" + suffix}.get(install, str(original))
+    first_root, second_root = tmp_path / "first", tmp_path / "second"
+    first = binary(first_root / suffix)
+    second = binary(second_root / suffix)
+    visited = []
+    monkeypatch.setattr(runtime.sys, "platform", "darwin")
+    def otool(command, **kwargs):
+        path = Path(command[-1])
+        visited.append(path)
+        output = f"{path}:\n"
+        if path == main:
+            output += f"\t{name} (compatibility version 1)\n"
+        return SimpleNamespace(stdout=output if command[1] == "-L" else "")
+    monkeypatch.setattr(runtime.subprocess, "run", otool)
+    aliases = {}
+    # A relative first override is interpreted in the child checkout, not cwd.
+    roots = runtime.native_dependencies([str(main)], executable=main, repo_root=tmp_path,
+        environment={"DYLD_FRAMEWORK_PATH": os.pathsep.join(("first", str(second_root)))}, aliases=aliases)
+    assert first in roots and second in roots
+    assert first in visited and second not in visited and original not in visited
+    assert aliases[digest(str(first))] == digest(str(first))
+
+
+def test_missing_earlier_framework_override_invalidates_when_created(tmp_path, monkeypatch):
+    import os
+    main = binary(tmp_path / "python3.14")
+    suffix = "Python.framework/Versions/3.14/Python"
+    earlier, later = tmp_path / "earlier", tmp_path / "later"
+    selected = binary(later / suffix)
+    monkeypatch.setattr(runtime.sys, "platform", "darwin")
+    def otool(command, **kwargs):
+        name = Path(command[-1])
+        dependency = f"\t/old/missing/{suffix} (compatibility version 1)\n" if name == main else ""
+        return SimpleNamespace(stdout=f"{name}:\n{dependency}" if command[1] == "-L" else "")
+    monkeypatch.setattr(runtime.subprocess, "run", otool)
+    aliases = {}
+    roots = runtime.native_dependencies([str(main)], executable=main,
+        environment={"DYLD_FRAMEWORK_PATH": os.pathsep.join((str(earlier), str(later)))}, aliases=aliases)
+    assert selected in roots and earlier / suffix in roots
+    assert aliases[digest(str(earlier / suffix))] == digest("missing")
+    before = discover_files(roots, allow_missing=True)
+    binary(earlier / suffix)
+    assert before != discover_files(roots, allow_missing=True)
+
+
+def test_unresolved_framework_stays_blocked_with_configured_overrides(tmp_path, monkeypatch):
+    main = binary(tmp_path / "python3.14")
+    monkeypatch.setattr(runtime.sys, "platform", "darwin")
+    monkeypatch.setattr(runtime.subprocess, "run", lambda command, **kwargs: SimpleNamespace(
+        stdout=f"{main}:\n\t/absent/Python.framework/Versions/3.14/Python (compatibility version 1)\n" if command[1] == "-L" else ""))
+    with pytest.raises(ValueError, match="unresolved"):
+        runtime.native_dependencies([str(main)], executable=main,
+            environment={"DYLD_FRAMEWORK_PATH": str(tmp_path / "absent-override")})
+
+
+def test_reviewed_qt_test_events_bind_bytes_and_native_extension(tmp_path):
+    source = tmp_path / "native_events.py"
+    source.write_text("from PyQt6 import QtTest\n")
+    bindings = runtime.qt_import_bindings([tmp_path])
+    assert bindings == {digest(str(source.resolve())): runtime.file_sha256(source)}
+    assert runtime._native_entrypoint("/site/PyQt6/QtTest.abi3.so")
+    source.write_text("from PyQt6 import QtQuick\n")
+    with pytest.raises(ValueError, match="Qt imports"):
+        runtime.qt_import_bindings([tmp_path])

@@ -30,6 +30,7 @@ from sciplot_core.studio_render.series_option_context import (
     is_inferred_source_group_order,
     replicate_group_style_indexes,
     request_option_authority,
+    series_styles_by_identity,
 )
 
 from sciplot_core.studio_render.template_resolution import (
@@ -46,6 +47,7 @@ def resolve_series_encodings(
     *,
     render_options: dict[str, Any],
     request: dict[str, Any],
+    source_bindings: dict[str, Any] | None = None,
 ) -> list[StudioSeries]:
     """Select, order, and bind every ordinary series visual encoding once."""
 
@@ -53,11 +55,11 @@ def resolve_series_encodings(
     order = _string_list(render_options.get("series_order")) or _string_list(
         request.get("series_order")
     )
-    styles = (
-        render_options.get("series_styles")
-        if isinstance(render_options.get("series_styles"), list)
-        else []
-    )
+    bindings = source_bindings or {}
+    def identity(item: StudioSeries) -> str:
+        return str(bindings[item.x_name]["source_id"]) if bindings else item.label
+    raw_styles = render_options.get("series_styles")
+    styles = raw_styles if isinstance(raw_styles, list) else []
     template_id = _request_template(request)
     palette_resolution = resolve_palette_authority(
         request,
@@ -91,7 +93,7 @@ def resolve_series_encodings(
         for label, count in Counter(item.label for item in series).items()
         if count > 1
     )
-    if duplicate_labels:
+    if duplicate_labels and not bindings:
         raise StudioPreparationBlocked(
             "duplicate_series_labels",
             "Series labels must be unique before label-based selection: "
@@ -113,7 +115,7 @@ def resolve_series_encodings(
             "duplicate_series_include",
             "series_include contains duplicate labels: " + ", ".join(duplicate_include),
         )
-    by_label = {item.label: item for item in series}
+    by_label = {identity(item): item for item in series}
     unknown_order = [label for label in order if label not in by_label]
     if unknown_order:
         if is_inferred_source_group_order(order, request=request):
@@ -126,7 +128,7 @@ def resolve_series_encodings(
             )
     ordered = [by_label[label] for label in order if label in by_label]
     ordered.extend(
-        item for item in series if item.label not in {entry.label for entry in ordered}
+        item for item in series if identity(item) not in {identity(entry) for entry in ordered}
     )
     if include:
         unknown_include = [label for label in include if label not in by_label]
@@ -137,37 +139,27 @@ def resolve_series_encodings(
                 + ", ".join(unknown_include),
             )
         include_set = set(include)
-        ordered = [item for item in ordered if item.label in include_set]
-    style_by_label: dict[str, dict[str, Any]] = {}
-    for style in styles:
-        if isinstance(style, dict):
-            label = (
-                style.get("label")
-                or style.get("sample")
-                or style.get("name")
-                or style.get("series_id")
-            )
-            if isinstance(label, str):
-                style_by_label[label] = style
+        ordered = [item for item in ordered if identity(item) in include_set]
+    style_by_label = series_styles_by_identity(styles, identities=set(by_label), structured=bool(bindings))
     styled: list[StudioSeries] = []
-    factorized_curve = _factorized_curve_grid(
+    factorized_curve = None if bindings else _factorized_curve_grid(
         ordered,
         template_id=template_id,
     )
     grouped_replicate_styles = (
         replicate_group_style_indexes([item.label for item in ordered])
-        if str(request.get("rule_id") or "").strip() == "swelling_curve"
+        if not bindings and str(request.get("rule_id") or "").strip() == "swelling_curve"
         else {}
     )
     grouped_bar_samples: list[str] = []
     for item in ordered:
         if item.presentation_kind != "categorical_grouped_replicates":
             continue
-        sample, _condition = _grouped_bar_identity(item.label)
+        sample = bindings[item.x_name]["sample"] if bindings else _grouped_bar_identity(item.label)[0]
         if sample not in grouped_bar_samples:
             grouped_bar_samples.append(sample)
     for index, item in enumerate(ordered):
-        style = style_by_label.get(item.label, {})
+        style = style_by_label.get(identity(item), {})
         if style.get("visible") is False or style.get("enabled") is False:
             continue
         impact_point_line_item = item.presentation_kind in IMPACT_POINT_LINE_KINDS
@@ -200,7 +192,7 @@ def resolve_series_encodings(
             # tone, and every measured trace remains solid with no markers.
             factor_line_style = "solid"
         if item.presentation_kind == "categorical_grouped_replicates":
-            sample, _condition = _grouped_bar_identity(item.label)
+            sample = bindings[item.x_name]["sample"] if bindings else _grouped_bar_identity(item.label)[0]
             condition_index = grouped_bar_samples.index(sample)
         default_marker = (
             marker_sequence[replicate_index % len(marker_sequence)]
@@ -295,22 +287,24 @@ def resolve_series_encodings(
             line_bound = default_line_bound
 
         marker_fill_mode = str(
-            render_options.get("marker_fill_mode") or "filled"
+            style.get("marker_fill_mode") or render_options.get("marker_fill_mode") or "filled"
         ).casefold()
+        item_fill_source = series_styles_source if style.get("marker_fill_mode") else marker_fill_source
+        item_fill_bound = series_styles_bound if style.get("marker_fill_mode") else marker_fill_bound
         if item.presentation_kind == "categorical_replicates":
             resolved_marker_fill = resolved_color
             resolved_marker_fill_source = color_source
             resolved_marker_fill_bound = color_bound
         elif marker_fill_mode == "open":
             resolved_marker_fill = "white"
-            resolved_marker_fill_source = marker_fill_source
-            resolved_marker_fill_bound = marker_fill_bound
+            resolved_marker_fill_source = item_fill_source
+            resolved_marker_fill_bound = item_fill_bound
         else:
             resolved_marker_fill = resolved_color
             resolved_marker_fill_source = (
-                marker_fill_source if marker_fill_bound else color_source
+                item_fill_source if item_fill_bound else color_source
             )
-            resolved_marker_fill_bound = marker_fill_bound or color_bound
+            resolved_marker_fill_bound = item_fill_bound or color_bound
 
         if item.marker_line_color:
             resolved_marker_line = item.marker_line_color

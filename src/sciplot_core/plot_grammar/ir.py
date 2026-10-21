@@ -13,7 +13,8 @@ from sciplot_core.rendering_contract import require_binding, resolved_style_defa
 
 from .schema import rendering_binding_schema, annotation_schema, axis_schema, guide_schema, layer_schema, scale_schema
 from .styles import COLOR, style_schema
-from .validation import validate_bound_data, validate_axis_presentation
+from .validation import validate_bound_data, validate_axis_presentation, scale_quantity_matches, validate_quantity_members
+from .display import resolve_display_curves
 
 
 def ir_schema_v2() -> dict[str, Any]:
@@ -29,14 +30,15 @@ def ir_schema_v2() -> dict[str, Any]:
         "scientific_hash": DIGEST, "presentation_hash": DIGEST,
         "figure": closed({"id": IDENTIFIER, "background_color": COLOR}),
         "datasets": {"type": "object", "propertyNames": IDENTIFIER, "additionalProperties": dataset_schema()},
-        "scales": {"type": "array", "minItems": 2, "items": scale_schema()},
+        "scales": {"type": "array", "minItems": 2, "items": scale_schema(resolved=True)},
         "views": {"type": "array", "minItems": 1, "items": view}, "layout": resolved_layout_schema(),
         "guides": {"type": "array", "items": guide_schema(resolved=True)},
         "annotations": {"type": "array", "items": annotation_schema(resolved=True)}, "layout_qa": qa, "ir_hash": DIGEST,
         "rendering_contract": rendering_binding_schema("sciplot-house-style-v1"),
         "composition_policy": rendering_binding_schema("sciplot-figure-composition-v1"),
         "style_provenance": {"type": "object"}}
-    return closed(fields, [key for key in fields if key not in {"ir_hash", "rendering_contract", "composition_policy", "style_provenance"}])
+    fields["display_curves"] = {"type": "object", "propertyNames": IDENTIFIER, "additionalProperties": {"type": "object"}}
+    return closed(fields, [key for key in fields if key not in {"ir_hash", "rendering_contract", "composition_policy", "style_provenance", "display_curves"}])
 
 
 def _invalid(message: str, path: str, **details: Any) -> None:
@@ -86,7 +88,7 @@ def _validate(value: Any, *, verify: bool) -> dict[str, Any]:
             layers[layer["id"]] = (view["id"], layer)
             for dimension in ("x", "y"):
                 scale = scales.get(layer[dimension + "_scale"])
-                if scale is None or scale["dimension"] != dimension or scale["quantity"] != layer["mapping_semantics"][dimension]:
+                if scale is None or scale["dimension"] != dimension or not scale_quantity_matches(scale, layer["mapping_semantics"][dimension]):
                     _invalid("Layers bind existing scales with matching dimensions and scientific quantities.", "/views/layers")
                 bound.add(layer[dimension + "_scale"])
             bounds = any(mark["type"] in {"errorbar", "band"} for mark in layer["marks"])
@@ -143,7 +145,10 @@ def _validate(value: Any, *, verify: bool) -> dict[str, Any]:
             for dimension in ("x", "y"):
                 if annotation[dimension + "_scale"] not in {layer[dimension + "_scale"] for layer in views[annotation["view_id"]]["layers"]}:
                     _invalid("Data annotations require explicit scales belonging to their view.", "/annotations")
+    validate_quantity_members(result["scales"], result["views"])
     validate_bound_data(result, result["datasets"])
+    if result.get("display_curves", {}) != resolve_display_curves(result["views"], result["datasets"]):
+        fail("figure_display_binding", "Display lines must be exactly derived from their declared original arrays and presentation settings.", "/display_curves", "exact_display_derivation")
     qa = structural_publication_qa(result["layout"], annotations=result["annotations"])
     if qa["hard"] or result["layout_qa"]["hard"] or result["layout_qa"]["status"] != "passed":
         _invalid("Invalid resolved geometry cannot be sent to a backend.", "/layout", issues=qa["hard"])

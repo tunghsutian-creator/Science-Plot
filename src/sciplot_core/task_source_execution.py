@@ -11,7 +11,7 @@ from sciplot_core.task_execution import _phase, run_export
 from sciplot_core.task_planning import assert_source_current
 from sciplot_core.task_source_update import apply_source_update_review, prepare_source_update_review
 from sciplot_core.task_storage import save_task
-from sciplot_core.task_column_mapping import column_question, mapped_plan_request, pause_for_columns
+from sciplot_core.task_column_mapping import column_question, mapped_plan_request, pause_for_columns, replicate_mapping_mode
 
 
 def run_source_preview(root: Path, state: dict[str, Any]) -> None:
@@ -23,9 +23,13 @@ def run_source_preview(root: Path, state: dict[str, Any]) -> None:
     )
     if requires_mapping and not state.get("mapping_choice"):
         selected = {key: previous[key] for key in ("rule_id", "template")}
-        question = column_question(source, selected, explicit=True)
+        shape = "replicates" if replicate_mapping_mode(state, selected) else "xy"
+        question = column_question(source, selected, explicit=True, mapping_shape=shape)
         if question is None:
             raise TaskControlError("column_mapping_unsupported", "更新需要重新选择当前原始列。")
+        if shape == "replicates":
+            labels = previous["data_mapping_plan_binding"]["expected_sample_labels"]
+            question["message"] += f" Preserve every existing group in this order: {labels!r}; then select added groups from the same unchanged original source."
         question["message"] += " 此次更新必须重新核验映射，旧列位置不会自动复用。"
         from sciplot_core.foundation.json_hashing import canonical_json_sha256
         question["question_id"] = canonical_json_sha256({k: v for k, v in question.items() if k != "question_id"}, allow_nan=False)
@@ -37,11 +41,14 @@ def run_source_preview(root: Path, state: dict[str, Any]) -> None:
     index = int(state.get("preview_attempt", 0)) + 1
     state["preview_attempt"] = index
     save_task(root, state)
+    review_options: dict[str, Any] = {
+        **({"mapping_request": mapping_request} if mapping_request else {}),
+        **({"annotation_decisions": state["annotation_decisions"]} if "annotation_decisions" in state else {}),
+    }
     review = prepare_source_update_review(
         Path(request["project"]), source, worksheet=request.get("worksheet"),
         review_path=root / f"source_review_{index:03}.json",
-        **({"mapping_request": mapping_request} if mapping_request else {}),
-        **({"annotation_decisions": state["annotation_decisions"]} if "annotation_decisions" in state else {}),
+        **review_options,
     )
     state.update(project=review["project"], revision_id=review["revision_id"])
     if review["status"] == "needs_annotation_choices":

@@ -11,6 +11,7 @@ import pandas as pd
 from sciplot_core.source_inspection.header_matching import cell_text
 from sciplot_core.source_inspection.intent_recognition import detect_source_intent
 from sciplot_core.source_inspection.models import SourceIntent
+from sciplot_core.source_inspection.input_errors import require_source_file
 from sciplot_core.source_tables import (
     CurveSeries,
     HeatmapTable,
@@ -130,6 +131,34 @@ def _small_table_figure(raw: pd.DataFrame) -> bool:
     return 0 < numeric_count < len(values)
 
 
+def _replicate_metadata(raw: pd.DataFrame) -> bool:
+    """A numeric parse alone does not prove repeated measurements of one quantity.
+
+    Keep the permissive explicit loader for compatibility. Automatic recognition
+    requires its three metadata rows to describe the same quantity/unit and real
+    group identities, rather than treating the first measurement as group names.
+    """
+    if len(raw) < 4 or not raw.shape[1]:
+        return False
+    labels = [cell_text(value) for value in raw.iloc[0]]
+    shared = sum(bool(label) for label in labels) <= 1
+    units = [cell_text(value) for value in raw.iloc[2 if shared else 1]]
+    groups = [cell_text(value) for value in raw.iloc[1 if shared else 2]]
+    quantity_labels = [normalize_label(label) for label in labels if label]
+    if not quantity_labels or len(set(quantity_labels)) != 1:
+        return False
+    if not all(groups) or any(_number(group) is not None for group in groups):
+        return False
+    return bool(units) and all(units) and len(set(units)) == 1 and all(_number(unit) is None for unit in units)
+
+
+def _number(value: object) -> float | None:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
 def recognize_source(
     input_path: Path,
     sheet: str | int = 0,
@@ -137,6 +166,7 @@ def recognize_source(
     """Read a source once and classify its table structure."""
 
     source = Path(input_path)
+    require_source_file(source)
     raw = read_raw_table(source, sheet_name=sheet)
     compact = raw.dropna(how="all").dropna(axis=1, how="all")
     bundle = _point_line_bundle(compact, source)
@@ -171,22 +201,21 @@ def recognize_source(
     if intent is not None:
         return RecognizedSource(model=intent.model, raw=raw, intent=intent)
 
-    with suppress(Exception):
-        groups = load_replicate_table_from_frame(compact)
-        return RecognizedSource(
-            model="replicate_table",
-            raw=raw,
-            replicate_groups=tuple(groups),
-        )
+    if _replicate_metadata(compact):
+        with suppress(Exception):
+            groups = load_replicate_table_from_frame(compact)
+            return RecognizedSource(
+                model="replicate_table",
+                raw=raw,
+                replicate_groups=tuple(groups),
+            )
 
     if _small_table_figure(compact):
         return RecognizedSource(model="table_summary", raw=raw)
 
-    raise ValueError(
-        "Could not recognize this file's table layout. Original cells, scientific "
-        "quantities, units and sample identities need confirmation through a "
-        "supported import path."
-    )
+    if any(pd.to_numeric(compact[column], errors="coerce").notna().any() for column in compact):
+        return RecognizedSource(model="unbound_table", raw=raw)
+    raise ValueError("Could not recognize this file: the table contains no supported numeric measurement layout.")
 
 
 def looks_like_nmr(curves: tuple[CurveSeries, ...]) -> bool:

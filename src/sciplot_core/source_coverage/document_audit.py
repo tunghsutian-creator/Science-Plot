@@ -129,6 +129,9 @@ def _run_audit_worker(document: Path, spec: Path, check_presentation: bool) -> d
         env=veusz_worker_environment(), cold_runner=subprocess.run,
     )
     if completed.returncode != 0:
+        from sciplot_core.studio_core.categorical_display_errors import raise_categorical_worker_rejection
+
+        raise_categorical_worker_rejection(completed.returncode, completed.stderr)
         detail = completed.stderr.strip().splitlines()
         raise ValueError(
             "Exact-current Veusz data-consumption audit failed: "

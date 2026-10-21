@@ -828,3 +828,33 @@ def test_direct_render_keeps_existing_plot_ready_renderer(tmp_path, monkeypatch)
     assert cli.main(["render", str(source), "--template", "curve", "--out", str(tmp_path / "out")]) == 0
     assert calls[0][0] == source
     assert calls[0][1]["template"] == "curve"
+
+
+def test_quick_smoke_cli_selects_bounded_native_profile(tmp_path, monkeypatch, capsys):
+    from sciplot_core import cli, smoke, studio
+
+    calls = []
+    monkeypatch.setattr(studio, 'maybe_reexec_with_qt_runtime', lambda _argv: None)
+    payload = {'status': 'passed', 'profile': 'quick',
+               'coverage': {'deferred_to_full': ['complete lifecycle']}}
+    monkeypatch.setattr(smoke, 'run_runtime_smoke',
+                        lambda **kwargs: calls.append(kwargs) or payload)
+    assert cli.main(['smoke', '--profile', 'quick', '--out', str(tmp_path), '--json']) == 0
+    assert calls == [{'output_root': tmp_path, 'profile': 'quick'}]
+    assert json.loads(capsys.readouterr().out) == payload
+
+
+def test_explicit_full_smoke_cli_preserves_existing_default_seam(tmp_path, monkeypatch, capsys):
+    from sciplot_core import cli, smoke, studio
+
+    calls = []
+    monkeypatch.setattr(studio, 'maybe_reexec_with_qt_runtime', lambda _argv: None)
+
+    def full(*, output_root):
+        calls.append(output_root)
+        return {'status': 'passed', 'summary': {'check_count': 36}}
+
+    monkeypatch.setattr(smoke, 'run_runtime_smoke', full)
+    assert cli.main(['smoke', '--profile', 'full', '--out', str(tmp_path), '--json']) == 0
+    assert calls == [tmp_path]
+    assert json.loads(capsys.readouterr().out)['summary']['check_count'] == 36

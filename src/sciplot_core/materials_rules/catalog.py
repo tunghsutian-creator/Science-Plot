@@ -130,6 +130,12 @@ def _public_rule_payload(
     invocation_projector: RuleInvocationProjector | None,
 ) -> dict[str, Any]:
     payload = rule.to_payload()
+    if rule.rule_id == "impact_metric":
+        from sciplot_core.materials_rules.impact_presentation import impact_statistics_by_template
+
+        payload["presentation_contract"]["statistics_by_template"] = impact_statistics_by_template()
+        payload["presentation_contract"]["render_option_summary_scope"] = "default_box_and_box_strip_only"
+        payload["analysis_table_scope"] = "Internal n/median/IQR table; not a declaration of displayed bar or point-line statistics and not included in the visible delivery."
     if invocation_projector is not None:
         payload["invocation"] = invocation_projector(rule)
     return payload

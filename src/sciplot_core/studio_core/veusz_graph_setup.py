@@ -50,7 +50,8 @@ def create_veusz_page_and_graph(
     interface.Set("rightMargin", _cm_from_mm(float(margins["right"])))
     interface.Set("topMargin", _cm_from_mm(float(margins["top"])))
     interface.Set("bottomMargin", _cm_from_mm(float(margins["bottom"])))
-    _add_veusz_axis(interface, "x", axes["x"], style)
+    plot_width = float(size_mm[0]) - float(margins["left"]) - float(margins["right"])
+    _add_veusz_axis(interface, "x", axes["x"], style, plot_width_mm=plot_width)
     _add_veusz_axis(interface, "y", axes["y"], style)
 
 

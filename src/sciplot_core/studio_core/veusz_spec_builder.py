@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from typing import Any
+from sciplot_core.mapping_contract.categorical_identity import category_ids_from_bindings
+
+from sciplot_core.source_tables.parsing import (
+    DECIMAL_ROUND_TRIP_ENCODING,
+    SOURCE_NUMERIC_ENCODING_KEY,
+)
 
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
@@ -75,6 +81,7 @@ def _build_veusz_plot_spec(
         series,
         template_id=template_id,
         render_options=render_options,
+        source_bindings=axis_info.get("source_bindings"),
     )
     categorical_style = (
         categorical.get("visual_style")
@@ -99,6 +106,7 @@ def _build_veusz_plot_spec(
         legend_mode=legend_mode,
         show_key=show_key,
         width_mm=width_mm,
+        source_bindings=axis_info.get("source_bindings"),
     )
     layout_issues = build_veusz_layout_issues(
         request=request,
@@ -123,6 +131,7 @@ def _build_veusz_plot_spec(
         categorical_contract=categorical,
         categorical_visual_style=categorical_style,
         style=style,
+        source_bindings=axis_info.get("source_bindings"),
     )
     axes = _veusz_axes_spec(
         render_options=render_options,
@@ -134,7 +143,11 @@ def _build_veusz_plot_spec(
     return {
         "kind": "sciplot_veusz_plot_spec",
         "version": 1,
+        **({"source_category_ids": category_ids_from_bindings([
+            axis_info["source_bindings"][item.x_name] for item in series])}
+           if categorical is not None and axis_info.get("source_bindings") else {}),
         NUMERIC_ENCODING_KEY: FLOAT64_ENCODING,
+        SOURCE_NUMERIC_ENCODING_KEY: DECIMAL_ROUND_TRIP_ENCODING,
         "created_at": utc_now_iso(),
         "render_engine": "veusz",
         "qa_target": "veusz_export",

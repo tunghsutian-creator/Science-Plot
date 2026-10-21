@@ -51,11 +51,17 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         save_task(root, state)
         return
     _phase(root, state, "planning")
-    plan = plan_task(root, state)
+    if "categorical" in state["request"]:
+        from sciplot_core.task_categorical_creation import plan_categorical_task
+
+        plan = plan_categorical_task(state)
+    else:
+        plan = plan_task(root, state)
     if plan is None:
         save_task(root, state)
         return
-    save_profile(root, state)
+    if "categorical" not in state["request"]:
+        save_profile(root, state)
     _phase(root, state, "creating")
     request = state["request"]
     def checkpoint(prepared: dict[str, Any]) -> None:
@@ -181,6 +187,7 @@ def record_failure(root: Path, state: dict[str, Any], exc: Exception) -> None:
     code = "task_worker_timeout" if timed_out else getattr(exc, "reason_code", "task_execution_failed")
     action = recovery_action(state, code)
     issues = getattr(exc, "issues", None)
+    repair = getattr(exc, "repair", None)
     state.update({
         "status": "blocked",
         "blocker": {
@@ -189,6 +196,7 @@ def record_failure(root: Path, state: dict[str, Any], exc: Exception) -> None:
             "recovery_action": action,
             **({"timeout_seconds": exc.timeout} if isinstance(exc, TimeoutExpired) else {}),
             **({"issues": issues} if issues else {}),
+            **({"repair": repair} if isinstance(repair, dict) else {}),
             "recovery": (
                 "可重试原操作；需改正操作时，用当前 preview_revision 作为 expected_preview_revision 提交 revise_operations。"
                 if action == "revise_operations"

@@ -11,6 +11,7 @@ from pathlib import Path
 import platform
 import re
 import sys
+from weakref import ref
 
 from PIL import Image
 
@@ -66,6 +67,7 @@ def _painted_text(document, document_module):
     utils = import_module("veusz.utils")
     qt_gui = import_module("PyQt6.QtGui")
     original, result, primitives = utils.Renderer, [], []
+    live_renderers = []
     bar_type = import_module("veusz.widgets.bar").BarPlotter
     polygon_type = import_module("veusz.widgets.polygon").Polygon
     line_type = import_module("veusz.widgets.line").Line
@@ -99,16 +101,23 @@ def _painted_text(document, document_module):
 
     def factory(*args, **kwargs):
         renderer = original(*args, **kwargs)
-        render = renderer.render
+        # Retain inline renderers only through synchronous painting. The
+        # instance override must not keep a bound method or renderer cycle.
+        live_renderers.append(renderer)
+        renderer_ref = ref(renderer)
+        render = type(renderer).render
 
         def measured():
-            returned = render()
+            live_renderer = renderer_ref()
+            if live_renderer is None:
+                raise RuntimeError("The native capture renderer expired before measurement.")
+            returned = render(live_renderer)
             font, actual_font = args[1], qt_gui.QFontInfo(args[1])
             widget = getattr(args[0], "widget", None)
             result.append({
                 "widget_path": str(widget.path) if widget is not None else None,
                 "text": str(args[4]),
-                "bounds_mm": [float(value) * 25.4 / 150 for value in renderer.getBounds()],
+                "bounds_mm": [float(value) * 25.4 / 150 for value in live_renderer.getBounds()],
                 "anchor_mm": [float(args[2]) * 25.4 / 150, float(args[3]) * 25.4 / 150],
                 "font_family": font.family(), "resolved_font_family": actual_font.family(),
                 "font_size_pt": font.pointSizeF(), "font_pixel_size": font.pixelSize(),
@@ -129,6 +138,8 @@ def _painted_text(document, document_module):
         # Native Export may paint on worker threads; interception is synchronous only.
         utils.Renderer = original
         bar_type.plotBars, polygon_type.draw, line_type.draw = original_bar, original_polygon, original_line
+        # Destroy painters while the PaintHelper-owned devices remain live.
+        live_renderers.clear()
     return sorted(result, key=lambda item: (item["text"], item["bounds_mm"])), primitives
 
 

@@ -16,7 +16,7 @@ from sciplot_core.studio_render.models import (
     IMPACT_POINT_LINE_SUMMARY_KIND,
 )
 from sciplot_core.veusz_worker.axis_matchers import _axis_record_matches_spec
-from sciplot_core.veusz_worker.numeric_evidence import _dataset_evidence
+from sciplot_core.veusz_worker.numeric_evidence import dataset_evidence
 from sciplot_core.veusz_worker.spec_audit.model import SpecAuditInventory
 from sciplot_core.veusz_worker.spec_audit.bar_error import audit_bar_error_consumer
 from sciplot_core.veusz_worker.spec_audit.series_encoding import (
@@ -33,6 +33,7 @@ def audit_axes_and_series(
     spec: dict[str, Any],
 ) -> list[dict[str, Any]]:
     from sciplot_core.studio_core.series_request import veusz_literal_text
+    from sciplot_core.performance_veusz.contracts import performance_literal_text
 
     loaded_document = inventory.loaded_document
     units = inventory.units
@@ -49,7 +50,8 @@ def audit_axes_and_series(
     component_bar_record = inventory.component_bar_record
     component_bar_datasets_by_y = inventory.component_bar_datasets_by_y
     axes = spec.get("axes")
-    style = spec.get("style") if isinstance(spec.get("style"), dict) else {}
+    raw_style = spec.get("style")
+    style = raw_style if isinstance(raw_style, dict) else {}
     validate_series_encoding_contract(spec)
     validate_axis_data_visibility(spec)
 
@@ -127,6 +129,9 @@ def audit_axes_and_series(
             )
         series_by_y[y_name] = raw_series
 
+    from sciplot_core.mapping_contract.categorical_identity import validate_categorical_correspondence
+    validate_categorical_correspondence(spec)
+
     if (
         isinstance(categorical, dict)
         and categorical.get("presentation_kind") == CATEGORICAL_POINT_LINE_KIND
@@ -170,24 +175,9 @@ def audit_axes_and_series(
         ):
             raise ValueError("Impact overlay sample/condition labels changed.")
     elif isinstance(categorical, dict):
-        categorical_labels: list[str] = []
-        for y_name, group in categorical_groups.items():
-            raw_series = series_by_y.get(y_name)
-            if raw_series is None or str(group.get("label") or "") != str(
-                raw_series.get("label") or ""
-            ):
-                raise ValueError(
-                    "Categorical group labels do not match their rendered series identities."
-                )
-            categorical_labels.append(
-                str(
-                    group.get("sample_label")
-                    if inventory.categorical_kind == "grouped_bar_error"
-                    else group.get("label") or ""
-                )
-            )
-        if inventory.categorical_kind == "grouped_bar_error":
-            categorical_labels = list(dict.fromkeys(categorical_labels))
+        from sciplot_core.veusz_worker.spec_audit.categorical_identity import categorical_series_labels
+
+        categorical_labels = categorical_series_labels(spec, categorical_groups, series_by_y, inventory.categorical_kind)
         x_axis = (
             spec.get("axes", {}).get("x")
             if isinstance(spec.get("axes"), dict)
@@ -212,24 +202,28 @@ def audit_axes_and_series(
             )
         seen_identities.add(identity)
         allowed_xy_records.add((name, x_name, y_name))
+        key_value = raw_series.get("legend_key", raw_series.get("label"))
+        native_key = (
+            performance_literal_text(spec, key_value)
+            if isinstance(spec.get("performance_comparison"), dict)
+            else veusz_literal_text(key_value)
+        )
         expected_xy_order.append(
             (
                 name,
                 x_name,
                 y_name,
-                veusz_literal_text(
-                    raw_series.get("legend_key", raw_series.get("label"))
-                ),
+                native_key,
             )
         )
         datasets = [
-            _dataset_evidence(
+            dataset_evidence(
                 loaded_document,
                 dataset_name=x_name,
                 expected_values=raw_series.get("x_values"),
                 dimensions=1,
             ),
-            _dataset_evidence(
+            dataset_evidence(
                 loaded_document,
                 dataset_name=y_name,
                 expected_values=raw_series.get("y_values"),
@@ -242,12 +236,7 @@ def audit_axes_and_series(
             if record["name"] == name
             and str(record["bindings"]["xData"]) == x_name
             and (str(record["bindings"]["yData"]) == y_name)
-            and (
-                str(record["bindings"]["key"])
-                == veusz_literal_text(
-                    raw_series.get("legend_key", raw_series.get("label"))
-                )
-            )
+            and str(record["bindings"]["key"]) == native_key
         ]
         if len(matching_xy) != 1:
             raise ValueError(

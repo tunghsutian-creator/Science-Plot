@@ -32,6 +32,7 @@ from sciplot_core.project_manifest import (
     edit_intake_project_manifest,
     locked_intake_project_manifest,
 )
+from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
 def _write_zip(project_dir: Path, zip_path: Path) -> None:
@@ -349,20 +350,7 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
 
 
 def _studio_prepare_env() -> dict[str, str]:
-    env = os.environ.copy()
-    env.setdefault("QT_QPA_PLATFORM", "offscreen")
-    framework_paths = [
-        Path("/opt/homebrew/opt/qtbase/lib"),
-        Path("/opt/homebrew/opt/qt/lib"),
-    ]
-    existing = [str(path) for path in framework_paths if path.exists()]
-    if existing:
-        joined = ":".join(existing)
-        for key in ("DYLD_FRAMEWORK_PATH", "DYLD_LIBRARY_PATH"):
-            current = env.get(key)
-            env[key] = f"{joined}:{current}" if current else joined
-        env.setdefault("SCIPLOT_STUDIO_QT_RUNTIME", "1")
-    return env
+    return veusz_worker_environment()
 
 
 def _prepare_studio_project_package(project_dir: Path) -> None:

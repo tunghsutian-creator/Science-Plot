@@ -6,7 +6,7 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.task_column_mapping import (
     accept_column_response, accept_metadata_response, accept_table_response,
-    pause_for_columns, table_question,
+    pause_for_columns, table_question, replicate_mapping_mode,
 )
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_storage import save_task
@@ -34,7 +34,8 @@ def apply_mapping_choices(root: Path, state: dict[str, Any], mapping: dict[str, 
     """Run the same checked choices locally, stopping only at an actual error."""
     if not source.is_file() or file_sha256(source) != mapping["source_sha256"]:
         raise TaskControlError("source_changed", "mapping 的 SHA 与原文件不符；请重新读取当前原始数据。")
-    question = table_question(source, selected)
+    shape = "replicates" if replicate_mapping_mode(state, selected) else "xy"
+    question = table_question(source, selected, mapping_shape=shape)
     if question is None:
         raise TaskControlError("column_mapping_unsupported", "此来源不支持原表区域映射。")
     pause_for_columns(state, question)
@@ -55,7 +56,8 @@ def apply_mapping_choices(root: Path, state: dict[str, Any], mapping: dict[str, 
     except TaskControlError as exc:
         if exc.reason_code != "invalid_mapping_selection":
             raise
-        state["mapping_error"] = {"reason_code": exc.reason_code, "message": str(exc)}
+        state["mapping_error"] = {"reason_code": exc.reason_code, "message": str(exc),
+                                  **({"issues": exc.issues} if exc.issues else {})}
         save_task(root, state)
         return False
     state.pop("mapping_error", None)

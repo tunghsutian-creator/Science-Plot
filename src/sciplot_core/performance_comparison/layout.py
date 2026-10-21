@@ -165,11 +165,14 @@ def _deterministic_scatter_x_values(
     comparison: PerformanceComparison,
     *,
     x_metric: PerformanceMetric,
+    preserve_original: bool = False,
 ) -> tuple[dict[str, float], list[dict[str, Any]]]:
     raw_values = {
         material.material_id: material.values[x_metric.metric_id]
         for material in comparison.materials
     }
+    if preserve_original:
+        return raw_values, []
     raw_span = max(raw_values.values()) - min(raw_values.values())
     if math.isclose(raw_span, 0.0):
         raw_span = max(abs(next(iter(raw_values.values()))), 1.0) * 0.16

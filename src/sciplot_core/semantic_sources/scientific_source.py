@@ -96,12 +96,12 @@ def _resolve_stress_relaxation_scientific_source(
         transform = resolve_stress_relaxation_transform(
             source,
             series_order=request.get("series_order"),
+            **({"xscale": request["xscale"]} if "xscale" in request else {}),
         )
     except (OSError, ValueError) as exc:
-        raise ScientificSourceResolutionError(
-            "stress_relaxation_transform_invalid",
-            str(exc),
-        ) from exc
+        error = ScientificSourceResolutionError("stress_relaxation_transform_invalid", str(exc))
+        error.issues = getattr(exc, "issues", None)
+        raise error from exc
     return bind_single_curve_scientific_source(
         source,
         rule=rule,

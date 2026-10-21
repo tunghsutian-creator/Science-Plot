@@ -95,12 +95,12 @@ def test_plan_dependency_change_blocks_apply_before_publication(tmp_path, monkey
     directory = workspace / "style_previews" / "case"
     directory.mkdir(parents=True)
     external = _write(tmp_path / "provided.json", _plan())
-    preview = {"workspace": str(workspace), "delivery": str(delivery), "sources": [],
+    preview = {"kind": "sciplot_rheology_style_preview", "workspace": str(workspace), "delivery": str(delivery), "sources": [],
         "presentation_plan": {"path": str(external), "sha256": file_sha256(external)}}
     path = _write(directory / "preview.json", preview)
     (directory / "preview.sha256").write_text(canonical_json_sha256(preview))
     external.write_text("changed after preview")
-    monkeypatch.setattr(update, "_load", lambda _: (workspace, {"delivery": str(delivery)}))
+    monkeypatch.setattr(update, "_load", lambda _, *, native_display=False: (workspace, {"delivery": str(delivery)}))
     monkeypatch.setattr(suite, "_check_sources", lambda _: None)
     monkeypatch.setattr(update, "publish_files", lambda *a, **kw: pytest.fail("must reject before publishing"))
     with pytest.raises(ValueError, match="Stale external presentation plan"):

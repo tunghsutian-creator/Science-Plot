@@ -13,7 +13,7 @@ from sciplot_core.launchers.delivery_binding import delivery_binding_from_conten
 from sciplot_core.launchers.delivery_inspection import (
     inspect_delivery_launcher_contract,
 )
-from sciplot_core.source_coverage.managed_documents import _source_records
+from sciplot_core.source_coverage.managed_documents import source_records
 from sciplot_core.studio_core.delivery_target import _managed_project
 from sciplot_core.studio_core.figure_set_state import _read_studio_figure_set
 
@@ -218,7 +218,7 @@ def capture_recovery_state(project_dir: Path, candidate: Path | None) -> dict[st
         )
     spec = _object(spec_path)
     prepared: dict[str, str] = {}
-    for path, expected in _source_records(spec).items():
+    for path, expected in source_records(spec).items():
         canonical_path(path)
         actual = file_sha256(path)
         if actual != expected:

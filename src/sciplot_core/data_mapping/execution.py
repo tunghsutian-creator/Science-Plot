@@ -165,7 +165,7 @@ def execute_data_mapping_proposal(
             frame = frames[reference.source_id]
             _write_mapped_csv(destination, frame, **({"full_precision": True} if resolved.provider == "explicit_table_choice" else {}))
             output_paths.append(destination)
-            output_labels.append(destination.stem)
+            output_labels.append(reference.source_id if reference.identity else destination.stem)
             outputs.append(
                 {
                     "source_id": reference.source_id,

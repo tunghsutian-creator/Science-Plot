@@ -20,8 +20,8 @@ from sciplot_core.semantic_sources.models import (
 
 from sciplot_core.semantic_sources.table_scanning import (
     _float,
-    _read_candidate_tables,
 )
+from sciplot_core.semantic_sources.table_candidate_sources import read_candidate_tables as _read_candidate_tables
 
 
 def _canonical_impact_unit(value: object) -> str | None:
@@ -35,10 +35,19 @@ def _canonical_impact_unit(value: object) -> str | None:
         .replace("−", "-")
         .replace("⁻", "-")
     )
-    compact = re.sub(r"[\s·*/()\[\]{}]", "", compact)
-    if "kj" in compact and ("m2" in compact or "m-2" in compact):
+    compact = compact.replace("{", "").replace("}", "")
+    if len(compact) >= 2 and (compact[0], compact[-1]) in {("(", ")"), ("[", "]")}:
+        compact = compact[1:-1].strip()
+    # The readers retain the numbers: only exact spelling identities may be
+    # relabelled. A different area prefix requires a real conversion contract.
+    if re.fullmatch(r"kj\s*/\s*(?:m2|\(m2\))|kj(?:\s+|\s*[·*]\s*)m-2", compact):
         return "kJ/m2"
     return None
+
+
+def _is_impact_metric(metric: str) -> bool:
+    """The shared wide-column identity predicate; callers retain normalization."""
+    return metric == "re" or "impact" in metric or "冲击" in metric
 
 
 def _validated_impact_unit(values: list[object]) -> str:
@@ -58,11 +67,17 @@ def _validated_impact_unit(values: list[object]) -> str:
 
 
 def _impact_unit_candidate_from_header(header: str) -> str | None:
+    compact = header.casefold()
+    if "kj" in compact:
+        suffix = header[compact.index("kj"):].strip()
+        if _canonical_impact_unit(suffix) is not None:
+            return suffix
     bracketed = re.search(r"\(([^)]+)\)|\[([^\]]+)\]", header)
     if bracketed:
         candidate = next((group for group in bracketed.groups() if group), "")
         return candidate.strip() or None
-    compact = header.casefold()
+    if "kj" in compact:
+        return header[compact.index("kj"):].strip()
     if any(token in compact for token in ("kj", "mpa", "gpa", "j/", "m²", "m2", "m^2")):
         return header
     return None
@@ -108,11 +123,7 @@ def _read_impact_canonical_tables(source: Path) -> ImpactReplicatePayload:
         sheet_label = table_name.split(":", 1)[-1] if ":" in table_name else ""
         for column in range(table.shape[1]):
             metric_token = _token(table.iat[0, column])
-            if not (
-                metric_token == "re"
-                or "impact" in metric_token
-                or "冲击" in metric_token
-            ):
+            if not _is_impact_metric(metric_token):
                 continue
             sample = _clean_text(table.iat[2, column])
             if not sample:
@@ -134,12 +145,21 @@ def _read_impact_canonical_tables(source: Path) -> ImpactReplicatePayload:
         for _sheet, sample, _values in parsed
     }
     groups: dict[str, list[float]] = {}
+    display_owners: dict[str, tuple[str, str]] = {}
     for sheet_label, sample, values in parsed:
         label = (
             f"{sample} ({sheet_label})"
             if sample_counts[sample] > 1 and sheet_label
             else sample
         )
+        identity = sheet_label, sample
+        if label in display_owners and display_owners[label] != identity:
+            raise _ImpactDataValidationError(
+                "Distinct original impact groups have the same sample/sheet display label. "
+                "Choose explicit original replicate columns to retain independent source identities; "
+                "no groups were merged and no source text was rewritten."
+            )
+        display_owners[label] = identity
         groups.setdefault(label, []).extend(values)
     return _impact_payload(groups, unit=_validated_impact_unit(unit_candidates))
 
@@ -160,11 +180,7 @@ def read_impact_condition_payloads(
         unit_candidates: list[object] = []
         for column in range(table.shape[1]):
             metric_token = _token(table.iat[0, column])
-            if not (
-                metric_token == "re"
-                or "impact" in metric_token
-                or "冲击" in metric_token
-            ):
+            if not _is_impact_metric(metric_token):
                 continue
             sample = _clean_text(table.iat[2, column])
             if not sample:
@@ -291,7 +307,7 @@ def _read_impact_source(source: Path) -> ImpactReplicatePayload:
     if not sources:
         raise ValueError(f"No impact-strength tables found under {source}.")
     groups: dict[str, list[float]] = {}
-    payload_units: list[str] = []
+    payload_units: list[object] = []
     errors: list[str] = []
     for path in sources:
         try:

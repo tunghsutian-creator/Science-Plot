@@ -18,7 +18,7 @@ class BackendRouter:
         if close:
             close()
 
-    def _owner(self, binding: dict[str, Any]) -> Any:
+    def _owner(self, binding: dict[str, Any]) -> PlotBackend | ManagedBackend:
         return self.managed if binding.get("kind") == "sciplot_managed_binding" else self.legacy
 
     def import_project(self, project: Path, figure_id: str | None = None,

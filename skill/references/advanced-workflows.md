@@ -109,12 +109,22 @@ edits do not require new analysis, inventory scripts or development tests.
    --group-dir NEW_DIRECTORY --json` and its MCP group tools. The explicit list
    contains ordinary task requests; do not scan a mixed folder and silently pick
    datasets. The optional shared sample preset applies to newly created figures.
+   A create item's optional `presentation` contains existing typed `operations`
+   and an optional `figure_id` (required when preparation yields several figures).
+   It saves a source-bound native preparation checkpoint before first export,
+   combines the preset and explicit changes into one reviewed batch per figure,
+   then exports each project once. It does not infer samples, units or science.
    Inspect the local `overview` and returned PNGs, then pass item/task-bound
    responses through `task group resume`. One pending item does not stop the
    others. Omit responses to continue interrupted work; this never accepts
    previews or chooses scientific answers. Same-project figure edits remain
    sequential under the existing document transaction. Group completion is task
    progress; inspect each project's current source/QA/delivery for handoff.
+   Use the returned bound `next_step.responses_template` and current item evidence
+   without repeating per-figure context discovery. `ordered_figures` is a current
+   selection description, not aggregate publication certification. The completed
+   group's paper command template delegates ordered selection and version capture
+   to the existing paper owner; it does not ask AI to copy version hashes.
 
    For alternatives of the same saved figure, use `task compare start` with
    2–8 labelled operation batches, one explicit figure ID and the saved SHA.
@@ -303,6 +313,9 @@ rather than copying template behavior into a recipe or script.
 rule may be selected automatically only when that contract is recognized;
 explicit Studio requests remain available for choosing `scatter` or
 `polar_curve`.
+For two exact scatter Metrics, missing per-Metric units or original X positions,
+use [Metric selection](performance-selection.md). Its read-only metadata and
+source-bound expected-plan continuation share this rule's existing native owner.
 
 Global typography, strokes, ticks, markers, ordinary frames, exports, and the
 plot contract belong to `src/sciplot_core/policy/`. Heatmap scalar colors are
@@ -386,8 +399,13 @@ Default to the source-controlled changed-owner route while iterating:
 skill/scripts/sciplot verify --changed --json
 ```
 
-It compares the current `HEAD` with staged, unstaged, and untracked paths in
-one selection pass. It runs at most one Ruff command over existing changed
+By default it selects staged, unstaged and untracked paths against `HEAD`.
+`--base REV` also selects committed paths from the resolved base to resolved HEAD,
+so a clean commit does not lose the development delta. Staged and unstaged sets
+are separate: a worktree edit cancelling an index change still selects its owner.
+Renames/deletions retain both path endpoints. `--plan-only` only selects checks;
+zero work is `NO_TESTS` (exit 2), not a pass. Tests execute the current worktree,
+not a different staged-index image. It runs at most one Ruff command over existing changed
 Python files, one focused pytest command over explicit owner targets, and one
 mypy command only when the changed owner intersects the scope declared in
 `pyproject.toml`, plus one tracked diff whitespace check. Unknown production or
@@ -395,6 +413,16 @@ configuration paths fail closed; they
 never trigger a repository-wide focused, comprehensive, full, smoke, or
 acceptance fallback. The command does not render, edit, hash-check, or export a
 Veusz document.
+
+```bash
+skill/scripts/sciplot verify --changed --base BASE_COMMIT --plan-only --json
+skill/scripts/sciplot verify --changed --base BASE_COMMIT --json
+```
+
+Selectors remove exact and whole-module/ancestor redundancy while preserving
+their node union. Dedicated typed-intent changes use their contract owner; a
+mixed backend change retains the broad native/scientific owner. Unrecognized
+new paths remain fail-closed.
 
 For a single known behavior, the smallest discriminating test remains valid:
 
@@ -421,6 +449,29 @@ Pytest assigns every test to exactly one logical tier:
 - `comprehensive`: real Veusz worker/export, cross-process wrapper, or complete
   Studio lifecycle behavior.
 
+Real-native TTS render/edit/style/error cases explicitly enter comprehensive;
+pure validation, request/compile and publication-fault checks remain focused.
+Every historical node remains in full regardless of its tier.
+
+Input requirements form a separate exact-node partition. `public-focused` and
+`public-comprehensive` execute reviewed public behavior, including generated
+native controls; `private-science` requires the authorized local corpus. Use
+`--input-scope PROFILE` on pytest or the durable start command for diagnostics.
+The comprehensive public CI entry is
+`python -m sciplot_core.verification.public_stage --profile public-comprehensive
+--out .tmp_verify/public-comprehensive` with a fresh output directory. It runs
+the entire selected profile in a source-only temporary checkout, retains the
+original tests and assertion rewriting, records its own Git identity and checks
+both origin and copied source/runtime bytes. Private fixture namespaces and
+`.local` are excluded from the copy; original files remain untouched. Inherited
+private roots, aliases and unknown generated-control callers fail closed.
+This bounded composition is not an OS sandbox or a private-access certificate.
+Unknown/stale
+membership and missing/unsafe private inputs block before bodies. Unfiltered
+full retains all public and original private cases; public execution does not
+establish the real scientific values. The two public tiers are the clean-source
+CI gate, while authorized Mac full is the scientific release gate.
+
 Run the tier that matches the changed boundary:
 
 ```bash
@@ -433,6 +484,12 @@ Do not run the full suite after intermediate edits or use it to compensate for
 an unknown owner. Full pytest is a release/merge gate. A documentation-only or
 isolated fixture change may close with its directly related owner tests when no
 executable contract changed.
+
+For one unchanged frozen snapshot, full already executes both tiers. Run tiers
+as development checkpoints, then one unfiltered final full; do not mechanically
+execute focused + comprehensive + full as three release proofs. New prose can
+be checked separately while matching executable evidence remains valid. An
+inventory correction still needs its own closure proof, not a prose-only waiver.
 
 A gate is invalid if it passes only because coverage was deleted, types or
 assertions were weakened, checks were disabled, errors were ignored, or broad
@@ -448,6 +505,81 @@ skill/scripts/sciplot doctor --json
 skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
 git diff --check
 ```
+
+Intermediate bounded native feedback is available:
+
+```bash
+skill/scripts/sciplot smoke --profile quick --out .tmp_verify/quick_smoke --json
+```
+
+Quick runs one actual native creation/export, source/document/artifact seals,
+QA and delivery path. It reports included/deferred coverage. Full/default keeps
+the probe matrices, manual-edit/reexport/source-update lifecycle, launchers and
+provider wire path. Quick cannot close the full milestone. Comparing their
+timings compares different coverage, not a speedup of the same suite.
+
+### Durable original execution
+
+```bash
+skill/scripts/sciplot verify --start full --out .tmp_verify/final-full --json
+skill/scripts/sciplot verify --status .tmp_verify/final-full --json
+```
+
+The depth profiles are `focused`, `comprehensive` and unfiltered `full`; the
+named input scopes above are separate explicitly selected profiles.
+Starting requires a new ignored directory and no `PYTEST_ADDOPTS` filtering.
+The detached supervisor seals its request, exit, completion and original logs;
+status reads that execution without a retry, re-collection or reuse claim.
+`RUNNING` is not a pass. Optional paired `--audit-plugin-dir` and `--audit-out`
+bind the source-owned bootstrap from `private_observer.write_bootstrap` and a
+fresh separate output. Closure is computed from actual startup, stream, terminal,
+exec handoff and original durable exit evidence. Normal native EOF/recycle is
+observed; interrupted, lost, truncated or unobserved epochs remain BLOCKED.
+Legacy arbitrary helpers provide diagnostics, not a completeness certificate.
+Access closure and scientific acceptance remain separate claims.
+
+### Local checkpoints
+
+```bash
+skill/scripts/sciplot verify --changed --base BASE_COMMIT \
+  --record .tmp_verify/checkpoint --json
+skill/scripts/sciplot verify --changed --base BASE_COMMIT \
+  --reuse .tmp_verify/checkpoint --json
+```
+
+Record executes the selected checks once with immutable local completion/log
+evidence. Reuse freshly hashes trusted inputs and independently verifies known
+execution files; it never follows a receipt-supplied command or expands scope.
+Missing/corrupt/stale evidence is `BLOCKED`, not a fresh pass or automatic replay.
+Receipts are unsigned local developer evidence, not an untrusted-host attestation.
+Private paths stay in ignored requests; environment values are hashed, not saved
+as credentials.
+
+Inputs include implementation/tests/resources/config, owner policy, actual
+Python/dependencies/Qt/native/fonts, raw/golden/corpus bytes, membership and aliases.
+Before/after capture detects changed bytes and new members. Pytest requires exact
+collected IDs, successful call bodies, exit and session finish; selected skips or
+abrupt exit zero cannot mint `PASS`. Unknown closure blocks reuse. Declared
+fixture closure explicitly excludes fresh access audit/scientific acceptance;
+the complete private receipt remains a separate gate.
+
+Reuse is per check. A code check may survive an unrelated prose-only commit;
+documentation checks still bind documents they read, and Git whitespace checks
+bind changing index/HEAD/diff state. Therefore the whole plan can be `BLOCKED`
+while some matching original checks are explicitly reused.
+
+| State | Meaning |
+| --- | --- |
+| `PASS` / legacy `passed` | Selected checks passed, or an exact original proof is explicitly reused; later gates remain separate. |
+| `FAIL` / legacy `failed` | An executed check failed. Unknown-owner/scope failures remain fail-closed without fallback. |
+| `BLOCKED` | Required identity/completion/data evidence is absent, changed or incomplete; no reusable pass. |
+| `NO_TESTS` | Zero selected work; exit 2, not successful test verification. |
+| `planned` / `RUNNING` | Selection only or work still executing; neither is a pass. |
+
+Fingerprint time, command time and elapsed wall time remain separate. Recording
+is opt-in; directly running a cheap leaf may cost less than validating a broad
+environment. Timing budgets are targets until matching environment and coverage
+are actually measured.
 
 Acceptance and full pytest are release/merge gates. At that gate, shared style,
 renderer, rule, QA, or delivery changes also run:

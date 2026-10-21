@@ -214,7 +214,13 @@ def test_pending_table_recovery_batches_metadata_region_and_pairs(tmp_path, monk
     result = control.resume_task(task, response)
     assert result["status"] == "complete" and len(calls) == 1
     assert result["local_timing"]["calls"] == 2
-    assert "sample A,sample A" in effective(result)
+    import json
+
+    mapped = load_data_mapping_execution(result["data_mapping"]["data_mapping_execution"])
+    proposal = json.loads(Path(mapped["proposal"]).read_text())
+    assert list(proposal["sample_labels"].values()) == ["A"]
+    assert effective(result).splitlines()[2] == ",".join([proposal["sources"][0]["source_id"]] * 2)
+    assert list(proposal["display_labels"].values()) == ["sample A"]
     assert control.resume_task(task, response)["status"] == "complete" and len(calls) == 1
 
 

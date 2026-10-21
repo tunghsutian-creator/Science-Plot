@@ -10,7 +10,10 @@ from sciplot_core.studio_render.axes_spec import (
     _direct_label_contracts,
 )
 from sciplot_core.studio_render.label_density import _label_load
-from sciplot_core.studio_render.legend_visibility import _legend_columns
+from sciplot_core.studio_render.categorical_legend import legend_columns
+from sciplot_core.studio_render.component_legend import (
+    component_legend_spec as _categorical_component_legend_spec,
+)
 from sciplot_core.studio_render.models import (
     StudioSeries,
     _VeuszAxisContract,
@@ -20,7 +23,6 @@ from sciplot_core.studio_render.value_parsing import _optional_float
 
 from sciplot_core.studio_core.context import _normalize_optional_string
 from sciplot_core.studio_core.legend_specs import (
-    _categorical_component_legend_spec,
     _curve_factor_legend_spec,
 )
 
@@ -63,11 +65,12 @@ def build_veusz_legend_spec(
     legend_mode: str,
     show_key: bool,
     width_mm: float,
+    source_bindings: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Build one native, segmented, or factorized legend contract."""
 
     component_labels = _component_legend_labels(categorical_contract)
-    factor_legend = _curve_factor_legend_spec(
+    factor_legend = None if source_bindings else _curve_factor_legend_spec(
         series,
         template_id=template_id,
         style=style,
@@ -81,11 +84,12 @@ def build_veusz_legend_spec(
     )
     legend_spec: dict[str, Any] = {
         "show": show_key,
-        "columns": _legend_columns(
+        "columns": legend_columns(
             series_count=label_load["series_count"],
             mode=legend_mode,
             max_label_length=label_load["max_label_length"],
             figure_width_mm=width_mm,
+            requested=render_options.get("_ordinary_categorical_legend_columns"),
         ),
         "mode": legend_mode,
         "horz_position": _normalize_optional_string(

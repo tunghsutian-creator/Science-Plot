@@ -8,27 +8,35 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.source_coverage.managed_documents import (
     verify_managed_document_sources,
 )
+from sciplot_core.source_coverage.managed_task_sources import registered_task_snapshot_sources
 from sciplot_core.studio_core.prepare_generated import generate_studio_document
 from sciplot_core.studio_core.source_update_review import project_figures
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
 def verify_project_science(project: Path) -> dict[str, Any]:
-    documents = [str(item[0]) for item in project_figures(project).values()]
+    request = json.loads((project / "plot_request.json").read_text())
+    _, application = resolve_data_mapping_request(request, base_dir=project)
+    documents = [item[0] for item in project_figures(project).values()]
+    sources = registered_task_snapshot_sources(
+        request=request, project_dir=project, documents=documents,
+        existing_sources=[project / "source", project / "studio" / "processed"],
+        data_mapping_application=application,
+    )
     return verify_managed_document_sources(
         {
-            "veusz_documents": documents,
-            "data_snapshot_sources": [
-                str(project / "source"),
-                str(project / "studio" / "processed"),
-            ],
-        }
+            "veusz_documents": [str(path) for path in documents],
+            "data_snapshot_sources": [str(path) for path in sources],
+            "template": request.get("template"),
+        },
+        mapping_application=application,
     )
 
 
@@ -93,6 +101,12 @@ def prepare_candidate(
         plan = dict(build_plan_preview(source, request=mapping_request))
         if plan["status"] != "planned":
             raise ValueError(f"Fresh source mapping cannot prepare this project: {plan.get('blocker')}")
+        from sciplot_core.data_mapping.plan_binding import verify_replicate_source_expansion
+
+        try:
+            verify_replicate_source_expansion(previous, source, mapping_request, plan)
+        except ValueError as exc:
+            raise ValueError(f"Fresh source mapping cannot prepare this project: {exc}") from exc
         result = _prepare_mapped_project(source, verified=plan, layout=UserOutputLayout(
             delivery_root=requested_delivery_root({"request": previous}, run_output=project),
             workspace_root=temporary,

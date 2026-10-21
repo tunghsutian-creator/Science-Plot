@@ -4,20 +4,26 @@ import re
 from typing import Any
 
 from sciplot_core.style_values import normalize_physical_size
+from sciplot_core.policy.frame_export import DEFAULT_LINE_STYLE_SEQUENCE
 
 from .errors import fail
 
 
 # type, minimum risk, object kinds; native paths never enter this registry.
 PROPERTY_RULES: dict[str, tuple[str, str, set[str]]] = {
+    "series.display_label": ("string", "review", {"series"}),
+    "series.visible": ("boolean", "review", {"series"}),
     "style.line.width": ("physical_size", "presentation", {"series"}),
     "style.line.color": ("color", "presentation", {"series"}),
+    "style.line.pattern": ("enum", "presentation", {"series"}),
     "font.size": ("physical_size", "presentation", {"title", "axis", "legend", "annotation", "figure"}),
     "title.visible": ("boolean", "presentation", {"title"}),
     "title.text": ("string", "review", {"title"}),
     "axis.limits": ("number_pair", "review", {"axis"}),
     "legend.visible": ("boolean", "presentation", {"legend"}),
+    "legend.columns": ("number", "presentation", {"legend"}),
     "legend.position": ("number_pair", "review", {"legend"}),
+    "legend.sample_length": ("physical_size", "presentation", {"legend"}),
     "annotation.position": ("number_pair", "review", {"annotation"}),
     "annotation.visible": ("boolean", "review", {"annotation"}),
     "annotation.text": ("string", "review", {"annotation"}),
@@ -40,6 +46,14 @@ def validate_capability(obj: dict[str, Any], prop: str, capability: dict[str, An
     if RISK_ORDER[capability["risk"]] < RISK_ORDER[minimum_risk]:
         fail("document_invalid_capability", "A property capability cannot lower its registered risk.",
              path + "/risk", "minimum_risk", minimum=minimum_risk)
+    if prop == "style.line.pattern" and (
+        not capability.get("enum")
+        or any(value not in DEFAULT_LINE_STYLE_SEQUENCE for value in capability["enum"])
+    ):
+        fail("document_invalid_capability", "Line patterns must use the bounded visible pattern contract.",
+             path, "visible_line_pattern", allowed=list(DEFAULT_LINE_STYLE_SEQUENCE))
+    if prop == "legend.columns" and (not capability.get("enum") or any(type(value) is not int or not 1 <= value <= 32 for value in capability["enum"])):
+        fail("document_invalid_capability", "Legend columns use integer values from 1 to 32.", path, "legend_columns")
     if set(capability) & {"min_length", "max_length", "non_blank"} and (
             value_type != "string" or capability.get("min_length", 0) > capability.get("max_length", 4096)):
         fail("document_invalid_capability", "String bounds must match the property type and be ordered.",

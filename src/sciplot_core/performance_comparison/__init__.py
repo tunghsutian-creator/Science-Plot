@@ -81,6 +81,13 @@ from sciplot_core.performance_comparison.public_api import (  # noqa: F401
     prepare_performance_comparison,
     performance_transform_parameters,
 )
+from sciplot_core.performance_comparison.selection import (
+    parse_performance_selection as parse_performance_selection,
+    performance_selection_schema as performance_selection_schema,
+)
+from sciplot_core.performance_comparison.metadata import (
+    inspect_performance_metadata as inspect_performance_metadata,
+)
 
 __all__ = [
     "PERFORMANCE_COMPARISON_RULE_ID",
@@ -95,7 +102,10 @@ __all__ = [
     "build_performance_radar_payload",
     "build_performance_scatter_payload",
     "is_performance_comparison_source",
+    "inspect_performance_metadata",
     "load_performance_comparison",
     "performance_transform_parameters",
     "prepare_performance_comparison",
+    "parse_performance_selection",
+    "performance_selection_schema",
 ]

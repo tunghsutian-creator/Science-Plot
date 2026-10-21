@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import json
 import os
-from pathlib import Path
 import signal
 import socket
 import tempfile
 import threading
 import time
-from typing import Any, ClassVar, Iterator
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import Any, ClassVar, Self
 
 import pytest
 
@@ -45,6 +46,9 @@ class FakeService:
 
     def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         return self._call("patch", plot, request)
+
+    def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        return self._call("resume", plot, request)
 
     def render(self, plot: Path) -> dict[str, Any]:
         return self._call("render", plot)
@@ -168,6 +172,55 @@ def test_uncertain_disconnect_is_not_automatically_replayed() -> None:
             assert error.value.repair is not None
             assert error.value.repair["request_id"] == "same-id"
             assert error.value.repair["action"] == "retry_same_request"
+            assert error.value.repair["idempotency_key"] == "same-key"
+            assert error.value.repair["automatic_retry"] is False
+            assert error.value.repair["next_step"] == {"action": "plot.describe", "plot": "/tmp/plot",
+                                                       "description": {"scope": "summary"}}
+
+
+def test_slow_response_cannot_extend_the_total_exchange_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = [0.0]
+    sent: list[bytes] = []
+    chunks = iter([b'{"jsonrpc":', b'"2.0","id":', b'"same-id",', b'"result":{}}\n'])
+
+    class SlowSocket:
+        timeout = 0.0
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            pass
+
+        def settimeout(self, timeout: float) -> None:
+            self.timeout = timeout
+
+        def connect(self, _path: str) -> None:
+            pass
+
+        def sendall(self, payload: bytes) -> None:
+            sent.append(payload)
+
+        def recv(self, _limit: int) -> bytes:
+            delay = 0.04
+            if self.timeout < delay:
+                clock[0] += self.timeout
+                raise TimeoutError("The partial response exhausted the remaining deadline.")
+            clock[0] += delay
+            return next(chunks)
+
+    monkeypatch.setattr(client.socket, "socket", lambda *_args: SlowSocket())
+    monkeypatch.setattr(client.time, "monotonic", lambda: clock[0])
+    request = {"jsonrpc": "2.0", "id": "same-id", "method": "plot.patch", "params": {
+        "plot": "/tmp/plot", "request": {"idempotency_key": "same-key"}}}
+    with pytest.raises(TransportError) as error:
+        client._exchange(Path("/tmp/private/engine.sock"), request, 0.1)
+    assert error.value.reason_code == "transport_outcome_unknown"
+    assert error.value.repair is not None
+    assert error.value.repair["request_id"] == "same-id"
+    assert error.value.repair["action"] == "retry_same_request"
+    assert sent == [rpc.encode(request)]
+    assert clock[0] == pytest.approx(0.1)
 
 
 def test_simultaneous_client_start_and_crash_reconnect_keep_owned_socket() -> None:
@@ -182,7 +235,8 @@ def test_simultaneous_client_start_and_crash_reconnect_keep_owned_socket() -> No
             live_pid = first["pid"]
             assert live_pid != os.getpid()
             assert client._ping(path, 3)["pid"] == live_pid
-            os.kill(live_pid, signal.SIGTERM)
+            # Exercise abrupt death; SIGTERM now owns graceful daemon cleanup.
+            os.kill(live_pid, signal.SIGKILL)
             time.sleep(0.2)
             client.ensure_server(path)
             replacement = read_owner(path)
@@ -254,10 +308,11 @@ def test_cli_create_paths_bind_caller_directory_before_daemon(
 
 
 def test_mcp_semantic_schemas_and_dispatch_share_core(monkeypatch: pytest.MonkeyPatch) -> None:
+    from test_task_capabilities import expand
+
     from sciplot_core.mcp_server.schemas import tool_definitions
     from sciplot_core.mcp_server.services import invoke_owner
     from sciplot_core.plot_document.schema import patch_schema
-    from test_task_capabilities import expand
 
     tools = {item.name: item for item in tool_definitions()}
     assert expand(tools["sciplot_plot_patch"].input_schema)["properties"]["request"] == patch_schema()
@@ -277,7 +332,11 @@ def test_mcp_semantic_schemas_and_dispatch_share_core(monkeypatch: pytest.Monkey
 
 def test_lifecycle_contract_rejects_unknown_and_relative_fields() -> None:
     from sciplot_core.plot_document.errors import DocumentError
-    from sciplot_core.plot_engine.contracts import validate_create, validate_decide, validate_rollback
+    from sciplot_core.plot_engine.contracts import (
+        validate_create,
+        validate_decide,
+        validate_rollback,
+    )
 
     for invalid in ({"source": "ambiguous.csv", "idempotency_key": "k"},
                     {"source": "/tmp/raw.csv", "idempotency_key": "k", "guess_mapping": True}):
@@ -360,3 +419,120 @@ def test_default_engine_identity_changes_with_build_but_not_bytecode(
         assert paths.runtime_fingerprint() != updated
     finally:
         paths.runtime_fingerprint.cache_clear()
+
+
+def test_startup_ping_loss_does_not_claim_the_plotting_request_was_sent(monkeypatch):
+    def unavailable(*_args, **_kwargs):
+        raise TransportError("transport_outcome_unknown", "ping reply lost", repair={"method": "engine.ping"})
+
+    monkeypatch.setattr(client, "ensure_server", unavailable)
+    monkeypatch.setattr(client, "_exchange", lambda *_args: pytest.fail("Startup failure sent a plotting request"))
+    params = {"plot": "/tmp/plot", "request": {"plot_id": "original", "base_revision": 3, "idempotency_key": "known"}}
+    with pytest.raises(TransportError) as failed:
+        client.call("plot.resume", params, request_id="resume-id")
+    repair = failed.value.repair
+    assert repair["method"] == "plot.resume" and repair["request_id"] == "resume-id"
+    assert repair["idempotency_key"] == "known" and repair["base_revision"] == 3
+    assert repair["request_sent"] is False and repair["automatic_retry"] is False
+
+
+@pytest.mark.parametrize("response", [
+    {"jsonrpc": "2.0", "id": "foreign", "result": {}},
+    {"jsonrpc": "2.0", "id": "known", "result": []},
+    {"jsonrpc": "2.0", "id": "known", "error": "invalid"},
+    {"jsonrpc": "2.0", "id": "known", "error": {}},
+    {"jsonrpc": "2.0", "id": "known", "error": {"code": -32000, "message": "unusable", "data": []}},
+])
+def test_invalid_response_preserves_original_recovery_binding(response):
+    with tempfile.TemporaryDirectory(prefix="spr-invalid-", dir="/tmp") as temporary:
+        path = Path(temporary) / "socket"
+        requests = []
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            listener.bind(str(path))
+            listener.listen(1)
+
+            def reply_once():
+                connection, _ = listener.accept()
+                with connection:
+                    requests.append(rpc.decode(server.read_frame(connection, rpc.MAX_REQUEST_BYTES)))
+                    connection.sendall(rpc.encode(response))
+
+            thread = threading.Thread(target=reply_once)
+            thread.start()
+            request = {"jsonrpc": "2.0", "id": "known", "method": "plot.patch", "params": {
+                "plot": "/tmp/plot", "request": {"plot_id": "saved", "idempotency_key": "saved-key", "base_revision": 7}}}
+            with pytest.raises(TransportError) as failed:
+                client._exchange(path, request, 3)
+            thread.join(timeout=3)
+            assert not thread.is_alive() and requests == [request]
+            assert failed.value.reason_code == "invalid_engine_response"
+            repair = failed.value.repair
+            assert repair["idempotency_key"] == "saved-key" and repair["base_revision"] == 7
+            assert repair["plot_id"] == "saved" and repair["request_sent"] is True
+            assert repair["automatic_retry"] is False and repair["next_step"]["action"] == "plot.describe"
+
+
+def test_resume_cli_rpc_and_mcp_share_one_closed_schema(monkeypatch, tmp_path, capsys):
+    from sciplot_core import cli
+    from sciplot_core.mcp_server.schemas import tool_definitions
+    from sciplot_core.mcp_server.services import invoke_owner
+    from sciplot_core.plot_engine.contracts import resume_schema, validate_resume
+    from test_task_capabilities import expand
+
+    request = {"plot_id": "saved", "base_revision": 2, "idempotency_key": "original-key"}
+    assert validate_resume(request) == request
+    service = FakeService()
+    monkeypatch.setattr(server, "make_service", lambda: service)
+    path = tmp_path / "resume.json"
+    path.write_text(json.dumps(request))
+    assert cli.main(["plot", "resume", "/tmp/plot", "--request", str(path), "--direct", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["request"] == request
+    assert service.calls == [("resume", Path("/tmp/plot").resolve(), request)]
+    tool = next(item for item in tool_definitions() if item.name == "sciplot_plot_resume")
+    assert expand(tool.input_schema)["properties"]["request"] == resume_schema()
+    assert tool.annotations.idempotent_hint and not tool.annotations.read_only_hint
+    captured = []
+    monkeypatch.setattr(client, "call", lambda method, params: captured.append((method, params)) or {"status": "complete"})
+    params = {"plot": "/tmp/plot", "request": request}
+    assert invoke_owner("sciplot_plot_resume", params) == {"status": "complete"}
+    assert captured == [("plot.resume", params)]
+
+
+@pytest.mark.parametrize("params", [None, 7, {"plot": "/tmp/plot", "request": None},
+                                         {"plot": "/tmp/plot", "request": 7}])
+def test_bad_reply_to_malformed_wire_request_keeps_transport_error(params):
+    with tempfile.TemporaryDirectory(prefix="spr-malformed-", dir="/tmp") as temporary:
+        path = Path(temporary) / "socket"
+        received = []
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            listener.bind(str(path))
+            listener.listen(1)
+
+            def invalid_reply():
+                connection, _ = listener.accept()
+                with connection:
+                    received.append(rpc.decode(server.read_frame(connection, rpc.MAX_REQUEST_BYTES)))
+                    connection.sendall(rpc.encode({"jsonrpc": "2.0", "id": "wrong", "result": {}}))
+
+            thread = threading.Thread(target=invalid_reply)
+            thread.start()
+            request = {"jsonrpc": "2.0", "id": "original", "method": "plot.patch", "params": params}
+            with pytest.raises(TransportError) as failed:
+                client._exchange(path, request, 3)
+            thread.join(timeout=3)
+            assert not thread.is_alive() and received == [request]
+            assert failed.value.reason_code == "invalid_engine_response"
+            repair = failed.value.repair
+            assert repair["request_id"] == "original" and repair["method"] == "plot.patch"
+            assert repair["automatic_retry"] is False and repair["request_sent"] is True
+            assert "idempotency_key" not in repair
+            if isinstance(params, dict):
+                assert repair["next_step"]["plot"] == params["plot"]
+
+
+@pytest.mark.parametrize("value", [None, 7])
+def test_public_call_rejects_malformed_request_before_startup(monkeypatch, value):
+    monkeypatch.setattr(client, "ensure_server", lambda *_a, **_k: pytest.fail("Invalid request started a daemon"))
+    with pytest.raises(rpc.ProtocolError) as failed:
+        client.call("plot.patch", {"plot": "/tmp/plot", "request": value})
+    assert failed.value.reason_code == "invalid_rpc_params"

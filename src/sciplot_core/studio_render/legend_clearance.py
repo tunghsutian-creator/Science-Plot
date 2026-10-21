@@ -88,6 +88,7 @@ def _reserve_vertical_legend_clearance(
     series: list[StudioSeries],
     template_id: str,
     placement: dict[str, Any],
+    source_bindings: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     position = str(placement.get("position") or "")
     if position not in {"lower_left", "lower_right", "upper_left", "upper_right"}:
@@ -97,6 +98,15 @@ def _reserve_vertical_legend_clearance(
     if initial_minimum is None or initial_minimum >= required:
         return render_options, placement
     lower = position.startswith("lower")
+    categorical = request.get("categorical_binding")
+    from sciplot_core.studio_render.segmented_legend_clearance import ordinary_grouped_summary
+
+    segmented = ordinary_grouped_summary(request, template_id=template_id)
+    fixed_position = (str(categorical.get("legend_position"))
+        if isinstance(categorical, dict) and categorical.get("legend_position") in {
+            "lower_left", "lower_right", "upper_left", "upper_right"} else None)
+    if segmented:
+        fixed_position = "upper_left"  # Existing component rows have fixed geometry.
     bound_key = "y_min" if lower else "y_max"
     if bound_key in _explicit_render_options(request):
         return render_options, placement
@@ -105,21 +115,28 @@ def _reserve_vertical_legend_clearance(
     updated = dict(render_options)
     revised = placement
     original_bound: float | None = None
+    original_span: float | None = None
     total_reserve = 0.0
     for _attempt in range(MAX_LEGEND_RESERVE_ITERATIONS):
         minimum = _optional_float(revised.get("minimum_curve_clearance_mm"))
         if minimum is None or minimum >= required:
             break
-        axis_contract = _veusz_axis_contract(
-            updated, template_id=template_id, series=series
-        )
+        if isinstance(categorical, dict):
+            from sciplot_core.studio_render.categorical_legend import categorical_legend_axis
+
+            axis_contract = categorical_legend_axis(series, updated, request=request, template_id=template_id)
+        else:
+            axis_contract = _veusz_axis_contract(updated, template_id=template_id, series=series)
         y_min = axis_contract.y_min
         y_max = axis_contract.y_max
         if y_min is None or y_max is None or y_max <= y_min:
             break
         if original_bound is None:
             original_bound = y_min if lower else y_max
+            original_span = y_max - y_min
         deficit_mm = required - minimum
+        if segmented:
+            deficit_mm += float(revised.get("overlap_depth_mm") or 0.0)
         previous_bound = updated.get(bound_key)
         if scale == "log":
             if y_min <= 0.0:
@@ -148,10 +165,35 @@ def _reserve_vertical_legend_clearance(
                 updated["y_min"] = y_min - increment
             else:
                 updated["y_max"] = y_max + increment
-        candidate = _legend_placement_on_vertical_side(
-            _auto_inside_legend_placement(series, updated, template_id=template_id),
-            lower=lower,
-        )
+        if "categorical_binding" in request:
+            from sciplot_core.studio_render.categorical_legend import categorical_legend_placement
+
+            updated["_legend_placement_diagnostics"] = {"axis_reserve": {"side": "bottom" if lower else "top"}}
+            if segmented:
+                from sciplot_core.studio_render.segmented_legend_clearance import segmented_legend_placement
+
+                measured = segmented_legend_placement(series, updated, request=request, template_id=template_id,
+                    source_bindings=source_bindings)
+            else:
+                measured = categorical_legend_placement(series, updated, request=request,
+                    template_id=template_id, position=fixed_position)
+        else:
+            measured = _auto_inside_legend_placement(series, updated, template_id=template_id)
+        candidate = measured if fixed_position else _legend_placement_on_vertical_side(measured, lower=lower)
+        actual_total = None
+        if isinstance(categorical, dict):
+            actual_bound = float(candidate["measurement_axes"]["y"][0 if lower else 1])
+            actual_total = (abs(math.log10(actual_bound / original_bound)) if scale == "log"
+                            else abs(actual_bound - original_bound))
+            actual_cap = (MAX_LOG_LEGEND_RESERVE_DECADES if scale == "log"
+                          else float(original_span or 0) * MAX_LINEAR_LEGEND_RESERVE_FRACTION)
+            if actual_total > actual_cap + 1e-12:
+                if previous_bound is None:
+                    updated.pop(bound_key, None)
+                else:
+                    updated[bound_key] = previous_bound
+                break
+            updated[bound_key] = actual_bound
         candidate_minimum = _optional_float(candidate.get("minimum_curve_clearance_mm"))
         current_metrics = revised.get("candidates", {}).get(
             str(revised.get("position") or ""), {}
@@ -171,13 +213,16 @@ def _reserve_vertical_legend_clearance(
                 and candidate_load < current_load - 1e-6
             )
         )
-        if not candidate_improved:
+        # Zero distance saturates while a curve remains inside the key. Keep
+        # bounded reserve probes moving until actual clearance can improve.
+        saturated_overlap = current_overlap > 0 and candidate_overlap > 0
+        if not candidate_improved and not saturated_overlap:
             if previous_bound is None:
                 updated.pop(bound_key, None)
             else:
                 updated[bound_key] = previous_bound
             break
-        total_reserve += increment
+        total_reserve = actual_total if actual_total is not None else total_reserve + increment
         revised = candidate
     revised_minimum = _optional_float(revised.get("minimum_curve_clearance_mm"))
     if (

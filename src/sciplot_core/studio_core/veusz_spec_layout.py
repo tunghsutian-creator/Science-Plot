@@ -42,7 +42,7 @@ def build_veusz_layout_issues(
     )
     if spectral_issue is not None:
         issues.append(spectral_issue)
-    issues.extend(_semantic_series_contract_issues(series, request=request))
+    issues.extend(_semantic_series_contract_issues(series, request=request, source_bindings=axis_info.get("source_bindings")))
 
     placement = render_options.get("_legend_placement_diagnostics")
     placement_is_safe = (

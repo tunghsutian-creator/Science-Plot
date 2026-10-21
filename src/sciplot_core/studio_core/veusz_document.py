@@ -75,6 +75,12 @@ def _write_veusz_document(
     series: list[StudioSeries],
     axis_info: dict[str, Any],
 ) -> Path:
+    if request.get("data_mapping_execution"):
+        from sciplot_core.data_mapping import resolve_data_mapping_request
+
+        _, application = resolve_data_mapping_request(request, base_dir=path.parent)
+        if application is not None and application.get("source_groups"):
+            request = {**request, "data_mapping_application": application}
     performance_payload = axis_info.get("performance_comparison")
     if isinstance(performance_payload, dict):
         from sciplot_core.performance_veusz import build_performance_veusz_spec
@@ -142,6 +148,7 @@ def _write_veusz_document(
         series,
         template_id=template_id,
         render_options=render_options,
+        source_bindings=axis_info.get("source_bindings"),
     )
     base_axis_contract = _veusz_axis_contract(
         render_options,
@@ -171,11 +178,13 @@ def _write_veusz_document(
         series = _reindex_categorical_series(
             series,
             render_options=render_options,
+            source_bindings=axis_info.get("source_bindings"),
         )
     categorical_contract = _categorical_plot_contract(
         series,
         template_id=template_id,
         render_options=render_options,
+        source_bindings=axis_info.get("source_bindings"),
     )
     axis_contract, visual_extent_diagnostics = _expand_axis_for_visual_extents(
         base_axis_contract,
@@ -200,6 +209,8 @@ def _write_veusz_document(
     show_key = _show_veusz_key(
         template_id=template_id, render_options=render_options, series_count=len(series)
     )
+    from sciplot_core.studio_render.source_group_series import source_group_key_visible
+    show_key = show_key or source_group_key_visible(series, axis_info.get("source_bindings"), render_options, request=request)
     show_direct_labels = _show_veusz_direct_labels(
         template_id=template_id,
         render_options=render_options,

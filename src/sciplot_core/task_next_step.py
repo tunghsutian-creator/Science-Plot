@@ -8,6 +8,36 @@ from sciplot_core.task_recovery_policy import recovery_action, refresh_context_a
 def task_next_step(state: dict[str, Any]) -> dict[str, Any]:
     status, phase = state["status"], state["phase"]
     task = state.get("task_dir")
+    if status == "blocked" and state.get("blocker", {}).get("reason_code") == "scientific_presentation_unsupported":
+        blocker = state["blocker"]
+        return {"action": "resolve_scientific_intent", "task": task,
+                "reason_code": blocker["reason_code"], "required": blocker["required"],
+                "effective": blocker["effective"], "issues": blocker["issues"],
+                "message": blocker["continuation"]}
+    if "intent" in state["request"] and status == "needs_input" and state.get("question", {}).get("field") == "semantic_plan":
+        return {"action": "confirm_source_plan", "task": task,
+                "response_template": {"expected_question_id": state["question"]["question_id"], "confirm_plan": True,
+                                      "choices": {decision["field"]: "CHOOSE ONE ADVERTISED OPTION" for decision in state["semantic_plan"].get("decisions", [])}},
+                "revise_template": {"expected_intent_revision": state["intent_revision"], "revise_intent": state["request"]["intent"]},
+                "cli": "task resume TASK --response ANSWER_JSON_FILE --json",
+                "message": "Confirm exact attachments, stages, coordinate quantities and any listed decisions together; the program expands source hashes, row/column IDs, units and its standard layout locally."}
+    if "intent" in state["request"] and status == "blocked":
+        from sciplot_core.task_semantic_next_step import blocked_next_step
+
+        return blocked_next_step(state)
+    if (status == "blocked" and phase == "planning" and state["request"]["action"] == "create"
+            and state["request"].get("summary_statistic") == "raw_only"
+            and state.get("blocker", {}).get("reason_code") == "column_mapping_unsupported"):
+        from sciplot_core.data_mapping.curve_support import supports_replicate_mapping
+        from sciplot_core.materials_rules import get_rule
+
+        try:
+            supported = supports_replicate_mapping(get_rule((state.get("selection") or {}).get("rule_id") or state["request"].get("rule_id", "")))
+        except ValueError:
+            supported = False
+        if supported:
+            return {"action": "retry_same_task", "task": task, "response": {"retry": True},
+                    "message": "Retry this pre-creation task to obtain the original-sheet replicate question. Existing output or uncertain creation remains protected by the saved creation recovery checks."}
     if state.get("defer_creation_export") is True and phase == "prepared" and status == "complete":
         return {"action": "continue_template_creation", "task": task,
                 "message": "The exact native project is prepared but has not been published; its semantic creation owner must continue styling/export."}
@@ -16,6 +46,11 @@ def task_next_step(state: dict[str, Any]) -> dict[str, Any]:
                 "message": "Inspect current source, QA and delivery before handoff or another edit."}
     if status == "needs_input":
         question = state["question"]
+        if question["field"] == "categorical":
+            return {"action": "answer_scientific_question", "task": task,
+                    "schema_query": {"section": "response", "name": "categorical"},
+                    "response_template": question["response_template"],
+                    "message": "Choose original table rows and categorical column roles using the returned source evidence. Reply in this same task; supply metadata confirmations for missing units and preserve original sample IDs in category_order/aliases. Explicit key columns/corners apply only to given_values; repeated-measurement bars retain their existing fixed categorical legend."}
         if question["field"] == "out":
             return {"action": "choose_new_output", "task": task,
                     "schema_query": {"section": "response", "name": "out"},
@@ -34,7 +69,9 @@ def task_next_step(state: dict[str, Any]) -> dict[str, Any]:
                     "schema_query": {"section": "response", "name": "mapping"},
                     "response_bindings": {"expected_question_id": question["question_id"]},
                     "cli": "task resume TASK_DIR --response ANSWER_JSON_FILE --json",
-                    "message": "Reply once with mapping: source_sha256, table_selection, metadata_confirmations if needed, column_mapping pairs and optional labels. Include rule_id/template when choosing the experiment. Resume this task; do not split raw files, try other plotting commands, or create another project. Legacy stepwise answers remain supported."}
+                    "message": ("Reply with mapping: source_sha256, original table_selection and column_mapping.replicates (physical column_index per group, optional complete region overrides and labels). Preserve metric/unit/sample evidence and every row/missing position in each confirmed domain. Resume this task to correct or continue."
+                                if question.get("mapping_shape") == "replicates" else
+                                "Reply once with mapping: source_sha256, table_selection, metadata_confirmations if needed, column_mapping pairs and optional labels. Include rule_id/template when choosing the experiment. Resume this task; do not split raw files, try other plotting commands, or create another project. Legacy stepwise answers remain supported.")}
         field = "annotation_choices" if question["field"] == "annotation_rebinding" else question["field"]
         bindings = ({"expected_revision_id": state["revision_id"]} if field == "annotation_choices" else
                     {"expected_question_id": question["question_id"]} if "question_id" in question and field != "rule_id" else {})

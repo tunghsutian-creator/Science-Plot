@@ -260,6 +260,16 @@ def _apply_readability_render_defaults(
             updated["_autofixes_applied"] = sorted(set(autofixes))
         return updated
     if template_id in CATEGORICAL_TEMPLATE_IDS:
+        from sciplot_core.studio_render.source_group_series import source_group_key_visible
+
+        if source_group_key_visible(series, axis_info.get("source_bindings"), updated, request=request):
+            placement = _auto_inside_legend_placement(series, updated, template_id=template_id)
+            updated, placement = _reserve_vertical_legend_clearance(updated, request=request,
+                series=series, template_id=template_id, placement=placement, source_bindings=axis_info.get("source_bindings"))
+            updated["_legend_placement_diagnostics"] = placement
+            updated["legend_position"] = str(placement["position"])
+            updated["legend_horz_position"] = updated["legend_vert_position"] = "manual"
+            updated["legend_horz_manual"], updated["legend_vert_manual"] = manual_anchor_fraction(placement)
         if (
             template_id == "bar"
             and _axis_scale(updated, "y") == "linear"
@@ -269,6 +279,16 @@ def _apply_readability_render_defaults(
             if bar_axis is not None:
                 updated.update(bar_axis)
                 autofixes.append("categorical_bar_mean_and_error_headroom")
+        from sciplot_core.studio_render.segmented_legend_clearance import ordinary_grouped_summary, segmented_legend_placement
+
+        if ordinary_grouped_summary(request, template_id=template_id):
+            placement = segmented_legend_placement(series, updated, request=request, template_id=template_id,
+                source_bindings=axis_info.get("source_bindings"))
+            updated, placement = _reserve_vertical_legend_clearance(updated, request=request,
+                series=series, template_id=template_id, placement=placement, source_bindings=axis_info.get("source_bindings"))
+            updated["_legend_placement_diagnostics"] = placement
+            if "axis_reserve" in placement:
+                autofixes.append("segmented_summary_legend_axis_reserve_top")
         if autofixes:
             updated["_autofixes_applied"] = sorted(set(autofixes))
         return updated
@@ -277,9 +297,12 @@ def _apply_readability_render_defaults(
         if _legend_is_dense(series) and "size" not in explicit_options:
             updated["size"] = _wide_size_for_dense_legend(series)
             autofixes.append("legend_auto_widened_inside")
-        placement = _auto_inside_legend_placement(
-            series, updated, template_id=template_id
-        )
+        if "categorical_binding" in request:
+            from sciplot_core.studio_render.categorical_legend import categorical_legend_placement
+
+            placement = categorical_legend_placement(series, updated, request=request, template_id=template_id)
+        else:
+            placement = _auto_inside_legend_placement(series, updated, template_id=template_id)
         updated, placement = _reserve_vertical_legend_clearance(
             updated,
             request=request,
@@ -304,6 +327,18 @@ def _apply_readability_render_defaults(
         }
         autofixes.append("legend_corner_edge_reclaimed")
         autofixes.append(f"legend_auto_{position}")
+    elif ("categorical_binding" in request and template_id == "point_line"
+          and legend_position in {"upper_left", "upper_right", "lower_left", "lower_right"}
+          and label_mode in {"", "auto", "legend"}):
+        from sciplot_core.studio_render.categorical_legend import categorical_legend_placement
+
+        placement = categorical_legend_placement(
+            series, updated, request=request, template_id=template_id, position=legend_position)
+        updated, placement = _reserve_vertical_legend_clearance(updated, request=request,
+            series=series, template_id=template_id, placement=placement)
+        updated["_legend_placement_diagnostics"] = placement
+        if isinstance(placement.get("axis_reserve"), dict):
+            autofixes.append(f"legend_axis_reserve_{placement['axis_reserve']['side']}")
 
     if autofixes:
         updated["_autofixes_applied"] = sorted(set(autofixes))

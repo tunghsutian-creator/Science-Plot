@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
+
+from sciplot_core.source_tables.parsing import (
+    DECIMAL_ROUND_TRIP_ENCODING,
+    SOURCE_NUMERIC_ENCODING_KEY,
+)
 
 from sciplot_core.source_coverage.artifacts import _result_path_list
 from sciplot_core.source_coverage.document_audit import _audit_exact_document_data
@@ -103,7 +109,8 @@ def verify_managed_document_sources(
     return payload
 
 
-def _source_records(spec: dict[str, Any]) -> dict[Path, str]:
+def source_records(spec: dict[str, Any]) -> dict[Path, str]:
+    """Return the exact declared source inventory, rejecting missing/conflicting evidence."""
     units = list(spec.get("series") or [])
     if isinstance(spec.get("scalar_field"), dict):
         units.append(spec["scalar_field"])
@@ -131,6 +138,10 @@ def _source_records(spec: dict[str, Any]) -> dict[Path, str]:
     return records
 
 
+# Retained for source-coverage callers and documented test monkeypatches.
+_source_records = source_records
+
+
 def _verify_prepared_data(
     spec: dict[str, Any], snapshots: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -145,6 +156,12 @@ def _verify_prepared_data(
     request = spec.get("source_request")
     if not isinstance(request, dict):
         raise ValueError("Managed scientific data have no prepared source request.")
+    from sciplot_core.source_coverage.replicate_disclosure import verify_replicate_summary_request
+
+    replicate_audit = verify_replicate_summary_request(request)
+    encoding = spec.get(SOURCE_NUMERIC_ENCODING_KEY)
+    if encoding not in (None, DECIMAL_ROUND_TRIP_ENCODING):
+        raise ValueError("Unknown managed source numeric encoding.")
     inventory = {str(item["path"]): item["sha256"] for item in snapshots}
     expected = _spec_render_data_units(spec, artifact_inventory=inventory)
     with tempfile.TemporaryDirectory(prefix="sciplot_managed_source_audit_") as temp:
@@ -164,8 +181,35 @@ def _verify_prepared_data(
                 "sha256": snapshot["sha256"],
             }
         derived = _derive_prepared_data(
-            request=request, private_sources=private_sources
+            request=request, private_sources=private_sources,
+            source_artifact_origins=mapping if ((request.get("data_mapping_application") or {}).get("source_groups")
+                or (request.get("categorical_binding") or {}).get("source_identity_version")) else None,
         )
+        if "performance_selection" in request:
+            from sciplot_core.performance_comparison.selected_scatter import selected_source_evidence
+            performance = spec.get("performance_comparison")
+            if not isinstance(performance, dict) or canonical_json_sha256(selected_source_evidence(performance), allow_nan=False) != canonical_json_sha256(derived.get("performance_selection_evidence"), allow_nan=False):
+                raise ValueError("Selected performance source rows, missing masks, Metric IDs or unit declarations do not reproduce from the exact original table.")
+        # Historical specs predate source-parser versioning. Reproduce their
+        # original parser exactly, never relax the complete data signature or
+        # rewrite their saved scientific authority. Versioned specs cannot
+        # downgrade to this compatibility parser.
+        if encoding is None and request.get("rule_id") != "performance_comparison":
+            current_units = derived.get("units")
+            if derived.get("status") == "passed" and isinstance(current_units, list) and current_units:
+                remapped = [
+                    {**unit, "source_artifacts": _remap_derived_source_artifacts(
+                        unit.get("source_artifacts"), private_to_original=mapping,
+                        label="managed prepared data",
+                    )} for unit in current_units
+                ]
+                if [render_data_unit_signature(unit) for unit in remapped] != [
+                    render_data_unit_signature(unit) for unit in expected
+                ]:
+                    derived = _derive_prepared_data(
+                        request=request, private_sources=private_sources,
+                        legacy_numeric_parser=True,
+                    )
         units = derived.get("units")
         if (
             derived.get("status") != "passed"
@@ -185,19 +229,25 @@ def _verify_prepared_data(
             "Managed specification values, axes, or sample identities do not "
             "reproduce from the exact prepared source tables."
         )
-    return {"status": "passed", "unit_count": len(units), "unit_signatures": signatures}
+    return {"status": "passed", "unit_count": len(units), "unit_signatures": signatures,
+            **({"replicate_disclosure_verification": replicate_audit} if replicate_audit is not None else {})}
 
 
 def _derive_prepared_data(
-    *, request: dict[str, Any], private_sources: list[Path]
+    *, request: dict[str, Any], private_sources: list[Path],
+    legacy_numeric_parser: bool = False,
+    source_artifact_origins: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.studio_render import derive_terminal_render_data_contract
 
     if request.get("rule_id") != "performance_comparison":
         return derive_terminal_render_data_contract(
-            request=request, terminal_sources=private_sources
+            request=request, terminal_sources=private_sources,
+            legacy_numeric_parser=legacy_numeric_parser,
+            **({"source_artifact_origins": source_artifact_origins} if source_artifact_origins is not None else {}),
         )
     from sciplot_core.performance_comparison import prepare_performance_comparison
+    from sciplot_core.performance_comparison.selection import performance_selection_from_request
     from sciplot_core.performance_veusz.spec_builder import build_performance_veusz_spec
 
     if len(private_sources) != 1:
@@ -205,11 +255,16 @@ def _derive_prepared_data(
             "Performance scientific data require one confirmed long table."
         )
     payload = prepare_performance_comparison(
-        private_sources[0], template_id=str(request["template"])
+        private_sources[0], template_id=str(request["template"]),
+        selection=performance_selection_from_request(request),
     )
     derived_spec = build_performance_veusz_spec(payload=payload, request=request)
     units = _spec_render_data_units(
         derived_spec,
         artifact_inventory={str(payload["source"]): str(payload["source_sha256"])},
     )
-    return {"status": "passed", "units": units, "unit_count": len(units)}
+    result: dict[str, Any] = {"status": "passed", "units": units, "unit_count": len(units)}
+    if "performance_selection" in request:
+        from sciplot_core.performance_comparison.selected_scatter import selected_source_evidence
+        result["performance_selection_evidence"] = selected_source_evidence(payload)
+    return result

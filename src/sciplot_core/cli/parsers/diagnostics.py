@@ -17,6 +17,8 @@ def register_diagnostics_commands(subparsers: Any) -> None:
     )
 
     plan_parser.add_argument("input", type=Path)
+    plan_parser.add_argument("--performance-selection", type=Path,
+                             help="Complete source-bound performance Metric selection and per-Metric missing-unit user statements JSON.")
 
     plan_parser.add_argument(
         "--rule",
@@ -37,6 +39,8 @@ def register_diagnostics_commands(subparsers: Any) -> None:
     )
 
     inspect_parser.add_argument("input", type=Path)
+    inspect_parser.add_argument("--performance", action="store_true",
+                                help="Read only original long-table Metric IDs, unit facts and a source-bound confirmation template.")
 
     inspect_parser.add_argument("--sheet", default="0")
 
@@ -55,18 +59,56 @@ def register_diagnostics_commands(subparsers: Any) -> None:
 
     verify_parser = subparsers.add_parser(
         "verify",
-        help="Run one changed-owner focused verification pass.",
+        help="Verify a changed scope or start and inspect a durable test suite.",
     )
 
-    verify_parser.add_argument(
+    verify_scope = verify_parser.add_mutually_exclusive_group(required=True)
+    verify_scope.add_argument(
         "--changed",
         action="store_true",
-        required=True,
         help="Verify the staged, unstaged, and untracked HEAD worktree.",
+    )
+    verify_scope.add_argument(
+        "--start", choices=("focused", "comprehensive", "full", "public-focused", "public-comprehensive", "public-all", "private-science"),
+        help="Start one durable suite execution; return before the suite finishes.",
+    )
+    verify_scope.add_argument(
+        "--status", type=Path, metavar="DIR",
+        help="Read the original durable execution without collecting or rerunning tests.",
+    )
+    verify_parser.add_argument(
+        "--out", type=Path, metavar="DIR",
+        help="Fresh named directory under .tmp_verify, required with --start.",
+    )
+    verify_parser.add_argument(
+        "--audit-plugin-dir", type=Path, metavar="DIR",
+        help="Frozen local access-observation plugin directory, only with --start.",
+    )
+    verify_parser.add_argument(
+        "--audit-out", type=Path, metavar="DIR",
+        help="Fresh separate local audit output, paired with --audit-plugin-dir.",
     )
 
     verify_parser.add_argument(
         "--json", action="store_true", help="Emit machine-readable JSON."
+    )
+
+    verify_parser.add_argument(
+        "--base", metavar="REV",
+        help="Include committed changes from REV to HEAD, plus the current worktree.",
+    )
+    verify_mode = verify_parser.add_mutually_exclusive_group()
+    verify_mode.add_argument(
+        "--plan-only", action="store_true",
+        help="Resolve the changed scope and list checks without executing them.",
+    )
+    verify_mode.add_argument(
+        "--record", type=Path, metavar="DIR",
+        help="Execute each check once with durable local evidence under .tmp_verify.",
+    )
+    verify_mode.add_argument(
+        "--reuse", type=Path, metavar="DIR",
+        help="Validate matching local check receipts without rerunning verification gates.",
     )
 
     readiness_parser = subparsers.add_parser(
@@ -118,6 +160,11 @@ def register_diagnostics_commands(subparsers: Any) -> None:
 
     smoke_parser.add_argument(
         "--out", type=Path, default=Path(".tmp_verify") / "runtime_smoke"
+    )
+
+    smoke_parser.add_argument(
+        "--profile", choices=("full", "quick"), default="full",
+        help="Full lifecycle gate (default), or bounded native/export/QA feedback.",
     )
 
     smoke_parser.add_argument(

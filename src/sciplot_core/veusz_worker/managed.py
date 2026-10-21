@@ -3,7 +3,9 @@
 from contextlib import contextmanager
 from importlib import import_module
 import json
+import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Iterator
 
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -49,25 +51,52 @@ def fresh_document(ir: dict[str, Any]) -> Iterator[Any]:
 
 
 def compile_plot_ir(ir_path: Path, document: Path, preview: Path) -> dict[str, Any]:
+    if document.resolve() == preview.resolve():
+        raise ValueError("A compile preview cannot overwrite its native document.")
     ir = _read_ir(ir_path)
     if document.exists():
         raise ValueError("Managed compilation requires a new artifact path; existing native bytes are never replaced.")
     document.parent.mkdir(parents=True, exist_ok=True)
-    with fresh_document(ir) as expected:
-        import_module("veusz.document").CommandInterface(expected).Save(str(document))
-        expected_hash = content_hash(native_state(expected))
-    result = inspect_plot_ir(ir_path, document)
-    if result["status"] != "unchanged" or result["scientific_audit"]["status"] != "passed":
-        raise ValueError(f"Saved managed artifact failed native fidelity: {result}")
-    if result.get("publication_qa", {}).get("status", "passed") != "passed":
-        raise ValueError(f"Managed Figure publication QA failed: {result['publication_qa']}")
-    audited_hash = result["document_sha256"]
-    if file_sha256(document) != audited_hash:
-        raise ValueError("Managed native document changed after its compilation audit.")
-    with loaded_native_document(document) as loaded:
-        image = _preview(loaded, preview)
-    if file_sha256(document) != audited_hash:
-        raise ValueError("Managed native document changed between its compilation audit and preview.")
+    # A terminated Save or painter must never leave a partial canonical VSZ.
+    # The private same-filesystem directory owns this attempt only. Abrupt
+    # process death may leave it for diagnosis; a later attempt never adopts
+    # or removes unknown old directories or existing canonical bytes.
+    with TemporaryDirectory(prefix=".sciplot-compile-", dir=document.parent) as staging:
+        candidate = Path(staging) / "document.vsz"
+        candidate_preview = Path(staging) / "preview.png"
+        with fresh_document(ir) as expected:
+            import_module("veusz.document").CommandInterface(expected).Save(str(candidate))
+            expected_hash = content_hash(native_state(expected))
+        result = inspect_plot_ir(ir_path, candidate)
+        if result["status"] != "unchanged" or result["scientific_audit"]["status"] != "passed":
+            raise ValueError(f"Saved managed artifact failed native fidelity: {result}")
+        if result.get("publication_qa", {}).get("status", "passed") != "passed":
+            from sciplot_core.plot_document import DocumentError
+
+            error = DocumentError("publication_qa_failed", "Managed Figure publication QA failed: native text exceeds its resolved layout bounds.",
+                                  issues=result["publication_qa"].get("hard", []))
+            error.repair = {"action": "correct_layout", "issues": error.issues,
+                            "publication_qa": result["publication_qa"], "native_stage": "publication_qa",
+                            "save_completed": True, "scientific_audit_status": result["scientific_audit"]["status"],
+                            "preview_rendered": False, "canonical_document_published": False}
+            raise error
+        audited_hash = result["document_sha256"]
+        if file_sha256(candidate) != audited_hash:
+            raise ValueError("Managed native document changed after its compilation audit.")
+        with loaded_native_document(candidate) as loaded:
+            image = _preview(loaded, candidate_preview)
+        if file_sha256(candidate) != audited_hash:
+            raise ValueError("Managed native document changed between its compilation audit and preview.")
+        with candidate.open("rb") as saved:
+            os.fsync(saved.fileno())
+        # link is an atomic, no-clobber publication of these exact audited
+        # bytes. replace would silently overwrite a concurrently created VSZ.
+        os.link(candidate, document)
+        if file_sha256(document) != audited_hash:
+            raise ValueError("Managed native document changed during canonical publication.")
+        preview.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(candidate_preview, preview)
+        image = {**image, "path": str(preview)}
     return {"kind": "sciplot_managed_compile", "document": str(document),
             "document_sha256": audited_hash, "ir_path": str(ir_path),
             "ir_hash": ir["ir_hash"], "scientific_hash": ir["scientific_hash"],

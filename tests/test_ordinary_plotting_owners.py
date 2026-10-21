@@ -1,0 +1,390 @@
+"""Bounded public plotting owners retain scientific and shared gateway coverage."""
+
+from pathlib import Path
+import sys
+import tomllib
+
+import pytest
+
+from sciplot_core.verification import build_changed_verification_plan
+from sciplot_core.verification.ordinary_plotting_owners import (
+    APPEND_IDENTITY_LEAF_PATH,
+    CATEGORICAL_EDIT_TESTS,
+    CATEGORICAL_PRESENTATION_EDIT_OWNER,
+    CATEGORICAL_SOURCE_OWNER,
+    CURVE_TESTS,
+    ORDINARY_CURVE_OWNER,
+    ORDINARY_PLOTTING_OWNERS,
+    ORDINARY_TASK_LEAF_PATHS,
+    PERFORMANCE_SELECTION_OWNER,
+    PERFORMANCE_TESTS,
+    REPLICATE_DISCLOSURE_OWNER,
+    REPLICATE_TESTS,
+)
+from sciplot_core.verification.owners import CHANGED_OWNERS
+from sciplot_core.verification.type_gate_owners import (
+    ARCHITECTURE_CORE_TARGETS,
+    SCIENTIFIC_TRANSACTION_TYPE_PATHS,
+)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+# Expected additions to the preserved 195-file residual scope. Production still
+# derives the complete strict gate solely from pyproject.toml.
+ROUND2_STRICT_ADDITIONS = frozenset(
+    {
+        "src/sciplot_core/task_semantic_axes.py",
+        "src/sciplot_core/task_semantic_curve_bindings.py",
+        "src/sciplot_core/task_missing_values.py",
+        "src/sciplot_core/task_replicate_summary.py",
+        "src/sciplot_core/semantic_sources/impact_replicate_disclosure.py",
+        "src/sciplot_core/source_coverage/replicate_disclosure.py",
+        "src/sciplot_core/plan_source_options.py",
+        "src/sciplot_core/plot_data/spec_tables.py",
+        "src/sciplot_core/plot_data/exports.py",
+        "src/sciplot_core/plan_preview_contract.py",
+        "src/sciplot_core/performance_comparison/metadata.py",
+        "src/sciplot_core/performance_comparison/selection.py",
+        "src/sciplot_core/performance_comparison/selection_rows.py",
+        "src/sciplot_core/performance_comparison/selected_scatter.py",
+        "src/sciplot_core/performance_comparison/source_tables.py",
+        "src/sciplot_core/performance_comparison/public_api.py",
+        "src/sciplot_core/performance_comparison/scatter.py",
+        "src/sciplot_core/performance_comparison/models.py",
+        "src/sciplot_core/performance_comparison/layout.py",
+        "src/sciplot_core/performance_comparison/source_loading.py",
+        "src/sciplot_core/performance_veusz/spec_builder.py",
+        "src/sciplot_core/performance_veusz/style.py",
+        "src/sciplot_core/performance_veusz/contracts.py",
+        "src/sciplot_core/performance_veusz/apply.py",
+        "src/sciplot_core/performance_veusz/widget_apply.py",
+        "src/sciplot_core/veusz_worker/spec_audit/labels.py",
+        "src/sciplot_core/veusz_worker/spec_audit/series.py",
+        "src/sciplot_core/categorical_plan.py",
+        "src/sciplot_core/categorical_disclosure.py",
+        "src/sciplot_core/mapping_contract/categorical.py",
+        "src/sciplot_core/studio_render/categorical_bindings.py",
+        "src/sciplot_core/studio_render/categorical_bound_series.py",
+        "src/sciplot_core/task_categorical_contract.py",
+        "src/sciplot_core/task_categorical_creation.py",
+        "src/sciplot_core/studio_render/categorical_groups.py",
+        "src/sciplot_core/studio_render/categorical_legend.py",
+        "src/sciplot_core/studio_core/veusz_spec_labels.py",
+        "src/sciplot_core/verification/ordinary_plotting_owners.py",
+    }
+)
+CATEGORICAL_EDIT_STRICT_ADDITIONS = frozenset(
+    {
+        "src/sciplot_core/studio_core/categorical_display.py",
+        "src/sciplot_core/studio_core/categorical_display_schema.py",
+        "src/sciplot_core/studio_core/categorical_display_errors.py",
+        "src/sciplot_core/studio_core/categorical_display_preflight.py",
+        "src/sciplot_core/veusz_worker/categorical_display.py",
+        "src/sciplot_core/veusz_worker/categorical_rejection.py",
+        "src/sciplot_core/source_coverage/document_audit.py",
+    }
+)
+SUMMARY_LEGEND_STRICT_ADDITIONS = frozenset(
+    {
+        "src/sciplot_core/studio_render/component_legend.py",
+        "src/sciplot_core/studio_render/segmented_legend_clearance.py",
+        "src/sciplot_core/veusz_audit/segmented_legend_geometry.py",
+        "src/sciplot_core/studio_core/current_layout_review.py",
+    }
+)
+ZERO_SD_STRICT_ADDITIONS = frozenset(
+    {"src/sciplot_core/studio_core/guide_contracts.py"}
+)
+SOURCE_FACT_STRICT_ADDITIONS = frozenset(
+    {
+        "src/sciplot_core/data_mapping/plan_binding.py",
+        "src/sciplot_core/data_mapping/original_tables.py",
+        "src/sciplot_core/semantic_sources/instrument_regions.py",
+        "src/sciplot_core/semantic_sources/numeric_separators.py",
+    }
+)
+SOURCE_DOMAIN_STRICT_ADDITIONS = frozenset(
+    {"src/sciplot_core/task_semantic_stages.py"}
+)
+SOURCE_IDENTITY_STRICT_ADDITIONS = frozenset(
+    {"src/sciplot_core/mapping_contract/source_identity.py",
+     "src/sciplot_core/mapping_contract/categorical_identity.py",
+     "src/sciplot_core/studio_render/categorical_source_identity.py",
+     "src/sciplot_core/veusz_worker/spec_audit/categorical_identity.py",
+     "src/sciplot_core/data_mapping/source_projection.py",
+     "src/sciplot_core/data_mapping/pair_choice.py",
+     "src/sciplot_core/studio_render/paired_source_identity.py",
+     "src/sciplot_core/studio_render/series_option_context.py",
+     "src/sciplot_core/studio_render/source_group_series.py"}
+)
+NATIVE_PRESENTATION_STRICT_ADDITIONS = frozenset(
+    {"src/sciplot_core/veusz_worker/style_projection.py",
+     "src/sciplot_core/source_coverage/spec_units.py",
+     "src/sciplot_core/studio_core/style_transfer_storage.py",
+     "src/sciplot_core/studio_core/axis_presentation.py",
+     "src/sciplot_core/studio_core/series_encoding_contract.py"}
+)
+FINAL_STRICT_ADDITIONS = (
+    ROUND2_STRICT_ADDITIONS
+    | CATEGORICAL_EDIT_STRICT_ADDITIONS
+    | SUMMARY_LEGEND_STRICT_ADDITIONS
+    | ZERO_SD_STRICT_ADDITIONS
+    | SOURCE_FACT_STRICT_ADDITIONS
+    | SOURCE_DOMAIN_STRICT_ADDITIONS
+    | SOURCE_IDENTITY_STRICT_ADDITIONS
+    | NATIVE_PRESENTATION_STRICT_ADDITIONS
+)
+
+
+def _plan(paths):
+    return build_changed_verification_plan(paths, repo_root=ROOT)
+
+
+def _targets(plan):
+    return set(
+        next(
+            check["command"]
+            for check in plan["checks"]
+            if check["check_id"] == "pytest_changed_owners"
+        )[6:]
+    )
+
+
+@pytest.mark.parametrize(
+    "owner", ORDINARY_PLOTTING_OWNERS, ids=lambda owner: owner.owner_id
+)
+def test_each_domain_has_exact_existing_paths_and_generated_native_controls(owner):
+    assert not owner.path_prefixes
+    assert owner.owned_test_paths
+    assert owner.mypy_required
+    assert set(ARCHITECTURE_CORE_TARGETS) <= set(owner.pytest_targets)
+    assert "smoke" in owner.final_milestone_gates
+    assert "full_pytest" in owner.release_gates
+    for path in owner.exact_paths | owner.owned_test_paths:
+        assert (ROOT / path).is_file(), path
+        plan = _plan([path])
+        assert not plan["unowned_paths"]
+        assert owner.owner_id in {item["owner_id"] for item in plan["owners"]}
+        assert set(owner.owned_test_paths) <= _targets(plan)
+    for target in owner.pytest_targets:
+        assert (ROOT / target.split("::", 1)[0]).is_file(), target
+
+
+@pytest.mark.parametrize("path", sorted(ORDINARY_TASK_LEAF_PATHS))
+def test_new_task_leaves_keep_public_native_controls_without_unrelated_task_gate(path):
+    plan = _plan([path])
+    owners = {item["owner_id"] for item in plan["owners"]}
+    assert "local_task_control" not in owners
+    assert not plan["unowned_paths"]
+    assert "tests/test_task_saved_work.py" not in _targets(plan)
+    assert "tests/test_task_groups.py" not in _targets(plan)
+    assert any("native" in target for target in _targets(plan))
+    assert "full_pytest" in plan["required_later"]["release"]
+
+
+def test_new_append_identity_leaf_retains_append_and_curve_native_consumers():
+    plan = _plan([APPEND_IDENTITY_LEAF_PATH])
+    owners = {item["owner_id"] for item in plan["owners"]}
+    assert ORDINARY_CURVE_OWNER.owner_id in owners
+    assert "semantic_plot_engine" not in owners
+    assert set(CURVE_TESTS) | {
+        "tests/test_managed_source_append.py",
+        "tests/test_managed_source_append_native.py",
+    } <= _targets(plan)
+    assert "tests/test_plot_recovery.py" not in _targets(plan)
+
+
+@pytest.mark.parametrize(
+    "path,original_owner,original_targets",
+    [
+        (
+            "src/sciplot_core/task_control.py",
+            "local_task_control",
+            {"tests/test_task_saved_work.py", "tests/test_task_source_control.py"},
+        ),
+        (
+            "src/sciplot_core/task_contract.py",
+            "local_task_control",
+            {"tests/test_task_groups.py", "tests/test_task_papers.py"},
+        ),
+        (
+            "src/sciplot_core/cli/dispatch/tasks.py",
+            "local_task_control",
+            {"tests/test_task_column_mapping_native.py", "tests/test_task_recovery.py"},
+        ),
+        (
+            "src/sciplot_core/plot_engine/managed_source_append.py",
+            "semantic_plot_engine",
+            {
+                "tests/test_managed_source_append_native.py",
+                "tests/test_plot_recovery.py",
+            },
+        ),
+        (
+            "src/sciplot_core/source_coverage/managed_documents.py",
+            "managed_document_science",
+            {
+                "tests/test_managed_document_science.py",
+                "tests/test_native_numeric_precision.py",
+            },
+        ),
+        (
+            "src/sciplot_core/veusz_worker/spec_audit/series.py",
+            "managed_document_science",
+            {
+                "tests/test_managed_document_science.py",
+                "tests/test_document_audit_transport.py",
+            },
+        ),
+        (
+            "src/sciplot_core/cli/parsers/diagnostics.py",
+            "changed_verification",
+            {"tests/test_changed_verification.py", "tests/test_cli_surface.py"},
+        ),
+        (
+            "src/sciplot_core/studio_core/annotation_operations.py",
+            "native_annotations",
+            {"tests/test_annotation_operations.py", "tests/test_annotation_validation.py"},
+        ),
+        (
+            "src/sciplot_core/studio_core/document_edit_state.py",
+            "native_document_edit",
+            {"tests/test_document_edit.py", "tests/test_document_edit_native.py"},
+        ),
+        (
+            "src/sciplot_core/veusz_worker/__main__.py",
+            "generic_terminal_preparation",
+            {"tests/test_render_worker_rejection.py", "tests/test_generic_single_task_plan.py"},
+        ),
+        (
+            "src/sciplot_core/veusz_worker/persistent.py",
+            "semantic_plot_engine",
+            {"tests/test_plot_recovery.py", "tests/test_managed_backend_native.py"},
+        ),
+        (
+            "src/sciplot_core/studio_core/current_layout_review.py",
+            "current_native_legend_layout",
+            {"tests/test_current_layout_review.py", "tests/test_current_layout_review_native.py"},
+        ),
+        (
+            "src/sciplot_core/studio_core/guide_contracts.py",
+            "managed_document_science",
+            {"tests/test_managed_document_science.py", "tests/test_native_numeric_precision.py"},
+        ),
+    ],
+)
+def test_critical_gateways_retain_original_broad_owners_and_targets(
+    path,
+    original_owner,
+    original_targets,
+):
+    plan = _plan([path])
+    assert original_owner in {item["owner_id"] for item in plan["owners"]}
+    assert original_targets <= _targets(plan)
+    assert "full_pytest" in plan["required_later"]["release"]
+
+
+def test_shared_plan_option_selects_all_source_contract_consumers_once():
+    plan = _plan(["src/sciplot_core/plan_source_options.py"])
+    assert {
+        REPLICATE_DISCLOSURE_OWNER.owner_id,
+        PERFORMANCE_SELECTION_OWNER.owner_id,
+        CATEGORICAL_SOURCE_OWNER.owner_id,
+    } <= {item["owner_id"] for item in plan["owners"]}
+    expected = set(REPLICATE_TESTS) | set(PERFORMANCE_TESTS)
+    expected |= set(CATEGORICAL_SOURCE_OWNER.owned_test_paths)
+    assert expected <= _targets(plan)
+    checks = [check["command"] for check in plan["checks"]]
+    assert checks.count([sys.executable, "-m", "mypy"]) == 1
+    assert (
+        len(
+            [
+                check
+                for check in plan["checks"]
+                if check["check_id"] == "pytest_changed_owners"
+            ]
+        )
+        == 1
+    )
+
+
+def test_future_task_file_keeps_broad_owner_and_unknown_metric_leaf_fails_closed():
+    task = _plan(["src/sciplot_core/task_future_ordinary_probe.py"])
+    assert "local_task_control" in {item["owner_id"] for item in task["owners"]}
+    assert "tests/test_task_recovery.py" in _targets(task)
+    unknown = "src/sciplot_core/performance_comparison/future_metric_probe.py"
+    blocked = _plan([unknown])
+    assert blocked["status"] == "failed"
+    assert blocked["unowned_paths"] == [unknown]
+    assert blocked["checks"] == []
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "skill/references/performance-selection.md",
+        "skill/references/ordinary-categorical.md",
+        "skill/references/categorical-presentation-edit.md",
+    ],
+)
+def test_public_workflow_references_have_an_exact_documentation_owner(path):
+    plan = _plan([path])
+    assert "documentation_contract" in {item["owner_id"] for item in plan["owners"]}
+    assert "tests/test_documentation_contract.py" in _targets(plan)
+
+
+def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
+    configured = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["mypy"][
+        "files"
+    ]
+    additions = (
+        ROUND2_STRICT_ADDITIONS,
+        CATEGORICAL_EDIT_STRICT_ADDITIONS,
+        SUMMARY_LEGEND_STRICT_ADDITIONS,
+        ZERO_SD_STRICT_ADDITIONS,
+        SOURCE_FACT_STRICT_ADDITIONS,
+        SOURCE_DOMAIN_STRICT_ADDITIONS,
+        SOURCE_IDENTITY_STRICT_ADDITIONS,
+        NATIVE_PRESENTATION_STRICT_ADDITIONS,
+    )
+    assert all(
+        scope.isdisjoint(other)
+        for index, scope in enumerate(additions)
+        for other in additions[index + 1 :]
+    )
+    assert len(configured) == len(set(configured))
+    assert ROUND2_STRICT_ADDITIONS <= SCIENTIFIC_TRANSACTION_TYPE_PATHS
+    assert FINAL_STRICT_ADDITIONS <= SCIENTIFIC_TRANSACTION_TYPE_PATHS
+    assert all(configured.count(path) == 1 for path in FINAL_STRICT_ADDITIONS)
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS - FINAL_STRICT_ADDITIONS) == 195
+    for path in FINAL_STRICT_ADDITIONS:
+        assert (ROOT / path).is_file()
+        owners = [owner for owner in CHANGED_OWNERS if owner.matches(path)]
+        assert any(owner.mypy_required for owner in owners)
+
+
+def test_categorical_native_helper_selects_real_tests_without_an_empty_pytest_target():
+    helper = "tests/categorical_display_native_helpers.py"
+    plan = _plan([helper])
+    assert CATEGORICAL_PRESENTATION_EDIT_OWNER.owner_id in {
+        item["owner_id"] for item in plan["owners"]
+    }
+    assert set(CATEGORICAL_EDIT_TESTS) <= _targets(plan)
+    assert helper not in _targets(plan)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/sciplot_core/studio_core/categorical_display_future_probe.py",
+        "src/sciplot_core/veusz_worker/categorical_future_probe.py",
+        "src/sciplot_core/studio_render/segmented_future_probe.py",
+        "tests/categorical_display_future_helpers.py",
+        "skill/references/categorical-future-probe.md",
+    ],
+)
+def test_future_categorical_neighbors_remain_unowned_and_fail_closed(path):
+    blocked = _plan([path])
+    assert blocked["status"] == "failed"
+    assert blocked["unowned_paths"] == [path]
+    assert blocked["checks"] == []

@@ -24,6 +24,14 @@ It preserves scientific questions and accepts explicit `--rule`, `--template`,
 `--profile`, `--out` and `--task-dir`. Require returned Doctor `status=ready`;
 reuse that readiness within an unchanged session. Structured `task start` remains
 available for advanced known mappings; only then read missing named schemas.
+For multiple table attachments or explicit coordinates/right axis/stages, keep
+the same task with repeated `--source`, `--x`, `--y` and the small optional stage/
+display flags in the Create route. Review its one source plan, answer listed
+scientific choices, and use `revise_intent` to correct a rejected draft. The
+program manages attempt keys and expands Managed contracts. `--query`,
+`--request`, `--response` and `--intent` are JSON file paths on CLI; MCP takes
+objects. Do not use MCP/schema discovery to write a low-level template for this
+ordinary intent.
 Do not rerun a saved project's raw source to make an edit. Before applying an
 external edit, close every writable native Veusz window for that project,
 including a clean window with no unsaved changes. Save any intended native
@@ -116,6 +124,48 @@ reported cause and resume the same task with `{"retry":true}`; do not reapply.
 If the outcome is uncertain or the binding changed, follow its returned recovery
 guidance. Lower-level preview/apply/Studio commands below are available for
 diagnostics and do not form extra steps in a completed task edit.
+
+## Recover a semantic request after a lost reply
+
+Connection loss or an invalid reply does not prove that a mutation failed.
+Keep the original plot ID, base revision and idempotency key; never make a new
+key merely because the response was lost. Transport repair reports whether the
+plotting request was sent. A startup/ping failure explicitly reports it was not
+sent. The client does not automatically resend mutations.
+
+For an existing semantic plot, follow the returned read-only `plot.describe`
+step. Its `recovery` identifies the frozen transaction and original base versus
+current revision without rendering or applying anything. A pending review includes
+the original preview/audit and exact `plot.decide` request; inspect that preview
+before accepting. Export-pending points to `plot.export`, which preserves the
+committed revision. Changed inputs block continuation and require resolution.
+For a stale LegacyPlot journal still in `applying`, `recovery.guarded_resume`
+may also offer an optional original-key request. The summary remains stale and
+its conservative default step is unchanged. Only an explicit call asks the native
+apply owner to verify its existing receipt and source/native/revision guards;
+that owner may refuse. The option does not identify drift as the transaction's
+own write and never automatically accepts or resends a mutation.
+
+The explicit compact recovery entry accepts only the original three fields:
+
+```json
+{"plot_id":"ORIGINAL_PLOT_ID","base_revision":0,"idempotency_key":"ORIGINAL_KEY"}
+```
+
+```bash
+skill/scripts/sciplot plot resume /absolute/plot --request RESUME.json --json
+```
+
+Use the returned `recovery.resume.request` unchanged. JSON-RPC `plot.resume` and
+MCP `sciplot_plot_resume` take the same `plot` and `request`. This entry loads the
+existing journal and reuses its original guards and apply/export recovery; even a
+large original batch needs no reconstruction. An unknown key never creates an
+edit. Wrong plot/base identity, source/native drift and uncertain native state
+remain guarded. A review is never automatically accepted. A completed operation
+replays its existing revision; a historical replay does not claim current ready
+exports. Creation questions and native reimport retain their original decision
+entries. This is continuation of an existing semantic transaction, not a general
+process-crash or filesystem recovery service.
 
 ## Complete local tasks and MCP
 

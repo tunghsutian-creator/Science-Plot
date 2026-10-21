@@ -1,7 +1,8 @@
 """Persist stages before side effects; resume native commit and export independently."""
 
 from pathlib import Path
-from subprocess import TimeoutExpired
+from subprocess import CalledProcessError, TimeoutExpired
+from base64 import b64encode
 from collections.abc import Callable
 from copy import deepcopy
 import json
@@ -26,15 +27,25 @@ def _retryable(exc: Exception) -> bool:
 def _failure(root: Path, tx: dict[str, Any], exc: Exception, stage: str) -> None:
     import traceback
 
-    path = root / "transactions" / tx["id"] / "diagnostic.json"
+    # A retry must not replace the only evidence of the original failure.
+    path = root / "transactions" / tx["id"] / ("diagnostic-" + uuid4().hex + ".json")
     issues = getattr(exc, "issues", [])
     repair = getattr(exc, "repair", None)
-    write(path, {"stage": stage, "type": type(exc).__name__, "message": str(exc),
-                 "traceback": traceback.format_exc(), "issues": issues, "repair": repair})
+    process = _process_failure(exc)
+    diagnostic: dict[str, Any] = {"stage": stage, "type": type(exc).__name__, "message": str(exc),
+                                  "traceback": traceback.format_exc(), "issues": issues, "repair": repair}
+    if process is not None:
+        diagnostic["process"] = process
+    write(path, diagnostic)
     tx["error"] = {"reason_code": getattr(exc, "reason_code", "backend_failure"), "stage": stage,
                    "message": str(exc)[:240], "diagnostic": str(path)}
     tx["error"]["action"] = (repair.get("action", "inspect_diagnostic") if isinstance(repair, dict)
                               else "retry_same_request" if _retryable(exc) else "inspect_diagnostic")
+    if process is not None:
+        tx["error"]["process"] = {"returncode": process["returncode"],
+                                  "evidence": {"path": str(path), "json_pointer": "/process"}}
+    tx.setdefault("failure_attempts", []).append({"stage": stage, "diagnostic": str(path),
+                                                   "reason_code": tx["error"]["reason_code"]})
     for key, detail in (("issues", issues), ("repair", repair)):
         if detail:
             if len(json.dumps(detail, ensure_ascii=False).encode()) <= 1024:
@@ -47,6 +58,29 @@ def _failure(root: Path, tx: dict[str, Any], exc: Exception, stage: str) -> None
     persist(root, tx)
 
 
+def _process_failure(exc: BaseException) -> dict[str, Any] | None:
+    """Preserve subprocess evidence through a domain exception's cause chain."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, (CalledProcessError, TimeoutExpired)):
+            command = current.cmd
+            result: dict[str, Any] = {
+                "cmd": [str(item) for item in command] if isinstance(command, (tuple, list)) else str(command),
+                "returncode": current.returncode if isinstance(current, CalledProcessError) else None,
+            }
+            if isinstance(current, TimeoutExpired):
+                result["timeout_seconds"] = current.timeout
+            for name, value in (("stdout", current.stdout), ("stderr", current.stderr)):
+                result[name] = value.decode(errors="replace") if isinstance(value, bytes) else value
+                if isinstance(value, bytes):
+                    result[name + "_bytes_base64"] = b64encode(value).decode("ascii")
+            return result
+        current = current.__cause__ or current.__context__
+    return None
+
+
 def _attempt(root: Path, tx: dict[str, Any], stage: str, operation: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     """One durable extra attempt only for explicitly known transient failures."""
     try:
@@ -56,6 +90,7 @@ def _attempt(root: Path, tx: dict[str, Any], stage: str, operation: Callable[[],
         budget = tx.setdefault("retry_counts", {})
         if not _retryable(exc) or budget.get(stage, 0) >= 1:
             raise
+        _failure(root, tx, exc, stage)
         budget[stage] = budget.get(stage, 0) + 1
         persist(root, tx)
         retried: dict[str, Any] = operation()
@@ -177,6 +212,10 @@ def advance(root: Path, tx: dict[str, Any], backend: PlotBackend) -> dict[str, A
 
 
 def replay(root: Path, tx: dict[str, Any], backend: PlotBackend) -> dict[str, Any]:
+    if tx.get("superseded_by"):
+        from .publication_repair import superseded_receipt
+
+        return superseded_receipt(root, tx)
     if tx["phase"] == "complete":
         head = load_head(root)
         if head["document"]["revision"] != tx["document"]["revision"]:

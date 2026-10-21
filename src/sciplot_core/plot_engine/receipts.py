@@ -16,6 +16,7 @@ def receipt(root: Path, transaction: dict[str, Any], *, replay: bool = False) ->
         "scientific_hash": doc["scientific_hash"], "presentation_hash": doc["presentation_hash"],
         "commit_status": "committed" if phase in {"committed", "exporting", "export_pending", "complete"} else "pending",
         "export_status": "complete" if phase == "complete" else "pending",
+        "ready_to_use": False,
         "replayed": replay, "changed": bool(transaction["diff"]),
         "effective_risk": transaction["risk"],
         "scientific_hash_changed": doc["scientific_hash"] != transaction["before"]["scientific_hash"],
@@ -44,6 +45,9 @@ def receipt(root: Path, transaction: dict[str, Any], *, replay: bool = False) ->
                        "next_step": {"action": "plot.decide", "request": {
                            "decision_id": transaction["id"], "base_revision": transaction["request"]["base_revision"],
                            "accept": True}}})
+        if "before_preview" in transaction["review"]:
+            result["before_preview"] = transaction["review"]["before_preview"]
+            result["source_append_evidence"] = {"path": result["evidence"], "json_pointer": "/review/source_append"}
     elif phase == "complete":
         result.update({"ready_to_use": transaction["export"].get("ready_to_use", False),
                        "artifact_build_key": transaction.get("artifact_build_key"),
@@ -56,11 +60,20 @@ def receipt(root: Path, transaction: dict[str, Any], *, replay: bool = False) ->
     elif phase == "rejected":
         result["next_step"] = {"action": "none"}
     else:
-        result["next_step"] = {"action": "retry_same_request"}
+        result["next_step"] = ({"action": "plot.export", "plot": str(root)}
+                               if phase in {"committed", "exporting", "export_pending"}
+                               else {"action": "retry_same_request"})
         if transaction.get("error"):
             result["error"] = transaction["error"]
             result["status"] = "blocked"
-            result["next_step"] = {"action": transaction["error"].get("action", "inspect_diagnostic")}
+            result["next_step"] = {"action": transaction["error"].get("action", "inspect_diagnostic"), "plot": str(root)}
+            if result["next_step"]["action"] == "retry_same_request":
+                if phase in {"committed", "exporting", "export_pending"}:
+                    result["next_step"] = {"action": "plot.export", "plot": str(root)}
+                elif "changes" in transaction["request"] and transaction.get("mode") != "reimport":
+                    result["next_step"] = {"action": "plot.resume", "plot": str(root), "request": {
+                        "plot_id": doc["plot_id"], "base_revision": transaction["request"]["base_revision"],
+                        "idempotency_key": transaction["request"]["idempotency_key"]}}
             if ((phase == "planned" and transaction["error"]["stage"] == "preview"
                  or phase == "resolving" and transaction["error"]["stage"] == "resolving") and "native_result" not in transaction):
                 result["discard_request"] = {"decision_id": transaction["id"],

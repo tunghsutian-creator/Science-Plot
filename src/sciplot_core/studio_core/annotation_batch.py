@@ -22,10 +22,30 @@ def compile_annotation_operations(
     touched: set[str] = set()
     range_axes: set[str] = set()
     legend_touched = False
+    series_touched: set[str] = set()
     for index, operation in enumerate(operations):
         if not isinstance(operation, dict):
             raise AnnotationOperationError("invalid_operation", f"Operation {index} must be an object.")
         kind = operation.get("op")
+        if kind in {"set_category_display_labels", "set_categorical_display_style"}:
+            from sciplot_core.studio_core.categorical_display import compile_display
+
+            if kind in series_touched:
+                raise AnnotationOperationError("duplicate_categorical_display", "Batch each categorical display operation once.")
+            result, change = compile_display(result, operation)
+            actual.append(change)
+            series_touched.add(kind)
+            continue
+        if kind in {"set_series_selection", "set_series_display_label"}:
+            from sciplot_core.studio_core.series_display import compile_series_display
+
+            identity = "selection" if kind == "set_series_selection" else "alias:" + str(operation.get("sample"))
+            if identity in series_touched:
+                raise AnnotationOperationError("duplicate_series_change", "Set each series display property once per batch.")
+            result, change = compile_series_display(result, operation)
+            actual.append(change)
+            series_touched.add(identity)
+            continue
         if kind in {"set_axis_range", "set_axis_limits"}:
             if operation.get("axis") in range_axes:
                 raise AnnotationOperationError("duplicate_axis_range", "Set each axis display range only once per batch.")

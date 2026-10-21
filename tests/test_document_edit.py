@@ -73,6 +73,63 @@ def test_commit_preserves_source_and_archives_then_reconciles_lost_response(edit
         commit.prior_edit_result(project, review)
 
 
+def test_applied_native_edit_chain_requires_contiguous_archives_and_reviewed_sources(edit_case, tmp_path):
+    project, document, candidate, _ = edit_case
+    spec = document.with_name("spec.json")
+    spec.write_text('{"series":[],"color":"old"}')
+    candidate_spec = tmp_path / "candidate.spec.json"
+    candidate_spec.write_text('{"series":[],"color":"new"}')
+    baseline = {str(project / name): digest for name, digest in edit_state(project)["project_files"].items()}
+
+    def apply():
+        review = {"kind": "sciplot_document_edit_preview", "version": 2, "status": "ready",
+            "project": str(project), "figure_id": "f", "document": str(document),
+            "document_sha256": file_sha256(document), "spec": str(spec),
+            "base_state": edit_state(project), "changes": [], "operations": [],
+            "candidate_spec": {"sha256": file_sha256(candidate_spec)}, "scientific_audit": {"status": "passed"}}
+        review["operation_id"] = preview_identity(review)
+        commit.commit_document_edit(project, document, candidate, review, spec=spec, candidate_spec=candidate_spec)
+        return review
+
+    first = apply()
+    candidate.write_bytes(b"second legal native save")
+    second = apply()
+    arguments = dict(figure_id="f", document=document, spec=spec, baseline_files=baseline)
+    before = {str(path): (path.read_bytes(), path.stat().st_mtime_ns) for path in tmp_path.rglob("*") if path.is_file()}
+    assert commit.applied_native_edit_chain(project, **arguments) == [first["operation_id"], second["operation_id"]]
+    assert {str(path): (path.read_bytes(), path.stat().st_mtime_ns) for path in tmp_path.rglob("*") if path.is_file()} == before
+    root = history_directory(project, first["operation_id"])
+    outcome = root / "outcome.json"
+    original = outcome.read_bytes()
+    record = json.loads(original)
+    record["status"] = "pending"
+    outcome.write_text(json.dumps(record))
+    assert commit.applied_native_edit_chain(project, **arguments) is None  # Cannot skip the intermediate revision.
+    outcome.write_bytes(original)
+    archive = root / "after.vsz"
+    saved = archive.read_bytes()
+    archive.write_bytes(b"tampered archived native")
+    with pytest.raises(ValueError, match="archives changed"):
+        commit.applied_native_edit_chain(project, **arguments)
+    archive.write_bytes(saved)
+    preview_path = root / "preview.json"
+    saved_preview = preview_path.read_bytes()
+    preview = json.loads(saved_preview)
+    preview["changes"] = [{"unreviewed": True}]
+    preview_path.write_text(json.dumps(preview))
+    with pytest.raises(ValueError, match="reviewed identity"):
+        commit.applied_native_edit_chain(project, **arguments)
+    preview_path.write_bytes(saved_preview)
+    source_path = str(project / "source/data.csv")
+    with pytest.raises(ValueError, match="source or project baseline"):
+        commit.applied_native_edit_chain(project, **{**arguments, "baseline_files": {**baseline, source_path: "f" * 64}})
+    current = document.read_bytes()
+    document.write_bytes(b"external save after legal edits")
+    assert commit.applied_native_edit_chain(project, **arguments) is None
+    document.write_bytes(current)
+    assert commit.applied_native_edit_chain(project, **arguments) == [first["operation_id"], second["operation_id"]]
+
+
 def test_failed_success_journal_restores_original_bytes_and_mode(
     edit_case, monkeypatch
 ):

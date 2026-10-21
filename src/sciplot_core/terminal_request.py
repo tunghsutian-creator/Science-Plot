@@ -35,6 +35,7 @@ TASK_TERMINAL_RENDER_REQUEST_FIELDS = frozenset(
 )
 TERMINAL_RENDER_REQUEST_FIELDS = (
     LEGACY_TERMINAL_RENDER_REQUEST_FIELDS | TASK_TERMINAL_RENDER_REQUEST_FIELDS
+    | {"categorical_binding", "data_mapping_application", "missing_values"}
 )
 
 
@@ -141,6 +142,13 @@ def project_terminal_render_request(
         raise ValueError("A terminal render request needs a template.")
     if not isinstance(request_context, dict):
         return request
+    if (request_context.get("categorical_binding") or {}).get("source_identity_version") == 1:
+        request["categorical_binding"] = json_safe(request_context["categorical_binding"])
+        if "missing_values" in request_context:
+            request["missing_values"] = request_context["missing_values"]
+    application = request_context.get("data_mapping_application") or {}
+    if application.get("source_groups"):
+        request["data_mapping_application"] = json_safe(application)
     task = _resolved_figure_task(request_context)
     if task is not None:
         if task.template != request["template"]:
@@ -177,6 +185,8 @@ def project_terminal_render_request(
     )
     if series_order:
         request["series_order"] = series_order
+    if application.get("source_groups"):
+        request["series_order"] = [group["source_id"] for group in application["source_groups"]]
     condition_order = (
         list(task.conditions)
         if task is not None and task.conditions

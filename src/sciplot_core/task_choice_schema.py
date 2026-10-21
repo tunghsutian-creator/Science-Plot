@@ -24,7 +24,7 @@ def table_region_schema() -> dict[str, Any]:
 
 
 def column_mapping_schema() -> dict[str, Any]:
-    pair = {"type": "object", "additionalProperties": False,
+    pair: dict[str, Any] = {"type": "object", "additionalProperties": False,
             "properties": {
                 **{key: {"type": "integer", "minimum": 0} for key in ("x_column", "y_column")},
                 "label": {"type": "string", "minLength": 1, "maxLength": 160, "pattern": "\\S",
@@ -32,9 +32,19 @@ def column_mapping_schema() -> dict[str, Any]:
                 "table_selection": table_selection_schema(),
                 "metadata_confirmations": metadata_confirmations_schema()},
             "required": ["x_column", "y_column"]}
+    replicate = {"type": "object", "additionalProperties": False,
+                 "properties": {"column_index": {"type": "integer", "minimum": 0},
+                                "table_selection": table_selection_schema(),
+                                "metadata_confirmations": metadata_confirmations_schema(),
+                                "label": pair["properties"]["label"]},
+                 "required": ["column_index"]}
     return {"oneOf": [pair, {"type": "object", "additionalProperties": False,
                              "properties": {"pairs": {"type": "array", "minItems": 1, "maxItems": 32, "items": pair}},
-                             "required": ["pairs"]}]}
+                             "required": ["pairs"]},
+                      {"type": "object", "additionalProperties": False,
+                       "properties": {"replicates": {"type": "array", "minItems": 1, "maxItems": 32,
+                                                       "items": replicate}},
+                       "required": ["replicates"]}]}
 
 
 def table_response_schema() -> dict[str, Any]:
@@ -47,7 +57,7 @@ def table_response_schema() -> dict[str, Any]:
 
 def initial_mapping_schema() -> dict[str, Any]:
     return {"type": "object", "additionalProperties": False,
-            "description": "Explicit choices already reviewed by the caller, bound to the original file bytes. Uses the same table, metadata and pair validation as interactive answers; never accepts a visual edit preview.",
+            "description": "Explicit choices already reviewed by the caller, bound to the original file bytes. Uses the same table, metadata and mutually exclusive XY-pair or raw-replicate validation as interactive answers; never accepts a visual edit preview.",
             "properties": {
                 "source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
                 "table_selection": table_selection_schema(),
@@ -68,7 +78,7 @@ def mapping_candidate_response_schema() -> dict[str, Any]:
 
 def mapping_response_schema() -> dict[str, Any]:
     return {"type": "object", "additionalProperties": False,
-            "description": "Correct this task in one reply: original region, metadata, XY pairs and labels. No rewritten arrays or new project required.",
+            "description": "Correct this task in one reply: original region, metadata, the advertised XY pairs or independent raw replicate columns, and labels. No rewritten arrays or new project required.",
             "properties": {
                 "expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
                 "rule_id": {"type": "string", "minLength": 1},

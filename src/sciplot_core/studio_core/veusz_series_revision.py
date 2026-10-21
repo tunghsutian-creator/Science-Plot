@@ -131,6 +131,15 @@ def apply_veusz_series_revision(
     }
 
 
+def prepare_veusz_series_revision(document: Any, document_path: Path, *, expected_order: list[str], target_order: list[str]) -> Any:
+    """Compile the shared native membership owner into an enclosing transaction."""
+    preview = preview_veusz_series_revision(document, document_path, target_order)
+    if preview["current_order"] != expected_order:
+        raise VeuszSeriesRevisionError("stale_series_selection", "Current native membership differs from the reviewed selection.")
+    return build_native_series_revision_operation(document, contract=_revision_contract(document, document_path),
+        target_order=list(preview["target_order"]), error_factory=VeuszSeriesRevisionError)
+
+
 def can_revert_veusz_series_revision(document: Any) -> bool:
     """Return whether the next native Undo is a SciPlot series revision."""
 
@@ -366,5 +375,6 @@ __all__ = [
     "has_pending_veusz_series_revision",
     "inspect_veusz_series_revision",
     "preview_veusz_series_revision",
+    "prepare_veusz_series_revision",
     "revert_veusz_series_revision",
 ]

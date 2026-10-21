@@ -11,7 +11,18 @@ if [[ ! -x "$PYTHON" ]]; then
   PYTHON="python3"
 fi
 
-if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v otool >/dev/null 2>&1; then
+if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" && -z "${SCIPLOT_BUNDLED_QT_LIB:-}" &&
+      -d "$RUNTIME_REPO/.local/runtime/qt/lib" ]]; then
+  export SCIPLOT_BUNDLED_QT_LIB="$RUNTIME_REPO/.local/runtime/qt/lib"
+fi
+
+if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" && -n "${SCIPLOT_BUNDLED_QT_LIB:-}" ]]; then
+  if [[ ! -d "$SCIPLOT_BUNDLED_QT_LIB" ]]; then
+    printf '%s\n' 'The bundled Qt library directory is missing; repair this installation.' >&2
+    exit 1
+  fi
+  export DYLD_FRAMEWORK_PATH="$SCIPLOT_BUNDLED_QT_LIB"
+elif [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v otool >/dev/null 2>&1; then
   VEUSZ_RUNTIME_ROOT="${SCIPLOT_VEUSZ_ROOT:-$RUNTIME_REPO/third_party/veusz}"
   QTLOOPS_EXTENSION=""
   for candidate in "$VEUSZ_RUNTIME_ROOT"/veusz/helpers/qtloops*.so; do
@@ -21,21 +32,64 @@ if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v otool >/dev
     fi
   done
   if [[ -n "$QTLOOPS_EXTENSION" ]]; then
-    QT_FRAMEWORK_ROOT="$(
+    QT_CORE_LIBRARY="$(
       otool -L "$QTLOOPS_EXTENSION" |
-        awk '/QtCore[.]framework/ { path=$1; sub("/QtCore[.]framework.*", "", path); print path; exit }'
+        awk '/QtCore[.]framework/ { print $1; exit }'
     )"
+    QT_FRAMEWORK_ROOT="${QT_CORE_LIBRARY%%/QtCore.framework/*}"
     if [[ -n "$QT_FRAMEWORK_ROOT" && -d "$QT_FRAMEWORK_ROOT" ]]; then
+      QT_FRAMEWORK_PATH="$QT_FRAMEWORK_ROOT"
+      # qtbase omits QtSvg. Only add a complete Qt tree that resolves the exact
+      # helper-linked QtCore, so a custom runtime cannot mix unrelated Qt builds.
+      for candidate in "${QT_FRAMEWORK_ROOT%/qtbase/lib}/qt/lib" /opt/homebrew/opt/qt/lib /usr/local/opt/qt/lib; do
+        if [[ -f "$candidate/QtSvg.framework/Versions/A/QtSvg" &&
+              "$candidate/QtCore.framework/Versions/A/QtCore" -ef "$QT_CORE_LIBRARY" &&
+              "$candidate" != "$QT_FRAMEWORK_ROOT" ]]; then
+          QT_FRAMEWORK_PATH="$QT_FRAMEWORK_PATH:$candidate"
+          break
+        fi
+      done
       case ":${DYLD_FRAMEWORK_PATH:-}:" in
-        *":$QT_FRAMEWORK_ROOT:"*) ;;
-        *) export DYLD_FRAMEWORK_PATH="$QT_FRAMEWORK_ROOT${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}" ;;
+        *":$QT_FRAMEWORK_PATH:"*) ;;
+        *) export DYLD_FRAMEWORK_PATH="$QT_FRAMEWORK_PATH${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}" ;;
       esac
     fi
   fi
 fi
 
+if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v realpath >/dev/null 2>&1; then
+  PYTHON_EXECUTABLE="$PYTHON"
+  if [[ "$PYTHON_EXECUTABLE" != */* ]]; then
+    PYTHON_EXECUTABLE="$(command -v "$PYTHON_EXECUTABLE" || true)"
+  fi
+  PYTHON_REAL_PATH="$(realpath -- "$PYTHON_EXECUTABLE" 2>/dev/null || true)"
+  case "$PYTHON_REAL_PATH" in
+    */Python.framework/Versions/*/bin/python*)
+      PYTHON_FRAMEWORK_ROOT="${PYTHON_REAL_PATH%%/Python.framework/Versions/*}"
+      PYTHON_FRAMEWORK_LIBRARY="${PYTHON_REAL_PATH%/bin/python*}/Python"
+      if [[ -d "$PYTHON_FRAMEWORK_ROOT" && -f "$PYTHON_FRAMEWORK_LIBRARY" ]]; then
+        # Protected macOS shell entry points clear inherited DYLD variables.
+        # Restore the selected interpreter's actual framework after that entry.
+        case ":${DYLD_FRAMEWORK_PATH:-}:" in
+          *":$PYTHON_FRAMEWORK_ROOT:"*) ;;
+          *) export DYLD_FRAMEWORK_PATH="$PYTHON_FRAMEWORK_ROOT${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}" ;;
+        esac
+      fi
+      ;;
+  esac
+fi
+
 if [[ -d "$SOURCE_ROOT" ]]; then
   export PYTHONPATH="$SOURCE_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+fi
+
+if [[ -n "${SCIPLOT_PUBLIC_INPUT_GUARD:-}" ]]; then
+  # Opt-in verification startup remains active after bootstrap controls clear
+  # PYTHONPATH. This owned shim composes supported observation before enforcement.
+  GUARD_BOOTSTRAP="$REPO/src/sciplot_core/verification/public_guard_bootstrap"
+  export PYTHONPATH="$GUARD_BOOTSTRAP${PYTHONPATH:+:$PYTHONPATH}"
+  # The shim validates and binds itself using only the standard library.
+  export SCIPLOT_PUBLIC_GUARD_WRAPPER_BOOTSTRAP="$GUARD_BOOTSTRAP/sitecustomize.py"
 fi
 
 export SCIPLOT_REPO="$REPO"

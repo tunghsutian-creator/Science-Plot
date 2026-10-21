@@ -107,8 +107,16 @@ class ManagedBackend:
         ir, native = self._ensure(candidate)
         output.mkdir(parents=True, exist_ok=True)
         preview = self.compiler.render_ir(ir, native, output / "preview.png")
-        return {"scientific_audit": self.compiler.audit_ir(ir, native), "preview": preview.get("preview", preview),
-                "_managed_binding": candidate}
+        review = {"scientific_audit": preview["scientific_audit"], "preview": preview.get("preview", preview),
+                  "_managed_binding": candidate}
+        if any(item["property"] == "source.append" for item in diff):
+            before_ir, before_native = self._ensure(binding)
+            before = self.compiler.render_ir(before_ir, before_native, output / "before.png")
+            review["before_preview"] = before.get("preview", before)
+            review["source_append"] = {"before_layer_ids": [layer["id"] for view in before_ir["views"] for layer in view["layers"]],
+                "candidate_layer_ids": [layer["id"] for view in ir["views"] for layer in view["layers"]],
+                "before_scientific_audit": before["scientific_audit"]}
+        return review
 
     def apply(self, binding: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:
         candidate = review["_managed_binding"]

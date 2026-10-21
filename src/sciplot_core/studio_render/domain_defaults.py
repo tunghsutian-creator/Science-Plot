@@ -64,7 +64,7 @@ def _apply_domain_render_defaults(
         for key, value in POINT_LINE_RENDER_OPTIONS.items():
             if key not in explicit_options:
                 updated[key] = list(value) if isinstance(value, list) else value
-        if axis_info.get("presentation_kind") == "impact_point_line_raw_overlay":
+        if axis_info.get("presentation_kind") in {"impact_point_line_raw_overlay", "categorical_point_line"}:
             category_positions = [
                 float(value) for value in axis_info.get("category_positions") or []
             ]
@@ -72,6 +72,7 @@ def _apply_domain_render_defaults(
                 updated.setdefault("x_min", min(category_positions) - 0.5)
                 updated.setdefault("x_max", max(category_positions) + 0.5)
                 updated.setdefault("x_ticks", category_positions)
+        if axis_info.get("presentation_kind") == "impact_point_line_raw_overlay":
             overlay_defaults = {
                 "x_label_override": "Sample",
                 "y_label_override": "Impact strength (kJ m⁻²)",

@@ -6,16 +6,10 @@ import json
 from typing import Any
 from sciplot_core.task_choice_schema import annotation_response_schema, column_mapping_schema, table_response_schema, metadata_response_schema, initial_mapping_schema, mapping_response_schema, mapping_candidate_response_schema
 
-
-class TaskControlError(ValueError):
-    def __init__(self, reason_code: str, message: str) -> None:
-        super().__init__(message)
-        self.reason_code = reason_code
-        self.repair: dict[str, Any] | None = None
-
+from sciplot_core.task_errors import TaskControlError as TaskControlError
 
 _FIELDS = {
-    "create": {"source", "rule_id", "template", "out", "profile", "choose_columns", "mapping"},
+    "create": {"source", "rule_id", "template", "out", "profile", "choose_columns", "mapping", "xscale", "curve_display", "summary_statistic", "missing_values"},
     "edit": {"project", "figure_id", "expected_document_sha256", "operations", "export"},
     "export": {"project"},
     "update_source": {"project", "source", "worksheet", "choose_columns"},
@@ -53,16 +47,26 @@ def task_request_schema() -> dict[str, Any]:
             }
             properties["operations"] = annotation_operation_capabilities()["operations_schema"]
         if action == "create":
+            from sciplot_core.task_scientific_presentation import presentation_requirement_properties
+
+            properties.update(presentation_requirement_properties())
+            properties["missing_values"] = {"enum": ["exclude"], "description": "Explicit scientific instruction to exclude missing replicates and disclose valid n; never fills cells."}
             properties["mapping"] = initial_mapping_schema()
+            properties["xscale"] = {"enum": ["log", "linear"],
+                "description": "Explicit stress-relaxation time display; normalization uses the original source before domain projection."}
         variant: dict[str, Any] = {
             "type": "object", "additionalProperties": False,
             "properties": properties,
             "required": ["version", "action", *sorted(_REQUIRED[action])],
         }
         if action == "create":
-            variant["dependentSchemas"] = {"mapping": {"required": ["rule_id"], "not": {"required": ["profile"]}}}
+            variant["dependentSchemas"] = {"mapping": {"required": ["rule_id"], "not": {"required": ["profile"]}},
+                "missing_values": {"required": ["summary_statistic"], "properties": {"summary_statistic": {"const": "mean_sample_sd_n"}}}}
         variants.append(variant)
-    return {"oneOf": variants}
+    from sciplot_core.task_semantic_contract import semantic_request_schema
+    from sciplot_core.task_categorical_contract import categorical_request_schema
+
+    return {"oneOf": [*variants, semantic_request_schema(), categorical_request_schema()]}
 
 
 def task_response_schema() -> dict[str, Any]:
@@ -72,8 +76,16 @@ def task_response_schema() -> dict[str, Any]:
                     "description": "Current preview operation_id. Required for revisions and for accepting or rejecting a revised preview."}
     replacement = {**annotation_operation_capabilities()["operations_schema"],
                    "description": "Replace the whole batch against the same saved document; this does not append to the old preview."}
+    from sciplot_core.task_semantic_contract import semantic_response_schemas
+
+    from sciplot_core.task_missing_values import missing_values_response_schema
+    from sciplot_core.task_categorical_contract import categorical_response_schema
+
     return {
         "oneOf": [
+            categorical_response_schema(),
+            *semantic_response_schemas(),
+            missing_values_response_schema(),
             {"type": "object", "additionalProperties": False,
              "properties": {"expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
                             "out": {"type": "string", "minLength": 1}},
@@ -120,6 +132,22 @@ def validate_task_request(value: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise TaskControlError("invalid_task_request", "任务请求必须是 JSON 对象。")
     action = value.get("action")
+    if action == "create" and "categorical" in value:
+        from sciplot_core.task_categorical_contract import validate_categorical_request
+
+        return validate_categorical_request(value)
+    if action == "create":
+        from sciplot_core.task_scientific_presentation import validate_presentation_requirements
+
+        validate_presentation_requirements(value)
+    if action == "create" and ("sources" in value or "intent" in value):
+        from jsonschema import Draft202012Validator
+        from sciplot_core.task_semantic_contract import semantic_request_schema, validate_intent
+
+        validate_intent(value.get("intent"))
+        if not Draft202012Validator(semantic_request_schema()).is_valid(value):
+            raise TaskControlError("invalid_task_fields", "Semantic create needs sources and intent, without source/profile/template/mapping overrides.")
+        return dict(json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False)))
     if type(value.get("version")) is not int or value["version"] != 1:
         raise TaskControlError("unsupported_task_version", "任务接口版本必须为 1。")
     if not isinstance(action, str) or action not in _FIELDS:
@@ -150,6 +178,10 @@ def validate_task_request(value: dict[str, Any]) -> dict[str, Any]:
         raise TaskControlError("invalid_column_choice", "显式列选择使用 choose_columns=true。")
     if value.get("choose_columns") and value.get("profile"):
         raise TaskControlError("profile_selection_conflict", "列选择需要当前原始证据，不能同时复用旧配置。")
+    if "missing_values" in value and (value["missing_values"] != "exclude" or value.get("summary_statistic") != "mean_sample_sd_n"):
+        raise TaskControlError("invalid_missing_values_policy", "missing_values=exclude requires an explicit mean_sample_sd_n replicate summary.")
+    if "xscale" in value and value["xscale"] not in {"log", "linear"}:
+        raise TaskControlError("invalid_source_option", "xscale must be log or linear.")
     if "mapping" in value:
         from jsonschema import Draft202012Validator
 

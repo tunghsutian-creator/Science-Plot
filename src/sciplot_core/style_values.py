@@ -1,8 +1,24 @@
-"""Pure physical-size grammar shared by ingress and native style validation."""
+"""Pure style values shared by semantic contracts and native style validation."""
 
 import math
 import re
 from typing import Any
+
+from sciplot_core.policy.frame_export import DEFAULT_LINE_STYLE_SEQUENCE
+
+
+_LINE_STYLE_ALIASES = {"dash": "dashed", "dot": "dotted"}
+LINE_STYLE_VALUES = (*DEFAULT_LINE_STYLE_SEQUENCE, *_LINE_STYLE_ALIASES)
+
+
+def normalize_line_style(value: Any) -> str:
+    """Use the existing visible native patterns, retaining historical IR aliases."""
+    if not isinstance(value, str):
+        raise ValueError("Use a supported visible line style.")
+    pattern = _LINE_STYLE_ALIASES.get(value, value)
+    if pattern not in DEFAULT_LINE_STYLE_SEQUENCE:
+        raise ValueError("Use a supported visible line style.")
+    return pattern
 
 
 PHYSICAL_SIZE_UNITS = ("pt", "mm", "cm", "in", "inch")

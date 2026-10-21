@@ -8,6 +8,7 @@ from jsonschema import Draft202012Validator
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.semantic_sources.rheology_tts_corrected import CORRECTED_OPTIONS, LEGACY_OPTIONS
+from sciplot_core.workflow.rheology_tts_prepared_contract import prepared_plan_contract
 
 
 def creation_request_schema() -> dict:
@@ -63,6 +64,7 @@ def rheology_capabilities() -> dict:
     from sciplot_core.rheology_tts_style import tts_presentation_capabilities
 
     contract = {"prepared_request_schema": prepared_request_schema(),
+                "prepared_plan": prepared_plan_contract(),
                 "legacy_analysis_request_schema": creation_request_schema(),
                 "presentation": tts_presentation_capabilities(),
                 "presentation_update": presentation_update_contract()}

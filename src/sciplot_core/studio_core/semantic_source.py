@@ -32,6 +32,13 @@ def _studio_source_for_request(
     """Prepare the requested rule once and project its terminal sample order."""
 
     rule_id = str(request.get("rule_id") or "").strip()
+    if (request.get("data_mapping_application") or {}).get("source_groups"):
+        from sciplot_core.data_mapping.source_projection import verified_mapping_source_groups
+
+        if verified_mapping_source_groups(request, replicates=True):
+            if rule_id != "impact_metric" or request.get("summary_statistic") != "raw_only":
+                raise ValueError("Structured raw groups require their confirmed raw-only impact adapter.")
+            return source, [], None
     if not rule_id:
         return source, [], None
     from sciplot_core.semantic import classify_source, prepare_semantic_source

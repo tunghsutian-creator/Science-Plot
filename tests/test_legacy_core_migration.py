@@ -59,6 +59,96 @@ def test_curve_table_parser_preserves_labels_units_and_numeric_pairs(
         "y": [0, 7],
     }
 
+    # Synthetic decimals distinguish exact binary64 input parsing from the
+    # shorter decimal coercion formerly used before the native round-trip audit.
+    precise_source = _write_rows(
+        tmp_path / "precise_curves.csv",
+        [
+            ["Time", "Stress", "Time", "Stress"],
+            ["s", "Pa", "s", "Pa"],
+            ["First", "First", "Second", "Second"],
+            ["3", "0.12345678901234567890", "2", "1.0000000000000002"],
+            ["1", "0.00000000000000012345678901234567", "", ""],
+            ["1", "0.12345678901234567890", "", ""],
+        ],
+    )
+    original_bytes = precise_source.read_bytes()
+    precise = load_curve_table(precise_source)
+    assert precise_source.read_bytes() == original_bytes
+    assert precise[0].data["x"].tolist() == [3, 1, 1]
+    assert [value.hex() for value in precise[0].data["y"]] == [
+        "0x1.f9add3746f65fp-4",
+        "0x1.1cac067affebcp-53",
+        "0x1.f9add3746f65fp-4",
+    ]
+    assert precise[1].data["y"].tolist() == [float.fromhex("0x1.0000000000001p+0")]
+
+    # Studio rereads the retained source independently before building native
+    # series; both the structured and plain numeric routes must keep precision.
+    from sciplot_core.studio_render.table_io import _coerced_numeric_frame, _read_table
+    from sciplot_core.source_tables.parsing import coerce_numeric_series
+
+    terminal = _coerced_numeric_frame(_read_table(precise_source))
+    assert [value.hex() for value in terminal.iloc[:, 1]] == [
+        "0x1.f9add3746f65fp-4", "0x1.1cac067affebcp-53", "0x1.f9add3746f65fp-4",
+    ]
+    plain = tmp_path / "numeric.csv"
+    plain.write_text("x,y\n1,0.12345678901234567890\n2,0.00000000000000012345678901234567\n")
+    assert [value.hex() for value in _coerced_numeric_frame(_read_table(plain))["y"]] == [
+        "0x1.f9add3746f65fp-4", "0x1.1cac067affebcp-53",
+    ]
+    assert coerce_numeric_series(pd.Series(["1.0\x00", "1e2\x00x"])).tolist() == [1.0, 100.0]
+
+    # An old document must exactly reproduce the old parser's values. A new
+    # spec cannot downgrade its declared source encoding to accept those values.
+    from copy import deepcopy
+    from sciplot_core.source_tables.parsing import (
+        DECIMAL_ROUND_TRIP_ENCODING, SOURCE_NUMERIC_ENCODING_KEY,
+    )
+    from sciplot_core.studio_render import derive_terminal_render_data_contract
+    from sciplot_core.source_coverage.managed_documents import _verify_prepared_data
+    from sciplot_core.source_coverage.file_snapshots import _stable_file_snapshot
+
+    request = {"template": "curve", "render_options": {"size": "60x55"}}
+    def source_spec(*, legacy: bool) -> dict:
+        units = derive_terminal_render_data_contract(
+            request=request, terminal_sources=[precise_source],
+            legacy_numeric_parser=legacy,
+        )["units"]
+        return {
+            "source_request": request, "series": units,
+            "axes": units[0]["axes"],
+            "categorical": units[0]["categorical_contract"],
+            "reference_guides": units[0]["reference_guides"],
+            "direct_labels": units[0]["direct_labels"],
+        }
+    current = source_spec(legacy=False)
+    historical = source_spec(legacy=True)
+    assert current["series"][0]["y_values"][0].hex() == "0x1.f9add3746f65fp-4"
+    assert historical["series"][0]["y_values"] != current["series"][0]["y_values"]
+    snapshots = [_stable_file_snapshot(precise_source, label="generated source")]
+    assert _verify_prepared_data(historical, snapshots)["status"] == "passed"
+    assert _verify_prepared_data(current, snapshots)["status"] == "passed"
+    versioned = {**current, SOURCE_NUMERIC_ENCODING_KEY: DECIMAL_ROUND_TRIP_ENCODING}
+    assert _verify_prepared_data(versioned, snapshots)["status"] == "passed"
+    with pytest.raises(ValueError, match="do not reproduce"):
+        _verify_prepared_data(
+            {**historical, SOURCE_NUMERIC_ENCODING_KEY: DECIMAL_ROUND_TRIP_ENCODING}, snapshots
+        )
+    with pytest.raises(ValueError, match="Unknown managed source numeric encoding"):
+        _verify_prepared_data({**current, SOURCE_NUMERIC_ENCODING_KEY: "unknown"}, snapshots)
+    for field, replacement in (("y_values", [1, 2, 3]), ("label", "Other sample")):
+        altered = deepcopy(historical)
+        altered["series"][0][field] = replacement
+        with pytest.raises(ValueError, match="do not reproduce"):
+            _verify_prepared_data(altered, snapshots)
+    altered = deepcopy(historical)
+    altered["axes"]["y"]["label"] = "Different units"
+    with pytest.raises(ValueError, match="do not reproduce"):
+        _verify_prepared_data(altered, snapshots)
+    assert source_spec(legacy=False) == current
+    assert precise_source.read_bytes() == original_bytes
+
 
 def test_replicate_and_heatmap_parsers_keep_their_distinct_models() -> None:
     groups = load_replicate_table_from_frame(

@@ -12,8 +12,8 @@ from sciplot_core.veusz_worker.contours import (
     _expected_contour_records,
 )
 from sciplot_core.veusz_worker.numeric_evidence import (
-    _dataset_evidence,
-    _numeric_digest,
+    dataset_evidence,
+    numeric_digest,
 )
 from sciplot_core.veusz_worker.spec_audit.model import SpecAuditInventory
 from sciplot_core.veusz_worker.visual_matchers import (
@@ -49,7 +49,7 @@ def audit_scalar_field(
             raise ValueError(
                 "Veusz scalar-field specification has no unique data identity."
             )
-        dataset = _dataset_evidence(
+        dataset = dataset_evidence(
             loaded_document,
             dataset_name=data_name,
             expected_values=scalar.get("z_values"),
@@ -57,11 +57,11 @@ def audit_scalar_field(
         )
         loaded_dataset = loaded_document.data[data_name]
         x_centres, y_centres = loaded_dataset.getPixelCentres()
-        x_evidence = _numeric_digest(x_centres)
-        y_evidence = _numeric_digest(y_centres)
-        if x_evidence != _numeric_digest(
+        x_evidence = numeric_digest(x_centres)
+        y_evidence = numeric_digest(y_centres)
+        if x_evidence != numeric_digest(
             scalar.get("x_values"), expected_persisted=True
-        ) or y_evidence != _numeric_digest(
+        ) or y_evidence != numeric_digest(
             scalar.get("y_values"), expected_persisted=True
         ):
             raise ValueError(

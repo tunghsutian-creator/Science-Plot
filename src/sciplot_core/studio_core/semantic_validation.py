@@ -65,11 +65,12 @@ def _semantic_series_contract_issues(
     series: list[StudioSeries],
     *,
     request: dict[str, Any],
+    source_bindings: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Reject same-axis series that contradict the selected rule's metric contract."""
 
     rule_id = str(request.get("rule_id") or "").strip()
-    labels = [str(item.label or "").casefold() for item in series]
+    labels = [str((source_bindings or {}).get(item.x_name, {}).get("sample", item.label) or "").casefold() for item in series]
     issues: list[dict[str, Any]] = []
     forbidden_by_rule = {
         "saxs_profile": ("azimuth", "angle"),

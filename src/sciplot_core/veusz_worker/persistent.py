@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 import gc
+import json
 import os
 import sys
 import tempfile
@@ -10,6 +11,7 @@ from typing import Any, Iterator, TextIO
 
 from sciplot_core.native_process.protocol import (MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, MAX_STDERR_BYTES,
     MAX_STDOUT_BYTES, decode, encode, validate_request)
+from sciplot_core.studio_core.categorical_display_errors import CategoricalPresentationConflict
 
 
 @contextmanager
@@ -65,6 +67,12 @@ def serve() -> int:
                     code = main(argv)
                 except SystemExit as exc:
                     code = exc.code if type(exc.code) is int else 1
+                except CategoricalPresentationConflict as exc:
+                    error.seek(0)
+                    error.truncate()
+                    print(json.dumps({"kind": "sciplot_worker_preparation_blocked", "version": 1,
+                                      "reason_code": exc.reason_code, "message": str(exc)}), file=sys.stderr)
+                    code = 1
                 except Exception:
                     traceback.print_exc()
                     code = 1

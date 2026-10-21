@@ -8,7 +8,7 @@ import math
 from typing import Any
 
 from sciplot_core.plot_backends.managed_plan import dataset_name, native_datasets, native_name
-from sciplot_core.veusz_worker.numeric_evidence import _dataset_evidence, _numeric_digest
+from sciplot_core.veusz_worker.numeric_evidence import dataset_evidence, numeric_digest
 
 
 def _value(value: Any) -> Any:
@@ -92,7 +92,7 @@ def scientific_audit(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
     for dataset in loaded.data.values():
         if (type(dataset).__module__, type(dataset).__name__) != ("veusz.datasets.oned", "Dataset") or getattr(dataset, "linked", None) is not None:
             raise ValueError("Managed datasets must be plain embedded numeric arrays without expressions or links.")
-    datasets = [_dataset_evidence(loaded, dataset_name=name, expected_values=values, dimensions=1)
+    datasets = [dataset_evidence(loaded, dataset_name=name, expected_values=values, dimensions=1)
                 for name, values in native_datasets(ir).items()]
     expected_names = set(native_datasets(ir))
     if set(loaded.data) != expected_names:
@@ -109,8 +109,8 @@ def scientific_audit(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
         series.append({"id": record["id"], "dataset_id": record["dataset_id"],
                        "x_column": record["x_column"], "y_column": record["y_column"],
                        "point_count": len(record["x"]),
-                       "x_values_hash": _numeric_digest(loaded.data[x_name].data),
-                       "y_values_hash": _numeric_digest(loaded.data[y_name].data)})
+                       "x_values_hash": numeric_digest(loaded.data[x_name].data),
+                       "y_values_hash": numeric_digest(loaded.data[y_name].data)})
     return {"kind": "sciplot_managed_native_audit", "status": "passed",
             "scientific_hash": ir["scientific_hash"], "ir_hash": ir["ir_hash"],
             "datasets": datasets, "series": series}

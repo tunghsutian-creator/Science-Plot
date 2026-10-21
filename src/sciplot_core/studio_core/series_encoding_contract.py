@@ -129,6 +129,30 @@ def series_encoding_from_spec(
     return _legacy_encoding_payload(series_spec, style=style)
 
 
+def apply_native_series_style(series: dict[str, Any], setting: str, value: Any) -> None:
+    """Keep existing flat and encoded style representations in one owner."""
+    fields = {
+        "PlotLine/color": ("color", "line", "color", "line.color"),
+        "PlotLine/width": ("line_width_pt", "line", "width_pt", None),
+        "MarkerFill/color": ("marker_fill_color", "marker", "fill_color", "marker.fill_color"),
+        "MarkerLine/color": ("marker_line_color", "marker", "line_color", "marker.line_color"),
+        "MarkerLine/width": ("marker_line_width_pt", "marker", "line_width_pt", None),
+    }
+    if setting not in fields:
+        return
+    flat, channel, field, source = fields[setting]
+    if flat in series:
+        series[flat] = value
+    encoding = series.get("encoding")
+    if isinstance(encoding, dict):
+        encoding = series_encoding_from_spec(series, style={})
+        if field in encoding[channel]:
+            encoding[channel][field] = value
+        if source in encoding["sources"]:
+            encoding["sources"][source] = "preserved_exact_current_native_style"
+        series["encoding"] = encoding
+
+
 def series_encoding_contract_payload(
     series_specs: list[dict[str, Any]],
 ) -> dict[str, Any]:

@@ -20,21 +20,44 @@ from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_storage import save_task
 
 
-def table_question(source: Path, selected: dict[str, Any]) -> dict[str, Any] | None:
-    table = table_choice_snapshot(source, selected["rule_id"])
+def replicate_mapping_mode(state: dict[str, Any], selected: dict[str, Any]) -> bool:
+    """Share scientific shape selection between initial, interactive and update choices."""
+    from sciplot_core.data_mapping.curve_support import table_mapping_shape
+    from sciplot_core.materials_rules import get_rule
+
+    summary = state["request"].get("summary_statistic")
+    if state["request"]["action"] == "update_source":
+        from sciplot_core.data_mapping.plan_binding import project_replicate_binding
+
+        previous = json.loads((Path(state["request"]["project"]) / "plot_request.json").read_text())
+        summary = "raw_only" if project_replicate_binding(previous) is not None else None
+    return table_mapping_shape(get_rule(selected["rule_id"]), summary_statistic=summary) == "replicates"
+
+
+def table_question(source: Path, selected: dict[str, Any], *, mapping_shape: str = "xy") -> dict[str, Any] | None:
+    if mapping_shape == "replicates":
+        from sciplot_core.data_mapping.table_choice import source_table_snapshot
+        from sciplot_core.data_mapping.curve_support import supports_replicate_mapping
+        from sciplot_core.materials_rules import get_rule
+
+        table = source_table_snapshot(source, rule_id=selected["rule_id"]) if supports_replicate_mapping(get_rule(selected["rule_id"])) else None
+    else:
+        table = table_choice_snapshot(source, selected["rule_id"])
     if table is not None:
         from sciplot_core.data_mapping.table_diagnostics import table_diagnostics
 
-        question = {
+        question: dict[str, Any] = {
             "field": "table_selection", "reason_code": "table_selection_required",
             "message": "原表布局需要明确选择。可一次回复 mapping 指定工作表、行范围、元数据及 XY 列；索引从 0 开始，结束行不包含在内。无需另建源文件或重建任务。",
             "selection": {"rule_id": selected["rule_id"], "template": resolve_rule_template(selected["rule_id"], selected.get("template"))},
             "evidence": table,
             "diagnostics": table_diagnostics(table),
         }
+        if mapping_shape == "replicates":
+            question.update(mapping_shape="replicates", message="Select original sheet, metadata/data rows and independent replicate columns. Keep complete original row domains and missing positions; no X coordinate or summary is inferred.")
         from sciplot_core.data_mapping.table_candidates import wide_table_candidates
 
-        candidates = wide_table_candidates(table, question["diagnostics"])
+        candidates = wide_table_candidates(table, question["diagnostics"]) if mapping_shape == "xy" else []
         if candidates:
             question["mapping_candidates"] = candidates
         if selected["rule_id"] == "ftir_spectrum":
@@ -49,7 +72,10 @@ def table_question(source: Path, selected: dict[str, Any]) -> dict[str, Any] | N
     return None
 
 
-def column_question(source: Path, selected: dict[str, Any], *, explicit: bool = False) -> dict[str, Any] | None:
+def column_question(source: Path, selected: dict[str, Any], *, explicit: bool = False,
+                    mapping_shape: str = "xy") -> dict[str, Any] | None:
+    if mapping_shape == "replicates":
+        return table_question(source, selected, mapping_shape=mapping_shape) if explicit else None
     snapshot = column_choice_snapshot(source, selected["rule_id"])
     if snapshot is None:
         question = table_question(source, selected) if explicit or source.suffix.casefold() in {".xls", ".xlsx", ".xlsm"} else None
@@ -89,9 +115,13 @@ def validate_column_response(state: dict[str, Any], response: dict[str, Any]) ->
 
     question = state["question"]
     choice = response.get("column_mapping")
-    if (set(response) != {"expected_question_id", "column_mapping"}
+    if (set(response) != {"expected_question_id", "column_mapping"} or not isinstance(choice, dict)
             or not Draft202012Validator(column_mapping_schema()).is_valid(choice)):
         raise TaskControlError("invalid_task_response", "请回答 column_mapping 的 x_column/y_column，并附当前 expected_question_id。")
+    replicate_question = question.get("mapping_shape") == "replicates"
+    if ("replicates" in choice) != replicate_question or (
+            replicate_question and not replicate_mapping_mode(state, question["selection"])):
+        raise TaskControlError("invalid_mapping_selection", "Use the advertised source shape: independent replicate columns require the current raw-only replicate question.")
     if response["expected_question_id"] != question["question_id"]:
         raise TaskControlError("stale_task_question", "此答案对应旧问题，请读取当前列选择问题。")
 
@@ -106,6 +136,8 @@ def accept_column_response(root: Path, state: dict[str, Any], response: dict[str
     seed = {
         "input": state["request"]["source"], "output": str(attempt / "run"),
         **question["selection"], "exports": ["pdf", "tiff_300"],
+        **({"xscale": state["request"]["xscale"]} if "xscale" in state["request"] else {}),
+        **({"summary_statistic": "raw_only"} if question.get("mapping_shape") == "replicates" else {}),
     }
     if request_path.exists():
         if json.loads(request_path.read_text()) != seed:
@@ -115,7 +147,7 @@ def accept_column_response(root: Path, state: dict[str, Any], response: dict[str
     try:
         factory = proposal_for_table_columns if question["evidence"]["kind"] == "sciplot_table_columns" else proposal_for_column_choice
         values = response["column_mapping"]
-        if factory is proposal_for_table_columns and "pairs" not in values:
+        if factory is proposal_for_table_columns and not ({"pairs", "replicates"} & set(values)):
             values = {"pairs": [values]}
         if factory is proposal_for_column_choice and (not {"x_column", "y_column"} <= set(values)
                                                      or set(values) - {"x_column", "y_column", "label"}):
@@ -127,7 +159,9 @@ def accept_column_response(root: Path, state: dict[str, Any], response: dict[str
         preview_data_mapping_proposal(proposal, source_root=Path(seed["input"]).parent,
                                       request_path=request_path)
     except ValueError as exc:
-        raise TaskControlError("invalid_mapping_selection", str(exc)) from exc
+        error = TaskControlError("invalid_mapping_selection", str(exc))
+        error.issues = getattr(exc, "issues", None)
+        raise error from exc
     proposal_path = attempt / "proposal.json"
     receipt_path = attempt / "confirmation.json"
     if proposal_path.exists() and json.loads(proposal_path.read_text()) != proposal.to_dict():
@@ -164,6 +198,8 @@ def accept_table_response(root: Path, state: dict[str, Any], response: dict[str,
     next_question = {"field": "column_mapping", "reason_code": "column_selection_required",
                      "message": "请查看逐列 rejection_reasons，确认 pairs。每组可指定独立的完整 table_selection 和 metadata_confirmations；另一工作表不继承声明。可用 metadata_confirmations 补充有证据的量名、单位和样品，或用 table_selection 更正默认区域。",
                      "selection": question["selection"], "evidence": columns}
+    if question.get("mapping_shape") == "replicates":
+        next_question.update(mapping_shape="replicates", message="Select column_mapping.replicates using original physical column indices. Each group may override the complete original table_selection; original metric, sample, unit and full row mask remain bound.")
     state.setdefault("scientific_choice_history", []).append({"question": question, "response": response})
     next_question["revision"] = len(state["scientific_choice_history"])
     if "metadata_hint" in question:
@@ -197,6 +233,8 @@ def accept_metadata_response(root: Path, state: dict[str, Any], response: dict[s
     next_question = {"field": "column_mapping", "reason_code": "column_selection_required",
         "message": "请审阅 raw_metadata、metadata_confirmations 和逐列拒绝原因后选择 pairs。更正时提交完整 metadata_confirmations 列表；空列表撤回全部声明。冲突继续阻断。",
         "selection": question["selection"], "evidence": columns, "revision": len(state["scientific_choice_history"])}
+    if question.get("mapping_shape") == "replicates":
+        next_question["mapping_shape"] = "replicates"
     if "metadata_hint" in question:
         next_question["metadata_hint"] = question["metadata_hint"]
     next_question["question_id"] = canonical_json_sha256(next_question, allow_nan=False)

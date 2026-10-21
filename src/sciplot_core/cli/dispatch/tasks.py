@@ -1,6 +1,7 @@
 """Thin CLI adapter to deterministic tasks; no model invocation."""
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,10 @@ def _object(path: Path) -> dict[str, Any]:
     resolved = path.expanduser().resolve()
     try:
         payload = json.loads(resolved.read_text())
+    except OSError as cause:
+        error = TaskControlError("invalid_json_file", "Provide a readable JSON file path; CLI JSON options do not accept inline objects.")
+        error.repair = {"action": "select_json_file", "file": str(resolved), "issues": [{"path": "/", "constraint": "readable_json_file"}]}
+        raise error from cause
     except json.JSONDecodeError as cause:
         error = TaskControlError("invalid_json_file", "Correct the JSON syntax at the reported line and column.")
         error.repair = {"action": "correct_json_file", "file": str(resolved),
@@ -29,6 +34,72 @@ def _object(path: Path) -> dict[str, Any]:
                         "issues": [{"path": "/", "constraint": "type", "expected": "object"}]}
         raise error
     return payload
+
+
+def _semantic_intent(args: Any) -> dict[str, Any] | None:
+    flags = ("x", "x_header", "y_header", "x_unit", "x_direction", "x_scale", "y", "y_unit", "y_direction", "y_scale", "y_min", "y_max", "secondary_y", "secondary_y_unit",
+             "stages", "stage_order", "time_boundary", "temperature_header", "temperature_source", "labels", "marker_every", "interpolation", "test_names", "source_blocks")
+    has_flags = any(getattr(args, key, None) is not None for key in flags)
+    if args.intent is not None:
+        if has_flags:
+            raise TaskControlError("invalid_semantic_intent", "Use --intent JSON_FILE or semantic flags, keeping the attachment list unchanged.")
+        return _object(args.intent)
+    if not has_flags and not args.sources:
+        return None
+    if not args.x or not args.y:
+        raise TaskControlError("invalid_semantic_intent", "Attachment plotting needs --x QUANTITY and --y QUANTITY; original columns, units and row IDs are expanded by the program.")
+    intent: dict[str, Any] = {"x": {"quantity": args.x}, "y": {"quantity": args.y}}
+    selection: dict[str, Any] = {}
+    if getattr(args, "test_names", None) is not None:
+        selection["test_names"] = args.test_names
+    if getattr(args, "source_blocks", None) is not None:
+        blocks = []
+        for value in args.source_blocks:
+            if not re.fullmatch(r"source:[0-9]+/table:[0-9]+/block:[0-9]+", value):
+                raise TaskControlError("invalid_semantic_intent", "--source-block requires an exact inspected source:N/table:N/block:N reference.")
+            blocks.append(dict(zip(("source_id", "table_id", "block_id"), value.split("/"), strict=True)))
+        selection["blocks"] = blocks
+    if selection:
+        intent["selection"] = selection
+    for coordinate in ("x", "y"):
+        if getattr(args, coordinate + "_scale", None) is not None:
+            intent[coordinate]["scale"] = getattr(args, coordinate + "_scale")
+        if getattr(args, coordinate + "_header") is not None:
+            intent[coordinate]["header"] = getattr(args, coordinate + "_header")
+        if getattr(args, coordinate + "_direction") is not None:
+            intent[coordinate]["direction"] = getattr(args, coordinate + "_direction")
+    for key, coordinate in (("x_unit", "x"), ("y_unit", "y")):
+        if getattr(args, key) is not None:
+            intent[coordinate]["unit"] = getattr(args, key)
+    for name in ("minimum", "maximum"):
+        value = getattr(args, "y_min" if name == "minimum" else "y_max")
+        if value is not None:
+            intent["y"][name] = value
+    if args.secondary_y:
+        intent["secondary_y"] = {"quantity": args.secondary_y}
+        if args.secondary_y_unit:
+            intent["secondary_y"]["unit"] = args.secondary_y_unit
+    if args.stages:
+        intent["stages"] = {"mode": args.stages}
+        for source, key in (("stage_order", "order"), ("time_boundary", "boundary")):
+            if getattr(args, source) is not None:
+                intent["stages"][key] = getattr(args, source)
+    elif args.stage_order or args.time_boundary:
+        raise TaskControlError("invalid_semantic_intent", "--stage-order and --time-boundary require --stages concatenate.")
+    for key in ("temperature_header", "temperature_source", "labels"):
+        if getattr(args, key) is not None:
+            intent[key] = getattr(args, key)
+    display: dict[str, Any] = {}
+    if args.marker_every is not None:
+        display["marker_every"] = args.marker_every
+    if args.interpolation:
+        display["interpolation"] = {"method": args.interpolation, "subdivisions": args.interpolation_subdivisions,
+                                    "purpose": "display", "boundary": "preserve_gaps"}
+    if display:
+        intent["display"] = display
+    if args.rule_id:
+        intent["rule_id"] = args.rule_id
+    return intent
 
 
 def _resume_response(args: Any) -> dict[str, Any]:
@@ -45,7 +116,20 @@ def _resume_response(args: Any) -> dict[str, Any]:
 def dispatch_task(args: Any) -> int:
     action = args.task_action
     result: dict[str, Any]
-    if action == "compare":
+    if action == "edit":
+        from sciplot_core.cli.dispatch.common_edits import dispatch_common_edit
+
+        return dispatch_common_edit(args)
+    if action == "paper":
+        from sciplot_core.cli.task_paper import dispatch_paper
+
+        return dispatch_paper(args)
+    if action == "continue":
+        from sciplot_core.task_saved_work import continue_saved_work
+
+        result = continue_saved_work(args.source, search_roots=args.search_root, tasks_root=args.tasks_root,
+                                     target=args.target, figure_id=args.figure)
+    elif action == "compare":
         from sciplot_core.task_comparisons import inspect_comparison, resume_comparison, select_comparison, start_comparison
         from sciplot_core.task_comparison_contract import comparison_request_schema, comparison_selection_schema
 
@@ -86,14 +170,30 @@ def dispatch_task(args: Any) -> int:
 
         result = inspect_table_region(args.target, _object(args.query))
     elif action == "find":
-        result = find_tasks(args.source, tasks_root=args.tasks_root, limit=args.limit)
+        if args.search_root:
+            from sciplot_core.task_saved_work import find_saved_work
+
+            result = find_saved_work(args.source, search_roots=args.search_root, tasks_root=args.tasks_root, limit=args.limit)
+        else:
+            result = find_tasks(args.source, tasks_root=args.tasks_root, limit=args.limit)
     elif action == "start":
         result = start_task(_object(args.request), task_dir=args.task_dir)
     elif action == "create":
         from sciplot_core.task_shortcuts import create_task
 
+        create_options: dict[str, Any] = {}
+        for field in ("curve_display", "summary_statistic"):
+            if getattr(args, field) is not None:
+                create_options[field] = getattr(args, field)
+        if args.xscale is not None:
+            create_options["xscale"] = args.xscale
+        if args.choose_columns:
+            create_options["choose_columns"] = True
+        semantic = _semantic_intent(args)
+        if semantic is not None:
+            create_options.update(intent=semantic, sources=args.sources)
         result = create_task(args.source, rule_id=args.rule_id, template=args.template,
-                             profile=args.profile, out=args.out, task_dir=args.task_dir)
+                             profile=args.profile, out=args.out, task_dir=args.task_dir, **create_options)
     elif action == "style":
         from sciplot_core.task_shortcuts import style_task
 

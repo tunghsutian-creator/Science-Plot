@@ -12,8 +12,15 @@ from .schema import BUILTIN_VERSION
 
 def builtin_files() -> dict[str, str]:
     root = Path(__file__).parent
-    return {str(root / name): file_sha256(root / name)
-            for name in ("builtins.py", "datasets.py", "execution.py", "schema.py", "identity.py")}
+    paths = [root / name for name in ("builtins.py", "datasets.py", "execution.py", "schema.py",
+                                     "identity.py", "series.py", "lineage.py", "units.py", "rheology.py")]
+    paths.extend(root.parent / "materials_rules" / name for name in ("unit_conversion.py", "unit_data.py"))
+    paths.append(root.parent / "materials_rules" / "unit_formatting.py")
+    paths.extend(root.parent / "semantic_sources" / name for name in ("rheology_frequency_metrics.py", "rheology_units.py"))
+    paths.append(root.parent / "foundation" / "text_values.py")
+    paths.append(root.parent / "semantic_sources" / "paired_curve_table_metadata.py")
+    paths.append(root.parent / "policy" / "frame_export.py")
+    return {str(path): file_sha256(path) for path in paths}
 
 
 def builtin_executor() -> dict[str, Any]:

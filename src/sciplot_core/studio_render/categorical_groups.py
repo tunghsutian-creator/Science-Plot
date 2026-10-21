@@ -5,8 +5,10 @@ from __future__ import annotations
 import math
 from typing import Any
 import pandas as pd
-from sciplot_core.policy import (
+from sciplot_core.source_tables.parsing import coerce_numeric_series
+from sciplot_core.policy.categorical import (
     CATEGORICAL_GROUPED_BAR_CENTER_OFFSET,
+    CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION,
 )
 
 from sciplot_core.studio_render.models import (
@@ -26,6 +28,31 @@ from sciplot_core.studio_render.metric_columns import (
 )
 
 _GROUPED_BAR_LABEL_SEPARATOR = " || "
+
+
+def categorical_group_offsets(count: int) -> tuple[float, ...]:
+    """One retained placement owner for adjacent groups inside a real category."""
+    if count <= 1:
+        return (0.0,)
+    return tuple(CATEGORICAL_GROUPED_BAR_CENTER_OFFSET * (2 * index / (count - 1) - 1)
+                 for index in range(count))
+
+
+def source_group_positions(series: list[StudioSeries], bindings: dict[str, Any]) -> dict[str, float]:
+    categories = list(dict.fromkeys(bindings[item.x_name]["category"] for item in series))
+    result = {}
+    for index, category in enumerate(categories, start=1):
+        members = [item for item in series if bindings[item.x_name]["category"] == category]
+        for item, offset in zip(members, categorical_group_offsets(len(members)), strict=True):
+            result[bindings[item.x_name]["source_id"]] = float(index) + offset
+    return result
+
+
+def source_group_width_fraction(series: list[StudioSeries], bindings: dict[str, Any]) -> float | None:
+    counts = [sum(bindings[item.x_name]["category"] == category for item in series)
+              for category in dict.fromkeys(bindings[item.x_name]["category"] for item in series)]
+    maximum = max(counts, default=0)
+    return CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION / (maximum - 1) if maximum > 1 else None
 
 
 def _factor_pair_identity(label: str) -> tuple[str, str]:
@@ -147,11 +174,12 @@ def _categorical_grouped_series_from_frames(
             continue
         detected = True
         numeric_candidates: list[Any] = []
+        legacy = frame.attrs.get("sciplot_legacy_numeric_parser") is True
         for column in frame.columns:
             if column in {sample_column, condition_column}:
                 continue
             nonblank = frame[column].map(_clean_studio_cell).ne("")
-            numeric = pd.to_numeric(frame[column], errors="coerce")
+            numeric = pd.to_numeric(frame[column], errors="coerce") if legacy else coerce_numeric_series(frame[column])
             if nonblank.any() and numeric[nonblank].notna().all():
                 numeric_candidates.append(column)
         if len(numeric_candidates) != 1:
@@ -173,10 +201,9 @@ def _categorical_grouped_series_from_frames(
                     "incomplete_categorical_grouped_row",
                     "Every grouped-bar row needs Sample, Condition, and value.",
                 )
-            numeric_value = pd.to_numeric(
-                pd.Series([frame.at[row_index, value_column]]),
-                errors="coerce",
-            ).iloc[0]
+            raw_value = pd.Series([frame.at[row_index, value_column]])
+            parsed = pd.to_numeric(raw_value, errors="coerce") if legacy else coerce_numeric_series(raw_value)
+            numeric_value = parsed.iloc[0]
             if pd.isna(numeric_value) or not math.isfinite(float(numeric_value)):
                 raise StudioPreparationBlocked(
                     "invalid_categorical_grouped_value",
@@ -205,6 +232,14 @@ def _categorical_grouped_series_from_frames(
             + ", ".join(distinct_value_labels),
         )
 
+    return grouped_series_from_records(records, value_label=distinct_value_labels[0])
+
+
+def grouped_series_from_records(
+    records: list[tuple[str, str, float, tuple[str, str]]], *, value_label: str,
+    allow_single_condition: bool = False,
+) -> tuple[list[StudioSeries], dict[str, Any]]:
+    """Reuse the existing grouped-bar layout for explicitly bound raw rows."""
     sample_order: list[str] = []
     condition_order: list[str] = []
     grouped: dict[tuple[str, str], list[float]] = {}
@@ -217,7 +252,7 @@ def _categorical_grouped_series_from_frames(
         key = (sample, condition)
         grouped.setdefault(key, []).append(value)
         artifacts.setdefault(key, set()).add(artifact)
-    if len(condition_order) < 2:
+    if len(condition_order) < 2 and not allow_single_condition:
         raise StudioPreparationBlocked(
             "insufficient_grouped_bar_conditions",
             "A grouped bar requires at least two conditions.",
@@ -239,16 +274,7 @@ def _categorical_grouped_series_from_frames(
             )
 
     condition_count = len(condition_order)
-    if condition_count == 2:
-        offsets = (
-            -CATEGORICAL_GROUPED_BAR_CENTER_OFFSET,
-            CATEGORICAL_GROUPED_BAR_CENTER_OFFSET,
-        )
-    else:
-        offsets = tuple(
-            CATEGORICAL_GROUPED_BAR_CENTER_OFFSET * (index - 1)
-            for index in range(condition_count)
-        )
+    offsets = categorical_group_offsets(condition_count)
     series: list[StudioSeries] = []
     for sample_index, sample in enumerate(sample_order, start=1):
         for condition_index, condition in enumerate(condition_order):
@@ -270,7 +296,7 @@ def _categorical_grouped_series_from_frames(
             )
     return series, {
         "x_label": "Sample",
-        "y_label": distinct_value_labels[0],
+        "y_label": value_label,
         "presentation_kind": "categorical_grouped_replicates",
         "category_labels": sample_order,
         "category_positions": [

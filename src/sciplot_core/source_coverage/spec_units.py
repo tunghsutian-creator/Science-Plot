@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.scalar_visual import scalar_visual_contract
+from sciplot_core.studio_core.axis_presentation import AXIS_PT_STYLE_FIELDS
 
 from sciplot_core.source_coverage.artifacts import (
     _series_source_artifacts,
@@ -12,7 +13,7 @@ from sciplot_core.source_coverage.artifacts import (
 
 
 def render_data_unit_signature(unit: dict[str, Any]) -> str:
-    """Hash the same generated source-data contract in every publication route."""
+    """Hash source facts; current represented typography belongs to native audit."""
 
     from sciplot_core.source_coverage.file_snapshots import _canonical_sha256
 
@@ -38,8 +39,27 @@ def render_data_unit_signature(unit: dict[str, Any]) -> str:
         "boxplot_eligible",
         "categorical_contract",
         "source_artifacts",
+        "source_binding",
     )
-    return _canonical_sha256({field: unit[field] for field in fields if field in unit})
+    payload = {field: unit[field] for field in fields if field in unit}
+    axes = payload.get("axes")
+    if isinstance(axes, dict):
+        # The style-transfer owner can preserve these existing slots without
+        # changing the request that derives the original source data. Keep all
+        # axis meanings, bounds, ticks, category facts and unknown fields exact.
+        payload["axes"] = {
+            name: {key: value for key, value in axis.items()
+                   if key not in AXIS_PT_STYLE_FIELDS.values()}
+            if name in {"x", "y"} and isinstance(axis, dict) else axis
+            for name, axis in axes.items()
+        }
+    labels = payload.get("direct_labels")
+    if isinstance(labels, list):
+        payload["direct_labels"] = [
+            {key: value for key, value in label.items() if key != "text_size_pt"}
+            if isinstance(label, dict) else label for label in labels
+        ]
+    return _canonical_sha256(payload)
 
 
 def _spec_render_data_units(
@@ -98,6 +118,7 @@ def _spec_render_data_units(
             {
                 "kind": "series",
                 "name": str(raw_series.get("name") or ""),
+                **({"source_binding": json_safe(raw_series["source_binding"])} if "source_binding" in raw_series else {}),
                 "label": str(raw_series.get("label") or ""),
                 "x_name": str(raw_series.get("x_name") or ""),
                 "y_name": y_name,

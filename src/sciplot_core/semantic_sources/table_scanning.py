@@ -29,7 +29,15 @@ from sciplot_core.semantic_sources.table_candidate_sources import (
     read_raw_table_normalized,
 )
 
+from sciplot_core.semantic_sources.instrument_regions import (
+    InstrumentLayoutError as InstrumentLayoutError,
+    _rheology_test_bounds,
+    rheology_instrument_regions as rheology_instrument_regions,
+)
+from sciplot_core.semantic_sources.numeric_separators import parse_numeric_cell as _numeric_cell
+
 _read_raw_table_normalized = read_raw_table_normalized
+_float = _numeric_cell
 
 
 def _sample_from_interval_metadata(raw: pd.DataFrame, fallback: str) -> str:
@@ -52,20 +60,8 @@ def _rheology_test_sections(
     metadata inside each block owns sample identity.
     """
 
-    starts = [
-        row_index
-        for row_index in range(raw.shape[0])
-        if raw.shape[1] and _token(raw.iat[row_index, 0]) == "test"
-    ]
-    if not starts:
-        return [(fallback, raw)]
-    sections: list[tuple[str, pd.DataFrame]] = []
-    for index, start in enumerate(starts):
-        stop = starts[index + 1] if index + 1 < len(starts) else raw.shape[0]
-        block = raw.iloc[start:stop].dropna(how="all")
-        sample = _sample_from_interval_metadata(block, fallback)
-        sections.append((sample, block))
-    return sections
+    return [(sample if sample is not None else fallback, raw.iloc[start:stop])
+            for start, stop, sample in _rheology_test_bounds(raw)]
 
 
 def _find_column(headers: list[str], candidates: tuple[str, ...]) -> int:
@@ -82,26 +78,6 @@ def _unit_for(units: list[str], index: int, fallback: str) -> str:
         if unit:
             return format_unit_label(unit)
     return format_unit_label(fallback)
-
-
-def _float(value: object, *, decimal_comma: bool = False) -> float | None:
-    if type(value) is float:
-        return None if math.isnan(value) else value
-    text = (
-        _clean_text(value).replace("\u00a0", "").replace("\u202f", "").replace(" ", "")
-    )
-    if not text:
-        return None
-    if decimal_comma:
-        if "," in text and "." in text:
-            text = text.replace(".", "")
-        text = text.replace(",", ".")
-    else:
-        text = text.replace(",", "")
-    try:
-        return float(text)
-    except ValueError:
-        return None
 
 
 def _unit_row_score(raw: pd.DataFrame, row_index: int, columns: tuple[int, ...]) -> int:
@@ -271,7 +247,7 @@ def _scan_curve_series_table(
             elif sample_index == preceding_sample_index and preceding_row_has_samples:
                 sample = preceding_samples[x_index]
                 sample_detection = "detected_from_preceding_sample_row"
-                sample_row_index: int | None = preceding_sample_index
+                sample_row_index = preceding_sample_index
             elif sample_index is not None:
                 sample = adjacent_samples[x_index]
                 sample_detection = "detected_from_adjacent_sample_row"

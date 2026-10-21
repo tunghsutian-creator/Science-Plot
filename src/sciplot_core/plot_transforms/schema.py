@@ -20,6 +20,18 @@ def transform_schema() -> dict[str, Any]:
         "normalize": closed({"columns": columns, "method": {"enum": ["max_abs", "first", "constant"]},
                              "constant": {"type": "number"}, "output_unit": {"const": "1"}},
                             ["columns", "method", "output_unit"]),
+        "row_slice": closed({"start": {"type": "integer", "minimum": 0},
+                             "end": {"type": "integer", "minimum": 1}}),
+        "concat_time": closed({"time_column": IDENTIFIER,
+                               "boundary": {"enum": ["preserve_endpoint", "next_sample"]},
+                               "first_origin": {"enum": ["preserve", "zero"]}}),
+        "convert_unit": closed({"columns": columns, "from_unit": {"type": "string", "minLength": 1},
+                                "to_unit": {"type": "string", "minLength": 1}}),
+        "time_offset": closed({"time_column": IDENTIFIER, "offset": {"type": "number"},
+                               "unit": {"type": "string", "minLength": 1}}),
+        "rheology_complex_viscosity": closed({"frequency_column": IDENTIFIER, "storage_column": IDENTIFIER,
+                                             "loss_column": IDENTIFIER, "output_column": IDENTIFIER,
+                                             "output_unit": {"enum": ["Pa s", "Pa·s", "mPa s", "mPa·s"]}}),
         "external": {"type": "object"},
     }
     variants = []
@@ -32,7 +44,8 @@ def transform_schema() -> dict[str, Any]:
                             "protocol_version": {"const": 1}}) if kind == "external" else
                     closed({"kind": {"const": "builtin"}, "version": {"const": BUILTIN_VERSION}, "content_hash": DIGEST}))
         variants.append(closed({"id": IDENTIFIER, "kind": {"const": kind},
-            "inputs": {"type": "array", "minItems": 1, "maxItems": 1, "items": IDENTIFIER},
+            "inputs": {"type": "array", "minItems": 1, "maxItems": 64 if kind == "concat_time" else 1,
+                       "uniqueItems": True, "items": IDENTIFIER},
             "output": IDENTIFIER, "parameters": params, "executor": executor,
             "determinism": {"enum": ["deterministic", "non_deterministic"]}}))
     return {"oneOf": variants}
@@ -41,6 +54,11 @@ def transform_schema() -> dict[str, Any]:
 def validate_node(value: Any) -> dict[str, Any]:
     validate_wire(value, transform_schema(), code="transform_node_invalid")
     assert isinstance(value, dict)
+    if value["kind"] == "row_slice":
+        for field in ("start", "end"):
+            if type(value["parameters"][field]) is not int:
+                fail("transform_row_index_invalid", "Row indices require integer literals; fractional, boolean and floating-point values cannot index source rows.",
+                     "/parameters/" + field, "integer_literal", actual=value["parameters"][field])
     if value["kind"] == "normalize":
         if (value["parameters"]["method"] == "constant") != ("constant" in value["parameters"]):
             fail("transform_parameter_conflict", "Only constant normalization requires an explicit constant.",

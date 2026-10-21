@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterator
+from contextlib import contextmanager
 import math
 from pathlib import Path
+import signal
 import socket
 import threading
 import time
@@ -62,12 +65,27 @@ def _remove_stale(path: Path) -> None:
     raise TransportError("engine_already_running", "The selected socket already has a live local server.")
 
 
+@contextmanager
+def _termination_event(stop_event: threading.Event | None) -> Iterator[threading.Event]:
+    event = stop_event if stop_event is not None else threading.Event()
+    if threading.current_thread() is not threading.main_thread():
+        yield event
+        return
+    previous = signal.signal(signal.SIGTERM, lambda _number, _frame: event.set())
+    try:
+        yield event
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
 def serve(socket_path: Path, *, service: Service | None = None, stop_event: threading.Event | None = None,
           idle_timeout: float = 900.0, request_timeout: float = 600.0) -> None:
     path = prepare_socket(socket_path)
     if any(not math.isfinite(value) or not 0 < value <= 86400 for value in (idle_timeout, request_timeout)):
         raise ValueError("Engine timeouts must be finite, positive and at most 86400 seconds.")
-    with lifecycle_lock(path, "server", timeout=0):
+    # Normal daemon termination finishes the current request, then uses the
+    # existing service close/worker EOF and owned-socket cleanup path.
+    with _termination_event(stop_event) as stopping, lifecycle_lock(path, "server", timeout=0):
         _remove_stale(path)
         instance_id = uuid4().hex
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
@@ -77,7 +95,7 @@ def serve(socket_path: Path, *, service: Service | None = None, stop_event: thre
             listener.settimeout(0.2)
             owner = write_owner(path, instance_id)
             try:
-                _serve(listener, owner, service, stop_event, idle_timeout, request_timeout)
+                _serve(listener, owner, service, stopping, idle_timeout, request_timeout)
             finally:
                 remove_owned_socket(path, instance_id)
 

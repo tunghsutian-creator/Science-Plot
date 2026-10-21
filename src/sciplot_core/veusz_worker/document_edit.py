@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from importlib import import_module
+import math
 from pathlib import Path
 from typing import Any
 
@@ -164,6 +165,7 @@ def edit_document(
 
         native, actual = prepare_setting_batch(loaded, changes)
         loaded.applyOperation(OperationMultiple(native, descr="SciPlot external style edit"))
+        _check_legend_sample_bounds(loaded, actual)
         candidate.parent.mkdir(parents=True, exist_ok=True)
         try:
             CommandInterface(loaded).Save(str(candidate))
@@ -177,3 +179,49 @@ def edit_document(
     return {"kind": "sciplot_document_edit", "version": 1, "status": "passed",
             "document": identity, "candidate": _identity(candidate),
             "changes": actual, "preview": preview}
+
+
+def _check_legend_sample_bounds(loaded: Any, actual: list[dict[str, Any]]) -> None:
+    """Reject clipped sample-length candidates using native, unclipped key bounds."""
+    paths = {item["object_path"] for item in actual
+             if item["setting_path"] == item["object_path"] + "/keyLength"}
+    if not paths:
+        return
+    from sciplot_core.veusz_audit.pages import collect_page_geometry
+
+    PaintHelper = import_module("veusz.document").PaintHelper
+    ControlKey = import_module("veusz.widgets.key").ControlKey
+    states, pages = collect_page_geometry(loaded, PaintHelper)
+    try:
+        for path in sorted(paths):
+            state = states.get(path)
+            if state is None:
+                raise ValueError("The edited legend has no visible native page bounds.")
+            widget = loaded.resolveWidgetPath(None, path)
+            controls = [control for control in state["helper"].getControlGraph(widget) or []
+                        if isinstance(control, ControlKey) and control.widget is widget]
+            if len(controls) != 1:
+                raise ValueError("The edited legend needs one complete native key boundary.")
+            x, y = controls[0].posn
+            width, height = controls[0].dims
+            bounds = [value / 72.0 * 25.4 for value in (x, y, x + width, y + height)]
+            page = next(page for page in pages if page["page"] == state["page"])
+            page_bounds = page["bounds_mm"]
+            if (len(page_bounds) != 4 or not all(math.isfinite(value) for value in page_bounds)
+                    or page_bounds[2] <= page_bounds[0] or page_bounds[3] <= page_bounds[1]):
+                raise ValueError("The edited legend needs finite, positive native page bounds.")
+            if (not all(math.isfinite(value) for value in bounds)
+                    or width <= 0 or height <= 0
+                    # Page bounds are rounded to 0.001 mm by the shared audit;
+                    # raw ControlKey bounds need only its rounding tolerance.
+                    or any(bounds[index] < page_bounds[index] - 0.001 for index in (0, 1))
+                    or any(bounds[index] > page_bounds[index] + 0.001 for index in (2, 3))):
+                raise ValueError("The complete native legend must fit inside its physical page.")
+    finally:
+        # Painting has finished; release recorded device/control state within
+        # the loaded QApplication lifetime, including rejected candidates.
+        helpers = {id(state["helper"]): state["helper"] for state in states.values()}
+        states.clear()
+        for helper in helpers.values():
+            helper.states.clear()
+            helper.rootstate = None

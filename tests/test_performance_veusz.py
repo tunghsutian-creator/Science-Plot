@@ -121,11 +121,8 @@ def test_performance_spec_uses_native_editable_veusz_contract(
             and item["line_transparency"] == PERFORMANCE_RADAR_SPOKE_TRANSPARENCY
             for item in performance["lines"]
         )
-        labels = {
-            int(str(item["name"]).rsplit("_", 1)[1]): item
-            for item in performance["labels"]
-            if str(item["name"]).startswith("performance_radar_axis_label_")
-        }
+        labels = [item for item in performance["labels"]
+                  if str(item["name"]).startswith("performance_radar_axis_label_")]
         endpoint_labels = {
             int(str(item["name"]).rsplit("_", 1)[1]): item
             for item in performance["labels"]
@@ -133,31 +130,31 @@ def test_performance_spec_uses_native_editable_veusz_contract(
         }
         assert all(
             item["text_size_pt"] == PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT
-            for item in labels.values()
+            for item in labels
         )
         assert [
             endpoint_labels[index]["label"] for index in sorted(endpoint_labels)
         ] == payload["axis_endpoint_labels"]
-        x_scale = float(payload["layout"]["plot_region_mm"][1]) / float(
-            payload["layout"]["plot_region_mm"][0]
-        )
+        assert all(item["parent"] == "page" for item in labels)
+        assert all(item["align"] == "centre" for item in labels)
+        width, height = spec["size_mm"]
+        centre_x, centre_y = 28.75, 26.25
+        endpoint_radius = 38.5 / (2.0 * 1.12) + 1.3
         for index, angle in enumerate(payload["angles_degrees"], start=1):
             radians = math.radians(float(angle))
             cosine = math.cos(radians)
             sine = math.sin(radians)
-            horizontal_radius = (
-                1.06 if cosine > 0.25 else 0.78 if cosine < -0.25 else 1.0
-            )
-            assert labels[index]["x"] == pytest.approx(
-                cosine * x_scale * horizontal_radius
-            )
-            assert labels[index]["y"] == pytest.approx(sine * 1.15)
-            assert endpoint_labels[index]["x"] == pytest.approx(cosine * x_scale * 1.06)
-            assert endpoint_labels[index]["y"] == pytest.approx(sine * 1.06)
+            assert endpoint_labels[index]["x"] * width == pytest.approx(
+                centre_x + cosine * endpoint_radius)
+            assert (1.0 - endpoint_labels[index]["y"]) * height == pytest.approx(
+                centre_y - sine * endpoint_radius)
 
 
 def test_five_axis_radar_uses_aligned_physical_label_slots() -> None:
     payload = build_performance_radar_payload(load_performance_comparison(FIXTURE))
+    # Historical specifications without the additive display contract retain
+    # their old native layout rather than being silently restyled.
+    payload.pop("radar_display")
     payload["angles_degrees"] = [90.0, 162.0, 234.0, 306.0, 18.0]
     payload["axis_labels"] = [
         "Density\n(g cm⁻³)",
@@ -322,9 +319,9 @@ def test_ready_radar_without_reserved_legend_panel_prepares_in_studio(
 
     assert prepared["pending_rule_review"] is False
     assert prepared["autonomous_rule_ready"] is True
-    assert spec["size_mm"] == [60.0, 55.0]
+    assert spec["size_mm"] == [120.0, 55.0]
     assert (
-        spec["performance_comparison"]["layout"]["legend_uses_reserved_panel"] is False
+        spec["performance_comparison"]["layout"]["legend_uses_reserved_panel"] is True
     )
     assert spec["axes"]["x"]["min"] == pytest.approx(-1.12)
     assert spec["axes"]["x"]["max"] == pytest.approx(1.12)

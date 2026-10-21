@@ -59,7 +59,34 @@ def edit_native_annotations(
         audit_native_annotations(loaded, spec)
         native, style_actual = prepare_setting_batch(loaded, styles) if styles else ([], [])
         ops = import_module("veusz.document.operations")
+        categorical_changes = any(change.get("op") in {"set_category_display_labels", "set_categorical_display_style"} for change in actual)
+        categorical_snapshot = None
+        if categorical_changes:
+            from sciplot_core.veusz_worker.categorical_display import dataset_snapshot, prepare_operations
+
+            categorical_snapshot = dataset_snapshot(loaded)
+            native.extend(prepare_operations(loaded, spec, new_spec, actual))
+        series_changes = any(change.get("op") in {"set_series_selection", "set_series_display_label"} for change in actual)
+        if series_changes:
+            from sciplot_core.studio_core.series_display import audit_source_series
+
+            audit_source_series(loaded, spec)
         for change in actual:
+            if change.get("op") == "set_series_selection":
+                from sciplot_core.studio_core.veusz_series_revision import prepare_veusz_series_revision
+
+                native.append(prepare_veusz_series_revision(loaded, document_path,
+                    expected_order=change["before"], target_order=change["after"]))
+                continue
+            if change.get("op") == "set_series_display_label":
+                from sciplot_core.studio_core.series_request import veusz_literal_text
+
+                series = next(item for item in spec["series"] if item["label"] == change["sample"])
+                path = "/page1/graph1/" + series["name"] + "/key"
+                if loaded.resolveSettingPath(None, path).get() != veusz_literal_text(change["before"]):
+                    raise ValueError("Current native alias differs from the reviewed display baseline.")
+                native.append(ops.OperationSettingSet(path, veusz_literal_text(change["after"])))
+                continue
             if change.get("op") == "set_legend_visibility":
                 key = loaded.resolveWidgetPath(None, "/page1/graph1/key1")
                 hidden = loaded.resolveSettingPath(None, key.path + "/hide").get()
@@ -91,6 +118,13 @@ def edit_native_annotations(
             native.extend(ops.OperationSettingSet(f"{widget['path']}/{suffix}", value)
                           for suffix, value in widget["settings"].items())
         loaded.applyOperation(ops.OperationMultiple(native, descr="SciPlot reviewed annotations"))
+        if categorical_snapshot is not None:
+            from sciplot_core.veusz_worker.categorical_display import audit_unchanged_datasets, audit_presentation
+
+            audit_unchanged_datasets(loaded, categorical_snapshot)
+            audit_presentation(loaded, new_spec)
+        if series_changes:
+            audit_source_series(loaded, new_spec)
         audit_native_annotations(loaded, new_spec)
         try:
             output_document.parent.mkdir(parents=True, exist_ok=True)

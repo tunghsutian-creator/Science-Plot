@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from sciplot_core.verification.axis_owners import GENERIC_AXIS_OWNERS
-from sciplot_core.verification.live_editor_owner import LIVE_EDITOR_OWNER
-from sciplot_core.verification.plot_owners import PLOT_OWNER
+from sciplot_core.verification.assembly_owners import PANEL_ASSEMBLY_OWNER
 from sciplot_core.verification.external_ai_owners import EXTERNAL_AI_OWNERS
-from sciplot_core.verification.task_control_owners import TASK_CONTROL_OWNERS
+from sciplot_core.verification.live_editor_owner import LIVE_EDITOR_OWNER
 from sciplot_core.verification.owner_model import ChangedOwner
-from sciplot_core.verification.rheology_tts_owner import RHEOLOGY_TTS_OWNER
+from sciplot_core.verification.ordinary_plotting_owners import ORDINARY_PLOTTING_OWNERS
+from sciplot_core.verification.plot_owners import PLOT_OWNER, TYPED_INTENT_OWNER
 from sciplot_core.verification.project_integrity_owners import PROJECT_INTEGRITY_OWNERS
 from sciplot_core.verification.project_revision_owners import PROJECT_REVISION_OWNERS
+from sciplot_core.verification.rheology_tts_owner import RHEOLOGY_TTS_OWNER
+from sciplot_core.verification.support_owners import DOCUMENTATION_OWNER, SCIENTIFIC_TEXT_OWNER, VEUSZ_NATIVE_BUILD_OWNER, WHEEL_DISTRIBUTION_OWNER, WORKFLOW_BUNDLE_EXPORT_OWNER
+from sciplot_core.verification.task_control_owners import NATIVE_SERIES_REVISION_OWNER, TASK_CONTROL_OWNERS
 from sciplot_core.verification.terminal_owners import GENERIC_TERMINAL_PREPARATION_OWNER
 from sciplot_core.verification.type_gate_owners import (
     ARCHITECTURE_CORE_TARGETS,
@@ -27,31 +30,17 @@ from sciplot_core.verification.type_gate_owners import (
 )
 
 CHANGED_OWNERS = (
+    *ORDINARY_PLOTTING_OWNERS,
+    PANEL_ASSEMBLY_OWNER,
+    WHEEL_DISTRIBUTION_OWNER,
+    VEUSZ_NATIVE_BUILD_OWNER,
+    SCIENTIFIC_TEXT_OWNER,
     RHEOLOGY_TTS_OWNER,
     LIVE_EDITOR_OWNER,
     PLOT_OWNER,
-    ChangedOwner(
-        owner_id="documentation_contract",
-        path_prefixes=("docs/", "third_party/tavotto-ui/"),
-        exact_paths=frozenset(
-            {
-                "AGENTS.md",
-                ".gitignore",
-                "DEVELOPMENT_LOG.md",
-                "DEVELOPMENT_ROADMAP.md",
-                "OLD_RENDERING_CONTRACT.md",
-                "visual_drift_report.md",
-                "README.md",
-                "skill/references/external-control.md",
-                "skill/references/advanced-workflows.md",
-                "skill/references/saved-figure-edit.md",
-                "skill/references/ordinary-create.md",
-                "skill/references/rheology-prepared.md",
-            }
-        ),
-        owned_test_paths=frozenset({"tests/test_documentation_contract.py"}),
-        pytest_targets=("tests/test_documentation_contract.py",),
-    ),
+    TYPED_INTENT_OWNER,
+    DOCUMENTATION_OWNER,
+    WORKFLOW_BUNDLE_EXPORT_OWNER,
     ChangedOwner(
         owner_id="validated_readiness_registry",
         path_prefixes=("src/sciplot_core/readiness/",),
@@ -61,12 +50,14 @@ CHANGED_OWNERS = (
                 "tests/test_readiness_registry_merge.py",
                 "tests/test_rule_certification.py",
                 "tests/test_human_daily_use_validation.py",
+                "tests/test_studio_rule_readiness_gui.py",
             }
         ),
         pytest_targets=(
             "tests/test_readiness_registry_merge.py",
             "tests/test_human_daily_use_validation.py",
             "tests/test_rule_certification.py",
+            "tests/test_studio_rule_readiness_gui.py",
             "tests/test_cli_surface.py::test_readiness_merge_parser_accepts_base_summary_and_output",
             "tests/test_cli_surface.py::test_readiness_merge_cli_writes_the_same_registry_and_reports_selection",
             *ARCHITECTURE_CORE_TARGETS,
@@ -79,10 +70,10 @@ CHANGED_OWNERS = (
     ChangedOwner(
         owner_id="skill_wrapper",
         exact_paths=frozenset(
-            {"skill/scripts/sciplot", "tests/test_skill_wrapper_cwd.py"}
+            {"skill/scripts/sciplot", "tests/test_skill_wrapper_cwd.py", "tests/test_skill_wrapper_framework.py"}
         ),
-        owned_test_paths=frozenset({"tests/test_skill_wrapper_contract.py"}),
-        pytest_targets=("tests/test_skill_wrapper_contract.py",),
+        owned_test_paths=frozenset({"tests/test_skill_wrapper_contract.py", "tests/test_skill_wrapper_cwd.py", "tests/test_skill_wrapper_framework.py"}),
+        pytest_targets=("tests/test_skill_wrapper_contract.py", "tests/test_skill_wrapper_framework.py"),
         handoff_gates=("doctor",),
         final_milestone_gates=("smoke",),
         release_gates=("full_pytest",),
@@ -95,13 +86,17 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/cli/entrypoint.py",
                 "src/sciplot_core/cli/value_io.py",
                 "src/sciplot_core/source_inspection/model_recognition.py",
+                "src/sciplot_core/source_inspection/__init__.py",
+                "src/sciplot_core/source_inspection/input_errors.py",
+                "src/sciplot_core/source_inspection/inspection.py",
+                "src/sciplot_core/source_inspection/semantic_evidence.py", "src/sciplot_core/source_inspection/rheology_evidence.py",
                 "src/sciplot_core/cli/dispatch/rendering.py",
                 "src/sciplot_core/cli/parsers/rendering.py",
                 "src/sciplot_core/materials_rules/catalog.py",
                 "src/sciplot_core/materials_rules/comparison_rules.py",
                 "src/sciplot_core/materials_rules/dma_frequency_rules.py",
                 "src/sciplot_core/materials_rules/dma_temperature_rules.py",
-                "src/sciplot_core/materials_rules/mechanical_rules.py",
+                "src/sciplot_core/materials_rules/mechanical_rules.py", "src/sciplot_core/materials_rules/impact_presentation.py",
                 "src/sciplot_core/materials_rules/models.py",
                 "src/sciplot_core/materials_rules/rheology_rules.py",
                 "src/sciplot_core/materials_rules/spectroscopy_rules.py",
@@ -114,6 +109,9 @@ CHANGED_OWNERS = (
         owned_test_paths=frozenset(
             {
                 "tests/test_autoplot_run.py",
+                "tests/test_source_identity_evidence.py",
+                "tests/test_instrument_source_regions.py",
+                "tests/test_managed_metadata_issues.py",
                 "tests/test_cli_runtime_error_payload.py",
                 "tests/test_cli_surface.py",
                 "tests/test_swelling_adapter_dispatch.py",
@@ -124,6 +122,9 @@ CHANGED_OWNERS = (
             }
         ),
         pytest_targets=(
+            "tests/test_source_identity_evidence.py",
+            "tests/test_instrument_source_regions.py",
+            "tests/test_managed_metadata_issues.py",
             "tests/test_cli_runtime_error_payload.py",
             "tests/test_cli_surface.py",
             "tests/test_swelling_adapter_dispatch.py",
@@ -182,7 +183,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/figure_plan/resolution.py",
                 "src/sciplot_core/semantic_sources/dma_sources.py",
                 "src/sciplot_core/semantic_sources/dma_temperature_transform.py",
-                "src/sciplot_core/semantic_sources/models.py",
+                "src/sciplot_core/semantic_sources/models.py", "src/sciplot_core/materials_rules/unit_data.py",
                 "src/sciplot_core/semantic_sources/numeric_separators.py",
                 "src/sciplot_core/semantic_contract_probe.py",
                 "src/sciplot_core/semantic_sources/impact_sources.py",
@@ -200,7 +201,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/studio_project_probe.py",
                 "src/sciplot_core/semantic_sources/torque_event_selection.py",
                 "src/sciplot_core/semantic_sources/torque_sources.py",
-                "src/sciplot_core/semantic_sources/prepare_rheology.py",
+                "src/sciplot_core/semantic_sources/prepare_rheology.py", "src/sciplot_core/semantic_sources/preparation_support.py",
                 "src/sciplot_core/semantic_sources/preparation_context.py",
                 "src/sciplot_core/request_contract.py",
                 "src/sciplot_core/semantic_sources/paired_curve_data_block.py",
@@ -211,18 +212,22 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/semantic_sources/rheology_units.py",
                 "src/sciplot_core/semantic_sources/rheology_interval.py",
                 "src/sciplot_core/semantic_sources/rheology_sweep_domain.py",
-                "src/sciplot_core/semantic_sources/rheology_sweep_sources.py",
+                "src/sciplot_core/semantic_sources/rheology_sweep_sources.py", "src/sciplot_core/semantic_sources/rheology_sweep_columns.py",
                 "src/sciplot_core/semantic_sources/rheology_temperature_domain.py",
                 "src/sciplot_core/semantic_sources/registered_paired_curve_transform.py",
                 "src/sciplot_core/semantic_sources/scientific_transform.py",
+                "src/sciplot_core/semantic_sources/series_labels.py",
                 "src/sciplot_core/semantic_sources/transform_contract_values.py",
                 "src/sciplot_core/semantic_sources/stress_relaxation_contract.py",
                 "src/sciplot_core/semantic_sources/stress_relaxation_evidence.py",
                 "src/sciplot_core/semantic_sources/stress_relaxation_hold.py",
                 "src/sciplot_core/semantic_sources/stress_relaxation_sources.py",
+                "src/sciplot_core/semantic_sources/stress_relaxation_wide.py",
+                "src/sciplot_core/semantic_sources/stress_relaxation_projection.py",
                 "src/sciplot_core/semantic_sources/stress_relaxation_transform.py",
                 "src/sciplot_core/semantic_sources/table_candidate_sources.py",
                 "src/sciplot_core/semantic_sources/table_scanning.py",
+                "src/sciplot_core/semantic_sources/instrument_regions.py",
                 "src/sciplot_core/semantic_sources/table_selection.py",
                 "src/sciplot_core/semantic_sources/table_source_files.py",
                 "src/sciplot_core/semantic_sources/tga_transform.py",
@@ -274,6 +279,7 @@ CHANGED_OWNERS = (
                 "tests/test_scientific_source_pipeline.py",
                 "tests/test_scientific_transform_contract.py",
                 "tests/test_semantic_multitest_contract.py",
+                "tests/test_instrument_source_regions.py",
                 "tests/test_tensile_workbook_directory.py",
                 "tests/test_semantic_preparation_dispatch.py",
                 "tests/test_studio_project_context.py",
@@ -303,6 +309,10 @@ CHANGED_OWNERS = (
             "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_preflight_binds_the_exact_plan",
             "tests/test_scientific_transform_contract.py",
             "tests/test_semantic_multitest_contract.py",
+            "tests/test_instrument_source_regions.py",
+            "tests/test_semantic_source_regions.py",
+            "tests/test_task_semantic_resolution.py",
+            "tests/test_task_semantic_resolution_native.py",
             "tests/test_tensile_workbook_directory.py",
             "tests/test_source_recognition_contract.py",
             "tests/test_semantic_preparation_dispatch.py",
@@ -352,43 +362,7 @@ CHANGED_OWNERS = (
     STUDIO_FIGURE_SET_EXECUTION_TYPE_OWNER,
     *GENERIC_AXIS_OWNERS,
     SCIENTIFIC_TRANSACTION_TYPE_OWNER,
-    ChangedOwner(
-        owner_id="native_series_revision",
-        exact_paths=frozenset(
-            {
-                "src/sciplot_core/studio.py",
-                "src/sciplot_core/studio_core/figure_set_storage.py",
-                "src/sciplot_core/studio_core/guide_contracts.py",
-                "src/sciplot_core/studio_core/persistence.py",
-                "src/sciplot_core/studio_core/qt_window.py",
-                "src/sciplot_core/studio_core/series_presentation.py",
-                "src/sciplot_core/studio_core/series_revision_persistence.py",
-                "src/sciplot_core/studio_core/veusz_series_revision.py",
-                "src/sciplot_core/studio_core/veusz_series_revision_operations.py",
-                "src/sciplot_core/veusz_worker/axis_matchers.py",
-                "src/sciplot_core/veusz_worker/spec_audit/coordinator.py",
-                "src/sciplot_core/veusz_worker/spec_audit/inventory.py",
-                "src/sciplot_core/veusz_worker/spec_audit/series.py",
-                "src/sciplot_core/veusz_worker/widget_bindings.py",
-                "src/sciplot_gui/studio_project/bridge.py",
-                "src/sciplot_gui/studio_project/dock.py",
-                "src/sciplot_gui/studio_project/export_action.py",
-                "src/sciplot_gui/studio_project/refresh.py",
-                "src/sciplot_gui/studio_project/series_revision.py",
-            }
-        ),
-        owned_test_paths=frozenset({"tests/test_veusz_series_revision.py"}),
-        pytest_targets=(
-            "tests/test_veusz_series_revision.py",
-            "tests/test_studio_figure_task_chain.py::test_spec_task_mismatch_rolls_back_document_spec_and_registry",
-            "tests/test_architecture_boundaries.py::test_studio_entry_modules_import_in_fresh_interpreters",
-            "tests/test_architecture_boundaries.py::test_core_business_and_data_layers_do_not_depend_on_the_gui_layer",
-            "tests/test_architecture_boundaries.py::test_gui_uses_the_public_studio_api_not_studio_core_implementation",
-            *ARCHITECTURE_CORE_TARGETS,
-        ),
-        final_milestone_gates=("smoke",),
-        release_gates=("full_pytest",),
-    ),
+    NATIVE_SERIES_REVISION_OWNER,
     *PROJECT_INTEGRITY_OWNERS,
     *PROJECT_REVISION_OWNERS,
     *EXTERNAL_AI_OWNERS,

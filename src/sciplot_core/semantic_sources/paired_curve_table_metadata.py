@@ -13,6 +13,14 @@ from sciplot_core.materials_rules.unit_formatting import (
 
 
 _HEADER_UNIT_RE = re.compile(r"(?:\(([^()]*)\)|\[([^\[\]]*)\])\s*$")
+# Closed machine-header spellings. An underscore is not generally a solidus:
+# only these explicit encodings carry unit evidence (never an arbitrary suffix).
+_SUFFIX_UNITS = {
+    "C": "C", "degC": "°C", "K": "K", "s": "s", "min": "min", "h": "h",
+    "Hz": "Hz", "rad_s": "rad/s", "Pa": "Pa", "kPa": "kPa", "MPa": "MPa",
+    "GPa": "GPa", "Pa_s": "Pa s", "mPa_s": "mPa s", "W_g": "W/g",
+    "mW_mg": "mW/mg", "mW_g": "mW/g", "nm": "nm", "cm_1": "cm⁻¹",
+}
 
 
 def axis_match(value: object, aliases: tuple[str, ...]) -> bool:
@@ -75,13 +83,26 @@ def looks_like_unit(value: object) -> bool:
 
 
 def explicit_header_unit(value: object) -> str:
-    """Return a terminal parenthesized/bracketed unit only when unit-shaped."""
+    """Return an explicit delimited unit or a closed machine-header suffix."""
 
-    match = _HEADER_UNIT_RE.search(clean_text(value))
+    text = clean_text(value)
+    match = _HEADER_UNIT_RE.search(text)
     if match is None:
-        return ""
+        return next((unit for suffix, unit in sorted(_SUFFIX_UNITS.items(), key=lambda item: -len(item[0]))
+                     if text.endswith("_" + suffix) and text[:-(len(suffix) + 1)].strip()), "")
     candidate = clean_text(next(group for group in match.groups() if group is not None))
     return candidate if looks_like_unit(candidate) else ""
+
+
+def header_quantity_text(value: object) -> str:
+    """Strip only a recognized explicit unit, preserving scientific symbols."""
+    text = clean_text(value)
+    if not explicit_header_unit(text):
+        return text
+    if _HEADER_UNIT_RE.search(text):
+        return _HEADER_UNIT_RE.sub("", text).strip()
+    return next((text[:-(len(suffix) + 1)] for suffix in sorted(_SUFFIX_UNITS, key=lambda value: -len(value))
+                 if text.endswith("_" + suffix)), text)
 
 
 def curve_axis_unit(
@@ -215,6 +236,7 @@ __all__ = [
     "axis_match",
     "curve_axis_unit",
     "explicit_header_unit",
+    "header_quantity_text",
     "looks_like_unit",
     "preceding_pair_sample",
     "resolve_adjacent_pair_row_roles",

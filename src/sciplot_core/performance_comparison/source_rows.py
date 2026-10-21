@@ -25,9 +25,13 @@ from sciplot_core.performance_comparison.source_values import (
 
 def normalize_performance_rows(
     source: str | Path,
+    *, selection: dict[str, Any] | None = None,
 ) -> tuple[Path, pd.DataFrame, dict[str, int], dict[str, int], int]:
     """Read required columns and return normalized rows plus stable orders."""
 
+    if selection is not None:
+        from sciplot_core.performance_comparison.selection_rows import normalize_selected_rows
+        return normalize_selected_rows(source, selection)
     source_path = _resolve_source(Path(source))
     frame = _read_source_frame(source_path).dropna(how="all").reset_index(drop=True)
     columns = _canonical_header_map(frame.columns)

@@ -61,6 +61,7 @@ class DataMappingProposal:
     proposal_id: str = field(default_factory=lambda: str(uuid4()))
     created_at: str = field(default_factory=_now)
     table_confirmation: dict[str, Any] = field(default_factory=dict)
+    display_labels: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.table_confirmation, dict):
@@ -68,9 +69,10 @@ class DataMappingProposal:
         if self.table_confirmation:
             from sciplot_core.mapping_contract.table_metadata import validate_metadata_confirmations
 
-            if (self.provider != "explicit_table_choice"
-                    or not {"rule_id", "selection", "metadata_confirmations", "pairs"} <= set(self.table_confirmation)
-                    or set(self.table_confirmation) - {"rule_id", "selection", "metadata_confirmations", "pairs", "sample_row_encoding"}):
+            choices = {"pairs", "replicates"} & set(self.table_confirmation)
+            if (self.provider != "explicit_table_choice" or len(choices) != 1
+                    or not {"rule_id", "selection", "metadata_confirmations"} <= set(self.table_confirmation)
+                    or set(self.table_confirmation) - {"rule_id", "selection", "metadata_confirmations", "pairs", "replicates", "sample_row_encoding"}):
                 raise ValueError("table_confirmation requires the explicit table-choice contract.")
             if ("sample_row_encoding" in self.table_confirmation
                     and self.table_confirmation["sample_row_encoding"] != "explicit_json_v1"):
@@ -104,6 +106,16 @@ class DataMappingProposal:
         source_ids = [source.source_id for source in self.sources]
         if len(set(source_ids)) != len(source_ids):
             raise ValueError("DataMappingProposal source IDs must be unique.")
+        from sciplot_core.mapping_contract.source_identity import proposal_source_identities
+
+        identities = proposal_source_identities(self)
+        if identities and (self.provider != "explicit_table_choice" or not {"replicates", "pairs"}.intersection(self.table_confirmation)):
+            raise ValueError("Structured source identities require the original-column replicate confirmation owner.")
+        if (not isinstance(self.display_labels, dict)
+                or any(key not in source_ids or not isinstance(value, str) or not value.strip()
+                       for key, value in self.display_labels.items())
+                or (self.display_labels and not proposal_source_identities(self))):
+            raise ValueError("display_labels require structured source IDs and nonempty display text.")
         source_paths = [source.relative_path for source in self.sources]
         if len(set(source_paths)) != len(source_paths) and not (
             self.provider == "explicit_table_choice"
@@ -245,6 +257,7 @@ class DataMappingProposal:
             "rationale": self.rationale,
             "created_at": self.created_at,
             **({"table_confirmation": self.table_confirmation} if self.table_confirmation else {}),
+            **({"display_labels": dict(self.display_labels)} if self.display_labels else {}),
         }
 
     @classmethod
@@ -269,6 +282,7 @@ class DataMappingProposal:
                 "rationale",
                 "created_at",
                 "table_confirmation",
+                "display_labels",
             },
             label="DataMappingProposal",
         )
@@ -302,6 +316,7 @@ class DataMappingProposal:
                 )
         proposal = cls(
             table_confirmation=payload.get("table_confirmation", {}),
+            display_labels=payload.get("display_labels", {}),
             proposal_id=_required_text(
                 payload.get("proposal_id"),
                 "proposal_id",

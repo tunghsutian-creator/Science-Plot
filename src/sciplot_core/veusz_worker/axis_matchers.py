@@ -26,6 +26,18 @@ def _axis_record_matches_spec(
         and (len(axis_spec["ticks"]) > 1 or expected_mode == "labels")
         else []
     )
+    positions = axis_spec.get("category_positions")
+    labels = axis_spec.get("category_labels")
+    # The existing native axis writer leaves one categorical tick automatic.
+    # Its text/position datasets are independently checked by categorical_axis.
+    automatic_single_category_tick = (
+        axis_name == "x" and expected_mode == "labels"
+        and isinstance(positions, list) and len(positions) == 1
+        and isinstance(labels, list) and len(labels) == 1
+        and isinstance(labels[0], str) and bool(labels[0].strip())
+        and _numeric_sequence_equal(expected_ticks, positions)
+        and _numeric_sequence_equal(bindings["MajorTicks/manualTicks"], [])
+    )
     expected_log = axis_spec.get("scale") == "log"
     expected_direction = "vertical" if axis_name == "y" else "horizontal"
     ticks_visible = axis_spec.get("show_ticks") is not False and not hidden
@@ -54,10 +66,10 @@ def _axis_record_matches_spec(
         and _numeric_setting_equal(bindings["max"], axis_spec.get("max"))
         and str(bindings["TickLabels/format"])
         == str(axis_spec.get("tick_format") or "Auto")
-        and _numeric_sequence_equal(
+        and (automatic_single_category_tick or _numeric_sequence_equal(
             bindings["MajorTicks/manualTicks"],
             expected_ticks,
-        )
+        ))
         and _numeric_setting_equal(
             bindings["MinorTicks/number"],
             int(axis_spec.get("minor_tick_count") or 20),

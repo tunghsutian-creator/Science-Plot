@@ -7,7 +7,7 @@ from sciplot_core.plot_document.errors import fail
 from .validation import validate_figure_spec
 
 _SCI_LAYER = ("id", "dataset_id", "mappings", "mapping_semantics", "x_scale", "y_scale", "role")
-_PRES_LAYER = ("id", "label", "legend", "z_order", "style")
+_PRES_LAYER = ("id", "label", "legend", "z_order", "style", "visible")
 
 
 def _take(value: dict[str, Any], names: tuple[str, ...]) -> dict[str, Any]:
@@ -20,7 +20,12 @@ def split_figure_spec(value: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     science: dict[str, Any] = {"kind": "sciplot_figure_science", "schema_version": 2,
         "id": spec["id"], "scales": spec["scales"], "views": [], "data_annotations": []}
     presentation: dict[str, Any] = {"kind": "sciplot_figure_presentation", "schema_version": 2,
-        **_take(spec, ("id", "composition", "layout", "theme", "guides", "rendering_contract", "composition_policy")), "views": [], "annotations": []}
+        **_take(spec, ("id", "composition", "layout", "theme", "guides", "rendering_contract", "composition_policy", "axis_layout_policy")), "views": [], "annotations": []}
+    if "domain_semantics" in spec:
+        science["domain_semantics"] = spec["domain_semantics"]
+        science["scales"] = [{key: value for key, value in scale.items() if key not in {"domain", "domain_rule"}}
+                             for scale in spec["scales"]]
+        presentation["scales"] = [_take(scale, ("id", "domain", "domain_rule")) for scale in spec["scales"]]
     for view in spec["views"]:
         scientific_view: dict[str, Any] = {"id": view["id"], "layers": []}
         visual_view = {**_take(view, ("id", "panel_label", "style", "axes")), "layers": []}
@@ -29,7 +34,7 @@ def split_figure_spec(value: Any) -> tuple[dict[str, Any], dict[str, Any]]:
             visual_layer = {**_take(layer, _PRES_LAYER), "marks": []}
             for mark in layer["marks"]:
                 scientific_layer["marks"].append(_take(mark, ("id", "type", "baseline", "width_data", "orientation")))
-                visual_layer["marks"].append(_take(mark, ("id", "style", "text")))
+                visual_layer["marks"].append(_take(mark, ("id", "style", "text", "interpolation")))
             scientific_view["layers"].append(scientific_layer)
             visual_view["layers"].append(visual_layer)
         science["views"].append(scientific_view)
@@ -54,8 +59,13 @@ def merge_figure_spec(science: Any, presentation: Any) -> dict[str, Any]:
                 or science["schema_version"] != 2 or presentation["schema_version"] != 2 or science["id"] != presentation["id"]):
             raise ValueError("projection identity")
         result: dict[str, Any] = {"kind": "sciplot_figure_spec", "schema_version": 2,
-            **_take(presentation, ("id", "composition", "layout", "theme", "guides", "rendering_contract", "composition_policy")),
+            **_take(presentation, ("id", "composition", "layout", "theme", "guides", "rendering_contract", "composition_policy", "axis_layout_policy")),
             "scales": deepcopy(science["scales"]), "views": [], "annotations": []}
+        if "domain_semantics" in science:
+            result["domain_semantics"] = science["domain_semantics"]
+            visual_scales = _index(presentation["scales"])
+            result["scales"] = [{**deepcopy(scale), **_take(visual_scales[scale["id"]], ("domain", "domain_rule"))}
+                                for scale in science["scales"]]
         scientific_views = _index(science["views"])
         for visual_view in presentation["views"]:
             scientific_view = scientific_views[visual_view["id"]]

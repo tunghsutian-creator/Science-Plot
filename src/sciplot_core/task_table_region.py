@@ -5,7 +5,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from sciplot_core.data_mapping.table_choice import _read, _original_text, table_choice_snapshot
+from sciplot_core.data_mapping.table_choice import read_original_table, _original_text, table_choice_snapshot
 from sciplot_core.data_mapping.merged_metadata import merged_metadata_ranges
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.task_choice_schema import table_region_schema
@@ -37,7 +37,7 @@ def inspect_table_region(task: Path, query: dict[str, Any]) -> dict[str, Any]:
     rs, re, cs, ce = (query[key] for key in ("row_start", "row_end", "column_start", "column_end"))
     if not (rs < re <= rs + 128 and cs < ce <= cs + 64):
         raise TaskControlError("invalid_task_response", "Region bounds must increase; at most 128 rows and 64 columns per query.")
-    frame = _read(source, query["sheet"], digest)
+    frame = read_original_table(source, query["sheet"], digest)
     if re > len(frame) or ce > frame.shape[1]:
         raise TaskControlError("invalid_task_response", "Region is outside the original table.")
     rows = [{"row_index": row, "cells": [

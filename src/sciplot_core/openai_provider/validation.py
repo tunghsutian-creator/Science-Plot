@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import ipaddress
 
+from sciplot_core.assistant_provider.text_validation import free_text
+
+_free_text = free_text
+
 
 def _required_text(value: object, label: str, *, maximum: int) -> str:
     if not isinstance(value, str):
@@ -11,15 +15,6 @@ def _required_text(value: object, label: str, *, maximum: int) -> str:
     text = value.strip()
     if not text:
         raise ValueError(f"{label} must be a non-empty string.")
-    if len(text) > maximum:
-        raise ValueError(f"{label} must contain at most {maximum} characters.")
-    return text
-
-
-def _free_text(value: object, label: str, *, maximum: int) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{label} must be a string.")
-    text = value.strip()
     if len(text) > maximum:
         raise ValueError(f"{label} must contain at most {maximum} characters.")
     return text

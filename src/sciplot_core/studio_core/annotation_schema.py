@@ -169,6 +169,16 @@ def annotation_operation_capabilities() -> dict[str, Any]:
     add("set_legend_visibility", {"expected_visible": {"type": "boolean"},
                                    "visible": {"type": "boolean"}},
         ["expected_visible", "visible"])
+    labels = {"type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": True,
+              "items": {"type": "string", "minLength": 1}}
+    add("set_series_selection", {"expected_order": labels, "active_order": labels},
+        ["expected_order", "active_order"])
+    add("set_series_display_label", {"sample": string, "expected_label": string,
+                                      "label": {"type": "string", "minLength": 1, "maxLength": 500}},
+        ["sample", "expected_label", "label"])
+    from sciplot_core.studio_core.categorical_display_schema import operation_schemas
+
+    operations.extend(operation_schemas())
     return {
         "kind": "sciplot_annotation_operations", "version": 1,
         "operations_schema": {"type": "array", "minItems": 1, "maxItems": 100,

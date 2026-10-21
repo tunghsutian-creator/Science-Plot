@@ -24,12 +24,19 @@ def _categorical_plot_contract(
     *,
     template_id: str,
     render_options: dict[str, Any],
+    source_bindings: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     point_line_contract = categorical_point_line_contract(
         series,
         template_id=template_id,
     )
     if point_line_contract is not None:
+        if source_bindings:
+            from sciplot_core.mapping_contract.categorical_identity import category_ids_from_bindings
+
+            categories = category_ids_from_bindings([source_bindings[item.x_name] for item in series])
+            for group, category in zip(point_line_contract["groups"], categories, strict=True):
+                group["source_category_id"] = category
         return point_line_contract
 
     impact_contract = _impact_point_line_contract(
@@ -51,4 +58,5 @@ def _categorical_plot_contract(
         series,
         template_id=template_id,
         render_options=render_options,
+        source_bindings=source_bindings,
     )

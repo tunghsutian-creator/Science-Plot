@@ -9,6 +9,139 @@ from sciplot_core import task_control as control, task_execution as execution, t
 from sciplot_core.task_contract import TaskControlError, validate_task_request
 
 
+@pytest.mark.parametrize("rule,template,requirement,effective", [
+    ("ftir_spectrum", "stacked_curve", {"curve_display": "raw_overlay"}, "stacked_offset"),
+    ("impact_metric", "point_line", {"summary_statistic": "mean_sample_sd_n"}, "mean_sample_sd"),
+    ("impact_metric", "point_line", {"summary_statistic": "median_iqr"}, "mean_sample_sd"),
+    ("impact_metric", "bar", {"summary_statistic": "median_iqr"}, "mean_sample_sd"),
+    ("impact_metric", "box_strip", {"summary_statistic": "mean_sample_sd_n"}, "median_iqr"),
+    ("impact_metric", "point_line", {"summary_statistic": "raw_only"}, "mean_sample_sd"),
+    ("tensile_curve", "curve", {"summary_statistic": "raw_only"}, "median_iqr"),
+])
+def test_explicit_scientific_presentation_never_silently_substitutes(tmp_path, monkeypatch, rule, template, requirement, effective):
+    path = tmp_path / "original.csv"
+    original = b"Wavenumber,Transmittance\ncm^-1,%\nA,A\n4000,60\n3900,72\n"
+    path.write_bytes(original)
+    monkeypatch.setattr(task_planning, "build_plan_preview", lambda *_a, **_k: pytest.fail("planned incompatible scientific presentation"))
+    monkeypatch.setattr(execution, "create_project", lambda *_a, **_k: pytest.fail("rendered incompatible scientific presentation"))
+    request = {"version": 1, "action": "create", "source": str(path), "rule_id": rule, "template": template, **requirement}
+    result = control.start_task(request, task_dir=tmp_path / "task")
+    assert result["status"] == "blocked"
+    assert result["blocker"]["reason_code"] == "scientific_presentation_unsupported"
+    field = next(iter(requirement))
+    assert result["blocker"]["effective"][field] == effective
+    assert result["blocker"]["required"] == requirement
+    assert result["next_step"]["action"] == "resolve_scientific_intent"
+    assert "response" not in result["next_step"]  # Unsupported is not an unchanged retry.
+    state = json.loads((tmp_path / "task/task.json").read_text())
+    assert state["request"] == request
+    assert result["scientific_presentation"]["source_sha256"] == state["source_sha256"]
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("x,requirements", [
+    ("sample", {}),
+    ("metric", {"summary_statistic": "mean_sample_sd_n"}),
+    ("wavenumber", {"curve_display": "stacked_offset"}),
+    ("wavenumber", {"summary_statistic": "mean_sample_sd_n"}),
+])
+def test_semantic_requirements_fail_before_binding_or_native_work(tmp_path, monkeypatch, x, requirements):
+    from sciplot_core import task_semantic_creation
+
+    path = tmp_path / "original.csv"
+    original = b"Sample,Value,Metric,Unit\nA,1,density,g/cm3\nB,2,density,g/cm3\n"
+    path.write_bytes(original)
+    monkeypatch.setattr(task_semantic_creation, "prepare_plan", lambda *_a, **_k: pytest.fail("bound unsupported semantics"))
+    monkeypatch.setattr(task_semantic_creation, "execute_managed", lambda *_a, **_k: pytest.fail("rendered unsupported semantics"))
+    request = {"version": 1, "action": "create", "sources": [str(path)],
+               "intent": {"x": {"quantity": x}, "y": {"quantity": "response"}, "rule_id": "ftir_spectrum"}, **requirements}
+    result = control.start_task(request, task_dir=tmp_path / "task")
+    assert result["status"] == "blocked", result
+    assert result["blocker"]["reason_code"] == "scientific_presentation_unsupported"
+    assert result["next_step"]["action"] == "resolve_scientific_intent"
+    state = json.loads((tmp_path / "task/task.json").read_text())
+    assert state["request"] == request
+    assert result["scientific_presentation"]["source_hashes"] == state["source_hashes"]
+    assert path.read_bytes() == original
+
+
+def test_scientific_requirements_accept_only_actual_existing_methods():
+    from sciplot_core.task_scientific_presentation import presentation_blocker, scientific_presentation
+
+    request = {"intent": {"x": {"quantity": "wavenumber"}, "y": {"quantity": "transmittance"}},
+               "curve_display": "raw_overlay", "summary_statistic": "raw_only"}
+    assert presentation_blocker(request, scientific_presentation(request)) is None
+    impact = {"summary_statistic": "median_iqr"}
+    actual = scientific_presentation(impact, rule_id="impact_metric", template="box_strip")
+    assert presentation_blocker(impact, actual) is None
+    assert actual["summary_statistic"] == "median_iqr"
+
+
+def test_impact_presentation_contract_matches_skewed_actual_series_not_default_option(tmp_path):
+    import math
+    import pandas as pd
+    from sciplot_core.materials_rules.catalog import show_rule_payload
+    from sciplot_core.studio_core.impact_series import _impact_point_line_series_from_source
+    from sciplot_core.studio_render.models import IMPACT_POINT_LINE_SUMMARY_KIND
+    from sciplot_core.task_scientific_presentation import presentation_blocker, scientific_presentation
+
+    source = tmp_path / "skewed.xlsx"
+    with pd.ExcelWriter(source) as writer:
+        for condition, offset in (("first", 0), ("second", 20)):
+            pd.DataFrame([["Re", "Re"], ["kJ/m2", "kJ/m2"], ["A", "B"],
+                          [1 + offset, 4 + offset], [2 + offset, 8 + offset], [10 + offset, 9 + offset]]).to_excel(writer, sheet_name=condition, header=False, index=False)
+    original = source.read_bytes()
+    # The old generic metadata option is deliberately contradictory. The actual
+    # point-line scientific owner still fixes mean and sample SD.
+    series, _axes, _steps = _impact_point_line_series_from_source(source, request={
+        "rule_id": "impact_metric", "template": "point_line", "render_options": {"summary_statistic": "median_iqr"}})
+    summary = [item for item in series if item.presentation_kind == IMPACT_POINT_LINE_SUMMARY_KIND]
+    assert summary[0].y_values == pytest.approx([13 / 3, 7])
+    assert summary[0].error_values == pytest.approx([math.sqrt(73 / 3), math.sqrt(7)])
+    assert summary[0].y_values[0] != 2  # Median differs on this skewed input.
+    actual = scientific_presentation({}, rule_id="impact_metric", template="point_line")
+    assert actual["summary_statistic"] == "mean_sample_sd"
+    assert presentation_blocker({"summary_statistic": "median_iqr"}, actual) is not None
+    assert presentation_blocker({"summary_statistic": "mean_sample_sd_n"}, actual) is not None
+    assert presentation_blocker({"summary_statistic": "mean_sample_sd"}, actual) is None
+    public = show_rule_payload("impact_metric")["presentation_contract"]["statistics_by_template"]
+    assert public["point_line"]["center"] == "arithmetic_mean"
+    assert public["point_line"]["ddof"] == 1
+    assert public["point_line"]["source_requirement"] == "at_least_two_compatible_workbook_conditions"
+    assert public["bar"]["summary_statistic"] == "mean_sample_sd"
+    assert public["box_strip"]["summary_statistic"] == "median_iqr"
+    assert source.read_bytes() == original
+
+
+def test_requested_sample_sd_cannot_treat_singleton_zero_error_as_an_estimate(tmp_path, monkeypatch):
+    path = tmp_path / "impact.csv"
+    path.write_text("Impact strength,Impact strength\nkJ/m2,kJ/m2\nA,B\n1,4\n2,\n10,\n")
+    monkeypatch.setattr(execution, "create_project", lambda *_a, **_k: pytest.fail("rendered undefined requested sample SD"))
+    result = control.start_task({"version": 1, "action": "create", "source": str(path),
+        "rule_id": "impact_metric", "template": "bar", "summary_statistic": "mean_sample_sd"}, task_dir=tmp_path / "task")
+    assert result["status"] == "blocked", result
+    assert result["blocker"]["reason_code"] == "scientific_presentation_unsupported"
+    assert result["blocker"]["issues"][0]["groups"] == {"B": 1}
+
+
+def test_mean_sample_sd_point_line_does_not_make_csv_a_condition_workbook(tmp_path, monkeypatch):
+    path = tmp_path / "impact.csv"
+    path.write_text("Impact strength,Impact strength\nkJ/m2,kJ/m2\nA,B\n1,4\n2,8\n10,9\n")
+    monkeypatch.setattr(execution, "create_project", lambda *_a, **_k: pytest.fail("rendered CSV as a condition workbook"))
+    result = control.start_task({"version": 1, "action": "create", "source": str(path),
+        "rule_id": "impact_metric", "template": "point_line", "summary_statistic": "mean_sample_sd"}, task_dir=tmp_path / "task")
+    assert result["status"] == "blocked", result
+    assert result["blocker"]["reason_code"] == "impact_point_line_needs_workbook_conditions"
+
+
+@pytest.mark.parametrize("field,value", [("curve_display", "normalized"), ("summary_statistic", "mean")])
+def test_unknown_scientific_presentation_cannot_be_silently_ignored(field, value):
+    with pytest.raises(TaskControlError) as failure:
+        validate_task_request({"version": 1, "action": "create", "source": "/original.csv", field: value})
+    assert failure.value.reason_code == "invalid_scientific_presentation"
+    assert failure.value.issues[0]["path"] == "/" + field
+
+
 def source(root: Path) -> Path:
     path = root / "UVvis.csv"
     path.write_text("Wavelength,Absorbance\nnm,a.u.\nE3,E3\n400,1\n450,4\n500,1\n")

@@ -42,6 +42,7 @@ def test_replicate_contract_exposes_only_active_summary_fields(
         assert group["bar_error"] == pytest.approx(1.0)
         assert group["bar_error_statistic"] == "sd"
         assert contract["bar_error_statistic"] == "sd"
+        assert contract["summary_statistic"] == "arithmetic_mean"
     else:
         assert bar_fields.isdisjoint(group)
         assert "bar_error_statistic" not in contract

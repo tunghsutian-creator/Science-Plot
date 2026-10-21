@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import math
 from typing import Any
-from sciplot_core.policy import (
+from sciplot_core.policy import DEFAULT_PALETTE_PRESET, UNIFIED_LINE_WIDTH_PT, UNIFIED_MARKER_SIZE_PT
+from sciplot_core.policy.categorical import (
     CATEGORICAL_BAR_FILL_TRANSPARENCY,
     CATEGORICAL_BAR_LINE_WIDTH_PT,
     CATEGORICAL_BAR_WIDTH_FRACTION,
@@ -14,16 +15,13 @@ from sciplot_core.policy import (
     CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
     CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION,
     DEFAULT_CATEGORICAL_SUMMARY,
-    DEFAULT_PALETTE_PRESET,
     MIN_BOX_REPLICATES,
-    UNIFIED_LINE_WIDTH_PT,
-    UNIFIED_MARKER_SIZE_PT,
     categorical_box_native_fill_scale,
     categorical_component_fill_color,
     categorical_fill_color,
     categorical_keyline_color,
-    normalize_categorical_summary,
 )
+from sciplot_core.policy.render_options import normalize_categorical_summary
 from sciplot_core.studio_render.models import (
     StudioPreparationBlocked,
     StudioSeries,
@@ -33,6 +31,7 @@ from sciplot_core.studio_render.categorical_values import (
 )
 from sciplot_core.studio_render.categorical_groups import (
     _grouped_bar_identity,
+    source_group_width_fraction,
 )
 from sciplot_core.studio_render.template_resolution import (
     _quantile,
@@ -44,6 +43,7 @@ def _replicate_distribution_contract(
     *,
     template_id: str,
     render_options: dict[str, Any],
+    source_bindings: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     categorical = [
         item
@@ -71,18 +71,22 @@ def _replicate_distribution_contract(
     grouped_condition_labels: list[str] = []
     if grouped_bar:
         for item in categorical:
-            _sample, condition = _grouped_bar_identity(item.label)
+            condition = source_bindings[item.x_name]["condition"] if source_bindings else _grouped_bar_identity(item.label)[1]
             if condition not in grouped_condition_labels:
                 grouped_condition_labels.append(condition)
     summary_statistic = normalize_categorical_summary(
         render_options.get("summary_statistic") or DEFAULT_CATEGORICAL_SUMMARY
     )
+    raw_only = summary_statistic == "raw_only" and template_id in {"box", "box_strip"}
     box_fill_fraction = float(
         render_options.get(
             "_categorical_box_fill_fraction",
             CATEGORICAL_BOX_FILL_FRACTION,
         )
     )
+    group_width = source_group_width_fraction(categorical, source_bindings) if source_bindings else None
+    if group_width is not None:
+        box_fill_fraction = min(box_fill_fraction, group_width)
     category_slot_width_mm = float(
         render_options.get("_categorical_slot_width_mm") or 0.0
     )
@@ -95,11 +99,15 @@ def _replicate_distribution_contract(
     marker_diameter_mm = 2.0 * UNIFIED_MARKER_SIZE_PT * 25.4 / 72.0
     groups: list[dict[str, Any]] = []
     for index, item in enumerate(categorical, start=1):
-        sample_label = item.label
-        condition_label: str | None = None
+        binding = (source_bindings or {}).get(item.x_name)
+        sample_label = binding["sample"] if binding else item.label
+        condition_label: str | None = binding["condition"] if binding else None
         condition_index = 0
-        if grouped_bar:
+        if grouped_bar and not binding:
             sample_label, condition_label = _grouped_bar_identity(item.label)
+        if grouped_bar:
+            if condition_label is None:
+                raise ValueError("A grouped bar requires its original condition fact.")
             condition_index = grouped_condition_labels.index(condition_label)
         values = [
             float(value) for value in item.y_values if math.isfinite(float(value))
@@ -118,9 +126,18 @@ def _replicate_distribution_contract(
         eligible = (
             summary_statistic == "median_iqr" and len(values) >= MIN_BOX_REPLICATES
         )
-        q1 = _quantile(values, 0.25)
-        median = _quantile(values, 0.5)
-        q3 = _quantile(values, 0.75)
+        statistics: dict[str, Any] = {}
+        if not raw_only:
+            q1 = _quantile(values, 0.25)
+            median = _quantile(values, 0.5)
+            q3 = _quantile(values, 0.75)
+            inside_iqr_count = sum(q1 <= value <= q3 for value in values)
+            statistics = {
+                "inside_iqr_count": inside_iqr_count,
+                "inside_iqr_fraction": inside_iqr_count / len(values),
+                "descriptive_statistics": {"minimum": min(values), "q1": q1,
+                                           "median": median, "q3": q3, "maximum": max(values)},
+            }
         raw_point_half_spread = max(
             (
                 abs(float(value) - position)
@@ -130,16 +147,18 @@ def _replicate_distribution_contract(
             default=0.0,
         )
         raw_point_band_fraction = 2.0 * raw_point_half_spread
-        inside_iqr_count = sum(q1 <= value <= q3 for value in values)
         groups.append(
             {
                 "label": item.label,
+                **({"source_binding": dict(binding)} if binding else {}),
                 "sample_label": sample_label,
                 "condition_label": condition_label,
                 "condition_index": condition_index,
                 "color": item.color,
                 "fill_color": (
-                    categorical_component_fill_color(
+                    item.color
+                    if grouped_bar and "line.color" in item.encoding_provenance.request_bound_fields
+                    else categorical_component_fill_color(
                         item.color,
                         component_index=(
                             len(grouped_condition_labels) - 1 - condition_index
@@ -172,8 +191,7 @@ def _replicate_distribution_contract(
                     + marker_diameter_mm
                     <= box_width_mm + 1e-12
                 ),
-                "inside_iqr_count": inside_iqr_count,
-                "inside_iqr_fraction": inside_iqr_count / len(values),
+                **statistics,
                 "boxplot_eligible": eligible,
                 "summary_status": (
                     "bar_error"
@@ -184,13 +202,6 @@ def _replicate_distribution_contract(
                     if summary_statistic == "raw_only"
                     else "insufficient_replicates"
                 ),
-                "descriptive_statistics": {
-                    "minimum": min(values),
-                    "q1": q1,
-                    "median": median,
-                    "q3": q3,
-                    "maximum": max(values),
-                },
                 **bar_statistics,
                 "raw_points_visible": (
                     template_id == "box_strip"
@@ -203,7 +214,9 @@ def _replicate_distribution_contract(
         "kind": "sciplot_categorical_replicate_contract",
         "version": 2,
         "presentation_kind": (
-            "grouped_bar_error"
+            "raw_points"
+            if raw_only
+            else "grouped_bar_error"
             if grouped_bar
             else "bar_error"
             if template_id == "bar"
@@ -211,11 +224,12 @@ def _replicate_distribution_contract(
             if template_id == "box_strip"
             else "box"
         ),
-        "summary_statistic": summary_statistic,
+        "summary_statistic": "arithmetic_mean" if template_id == "bar" else summary_statistic,
         "minimum_box_replicates": MIN_BOX_REPLICATES,
-        "quartile_method": "linear_interpolation_at_(n_minus_1)_times_p",
-        "box_definition": "q1_to_q3_middle_50_percent_interval",
-        "box_whisker_mode": "1.5IQR",
+        "summary_calculation": "none" if raw_only else "template_statistics",
+        "quartile_method": None if raw_only else "linear_interpolation_at_(n_minus_1)_times_p",
+        "box_definition": None if raw_only else "q1_to_q3_middle_50_percent_interval",
+        "box_whisker_mode": None if raw_only else "1.5IQR",
         "box_aspect_constraint": (
             dict(box_aspect_constraint)
             if isinstance(box_aspect_constraint, dict)
@@ -250,7 +264,7 @@ def _replicate_distribution_contract(
             "box_width_policy": (
                 "min(categorical_bar_width_times_4_over_3,data_iqr_physical_aspect_cap)"
             ),
-            "category_count": len(groups),
+            "category_count": len({group["source_binding"]["category"] for group in groups}) if source_bindings else len(groups),
             "category_slot_width_mm": category_slot_width_mm,
             "box_width_mm": box_width_mm,
             "raw_marker_diameter_mm": marker_diameter_mm,
@@ -266,11 +280,12 @@ def _replicate_distribution_contract(
             "raw_point_alpha": float(render_options.get("marker_alpha", 0.80)),
             "box_line_width_pt": CATEGORICAL_BOX_LINE_WIDTH_PT,
             "bar_width_fraction": (
+                group_width if group_width is not None else
                 CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION
                 if grouped_bar
                 else CATEGORICAL_BAR_WIDTH_FRACTION
             ),
-            "native_barfill": (1.0 if grouped_bar else CATEGORICAL_BAR_WIDTH_FRACTION),
+            "native_barfill": (1.0 if grouped_bar else group_width if group_width is not None else CATEGORICAL_BAR_WIDTH_FRACTION),
             "bar_fill_transparency": CATEGORICAL_BAR_FILL_TRANSPARENCY,
             "bar_line_width_pt": CATEGORICAL_BAR_LINE_WIDTH_PT,
             "error_cap_to_bar_ratio": CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,

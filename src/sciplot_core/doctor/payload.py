@@ -5,30 +5,31 @@ from __future__ import annotations
 import os
 import sys
 from typing import Any
+
 from sciplot_core._paths import REPO_ROOT, VEUSZ_ROOT
-from sciplot_core.materials_rules import iter_rules
-from sciplot_core.publication import (
-    list_composite_layouts,
+from sciplot_core.doctor.execution_identity import execution_identity
+from sciplot_core.doctor.actions import (
+    _next_actions,
 )
-from sciplot_core.style_contract import audit_style_template_contract
-
-from sciplot_core.doctor.runtime_checks import (
-    _check,
-    _module_available,
-    _veusz_qt_runtime_status,
-    _vsz_lifecycle_available,
-    _publication_foundation_available,
-)
-
 from sciplot_core.doctor.readiness_checks import (
     _publication_layout_inventory_available,
     _ready_rule_fixtures_exist,
     _validated_envelope_summary,
 )
-
-from sciplot_core.doctor.actions import (
-    _next_actions,
+from sciplot_core.doctor.runtime_checks import (
+    _check,
+    _local_socket_status,
+    _module_available,
+    _publication_foundation_available,
+    _qt_build_prerequisite_status,
+    _veusz_qt_runtime_status,
+    lifecycle_capability_status,
 )
+from sciplot_core.materials_rules import iter_rules
+from sciplot_core.publication import (
+    list_composite_layouts,
+)
+from sciplot_core.style_contract import audit_style_template_contract
 
 
 def doctor_payload() -> dict[str, Any]:
@@ -38,8 +39,11 @@ def doctor_payload() -> dict[str, Any]:
     pending_rules = [rule for rule in rules if rule.fixture_status != "ready"]
     fixtures_ok, fixture_detail = _ready_rule_fixtures_exist(rules)
     veusz_qt_ok, veusz_qt_detail = _veusz_qt_runtime_status()
+    qt_build_ok, qt_build_detail = _qt_build_prerequisite_status(needed=not veusz_qt_ok)
+    socket_ok, socket_detail = _local_socket_status()
     envelope_ok, envelope_detail, envelope_payload = _validated_envelope_summary()
     style_audit = audit_style_template_contract()
+    lifecycle = lifecycle_capability_status()
 
     checks = [
         _check(
@@ -68,10 +72,24 @@ def doctor_payload() -> dict[str, Any]:
             detail=veusz_qt_detail,
         ),
         _check(
+            "qt_build_prerequisites",
+            "Optional Veusz helper source-build tools",
+            qt_build_ok,
+            required=False,
+            detail=qt_build_detail,
+        ),
+        _check(
+            "local_socket_transport",
+            "Default sciplot plot AF_UNIX transport (route-specific)",
+            socket_ok,
+            required=False,
+            detail=socket_detail,
+        ),
+        _check(
             "vsz_lifecycle",
             "VSZ authority, history, exact export, and delivery hash gate",
-            _vsz_lifecycle_available(),
-            detail="studio/document.vsz -> Veusz -> exact edited export",
+            lifecycle["static_available"],
+            detail="Public lifecycle call contracts are statically available; native lifecycle execution is not verified by Doctor.",
         ),
         _check(
             "publication_foundation",
@@ -129,7 +147,10 @@ def doctor_payload() -> dict[str, Any]:
             detail=(
                 fixture_detail
                 if fixtures_ok
-                else f"not distributed on GitHub by policy; missing locally: {fixture_detail}"
+                else (
+                    "Real-data acceptance only; not needed for ordinary use. "
+                    f"Not distributed on GitHub by policy; {fixture_detail}"
+                )
             ),
         ),
     ]
@@ -138,12 +159,20 @@ def doctor_payload() -> dict[str, Any]:
     ]
     try:
         layouts = list_composite_layouts()
-    except Exception:
+    except Exception:  # noqa: BLE001 - A broken layout is a failed optional check.
         layouts = []
     return {
         "kind": "sciplot_doctor",
         "status": "ready" if not required_failures else "blocked",
+        "readiness_scope": {
+            "installation": "ready" if not required_failures else "blocked",
+            "checks": "static_contracts_and_local_dependency_loading",
+            "native_launch": "not_run", "requested_figure": "not_run",
+            "delivery_verified": False,
+            "next_validation": "Run the requested task; native compile, scientific audit, publication QA and actual files determine delivery readiness.",
+        },
         "repo_root": str(REPO_ROOT),
+        "execution_identity": execution_identity(),
         "normal_mode": {
             "task_interface": "external_ai",
             "daily_entrypoint": "sciplot task start --request REQUEST_JSON --json",
@@ -223,6 +252,7 @@ def doctor_payload() -> dict[str, Any]:
             "internal_models": ["one_step"],
         },
         "vsz_lifecycle": {
+            "capability_contract": lifecycle,
             "canonical_artifact": "studio/document.vsz",
             "editor": "live_editor",
             "native_editor": "veusz_mainwindow",
@@ -240,6 +270,11 @@ def doctor_payload() -> dict[str, Any]:
             "silent_data_omission_allowed": False,
         },
         "optional_capabilities": {
+            "plot_socket_transport": {
+                "required_for_task_native_readiness": False,
+                "default_route": "sciplot plot",
+                "available": socket_ok,
+            },
             "publication_layout_inventory": {
                 "required_for_daily_readiness": False,
                 "available": _publication_layout_inventory_available(),

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from sciplot_core.veusz_worker.numeric_evidence import _dataset_evidence
+from sciplot_core.veusz_worker.numeric_evidence import dataset_evidence
 from sciplot_core.veusz_worker.spec_audit.model import SpecAuditInventory
 from sciplot_core.veusz_worker.widget_bindings import _numeric_setting_equal
 
@@ -15,7 +15,7 @@ def audit_bar_error_consumer(
 ) -> tuple[list[dict[str, Any]], str]:
     groups = list(inventory.categorical_groups.values())
     evidence = [
-        _dataset_evidence(
+        dataset_evidence(
             inventory.loaded_document,
             dataset_name="category_bar_positions",
             expected_values=[float(group["position"]) for group in groups],
@@ -30,7 +30,7 @@ def audit_bar_error_consumer(
     )
     group = groups[group_index - 1]
     evidence.append(
-        _dataset_evidence(
+        dataset_evidence(
             inventory.loaded_document,
             dataset_name=lengths[group_index - 1],
             expected_values=[

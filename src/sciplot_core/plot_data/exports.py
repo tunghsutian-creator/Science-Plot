@@ -9,7 +9,7 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.file_hashing import existing_file_sha256, file_sha256
 from sciplot_core.foundation.path_names import slug
 from sciplot_core.plot_data.source_tables import (
     data_source as _data_source,
@@ -17,6 +17,7 @@ from sciplot_core.plot_data.source_tables import (
     sample_hint as _sample_hint,
 )
 from sciplot_core.plot_data.spec_tables import (
+    replicate_summary_table,
     read_json as _read_json,
     spec_paths as _spec_paths,
     spec_to_table as _spec_to_table,
@@ -45,16 +46,26 @@ def build_plot_data_exports(
     # A project-wide prepared table may describe only the primary plot. Each
     # saved figure supplies its own values and axes for a multi-figure export.
     source_table = _load_source_table(source) if len(specs) <= 1 else None
+    records: list[dict[str, Any]] = []
     if source_table is not None and not source_table.empty:
         output = destination / f"{project_name}_plot_data.csv"
         _write_four_row_csv(
             source_table, output, sample_hint=_sample_hint(manifest, source)
         )
-        return [_data_record(output, source=source, source_kind="processed_source")]
-
-    records: list[dict[str, Any]] = []
+        records.append(_data_record(output, source=source, source_kind="processed_source"))
     for index, spec_path in enumerate(specs, start=1):
         spec = _read_json(spec_path)
+        stem = project_name if index == 1 else f"{project_name}_{index:02d}"
+        spec_digest = file_sha256(spec_path)
+        summary = replicate_summary_table(spec, spec_sha256=spec_digest)
+        if summary is not None:
+            output = destination / f"{stem}_replicate_summary.csv"
+            _write_table_csv(summary, output)
+            records.append({**_data_record(output, source=spec_path, source_kind="audited_categorical_contract"),
+                            "data_role": "mean_sample_sd_n", "source_sha256": spec_digest,
+                            "original_source_sha256": spec["source_request"]["replicate_summary_disclosure"]["source_sha256"]})
+        if source_table is not None and not source_table.empty:
+            continue
         table = _spec_to_table(spec, manifest=manifest, spec_path=spec_path)
         if table is None or table.empty:
             continue

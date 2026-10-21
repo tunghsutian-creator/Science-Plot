@@ -10,6 +10,7 @@ from sciplot_core.plot_transforms import builtin_executor, builtin_files
 
 from .content_store import referenced_files, resolve_document_content
 from .errors import EngineError
+from .managed_source_groups import add_input
 from .storage import digest, read, write
 
 
@@ -18,11 +19,13 @@ def is_managed(document: dict[str, Any]) -> bool:
 
 
 def input_files(document: dict[str, Any]) -> dict[str, str]:
-    files = {item["path"]: item["sha256"] for item in document["scientific"]["data_sources"]}
+    files: dict[str, str] = {}
+    for source in document["scientific"]["data_sources"]:
+        add_input(files, source["path"], source["sha256"])
     registry = document["scientific"]["provenance"]["managed"].get("executors", {})
     for executor in registry.values():
-        files[executor["executable"]] = executor["identity"]["executable_sha256"]
-        files[executor["script"]] = executor["identity"]["script_sha256"]
+        add_input(files, executor["executable"], executor["identity"]["executable_sha256"])
+        add_input(files, executor["script"], executor["identity"]["script_sha256"])
     builtins = [node for node in document["scientific"]["transforms"] if node["executor"]["kind"] == "builtin"]
     if builtins:
         try:
@@ -35,7 +38,8 @@ def input_files(document: dict[str, Any]) -> dict[str, str]:
             raise EngineError("managed_builtin_executor_changed", "Builtin scientific implementation changed; explicitly refresh its pinned descriptor before recomputing.",
                               action="refresh_builtin_executor", targets=["transform:" + name for name in outdated],
                               property="transform.executor", current_executor=current)
-        files.update(implementation)
+        for path, sha256 in implementation.items():
+            add_input(files, path, sha256)
     return files
 
 

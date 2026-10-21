@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from contextlib import nullcontext
 import json
 from pathlib import Path
 from uuid import uuid4
@@ -14,13 +15,13 @@ from sciplot_core.workflow.rheology_tts_style_storage import check_snapshot, pub
 from sciplot_core.workflow.rheology_tts_tables import write_json
 
 
-def _load(workspace: Path) -> tuple[Path, dict]:
+def _load(workspace: Path, *, native_display: bool = False) -> tuple[Path, dict]:
     workspace = workspace.expanduser().resolve()
     manifest = json.loads((workspace / "suite.json").read_text(encoding="utf-8"))
     if manifest.get("kind") != "sciplot_rheology_tts_suite" or Path(manifest["workspace"]).resolve() != workspace:
         raise ValueError("Expected a bound rheology suite workspace.")
     delivery = Path(manifest["delivery"]).resolve()
-    if manifest.get("figure_layout") != "separate_polymer_modulus":
+    if not native_display and manifest.get("figure_layout") != "separate_polymer_modulus":
         raise ValueError("Template restoration requires the separated layout; legacy suites remain reproducible.")
     if json.loads((delivery / "data/delivery_manifest.json").read_text()) != manifest:
         raise ValueError("Visible and hidden suite manifests disagree.")
@@ -179,17 +180,22 @@ def preview_suite_style(workspace: Path, *, presentation_plan: Path | None = Non
             "next_step": "Inspect the candidate images, then apply this current preview; no numerical refit occurs."}
 
 
-def apply_suite_style(workspace: Path, preview_path: Path) -> dict:
+def apply_suite_style(workspace: Path, preview_path: Path, *, native_display: bool = False,
+                      _session_held: bool = False) -> dict:
     from sciplot_core.workflow.rheology_tts_contract import rheology_capabilities
     from sciplot_core.workflow.rheology_tts_suite import _check_sources, _figure_folder
+    from sciplot_core.workflow.rheology_tts_publication_recovery import recover_publication, seal_publication
 
-    workspace, manifest = _load(workspace)
+    workspace, manifest = _load(workspace, native_display=native_display)
     preview_path = preview_path.expanduser().resolve()
     if not preview_path.is_relative_to(workspace / "style_previews") or preview_path.name != "preview.json":
         raise ValueError("Preview must be the saved preview.json inside this suite's style_previews directory.")
     directory = preview_path.parent
-    with external_project_session(workspace):
+    with (nullcontext() if _session_held else external_project_session(workspace)):
         preview = json.loads(preview_path.read_text(encoding="utf-8"))
+        expected_kind = "sciplot_native_display_preview" if native_display else "sciplot_rheology_style_preview"
+        if preview.get("kind") != expected_kind:
+            raise ValueError("Preview kind does not match the selected presentation operation.")
         if canonical_json_sha256(preview) != (directory / "preview.sha256").read_text(encoding="ascii"):
             raise ValueError("Presentation preview receipt changed after creation.")
         if preview.get("workspace") != str(workspace) or preview.get("delivery") != manifest["delivery"]:
@@ -202,6 +208,9 @@ def apply_suite_style(workspace: Path, preview_path: Path) -> dict:
             applied = json.loads((directory / "applied.json").read_text())
             check_snapshot(applied["published_files"], label="previously applied presentation")
             return {**applied["result"], "already_applied": True}
+        recovered = recover_publication(directory, preview)
+        if recovered is not None:
+            return recovered
         if preview["contract_sha256"] != rheology_capabilities()["contract_sha256"]:
             raise ValueError("Presentation contract changed after preview; inspect a new preview.")
         check_snapshot(preview["baseline"], label="presentation baseline")
@@ -241,18 +250,21 @@ def apply_suite_style(workspace: Path, preview_path: Path) -> dict:
             "scope": "Changed shared-template fields and caller-supplied display labels/legend positions only; numeric analysis and unrelated native edits preserved."}
         staged_manifest = directory / "applied_manifest.json"
         write_json(staged_manifest, updated)
-        updates.extend([(Path(preview["plan"]), workspace / "figure_plan.json"),
-                        (Path(preview["plan"]), delivery / "data/figure_plan.json"),
-                        (staged_manifest, workspace / "suite.json"),
+        if not native_display:
+            updates.extend([(Path(preview["plan"]), workspace / "figure_plan.json"),
+                            (Path(preview["plan"]), delivery / "data/figure_plan.json")])
+        updates.extend([(staged_manifest, workspace / "suite.json"),
                         (staged_manifest, delivery / "data/delivery_manifest.json")])
         _check_sources(preview["sources"])
         expected = {**preview["baseline"], **{source["path"]: source["sha256"] for source in preview["sources"]}}
         generated = [source for source, _ in updates if str(source.resolve()) not in preview["candidate_files"]]
         candidates = {**preview["candidate_files"], **snapshot(generated)}
-        published = publish_files(updates, directory / "backup", expected=expected, candidates=candidates,
-                                  allowed_roots=(workspace, delivery))
+        backup = directory / "backup" / uuid4().hex
         result = {"status": "ready", "workspace": str(workspace), "delivery": str(delivery),
             "changed_figures": len(preview["candidates"]), "numerical_refit": False,
-            "exact_candidate_export": True, "backup": str(directory / "backup")}
+            "exact_candidate_export": True, "backup": str(backup)}
+        seal_publication(directory, preview, updates, candidates, result)
+        published = publish_files(updates, backup, expected=expected, candidates=candidates,
+                                  allowed_roots=(workspace, delivery))
         write_json(directory / "applied.json", {"published_files": published, "result": result})
         return result

@@ -46,6 +46,35 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     assert requests == [{"version": 1, "action": "create", "source": "/original.csv", "profile": "/profile.json"}]
 
 
+@pytest.mark.parametrize("semantic", [False, True])
+def test_create_cli_preserves_explicit_scientific_requirements(ready, monkeypatch, capsys, semantic):
+    requests = []
+    monkeypatch.setattr(shortcuts, "start_task", lambda request, **kwargs: requests.append(request) or {"status": "needs_input"})
+    coordinates = ["--x", "wavenumber", "--y", "transmittance"] if semantic else []
+    args = build_parser().parse_args(["task", "create", "/original.csv", "--rule", "ftir_spectrum",
+        "--curve-display", "raw_overlay", "--summary-statistic", "raw_only", *coordinates, "--json"])
+    assert dispatch.dispatch_task(args) == 0
+    capsys.readouterr()
+    assert requests[0]["curve_display"] == "raw_overlay"
+    assert requests[0]["summary_statistic"] == "raw_only"
+    assert requests[0].get("sources" if semantic else "source") == (["/original.csv"] if semantic else "/original.csv")
+
+
+def test_semantic_cli_projects_scale_directions_without_reordering_sources(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(shortcuts, "create_task", lambda source, **kwargs: calls.append((source, kwargs)) or {"status": "needs_input"})
+    args = build_parser().parse_args(["task", "create", "--source", "/second.csv", "--source", "/first.csv",
+        "--x", "wavenumber", "--y", "transmittance", "--x-direction", "descending", "--y-direction", "ascending",
+        "--curve-display", "raw_overlay", "--summary-statistic", "raw_only", "--json"])
+    assert dispatch.dispatch_task(args) == 0
+    capsys.readouterr()
+    assert calls[0][0] is None
+    assert calls[0][1]["sources"] == [Path("/second.csv"), Path("/first.csv")]
+    assert calls[0][1]["intent"]["x"] == {"quantity": "wavenumber", "direction": "descending"}
+    assert calls[0][1]["intent"]["y"] == {"quantity": "transmittance", "direction": "ascending"}
+    assert calls[0][1]["curve_display"] == "raw_overlay"
+
+
 def test_create_rejects_profile_conflict_before_runtime_or_task_allocation(ready, monkeypatch):
     calls, _ = ready
     monkeypatch.setattr(shortcuts, "start_task", lambda *_a, **_k: pytest.fail("allocated invalid task"))
@@ -214,3 +243,19 @@ def test_guidance_carries_exact_current_arguments_without_shell_concatenation():
     state.update(status="needs_review", request={"action": "update_source"}, revision_id="c" * 64)
     assert "cli_argv" not in task_next_step(state)
     assert "typed_entries" in task_capabilities()
+
+
+def test_stress_create_options_reuse_one_doctor_identity(ready, monkeypatch):
+    calls, runtime = ready
+    identity = {'source_package_root': '/source/src/sciplot_core', 'source_git_head': 'a' * 40,
+                'runtime_repo_root': '/source', 'python_executable': '/python',
+                'native_execution_verified': False}
+    runtime['execution_identity'] = {**identity, 'unbounded_detail': ['not forwarded']}
+    requests = []
+    monkeypatch.setattr(shortcuts, 'start_task', lambda request, **kwargs: requests.append(request) or {'status': 'needs_input'})
+    result = shortcuts.create_task(Path('/original.csv'), rule_id='rheology_stress_relaxation',
+                                   xscale='linear', choose_columns=True)
+    assert calls == ['doctor']
+    assert requests[0]['choose_columns'] is True and requests[0]['xscale'] == 'linear'
+    assert result['doctor']['execution_identity'] == identity
+    assert result['doctor']['execution_identity']['native_execution_verified'] is False

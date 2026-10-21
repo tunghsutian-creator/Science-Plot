@@ -12,12 +12,7 @@ from sciplot_core.source_tables import (
     normalize_label,
     normalize_unit,
 )
-
-
-def cell_text(value: Any) -> str:
-    if value is None or isinstance(value, float) and pd.isna(value):
-        return ""
-    return str(value).strip()
+from sciplot_core.source_tables.parsing import normalize_cell as cell_text
 
 
 def cell_token(value: Any) -> str:

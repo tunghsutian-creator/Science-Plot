@@ -55,6 +55,7 @@ def compute_analysis_metrics(
     processed_source: Path | None,
     semantic: dict[str, Any],
     output_dir: Path,
+    summary_statistic: str | None = None,
 ) -> list[dict[str, Any]]:
     rule_id = str(semantic.get("rule_id") or "")
     processed = (
@@ -218,7 +219,7 @@ def compute_analysis_metrics(
     elif rule_id == "swelling_curve":
         rows = _swelling_metrics(canonical_source)
     elif rule_id == "impact_metric" and processed is not None:
-        rows = _impact_metrics(processed)
+        rows = [] if summary_statistic == "raw_only" else _impact_metrics(processed)
     elif rule_id == "ftir_spectrum":
         rows = _ftir_peak_position_metrics(
             canonical_source,

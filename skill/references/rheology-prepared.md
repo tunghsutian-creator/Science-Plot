@@ -9,13 +9,40 @@ with governed templates. Its `plot` entry point must not analyze or refit data.
 
 ## Create and review
 
-Use the advertised closed request and plan contracts. A request contains
+Use `prepared_request_schema` for the closed request and `prepared_plan` for the
+plan's enforced provenance schema, complete minimal example and scientific
+disclosure guidance. `presentation.processed_plan` and `presentation.roles`
+describe the figure/panel/series fields and supported roles. A request contains
 `version:1`, absolute `prepared_plan` JSON path, and optional `out` and
 `expected_contract_sha256`:
 
 ```bash
 skill/scripts/sciplot rheology plot --request REQUEST.json --json
 ```
+
+The plan requires `version:1`, `source_binding`, `transform_ledger` and `figures`.
+`source_binding.sources` is a nonempty ordered array; each record contains exactly
+an absolute original local `path` and its unchanged file-byte `sha256`. Bind all
+inputs used for the prepared result. Put field/row selections, transformations
+or an explicit declaration of none, exclusions and scientific limitations in the
+nonempty `transform_ledger`. A structured ledger is recommended; existing
+nonempty text/list disclosures remain supported. The program adds the plan-file
+binding itself; do not invent a different source-binding or series-unit schema.
+
+Declare final units in panel `x_label`/`y_label` and source/output units plus any
+conversions in the ledger, per figure/series when needed. A real or imaginary
+viscosity component is distinct from complex-viscosity magnitude. The caller
+must supply the correctly defined final quantity with its derivation and unit
+evidence. This plotting entry preserves those declarations and values; it does
+not infer units, convert coordinates or verify the scientific calculation.
+
+Omit `out` by default. The delivery belongs beside the **first bound source**;
+an explicit destination may also be a new revision inside an existing
+source-bound sibling suite. If that check fails, use the source-adjacent
+destination; do not relabel or relocate source bindings to bypass it. If a plan
+is structurally rejected, correct the named field using `prepared_plan` in the
+live capabilities. Refresh `expected_contract_sha256` after reviewing a changed
+contract, without changing already approved coordinates or scientific choices.
 
 Creation replies are compact; complete native evidence remains at
 `full_evidence_path`. Read that file for a missing detail instead of creating the
@@ -35,6 +62,35 @@ route does not claim the ordinary browser canvas or strict thermorheological
 simplicity. Preserve raw inputs and all source-bound scientific limitations.
 
 ## Saved style corrections and exports
+
+Creation returns one `plot_objects` handle per actual figure. For a later
+legend or existing-note correction, use its exact `plot` target and returned
+`next_step` to read `object_operations` and current targets. A suite path needs
+an explicit `plot open WORKSPACE --figure FIGURE_ID`; an exact returned editable
+VSZ already selects one figure. This preserves native VSZ authority.
+
+When advertised, read `plot describe PLOT --scope edit --target-id ID --property
+NAME --json`, then submit `plot patch PLOT --request DELTA.json --json` using
+the existing plot ID, base revision and stable idempotency key. The bounded
+adapter covers `legend.location` and an existing annotation's `text`, `x`, `y`
+properties. Use the exact advertised property names; note coordinates are
+relative within `[0,1]`. Legend corners use `top-left`, `top-right`,
+`bottom-left`, `bottom-right`. Do not resend coordinates, prepared plans or
+scientific analysis for these edits. The program preserves untargeted native
+settings, source evidence, arrays and transform ledger.
+
+Review a returned `needs_review` candidate and scientific audit, then submit
+its exact `plot.decide` request. Reuse the original key and base revision after
+a lost reply; `plot.resume` continues the same transaction. The operation
+persists the accepted decision before publication, so recovery must repeat that
+decision rather than reverse it after an uncertain response. After a completed
+edit, read the current revision for the next delta. Existing selected audit
+sidecars stay bound alongside the native file and exports.
+Native revisions
+are opaque content-bound integers; use the returned value without incrementing
+it. `plot export PLOT --json` exports only this selected current native figure.
+Other optional figures need no regeneration or native execution. Request only
+the figures the user wants, and review each selected final export.
 
 For an authorized template-style correction:
 

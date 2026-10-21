@@ -1,6 +1,7 @@
 """Explicit managed scientific updates and ordinary semantic patches share one wire contract."""
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
@@ -9,10 +10,11 @@ from sciplot_core.plot_document.errors import fail
 
 from .errors import EngineError
 
-SPECIAL = {"theme", "source.sha256", "transform.parameters", "transform.executor", "executor.registration"}
+SPECIAL = {"theme", "source.sha256", "source.append", "transform.parameters", "transform.executor", "executor.registration"}
 
 
-def prepare_update(document: dict[str, Any], request: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], str, bool]:
+def prepare_update(document: dict[str, Any], request: dict[str, Any], *, root: Path | None = None,
+                   datasets: dict[str, dict[str, Any]] | None = None) -> tuple[dict[str, Any], list[dict[str, Any]], str, bool]:
     request = validate_patch(request)
     if request["plot_id"] != document["plot_id"] or request["base_revision"] != document["revision"]:
         raise EngineError("document_revision_conflict", "The managed patch must identify the current plot and revision.",
@@ -20,8 +22,12 @@ def prepare_update(document: dict[str, Any], request: dict[str, Any]) -> tuple[d
     from sciplot_core.plot_ir.figure_document import is_figure
     from .figure_updates import PROPERTIES, prepare_figure_update
 
+    if any(change["property"] == "source.append" for change in request["changes"]):
+        from .managed_source_append import prepare_append
+
+        return prepare_append(document, request)
     if is_figure(document) and any(change["property"] in PROPERTIES for change in request["changes"]):
-        return prepare_figure_update(document, request)
+        return prepare_figure_update(document, request, datasets=datasets)
     if not any(change["property"] in SPECIAL for change in request["changes"]):
         updated, diff, risk = apply_patch(document, request)
         return updated, diff, risk, False
@@ -34,6 +40,7 @@ def prepare_update(document: dict[str, Any], request: dict[str, Any]) -> tuple[d
         raise EngineError("managed_mixed_update", "Keep theme changes separate from scientific source/executor updates.")
     diff = []
     touched: set[tuple[str, str]] = set()
+    source_paths: set[str] = set()
     science = False
     for change in request["changes"]:
         if len(change["target"]) != 1:
@@ -55,8 +62,17 @@ def prepare_update(document: dict[str, Any], request: dict[str, Any]) -> tuple[d
                 fail("document_scientific_edit_unsupported", "Source and transform updates require explicit scientific intent.",
                      "/intent_class", "scientific_intent")
             science = True
-            before = _scientific(result, target, prop, value)
-            after = deepcopy(value)
+            if prop == "source.sha256":
+                from .managed_source_revision import prepare_source_revision, source_group
+
+                path, _sources = source_group(result, target)
+                if path in source_paths:
+                    raise EngineError("document_duplicate_change", "Reconfirm each physical source group once per transaction.")
+                source_paths.add(path)
+                before, after = prepare_source_revision(result, target, value, root=root)
+            else:
+                before = _scientific(result, target, prop, value)
+                after = deepcopy(value)
         if canonical_json_sha256(before, allow_nan=False) != canonical_json_sha256(after, allow_nan=False):
             diff.append({"target": target, "property": prop, "before": before,
                          "after": after, "risk": "scientific" if science else "presentation"})
@@ -68,16 +84,6 @@ def prepare_update(document: dict[str, Any], request: dict[str, Any]) -> tuple[d
 
 def _scientific(document: dict[str, Any], target: str, prop: str, value: Any) -> Any:
     scientific = document["scientific"]
-    if prop == "source.sha256":
-        from sciplot_core.plot_document.schema import DIGEST
-        from sciplot_core.plot_document.validation import validate_wire
-
-        validate_wire(value, DIGEST, code="managed_source_hash_invalid")
-        source = next((item for item in scientific["data_sources"] if target == "source:" + item["source_id"]), None)
-        if source is None:
-            raise EngineError("document_unknown_target", "Name an existing source:<source_id>.")
-        before, source["sha256"] = source["sha256"], value
-        return before
     if prop in {"transform.parameters", "transform.executor"}:
         from sciplot_core.plot_transforms import builtin_executor, validate_node
 

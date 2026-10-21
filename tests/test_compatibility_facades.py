@@ -35,3 +35,57 @@ def test_gui_mixin_descriptors_survive_responsibility_split() -> None:
         ContextHistoryMixin.__dict__["_terminal_history_status"],
         staticmethod,
     )
+
+
+def test_header_text_reuses_cell_owner_without_broadening_missing_values() -> None:
+    import pandas as pd
+
+    from sciplot_core.source_inspection.header_matching import cell_text
+    from sciplot_core.source_tables.parsing import normalize_cell
+
+    assert cell_text is normalize_cell
+    values = (None, float("nan"), pd.NA, 0, "  ζ (MPa)  ")
+    assert [cell_text(value) for value in values] == ["", "", "<NA>", "0", "ζ (MPa)"]
+
+
+def test_openai_free_text_reuses_typed_provider_contract_with_same_limits() -> None:
+    import pytest
+
+    from sciplot_core.assistant_provider.text_validation import _free_text as typed_free_text
+    from sciplot_core.assistant_provider.text_validation import free_text
+    from sciplot_core.openai_provider.validation import _free_text as model_free_text
+
+    assert model_free_text is typed_free_text is free_text
+    assert model_free_text("  ", "rationale", maximum=0) == ""
+    assert model_free_text("  done  ", "rationale", maximum=4) == "done"
+    with pytest.raises(ValueError, match="^rationale must be a string.$"):
+        model_free_text(None, "rationale", maximum=4)
+    with pytest.raises(ValueError, match="^rationale must contain at most 4 characters.$"):
+        model_free_text("longer", "rationale", maximum=4)
+
+
+def test_public_provider_factory_keeps_one_owner_and_absent_provider_behavior() -> None:
+    from sciplot_core.openai_provider import load_openai_provider_from_environment
+    from sciplot_core.openai_provider.provider import (
+        load_openai_provider_from_environment as owner,
+    )
+
+    assert load_openai_provider_from_environment is owner
+    assert load_openai_provider_from_environment({}) is None
+
+
+def test_public_template_validation_keeps_catalog_owner_and_original_error() -> None:
+    import pytest
+
+    from sciplot_core.style_contract import validate_veusz_template_id
+    from sciplot_core.style_contract.template_contracts import (
+        validate_veusz_template_id as owner,
+    )
+
+    assert validate_veusz_template_id is owner
+    assert validate_veusz_template_id(" curve ") == "curve"
+    with pytest.raises(
+        ValueError,
+        match="Template `missing` is not implemented by SciPlot's Veusz document builder",
+    ):
+        validate_veusz_template_id("missing")

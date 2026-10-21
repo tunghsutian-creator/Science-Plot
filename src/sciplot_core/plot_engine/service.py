@@ -3,7 +3,12 @@
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.plot_document import apply_patch, seal_document, validate_document, validate_patch
+from sciplot_core.plot_document import (
+    apply_patch,
+    seal_document,
+    validate_document,
+    validate_patch,
+)
 from sciplot_core.studio_core.project_query import resolve_project_figure
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.project_session import external_project_session
@@ -12,41 +17,80 @@ from .backend import PlotBackend
 from .cache_identity import build_key
 from .content_store import intern_document, referenced_files, verify_document_content
 from .current import changed_inputs, dependency_state, evidence_current, require_current
+from .description_scope import require_selector
 from .errors import EngineError
 from .execution import advance, replay
-from .storage import active, commit, digest, document_root, load_head, persist, read, reserve, transaction_path
+from .object_operations import attach_object_operations
+from .prepared_routing import native_dispatch
+from .recovery import project_recovery, resume_transaction
+from .recovery import pending_edit_error as _pending_edit_error
+from .storage import (
+    active,
+    commit,
+    digest,
+    document_root,
+    load_head,
+    persist,
+    read,
+    transaction_path,
+)
 
 
 class PlotService:
     def __init__(self, backend: PlotBackend | None = None) -> None:
         if backend is None:
             from sciplot_core.plot_backends.veusz import VeuszBackend
+
             from .backend_router import BackendRouter
 
             backend = BackendRouter(VeuszBackend())
         self.backend = backend
+
+    def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        if (result := native_dispatch("resume", canonical_path(plot), request=request)) is not None:
+            return result
+        return resume_transaction(plot, request, self.backend, self._patch)
 
     def close(self) -> None:
         close = getattr(self.backend, "close", None)
         if close is not None:
             close()
 
-    def open(self, target: Path, figure_id: str | None = None) -> dict[str, Any]:
-        return self._open(target, figure_id=figure_id)
+    def open(self, target: Path, figure_id: str | None = None, *,
+             description: dict[str, Any] | None = None) -> dict[str, Any]:
+        if (result := native_dispatch("describe", canonical_path(target), figure_id=figure_id, description=require_selector(description))) is not None:
+            return result
+        return self._open(target, figure_id=figure_id, description=require_selector(description))
 
     def open_created(self, target: Path, *, series_ids: dict[str, str], recipe: dict[str, Any],
                      figure_id: str | None = None) -> dict[str, Any]:
         return self._open(target, figure_id=figure_id, adoption=(series_ids, recipe))
 
     def _open(self, target: Path, *, figure_id: str | None,
+              description: dict[str, Any] | None = None,
               adoption: tuple[dict[str, str], dict[str, Any]] | None = None) -> dict[str, Any]:
         target = canonical_path(target)
+        from sciplot_core.foundation.json_io import read_json_object
+
+        delivery_index = target / "index.json"
+        package = read_json_object(delivery_index) if delivery_index.is_file() and not delivery_index.is_symlink() else None
+        if package is not None and package.get("kind") == "sciplot_managed_delivery":
+            from sciplot_core.plot_engine.managed_delivery_continuation import local_managed_target
+
+            selected = local_managed_target(target, figure_id)
+            head = load_head(selected["plot"])
+            require_current(self.backend, head["binding"])
+            result = self.describe(selected["plot"], description=description)
+            result["delivery_continuation"] = {"mode": "original_local_managed", "item_id": selected["item_id"],
+                                               "independent_native_snapshot": selected["native_snapshot"],
+                                               "portable_managed_project": False}
+            return result
         if (target / "head.json").is_file():
             if adoption is not None:
                 from .adoption import require_adoption
 
                 require_adoption(load_head(target)["binding"], *adoption)
-            return self.describe(target)
+            return self.describe(target, description=description)
         selection = resolve_project_figure(target, figure_id)
         project = Path(selection["project"])
         selected_id = selection["figure_id"]
@@ -84,14 +128,17 @@ class PlotService:
                 from .adoption import require_adoption
 
                 require_adoption(load_head(root)["binding"], *adoption)
-            return self._describe(root)
+            return self._describe(root, description=description)
 
-    def describe(self, plot: Path) -> dict[str, Any]:
+    def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
+        description = require_selector(description)
         root = canonical_path(plot)
+        if (result := native_dispatch("describe", root, description=description)) is not None:
+            return result
         with external_project_session(root):
-            return self._describe(root)
+            return self._describe(root, description=description)
 
-    def _describe(self, root: Path) -> dict[str, Any]:
+    def _describe(self, root: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
         head = load_head(root)
         document, binding = head["document"], head["binding"]
         changed = changed_inputs(self.backend, binding)
@@ -101,16 +148,24 @@ class PlotService:
                 "plot": str(root), "plot_id": document["plot_id"], "revision": document["revision"],
                 "scientific_hash": document["scientific_hash"], "presentation_hash": document["presentation_hash"],
                 "objects": document["presentation"]["objects"], "coverage": document["coverage"],
-                "changed_inputs": changed, "dependencies": dependency_state(document, binding, changed),
+                "changed_inputs": changed, "dependencies": ({}
+                    if description is not None and document.get("plot_type") == "ManagedPlot"
+                    else dependency_state(document, binding, changed)),
                 "pending": ({"idempotency_key": pending["request"]["idempotency_key"], "phase": pending["phase"]}
                             if pending and pending["phase"] not in {"complete", "rejected"} else None),
                 "document": str(root / "revisions" / f'{document["revision"]:08d}.json')}
+        project_recovery(result, root, pending)
         if document.get("plot_type") == "ManagedPlot":
             from .managed_description import describe_managed
+            from .export_status import current_export
 
-            return describe_managed(root, head, result, self.backend)
+            result["export_current"] = current_export(root, head, eligible=not changed and result["pending"] is None, cached_export=self._cached_export)
+            return attach_object_operations(describe_managed(root, head, result, self.backend, description=description), document)
         from .external_mutation import authority_status
 
+        if description is not None and description["scope"] == "edit":
+            raise EngineError("description_scope_unavailable", "Scoped edit contracts are available for ManagedPlot; use the full LegacyPlot description.",
+                              action="plot.describe")
         result["authority"] = authority_status("LegacyPlot")
         if changed and not result["pending"]:
             from .reimport import offer
@@ -118,58 +173,89 @@ class PlotService:
             next_step = offer(self.backend, head, changed)
             if next_step is not None:
                 result["next_step"] = next_step
-        return result
+        return attach_object_operations(result, document)
 
     def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         request = validate_patch(request)
         root = canonical_path(plot)
+        if (result := native_dispatch("patch", root, request=request)) is not None:
+            return result
         with external_project_session(root):
             return self._patch(root, request)
+
+    def deliver(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Package exact managed revisions; each export retains its own transaction."""
+        from sciplot_core.plot_engine.managed_delivery import deliver
+
+        return deliver(self, request)
+
+    def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        """Resolve two explicit FigureSpec text edits into the existing patch owner."""
+        from .typed_intent import compile_intent, validate_intent
+
+        request = validate_intent(request)
+        root = canonical_path(plot)
+        if request["mode"] == "plan":
+            # No session lease, native inspection, journal reservation, preview,
+            # or renderer call: a plan is a read of one current frozen revision.
+            head = load_head(root)
+            _, plan = compile_intent(head["document"], request)
+            require_current(self.backend, head["binding"])
+            pending = active(root)
+            if pending and pending["phase"] not in {"complete", "rejected"}:
+                raise _pending_edit_error(root, pending, "Finish or reject the pending transaction first.")
+            current = load_head(root)["document"]
+            if (current["plot_id"], current["revision"], current["scientific_hash"],
+                    current["presentation_hash"]) != (head["document"]["plot_id"], head["document"]["revision"],
+                                                     head["document"]["scientific_hash"],
+                                                     head["document"]["presentation_hash"]):
+                raise EngineError("document_revision_conflict", "The plot changed while planning this edit.",
+                                  action="plot.describe", description={"scope": "summary"},
+                                  current_revision=current["revision"])
+            require_current(self.backend, head["binding"])
+            pending = active(root)
+            if pending and pending["phase"] not in {"complete", "rejected"}:
+                raise _pending_edit_error(root, pending, "An edit began while planning this request.")
+            return {"plot": str(root), **plan}
+        with external_project_session(root):
+            saved = transaction_path(root, request["idempotency_key"])
+            # Recompile a retry against the *original* snapshot. Resolving a
+            # label against the new head would break replay after the first edit.
+            document = read(saved)["before"] if saved.exists() else load_head(root)["document"]
+            patch, _ = compile_intent(document, request)
+            return self._patch(root, patch)
 
     def _patch(self, root: Path, request: dict[str, Any], *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:
         saved = transaction_path(root, request["idempotency_key"])
         if saved.exists():
-            transaction = read(saved)
-            if transaction["request_hash"] != digest(request):
-                raise EngineError("document_idempotency_conflict", "This key already belongs to a different request.",
-                                  action="use_original_request")
-            if transaction["phase"] not in {"complete", "rejected"}:
-                pending = active(root)
-                if pending and pending["id"] != transaction["id"] and pending["phase"] not in {"complete", "rejected"}:
-                    raise EngineError("document_transaction_pending", "A different transaction is pending.")
-                head = load_head(root)
-                if (head["document"]["revision"] != request["base_revision"]
-                        and head["transaction"] != transaction["id"]):
-                    raise EngineError("document_revision_conflict", "The interrupted transaction no longer starts at the current revision.")
-                reserve(root, transaction)
-            return replay(root, transaction, self.backend)
+            from .publication_repair import prepare_saved
+
+            return replay(root, prepare_saved(root, read(saved), request, self.backend), self.backend)
         head = load_head(root)
         binding = head["binding"]
         scientific_update = False
         if head["document"].get("plot_type") == "ManagedPlot":
-            from .managed_updates import prepare_update
             from .managed_state import scientific_binding
+            from .current_unit_admission import prepare_current_update
 
-            document, diff, risk, scientific_update = prepare_update(head["document"], request)
-            if scientific_update:
+            document, diff, risk, scientific_update = prepare_current_update(root, head["document"], request)
+            if scientific_update and diff:
                 binding = scientific_binding(binding, document)
         else:
             document, diff, risk = apply_patch(head["document"], request)
         require_current(self.backend, binding)
-        pending = active(root)
-        if pending and pending["phase"] not in {"complete", "rejected"}:
-            raise EngineError("document_transaction_pending", "Finish or reject the pending transaction first.",
-                              action="retry_same_request", idempotency_key=pending["request"]["idempotency_key"],
-                              phase=pending["phase"])
+        from .publication_repair import authorize_pending, reserve_repair
+
+        repair = authorize_pending(root, head, request, document, diff, risk, scientific_update, self.backend)
         if diff:
             document["revision"] += 1
             document = seal_document(document)
         tx = {"id": digest(request["idempotency_key"]), "request": request, "request_hash": digest(request),
               "before": head["document"], "document": document, "binding": binding,
-              "diff": diff, "risk": risk, "phase": "resolving" if scientific_update and diff else "planned"}
+              "diff": diff, "risk": "review" if repair else risk, "phase": "resolving" if scientific_update and diff else "planned"}
         if rollback_request is not None:
             tx["rollback_request"] = rollback_request
-        reserve(root, tx)
+        reserve_repair(root, tx, repair, self.backend)
         if not diff:
             cached = self._cached_export(root, head)
             if cached:
@@ -184,6 +270,8 @@ class PlotService:
 
         request = validate_decide(request)
         root = canonical_path(plot)
+        if (result := native_dispatch("decide", root, request=request)) is not None:
+            return result
         if request.get("reimport") is True and (root / "head.json").is_file():
             if load_head(root)["document"].get("plot_type") == "ManagedPlot":
                 raise EngineError("managed_external_mutation", "Managed artifacts cannot be adopted through legacy reimport.",
@@ -273,6 +361,8 @@ class PlotService:
 
     def export(self, plot: Path) -> dict[str, Any]:
         root = canonical_path(plot)
+        if (result := native_dispatch("export", root)) is not None:
+            return result
         with external_project_session(root):
             tx = active(root)
             if tx and tx["phase"] not in {"complete", "rejected"}:
@@ -298,8 +388,8 @@ class PlotService:
             return render_head(root, head, self.backend)
 
     def create(self, request: dict[str, Any]) -> dict[str, Any]:
-        from .creation import create
         from .contracts import validate_create
+        from .creation import create
 
         request = validate_create(request)
         if "template_definition" in request and request.get("mode") != "legacy":

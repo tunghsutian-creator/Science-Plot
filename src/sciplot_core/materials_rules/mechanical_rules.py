@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from sciplot_core.policy import (
-    CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
-    TORQUE_CURVE_RENDER_OPTIONS,
-)
+from sciplot_core.policy import TORQUE_CURVE_RENDER_OPTIONS
+from sciplot_core.policy.template_defaults import CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS
 from sciplot_core.materials_rules.models import (
     ELONGATION_AT_BREAK_METRIC,
     AxisSpec,
@@ -183,7 +181,7 @@ MECHANICAL_RULES: tuple[SemanticRule, ...] = (
         fixture_status="ready",
         priority=5,
         reason=(
-            "Impact-strength groups preserve every raw observation; groups with at least two replicates use a native Veusz median/IQR box summary, while smaller groups remain raw-point only."
+            "Impact-strength groups preserve raw observations. Box and box_strip default to median/IQR; an explicit ordinary raw_only requirement uses their existing raw points without summary calculations. Bar shows arithmetic mean and sample SD. Point_line shows mean and sample SD only for at least two compatible workbook conditions. Valid n remains in internal analysis metrics rather than the visible delivery."
         ),
         presentation_data_shape="categorical_replicates",
         supported_templates=("bar", "box", "box_strip", "point_line"),

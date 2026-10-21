@@ -6,6 +6,9 @@ from typing import Any
 
 import pandas as pd
 
+SOURCE_NUMERIC_ENCODING_KEY = "source_numeric_encoding"
+DECIMAL_ROUND_TRIP_ENCODING = "decimal_float64_round_trip_v1"
+
 
 def normalize_cell(value: Any) -> str:
     if value is None or isinstance(value, float) and pd.isna(value):
@@ -55,7 +58,7 @@ def coerce_numeric_pair(
     column_numbers: tuple[int, int],
     table_name: str,
 ) -> pd.DataFrame:
-    numeric_pair = pair.apply(pd.to_numeric, errors="coerce")
+    numeric_pair = pair.apply(coerce_numeric_series)
     has_x_values = numeric_pair.iloc[:, 0].notna().any()
     has_y_values = numeric_pair.iloc[:, 1].notna().any()
     if has_x_values != has_y_values:
@@ -85,8 +88,41 @@ def coerce_numeric_pair(
     return numeric_pair.reset_index(drop=True)
 
 
-def coerce_axis_series(values: pd.Series) -> pd.Series:
+def coerce_numeric_series(values: pd.Series) -> pd.Series:
+    """Keep accepted numeric text's correctly rounded binary64 value.
+
+    Pandas' general text coercion can discard decimal digits even though the
+    original cells and the native writer retain them. Keep its existing grammar,
+    missing-value decisions and integer dtypes, but use Python's round-trip
+    conversion for accepted text in floating-point columns.
+    """
     numeric = pd.to_numeric(values, errors="coerce")
+    if not pd.api.types.is_float_dtype(numeric.dtype):
+        return numeric
+    return pd.Series(
+        [
+            _round_trip_accepted_text(value, number)
+            for value, number in zip(values, numeric, strict=True)
+        ],
+        index=values.index,
+        name=values.name,
+        dtype=numeric.dtype,
+    )
+
+
+def _round_trip_accepted_text(value: Any, number: Any) -> Any:
+    if isinstance(value, str) and pd.notna(number):
+        try:
+            return float(value)
+        except (ValueError, OverflowError):
+            # Retain pandas' existing result for nonstandard accepted spellings;
+            # the precision repair does not broaden or narrow its input grammar.
+            return number
+    return number
+
+
+def coerce_axis_series(values: pd.Series) -> pd.Series:
+    numeric = coerce_numeric_series(values)
     if numeric.notna().all():
         return numeric
     return values.map(normalize_cell)
@@ -103,6 +139,7 @@ def looks_numeric(value: Any) -> bool:
 __all__ = [
     "coerce_axis_series",
     "coerce_numeric_pair",
+    "coerce_numeric_series",
     "drop_fully_empty_columns",
     "ensure_header_row_content",
     "ensure_minimum_rows",

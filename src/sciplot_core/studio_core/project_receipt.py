@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 
 def project_receipt(payload: dict[str, Any], returncode: int) -> dict[str, Any]:
@@ -25,6 +26,7 @@ def project_receipt(payload: dict[str, Any], returncode: int) -> dict[str, Any]:
     registry = registry_value if isinstance(registry_value, dict) else {}
     artifacts = delivery.get("figures") or []
     figures = []
+    primary = registry.get("primary_figure_id")
     for item in registry.get("figures", []):
         if not isinstance(item, dict):
             continue
@@ -41,6 +43,23 @@ def project_receipt(payload: dict[str, Any], returncode: int) -> dict[str, Any]:
                 ],
             }
         )
+    if ready and not figures and isinstance(payload.get("project_dir"), str):
+        from sciplot_core.studio_core.project_query import inspect_project
+
+        try:
+            current = inspect_project(Path(payload["project_dir"]))
+            if all((current.get(key) or {}).get("current") is True for key in ("source", "qa", "delivery")):
+                for item in current.get("figures", []):
+                    if item.get("status") != "ready" or not Path(item["document"]).is_file():
+                        continue
+                    exports = [{"format": record.get("format"), "path": record["path"]}
+                        for record in artifacts if record.get("figure_id") == item["figure_id"]
+                        and isinstance(record.get("path"), str) and Path(record["path"]).is_file()]
+                    if exports:
+                        figures.append({**{key: item.get(key) for key in ("figure_id", "title", "document")}, "exports": exports})
+                primary = current.get("primary_figure_id")
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
     return {
         "kind": "sciplot_project_creation_result",
         "version": 1,
@@ -48,7 +67,7 @@ def project_receipt(payload: dict[str, Any], returncode: int) -> dict[str, Any]:
         "project_dir": payload.get("project_dir"),
         "document": payload.get("document"),
         "request": payload.get("request"),
-        "primary_figure_id": registry.get("primary_figure_id"),
+        "primary_figure_id": primary,
         "figures": figures,
         "studio_run": {
             "ready_to_use": ready,

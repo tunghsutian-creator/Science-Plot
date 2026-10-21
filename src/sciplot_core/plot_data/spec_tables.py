@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -37,7 +37,7 @@ UNIT_SUFFIXES = (
 
 
 def spec_paths(manifest: dict[str, Any]) -> list[Path]:
-    result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
+    result: dict[str, Any] = cast(dict[str, Any], manifest.get("result")) if isinstance(manifest.get("result"), dict) else {}
     values: list[object] = []
     values.extend(
         manifest.get("veusz_specs", [])
@@ -123,7 +123,7 @@ def spec_to_table(
         return pd.DataFrame(rows)
 
     scalar = (
-        spec.get("scalar_field") if isinstance(spec.get("scalar_field"), dict) else {}
+        cast(dict[str, Any], spec.get("scalar_field")) if isinstance(spec.get("scalar_field"), dict) else {}
     )
     x_values = (
         scalar.get("x_values") if isinstance(scalar.get("x_values"), list) else []
@@ -140,7 +140,7 @@ def spec_to_table(
     y_name, y_unit = variable_descriptor(scalar.get("y_column"), fallback="y")
     z_name, z_unit = variable_descriptor(scalar.get("z_column"), fallback="z")
     sample = sample_hint(manifest, spec_path.parent)
-    rows: list[list[Any]] = [
+    scalar_rows: list[list[Any]] = [
         [x_name, y_name, z_name],
         [x_unit, y_unit, z_unit],
         [sample, sample, sample],
@@ -153,8 +153,8 @@ def spec_to_table(
         )
         for x_index, x_value in enumerate(x_values):
             z_value = row_values[x_index] if x_index < len(row_values) else ""
-            rows.append([x_value, y_value, z_value])
-    return pd.DataFrame(rows)
+            scalar_rows.append([x_value, y_value, z_value])
+    return pd.DataFrame(scalar_rows)
 
 
 def axis_descriptor(
@@ -163,19 +163,19 @@ def axis_descriptor(
     manifest: dict[str, Any],
     axis: str,
 ) -> tuple[str, str]:
-    axes = spec.get("axes") if isinstance(spec.get("axes"), dict) else {}
-    axis_spec = axes.get(axis) if isinstance(axes.get(axis), dict) else {}
+    axes: dict[str, Any] = cast(dict[str, Any], spec.get("axes")) if isinstance(spec.get("axes"), dict) else {}
+    axis_spec: dict[str, Any] = cast(dict[str, Any], axes.get(axis)) if isinstance(axes.get(axis), dict) else {}
     if str(axis_spec.get("label") or "").strip():
         return split_label_unit(axis_spec["label"], fallback=axis)
     semantic = (
-        manifest.get("semantic") if isinstance(manifest.get("semantic"), dict) else {}
+        cast(dict[str, Any], manifest.get("semantic")) if isinstance(manifest.get("semantic"), dict) else {}
     )
     axis_plan = (
-        semantic.get("axis_plan") if isinstance(semantic.get("axis_plan"), dict) else {}
+        cast(dict[str, Any], semantic.get("axis_plan")) if isinstance(semantic.get("axis_plan"), dict) else {}
     )
-    axis_payload = axis_plan.get(axis) if isinstance(axis_plan.get(axis), dict) else {}
+    axis_payload: dict[str, Any] = cast(dict[str, Any], axis_plan.get(axis)) if isinstance(axis_plan.get(axis), dict) else {}
     unit_plan = (
-        semantic.get("unit_plan") if isinstance(semantic.get("unit_plan"), dict) else {}
+        cast(dict[str, Any], semantic.get("unit_plan")) if isinstance(semantic.get("unit_plan"), dict) else {}
     )
     canonical_name = str(axis_payload.get("canonical_label") or "").strip()
     canonical_unit = str(
@@ -217,3 +217,53 @@ def unit_from_label(value: object) -> str:
 
 def display_unit(value: object) -> str:
     return format_unit_label(str(value or "").strip())
+
+
+def replicate_summary_table(spec: dict[str, Any], *, spec_sha256: str) -> pd.DataFrame | None:
+    """Project audited rendered means/SD/n; never recompute statistics for export."""
+    import math
+
+    request = spec.get("source_request", {})
+    if not isinstance(request, dict):
+        return None
+    from sciplot_core.source_coverage.replicate_disclosure import verify_replicate_summary_request
+
+    audit = verify_replicate_summary_request(request)
+    if audit is None:
+        return None
+    disclosure = request.get("replicate_summary_disclosure")
+    categorical = spec.get("categorical", {})
+    if (not isinstance(disclosure, dict) or disclosure.get("version") != 1
+            or disclosure.get("missing_values") not in {"exclude", "none_present"}
+            or not isinstance(disclosure.get("groups"), list)
+            or not isinstance(categorical, dict)
+            or categorical.get("presentation_kind") not in {"bar_error", "grouped_bar_error"}
+            or categorical.get("summary_statistic") != "arithmetic_mean"
+            or categorical.get("bar_error_statistic") != "sd"):
+        raise ValueError("Delivered mean/sample SD/n requires its audited bar contract and source disclosure.")
+    task = request.get("resolved_figure_task", {})
+    conditions = task.get("conditions", []) if isinstance(task, dict) else []
+    evidence = disclosure["groups"]
+    if conditions:
+        evidence = [group for group in evidence if group["condition"] in conditions]
+    groups = categorical.get("groups")
+    if not isinstance(groups, list) or len(groups) != len(evidence):
+        raise ValueError("Summary groups do not match the original source-bound n disclosure.")
+    rows: list[list[Any]] = [["sample", "condition", "metric", "unit", "mean", "sample_sd", "valid_n",
+                            "missing_policy", "excluded_missing_count", "source_sha256", "spec_sha256"]]
+    for actual, original in zip(groups, evidence, strict=True):
+        count = actual.get("replicate_count")
+        condition = actual.get("condition_label") or (conditions[0] if len(conditions) == 1 else "")
+        if (actual.get("sample_label") != original["sample"] or condition != original["condition"]
+                or type(count) is not int or count < 2 or count != original["valid_n"]
+                or actual.get("bar_error_statistic") != "sd"
+                or type(original.get("missing_count")) is not int or original["missing_count"] < 0
+                or (original["missing_count"] and disclosure["missing_values"] != "exclude")):
+            raise ValueError("Audited mean/SD/n group identity, valid count or missing policy differs from source disclosure.")
+        numbers = [actual.get("bar_mean"), actual.get("bar_error")]
+        if any(type(value) not in (int, float) or not math.isfinite(value) for value in numbers) or numbers[1] < 0:
+            raise ValueError("Audited bar mean and sample SD must be finite; undefined SD cannot be delivered.")
+        rows.append([original["sample"], original["condition"], original["metric"], original["unit"],
+                     *[format(value, ".17g") for value in numbers], count, disclosure["missing_values"],
+                     original["missing_count"], disclosure["source_sha256"], spec_sha256])
+    return pd.DataFrame(rows)

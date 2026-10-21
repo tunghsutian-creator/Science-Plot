@@ -41,8 +41,6 @@ from sciplot_core.studio_render.axes_spec import (
     _reference_guides_contract as _reference_guides_contract,
 )
 from sciplot_core.studio_core.legend_contracts import (
-    _categorical_component_legend_label_contracts as _categorical_component_legend_label_contracts,
-    _categorical_component_legend_rect_contracts as _categorical_component_legend_rect_contracts,
     _categorical_grouped_bar_fill_rect_contracts as _categorical_grouped_bar_fill_rect_contracts,
     _curve_factor_legend_condition_rect_contracts as _curve_factor_legend_condition_rect_contracts,
     _curve_factor_legend_label_contracts as _curve_factor_legend_label_contracts,
@@ -50,7 +48,6 @@ from sciplot_core.studio_core.legend_contracts import (
 )
 from sciplot_core.studio_core.guide_contracts import (
     _categorical_line_contracts as _categorical_line_contracts,
-    _reference_guide_line_contracts as _reference_guide_line_contracts,
     _reference_guide_rect_contracts as _reference_guide_rect_contracts,
 )
 from sciplot_core.studio_render.categorical_plot_spec import (
@@ -140,7 +137,6 @@ from sciplot_core.studio_render.metric_columns import (
 )
 from sciplot_core.studio_render.series_transforms import (
     _apply_template_series_transforms as _apply_template_series_transforms,
-    _stack_studio_series as _stack_studio_series,
 )
 from sciplot_core.studio_figure_set_contract import (
     is_primary_figure_set_export_scope as _is_primary_figure_set_export_scope,  # noqa: F401
@@ -158,11 +154,7 @@ from sciplot_core.studio_render.axis_contract import (
     _veusz_axis_contract as _veusz_axis_contract,
 )
 from sciplot_core.studio_core.registry_state import (
-    _studio_document_state as _studio_document_state,
     _veusz_spec_path as _veusz_spec_path,
-)
-from sciplot_core.studio_core.document_archive import (
-    _archive_manual_document_if_needed as _archive_manual_document_if_needed,
 )
 from sciplot_core.studio_render.style_contract import (
     _veusz_style_contract as _veusz_style_contract,

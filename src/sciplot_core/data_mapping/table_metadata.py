@@ -16,7 +16,7 @@ from sciplot_core.semantic_sources.registered_paired_curve_transform import _com
 
 def resolve_column_metadata(
     columns: list[dict[str, Any]], confirmations: list[dict[str, Any]], *,
-    source_sha256: str, sheet: str | None, frame: pd.DataFrame, rule: SemanticRule,
+    source_sha256: str, sheet: str | None, frame: pd.DataFrame, rule: SemanticRule | None,
     source: Path | None = None,
 ) -> None:
     validate_metadata_confirmations(confirmations)
@@ -47,6 +47,13 @@ def resolve_column_metadata(
             problems.append({"code": "raw_metadata_conflict", "field": "unit",
                              "header_unit": header_unit, "unit_row": raw["unit"]})
         resolved = {"quantity": raw["header"], "unit": raw["unit"], "sample": raw["sample"]}
+        if rule is not None and rule.scientific_source_adapter == "stress_relaxation":
+            from sciplot_core.semantic_sources.stress_relaxation_wide import normalized_header_identity
+
+            compact = normalized_header_identity(raw["header"])
+            if compact is not None:
+                sample, quantity, unit = compact
+                resolved.update(quantity=quantity, unit=unit, sample=sample)
         # Establish explicit identity before interpreting a sample-labelled header.
         for field in ("sample", "quantity", "unit"):
             items = grouped.get((index, field), [])
@@ -57,21 +64,21 @@ def resolve_column_metadata(
                 problems.append({"code": "conflicting_confirmations", "field": field, "values": sorted(values)})
                 continue
             value = next(iter(values))
-            if field == "quantity" and value.casefold() not in {
+            if rule is not None and field == "quantity" and value.casefold() not in {
                 label.casefold() for axis in (rule.x_axis, rule.y_axis)
                 for label in (axis.canonical_label, *axis.aliases)
             }:
                 problems.append({"code": "unsupported_quantity", "field": field, "declared": value})
                 continue
             original = resolved[field]
-            if field == "quantity" and original == resolved["sample"] and not any(
+            if rule is not None and field == "quantity" and original == resolved["sample"] and not any(
                 axis_match(original, (axis.canonical_label, *axis.aliases)) for axis in (rule.x_axis, rule.y_axis)
             ):
                 original = ""  # Explicitly identified sample cell, retained above as raw fact.
             equivalent = original == value
             if field == "unit":
                 equivalent = _comparable_unit(original) == _comparable_unit(value)
-            elif field == "quantity":
+            elif rule is not None and field == "quantity":
                 equivalent = any(axis_match(original, (axis.canonical_label, *axis.aliases))
                     and value.casefold() in {label.casefold() for label in (axis.canonical_label, *axis.aliases)}
                     for axis in (rule.x_axis, rule.y_axis))
@@ -86,7 +93,8 @@ def resolve_column_metadata(
                 resolved[field] = value
         column.update(header=resolved["quantity"], unit=resolved["unit"], sample=resolved["sample"])
         column["metadata_conflicts"] = problems
-        for role, axis in (("x", rule.x_axis), ("y", rule.y_axis)):
+        for role, axis in ((("x", rule.x_axis), ("y", rule.y_axis)) if rule is not None else ()):
+            assert rule is not None  # The optional ordinary-XY context has no experiment axes.
             reasons = list(problems)
             if not axis_match(resolved["quantity"], (axis.canonical_label, *axis.aliases)):
                 reasons.append({"code": "quantity_missing_or_mismatched", "field": "quantity",

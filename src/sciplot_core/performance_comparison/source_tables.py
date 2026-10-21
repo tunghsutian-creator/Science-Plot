@@ -17,7 +17,7 @@ from sciplot_core.performance_comparison.source_values import (
 )
 
 
-def _resolve_source(source: Path) -> Path:
+def _resolve_source(source: Path, *, allow_missing_unit: bool = False) -> Path:
     resolved = source.expanduser().resolve()
     if resolved.is_file():
         return resolved
@@ -29,7 +29,11 @@ def _resolve_source(source: Path) -> Path:
         if path.is_file()
         and path.suffix.casefold() in {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
     ]
-    matching = [path for path in candidates if _source_has_required_headers(path)]
+    matching = [
+        path
+        for path in candidates
+        if _source_has_required_headers(path, allow_missing_unit=allow_missing_unit)
+    ]
     if len(matching) != 1:
         raise PerformanceComparisonError(
             "performance_source_ambiguous",
@@ -39,7 +43,7 @@ def _resolve_source(source: Path) -> Path:
     return matching[0]
 
 
-def _read_text_table(path: Path) -> pd.DataFrame:
+def _read_text_table(path: Path, *, exact_numeric: bool = False) -> pd.DataFrame:
     text = decode_text(path)
     tab_count = text.count("\t")
     comma_count = text.count(",")
@@ -52,16 +56,33 @@ def _read_text_table(path: Path) -> pd.DataFrame:
         separator = None
     from io import StringIO
 
+    if exact_numeric:
+        return pd.read_csv(
+            StringIO(text),
+            sep=separator,
+            engine="python",
+            dtype=object,
+            skip_blank_lines=False,
+            keep_default_na=False,
+        )
     return pd.read_csv(StringIO(text), sep=separator, engine="python")
 
 
-def _read_source_frame(path: Path) -> pd.DataFrame:
+def _read_source_frame(
+    path: Path, *, exact_numeric: bool = False, allow_missing_unit: bool = False
+) -> pd.DataFrame:
     if path.suffix.casefold() in {".xlsx", ".xls"}:
-        sheets = pd.read_excel(path, sheet_name=None)
+        sheets = (
+            pd.read_excel(path, sheet_name=None, dtype=object, keep_default_na=False)
+            if exact_numeric
+            else pd.read_excel(path, sheet_name=None)
+        )
         matching = [
             frame
             for frame in sheets.values()
-            if _required_headers_present(frame.columns)
+            if _required_headers_present(
+                frame.columns, allow_missing_unit=allow_missing_unit
+            )
         ]
         if len(matching) != 1:
             raise PerformanceComparisonError(
@@ -70,7 +91,7 @@ def _read_source_frame(path: Path) -> pd.DataFrame:
                 f"the required headers; found {len(matching)}.",
             )
         return matching[0]
-    return _read_text_table(path)
+    return _read_text_table(path, exact_numeric=exact_numeric)
 
 
 def _canonical_header_map(columns: Any) -> dict[str, object]:
@@ -97,25 +118,36 @@ def _canonical_header_map(columns: Any) -> dict[str, object]:
     return resolved
 
 
-def _required_headers_present(columns: Any) -> bool:
+def _required_headers_present(
+    columns: Any, *, allow_missing_unit: bool = False
+) -> bool:
     try:
-        return _REQUIRED_COLUMNS <= set(_canonical_header_map(columns))
+        required = (
+            _REQUIRED_COLUMNS - {"unit"} if allow_missing_unit else _REQUIRED_COLUMNS
+        )
+        return required <= set(_canonical_header_map(columns))
     except PerformanceComparisonError:
         return False
 
 
-def _source_has_required_headers(path: Path) -> bool:
+def _source_has_required_headers(
+    path: Path, *, allow_missing_unit: bool = False
+) -> bool:
     try:
         if path.suffix.casefold() in {".xlsx", ".xls"}:
             sheets = pd.read_excel(path, sheet_name=None, nrows=1)
             return (
                 sum(
-                    _required_headers_present(frame.columns)
+                    _required_headers_present(
+                        frame.columns, allow_missing_unit=allow_missing_unit
+                    )
                     for frame in sheets.values()
                 )
                 == 1
             )
-        return _required_headers_present(_read_text_table(path).columns)
+        return _required_headers_present(
+            _read_text_table(path).columns, allow_missing_unit=allow_missing_unit
+        )
     except Exception:
         return False
 

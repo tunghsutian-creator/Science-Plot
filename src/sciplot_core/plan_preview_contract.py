@@ -18,6 +18,7 @@ PlanPreviewStatus = Literal["planned", "not_applicable", "blocked"]
 class PlanPreviewBlocker(TypedDict):
     reason_code: str
     message: str
+    issues: NotRequired[list[dict[str, Any]]]
 
 
 class PlanPreviewBase(TypedDict):
@@ -28,6 +29,7 @@ class PlanPreviewBase(TypedDict):
     template: str
     preview_identity: dict[str, Any] | None
     data_mapping: NotRequired[dict[str, Any]]
+    source_options: NotRequired[dict[str, Any]]
 
 
 class PlanPreviewPayload(PlanPreviewBase):
@@ -45,16 +47,17 @@ def _blocked_preview(
     reason_code: str,
     message: str,
     scientific_transform: dict[str, Any] | None = None,
+    issues: list[dict[str, Any]] | None = None,
 ) -> PlanPreviewPayload:
+    blocker: PlanPreviewBlocker = {"reason_code": reason_code, "message": message}
+    if issues:
+        blocker["issues"] = issues
     return {
         **_preview_base(source=source, rule_id=rule_id, template=template),
         "status": "blocked",
         "resolved_figure_plan": None,
         "scientific_transform": scientific_transform,
-        "blocker": {
-            "reason_code": reason_code,
-            "message": message,
-        },
+        "blocker": blocker,
     }
 
 

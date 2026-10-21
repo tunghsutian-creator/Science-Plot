@@ -33,8 +33,6 @@ from sciplot_core.semantic_sources.models import (  # noqa: F401
     CurveSeriesPayload,
     ImpactReplicatePayload,
     RheologySweepSample,
-    _ImpactDataValidationError,
-    _StressRelaxationHoldError,
 )
 from sciplot_core.semantic_sources.preparation_context import (
     SemanticPreparationContext,

@@ -7,6 +7,16 @@ from sciplot_core.verification.owner_model import ChangedOwner
 
 PROJECT_INTEGRITY_OWNERS = (
     ChangedOwner(
+        owner_id="fixture_provenance_evidence",
+        exact_paths=frozenset({
+            "src/sciplot_core/evidence/provenance.py",
+            "src/sciplot_core/evidence/evidence_status.py",
+        }),
+        owned_test_paths=frozenset({"tests/test_evidence_reports.py"}),
+        pytest_targets=("tests/test_evidence_reports.py", "tests/test_rule_certification.py"),
+        release_gates=("acceptance_rules", "full_pytest"),
+    ),
+    ChangedOwner(
         owner_id="native_assistant_dock",
         exact_paths=frozenset({"src/sciplot_gui/studio_assistant/dock.py"}),
         pytest_targets=("tests/test_assistant_contract.py",),
@@ -63,6 +73,7 @@ PROJECT_INTEGRITY_OWNERS = (
         ),
         owned_test_paths=frozenset(
             {
+                "tests/test_delivery_install.py",
                 "tests/test_delivery_project_documents.py",
                 "tests/test_delivery_editor_launcher.py",
                 "tests/test_delivery_project_continuation.py",
@@ -71,6 +82,7 @@ PROJECT_INTEGRITY_OWNERS = (
             }
         ),
         pytest_targets=(
+            "tests/test_delivery_install.py",
             "tests/test_delivery_project_documents.py",
             "tests/test_delivery_editor_launcher.py",
             "tests/test_delivery_project_continuation.py",
@@ -105,8 +117,8 @@ PROJECT_INTEGRITY_OWNERS = (
                 "src/sciplot_core/data_mapping_probe.py",
             }
         ),
-        owned_test_paths=frozenset({"tests/test_managed_document_science.py", "tests/test_document_audit_transport.py", "tests/test_native_numeric_precision.py"}),
-        pytest_targets=("tests/test_managed_document_science.py", "tests/test_document_audit_transport.py",
+        owned_test_paths=frozenset({"tests/test_source_replay_presentation.py", "tests/test_registered_mapping_task_sources.py", "tests/test_managed_document_science.py", "tests/test_document_audit_transport.py", "tests/test_native_numeric_precision.py"}),
+        pytest_targets=("tests/test_source_replay_presentation.py", "tests/test_registered_mapping_task_sources.py", "tests/test_managed_document_science.py", "tests/test_document_audit_transport.py",
                         "tests/test_native_numeric_precision.py", "tests/test_table_ranges.py"),
         handoff_gates=("doctor",),
         final_milestone_gates=("smoke",),

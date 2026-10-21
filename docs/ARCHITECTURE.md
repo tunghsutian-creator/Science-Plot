@@ -30,15 +30,179 @@ raw files + hashes
 - versioned policy and request contracts define constraints;
 - QA reports only checks it actually performs.
 
+State authority and renderer choice are separate. `PlotService` installs the
+Veusz backend router; `ManagedVeuszCompiler` still compiles PlotIR into
+`document.vsz`, and native inspection, canvas editing and PDF/TIFF export use
+Veusz Documents. A Managed VSZ is rebuildable, whereas a Legacy VSZ remains the
+complete visual authority. Neither is an unused file format. Removing VSZ would require a separately approved rendering, editing,
+scientific-QA and existing-project migration contract.
+
 Frequency response completion belongs to `semantic_sources/rheology_frequency_metrics.py`:
 instrument, confirmed-column and three-header workbook routes share the original
 modulus/positive-frequency derivation and record units/provenance. The frequency
 plan defaults to viscosity and admits complex modulus only through an explicit
 queue entry. Creep preparation, rule axes and study defaults share original
 shear strain versus time, preserving selected interval order and counts.
+`rheology_sweep_columns.py` shares exact magnitude identities and explicit unit
+evidence across the original sweep reader. Real/imaginary components cannot bind
+the magnitude. Literal temperature-labelled frequency Results remain separate
+conditions, with their original sample, row bounds, nominal-condition evidence
+and point order retained; measured temperatures are never rounded into groups.
+`source_inspection/rheology_evidence.py` projects those original intervals for
+the semantic task adapter. `task_semantic_frequency.py` binds each interval into
+the existing Managed graph and its typed `rheology_complex_viscosity` transform;
+the shared metric owner computes `hypot(Gprime, Gdoubleprime) / omega` only with
+explicit compatible units. An original source may omit unrelated text columns
+from numeric loading only when every direct consumer is a validated deterministic
+`select`; selected metadata, complete source hashes and physical rows remain bound.
 Exact-current file comparison rehashes the full bytes and rejects identity,
 mode, size, modification-time or content changes. A ctime-only metadata update
 between two individually stable snapshots does not invalidate identical data.
+
+`data_mapping/original_tables.py` owns the physical table catalog, original-cell
+port and byte-bound observation snapshot, above the unchanged raw reader. The
+catalog retains every original table ordinal. A qualified source/table/block
+selection resolves its table scope before observing measurement cells;
+`task_semantic_selection.py` then intersects observed blocks with exact Test and
+block predicates before coordinate decisions and builders. Unknown references
+and empty intersections fail closed. Original block IDs/order, physical rows,
+missing positions and full source SHA stay bound. Unobserved tables retain their
+catalog/hash and explicit observation state, without invented blocks or counts.
+Omitted or Test-name-only selection retains conservative full discovery.
+Selection never creates a filtered file or another scientific executor.
+
+Existing explicit `table_selection` consumers use the same observed-sheet scope
+for fresh validation, Managed reload/append, templates and categorical bindings.
+Multi-pair/replicate confirmation includes every declared sheet. Explicit
+cross-sheet metadata evidence remains readable independently of measurement
+scope; it cannot become a measurement candidate. Full historical snapshots keep
+their original payload and comparison semantics. Row parsing, accepted numeric
+lexemes and acquisition-stage interpretation are unchanged by this boundary.
+
+Ambiguous tables are resolved before coordinate validation. The existing task
+question journal then replans only the selected source facts, retaining earlier
+answers and complete available/selected/excluded provenance under a new question
+identity. Format dispatch reads those same selected candidates.
+`task_semantic_temperature.py` owns the intersection of explicit secondary
+header/column ID, legacy temperature header and confirmed role. Planning and
+Managed binding consume that one selector; disagreements fail before creation.
+Unused temperature metadata does not become a prerequisite for source-order
+stage concatenation.
+
+`task_semantic_stages.py` owns complete acquisition-stage domains for planning
+and lowering. Finite observation runs remain display evidence. Only adjacent
+measured decreases in the resolved time column locate a reset; a decrease across
+missing time is an unresolved boundary. Every confirmed physical position stays
+in its source region. Cumulative assembly passes complete stages to the sealed
+executor, or refuses with original-row evidence. Unexecuted drafts with missing
+coverage need reconfirmation; saved creation requests do not replan.
+
+Current semantic coordinate planning and expert/append admission use
+`plot_transforms/unit_relations.py` for registered unit relations. Finite endpoint
+spellings are separate from display formatting. Legacy `C` denotes Celsius only
+with observed temperature metadata or an exact selected user quantity fact;
+charge `C` retains its literal identity. Planning freezes that context beside the
+exact source coordinate, and supported lineage consumes that proof before
+falling back to original source-header evidence. A renamed graph or display label
+cannot establish temperature. Impact source readers share an exact complete
+`kJ/m²` spelling identity; area prefixes cannot relabel unchanged values.
+
+`plot_engine/current_unit_admission.py` admits new expert creation before its
+creation journal, and actual scientific edits before reservation or execution.
+It consumes original metadata from the existing scoped source load. The shared
+`original_coordinate.py` traces finite supported graph edges, including executed
+columns absent from visible mappings. Scientific layer semantics with a unique
+original-column selector can express a user quantity fact; scale labels alone
+cannot. Raw charge evidence cannot be erased by rename or a Celsius spelling
+confirmation. The real frozen context is under
+`provenance.binding.semantic_task.resolution.bindings`; verified CAS binding
+reads use the same content-store byte owner without decoding unrelated arrays.
+An affected unexecuted C draft without adequate context needs confirmation.
+Saved creation/transaction replay, no-ops and presentation edits do not re-enter
+new scientific admission. Historical executors remain sealed; unsupported
+compound context and unknown derived/external unit lineage remain explicit
+refusals.
+
+New semantic creation records `domain_semantics: current_view_v1`. Each endpoint
+has a current auto/fixed rule; numeric domains and ticks are their presentation
+projection. Auto uses visible drawable members, while fixed endpoints preserve
+comparison windows. Hidden members retain complete scientific validation.
+`plot_grammar/current_view.py` is the numeric writer after resolved datasets are
+available and before final storage/sealing. Creation, append and saved edits use
+it; compilation only validates the projection. Manual tick conflicts refuse the
+candidate rather than deleting ticks or expanding the data extent. Current
+rules are never reconstructed from original creation intent. Unmarked documents
+retain their existing numeric-domain scientific projection and replay.
+`mark_geometry.py` supplies data primitives to extent/QA and native lowering;
+native adapters alone add physical caps, strokes and relative coordinates.
+Semantic measurement channels, including secondary temperature, retain point
+marks for isolated finite observations instead of fabricating line segments.
+
+Managed resolution and binding dependency graphs both consume the final
+canonical document after content interning. A pre-CAS graph cannot serve as
+evidence for a different canonical scientific hash.
+
+The existing `source.sha256` scientific operation reconfirms the complete
+physical-file group. `managed_source_groups.py` owns canonical path matching;
+equal bytes in two distinct files cannot establish the same group.
+`managed_source_revision.py` normalizes full declarations, keeps no-ops in their
+original CAS representation and checks current facts through the admission
+owner's single selected-table load. Original conditions, coordinates and typed
+derived inputs cannot be withdrawn to authorize a new SHA. Historical creation
+and transaction requests remain historical; source refresh never rewrites them.
+Virtual source targets share the same full/summary/edit descriptor and are not
+fictional presentation objects. Input-file accumulation rejects conflicting
+expected hashes before flattening a physical group.
+
+New confirmed mappings separate physical source views, original sample/category
+facts and display aliases. `mapping_contract/source_identity.py` mints each
+logical view ID from the canonical original namespace and exact sheet/row/column
+selector; SHA witnesses the source version rather than defining that ID.
+`sample_labels` retains original facts and `display_labels` is presentation.
+`data_mapping/source_projection.py` derives render correspondence only after
+reproducing the existing execution receipt. Snapshot-origin parameters are
+runtime arguments built by the captured-byte owner, not request fields or a
+self-authenticating path/SHA declaration.
+
+Raw replicate groups and ordinary categorical values use explicit source facts,
+never split aliases to recover category or condition. Independent groups sharing
+one category occupy deterministic group slots while axis ticks stay at category
+centres. Current style/order/include selectors are frozen to IDs at creation;
+saved rendering does not reinterpret an alias as a selector.
+
+Current explicit XY pairs still run their scientific adapter, preparation
+attestation and registered FigureTask. At the mapping-to-preparation boundary,
+the legacy intermediate metadata/model string slot named sample carries the
+verified logical view key; it is not a new original-sample assertion. Receipt
+sample facts and final source bindings retain the original sample, including
+several distinct physical views of the same sample without pooling. The native
+encoding uses the same view key and applies aliases only after terminal science
+validation. Historical requests without structured identity retain their original
+serialization and replay; no alias, file stem or worksheet suffix migrates them.
+
+Native continuation applies one style-transfer plan to the saved VSZ and the
+presentation fields already represented by its spec. Axis point-size fields and
+series encoding use their existing shared field owners. The named
+`style_transfer_storage` port stages, strictly audits and atomically installs
+both files through the existing figure-set transaction, retaining both originals
+on failure. An opaque native font face stays native; it is not guessed into a
+global semantic theme. Exact native/spec style fidelity and source-data replay
+are separate checks. `source_coverage/spec_units.py` uses those same represented
+axis style fields when hashing source-data replay units, and excludes only
+direct-label size from the existing label representation. Scientific axes,
+values, category coordinates, source bindings and unknown fields remain exact;
+the replay check neither erases saved styles nor relaxes native presentation
+audit.
+
+Information loss is permitted only in a named projection. Full physical rows,
+missing positions and original numeric values remain in source/mapping evidence;
+finite raw display points do not replace that domain. Recorded conversions and
+derived calculations produce separate datasets with bound inputs and units.
+Presentation aliases cannot supply their sample, quantity or source selector.
+Numeric windows/ticks are projections of current rules, and pixels/exported
+glyphs cannot reconstruct their scientific authority. Native geometry and
+numeric audit precede publication QA; either one's success cannot stand in for
+the other's unperformed checks.
 
 Lifecycle success, provenance, artifact QA, human review, and journal
 compliance are separate evidence claims.
@@ -82,6 +246,37 @@ Failure before publication preserves the visible set; ordinary publication
 exceptions roll back replacements. The workspace lease serializes CLI operations,
 while native GUI saves are detected by fingerprints. This does not provide
 automatic process-crash recovery or a second document authority.
+
+Bound native suite figures also share `plot.open/describe/patch/decide/resume/export`
+through `plot_engine/prepared_routing.py` and `workflow/native_suite_operations.py`.
+They retain LegacyPlot/native authority and advertise only actual existing
+legend and relative-note fields. `native_suite_objects` binds the selected
+spec/native/source bytes to a stable figure ID and opaque content-bound revision;
+descriptions read current native values. Recognized invalid bindings fail closed
+before ordinary importing. `native_suite_preview/storage/transactions` reuse
+suite `style_previews`, exact native state audits, snapshots and guarded
+publication. They retain original requests for key replay and export-only
+continuation, preserving opaque native settings and scientific evidence.
+Selected export validates and executes only the chosen figure; unselected
+optional native/spec/export files are not prerequisites. Whole-suite export and
+the older separated-layout style guard retain their compatibility boundaries.
+Creation handles project in-memory successful metadata without another native
+inspection. The native backend owns role painting order while scientific and
+legend order remain as declared.
+
+The selected figure's existing native-audit sidecar participates in the same
+guarded preview baseline as its document and exports. A decision is persisted
+before publication; contradictory decisions are refused, and accepted recovery
+reuses the existing publication owner without reapplying native edits. Creation
+export receipts may establish currentness only when the canonical visible files
+match their byte seals. A no-op still inspects current native display state and
+does no native mutation, rendering or export.
+
+Managed previews return the scientific audit already passed by their render
+stage, after checking the preview receipt and current native SHA. The backend
+consumes that same-stage result once. Independent apply/export and source/native
+drift checks retain their own boundaries; this introduces no cross-stage audit
+cache or new authority.
 
 ## External control and native document boundary
 
@@ -127,6 +322,33 @@ solver rejects impossible constraints; native text fitting never resizes the
 prescribed frame. Historical unbound revisions retain their previous compiler
 interpretation and are not automatically restyled.
 
+New semantic tasks explicitly select `axis_layout_policy=decorated_secondary_sides_v1`.
+It allocates conservative additional right/top decoration space before sealing
+PlotIR and records base versus resolved margins. Omitted policy retains the
+saved historical layout interpretation, including existing multi-axis figures.
+The task adapter tries declared house size presets against the same pure layout
+checks; it records the first fitting width rather than reducing fonts or dropping
+content. Native text QA remains a separate final check.
+
+`panel_assembly/` composes existing figures and images through that physical
+solver, with explicit sparse cells and row/column spans. The pure `document`
+leaf, public `model`, `operations`,
+`history` and `storage` own a closed versioned placement document, local undo/redo
+and atomic writer-lease saves. Session-bound original bytes refuse stale saves,
+including independent readers of the same revision; a noncooperative external
+writer after the final check is not a kernel compare-and-swap guarantee.
+`sources` captures exact Legacy VSZ or canonical Managed authority and rejects
+source drift. `native` reflows supported native pages at target mm and compares
+opaque payload/science before and after portable Save. `export` places those PDF
+pages at physical 1:1 with image-only nondestructive crops and measured outer
+letters. Real native text/legend bounds gate publication before clipping.
+`preview` renders current frozen sources in temporary storage without Save;
+`desktop_previews` caches bounded PNG bytes off the UI thread and constructs Qt
+pixmaps on the UI thread. Painting and local spacing do no source I/O or AI work.
+`desktop*` is the native workbench adapter; `service` is the shared compact
+CLI/MCP new/inspect/apply/export port. Saved placement references do not replace
+scientific authority. See [panel assembly design](DESIGN_PANEL_ASSEMBLY.md).
+
 Metric-flow axes and simple legends carry complete typography, physical padding,
 frame and explicit legend membership into PlotIR. Native text metrics are measured
 by QA; metric flow does not retain ignored hand-positioned text coordinates.
@@ -147,7 +369,8 @@ state, including data/reference/custom-definition state. Unsupported backend
 capabilities fail explicitly. Scientific/IR identity excludes renderer timestamps;
 compiler/runtime fingerprints and actual artifact byte seals are separate.
 
-`plot_transforms/` owns typed select/rename/scale/normalize nodes and a fixed-file
+`plot_transforms/` owns typed select/rename/scale/normalize, original-row selection,
+explicit multi-input time concatenation and physical unit conversion, plus a fixed-file
 external executor protocol. Node intent and execution provenance jointly record
 stable IDs, parameters, input/output dataset IDs and hashes, executor identity,
 determinism and status. External execution binds interpreter/script bytes and
@@ -155,6 +378,13 @@ closed parameters; existing scientific algorithms remain external owners.
 Non-deterministic declarations are representable but execution is unsupported.
 There is no client-supplied code-string evaluation. Original sample/column/row
 lineage is checked through supported transforms, with missing values retained.
+
+Display interpolation belongs to the presentation side of FigureSpec marks.
+Its deterministic PCHIP arrays and interval lineage are compiled separately from
+the original datasets. Native line geometry binds those arrays; measured points
+and marker geometry retain the source-bound scientific arrays. Gaps and duplicate
+coordinates cannot silently become a fitted continuation. This reuses PlotIR,
+native compilation and exact array audits without a second scientific ledger.
 
 `plot_backends/` owns current-native import and the Veusz translation. Imported
 projects are `legacy_shadow`, never falsely fully represented: unmodeled objects,
@@ -183,6 +413,28 @@ leave the revision committed; retries never reapply it. Only known transient
 preview/export failures get one durable extra attempt. Undo appends a revision.
 This is recoverable logical execution, not a claim of atomic multi-file filesystem
 replacement across power loss. Full candidate/native evidence stays local.
+`plot_engine/recovery` projects that existing frozen receipt into descriptions
+and validates a compact plot ID/base revision/idempotency key before replaying
+the original saved patch. CLI, RPC and MCP delegate to this owner. Recovery
+cannot accept a preview, invent a missing request, rebind changed inputs or
+advance a historical transaction as current. Transport failure guidance retains
+the original key and distinguishes a request not sent from a lost reply.
+
+A failed Managed export-only transaction with an exact native publication-QA
+layout rejection may be superseded by a nonempty typed presentation correction.
+The guard binds the current head, unchanged science, sources and known native
+bytes. Unknown/transient failures, stale or scientific changes and untracked
+native files remain blocked. The original transaction keeps its error and
+diagnostics plus a durable supersession reference; its old key cannot reclaim
+active work. The new correction uses the existing preview, decision and export
+phases rather than a parallel recovery workflow.
+
+Managed descriptions expose `export_current` from the service's existing recipe
+and exact byte-inventory validator. Clients consume this read-only evidence in
+the owning process environment; they do not reconstruct its renderer identity
+from a different process. Missing or uncertain evidence is false/unknown and
+does not trigger native work. This is separate from a task's final package
+inventory and from the installation readiness reported by Doctor.
 
 Large imported scientific provenance values are interned once into immutable
 content-addressed JSON blobs before revision zero. References seal exact bytes;
@@ -213,6 +465,15 @@ separates daemon versions; an active mutation is never hot-reloaded. Connection
 loss carries the original request identity and never silently resends a mutation.
 Files are verified when a request uses them; there is no background source
 recomputation or claim of a general live filesystem watcher.
+
+While `serve()` owns the main thread, a temporary SIGTERM handler requests a
+normal stop after the current bounded request. The existing service `finally`
+closes the native worker through EOF and an actual wait, then removes the owned
+socket; the previous signal handler is restored. Thread-hosted servers retain
+their caller's signal policy. SIGKILL, abrupt exits and worker timeouts do not
+acquire normal termination evidence. CLI auto-start still detaches the daemon;
+later clients are not its OS parent, so socket removal or a daemon terminal
+frame cannot substitute for that parent's actual wait ledger.
 
 The `task style` compatibility facade routes already-imported figures through the
 semantic engine; unimported projects and other retained task operations continue
@@ -268,6 +529,150 @@ saved-project queries, native edits, exact-current export and continuation.
 It calls existing local domain services without starting an internal provider.
 `task_control` orchestrates bounded create/edit/export requests over those owners;
 task receipts live outside active projects and do not define scientific readiness.
+
+The semantic task adapter accepts multiple source attachments and a small closed
+coordinate intent. Local source evidence supplies current tables, columns, units
+and reset-time segments; the source-bound plan exposes real ambiguity before
+expanding existing FigureTemplate/Binding contracts. Scientific authority remains
+the ManagedDocument. The task checkpoint owns only process state and immutable
+attempt references. Revising a draft and retrying a committed attempt are distinct
+operations; retry cannot recommit science or execute transforms again.
+
+Without an explicit experiment rule, numeric task coordinates bind the existing
+original-value `ordinary_xy` context. Omitted and explicit ordinary context have
+the same meaning; source layout and axis quantities do not select an experiment
+or authorize a derived quantity. `task_semantic_plan` resolves original columns,
+units, views, stages and axes once. Lowering validates those literal bindings and
+executes the existing typed transforms without selecting coordinates again.
+An old unattempted draft is preserved in history and resolved against its
+unchanged sources; a frozen creation attempt retains its original request and
+recovery identity. An uncertain attempted outcome cannot become a new draft.
+`source_context` records caller statements in semantic provenance. Absent an
+explicit stage request, the plan retains the full original block, including
+missing coordinates and time reversals; it does not infer stage concatenation.
+`task_semantic_axes` projects explicit ordinary linear/log choices through the
+existing axis policy. Log validation examines every mapped observation, with no
+silent deletion or shift. `task_semantic_curve_bindings` resolves qualified
+original X/Y pairs for declared compatible `quantity_members`, retaining each
+pair's grid and scientific quantity on their shared scale. Views validate the
+qualified original identities; the semantic plan owns quantity and unit choices.
+The existing `table_selection` owns each confirmed physical row domain. Numeric
+first/last/finite counts are observations within that domain, never replacement
+bounds. Shared source observation retains literal Test/Result/Interval identities
+and declared record members, including all-missing members and shorter tails.
+The pure physical block observer lives in `semantic_sources/instrument_regions`;
+`table_scanning` retains its existing consumer names. Original numeric-cell
+lexeme parsing belongs to the existing `numeric_separators` owner, with the
+old parser semantics retained.
+Empty storage extent does not establish a measurement; a disconnected inferred
+body needs clarification. Separate Tests retain separate domains unless an
+explicit supported time-stage contract assembles them. Display finite masks do
+not compact the source grid or change its row references. This raw binding
+cannot replace an instrument adapter or combine rules, stages or secondary axes.
+`impact_presentation` admits `raw_only` only for the existing box/box-strip raw
+point path. Preparation, layout and analysis skip summary calculations, while
+the native audit retains all original replicate values and category order.
+
+`plot_engine/managed_source_append.py` builds a bounded scientific update for one
+original-value Managed XY view. It validates original table selection and column
+metadata through existing source owners, then extends the current binding and
+FigureSpec with deterministic select nodes and layers. No caller arrays or
+transcribed templates are accepted. Compatible quantities, registered unit
+relations and existing complete-data scale validation apply. The unsealed
+`plot_transforms/unit_relations` leaf projects the existing registered executor;
+it introduces no independent aliases or numerical conversion rules. A real
+numeric conversion needs the appended curve's explicit `x_unit` or `y_unit`
+equal to the current axis unit. Identity spellings need no numerical permission;
+typed conversion still preserves their exact recorded unit labels. Normalization,
+fitting and stage assembly remain outside this operation. A path/ID-only request returns original
+metadata before transaction allocation. A complete request uses the existing
+preview, source revalidation, journal, decision and reply-loss recovery owners.
+Before/candidate images and scientific evidence remain attached to that receipt.
+The Figure `legend.order` edit projects directly into the existing presentation
+guide's `order` field. A nonempty value is a full permutation of that guide's
+eligible layer identities, including hidden layers; the compiler filters hidden
+entries for rendering. An empty array restores automatic order. Existing
+validation, review, rejection and reply-loss recovery own the edit, with no
+transform execution or scientific hash change. Managed line-pattern schemas and
+writers share `style_values`' projection of the existing seven native patterns,
+retaining historical `dash` and `dot` aliases without rewriting saved values.
+The existing exact native-state comparison audits curve and legend line styles.
+`append_target_lineage` traces the actual select, row-slice, rename and registered
+unit-conversion chain back to original columns and physical rows. Eligibility
+does not depend on a global whitelist of every transform in the document.
+`append_measurement_identity` requires the same original SHA and preserves the
+existing metadata-region path. `append_source_regions` permits a different
+same-file region only with one exact block from the shared physical observer;
+its literal Test identity uses the existing source-cell metadata evidence.
+Partial, ambiguous or cross-Test regions gain no such permission. Overlapping
+original responses are rejected even when hidden or assigned another alias.
+
+`task_replicate_summary` accepts an explicit missing-value policy or the current
+source-bound question response, then uses `semantic_sources/impact_replicate_disclosure`
+to count original finite replicates. Mean/sample-SD calculations remain in the
+existing bar owner. `source_coverage/replicate_disclosure` freshly checks the
+complete typed disclosure against the canonical original input before native
+publication or summary CSV export, including when prepared tables are the
+renderer's input. Original physical columns and missing cells remain recorded.
+The visible summary projects audited numbers with round-trip precision and
+binds their original-source tree and saved-spec hashes; it creates no new method.
+
+`mapping_contract/categorical` closes the ordinary original-file/table binding.
+`task_categorical_creation` owns its existing task question and missing-value
+continuation; `categorical_plan` seals that binding into the current plan-preview
+identity without inventing an experiment or FigurePlan.
+`studio_render/categorical_bindings` reads the declared original physical cells,
+and `categorical_bound_series` reuses given-value point-lines or the existing
+mean/sample-SD bar groups. Sample/condition identity, selection, category order
+and display aliases remain distinct. `categorical_disclosure` derives original
+valid-n/missing-cell evidence; publication compares the complete binding and
+typed disclosure against the canonical source request and fresh original input.
+Cold query indicators check the binding's actual original-file SHA while still
+reporting `scientific_audit_evaluated=false`; they do not fabricate a FigurePlan
+or substitute hash currentness for scientific publication audit. Single-primary
+receipts reuse their existing canonical figure and delivery records.
+The current legend placement retains bounded reserve and final QA; saturated
+overlap can continue that existing search, while explicit corners are measured
+against the same final axis contract as native export. The requested corner and
+explicit axis bounds remain fixed; unspecified bounds can use the existing
+bounded reserve. Its recorded limits and QA use the actual final axis extents.
+Ordinary grouped summaries reuse `component_legend`'s existing row/swatch contract
+and the bounded axis reserve. `segmented_legend_clearance` derives a conservative
+top band without moving explicit bounds. Native `segmented_legend_geometry`
+measures painted component boxes against the complete bar/SD shapes; the current
+layout review binds that evidence to document bytes and exact expected paths.
+Missing or stale geometry and a legend outside its fixed frame remain blocking.
+
+`studio_core/categorical_display` keeps late aliases/styles in the closed
+`presentation_categorical_display` overlay. Original category labels, group IDs,
+observations, statistics, canonical request and scientific hashes retain their
+existing authority. Current edit context exposes stable original selectors and
+complete expected display values; bars allow color, while given-value point-lines
+also allow represented markers/fill and native-key layout. The worker applies
+the existing native operations and audits unchanged numerical datasets plus the
+effective presentation. `categorical_display_preflight` runs the complete current
+source/native audit before export can touch files; the existing inside-export
+audit remains. One explicit conflict subtype crosses the existing four-key
+worker failure envelope. Cold and persistent workers frame that subtype before
+native settings chatter can obscure it; other errors keep their original output
+and failure behavior. Retry uses the existing task and export recovery owner.
+
+`performance_comparison/metadata` exposes read-only original Metric IDs and unit
+facts. Its closed `selection` contract binds exactly two Metrics, source SHA,
+per-Metric user statements and the existing scatter display choice.
+`selection_rows` and `selected_scatter` retain exact original numeric cells,
+physical selected rows, explicit missing-pair masks/counts and material identity.
+`plan_source_options` carries this declaration through the ordinary expected-plan
+identity. Native source reread independently derives the same complete evidence;
+changed units, masks, statements or source bytes block publication. Selecting
+`preserve_original` suppresses display jitter without changing the older default.
+
+Task-to-Managed calls cross the existing local AF_UNIX protocol. Its
+`plot_protocol/socket_client` leaf owns the shared validated transport without
+importing the concrete service. The compatible direct/socket facade retains the
+explicit direct path. This keeps the task orchestrator independent of
+`PlotService`, whose source-only compatibility entry can still use ordinary
+tasks. A common lower error leaf preserves the public task exception identity.
 
 The `edit` CLI opens the default post-delivery human editing surface for an existing
 saved figure. `Open_in_SciPlot.command` opens its bound delivery through this CLI;
@@ -378,6 +783,13 @@ keeps its separate, stricter scientific-compatibility owner.
 before execution and carries successful items past another item's question or
 failure. Shared sample styles expand into ordinary per-figure edit tasks with
 deferred export; the existing native transactions retain all scientific checks.
+Create items may attach typed initial presentation operations. Native preparation
+checkpoints before a normal edit preview and exports only after its bound
+acceptance. This composes existing create/edit children; it adds no group-level
+mutation authority or cross-plot transaction. Original-source preflight guards
+both selected responses and automatic child continuation before native writes.
+The overview projects the existing response templates, next steps and ordered
+figure descriptors, so an unchanged receipt needs no repeated discovery.
 `task_group_review` queries current project evidence and caches native PNGs by
 project/figure/document/spec identity, then writes a read-only HTML gallery.
 It contains no plotting implementation, browser editor, model provider or
@@ -442,6 +854,16 @@ response rows cannot become different samples. Completed pairs are serialized as
 empty XY cells in the rectangular composite, while individual mapped outputs retain
 their exact lengths. Plan binding checks sample order and each selected point count.
 It adds no profile reuse or numerical changes.
+The mutually exclusive `column_mapping.replicates` branch binds independent
+original value columns to the existing raw-only impact adapter. Its sheet,
+metadata, explicit row domain and cell evidence use the same confirmation and
+mapping transaction. Per-group outputs preserve every confirmed row and null
+position; rectangular composite padding is only adapter storage. The replicate
+proposal belongs to the existing `data_mapping/table_choice` owner;
+`data_mapping/plan_binding` checks the renderer's finite membership, order and duplicates
+against these source-verified domains. It does not infer X coordinates, compute
+summaries or use finite observation counts to select rows. Existing XY proposal
+and serialized-table meanings remain unchanged.
 `task_initial_mapping` batches choices supplied in `create.mapping` or one
 question-bound `resume.mapping`, bound to the original single-file SHA. It delegates table,
 metadata and column validation to `task_column_mapping`; no alternate importer
@@ -449,7 +871,44 @@ or automatic scientific decision is introduced. Durable confirmations recover
 interrupted batches, while invalid choices retain an ordinary correctable question.
 Recovery checkpoints its pending answer and reuses an existing confirmation after
 interruption. It never accepts a source-update or native-edit visual preview.
+Existing ordinary source revision can expand an immutable raw-replicate binding
+through this same question and mapping transaction. Raw mode comes from verified
+old mapping and matching scientific render facts. Every old group must retain its
+order, original source identity, cell/column references, full row domain, mask and
+values; new groups follow them. Candidate preparation checks this before entering
+the native owner, then retains the existing figure task, preview/revision ID,
+style transfer, archive, atomic installation and export recovery. The bounded
+expansion requires the same unchanged original file and an existing raw binding.
 `data_mapping/curve_support` gates adapters that consume validated XY mappings.
+Semantic attachment planning retains that adapter gate. Its original-table
+evidence owner recognizes explicit quantity/sample/unit rows and closed
+machine-header unit suffixes; sample metadata partitions adjacent column blocks
+without interpreting them as acquisition stages. Exact coordinate selectors may
+bind an otherwise unknown header to the caller's declared quantity, but cannot
+replace a known quantity or viscosity component. `task_semantic_coordinates.py`
+owns the common literal selector, frozen binding lookup and absent-source-unit
+rules used by planning and lowering. A coordinate's `source_unit`
+fills only an absent original unit and is replayed through the existing
+source-bound user-statement metadata confirmation; its `unit` independently
+selects an existing registered conversion. Explicit registered frequency policy
+resolves measured or authorized derived coordinates into the common plan;
+the one lowerer consumes these blocks through the same Managed typed graph and
+preserves each original sample, point order and grid. An unresolved coordinate
+returns a same-task intent revision, rather than advertising an incompatible
+family's ordinary XY importer.
+Optional coordinate `direction` projects directly into the existing generic
+Scale direction with an ascending default. Its increasing numeric domain and
+original row arrays remain unchanged; the Veusz audit verifies descending native
+axis bounds independently from exact source datasets.
+For a generic multi-sample table, `task_semantic_figure._source_views` projects
+each retained literal sample block into the existing select-before-load stage
+binding. Independent sample blocks never become cumulative acquisition stages.
+Same-sample staged sources retain their existing binding identity and explicit
+time-assembly path. A non-time sample table rejects an explicit stage request;
+multi-sample secondary-coordinate or temperature-continuity assembly requires
+one selected original block. Source selection, exclusions, sample identities,
+per-sample grids, row order and raw values stay in the original plan and Managed
+source graph; no replacement source table or new scientific transform is added.
 `data_mapping/table_diagnostics` reports bounded numeric extents and holes; extents
 are not selections. Automatic layout recovery requires one complete table with
 explicit axis names, units, paired unique sample identities and finite data, and
@@ -531,6 +990,57 @@ evidence, without rebinding the intent to a new document SHA or expanding a new
 all-samples inventory. Changed or unrecorded intent conflicts; it cannot authorize
 the old preview. Whitespace in a valid physical size may be normalized, never its
 value or unit.
+
+`task_common_edits` parses closed presentation clauses, binds only represented
+targets and composes the existing semantic patch or native task transaction.
+An explicit first-call entry path freezes its original request for idempotent
+replay. Pending work cannot be overwritten with a new intent; unknown or
+unrepresented properties reject before mutation. CLI/MCP use this same owner.
+`task_series_edits` binds exact display names, original scientific sample names
+or stable IDs to the represented series. `studio_core/series_display.py` routes
+Legacy display-name/membership changes through the existing native revision and
+presentation persistence owners. Managed edits retain every layer, mapping and
+dataset while updating presentation visibility, labels and corresponding guide
+labels. These operations preserve the scientific hash and partial Legacy shadow
+coverage; they do not acquire source or native-state adoption authority. Legend
+columns use existing schema/catalog bounds, and layout QA may block export.
+Installed font validation uses the existing native process. The closed internal
+`font-families` command accepts no paths or extra arguments and creates Qt only
+on that process's main thread; an MCP background owner never initializes Qt.
+
+`task_saved_work` and its evidence helper perform bounded explicit-folder
+discovery using existing project/task/document identities. Source hashes filter
+candidates; final native/semantic/source/delivery checks, including a final
+search-source rehash, decide whether continuation arguments are current. Copies
+remain separate, snapshots remain non-original, and no catalog or path rebinding
+is introduced. Current editing authority does not imply ready delivery.
+
+`task_papers` packages an ordered selection of registered project figures using
+the existing native Save/audit ports and sealed publication files. Version guards and source closure bind
+each selection. Native Save converts consumed linked inputs to portable copies;
+it never patches VSZ text. Sealed staging supports exact partial retries and the
+generic exclusive directory installer rejects all existing targets. Completed
+start replay, inspect and resume share a read-only currentness projection;
+historical frozen delivery stays distinct from present source/package validity.
+`task_paper_selection` is a read-only group adapter: it freezes complete selected
+children and registered figures through the strict paper request owner, without
+rendering a gallery. `task_paper_publication` validates the existing publication
+receipt and exact file inventory and copies its PDF/TIFF bytes; it cannot render
+to repair a missing or changed publication. Native portable Save and scientific
+audits remain required. The original publication must be finished and ready with
+its canonical rule, QA and delivery gates satisfied; QA alone cannot establish
+completion. Missing completion evidence fails closed without repairing the run.
+`task_paper_status` projects current source/package
+evidence; the new group start calls it after completion before offering delivery.
+Explicit-request start retains its original completion/inspection boundary.
+
+Radar interpretation is presentation of existing scientific values and declared
+normalization. A reserved panel expands new page width without changing the
+physical scientific frame or polar coordinates. Fixed-frame QA identifies the
+native radar scaffold structurally (rings, spokes and hidden carrier axes);
+Cartesian frames retain their contract. Explicit conflicting dimensions fail
+before consumer defaults. A closed worker rejection envelope preserves that
+domain reason through the public render adapter; unexpected crashes stay errors.
 
 `source_tables/read_session` owns a bounded 32 MiB, operation-local parse cache.
 Every hit rehashes actual source bytes; misses hash before and after parsing, and
@@ -619,6 +1129,15 @@ and whole-batch visible-mark checks. A reviewed white-background color/opacity
 edit can retain visual tone while avoiding Qt's dense transparent-stroke PDF
 outlines. Export still uses the exact native document; no implicit color baking,
 path simplification, raster replacement or separate PDF renderer is installed.
+
+Inspected ordinary Legacy curves expose their existing native line-pattern
+enumeration and represented display-name/membership operations. Inspected Legacy
+keys expose column count and a positive physical sample length;
+the existing native candidate worker measures the complete key before save and
+rejects any out-of-page geometry. Unknown/opaque state remains unsupported.
+These edits preserve native authority, scientific bindings and immutable house
+defaults; a completed selected-artifact package does not imply recovery or
+republishing of a copied managed project.
 
 Candidate editing and candidate data audit share one native worker process.
 The source-coverage audit owner still creates private document/spec snapshots
@@ -807,7 +1326,10 @@ a cross-session identity.
 | Curated tensile workbook identity | `semantic_sources/tensile_workbooks.py` | A non-empty `DataStudio_Metadata.label` is the exact sample identity for the representative curve and specimen summaries; without it, the exact workbook stem is retained. Filenames never normalize, abbreviate, or outrank declared metadata. The resulting single identity flows through mechanical facts, ordering, FigurePlan, and task sources. |
 | Generic source inspection | `source_inspection/` | Recommend only production-supported templates. |
 | Mapping | `mapping_contract/`, `data_mapping/` | Closed contracts, explicit confirmation, immutable source evidence. |
-| Changed-owner verification | `verification/changed.py`, `verification/owners.py` | `changed.py` collects the current `HEAD` staged, unstaged, and untracked paths once, resolves their stable owner union, and runs at most one changed-file Ruff command, one explicit-target focused pytest command, the existing scoped mypy command when selected, and one tracked diff whitespace check. `owners.py` is the source-controlled path-to-test and gate authority. Unknown production/configuration paths fail closed without a broad-test fallback; Doctor is a handoff gate, smoke is a final cross-boundary milestone gate, and acceptance/full remain release gates. This owner never renders, opens, edits, hashes, or exports a Veusz document. |
+| Changed-owner verification | `verification/changed.py`, `verification/owners.py` | Default selection unions staged, unstaged and untracked paths against a resolved HEAD; an explicit base also includes committed paths from that resolved commit. Rename/delete endpoints stay selected, including index/worktree cancellation. The current worktree executes at most one changed-file Ruff, one explicit-target focused pytest, the configured strict mypy when selected, and one tracked whitespace command. Whole-module/ancestor selectors subsume narrower selectors without losing their node union. Unknown paths fail closed with no broad fallback; an empty selection is NO_TESTS, not PASS. Dedicated typed-intent ownership does not remove the broad native owner for mixed/backend or future paths. Doctor is handoff, full smoke is final milestone, and rules/full pytest remain release gates. Verification does not edit or render user plots; optional evidence capture hashes local input bytes without acquiring document authority. |
+| Local verification evidence | `verification/evidence.py`, `evidence_identity.py`, `durable_runner.py`, `pytest_finish.py` | Unsigned developer receipts bind exact command/scope/node IDs, actual content/environment/input closure and original completion artifacts. Capture checks before/after bytes, membership and aliases; unknown or changed closure, absent finish, skipped bodies and incomplete execution cannot mint reusable PASS. Reuse reads known local files and never executes receipt-supplied paths/commands. Detached supervision executes one command once and reports original execution after transport disconnect; it never retries or upgrades a declared fixture closure to private scientific acceptance. Requests and logs remain ignored/local, environment values are hashed, and no receipt is a scientific document, source ledger or publication authority. |
+| Test input scope | `verification/input_scope.py`, `input_scope_manifest.json`, `public_input_guard.py`, `public_stage.py`, `public_control_boundary.py` | Exact reviewed public/private nodes partition the unchanged lifecycle tiers. Unknown, stale, duplicate or omitted nodes fail before bodies. Public comprehensive CI derives a source-only checkout with independent Git identity, excludes private namespaces in the copy only, and binds original/copied source, config and native runtime before/after. Only a source-bound generated-control caller can exercise the genuine missing-startup negative. Authorized local unfiltered full retains original private scientific assertions. The CPython/owned-process guard fails closed for unsupported bootstrap routes and does not claim a kernel sandbox. |
+| Supported private access capture | `verification/private_observer.py`, `private_observer_pytest.py`, `private_process_boundaries.py`, `private_capture.py` | Opt-in source-bound bootstrap records synchronous chained process streams, actual spawn ownership, same-PID exec handoff, startup, observed roots, terminal and loss state. The strict consumer verifies raw topology and an external durable wait bound to the actual root PID, command, executable and source. Inner supervisor success cannot substitute for root exit; absent witness or root failure remains BLOCKED. Normal native EOF/recycle retains genuine terminal evidence; interruption, stream loss, root/source drift, unknown process ports or missing terminal remain BLOCKED. Finite source-compiled uname and owned Bash/Python handoffs have exact command/runtime/environment boundaries. Historical or self-asserted completion cannot certify closure; capture never rewrites raw inputs or scientific acceptance. |
 | Scoped static typing | `[tool.mypy]` in `pyproject.toml` | The exact strict Python diagnostic scope, its file and directory entries, and all strictness options belong only to `[tool.mypy]`. Changed owners project that executable scope into local verification without maintaining another scope list or file count. Imported modules outside the configured entries provide type information but are not part of the diagnostic claim. |
 | Intake project manifest | `project_manifest.py` | `intake_manifest.json` is canonical; compatibility `*.sciplot.json` mirrors, read-modify-write updates, and ZIP snapshots share one rollback-capable cross-process project lock. |
 | Intake rule projection | `intake/catalog.py`, `intake/session.py`, `intake/project/project_builder.py`, `intake/intake_static/index.html` | The source-controlled Intake catalog owns navigation metadata only: grouping, labels, icons, one unique canonical rule id, and unknown entries. Public template choices, render defaults, and replicate recommendations project from the existing `SemanticRule`; internal project construction obtains rule render options through its existing semantic-recognition path exactly once rather than treating them as browser edits. The browser sends no invisible replicate default. Omission uses the rule recommendation, explicit valid API values survive, and invalid values fail before persistence. Intake does not own a second capability catalog, template alias, renderer, request field, or family default. |
@@ -838,8 +1360,9 @@ a cross-session identity.
 | Ordinary XY series encoding | `studio_render/series_option_context.py`, `studio_render/series_options.py`, `studio_core/series_encoding_contract.py`, `studio_core/veusz_primitives.py`, `veusz_worker/spec_audit/series_encoding.py` | Resolve request provenance, palette, final-series order, per-series overrides, line style, marker, fill, and provenance once. Persist a closed versioned encoding per series; the writer consumes it without re-resolution, and exact-current audit enforces only fields owned by explicit/direct request intent. Performance scatter/radar and scalar fields retain separate semantic contracts. |
 | Ordinary XY axis-data visibility | `studio_core/axis_data_visibility.py`, `veusz_worker/spec_audit/series.py` | Recompute finite data extents against both configured render-option bounds and final effective axes. Persist potential below/above-bound counts separately from coordinates actually clipped by the final spec; reject stale or forged visibility evidence during exact-current audit. |
 | Pure plot construction | `studio_render/` | Convert confirmed data and policy into render specs. |
-| Veusz lifecycle | `studio_core/`, `studio.py` | Core owns implementation; `studio.py` exposes the stable GUI/CLI integration API. |
+| Veusz lifecycle | `studio_core/`, `studio.py`, `studio_core/lifecycle_contract.py` | Core owns implementation; `studio.py` exposes the stable GUI/CLI integration API. Doctor validates the named public owner call contracts and source evidence without relying on private facade aliases or loading native owners; static availability explicitly leaves runtime_verified=false. Native execution and artifacts have separate smoke/scientific evidence. |
 | Native numeric persistence | `studio_core/veusz_numeric_persistence.py`, `veusz_data_import.py`, `veusz_save.py`, `performance_veusz/apply.py`, `veusz_worker/numeric_evidence.py` | New ordinary/performance specs declare `native_1d_numeric_encoding=float64_round_trip_v1`. Import and native Save retain binary64 curve values with 17 significant digits; strict reopened-data audit rejects precision loss. The runtime adapter changes the native writer's numeric format only, without modifying upstream source or patching VSZ text. Historical specs retain their earlier quantized comparison; two-dimensional persistence keeps its existing contract. |
+
 | Rule contract certification | `readiness/rule_contract.py`, `readiness/rule_certification.py` | Build the canonical rule payload once, derive full/semantic hashes, and compare one already-resolved rule with exactly one validated-envelope registry entry. No Studio policy or I/O belongs here. |
 | Validated-envelope registry and scoped acceptance lineage | `readiness/constants.py`, `readiness/registry_model.py`, `readiness/registry_build.py`, `readiness/registry_merge.py`, `readiness/registry_io.py`, `readiness/status.py`, `cli/parsers/diagnostics.py`, `cli/dispatch/diagnostics.py` | Legacy registry v1 remains readable; complete certification and scoped merges write registry v2. `certify` builds from one complete ready-rule acceptance summary. `merge` replaces only selected entries after the same strict row, manifest, contract, evidence, artifact, and manual-visual validation, while every unselected base entry must still match its current full and semantic rule contracts. Versioned lineage records form a non-overlapping complete partition of registry entries and retain each real summary identity and selected rule set; status projects that same lineage. A candidate uses the existing registry schema and never reruns unselected lifecycles, invents hashes, or creates another authority. |
 | Studio prepare-time rule binding | `studio_core/rule_contract_binding.py` | Own the closed versioned binding persisted in canonical `plot_request.json`. Only successful generated preparation mints or refreshes it; exact-current reuse preserves it. |
@@ -857,6 +1380,36 @@ a cross-session identity.
 | Runtime gates | `smoke/`, `acceptance/`, probes | Evidence only; never production rendering routes. |
 | Upstream Veusz | `third_party/veusz/` | Preserve upstream identity; SciPlot integration stays outside. |
 
+Accepted decimal text for paired curves and numeric mapping operations shares
+`source_tables/parsing.py:coerce_numeric_series`. It retains the existing numeric
+grammar, missing-value validation and integer dtypes while correctly rounding
+accepted floating text to binary64 before the native persistence boundary.
+Raw cell strings, curve order, independent lengths and scientific transforms
+remain separate authorities; this parser performs no normalization or conversion.
+The terminal Studio table reader retains original object cells until that same
+numeric coercion, so its independent source reread cannot truncate the values
+before the existing native round-trip writer and audit.
+
+New ordinary specifications declare the source parser separately as
+`source_numeric_encoding=decimal_float64_round_trip_v1`. A versioned specification
+must reproduce through this parser. An unversioned historical specification can
+instead reproduce through the original table inference and pandas coercion,
+only after the current parser's exact signature does not match. That compatibility
+reader is local to the audited private frame; complete values, axes, identities
+and source-artifact signatures must still match exactly. Unknown encodings fail
+closed. This audit does not rewrite a historical specification or native document,
+and introduces no numeric tolerance or reinterpretation of old measurements.
+
+Impact display statistics are declared by `materials_rules/impact_presentation.py`
+and consumed by public rule descriptions and explicit task-presentation guards.
+The existing executors still own the calculation: box/box-strip use median/IQR;
+bar and compatible workbook condition point-line use arithmetic mean/sample SD.
+Internal analysis n tables do not establish delivered valid-n disclosure. The
+explicit wide/bar `mean_sample_sd_n` route adds the source-checked visible summary
+described above; it does not reinterpret box statistics or old specifications. The
+guard preserves an unsupported scientific request rather than changing its
+template, statistical meaning, source observations or scientific owner.
+
 `delivery/filesystem_metadata.py` recognizes only a standalone regular `.DS_Store`
 as incidental Finder metadata within a visible delivery. Package validation,
 replacement snapshots and the delivery side of edit-state comparison share this
@@ -868,6 +1421,44 @@ and rollback guards. Metadata is never scientific or current-document evidence.
 Compatibility facades may preserve a public import or documented monkeypatch
 seam. They must not acquire business logic or become forwarding layers without
 a real compatibility caller.
+
+Shared consumers use named owner ports for original table reads, exact numeric
+evidence, race-safe source snapshots and source inventory. Existing local/private
+aliases remain where supported patch seams need them; byte, precision, shape,
+identity and before/after source guards retain the same implementations.
+`rendering_contract/legacy_algorithms.py` exposes named compatibility bindings to
+the same sealed tick/legend functions and series values. Grammar consumes that
+contract without changing the 24 sealed source entries, v1 manifest or historical
+compiler interpretation. This does not complete general policy injection.
+
+Unused private facade reexports can retire only after checking literal/dynamic
+callers, public promises and persisted references. The transform implementation
+reference in historical ledgers is retained. TGA's documented compatibility
+adapter, public modes, Qt shims, mapping v1 inspection and worker `-m` entrypoints
+remain supported. Cell text reuses its source-table owner; provider free text
+uses a named typed-provider port, retaining boundary aliases and identical error
+behavior. The template validator shares its catalog; the environment factory
+shares its provider owner while public imports and absent-provider behavior stay
+the same.
+
+The unused `studio_core.document_archive` module and private
+`semantic_sources.series_labels._constant_sample_label` helper are retired.
+Manual-edit preservation remains in the live figure-set transaction in
+`figure_set_storage`, including backup hashes, history and rollback; the other
+sample-label helpers retain their existing reader callers. The retired source
+paths remain classified by their existing verification owners so a deletion
+cannot bypass the changed-file guard. Worker entrypoints, registered CLI modes,
+public compatibility ports and persisted implementation references are retained.
+
+The archive module's orphaned generated-hash lookup and unused workflow metric
+and figure-style aliases are also retired; live transaction and rendering owners
+retain their implementations. The unused `statsmodels` base requirement is
+removed from distribution dependency discovery without uninstalling local
+packages. Tests retain their complete node/parameter set and scientific/security
+assertions; only an uncalled readiness-test helper is removed, with the changed
+test-source bytes rebound in the preliminary corpus inventory.
+The untyped workflow export helper has an exact changed owner that reuses the
+workflow export regressions; the strict type-path sets remain unchanged.
 
 Readiness registry freshness covers rule declarations and render-request policy,
 not current implementation bytes or environment identity. Historical owner

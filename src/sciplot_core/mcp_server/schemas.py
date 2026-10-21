@@ -16,12 +16,27 @@ def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, 
 
 
 def tool_definitions() -> list[Tool]:
-    from sciplot_core.task_control import task_request_schema, task_response_schema
-    from sciplot_core.task_choice_schema import table_region_schema
-    from sciplot_core.task_group_contract import group_request_schema, group_responses_schema
-    from sciplot_core.task_comparison_contract import comparison_request_schema, comparison_selection_schema
     from sciplot_core.plot_document.schema import patch_schema
-    from sciplot_core.plot_engine.contracts import create_schema, rollback_schema, decide_schema
+    from sciplot_core.plot_engine.contracts import (
+        create_schema,
+        decide_schema,
+        resume_schema,
+        rollback_schema,
+    )
+    from sciplot_core.plot_engine.typed_intent import intent_schema
+    from sciplot_core.plot_engine.managed_delivery_contract import managed_delivery_schema
+    from sciplot_core.task_choice_schema import table_region_schema
+    from sciplot_core.task_comparison_contract import (
+        comparison_request_schema,
+        comparison_selection_schema,
+    )
+    from sciplot_core.task_control import task_request_schema, task_response_schema
+    from sciplot_core.task_common_edits import common_edit_schema
+    from sciplot_core.task_paper_contract import paper_request_schema
+    from sciplot_core.task_group_contract import (
+        group_request_schema,
+        group_responses_schema,
+    )
 
     string = {"type": "string", "minLength": 1}
     sha = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
@@ -46,37 +61,68 @@ def tool_definitions() -> list[Tool]:
         ))
 
     semantic_path = {**string, "pattern": "^/"}
-    semantic_plot = {"plot": {**semantic_path, "description": "Stable absolute local plot document directory returned by project_open or plot_create."}}
-    add("project_open", "Open one existing saved figure as a persistent semantic document. Returns stable object IDs, exact revision, current capabilities and legacy coverage. Does not overwrite the native figure.",
-        {"target": semantic_path, "figure_id": string}, ["target"], idempotent=True)
-    add("plot_describe", "Read current semantic objects, scientific and presentation hashes, dependency status and the next decision. Reuses the durable document without rebuilding scientific data.",
-        semantic_plot, ["plot"], read_only=True)
-    add("plot_create", "Create a source-bound semantic plot from an exact source and explicit optional rule/template/profile. Keep idempotency_key unchanged when retrying; unresolved scientific choices return a decision.",
+    description = {"oneOf": [
+        object_schema({"scope": {"const": "summary"}}, ["scope"]),
+        object_schema({"scope": {"const": "edit"}, "target": string, "property": string},
+                      ["scope", "target", "property"]),
+    ], "description": "Use summary or edit only when object_operations advertises that scope. Edit selects one advertised stable target/property. Omit for unknown authority or a full response; LegacyPlot native coverage remains explicit."}
+    semantic_plot = {"plot": {**semantic_path, "description": "Exact absolute plot target returned in plot_objects or project_open: a document directory or a supported bound native figure VSZ."}}
+    add("plot_deliver", "Package an ordered list of exact current ManagedPlot revisions into a new native-snapshot delivery and ZIP. Reuses per-plot audited export and native Save, retains original source bytes, reports partial completion and resumes the identical request. Never replaces an existing destination or claims a portable ManagedPlot registry. Local semantic continuation and independent native editing remain distinct.",
+        {"request": managed_delivery_schema()}, ["request"], idempotent=True)
+    add("project_open", "Open one existing saved figure. A known ManagedPlot or supported bound native suite object advertises summary/edit scopes and legal deltas in object_operations. A multi-figure suite requires figure_id or its exact returned VSZ. Unknown authority uses full open. Does not overwrite or promote native coverage.",
+        {"target": semantic_path, "figure_id": string, "description": description}, ["target"], idempotent=True)
+    add("plot_describe", "Read current object capabilities and values without rebuilding science. When advertised, use scope edit for one target/property and its exact schema. Supported native suite values come from the current selected VSZ. Omit description for full state; stale inputs and pending work remain explicit.",
+        {**semantic_plot, "description": description}, ["plot"], read_only=True)
+    add("plot_create", "Expert Template/Binding creation through the existing semantic lifecycle; ordinary attachment plotting uses task_start sources+intent. Source-only compatibility remains. Keep idempotency_key unchanged on retry; unresolved scientific choices return a decision.",
         {"request": create_schema()}, ["request"], idempotent=True, destructive=True)
     add("plot_patch", "Apply one atomic semantic change batch to exact stable object IDs and base_revision. Local engine classifies risk, checks scientific invariants and compiles/exports. Reuse the identical idempotency_key after a lost reply; never swap data bindings through a presentation patch.",
         {**semantic_plot, "request": patch_schema()}, ["plot", "request"], idempotent=True, destructive=True)
+    add("plot_intent", "After current ManagedPlot FigureSpec v2 state, plan then apply one literal axis label or annotation text edit. Select an advertised stable target ID or unique exact current label, plot ID, revision and idempotency key. Plan is read-only and returns unit/anchor context; apply uses the existing plot patch transaction. Not for LegacyPlot.",
+        {**semantic_plot, "request": intent_schema()}, ["plot", "request"], idempotent=True, destructive=True)
+    add("plot_resume", "Explicitly continue one existing semantic transaction using its original plot ID, base revision and idempotency key after a lost reply or daemon restart. Does not create a transaction or accept a pending review. Original source/native guards and export-only recovery remain active.",
+        {**semantic_plot, "request": resume_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_render", "Render the current semantic document through its native backend; reuses valid current cache and preserves the saved scientific state.",
         semantic_plot, ["plot"], idempotent=True)
-    add("plot_export", "Export the committed semantic revision. A prior export failure resumes export without applying a patch again. Handoff requires ready delivery evidence.",
+    add("plot_export", "Export the current selected object through its authority owner. A supported bound native figure exports independently of optional suite figures. A prior export failure continues without applying a patch again. Handoff requires ready evidence.",
         semantic_plot, ["plot"], idempotent=True, destructive=True)
     add("plot_rollback", "Restore an explicit historical presentation as a new revision, bound to base_revision and idempotency_key. Preserves revision history and scientific state.",
         {**semantic_plot, "request": rollback_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_decide", "Answer the specific current local decision. A review uses decision_id and base_revision; a creation question carries its existing source-bound response. Never invent scientific choices.",
         {**semantic_plot, "request": decide_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("capabilities", "Read the versioned local control contract. No model or provider is started.", {}, [], read_only=True)
+    from sciplot_core.panel_assembly.service import composition_request_schema
+
+    add("compose_capabilities", "Read the compact local panel assembly intent contract. Placement never calls a model or changes scientific state.", {}, [], read_only=True)
+    add("compose", "Create, inspect, arrange or export a local panel layout. Add/replace binds exact existing figures/images locally; apply requires expected_revision. Export reflows supported native panels at target mm, preserves text sizes and rejects source drift. Dragging and spacing use the same deterministic local owner.",
+        {"request": composition_request_schema()}, ["request"], destructive=True)
     add("task_capabilities", "Read a small task capability index or one exact schema. Pass its contract_sha256 as expected_contract_sha256 when fetching sections; server validation remains complete.",
-        {"section": {"enum": ["request", "response", "operations", "table_region"]}, "name": string,
+        {"section": {"enum": ["request", "response", "operations", "table_region", "common_edit", "paper_request", "semantic_intent"]}, "name": string,
          "expected_contract_sha256": sha, "full": {"type": "boolean"}}, [], read_only=True)
-    add("task_start", "Start one authorized local create/edit/export/update_source task. Answer source-bound column questions; inspect all returned source-update or edit candidate PNGs before resuming.",
+    add("task_start", "Start one authorized local create/edit/export/update_source task. Semantic create uses sources+small intent, returns one original-source plan and scientific decisions; the program expands Binding/FigureSpec locally. Answer source-bound column questions; inspect all returned source-update or edit candidate PNGs before resuming.",
         {"request": task_request_schema(), "task_dir": string, "full": full}, ["request"])
+    common_schema = common_edit_schema()
+    add("task_edit", "Execute exact common palette, typography or supported legend clauses through the existing plot transaction. Preserve data/scientific state. For recovery after a lost first reply, choose a stable task_dir before the first call and reuse it with identical intent. Existing pending/review/export continuations remain authoritative; unavailable properties are rejected.",
+        common_schema["properties"], common_schema["required"], destructive=True)
+    add("task_continue", "Read current saved originals within explicit bounded search_roots, distinguish export snapshots and return existing guarded edit/recovery arguments. Exact source hashes only filter candidates; copies/versions need explicit target selection. No rebinding, edit or regeneration occurs.",
+        {"source": string, "search_roots": {"type": "array", "minItems": 1, "maxItems": 20, "items": string},
+         "tasks_root": string, "target": string, "figure_id": string}, ["source"], read_only=True)
+    add("paper_capabilities", "Read the closed paper-selection schema; with exact project and figure_id, obtain current source/native version guards. No exports or source changes.",
+        {"project": string, "figure_id": string}, [], read_only=True)
+    add("paper_start", "Package an ordered list of exact selected figures across projects as PDF/TIFF, portable editable VSZ and sealed source-version evidence. Original projects stay unchanged; existing destinations are rejected. Reuse paper_dir with the identical request after an uncertain reply.",
+        {"request": paper_request_schema(), "paper_dir": string}, ["request", "paper_dir"], idempotent=True, destructive=True)
+    add("paper_inspect", "Inspect the original paper execution and current selected-source/delivery evidence. Historical completion is separate from currentness; no export or retry occurs.",
+        {"paper": string}, ["paper"], read_only=True)
+    add("paper_resume", "Resume only unfinished exact selected-figure exports or publication in the original paper_dir. Sealed items are rechecked and reused; changed sources or destination contents are blocked. Does not select new versions or overwrite an existing unrelated package.",
+        {"paper": string}, ["paper"], idempotent=True, destructive=True)
     add("task_inspect", "Resume context from a saved task. This does not rerun or certify its historical result.",
         {"task": string, "full": full}, ["task"], read_only=True)
     add("task_table_region", "Read up to 128 original rows by 64 columns, bound to the current table question and source bytes. Does not change the question or select cells.",
         {"task": string, "query": table_region_schema()}, ["task", "query"], read_only=True)
     add("task_find", "Find creation receipts by exact original source path in the source-adjacent task history or an explicit tasks_root. Returns candidates and source currentness; inspect the selected task/project before continuing. Does not create or choose a project.",
-        {"source": string, "tasks_root": string, "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
+        {"source": string, "tasks_root": string, "search_roots": {"type": "array", "minItems": 1, "maxItems": 20, "items": string},
+         "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
         ["source"], read_only=True)
-    add("task_resume", "Continue a saved task. Column answers require expected_question_id; source-update decisions require expected_revision_id. Style previews use expected_operation_id and blocked preview corrections use expected_preview_revision. Existing user intent authorizes the requested work.",
+    add("task_resume", "Continue a saved task. Semantic confirm_plan uses expected_question_id and listed choices; revise_intent uses the current intent_revision and retains prior attempts. Retry resumes the same frozen attempt/export. Column answers require expected_question_id; source-update decisions require expected_revision_id. Style previews use expected_operation_id and blocked preview corrections use expected_preview_revision. Existing user intent authorizes the requested work.",
         {"task": string, "response": task_response_schema(), "full": full}, ["task", "response"])
     add("group_start", "Run 1–32 independent experiment tasks from an explicit list. Optional shared sample_style_preset applies to each created figure through ordinary reviewed edits. One item needing judgment does not stop others. Returns a local overview and native PNG resources; no model calls.",
         {"request": group_request_schema(), "group_dir": string}, ["request", "group_dir"])

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from sciplot_core.materials_rules import format_unit_label
 
 
@@ -48,7 +49,13 @@ class PerformanceMetric:
 
     @property
     def radar_label(self) -> str:
-        return self.display_label
+        unit = _display_unit(self.unit) if self.unit else "unit not declared"
+        direction = "↑" if self.direction == "higher" else "↓"
+        bounds = (
+            f"; {self.scale_min:g}–{self.scale_max:g}"
+            if self.scale_min is not None and self.scale_max is not None else ""
+        )
+        return f"{self.display_label}\n({unit}{bounds}) {direction}"
 
 
 @dataclass(frozen=True)
@@ -87,6 +94,11 @@ class PerformanceComparison:
     source_row_count: int
     metrics: tuple[PerformanceMetric, ...]
     materials: tuple[PerformanceMaterial, ...]
+    selection: dict[str, Any] | None = None
+    source_observations: tuple[dict[str, Any], ...] = ()
+    selected_row_count: int | None = None
+    excluded_metrics: tuple[str, ...] = ()
+    literal_metric_labels: tuple[str, ...] = ()
 
     @property
     def samples(self) -> tuple[PerformanceMaterial, ...]:

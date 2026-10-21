@@ -110,6 +110,9 @@ def restyle_native_document(
     old_figure: dict[str, Any],
     new_figure: dict[str, Any],
     expected_sha256: str,
+    *,
+    targets_override: list | None = None,
+    preserve_native: bool = False,
 ) -> dict[str, Any]:
     """Preserve the original; write only changed, conflict-free style targets."""
     from veusz import document
@@ -137,9 +140,9 @@ def restyle_native_document(
     changes = []
     targets = []
     # Validate every target before mutating the in-memory candidate.
-    for native_path, old_fields, new_fields in _presentation_targets(
-        old_figure, new_figure, pairs
-    ):
+    selected = (_presentation_targets(old_figure, new_figure, pairs)
+                if targets_override is None else targets_override)
+    for native_path, old_fields, new_fields in selected:
         interface.To(native_path)
         if set(old_fields) != set(new_fields):
             raise ValueError(
@@ -165,6 +168,10 @@ def restyle_native_document(
                     "comparison": new_field["kind"],
                 }
             )
+    from sciplot_core.rheology_tts_native_state import native_state
+
+    excluded = {native_path + "/" + name for native_path, name, _ in targets}
+    baseline_state = native_state(doc, excluded) if preserve_native else None
     for native_path, name, field in targets:
         interface.To(native_path)
         set_native_field(interface, name, field)
@@ -181,6 +188,8 @@ def restyle_native_document(
         )
         candidate = document.Document()
         candidate.load(str(out_path))
+        if preserve_native and native_state(candidate, excluded) != baseline_state:
+            raise ValueError("Display candidate changed unrelated native settings or widget order.")
         candidate_interface = CommandInterface(candidate)
         for native_path, name, field in targets:
             candidate_interface.To(native_path)
@@ -199,6 +208,7 @@ def restyle_native_document(
             "status": "passed",
             "changed_field_count": len(changes),
             "scope": "Only compiled old-to-new target changes enforced; unrelated native settings retained.",
+            "unrelated_native_state_unchanged": preserve_native,
         }
         return {
             "kind": "sciplot_rheology_tts_restyle_candidate",

@@ -10,7 +10,7 @@ from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_re
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.source_coverage.managed_documents import _source_records
+from sciplot_core.source_coverage.managed_documents import source_records
 from sciplot_core.studio_core.project_query_paths import (
     bound_delivery_project,
     canonical_path,
@@ -51,6 +51,21 @@ def source_indicators(
         expected_sha256=expected,
     )
     mapped_raw: dict[str, str] = {}
+    if "categorical_binding" in request:
+        from sciplot_core.mapping_contract.categorical import validate_categorical_context
+
+        try:
+            validate_categorical_context(request)
+            if source is None:
+                raise ValueError("The categorical project lost its original source.")
+            expected_file = request["categorical_binding"]["source_sha256"]
+            actual_file = existing_file_sha256(canonical_path(source))
+            input_state = _indicator(actual_file == expected_file, path=str(source),
+                sha256=actual_file, expected_sha256=expected_file,
+                scope="categorical_original_file_sha256")
+            mapped_raw[str(source)] = expected_file
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            input_state = _indicator(False, path=str(source) if source else None, error=str(exc))
     if "data_mapping_execution" in request:
         try:
             if source is None:
@@ -99,7 +114,7 @@ def source_indicators(
             for unit in units:
                 for record in unit.get("source_artifacts", []):
                     canonical_path(Path(record["path"]))
-            for path, digest in _source_records(spec).items():
+            for path, digest in source_records(spec).items():
                 canonical_path(path)
                 if str(path) in prepared and prepared[str(path)] != digest:
                     raise ValueError("Prepared figures disagree about a source hash.")

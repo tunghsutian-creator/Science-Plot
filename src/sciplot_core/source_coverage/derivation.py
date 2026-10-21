@@ -94,6 +94,7 @@ def _terminal_render_derivation(
                 private_by_original[str(snapshot["path"])]
                 for snapshot in terminal_snapshots
             ],
+            source_artifact_origins=private_to_original,
             spec_count=len(spec_unit_groups),
         )
         if len(requests) != len(spec_unit_groups):
@@ -126,6 +127,8 @@ def _terminal_render_derivation(
                 terminal_sources=[
                     private_by_original[path] for path in expected_source_paths
                 ],
+                **({"source_artifact_origins": private_to_original} if ((request.get("data_mapping_application") or {}).get("source_groups")
+                    or (request.get("categorical_binding") or {}).get("source_identity_version")) else {}),
             )
             if (
                 derived.get("kind") != "sciplot_terminal_render_data_contract"

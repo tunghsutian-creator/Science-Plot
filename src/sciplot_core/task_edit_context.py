@@ -40,15 +40,31 @@ def edit_context(target: Path, *, operations: list[str], figure_id: str | None =
                 "next_step": {"action": "repair_runtime", "next_actions": runtime.get("next_actions", [])}}
 
     names = set(capabilities["operation_names"])
+    categorical = bool(names & {"set_category_display_labels", "set_categorical_display_style"})
     annotations = bool(names & {"add_annotation", "add_reference_line", "add_peak_label",
                                 "remove_annotation", "update_annotation"})
     axes = bool(names & {"add_annotation", "add_reference_line", "add_peak_label",
                          "update_annotation", "set_axis_range"})
     current = inspect_project(
-        path, figure_id=figure_id, native=bool(names & {"set_style", "add_peak_label"}),
+        path, figure_id=figure_id, native=categorical or bool(names & {"set_style", "add_peak_label"}),
         include_annotations=annotations, include_axes=axes,
     )
     require_edit_source_current(current)
+    category_targets = None
+    if categorical:
+        import json
+        from sciplot_core.studio_core.categorical_display import context
+        from sciplot_core.foundation.file_hashing import file_sha256
+
+        selected_raw = current["selected_figure"]
+        raw_spec = Path(selected_raw["spec"]).read_bytes()
+        from hashlib import sha256
+
+        if sha256(raw_spec).hexdigest() != selected_raw["spec_sha256"]:
+            raise TaskControlError("stale_revision", "The categorical mapping changed during context inspection.")
+        category_targets = context(json.loads(raw_spec), selected_raw.get("objects"))
+        if file_sha256(Path(selected_raw["document"])) != selected_raw["document_sha256"]:
+            raise TaskControlError("stale_revision", "The saved categorical figure changed during context inspection.")
     if "objects" in current["selected_figure"]:
         current = compact_result(current)
     selected = current["selected_figure"]
@@ -67,4 +83,6 @@ def edit_context(target: Path, *, operations: list[str], figure_id: str | None =
                             "message": "Fill request_template.operations with the complete authorized batch, using only selected schemas and current targets. Review the returned candidate image and scientific audit, then resume with its response_template. No additional Doctor, capability or inspect call is needed for this unchanged context."}}
     if "add_peak_label" in names:
         result["next_step"]["peak_evidence"] = "A peak label still requires a current source-bound candidate from project peaks; do not infer a candidate from image coordinates."
+    if category_targets is not None:
+        result["categorical_display"] = category_targets
     return result

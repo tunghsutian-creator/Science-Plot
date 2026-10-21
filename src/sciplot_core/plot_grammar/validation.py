@@ -5,6 +5,7 @@ from typing import Any
 from sciplot_core.plot_document.errors import fail
 from sciplot_core.plot_document.validation import validate_wire
 from sciplot_core.plot_transforms.datasets import validate_dataset
+from sciplot_core.plot_layout.grid import validate_grid_cells
 
 from .schema import figure_spec_schema, figure_layout_schema
 from .styles import STYLE_FIELDS
@@ -13,6 +14,23 @@ from .styles import STYLE_FIELDS
 def _check(condition: bool, code: str, message: str, path: str) -> None:
     if not condition:
         fail(code, message, path, code.removeprefix("figure_"))
+
+
+def scale_quantity_matches(scale: dict[str, Any], quantity: str) -> bool:
+    return quantity in scale["quantity_members"] if "quantity_members" in scale else quantity == scale["quantity"]
+
+
+def validate_quantity_members(scales: list[dict[str, Any]], views: list[dict[str, Any]]) -> None:
+    for scale in scales:
+        if "quantity_members" in scale:
+            members = set(scale["quantity_members"])
+            _check(scale["dimension"] == "y" and (scale["quantity"] == "response" or
+                   scale["quantity"] == "modulus" and members <= {"storage_modulus", "loss_modulus"}),
+                   "figure_scale_quantity_group", "Explicit members declare a shared response display or the modulus family; they never claim a derived magnitude or replace a component's identity.", "/scales/quantity_members")
+            actual = {layer["mapping_semantics"][axis] for view in views for layer in view["layers"]
+                      for axis in ("x", "y") if layer[axis + "_scale"] == scale["id"]}
+            _check(actual == members, "figure_scale_quantity_members",
+                   "Explicit scale quantity members must exactly cover all mapped scientific quantities, including hidden layers.", "/scales/quantity_members")
 
 
 def _identities(spec: dict[str, Any]) -> None:
@@ -39,6 +57,7 @@ def _composition(spec: dict[str, Any]) -> None:
         "figure_cell_bounds", "Grid cell positions must be inside declared rows and columns.", "/composition/cells")
     _check(len(composition["row_weights"]) == composition["rows"] and len(composition["column_weights"]) == composition["columns"],
         "figure_grid_weights", "Each declared row and column requires one positive weight.", "/composition")
+    validate_grid_cells(composition, list(views))
     kind = composition["kind"]
     _check(kind != "single" or len(views) == composition["rows"] == composition["columns"] == 1,
         "figure_single_composition", "Single composition has exactly one cell and view.", "/composition")
@@ -115,10 +134,34 @@ def validate_axis_presentation(axis: dict[str, Any], scale: dict[str, Any], *, b
                "figure_axis_label_runs", "Explicit axis label runs must reconstruct the exact plain label.", "/views/axes/label_runs")
 
 
-def validate_figure_spec(value: Any) -> dict[str, Any]:
+def _domain_rules(spec: dict[str, Any], *, pending_domains: bool) -> None:
+    current = spec.get("domain_semantics") == "current_view_v1"
+    for scale in spec["scales"]:
+        _check(("domain_rule" in scale) == current, "figure_domain_rule_scope",
+               "Current-view rules require the explicit figure marker and one complete rule per scale.", "/scales/domain_rule")
+        if current:
+            _check(scale["transform"] in {"linear", "log"}, "figure_current_view_transform",
+                   "Current-view domains support only the declared linear and log transforms.", "/scales/transform")
+            for index, endpoint in enumerate(("minimum", "maximum")):
+                rule = scale["domain_rule"][endpoint]
+                if rule["mode"] == "fixed":
+                    _check(scale["transform"] != "log" or rule["value"] > 0, "figure_scale_domain",
+                           "Fixed log endpoints must be positive.", "/scales/domain_rule")
+                    _check(pending_domains or rule["value"] == scale["domain"][index], "figure_domain_projection",
+                           "The numeric domain must exactly project its current fixed endpoint.", "/scales/domain")
+    for view in spec["views"]:
+        for axis in view["axes"]:
+            _check(("ticks_mode" in axis) == current, "figure_ticks_mode_scope",
+                   "Current-view axes require explicit automatic or fixed tick ownership.", "/views/axes/ticks_mode")
+            _check(axis.get("ticks_mode") != "automatic" or "tick_labels" not in axis,
+                   "figure_automatic_tick_labels", "Explicit category labels require fixed ticks.", "/views/axes/tick_labels")
+
+
+def validate_figure_spec(value: Any, *, pending_domains: bool = False) -> dict[str, Any]:
     validate_wire(value, figure_spec_schema(), code="figure_spec_invalid")
     assert isinstance(value, dict)
     spec = deepcopy(value)
+    _domain_rules(spec, pending_domains=pending_domains)
     from sciplot_core.rendering_contract import require_binding
     for field in ("rendering_contract", "composition_policy"):
         if field in spec:
@@ -168,7 +211,7 @@ def validate_figure_spec(value: Any) -> dict[str, Any]:
                 name = layer[axis + "_scale"]
                 _check(name in scales, "figure_scale_reference", "Layers must bind existing scale identities.", "/views/layers")
                 scale = scales[name]
-                _check(scale["dimension"] == axis and scale["quantity"] == layer["mapping_semantics"][axis],
+                _check(scale["dimension"] == axis and scale_quantity_matches(scale, layer["mapping_semantics"][axis]),
                     "figure_scale_mapping_conflict", "Scale dimension and quantity must match the explicitly declared mapping semantics.", "/views/layers")
                 used.add(name)
                 bound.add(name)
@@ -184,8 +227,10 @@ def validate_figure_spec(value: Any) -> dict[str, Any]:
             dimension = "x" if axis["side"] in {"top", "bottom"} else "y"
             _check(scale["dimension"] == dimension, "figure_axis_dimension", "Axis guide side must match the scale dimension.", "/views/axes")
             low, high = scale["domain"]
-            _check(all(low <= tick <= high for tick in axis["ticks"]), "figure_tick_domain", "All explicit ticks must lie inside their scale domain.", "/views/axes/ticks")
+            _check(pending_domains and "domain_semantics" in spec or all(low <= tick <= high for tick in axis["ticks"]),
+                   "figure_tick_domain", "All explicit ticks must lie inside their scale domain.", "/views/axes/ticks")
     _check(used == set(scales), "figure_unused_scale", "Each scale must be consumed by at least one scientific layer.", "/scales")
+    validate_quantity_members(spec["scales"], spec["views"])
     _composition(spec)
     for guide in spec["guides"]:
         local = guide["scope"] == "view"
@@ -233,6 +278,14 @@ def validate_bound_data(spec: dict[str, Any], datasets: dict[str, dict[str, Any]
                 if scale["transform"] == "log":
                     _check(all(value is None or value > 0 for value in column["values"]), "figure_log_data_domain",
                         "Logarithmic mappings cannot silently discard zero or negative measurements.", "/views/layers/mappings")
+            if not layer.get("visible", True):
+                xs, ys = (dataset["columns"][layer["mappings"][name]]["values"] for name in ("x", "y"))
+                _check(any(x is not None and y is not None for x, y in zip(xs, ys, strict=True)),
+                       "figure_empty_hidden_layer", "Hidden layers still require paired scientific measurements.", "/views/layers/mappings")
+            for mark in layer["marks"]:
+                if mark["type"] == "bar" and scales[layer["y_scale"]]["transform"] == "log":
+                    _check(mark["baseline"] > 0, "figure_log_bar_baseline",
+                           "Every bar baseline must be positive on a log scale, including hidden bars.", "/views/layers/marks/baseline")
             if "y_low" in layer["mappings"]:
                 low = dataset["columns"][layer["mappings"]["y_low"]]["values"]
                 high = dataset["columns"][layer["mappings"]["y_high"]]["values"]

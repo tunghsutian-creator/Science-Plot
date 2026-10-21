@@ -2,9 +2,10 @@
 
 from importlib import import_module
 from typing import Any
+from weakref import ref
 
+from sciplot_core.plot_backends.figure_marks import coordinates, fraction
 from sciplot_core.plot_backends.figure_plan import drawing_plan
-from sciplot_core.plot_backends.figure_marks import fraction, coordinates
 
 
 def native_publication_qa(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
@@ -15,20 +16,31 @@ def native_publication_qa(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
     observations: list[dict[str, Any]] = []
     utils: Any = import_module("veusz.utils")
     original = utils.Renderer
+    live_renderers: list[Any] = []
     dpi = 150
 
     def factory(*args: Any, **kwargs: Any) -> Any:
         renderer = original(*args, **kwargs)
+        # Veusz sometimes calls Renderer(...).render() inline.  Keep that
+        # temporary alive through painting without a renderer -> self cycle.
+        live_renderers.append(renderer)
         painter = args[0]
         widget = getattr(painter, "widget", None)
         path = widget.path if widget is not None else ""
         meta = metadata.get(path)
-        render = renderer.render
+        # Renderers retain their Qt painter.  An instance override that closes
+        # over the renderer (or one of its bound methods) forms a cycle and can
+        # postpone painter destruction until a later garbage-collection pass.
+        renderer_ref = ref(renderer)
+        render = type(renderer).render
 
         def measured() -> Any:
-            result = render()
+            live_renderer = renderer_ref()
+            if live_renderer is None:
+                raise RuntimeError("The native text renderer expired before measurement.")
+            result = render(live_renderer)
             if meta is not None:
-                bounds = renderer.getBounds()
+                bounds = live_renderer.getBounds()
                 factor = 25.4 / dpi
                 record: dict[str, Any] = {key: meta[key] for key in ("semantic_id", "role", "view_id", "allowed_bounds_mm") if key in meta}
                 record["bounds_mm"] = [float(bounds[0]) * factor, float(bounds[1]) * factor,
@@ -44,6 +56,7 @@ def native_publication_qa(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
         loaded.paintTo(helper, 0)
     finally:
         utils.Renderer = original
+        live_renderers.clear()
     expected_ids = sorted({node["semantic_id"] for node in nodes if node["type"] in {"label", "axis", "key"} and "semantic_id" in node})
     scales = {scale["id"]: scale for scale in ir["scales"]}
     points = []
@@ -51,6 +64,8 @@ def native_publication_qa(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
         panel = next(p for p in ir["layout"]["panels"] if p["view_id"] == view["id"])
         x0, y0, width, height = panel["plot_mm"]
         for layer in view["layers"]:
+            if not layer.get("visible", True):
+                continue
             data = coordinates(ir, layer)
             for x, y in zip(data["x"], data["y"], strict=True):
                 if x is not None and y is not None:

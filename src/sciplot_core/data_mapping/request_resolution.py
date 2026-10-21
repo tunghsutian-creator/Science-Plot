@@ -16,6 +16,7 @@ from sciplot_core.data_mapping.contracts import (
 from sciplot_core.data_mapping.execution_loading import (
     load_data_mapping_execution,
 )
+from sciplot_core.data_mapping.source_projection import mapping_source_groups
 
 
 def resolve_data_mapping_request(
@@ -109,6 +110,16 @@ def resolve_data_mapping_request(
         "raw_inputs_preserved": True,
         "outputs_verified": True,
     }
+    groups = mapping_source_groups(execution)
+    if groups:
+        application["source_groups"] = groups
+        application["expected_series_count_min"] = len(groups)
+        if mapping_source_groups(execution, replicates=True):
+            application["mapped_outputs"] = [
+                {key: group[key] for key in ("source_id", "path", "sha256", "rows")} for group in groups]
+        else:
+            application["expected_sample_labels"] = [group["source_id"] for group in groups]
+            application["expected_series_points"] = {group["source_id"]: group["rows"] for group in groups}
     effective["transform_ledger"] = deepcopy(application["transform_ledger"])
     effective["data_mapping_application"] = deepcopy(application)
     return effective, application

@@ -49,6 +49,7 @@ def _rebind_study_model(
     group_order: list[str] = []
     for reference in proposal.sources:
         label = (
+            reference.source_id if reference.identity and "pairs" in proposal.table_confirmation else
             proposal.sample_labels.get(reference.source_id)
             or Path(reference.relative_path).stem
             or reference.source_id
@@ -56,7 +57,9 @@ def _rebind_study_model(
         if label not in grouped:
             grouped[label] = []
             group_order.append(label)
-        matched = replicate_by_hash.get(reference.sha256)
+        # A whole-file digest proves a version, not which independently bound
+        # column/range represents a replicate. Current correspondence is exact.
+        matched = None if reference.identity else replicate_by_hash.get(reference.sha256)
         if matched is not None:
             grouped[label].append(matched)
             continue
@@ -65,7 +68,7 @@ def _rebind_study_model(
             (
                 None,
                 {
-                    "id": "",
+                    "id": reference.source_id if reference.identity else "",
                     "name": source_path.stem,
                     "order": 0,
                     "source_file": {
@@ -205,6 +208,20 @@ def _candidate_request(
         )
     if output_labels and "series_order" not in proposal.request_patch:
         request["series_order"] = list(output_labels)
+    if proposal.sources[0].identity and isinstance(request.get("render_options"), dict):
+        aliases = {source.source_id: proposal.display_labels.get(source.source_id, proposal.sample_labels[source.source_id])
+                   for source in proposal.sources}
+        frozen = []
+        for style in request["render_options"].get("series_styles", []):
+            if not isinstance(style, dict):
+                raise ValueError("A mapping creation style must explicitly select one source group.")
+            target = style.get("series_id") or style.get("label") or style.get("sample") or style.get("name")
+            matches = [key for key, label in aliases.items() if (key == target if "series_id" in style else label == target)]
+            if len(matches) != 1:
+                raise ValueError("A mapping creation style selector must identify exactly one original group.")
+            frozen.append({**style, "series_id": matches[0]})
+        if "series_styles" in request["render_options"]:
+            request["render_options"]["series_styles"] = frozen
     series_order = request.get("series_order")
     if isinstance(series_order, list):
         render_options = (

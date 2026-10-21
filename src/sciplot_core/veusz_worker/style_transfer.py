@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.mapping_contract.source_identity import scientific_group_binding
+from sciplot_core.veusz_worker.style_projection import LEGEND_POSITION_FIELDS, project_transferred_styles
 
 
 _AXIS_STYLE = (
@@ -26,12 +28,7 @@ _XY_COLORS = ("PlotLine/color", "MarkerFill/color", "MarkerLine/color")
 _BOX_STYLE = ("Border/width", "Whisker/width")
 _BOX_COLORS = ("Fill/color", "Border/color", "Whisker/color")
 _TEXT_STYLE = ("Text/font", "Text/size")
-_LEGEND_POSITION = {
-    "horzPosn": "horz_position",
-    "vertPosn": "vert_position",
-    "horzManual": "horz_manual",
-    "vertManual": "vert_manual",
-}
+_LEGEND_POSITION = LEGEND_POSITION_FIELDS
 
 
 def _compatibility_reason(
@@ -68,6 +65,13 @@ def _compatibility_reason(
 
 
 def _series_identity(item: dict[str, Any]) -> tuple[str, str]:
+    binding = item.get("source_binding")
+    if binding is not None:
+        # Pair only a complete scientific correspondence, including the group
+        # ID and original category/sample/condition proof. Display edits never
+        # establish (or break) this relation.
+        proof = scientific_group_binding(binding)
+        return "source:" + json.dumps(proof, sort_keys=True, ensure_ascii=False), str(item.get("presentation_kind") or "curve")
     # Full labels retain condition and replicate distinctions. Ambiguous repeated
     # labels are deliberately not paired using their position or dataset name.
     return str(item.get("label") or ""), str(item.get("presentation_kind") or "curve")
@@ -264,8 +268,8 @@ def transfer_document_styles(
     from PyQt6 import QtWidgets
     from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
     from sciplot_core.studio_core.qt_compat import ensure_veusz_loader_compat
-    from sciplot_core.studio_core.persistence import atomic_save_veusz_document
     from sciplot_core.veusz_worker.spec_audit import audit_spec_data
+    from sciplot_core.studio_core.style_transfer_storage import save_transferred_style_pair
 
     ensure_veusz_runtime_path()
     ensure_veusz_loader_compat()
@@ -332,13 +336,9 @@ def transfer_document_styles(
                 "Style-transfer input changed while its native documents were loaded."
             )
         if applied:
-
-            def validate(path: Path, **_kwargs: Any) -> bool:
-                audit = audit_spec_data(path, current_spec, check_presentation=False)
-                return str(audit["status"]) == "passed"
-
-            payload["save"] = atomic_save_veusz_document(
-                docs[1], current, staged_validator=validate
+            payload["save"] = save_transferred_style_pair(
+                docs[1], current, current_spec, project_transferred_styles(new_spec, applied),
+                input_hashes=hashes,
             )
         payload.update(
             applied=applied,

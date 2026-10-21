@@ -45,6 +45,7 @@ def _authoritative_terminal_render_requests(
     declared_requests: list[dict[str, Any]] | None,
     private_sources: list[Path],
     spec_count: int,
+    source_artifact_origins: dict[str, dict[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     from sciplot_core.studio_render import derive_terminal_render_data_contract
 
@@ -70,6 +71,8 @@ def _authoritative_terminal_render_requests(
     baseline = derive_terminal_render_data_contract(
         request=base_request,
         terminal_sources=private_sources,
+        **({"source_artifact_origins": source_artifact_origins} if ((base_request.get("data_mapping_application") or {}).get("source_groups")
+            or (base_request.get("categorical_binding") or {}).get("source_identity_version")) else {}),
     )
     baseline_units = baseline.get("units")
     if not isinstance(baseline_units, list) or not baseline_units:

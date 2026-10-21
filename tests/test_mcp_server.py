@@ -17,15 +17,16 @@ from sciplot_core.mcp_server.resources import ResourceStore
 from sciplot_core.mcp_server.schemas import tool_definitions
 from sciplot_core.studio_core.annotation_schema import annotation_operation_capabilities
 
-
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP1sAAAAASUVORK5CYII=")
 
 
 def test_tool_discovery_uses_closed_shared_operation_schema():
     tools = {item.name: item for item in tool_definitions()}
-    assert len(tools) == 32
+    assert len(tools) == 43
+    assert {"sciplot_compose", "sciplot_compose_capabilities"} <= tools.keys()
     assert {"sciplot_project_open", "sciplot_plot_create", "sciplot_plot_describe", "sciplot_plot_patch",
-            "sciplot_plot_render", "sciplot_plot_export", "sciplot_plot_rollback", "sciplot_plot_decide"} <= tools.keys()
+            "sciplot_plot_intent", "sciplot_plot_render", "sciplot_plot_export", "sciplot_plot_rollback",
+            "sciplot_plot_decide", "sciplot_plot_resume"} <= tools.keys()
     assert tools["sciplot_task_table_region"].annotations.read_only_hint is True
     for item in tools.values():
         assert item.input_schema["additionalProperties"] is False
@@ -173,3 +174,18 @@ def test_resource_failure_does_not_erase_completed_operation(monkeypatch):
         assert result.structured_content["resource_warnings"]
 
     anyio.run(scenario)
+
+
+def test_attachment_task_route_is_shared_with_cli_skill_and_remains_small():
+    from jsonschema import Draft202012Validator
+    from sciplot_core.mcp_server.server import INSTRUCTIONS
+    from sciplot_core.mcp_server.schemas import tool_definitions
+
+    tools = {tool.name: tool for tool in tool_definitions()}
+    request = {"version": 1, "action": "create", "sources": ["/original/data.xlsx"],
+               "intent": {"x": {"quantity": "time", "unit": "min"}, "y": {"quantity": "mass", "minimum": 95}}}
+    assert Draft202012Validator(tools["sciplot_task_start"].input_schema).is_valid({"request": request})
+    assert "Prefer task_start" in INSTRUCTIONS and "task_resume" in INSTRUCTIONS
+    assert "Explicit expert" in INSTRUCTIONS and "plot_create" in INSTRUCTIONS
+    assert "plot_create for source-bound creation" not in INSTRUCTIONS
+    assert "sciplot_plot_create" in tools  # The advanced/compatibility API is retained.

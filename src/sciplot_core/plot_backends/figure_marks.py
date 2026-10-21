@@ -3,7 +3,9 @@
 from math import log10
 from typing import Any
 
-from sciplot_core.plot_backends.native_primitives import dataset_name, native_name, number_unit, _text
+from sciplot_core.plot_backends.native_primitives import dataset_name, display_dataset_name, native_name, number_unit, _text
+from sciplot_core.style_values import normalize_line_style
+from sciplot_core.plot_grammar.mark_geometry import data_coordinates, mark_data_geometry
 
 
 def graph_path(view_id: str) -> str:
@@ -27,49 +29,32 @@ def fraction(value: float, scale: dict[str, Any]) -> float:
 
 
 def coordinates(ir: dict[str, Any], layer: dict[str, Any]) -> dict[str, list[Any]]:
-    columns = ir["datasets"][layer["dataset_id"]]["columns"]
-    return {channel: list(columns[column]["values"]) for channel, column in layer["mappings"].items()}
+    return data_coordinates(ir["datasets"], layer)
 
 
 def mark_geometry(ir: dict[str, Any], view: dict[str, Any], layer: dict[str, Any], mark: dict[str, Any]) -> list[dict[str, Any]]:
     """Explicit mark geometry retains original source ordering and missing breaks."""
     data = coordinates(ir, layer)
     kind = mark["type"]
+    if kind == "line" and "interpolation" in mark:
+        return [{"xData": display_dataset_name(mark["id"], "x"), "yData": display_dataset_name(mark["id"], "y")}]
     if kind in {"line", "point"}:
         return [{"xData": dataset_name(layer["dataset_id"], layer["mappings"]["x"]),
                  "yData": dataset_name(layer["dataset_id"], layer["mappings"]["y"])}]
-    rows = list(zip(data["x"], data["y"], strict=True))
     scales = {scale["id"]: scale for scale in ir["scales"]}
     x_scale, y_scale = scales[layer["x_scale"]], scales[layer["y_scale"]]
-    if kind == "band":
-        runs: list[list[tuple[float, float, float]]] = [[]]
-        for x, low, high in zip(data["x"], data["y_low"], data["y_high"], strict=True):
-            if None in (x, low, high):
-                if runs[-1]:
-                    runs.append([])
-            else:
-                runs[-1].append((x, low, high))
-        return [{"xPos": [r[0] for r in run] + [r[0] for r in reversed(run)],
-                 "yPos": [r[1] for r in run] + [r[2] for r in reversed(run)]}
-                for run in runs if len(run) >= 2]
     result: list[dict[str, Any]] = []
-    for index, (x, y) in enumerate(rows):
-        if x is None or y is None:
-            continue
-        if kind == "bar":
-            half, baseline = mark["width_data"] / 2, mark["baseline"]
-            if mark["style"].get("baseline_border_visible") is False and mark["style"]["border_width_pt"] > 0:
+    for item in mark_data_geometry(data, mark):
+        if kind in {"bar", "band"}:
+            if kind == "bar" and mark["style"].get("baseline_border_visible") is False and mark["style"]["border_width_pt"] > 0:
                 # Separate three-sided outlines preserve the absence of a baseline
                 # stroke. Put them before the fill for native reverse paint order.
-                for x1, y1, x2, y2 in ((x - half, baseline, x - half, y),
-                                     (x + half, baseline, x + half, y), (x - half, y, x + half, y)):
+                for a, b in ((0, 3), (1, 2), (3, 2)):
+                    (x1, y1), (x2, y2) = item.points[a], item.points[b]
                     result.append({"xPos": [x1], "yPos": [y1], "xPos2": [x2], "yPos2": [y2]})
-            result.append({"xPos": [x - half, x + half, x + half, x - half],
-                           "yPos": [baseline, baseline, y, y]})
+            result.append({"xPos": [x for x, _ in item.points], "yPos": [y for _, y in item.points]})
         elif kind == "errorbar":
-            low, high = data["y_low"][index], data["y_high"][index]
-            if low is None or high is None:
-                continue
+            (x, low), (_, high) = item.points
             result.append({"xPos": [x], "yPos": [low], "xPos2": [x], "yPos2": [high]})
             panel = next(p for p in ir["layout"]["panels"] if p["view_id"] == view["id"])
             half_cap = mark["style"]["cap_width_pt"] * 25.4 / 72 / panel["plot_mm"][2] / 2
@@ -79,6 +64,7 @@ def mark_geometry(ir: dict[str, Any], view: dict[str, Any], layer: dict[str, Any
                 result.append({"positioning": "relative", "xPos": [fx - half_cap], "yPos": [fy],
                                "xPos2": [fx + half_cap], "yPos2": [fy]})
         elif kind == "rule":
+            x, y = item.points[0]
             if mark["orientation"] == "vertical":
                 result.append({"xPos": [x], "yPos": [y_scale["domain"][0]],
                                "xPos2": [x], "yPos2": [y_scale["domain"][1]]})
@@ -86,6 +72,7 @@ def mark_geometry(ir: dict[str, Any], view: dict[str, Any], layer: dict[str, Any
                 result.append({"xPos": [x_scale["domain"][0]], "yPos": [y],
                                "xPos2": [x_scale["domain"][1]], "yPos2": [y]})
         elif kind == "text":
+            x, y = item.points[0]
             result.append({"xPos": [x], "yPos": [y]})
     return result
 
@@ -94,7 +81,7 @@ def line_settings(style: dict[str, Any], prefix: str = "Line") -> dict[str, Any]
     result = {f"{prefix}/color": style["line_color"],
               f"{prefix}/width": number_unit(style["line_width_pt"], "pt"), f"{prefix}/hide": False}
     if "line_style" in style:
-        result[f"{prefix}/style"] = {"solid": "solid", "dash": "dashed", "dot": "dotted"}[style["line_style"]]
+        result[f"{prefix}/style"] = normalize_line_style(style["line_style"])
     if "line_opacity" in style:
         result[f"{prefix}/transparency"] = round((1 - style["line_opacity"]) * 100)
     # Joins apply to XY polylines. A free Line/legend segment has no vertices
@@ -114,7 +101,7 @@ def text_settings(text: str, style: dict[str, Any]) -> dict[str, Any]:
 
 def mark_nodes(ir: dict[str, Any], view: dict[str, Any], layer: dict[str, Any], mark: dict[str, Any]) -> list[dict[str, Any]]:
     kind, style = mark["type"], mark["style"]
-    base: dict[str, Any] = {"hide": False, "xAxis": scale_name(layer["x_scale"]),
+    base: dict[str, Any] = {"hide": not layer.get("visible", True), "xAxis": scale_name(layer["x_scale"]),
                             "yAxis": scale_name(layer["y_scale"])}
     native_type = {"line": "xy", "point": "xy", "bar": "polygon", "band": "polygon",
                    "rule": "line", "errorbar": "line", "text": "label"}[kind]
@@ -157,6 +144,7 @@ def mark_nodes(ir: dict[str, Any], view: dict[str, Any], layer: dict[str, Any], 
                     **line_settings({"line_color": style["border_color"], "line_width_pt": style["border_width_pt"]}), **geometry}
             else:
                 settings["Line/hide"] = True
+        settings["hide"] = not layer.get("visible", True)
         nodes.append({"type": node_type, "path": path if index == 0 else f"{path}_{index}",
                       "settings": settings, "semantic_id": mark["id"], "view_id": view["id"],
                       "role": "annotation" if kind == "text" else "mark"})

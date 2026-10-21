@@ -22,9 +22,16 @@ def _preview_output(arguments: dict[str, Any]) -> Path:
 
 
 def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if name in {"sciplot_compose", "sciplot_compose_capabilities"}:
+        from sciplot_core.panel_assembly.service import compose, composition_capabilities
+
+        return composition_capabilities() if name == "sciplot_compose_capabilities" else compose(arguments["request"])
     semantic_methods = {
         "sciplot_project_open": "project.open", "sciplot_plot_describe": "plot.describe",
         "sciplot_plot_create": "plot.create", "sciplot_plot_patch": "plot.patch",
+        "sciplot_plot_intent": "plot.intent",
+        "sciplot_plot_resume": "plot.resume",
+        "sciplot_plot_deliver": "plot.deliver",
         "sciplot_plot_render": "plot.render", "sciplot_plot_export": "plot.export",
         "sciplot_plot_rollback": "plot.rollback", "sciplot_plot_decide": "plot.decide",
     }
@@ -36,12 +43,43 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         from sciplot_core.task_capabilities import task_capabilities
 
         return task_capabilities(**arguments)
+    if name == "sciplot_task_edit":
+        from sciplot_core.task_common_edits import edit_task
+
+        converted = dict(arguments)
+        converted["target"] = Path(converted["target"])
+        if converted.get("task_dir"):
+            converted["task_dir"] = Path(converted["task_dir"])
+        return edit_task(**converted)
+    if name == "sciplot_task_continue":
+        from sciplot_core.task_saved_work import continue_saved_work
+
+        roots = arguments.get("search_roots")
+        task_root, target = arguments.get("tasks_root"), arguments.get("target")
+        return continue_saved_work(Path(arguments["source"]), search_roots=[Path(item) for item in roots] if roots else None,
+                                   tasks_root=Path(task_root) if task_root else None, target=Path(target) if target else None,
+                                   figure_id=arguments.get("figure_id"))
+    if name in {"sciplot_paper_capabilities", "sciplot_paper_start", "sciplot_paper_inspect", "sciplot_paper_resume"}:
+        from sciplot_core.task_papers import paper_capabilities, start_paper, inspect_paper, resume_paper
+
+        if name == "sciplot_paper_capabilities":
+            project = arguments.get("project")
+            return paper_capabilities(project=Path(project) if project else None, figure_id=arguments.get("figure_id"))
+        if name == "sciplot_paper_start":
+            return start_paper(arguments["request"], paper_dir=Path(arguments["paper_dir"]))
+        paper = Path(arguments["paper"])
+        return inspect_paper(paper) if name == "sciplot_paper_inspect" else resume_paper(paper)
     if name == "sciplot_task_table_region":
         from sciplot_core.task_table_region import inspect_table_region
 
         return inspect_table_region(Path(arguments["task"]), arguments["query"])
     if name in {"sciplot_comparison_start", "sciplot_comparison_inspect", "sciplot_comparison_resume", "sciplot_comparison_select"}:
-        from sciplot_core.task_comparisons import inspect_comparison, resume_comparison, select_comparison, start_comparison
+        from sciplot_core.task_comparisons import (
+            inspect_comparison,
+            resume_comparison,
+            select_comparison,
+            start_comparison,
+        )
 
         if name == "sciplot_comparison_start":
             return start_comparison(arguments["request"], comparison_dir=Path(arguments["comparison_dir"]))
@@ -57,8 +95,12 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         group = Path(arguments["group"])
         return inspect_group(group) if name == "sciplot_group_inspect" else resume_group(group, arguments.get("responses"))
     if name == "sciplot_capabilities":
-        from sciplot_core.studio_core.project_capabilities import project_control_capabilities
-        from sciplot_core.studio_core.annotation_schema import annotation_operation_capabilities
+        from sciplot_core.studio_core.annotation_schema import (
+            annotation_operation_capabilities,
+        )
+        from sciplot_core.studio_core.project_capabilities import (
+            project_control_capabilities,
+        )
 
         return {
             **project_control_capabilities(),
@@ -70,6 +112,11 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         from sciplot_core.task_discovery import find_tasks
 
         root = arguments.get("tasks_root")
+        if arguments.get("search_roots"):
+            from sciplot_core.task_saved_work import find_saved_work
+
+            return find_saved_work(Path(arguments["source"]), search_roots=[Path(item) for item in arguments["search_roots"]],
+                                   tasks_root=Path(root) if root else None, limit=arguments.get("limit", 20))
         return find_tasks(Path(arguments["source"]), tasks_root=Path(root) if root else None,
                           limit=arguments.get("limit", 20))
     if name in {"sciplot_task_start", "sciplot_task_inspect", "sciplot_task_resume"}:
@@ -91,16 +138,22 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         return preview_project_document(project, figure_id=figure_id, output_dir=_preview_output(arguments))
     if name == "sciplot_annotation_inspect":
-        from sciplot_core.studio_core.annotation_operations import inspect_annotation_state
+        from sciplot_core.studio_core.annotation_operations import (
+            inspect_annotation_state,
+        )
 
         return inspect_annotation_state(project, figure_id=figure_id)
     if name == "sciplot_sample_style_capture":
-        from sciplot_core.studio_core.sample_style_presets import capture_sample_style_preset
+        from sciplot_core.studio_core.sample_style_presets import (
+            capture_sample_style_preset,
+        )
 
         return capture_sample_style_preset(project, figure_id=figure_id,
             samples=arguments.get("samples"), output_dir=_preview_output(arguments))
     if name == "sciplot_edit_preview":
-        from sciplot_core.studio_core.annotation_operations import preview_document_operations
+        from sciplot_core.studio_core.annotation_operations import (
+            preview_document_operations,
+        )
 
         return preview_document_operations(project, arguments["operations"],
             output_dir=_preview_output(arguments), figure_id=figure_id,

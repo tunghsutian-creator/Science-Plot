@@ -12,6 +12,8 @@ from .styles import MARK_TYPES
 from .house_legends import resolve_house_legends
 from .house import StyleResolver, axis_flow, resolved_layout_input
 from .validation import validate_bound_data, validate_figure_spec
+from .display import resolve_display_curves
+from .current_view import current_view_qa, is_current_view, validate_current_view_projection
 
 
 def _fraction(value: float, scale: dict[str, Any]) -> float:
@@ -53,16 +55,19 @@ def _guides(spec: dict[str, Any], views: list[dict[str, Any]], scopes: list[dict
     for guide in spec["guides"]:
         scope = guide.get("view_id")
         candidates = [name for name, (view_id, layer) in layers.items()
-                      if layer["legend"]["visible"] and (scope is None or view_id == scope)]
-        selected = guide["layer_ids"] or candidates
-        order = guide["order"] or selected
+                      if layer.get("visible", True) and layer["legend"]["visible"] and (scope is None or view_id == scope)]
+        selected = [name for name in (guide["layer_ids"] or candidates) if layers[name][1].get("visible", True)]
+        order = [name for name in (guide["order"] or selected) if name in selected]
         result = {key: deepcopy(value) for key, value in guide.items() if key not in {"layer_ids", "order", "labels", "style"}}
         local_scopes = scopes + ([view_lookup[scope]["style"]] if scope is not None else [])
         result["style"] = resolver.resolve(guide["id"], "legend", local_scopes, guide["style"])
         result["entries"] = [{"layer_id": name, "label": guide["labels"].get(name, layers[name][1]["legend"]["label"]),
                               "marks": deepcopy(layers[name][1]["marks"])} for name in order]
         if result["visible"] and not result["entries"]:
-            fail("figure_empty_legend", "Visible legends require at least one eligible semantic layer.", "/guides", "legend_membership")
+            if any(not layer.get("visible", True) for _view, layer in layers.values()):
+                result["visible"] = False
+            else:
+                fail("figure_empty_legend", "Visible legends require at least one eligible semantic layer.", "/guides", "legend_membership")
         guides.append(result)
     return guides
 
@@ -72,6 +77,8 @@ def _data_qa(spec: dict[str, Any], datasets: dict[str, dict[str, Any]]) -> list[
     warnings = []
     for view in spec["views"]:
         for layer in view["layers"]:
+            if not layer.get("visible", True):
+                continue
             columns = datasets[layer["dataset_id"]]["columns"]
             xs, ys = (columns[layer["mappings"][axis]]["values"] for axis in ("x", "y"))
             x_domain, y_domain = (scales[layer[axis + "_scale"]]["domain"] for axis in ("x", "y"))
@@ -102,7 +109,8 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
     require_capabilities(spec, capabilities if capabilities is not None else {
         "marks": list(MARK_TYPES), "scale_transforms": ["linear", "log"], "multi_view": True, "multiple_scales": True})
     validate_bound_data(spec, datasets)
-    data_warnings = _data_qa(spec, datasets)
+    validate_current_view_projection(spec, datasets)
+    data_warnings = current_view_qa(spec, datasets) if is_current_view(spec) else _data_qa(spec, datasets)
     resolver = StyleResolver(spec)
     scales = {item["id"]: item for item in spec["scales"]}
     scopes = [spec["theme"]["project"], spec["theme"]["figure"]]
@@ -127,6 +135,7 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
                 trace[key]["source"] = "composition policy"
         for axis in view["axes"]:
             resolved = deepcopy(axis)
+            resolved.pop("ticks_mode", None)
             resolved.update(view_id=view["id"], style=resolver.resolve(axis["id"], "axis", view_scopes, axis["style"]),
                             tick_labels=deepcopy(axis.get("tick_labels", [format(value, ".6g") for value in axis["ticks"]])))
             if resolver.binding is not None:
@@ -142,7 +151,8 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
         views.append(result)
     guides = _guides(spec, views, scopes, resolver)
     layout_input, panel_margins = resolved_layout_input(spec)
-    layout = solve_layout({**spec["composition"], **layout_input}, spec["views"], flat_axes, guides, panel_margins_mm=panel_margins)
+    layout = solve_layout({**spec["composition"], **layout_input}, spec["views"], flat_axes, guides,
+                          panel_margins_mm=panel_margins, secondary_axis_policy=spec.get("axis_layout_policy"))
     if resolver.binding is not None:
         resolve_house_legends(spec, guides, datasets, layout)
     axes = {axis["id"]: axis for axis in resolve_axis_text(layout, flat_axes, spec["scales"])}
@@ -179,10 +189,25 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
             else "composition policy" if "composition_policy" in spec else "RenderingStyleContract"}
             for key, value in layout_input.items()}
         resolver.trace["figure:panel_margins_mm"] = {"value": panel_margins, "source": "RenderingStyleContract"}
+        additional = []
+        assert panel_margins is not None  # A bound house layout has explicit physical margins.
+        for panel in layout["panels"] if spec.get("axis_layout_policy") == "decorated_secondary_sides_v1" else []:
+            cx, cy, cw, ch = panel["cell_mm"]
+            px, py, pw, ph = panel["plot_mm"]
+            margins = {"left": px - cx, "top": py - cy, "right": cx + cw - px - pw, "bottom": cy + ch - py - ph}
+            if margins["right"] > panel_margins["right"] + 1e-9 or margins["top"] > panel_margins["top"] + 1e-9:
+                additional.append({"view_id": panel["view_id"], "margins_mm": margins})
+        if additional:
+            resolver.trace["figure:additional_axis_layout"] = {"policy": "decorated_secondary_sides_v1",
+                "source": "resolved axis decoration budgets", "base_margins_mm": panel_margins,
+                "panels": additional, "native_text_verified": False}
+    display = resolve_display_curves(views, datasets)
     return seal_ir_v2({"kind": "sciplot_plot_ir", "schema_version": 2, "scientific_hash": scientific_hash,
         "presentation_hash": presentation_hash, "figure": {"id": spec["id"], "background_color": spec["theme"].get("background_color", background).lower()},
-        "datasets": deepcopy(datasets), "scales": deepcopy(spec["scales"]), "views": views,
+        "datasets": deepcopy(datasets), "scales": [{key: deepcopy(value) for key, value in scale.items() if key != "domain_rule"}
+                                                  for scale in spec["scales"]], "views": views,
         "layout": layout, "guides": guides, "annotations": annotations, "layout_qa": qa,
+        **({"display_curves": display} if display else {}),
         **({"rendering_contract": resolver.binding, "style_provenance": resolver.trace,
             **({"composition_policy": spec["composition_policy"]} if "composition_policy" in spec else {})}
            if resolver.binding is not None else {})})

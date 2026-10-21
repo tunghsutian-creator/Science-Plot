@@ -177,20 +177,56 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
             return None
         if not apply_initial_mapping(root, state, source, selected):
             return None
+    from sciplot_core.task_scientific_presentation import presentation_blocker, scientific_presentation
+
+    try:
+        effective = scientific_presentation(request, rule_id=selected["rule_id"], template=selected.get("template"))
+    except ValueError:
+        pass  # The established plan owner reports invalid rules/templates.
+    else:
+        state["scientific_presentation"] = {**effective, "source_sha256": state["source_sha256"]}
+        blocker = presentation_blocker(request, effective)
+        if blocker is not None:
+            state.update(status="blocked", phase="planning", blocker=blocker)
+            return None
     mapping_choice = state.get("mapping_choice")
-    plan_request = mapped_plan_request(state) if mapping_choice else selected
+    plan_request = mapped_plan_request(state) if mapping_choice else dict(selected)
+    if "xscale" in request:
+        plan_request["xscale"] = request["xscale"]
+    if request.get("summary_statistic") == "raw_only" and selected["rule_id"] == "impact_metric":
+        plan_request["summary_statistic"] = "raw_only"
+    if request.get("summary_statistic") == "mean_sample_sd_n" and selected["rule_id"] == "impact_metric":
+        from sciplot_core.task_replicate_summary import prepare_replicate_disclosure
+
+        try:
+            disclosure = prepare_replicate_disclosure(state, source)
+        except ValueError as exc:
+            state.update(status="blocked", phase="planning", blocker={
+                "reason_code": "replicate_summary_source_invalid", "message": str(exc)})
+            return None
+        assert_source_current(state)
+        if disclosure is None:
+            return None
+        plan_request.update(summary_statistic="mean_sample_sd_n", replicate_summary_disclosure=disclosure)
     plan = dict(build_plan_preview(source, request=plan_request))
     atomic_write_json(root / "plan.json", plan)
     state["selection"] = {"rule_id": plan["rule_id"], "template": plan["template"]}
     blocker_snapshot = plan.get("blocker")
     reason = str(blocker_snapshot.get("reason_code", "")) if isinstance(blocker_snapshot, dict) else ""
     invalid_rule = reason in {"plan_rule_invalid", "plan_rule_unknown", "plan_template_unsupported"}
-    if not mapping_choice and not invalid_rule:
-        question = column_question(source, state["selection"], explicit=request.get("choose_columns", False))
+    if not mapping_choice and not invalid_rule and reason != "plan_source_option_invalid":
+        from sciplot_core.task_column_mapping import replicate_mapping_mode
+
+        shape = "replicates" if replicate_mapping_mode(state, selected) else "xy"
+        question = column_question(source, state["selection"], explicit=request.get("choose_columns", False), mapping_shape=shape)
         if question is None and plan["status"] == "blocked":
-            question = table_question(source, state["selection"])
+            question = table_question(source, state["selection"], mapping_shape=shape)
         if question:
-            if (not request.get("choose_columns") and plan["status"] == "blocked"
+            if isinstance(blocker_snapshot, dict) and blocker_snapshot.get("issues"):
+                question["source_issues"] = blocker_snapshot["issues"]
+                question["question_id"] = canonical_json_sha256(
+                    {key: value for key, value in question.items() if key != "question_id"}, allow_nan=False)
+            if (shape == "xy" and not request.get("choose_columns") and plan["status"] == "blocked"
                     and question["field"] == "table_selection"):
                 from sciplot_core.data_mapping.table_diagnostics import explicit_layout_mapping
                 from sciplot_core.task_initial_mapping import apply_mapping_choices
@@ -226,6 +262,14 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
         return None
     state.pop("question", None)
     state.pop("mapping_error", None)
+    from sciplot_core.task_scientific_presentation import sample_sd_source_blocker
+
+    if request.get("summary_statistic") == "mean_sample_sd" and selected["rule_id"] == "impact_metric":
+        blocker = sample_sd_source_blocker(request, state.get("scientific_presentation", {}), source)
+        assert_source_current(state)
+        if blocker is not None:
+            state.update(status="blocked", phase="planning", blocker=blocker)
+            return None
     return plan
 
 

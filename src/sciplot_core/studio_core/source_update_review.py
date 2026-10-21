@@ -78,7 +78,8 @@ def scientific_summary(spec: dict[str, Any]) -> dict[str, Any]:
     for item in spec.get("series", []):
         series.append(
             {
-                "sample": str(item.get("label") or item.get("legend_key") or ""),
+                "sample": (item.get("source_binding") or {}).get("sample") or (item.get("source_binding") or {}).get("source_id") or str(item.get("label") or item.get("legend_key") or ""),
+                **({"source_binding": item["source_binding"]} if item.get("source_binding") else {}),
                 "presentation": item.get("presentation_kind"),
                 "x": _numbers(item.get("x_values")),
                 "y": _numbers(item.get("y_values")),
@@ -92,7 +93,8 @@ def scientific_summary(spec: dict[str, Any]) -> dict[str, Any]:
     categorical = spec.get("categorical") or {}
     groups = [
         {
-            "sample": group.get("label") or group.get("sample"),
+            "sample": (group.get("source_binding") or {}).get("sample") or group.get("source_category_id") or group.get("label") or group.get("sample"),
+            **({"source_binding": group["source_binding"]} if group.get("source_binding") else {}),
             "statistics": group.get("descriptive_statistics"),
             "raw_values": _numbers(group.get("raw_values")),
             "replicate_count": group.get("replicate_count"),
@@ -177,9 +179,11 @@ def numerical_differences(
             else (new.get("categorical") or {}).get("groups", [])
         )
         for item in after:
-            label = item.get("label") or ""
-            matches = [s for s in before if s.get("label") == label]
-            if len(matches) != 1 or sum(s.get("label") == label for s in after) != 1:
+            def identity(value: dict[str, Any]) -> Any:
+                return (value.get("source_binding") or {}).get("source_id") or value.get("label") or ""
+            label = identity(item)
+            matches = [s for s in before if identity(s) == label]
+            if len(matches) != 1 or sum(identity(s) == label for s in after) != 1:
                 continue  # Added or ambiguous samples are disclosed by the full summaries.
             for field in fields:
                 delta = _value_difference(
@@ -210,8 +214,8 @@ def compare_figures(previous: Path, candidate: Path) -> dict[str, Any]:
         )
         old = scientific_summary(old_spec) if old_spec is not None else None
         new = scientific_summary(new_spec) if new_spec is not None else None
-        old_samples = [s["sample"] for s in old["series"]] if old else []
-        new_samples = [s["sample"] for s in new["series"]] if new else []
+        old_samples = list(dict.fromkeys(s["sample"] for s in [*old["series"], *old["groups"]])) if old else []
+        new_samples = list(dict.fromkeys(s["sample"] for s in [*new["series"], *new["groups"]])) if new else []
         changes.append(
             {
                 "figure_id": identity,

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import base64
+import json
+import sys
 from contextlib import redirect_stdout
 from copy import deepcopy
 from importlib.metadata import version
-import json
 from pathlib import Path
-import sys
 from typing import Any
 
 import anyio
@@ -17,25 +17,47 @@ from mcp import MCPError
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
-    BlobResourceContents, CallToolResult, ImageContent, ListResourcesResult,
-    ListToolsResult, ReadResourceResult, Resource, ResourceLink, TextContent,
+    BlobResourceContents,
+    CallToolResult,
+    ImageContent,
+    ListResourcesResult,
+    ListToolsResult,
+    ReadResourceResult,
+    Resource,
+    ResourceLink,
+    TextContent,
     TextResourceContents,
 )
 
 from sciplot_core.mcp_server.errors import AdapterError, error_payload
-from sciplot_core.studio_core.control_results import compact_result
 from sciplot_core.mcp_server.resources import ResourceSnapshot, ResourceStore
 from sciplot_core.mcp_server.schemas import tool_definitions
 from sciplot_core.mcp_server.services import invoke_owner
-
+from sciplot_core.studio_core.control_results import compact_result
 
 INSTRUCTIONS = (
     "SciPlot executes local scientific plotting without calling a model. Prefer "
-    "project_open then plot_patch for semantic saved-figure edits, or plot_create "
-    "for source-bound creation. Use returned stable object IDs and revision; "
+    "task_start for new attachment plotting, with sources plus a small semantic intent "
+    "for coordinates, exact Test/block selection, stages and display choices. The task expands original source "
+    "facts and existing Managed contracts; task_resume answers only advertised "
+    "scientific decisions, revises a rejected draft or resumes its frozen attempt. "
+    "Do not write a low-level FigureTemplate for this workflow. Explicit expert "
+    "Template/Binding construction uses plot_create; source-only compatibility "
+    "creation remains available. Use project_open for saved-figure edits. For a "
+    "previously identified ManagedPlot, open with description "
+    "scope summary, then request only the chosen target/property with plot_describe "
+    "scope edit before plot_patch. For an exact FigureSpec v2 axis label or "
+    "annotation text, plot_intent plan then apply uses the same patch transaction. "
+    "Creation plot_objects also continues supported bound native suite figures: "
+    "inspect object_operations and current advertised values, then send only legal "
+    "presentation deltas. Do not resend coordinates or recreate unselected figures. "
+    "If authority is unknown or LegacyPlot without advertised scoped support, use the full open; retain its native "
+    "coverage, never convert it just for compact reads. Check status, changed "
+    "inputs and pending work before editing. Use returned stable IDs and revision; "
     "keep idempotency_key unchanged on retry. Follow local decision and export "
-    "receipts instead of reapplying committed work. Existing task_start/task_resume "
-    "remain supported for their advertised workflows. Inspect existing saved "
+    "receipts instead of reapplying committed work. plot_deliver packages exact current "
+    "ManagedPlot revisions as independent native snapshots; portable Managed registry "
+    "migration is unsupported. Inspect existing saved "
     "projects instead of creating them again. Compatibility native-edit tools "
     "require real figure/object IDs and the saved SHA. Read candidate PNG resources and scientific "
     "audits before accepting previews. Keep raw values, units and sample identities. "
@@ -152,7 +174,7 @@ class Adapter:
             compact = {**compact, "preview_resources": group_resources}
         if warnings:
             compact = {**compact, "resource_warnings": warnings}
-        result = _text_result(compact, is_error=compact.get("status") in {"error", "failed", "blocked"})
+        result = _text_result(compact, is_error=compact.get("status") in {"error", "failed", "blocked", "partial"})
         result.content.extend(ResourceLink(**item.metadata()) for item in links)
         return result
 
@@ -165,7 +187,7 @@ class Adapter:
                 if name == "sciplot_read_result":
                     return _read_result(self.resources.get(arguments["uri"]))
                 return await anyio.to_thread.run_sync(self._execute, name, arguments)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - MCP must encode all owner failures as tool errors.
             payload = error_payload(exc)
             from jsonschema.exceptions import ValidationError
 

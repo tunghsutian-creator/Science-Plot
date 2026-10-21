@@ -52,6 +52,15 @@ def inspect_annotation_state(project: Path, *, figure_id: str | None = None) -> 
     audit_edited_document(document, spec_path)
     spec = json.loads(raw)
     records = annotation_records(spec)
+    from sciplot_core.studio_core.categorical_display import context, require_categorical
+
+    categorical = None
+    try:
+        require_categorical(spec)
+    except AnnotationOperationError:
+        pass
+    else:
+        categorical = context(spec)
     if file_sha256(document) != baseline or spec_path.read_bytes() != raw:
         raise AnnotationOperationError("stale_revision", "The figure changed during annotation inspection.")
     return {"kind": "sciplot_annotation_state", "version": 1, "status": "ok",
@@ -60,7 +69,8 @@ def inspect_annotation_state(project: Path, *, figure_id: str | None = None) -> 
                 axis: {"unit": axis_unit(spec, axis), **{key: spec["axes"][axis][key]
                                                         for key in ("label", "min", "max", "scale")}}
                 for axis in ("x", "y")},
-            "capabilities": annotation_operation_capabilities()}
+            "capabilities": annotation_operation_capabilities(),
+            **({"categorical_display": categorical} if categorical is not None else {})}
 
 
 def preview_document_operations(
@@ -71,7 +81,8 @@ def preview_document_operations(
 
     validate_operation_batch(operations)
     spec_sha: str | None = None
-    if any(operation.get("op") in {"set_sample_style", "apply_sample_style_preset"} for operation in operations):
+    category_edit = any(operation.get("op") in {"set_category_display_labels", "set_categorical_display_style"} for operation in operations)
+    if category_edit or any(operation.get("op") in {"set_sample_style", "apply_sample_style_preset"} for operation in operations):
         selected = resolve_project_figure(project, figure_id)
         query = inspect_project(project, figure_id=selected["figure_id"])
         require_edit_source_current(query)
@@ -83,7 +94,8 @@ def preview_document_operations(
         if spec_sha != selected["spec_sha256"]:
             raise AnnotationOperationError("stale_revision", "The sample mapping changed; inspect again.")
         spec = json.loads(raw)
-        operations = expand_sample_styles(spec, selected["objects"], expand_style_presets(spec, operations))
+        if not category_edit:
+            operations = expand_sample_styles(spec, selected["objects"], expand_style_presets(spec, operations))
         return preview_document_edit(project, [], output_dir=output_dir, figure_id=selected["figure_id"],
                                      expected_document_sha256=expected_document_sha256,
                                      expected_spec_sha256=spec_sha, operations=operations)

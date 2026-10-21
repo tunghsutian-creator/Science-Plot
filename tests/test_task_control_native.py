@@ -13,9 +13,56 @@ from sciplot_core.studio_core.control_results import compact_result
 
 def _cli(*args: object) -> dict:
     result = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), *map(str, args), "--json"],
-                            cwd=REPO_ROOT, capture_output=True, text=True, timeout=120)
+                            cwd=REPO_ROOT, capture_output=True, text=True, timeout=120, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     return json.loads(result.stdout)
+
+
+@pytest.mark.comprehensive
+@pytest.mark.parametrize("template", ["bar", "point_line"])
+def test_public_impact_mean_sd_is_numerically_audited_and_median_claim_is_rejected(tmp_path, template):
+    import math
+    import pandas as pd
+    from sciplot_core.studio_core.document_edit_state import run_document_worker
+    from sciplot_core.studio_core.registry_state import _veusz_spec_path
+    from sciplot_core.studio_render.models import IMPACT_POINT_LINE_SUMMARY_KIND
+
+    source = tmp_path / "skewed-impact.xlsx"
+    with pd.ExcelWriter(source) as writer:
+        for condition, offset in (("first", 0), ("second", 20)):
+            pd.DataFrame([["Re", "Re"], ["kJ/m2", "kJ/m2"], ["A", "B"],
+                          [1 + offset, 4 + offset], [2 + offset, 8 + offset], [10 + offset, 9 + offset]]).to_excel(writer, sheet_name=condition, header=False, index=False)
+    original = file_sha256(source)
+    rejected = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "task", "create", str(source),
+        "--rule", "impact_metric", "--template", template, "--summary-statistic", "median_iqr",
+        "--task-dir", str(tmp_path / "rejected"), "--json"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=120, check=False)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    refusal = json.loads(rejected.stdout)
+    assert refusal["blocker"]["reason_code"] == "scientific_presentation_unsupported"
+    assert refusal["blocker"]["effective"]["summary_statistic"] == "mean_sample_sd"
+
+    created = _cli("task", "create", source, "--rule", "impact_metric", "--template", template,
+                   "--summary-statistic", "mean_sample_sd", "--task-dir", tmp_path / "accepted")
+    assert created["status"] == "complete", created
+    document = Path(created["current_project"]["figures"][0]["document"])
+    spec_path = _veusz_spec_path(document)
+    spec = json.loads(spec_path.read_text())
+    if template == "point_line":
+        summaries = [item for item in spec["series"] if item["presentation_kind"] == IMPACT_POINT_LINE_SUMMARY_KIND]
+        means = summaries[0]["y_values"]
+        errors = summaries[0]["error_values"]
+        assert spec["categorical"]["error_bar_statistic"] == "sample_sd"
+    else:
+        means = [group["bar_mean"] for group in spec["categorical"]["groups"]]
+        errors = [group["bar_error"] for group in spec["categorical"]["groups"]]
+    assert means == pytest.approx([13 / 3, 7])
+    assert errors == pytest.approx([math.sqrt(73 / 3), math.sqrt(7)])
+    assert means[0] != 2
+    assert spec["categorical"]["summary_statistic"] == "arithmetic_mean"
+    audit = run_document_worker("audit-spec-data", document, spec_path)
+    assert audit["status"] == "passed"
+    assert all(created["current_project"][key]["current"] for key in ("source", "qa", "delivery"))
+    assert file_sha256(source) == original
 
 
 @pytest.mark.comprehensive
@@ -24,9 +71,13 @@ def test_public_task_creation_annotation_review_export_and_continuation(tmp_path
     source.write_text("Wavelength,Absorbance\nnm,a.u.\nE3,E3\n400,1\n425,2\n450,4\n475,2\n500,1\n")
     original = file_sha256(source)
     request = tmp_path / "request.json"
-    request.write_text(json.dumps({"version": 1, "action": "create", "source": str(source)}))
+    request.write_text(json.dumps({"version": 1, "action": "create", "source": str(source),
+                                   "curve_display": "raw_overlay", "summary_statistic": "raw_only"}))
     created = _cli("task", "start", "--request", request)
     assert created["status"] == "complete"
+    assert created["scientific_presentation"]["curve_display"] == "raw_overlay"
+    assert created["scientific_presentation"]["summary_statistic"] == "raw_only"
+    assert created["scientific_presentation"]["source_sha256"]
     assert created["result"]["kind"] == "sciplot_project_creation_result"
     assert all(created["current_project"][key]["current"] for key in ("source", "qa", "delivery"))
     assert created["next_step"]["action"] == "review_exports_and_deliver"
@@ -132,7 +183,7 @@ def test_three_sample_style_rounds_save_without_export_then_publish_current_data
             response.write_text(json.dumps({"expected_operation_id": first_id,
                 "revise_operations": [{"op": "set_sample_style", "samples": ["E0"], "style": {"width": 2}}]}))
             rejected = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "task", "resume", review["task_dir"],
-                                       "--response", str(response), "--json"], capture_output=True, text=True, timeout=120)
+                                       "--response", str(response), "--json"], capture_output=True, text=True, timeout=120, check=False)
             assert rejected.returncode == 1
             assert json.loads(rejected.stdout)["reason_code"] == "invalid_task_response"
             assert task_record.read_bytes() == task_bytes and previous_image.read_bytes() == previous_bytes
@@ -206,12 +257,23 @@ def test_failed_native_preview_is_corrected_in_place_and_then_saved(tmp_path):
     edit_request = {"version": 1, "action": "edit", "project": str(project),
         "expected_document_sha256": figure["document_sha256"], "export": False,
         "operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2"}}]}
+    invalid_task = tmp_path / "invalid_width"
+    request.write_text(json.dumps(edit_request))
+    invalid = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "task", "start", "--request", str(request),
+                              "--task-dir", str(invalid_task), "--json"], capture_output=True, text=True, timeout=120, check=False)
+    assert invalid.returncode == 1 and not invalid_task.exists()
+    invalid_payload = json.loads(invalid.stdout)
+    assert invalid_payload["reason_code"] == "invalid_sample_style"
+    assert invalid_payload["repair"]["issues"][0]["constraint"] == "positive_physical_size"
+    assert document.read_bytes() == before and sorted((project / "runs").iterdir()) == runs
+    edit_request["operations"] = [{"op": "set_sample_style", "samples": ["Missing A"], "style": {"width": "2pt"}}]
     request.write_text(json.dumps(edit_request))
     failed = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "task", "start", "--request", str(request),
-                             "--task-dir", str(task), "--json"], capture_output=True, text=True, timeout=120)
+                             "--task-dir", str(task), "--json"], capture_output=True, text=True, timeout=120, check=False)
     assert failed.returncode == 1
     blocked = json.loads(failed.stdout)
     assert blocked["status"] == "blocked" and blocked["phase"] == "previewing"
+    assert blocked["blocker"]["reason_code"] == "unknown_sample_style_target"
     assert document.read_bytes() == before
     correction = {"expected_preview_revision": blocked["preview_revision"],
                   "revise_operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2.5pt"}}]}

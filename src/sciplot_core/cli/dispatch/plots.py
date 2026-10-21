@@ -35,9 +35,12 @@ def dispatch_plot(args: Any) -> int | None:
         params["target"] = str(args.target.expanduser().resolve())
         if args.figure_id is not None:
             params["figure_id"] = args.figure_id
-    elif action != "create":
+    elif action not in {"create", "deliver"}:
         params["plot"] = str(args.plot.expanduser().resolve())
-    if action in {"create", "patch", "rollback", "decide"}:
+    if action in {"open", "describe"} and any(value is not None for value in (args.scope, args.target_id, args.property)):
+        params["description"] = {key: value for key, value in
+            (("scope", args.scope), ("target", args.target_id), ("property", args.property)) if value is not None}
+    if action in {"create", "patch", "resume", "intent", "rollback", "decide", "deliver"}:
         params["request"] = _request(args.request)
         if action == "create":
             for field in ("source", "profile", "out"):
@@ -52,4 +55,4 @@ def dispatch_plot(args: Any) -> int | None:
     method = "project.open" if action == "open" else f"plot.{action}"
     result = call(method, params, socket_path=args.socket, direct=args.direct, timeout=args.timeout)
     _print_json(result)
-    return 1 if result.get("status") in {"error", "blocked"} else 0
+    return 1 if result.get("status") in {"error", "blocked", "partial"} else 0

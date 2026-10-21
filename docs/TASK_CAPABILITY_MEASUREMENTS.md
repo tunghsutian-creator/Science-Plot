@@ -1,5 +1,108 @@
 # Task capability and local plotting measurements
 
+## 2026-10-13 Mac client telemetry boundary
+
+The Mac verification completed CLI/RPC/MCP native workflows and actual AF_UNIX
+lost-reply recovery with daemon restart. The available client capabilities do
+not expose per-request model usage or billing records. Actual input, output
+and cached tokens, fees and matched end-to-end savings therefore remain
+unknown. Account usage limits, UTF-8 response bytes and local process timings
+do not fill this gap. These transport checks are runtime/recovery evidence,
+not a real-model cost comparison.
+
+## 2026-10-13 — saved ManagedPlot AI-entry payload boundary
+
+The agent entry now chooses a summary first for a previously identified
+ManagedPlot, then one scoped edit contract or the exact FigureSpec v2 text
+intent. Unknown-authority and LegacyPlot figures keep the full first open;
+the wire default and scientific/recovery guards are unchanged. This measures
+local serialized bytes, not a new response default or an AI-client trial.
+
+Using the in-memory FigureSpec v2 fixture from
+`tests/test_managed_description_scopes.py`, serialized with compact UTF-8 JSON,
+`ensure_ascii=False`, `Tool.model_dump(mode="json", by_alias=True,
+exclude_none=True)` and `CallToolResult.model_dump` with the same options:
+Reproduce in this checkout with `PYTHONPATH=src:tests .venv/bin/python -m
+pytest -q -s tests/test_documentation_contract.py::test_saved_figure_mcp_entry_byte_measurement`
+(or another environment's SciPlot venv).
+
+| Local payload | Bytes |
+| --- | ---: |
+| All 33 default MCP tool definitions, array only | 138,477 |
+| Four saved-edit tool definitions (open, describe, patch, intent) | 5,617 |
+| MCP server instruction text, separately | 1,383 |
+| Full open MCP call result | 122,784 |
+| Managed summary MCP call result | 4,794 |
+| One `axis.label` scoped edit MCP call result | 3,086 |
+| Summary plus scoped edit call results | 7,880 |
+
+The two selective call results are 114,904 bytes smaller than the one full
+result for this fixture, but require two calls and carry less information.
+Selecting a response scope does **not** remove the tool definitions: a client
+that loads all 33 still receives the same 138,477-byte definition array.
+These MCP `CallToolResult` sizes include both the structured payload and its
+text content block, so they differ from the single JSON-RPC envelope bytes in
+`test_managed_description_scopes.py` and are not cross-transport comparisons.
+Actual MCP framing, client tool filtering, model context, billed tokens,
+network latency, end-to-end time and human usability were not measured.
+
+### Scoped read assembly, same-day local probe
+
+In the same FigureSpec fixture, 50 warmed, in-process `PlotService.describe`
+calls (median wall time) measured 28.3 ms for full, 13.8 ms for summary,
+and 14.3 ms for one `scale.domain` edit at base commit `b8a6422`.
+After selective assembly, they measured 26.0, 9.05, and 9.00 ms. The
+JSON-RPC response envelopes remained 56,922, 2,243, and 1,438 UTF-8
+bytes respectively at the measured temporary path. Managed-v1 summary
+fell from 0.435 to 0.217 ms on its fixture. These are local process
+measurements, not model tokens, network latency, or user-visible end-to-end
+speed. Results will vary by machine and filesystem.
+
+The profile located two discarded work paths in scoped reads: all-target
+value-schema construction before projection, and dependency build-key
+construction before projection. The selective route now shares the full
+contract's target and descriptor owner, builds only the requested descriptor,
+and still validates the FigureSpec and calculates saved-graph invalidation.
+Native artifact inspection remains deferred for summary as before. At fixed
+fixture paths, the default full, summary, and selected edit JSON-RPC bytes
+matched the base commit exactly; the Managed-v1 and Legacy full/summary
+bytes matched too.
+
+The following block reproduces the current in-process probe using an
+installed SciPlot test venv (shown as `.venv`) and `PYTHONPATH` pointing to
+this checkout. To reproduce the baseline, run the same block at `b8a6422`
+on the same host and venv; compare bytes only at a fixed or equal-length
+temporary path, since absolute plot paths are included in the payload.
+
+```sh
+PYTHONPATH=src:tests .venv/bin/python - <<'PY'
+from pathlib import Path
+from statistics import median
+from tempfile import TemporaryDirectory
+from time import perf_counter_ns
+from pytest import MonkeyPatch
+from test_managed_description_scopes import _service, _wire_size
+
+with TemporaryDirectory() as directory:
+    patch = MonkeyPatch()
+    service, root, _ = _service(Path(directory), patch)
+    for name, description in (
+        ("full", None),
+        ("summary", {"scope": "summary"}),
+        ("edit", {"scope": "edit", "target": "scale:x", "property": "scale.domain"}),
+    ):
+        result = service.describe(root, description=description)
+        samples = []
+        for _ in range(50):
+            start = perf_counter_ns()
+            service.describe(root, description=description)
+            samples.append((perf_counter_ns() - start) / 1_000_000)
+        print(name, round(median(samples), 3), "ms", _wire_size(result), "bytes")
+    patch.undo()
+PY
+```
+
+
 ## 2026-10-07 — bounded protocol failures and local recovery
 
 The entrypoint now returns structured JSON argument errors (exit 2) and rejects
@@ -831,6 +934,16 @@ inference and user end-to-end time remain unmeasured. Dense NMR/TTS costs and fu
 semantic recompilation are not established by the small fixture. The full report,
 raw measurements and reproduction harness are in
 `.tmp_verify/document_migration_20261007/`.
+
+The transport-native regression now distinguishes actual CLI stdout
+UTF-8 bytes from compact JSON re-encodings of decoded MCP/RPC result objects.
+The latter are neither transport-frame nor actual client-visible byte counts;
+they cannot be compared directly with stdout. It retains three individual warm
+`plot.describe` RPC timings and requires identical decoded results across them.
+These local same-operation repeats do not estimate a before/after speedup, model
+tokens, billed cost, or user end-to-end latency. The report is written to
+`.tmp_verify/document_migration_20261007/transport_native_acceptance.json` when
+the native test runs successfully.
 
 
 ## 2026-10-07: semantic transactions with a persistent native worker

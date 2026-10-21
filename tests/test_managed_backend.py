@@ -1,6 +1,7 @@
 """Resolved IR is lowered without template resolution or legacy artifact reads."""
 
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 
@@ -83,22 +84,29 @@ def test_compile_receipt_cannot_combine_old_audit_with_new_native_bytes(tmp_path
 
     document = tmp_path / "document.vsz"
     ir = managed_ir()
+    staged = []
+
+    def save(path):
+        staged.append(Path(path))
+        Path(path).write_bytes(b"audited native")
+
     monkeypatch.setattr(managed, "_read_ir", lambda _: ir)
     monkeypatch.setattr(managed, "fresh_document", lambda _: nullcontext(object()))
     monkeypatch.setattr(managed, "import_module", lambda _: SimpleNamespace(
-        CommandInterface=lambda _: SimpleNamespace(Save=lambda _: document.write_bytes(b"audited native"))))
+        CommandInterface=lambda _: SimpleNamespace(Save=save)))
     monkeypatch.setattr(managed, "native_state", lambda _: {})
     monkeypatch.setattr(managed, "inspect_plot_ir", lambda *_: {"status": "unchanged",
-        "document_sha256": file_sha256(document), "scientific_audit": {"status": "passed"}})
+        "document_sha256": file_sha256(staged[0]), "scientific_audit": {"status": "passed"}})
     monkeypatch.setattr(managed, "loaded_native_document", lambda _: nullcontext(object()))
 
     def raced_preview(*_):
-        document.write_bytes(b"external changed native")
+        staged[0].write_bytes(b"external changed native")
         return {"path": "raced-preview.png"}
 
     monkeypatch.setattr(managed, "_preview", raced_preview)
     with pytest.raises(ValueError, match="between its compilation audit and preview"):
         managed.compile_plot_ir(tmp_path / "ir.json", document, tmp_path / "preview.png")
+    assert not document.exists()
 
 
 def test_render_receipt_binds_the_exact_audited_native_bytes(tmp_path, monkeypatch):

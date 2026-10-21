@@ -94,6 +94,17 @@ def generic_figure_queue_from_plan(
     return figure_queue_from_plan(figure_plan, figure_plan.rule_id)
 
 
+def single_render_figure_queue_from_plan(
+    figure_plan: ResolvedFigurePlan | None,
+) -> list[dict[str, Any]]:
+    """Project the complete selected task when no condition source is needed."""
+    if figure_plan is None or figure_plan.selection_policy != "single_render_request":
+        return []
+    if len(figure_plan.tasks) != 1:
+        raise ValueError("A single render request requires exactly one selected FigureTask.")
+    return figure_queue_from_plan(figure_plan, figure_plan.rule_id)
+
+
 def figure_registry_projection_from_task(task: FigureTask) -> dict[str, Any]:
     """Build the task-owned fields of one v2 figure-set registry entry."""
 
@@ -322,6 +333,7 @@ def validate_veusz_spec_figure_task(
 
 __all__ = [
     "generic_figure_queue_from_plan",
+    "single_render_figure_queue_from_plan",
     "figure_queue_from_plan",
     "figure_queue_item_from_task",
     "figure_registry_projection_from_task",

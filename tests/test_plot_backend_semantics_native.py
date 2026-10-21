@@ -55,7 +55,7 @@ def test_reviewed_axes_legend_annotations_restart_and_rollback(tmp_path):
              "position": {"mode": "relative", "x": 0.05, "y": 0.85}}]
     seed.extend({"op": "set_style", "object_path": key, "setting_path": key + "/" + name,
                  "expected_value": initial["objects"][key]["settings"][name], "value": value}
-                for name, value in {"horzPosn": "right", "vertPosn": "top"}.items())
+                for name, value in {"horzPosn": "right", "vertPosn": "bottom"}.items())
     review = preview_document_operations(project, seed, output_dir=tmp_path / "seed",
                                          expected_document_sha256=initial["document_sha256"])
     apply_document_edit(project, review)
@@ -132,6 +132,49 @@ def test_reviewed_axes_legend_annotations_restart_and_rollback(tmp_path):
         "scientific_hash_unchanged": True, "rollback_restores_presentation_and_legend_preset": True,
         "clipping_reason_code": clipped["error"]["reason_code"], "warm_worker_starts": backend._worker.starts}, indent=2))
     backend.close()
+
+
+@pytest.mark.comprehensive
+def test_right_top_native_legend_overlap_remains_blocked_without_data_changes(tmp_path):
+    source, project = create_project(tmp_path)
+    source_bytes = source.read_bytes()
+    initial = inspect_project(project, native=True)["selected_figure"]
+    original_series = json.loads(Path(initial["spec"]).read_bytes())["series"]
+    key = "/page1/graph1/key1"
+    # Retain the former rollback fixture as an explicit rejection case: the
+    # upper E4 curve crosses this legend even though rollback itself is exact.
+    seed = [{"op": "add_annotation", "id": "note_axes", "parent_path": "/page1/graph1", "text": "Observed value",
+             "position": {"mode": "axes", "x": 450, "y": 3.5, "x_unit": "nm", "y_unit": "a.u."},
+             "arrow_to": {"mode": "axes", "x": 450, "y": 3, "x_unit": "nm", "y_unit": "a.u."}},
+            {"op": "add_annotation", "id": "note_relative", "parent_path": "/page1/graph1", "text": "Fixed note",
+             "position": {"mode": "relative", "x": 0.05, "y": 0.85}}]
+    seed.extend({"op": "set_style", "object_path": key, "setting_path": key + "/" + name,
+                 "expected_value": initial["objects"][key]["settings"][name], "value": value}
+                for name, value in {"horzPosn": "right", "vertPosn": "top"}.items())
+    review = preview_document_operations(project, seed, output_dir=tmp_path / "overlap-seed",
+                                         expected_document_sha256=initial["document_sha256"])
+    apply_document_edit(project, review)
+    seeded = inspect_project(project, native=True)["selected_figure"]
+    native_bytes = Path(seeded["document"]).read_bytes()
+    backend = VeuszBackend()
+    try:
+        document, binding = backend.import_project(project, plot_id="overlap-rejection")
+        result = backend.export(binding)
+        assert result["status"] == "blocked" and result["ready_to_use"] is False, result
+        manifest = json.loads(Path(result["studio_run"]["manifest"]).read_bytes())
+        issues = manifest["qa"]["studio_layout"]["critical_issues"]
+        overlap = next(item for item in issues if item["id"] == "legend_curve_clearance_below_target")
+        assert overlap["measurement_scope"] == "exact_current_native"
+        assert overlap["document_sha256"] == result["document_sha256"] == seeded["document_sha256"]
+        assert overlap["measured_clearance_mm"] == 0.0
+        assert overlap["required_clearance_mm"] == 2.0
+        assert source.read_bytes() == source_bytes
+        assert Path(seeded["document"]).read_bytes() == native_bytes
+        assert json.loads(Path(seeded["spec"]).read_bytes())["series"] == original_series
+        after, _ = backend.import_project(project, plot_id=document["plot_id"])
+        assert after["scientific_hash"] == document["scientific_hash"]
+    finally:
+        backend.close()
 
 
 @pytest.mark.comprehensive

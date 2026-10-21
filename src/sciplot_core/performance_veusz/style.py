@@ -66,8 +66,10 @@ def _cm_from_mm(value: float) -> str:
     return f"{float(value) / 10.0:g}cm"
 
 
-def _literal_text(value: object) -> str:
-    text = format_plot_text_units(value).replace("\\", "\ue000")
+def _literal_text(value: object, *, format_units: bool = True) -> str:
+    text = (format_plot_text_units(value) if format_units else str(value)).replace(
+        "\\", "\ue000"
+    )
     text = re.sub(r"([_\^\[\]\{\}])", r"\\\1", text)
     return text.replace("\ue000", "{\\backslash}")
 
@@ -157,11 +159,8 @@ def _performance_render_options(
     payload: dict[str, Any],
     request: dict[str, Any],
 ) -> dict[str, Any]:
-    options = (
-        dict(request.get("render_options"))
-        if isinstance(request.get("render_options"), dict)
-        else {}
-    )
+    requested = request.get("render_options")
+    options = dict(requested) if isinstance(requested, dict) else {}
     resolved = payload.get("inside_legend_render_options")
     if isinstance(resolved, dict):
         options.update(resolved)

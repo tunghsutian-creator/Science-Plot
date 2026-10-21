@@ -22,7 +22,6 @@ from sciplot_core.studio_core.figure_task_evidence import figure_queue_item_from
 
 from sciplot_core.workflow.bundle_exports import _rename_metric_exports
 from sciplot_core.workflow.rheology_task_sources import (
-    RHEOLOGY_METRIC_LABELS,
     RheologyTaskSource,
     build_rheology_task_sources,
     sweep_prefix_for_request,
@@ -31,8 +30,6 @@ from sciplot_core.workflow.rheology_terminal_validation import (
     validate_temperature_render_payload,
     validate_temperature_task_sources,
 )
-
-_RHEOLOGY_METRIC_LABELS = RHEOLOGY_METRIC_LABELS
 
 
 def _sweep_prefix_for_request(request: dict[str, Any]) -> str | None:

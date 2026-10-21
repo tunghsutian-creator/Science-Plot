@@ -116,7 +116,10 @@ def test_external_mixed_sample_inputs_need_explicit_lineage_or_prior_selection(t
 
 def test_builtin_identity_exposes_every_bound_implementation_file():
     files = builtin_files()
-    assert {Path(name).name for name in files} == {"builtins.py", "datasets.py", "execution.py", "schema.py", "identity.py"}
+    assert {Path(name).name for name in files} == {"builtins.py", "datasets.py", "execution.py", "schema.py", "identity.py",
+                                                "series.py", "lineage.py", "units.py", "unit_conversion.py", "unit_data.py",
+                                                "rheology.py", "rheology_frequency_metrics.py", "rheology_units.py", "unit_formatting.py",
+                                                "text_values.py", "paired_curve_table_metadata.py", "frame_export.py"}
     assert all(Path(name).is_absolute() and file_sha256(Path(name)) == value for name, value in files.items())
 
 
@@ -235,3 +238,27 @@ def test_loaded_builtin_code_cannot_execute_under_a_new_file_identity(monkeypatc
     with pytest.raises(ValueError) as error:
         execute_node(resolved["document"]["scientific"]["transforms"][0], raw)
     assert error.value.reason_code == "transform_runtime_changed"
+
+
+def test_resolution_graph_binds_final_canonical_document_after_content_interning(tmp_path):
+    from test_figure_document import request_for_figure
+
+    from sciplot_core.plot_engine.content_store import resolve_document_content
+    from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
+    from sciplot_core.plot_engine.managed_state import make_binding
+    from sciplot_core.plot_ir import create_managed_document
+
+    request = request_for_figure(tmp_path)
+    document = create_managed_document(request["template_definition"], request["data_binding"], plot_id="canonical-graph")
+    document = resolved_metadata(document, rule_id=request["rule_id"], executors={})
+    document["scientific"]["provenance"]["large_original_fact"] = {"text": "x" * 70000}
+    document = seal_document(document)
+    store = tmp_path / "store"
+    canonical, resolution = resolve_science(store, document)
+    expanded = resolve_document_content(store, canonical)
+    assert canonical["scientific_hash"] != expanded["scientific_hash"]
+    compile_node = next(node for node in resolution["graph"]["nodes"] if node["id"] == "compile")
+    assert compile_node["parameters"]["scientific_hash"] == canonical["scientific_hash"]
+    binding = make_binding(store, canonical, output=tmp_path / "output")
+    assert resolution["graph"] == binding["graph"]
+    assert expanded["scientific"]["provenance"]["large_original_fact"] == {"text": "x" * 70000}

@@ -1,232 +1,309 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-08. External AI is the task interface. Current behavior belongs
+Status: 2026-10-21. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
+Completed implementation narratives, superseded cloud blockers and historical
+run counts have been removed from this operational roadmap. Git and the
+original local evidence retain that history; historical PASS is not a new
+snapshot's acceptance.
 
-## Semantic document migration after the verified presentation slice
+## Scientific authority convergence
 
-The 2026-10-07 slice introduces a versioned scientific/presentation model, stable
-semantic patches, durable revisions/recovery, audited Veusz shadow import and a
-persistent CLI/MCP service. Its A–G acceptance covers safe title/width edits,
-scientific/stale-revision rejection, source invalidation, idempotency and separate
-export recovery. This changes the ordinary supported-edit entry; it does not mean
-every scientific plot or native setting has been migrated.
+Keep one writer for original source facts, confirmed bindings and transforms,
+current figure intent, and their rendering projections. Explicit table scope
+must survive every consumer; labels, filenames and display-unit typography
+cannot supply scientific identity. Separate full measurement domains from finite
+display runs, including missing-time rows in staged acquisition.
 
-The supported ManagedPlot contracts now have document authority,
-resolved PlotIR, disposable backend artifacts, typed deterministic transforms,
-fixed-file external executors, per-source/transform dependency invalidation and
-ExternalMutation classification. Real rebuild acceptance includes the public CLI
-and MCP path. Legacy imports and source-only task creation remain compatibility;
-no automatic promotion is intended.
+Verify the integrated scientific-authority snapshot across the full supported
+operation families. Retain the shared physical view IDs, complete time domains,
+whole-file reconfirmation and typed derived-input equality already used by
+creation, continuation and source refresh. New consumers must use those owners;
+labels and display aliases cannot supply science. Preserve old hash/executor
+replay and require explicit confirmation for ambiguous old state.
 
-FigureSpec/PlotIR v2 now covers generic multiple scales/views, seven typed marks,
-weighted physical layout, scoped themes, guides and actual native-text bounds QA.
-Real dual-Y rheology, 2x2 mixed research data, impact uncertainty/points and spectrum
-annotation slices pass full rebuild. This closes the bounded grammar slice, not
-arbitrary native feature parity or journal acceptance.
+Complete the remaining integrated native/full and original-data evidence beyond
+the bounded current-view, source-refresh, categorical-group and explicit-XY
+controls. Keep visible-member auto endpoints, fixed comparison windows, exact
+manual ticks and the single domain/geometry writers. Pure controls and native
+array audit do not certify every visual family or complete private acceptance.
 
-The visual compatibility gate now compares retained production legacy rendering
-against new contract-bound FigureTemplate v2, independently of self-rebuild.
-Five real single-panel line/point/spectrum cases match effective structure and
-native pixels; immutable extracted house style and a separate composition policy
-replace unrecorded visual defaults. See the root rendering-contract/drift reports.
-Real historical mechanical bars/errorbar caps and separate PP frequency-sweep
-G′/G″ now have fixed three-way golden profiles; existing FTIR/NMR remain green.
-See [research compatibility profiles](docs/RESEARCH_COMPATIBILITY_PROFILES.md).
-Remaining visual acceptance includes mechanical visible individual points/legends,
-a historically delivered dual-Y golden, other legacy families, multi-panel quality,
-additional font/runtime environments and hidden channels before exposing them.
-Historical unbound revisions and explicit v1 templates are not silently restyled.
+Compound ambiguous C display and unknown graph lineage remain explicit unsupported
+boundaries. Actual font-face capture and cross-runtime typography need separate
+proof even when represented VSZ/spec presentation fields agree. Unify
+daemon/runtime identity facts and preserve original startup diagnostics; an
+engine-unready result alone does not establish an OS or Qt root cause.
 
-Remaining expansion requires equivalent full-rebuild evidence: symlog/other scale
-transforms, facets/repeat, spanning/sparse grids, multiple figure legends, colorbars,
-image/area marks, broader named scientific templates, explicitly pinned additional
-resources and resolved font-file identities, richer continuous geometry collision
-checks, known managed external-delta adoption and explicit authority conversion.
-Non-deterministic executor adoption and uncertain external-execution reconciliation
-need their own durable contracts. Background file observation remains separate;
-current exact byte checks run when requests use files.
+Exit: independent source facts survive create, revision, reopen and export;
+alias-only changes cannot alter science; equivalent final membership and intent
+produce equivalent science; no unsupported migration, stale source or unknown
+execution can mutate state. Full, native/visual acceptance and complete private
+capture remain separate obligations. Merge to main and a normal push follow
+current acceptance and remote-state review. Default upgrades and release or
+deployment remain separate actions.
 
-Exit: each added capability has a real native round-trip and failure-recovery
-case; template instantiation preserves supplied data/units and requested style;
-new scientific nodes carry an explicit versioned execution/decision contract.
-Keep local timings separate from external-model tokens and end-to-end user time.
+## Native backend and further cleanup
 
-## 1. Independent beginner and installation acceptance
+VSZ/Veusz remains the active plotting backend. Ordinary users create, edit and
+export through the AI assistant and SciPlot canvas without manipulating VSZ.
+LegacyPlot retains saved VSZ visual authority; ManagedPlot owns its semantic
+document and still compiles VSZ for native rendering. Replacing that backend
+would require a separately approved rendering, editing, scientific-QA, recovery
+and existing-project migration contract. No replacement is planned by this cleanup.
 
-Reactivated for the macOS public beta on 2026-09-26. The distribution tools now
-retain failed verification, bind the relocated app and its ZIP to exact file
-identities, exercise task capabilities over MCP, and reject public packaging
-without Developer ID, a stapled notarization ticket and Gatekeeper acceptance.
-The [beta guide](docs/PUBLIC_BETA.md) covers installation, current canvas editing,
-feedback and recovery. These automated gates do not close the independent checks.
+Further retirement needs evidence about runtime imports, dynamic registration,
+public compatibility promises, packaging and persisted references. Preserve live
+archive/rollback behavior, GUI and Intake compatibility, executable worker
+entrypoints, safety refusals and historical rendering evidence. Source and
+packaged browser assets have distinct build, runtime and license obligations.
 
-Recruit 3–5 people who did not develop SciPlot. On the first supported macOS
-configuration, have them install/connect, create a figure from their own data,
-answer a real ambiguity, request an annotation, export and resume the next day.
-Record completions, time, maintainer interventions and mistaken project choices.
-Current programmatic/agent evidence is not this human usability evidence.
+## Private scientific acceptance and complete access capture
 
-Validate a clean machine separately from relocation on the development machine.
-Finish a signed/notarized distribution path if distributing to other Macs.
-Additional platforms and AI clients need their own installation acceptance.
+The checked-in private dependency inventory remains preliminary. Available
+inputs, successful original-data test bodies and complete child-inclusive
+access capture are separate claims. Neither public CI nor a prior full PASS
+can certify the current collection's complete private input closure.
 
-## 2. Independent original-data acceptance for table choices
+Finish an independent inventory review against the exact collected node and
+parameter set, then bind actual authorized raw/golden membership and bytes,
+implementation/tests, original process streams and the audited root's genuine
+external wait/exit. Missing startup/finish, lost observations, unrecorded waits,
+unsupported native ports or ambient Git inputs remain BLOCKED. Bounded Mac
+native-inspector evidence closes only its declared diagnostic boundary.
+Historical interrupted/failed epochs and the original scientific files stay intact.
+Only adequate fresh closure evidence may change the completeness flag.
 
-Worksheet/region selection, multirow headers, shared X and multiple XY use
-the same source-bound task/DataMapping route. Bounded original-region queries,
-per-column diagnostics and evidence-bound metadata confirmations now complete
-one untouched independent XRD workbook through creation/export. A real external
-figure confirms another source's quantity while its missing unit still blocks it.
-See [the metadata acceptance record](docs/SCIENTIFIC_METADATA_ACCEPTANCE.md).
-The five earlier failures remain historical evidence. A published natural workbook
-revision now completes fresh mapping, annotation review and export; its selected
-XRD measurements are unchanged across versions.
+Exit: a reviewer can trace every declared private responsibility and original
+child process to complete current evidence without substituting synthetic
+values, a subset, schema validity or a self-asserted capture flag. Keep private
+data and access streams local; public scopes retain their own exact-node guards.
 
-Independent per-pair rows and cross-sheet mappings are implemented, including
-native source updates. One untouched Bath XRD workbook retains 3,477/2,745 points
-through exact-current export; see [range acceptance](docs/TABLE_RANGE_ACCEPTANCE.md).
-The public Zhou natural workbook revision preserves all 4,779 points per selected
-curve through native/CSV export. Real changed-value and cross-sheet revisions
-remain additional acceptance work; current changed-value cross-sheet evidence is
-automated. New one-dimensional native persistence now retains full binary64 values
-and audits them exactly; older specs retain their original precision contract.
-Explicit XLSX/XLSM merged metadata and numeric-only sample labels are implemented.
-The untouched Bath-01345 workbook now selects its declared merged sample row
-without separate sample declarations. The user-supplied original 17-series FTIR
-workbook now preserves numeric sample IDs 1–17 through native creation and export,
-with every delivered value checked against its 7,469 original points per curve.
-Extend real-case
-coverage for externally documented units and scientific statements. Unit conversions
-or new quantities need their own scientific rule contract; never infer them just
-to make an acceptance source pass. The task rule-selection answer must not encode
-arbitrary scientific facts. Extend reusable profiles only when current headers,
-units and mappings can be validated.
+## Native fidelity, fonts and semantic expansion
 
-Exit: every advertised new choice has an untouched independent source completing
+The current opt-in font preflight reports saved requests and qualified Qt
+screen-font matches. It does not identify every face/glyph/file actually used by
+native painting. Record those identities only where the runtime can prove them;
+leave unresolved cases unknown. Validate other runtime/font environments and a
+second Mac separately from local native success. Preserve sealed legacy
+algorithms, original goldens and explicit old precision contracts.
+
+Remaining visual coverage includes mechanical individual points/legends, a
+historically delivered dual-Y golden, other legacy families, multi-panel quality
+and hidden channels before exposing them. Native reflow must keep refusing
+unsupported geometry. Source-root relocation, cross-Mac font/resource consistency
+and independent physical print/journal acceptance need their own records.
+
+Resolve the explicit-corner legend conflict exposed by real continuous XY
+acceptance. Current native QA records text/data collisions as soft findings;
+hard geometry success is not an overlap-free publication certificate. Preserve
+the requested corner, font and axes until the caller chooses an existing layout
+adjustment or explicitly revises that constraint. Do not silently move a legend,
+expand scientific domains or downgrade a visible failure. Finish native saved
+continuation and exact mutation detection for the narrow legend-order and native
+line-pattern projections through their existing presentation authorities.
+
+Broader grammar or authority work remains a proposal: symlog and other scale
+transforms; facets/repeat; spanning/sparse grids; multiple figure legends and
+colorbars; image/area marks; additional named scientific templates and pinned
+resources; continuous collision geometry; known Managed external-delta adoption;
+and explicit Legacy/Managed authority conversion. Non-deterministic executor
+adoption, uncertain external-execution reconciliation and background file
+observation also need separate durable contracts. Do not silently promote a
+partial import or restyle old native documents.
+
+The current bound-suite adapter covers existing native legends and relative
+notes through per-figure transactions and exact export. Added widgets, arbitrary
+native setters, scientific changes and automatic adoption remain outside that
+coverage. Expand only with exact native-state preservation and selected-object
+recovery evidence. Keep the caller's semantic/legend order independent from the
+backend's painting policy.
+
+The bounded text-intent route and read-only dependency explanation already
+exist. A theme intent remains a proposal. Before extending them, compare exact
+targets, stale revisions, native preview/recovery and unchanged science against
+actual execution. Dependency explanations do not guarantee future cache reuse
+or introduce a second scheduler. General no-op export reuse and broad automatic
+recovery are not claimed complete.
+
+Exit: each approved new capability has a real native round-trip, source/units
+and style preservation, scientific execution/decision contract and failure
+recovery. Cross-host visual/resource checks remain distinct from local tests.
+
+## Independent beginner and installation acceptance
+
+Recruit 3–5 people who did not develop SciPlot. Have them install/connect,
+create a figure from their own data, answer a real ambiguity, request an
+annotation, export and resume the next day. Record completion, time, maintainer
+interventions and mistaken project choices. Programmatic/agent evidence is
+not this human usability evidence.
+
+Validate a clean Mac separately from relocation on the development machine.
+The current distribution tools and [beta guide](docs/PUBLIC_BETA.md) retain
+relocated-app/ZIP identity, MCP and failure evidence. Finish Developer ID signing,
+stapled notarization and Gatekeeper acceptance before public distribution;
+ad-hoc local success does not close those gates. Other macOS versions, CPU
+architectures, platforms and AI clients require their own installation acceptance.
+Existing launchers with recorded runtime paths need explicit relocation/re-export
+handling; a portable VSZ snapshot does not establish a portable Managed project.
+
+Exit: independent users complete the supported lifecycle on a clean supported
+configuration, with distribution identity and documented recovery verified.
+
+## Independent original-data acceptance for table choices
+
+The local real-case repair now covers three-row sample/unit metadata, explicit
+source-unit statements, independent sample blocks in ordinary numeric XY tasks,
+and descending display scales without reordering or shifting raw values.
+Saved native continuation distinguishes original and effective source seals and
+validates the complete applied-save chain while retaining partial Legacy shadow
+coverage. Single-task native sets retain their registry and category label bounds.
+Keep testing these paths with untouched sources and independent clients.
+
+Scientific presentation requirements must match the selected executor: Impact
+boxes use median/IQR, whereas bars and compatible multi-condition workbook
+point-lines use mean/sample SD. Explicit `raw_only` now connects the existing
+box/box-strip original-point path without computing summaries. Explicit wide/bar
+valid-n disclosure and selected performance Metrics with per-Metric missing-unit
+statements now have generated, native and source-audit controls. Complete their
+independent original-data acceptance on the final frozen integration. Broader
+categorical tables now have an explicit original-file binding for given-value
+point-lines and long-form mean/sample-SD bars. Complete their original-cell,
+missing-policy, cold-continuation and final visual acceptance as well. Arbitrary
+table reshaping and derived scientific metrics are not implied.
+
+Later categorical aliases and styles now use a separate presentation overlay,
+the native transaction, complete source audits and an export preflight. Generated
+controls cover retained raw identities/statistics, exact conflict replies,
+unmodified delivery on refusal and same-task cold-export recovery. Complete
+independent review and original/fresh-case acceptance on the final integration.
+The original grouped-bar legend collision now has an unchanged-data repair using
+the existing bounded reserve and exact-current native component geometry. Its
+native/PDF controls retain the original false-ready counterexample and verify
+zero text/bar/SD overlap after repair. Finish independent visual review and the
+final integrated acceptance. The zero-SD bar-outline audit contract and summary
+scale preflight are repaired. Matching Qt 6.11.2 has been restored in ignored
+local storage; the zero-SD generated create/cold-export checks pass with the
+original scientific and native assertions. Final integrated full and original
+data acceptance remain pending. Given-value log axes remain supported;
+zero-baseline summary bars reject log requests before plotting.
+
+Ordinary numeric XY creation, same-plot Managed source append and represented
+Managed/Legacy curve display-name and hide/show edits now have generated and
+native controls. Complete independent original-case and fresh-source acceptance
+on the integrated snapshot, including cold continuation and layout failures.
+Include explicit ordinary linear/log axes, compatible same-axis quantity members
+with independent grids, and same-file append of a previously unused original
+response pair and an independently identified Test in the same original file.
+Verify complete physical row domains, missing masks and binary64 values from
+original cells through IR and saved native datasets; empty serialized storage
+rows are not measurements. Complete the raw replicate subset-to-expanded-group
+workflow with the same project/figure identity, old domains, styles and recovery.
+Existing incorrect Managed source selections still need a separately reviewed
+explicit repair contract; a new correct figure does not repair an old revision.
+Retain source-coordinate and forged-disclosure regression evidence.
+Keep correct mathematical clarification separate from drawing completion. These
+controls do not establish fresh private input/access completeness; the default
+upgrade remains held while the mandatory audited gate is BLOCKED. Legacy source
+append and general scientific rollback still require their own supported contracts.
+
+Continue independent instrument-frequency acceptance across original formats,
+condition metadata and explicit coordinate selections. Generated regressions now
+distinguish viscosity magnitude from components, retain temperature-labelled
+Results and bind formal source/unit/transform evidence. A correct local magnitude
+figure does not establish a viscosity TTS model or validate caller-prepared shifts;
+keep those scientific decisions and existing frozen plans separate.
+
+The explicit semantic task adapter now reuses Managed creation for multiple
+attachments, independent coordinate intent, formal reset-time stage assembly,
+unit conversion and presentation interpolation. Broader experiment/coordinate
+combinations still require their own exact source and native acceptance; this
+bounded adapter does not replace the retained family workflows. Native snapshot
+delivery and the original local Managed registry remain distinct authorities.
+
+Exact literal Test/qualified-block selection retains original SHA, physical rows
+and explicit exclusions before formal transforms. Broader instrument formats,
+source revisions and missing/ambiguous scientific metadata still need independent
+original-data acceptance; do not substitute inferred sample names or rewrite raw
+tables to make a selection pass.
+
+Worksheet/region selection, multirow/merged metadata, shared-X/multiple-XY and
+per-pair/cross-sheet mappings already use the source-bound task/DataMapping
+route. Native persistence audits the new binary64 contract exactly; older specs
+retain their original precision contract. Existing natural-workbook and user
+FTIR acceptance records remain in [metadata](docs/SCIENTIFIC_METADATA_ACCEPTANCE.md),
+[table ranges](docs/TABLE_RANGE_ACCEPTANCE.md) and
+[source updates](docs/TABLE_SOURCE_UPDATE_ACCEPTANCE.md).
+
+Extend untouched real-case coverage for alternate secondary-temperature roles,
+incompatible unused worksheets, changed-value cross-sheet revisions,
+externally documented units and scientific statements. Generated selector and
+table-choice regressions do not replace that independent source evidence. Current automated
+changed-value coverage is not that independent source evidence. Never infer a
+quantity or unit merely to make a source pass: the rule-selection answer must
+not encode arbitrary scientific facts. Extend reusable profiles only when
+current headers, units and mappings can be validated.
+
+Paired-curve and numeric mapping coercion now retain correctly rounded binary64
+values for accepted decimal text, with generated precision and missing-data
+controls. Independent real-source round trips must still verify this input
+boundary and the existing native persistence separately. This bounded contract
+does not establish exact decimal arithmetic or cover every statistical parser.
+
+Exit: each advertised new choice has an untouched independent source completing
 selection, correction, native creation and exact-current export through task/MCP.
 
-## 3. Reviewed annotation rebinding: independent source-revision acceptance
+## Reviewed annotation rebinding: independent source-revision acceptance
 
-Fresh mapped-source selection, compatible fixed annotations and reviewed observed
-peak rebinding now have automated native coverage, including moved/missing/multiple
-candidates and export-only recovery. An author's published original/revision pair
-with unchanged selected XRD values completes the same lifecycle with known sample
-identity and exact raw/VSZ/CSV agreement. Independent revisions with moved, missing
-or multiple changed peaks remain needed. Do not count edited synthetic copies or
-development fixtures as that evidence.
+Automated native controls cover fresh mapping, compatible fixed annotations,
+observed-peak rebinding, moved/missing/multiple candidates and export-only recovery.
+An original/revision XRD pair with unchanged selected values has independent
+acceptance. Independent revisions with moved, missing or multiple changed peaks
+remain needed; edited synthetic copies and development fixtures do not count.
 
 Validate original metadata, measurements, sample identity and final VSZ/spec/CSV
-together. New version-2 interrupted installations can restore a completely
-byte-proven baseline, preserve displaced candidate bytes and resume the reviewed
-update. Tests cover every replacement boundary, interruption during recovery and
-a killed native process resumed through public task CLI. Unknown/tampered parts
-and legacy mixed installations still block. Independent real interrupted-update
-evidence remains separate from these fault-injection tests.
+together. The implemented version-2 interrupted installation recovery requires a
+completely byte-proven baseline and preserves displaced candidates. Unknown or
+tampered parts and legacy mixed installations still block. Independent real
+interrupted-update evidence remains separate from fault-injection tests.
 
-Exit: untouched real revisions cover every peak outcome and confirmed mapping,
+Exit: untouched real revisions cover each peak outcome and confirmed mapping,
 with reviewed previews, correct exports and recorded interruption recovery.
 
-## 4. Measured usability and AI-efficiency improvements
+## Measured usability and AI-efficiency improvements
 
-Compact capability discovery, named schema reads, lossless definition factoring
-and state-specific next-step guidance are implemented. In the earlier measurement,
-local full output decreased
-from 204,457 to 51,609 bytes with the same expanded definitions; this is not a
-measured AI token or latency improvement. See [measurement boundaries](docs/TASK_CAPABILITY_MEASUREMENTS.md).
+Use matched real tasks to measure model rounds, tool calls, returned bytes,
+latency, failures and user questions. Existing compact/scoped discovery, typed
+creation/editing, grouped recovery and sealed paper delivery are current behavior;
+their local call/time/byte records belong in
+[task measurements](docs/TASK_CAPABILITY_MEASUREMENTS.md), not a repeated backlog.
+Retain visual review, raw arrays/hashes, current QA and genuine scientific choices.
 
-Operation-local byte-checked table reuse, array-based scanning, compact table
-questions, local phase timing and fresh completion queries are implemented.
-Local complete-task benchmarks now cover synthetic spectra, an untouched Bath
-workbook and three archived user experiments. The fast agent route avoids separate
-planning/export calls and redundant completion queries. These measurements still
-do not establish external model latency or token savings.
-Caller-reviewed `create.mapping` now batches original table/metadata/column choices
-in one source-bound call. CLI/MCP task receipts are compact by default, with full
-responses on demand. Their local replay measurements are recorded separately from
-actual external-model token counts and user-perceived end-to-end time.
-Repeated original-table cleanup/workbook structure reads now share the same
-byte-checked operation scope; short schema references further reduce discovery
-text without changing validation. Three-run before/after medians are recorded for
-the already-batched route; native startup/export and external AI time remain.
+Gather unassisted fresh-client traces and actual per-request input/output/cache
+tokens and billed fees where a client exposes them. Without counters they remain
+UNKNOWN. Fewer CLI calls, encoded MCP bytes and predetermined local corrections
+do not establish model-token savings, matched end-to-end speedup or population
+usability. Native startup/export and external AI time need separate measurement.
 
-Recovery now accepts one question-bound mapping answer with rows, columns,
-evidence and display labels in the same task. Structural diagnostics and a strict
-single-table metadata repair handle deterministic layout issues locally. This
-shared recovery includes FTIR; scientific ambiguity still belongs to the caller.
-The ordinary agent entry is shorter and advanced workflows are loaded on demand.
-Three-run local correction replay reduced four calls to two while preserving
-the complete exported CSV. Independent client behavior and token telemetry remain
-separate measurements; the prior Luna run exposed repeated recovery detours.
+MCP discovery filtering/deferred loading or an opt-in scoped server profile is
+still a measurement question. Implement one only if supported client traces
+justify it, retaining full schemas and validation. No new profile is implied by
+response scoping. Further local native optimization needs matched workloads and
+unchanged scientific/visual quality.
 
-Explicit source-note evidence now supports bounded shared-X mapping candidates:
-the AI reviews the proposed rows, columns, units and samples, then submits the
-question and candidate IDs (optionally a sample subset). Ambiguous notes and
-incomplete numeric ranges still require a full mapping decision. For the original
-17-series FTIR workbook, two sequential local runs per condition reduced median
-complete CLI time from 34.505 to 20.074 s, with identical CSVs and TIFF pixels;
-the answer shrank from 47,640 to 184 UTF-8 bytes. These are not model token counts.
-The reused Luna retest still took 202 s with parent intervention after request
-field mistakes; precise invalid-field diagnostics now address that observed detour.
-The task boundary now automatically relocates unambiguous task-location aliases,
-returns structured constraint violations with current question/next-step context,
-and pauses on occupied outputs before planning. Explicit output correction resumes
-the same task without moving old deliveries; uncertain native creation cannot be
-redirected. Exact current-question bindings reuse the earlier evidence and return
-only correction details; stale bindings return current evidence. A real-workbook
-local fault replay completed in 19.844 s with zero extra inspect/help calls,
-including 0.340 s conflict detection and 0.331 s bad-answer feedback (1,802 bytes).
-This used predetermined corrections, not measured AI inference.
-An unassisted matched client run and further native creation/export optimization
-remain needed before claiming second-scale end-to-end performance.
-A fresh-context prepared-rheology recovery client has now completed one saved
-64-coordinate figure with one resume and unchanged native identity. Its partial
-trace and four recorded CLI calls are documented in the measurement record.
-A separate fresh-context ordinary-task client has now completed the archived
-17-series FTIR workbook in six recorded CLI calls without parent correction or
-prefilled requests/mapping. All 126,973 original XY pairs and 34 native datasets
-passed, with the final TIFF viewed by client and parent. This closes one bounded
-raw-workbook client case; its tool trace remains partial. The old Downloads
-source/delivery remain absent and the new trial used a same-byte archive copy.
-Neither case establishes matched before/after token or time improvement; actual
-model telemetry and independent human/clean-machine acceptance remain open.
+Exit: publish reproducible before/after evidence with the same task scope and
+quality checks, separating local command time from actual client/user experience.
 
-The 2026-10-04 saved-edit review found minutes of user-visible time around tens
-of seconds of recorded local commands. Saved-edit routing now avoids redundant
-discovery/audit/export steps. Combining the primary export and scientific audit
-worker reduced a controlled dense-NMR re-export from 5.530 to 5.014 s (two-run
-medians), preserving exact data and raster pixels. Finder metadata no longer
-invalidates an otherwise current delivery. These bounded corrections do not
-close the matched external-client latency/telemetry work above; see the current
-measurement record for scope and unchanged creation timing.
+## Integration and publication acceptance
 
-A follow-up edit-context entry now combines readiness, current figure identity,
-targets and selected schemas. An independent ordinary demo edit completed in
-three public CLI calls with both visual reviews and current source/QA/delivery.
-The skill entry routes to one task-specific guide. The client still used 16
-underlying tools including evidence capture and memory lookup; three CLI calls
-do not mean three tools or establish a matched end-to-end speedup.
+Use the change-impact workflow in [development](skill/references/development.md):
+small relevant checks while iterating, the integrated changed-owner gate, scoped
+lint/types and a native smoke when the final change crosses those owners. Unknown
+owners, stale exact-node manifests and unsupported evidence remain fail closed.
+Full pytest and ready-rule acceptance remain release/merge gates; a frozen full
+already contains both tiers. Do not substitute public subsets for authorized
+private/full release acceptance or repeat full for every small cleanup.
 
-The 2026-10-07 typed entries move request construction into the program:
-recognized ordinary creation completed in one CLI call, and a fresh sample-style
-client completed preview/accept/export in two calls without caller-authored JSON.
-That client reported ten underlying tools, including two early-yield waits; the
-skill now recommends a normal initial wait. Final demo TIFF pixels match the
-earlier three-command result. End-to-end timing/token telemetry remains open.
-
-Use the same real tasks to compare model rounds, tool calls, returned bytes,
-latency, failures and user questions. Report actual client token telemetry when
-available; unknown is not zero. Improve compact results and orchestration from
-observed friction, while retaining visual review and genuine scientific choices.
-
-Exit: publish a reproducible before/after record with matching task scope and
-quality checks. Do not equate fewer CLI calls with a measured token percentage.
-
-
-The 2026-10-07 protocol/recovery milestone adds exact JSON argument failures,
-shared width preflight, semantic correction fields, stable typed-style replay,
-one durable preview-timeout retry, phase-specific continuation and local full
-error references. The real-client normal-path record and injected native-failure
-record remain distinct. General no-op export reuse, broad automatic recovery and
-population-level error/token/latency evidence are not claimed complete. See the
-current task capability measurements for verification and observed boundaries.
+Keep one normal local entry and recoverable Git checkpoints. Preserve physical
+projects, raw inputs, existing figures, independent backups and unmerged work.
+Remote exact-commit CI, main merge, release publication/deployment and local
+acceptance are separate actions/results; perform only the authorized ones.

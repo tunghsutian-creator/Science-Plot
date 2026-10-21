@@ -25,11 +25,12 @@ def task_path(path: Path) -> Path:
 
 def task_location(request: dict[str, Any], supplied: Path | None) -> Path:
     if request["action"] == "create":
-        source = canonical_path(Path(request["source"]))
+        source = canonical_path(Path(request["sources"][0] if "sources" in request else request["source"]))
         layout = resolve_user_output_layout(
             source, requested_delivery_root=request.get("out"),
         )
-        protected = [source, layout.delivery_root, layout.workspace_root]
+        protected = [source, layout.delivery_root, layout.workspace_root,
+                     *(canonical_path(Path(value)) for value in request.get("sources", []))]
         parent = layout.workspace_root.parent / "tasks"
     else:
         project = resolve_project_path(Path(request["project"]))
@@ -89,9 +90,22 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         "kind", "version", "task_dir", "status", "phase", "updated_at", "question",
         "blocker", "result", "preview", "operation_id", "profile", "profile_unavailable", "project", "edit_outcome",
         "mapping_error", "data_mapping", "revision_id", "previews", "source_update_outcome", "annotation_error", "local_timing",
-        "automatic_repairs", "automatic_corrections", "output_selection",
+        "automatic_repairs", "automatic_corrections", "output_selection", "intent_revision", "delivery_result", "scientific_presentation",
     )
     summary = {key: state[key] for key in keys if key in state}
+    handles = (state.get("result") or {}).get("plot_objects")
+    if isinstance(handles, list):
+        summary["plot_objects"] = handles
+    if "intent" in state["request"] and "semantic_plan" in state:
+        summary["source_plan"] = {"evidence": {"path": str(Path(state["task_dir"]) / "task.json"), "json_pointer": "/semantic_plan"},
+                                  "sources": [{key: source[key] for key in ("source_id", "path", "sha256")}
+                                              for source in state["semantic_plan"].get("sources", [])],
+                                  "confirmation": state.get("plan_confirmation", {"mode": "explicit_source_bound_answers"})}
+        if "selection" in state["semantic_plan"]:
+            from sciplot_core.task_semantic_selection import selection_summary
+
+            summary["source_plan"]["selection"] = selection_summary(
+                state["semantic_plan"]["selection"], state.get("semantic_choices", {}))
     question = summary.get("question")
     if isinstance(question, dict) and question.get("mapping_candidates"):
         question = {**question, "mapping_candidates": [
@@ -126,7 +140,7 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         "next_step": task_next_step(state),
         "model_calls_by_sciplot": 0,
         "external_model_tokens": None,
-        "ready_to_use": False if prepared else None,
+        "ready_to_use": False if prepared or "intent" in state["request"] else None,
         "readiness_evaluated": False,
         "completion_scope": (
             "prepared_project" if prepared else

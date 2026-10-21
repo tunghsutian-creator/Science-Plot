@@ -30,6 +30,7 @@ def register_rendering_commands(subparsers: Any) -> None:
     )
 
     render_parser.add_argument("--out", type=Path, required=True)
+    render_parser.add_argument("--json", action="store_true", help="Include structured JSON for preparation failures.")
 
     recipe_parser = subparsers.add_parser(
         "recipe", help="Low-level primitive: run a known experiment-family recipe."

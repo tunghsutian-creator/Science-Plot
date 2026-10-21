@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
+from weakref import ref
+from sciplot_core.studio_core.axis_presentation import AXIS_PT_STYLE_FIELDS
 from sciplot_core.studio_render.categorical_values import (
     _veusz_axis_label,
 )
@@ -64,6 +66,24 @@ def category_label_lines(axis_spec: dict[str, Any], style: dict[str, Any],
     return lines
 
 
+def category_label_rotation(axis_spec: dict[str, Any], style: dict[str, Any],
+                            plot_width_mm: float | None) -> int:
+    """Keep a wide categorical axis horizontal when every native label fits."""
+    labels = [str(label) for label in axis_spec.get("category_labels") or []]
+    if len(labels) <= 4:
+        return 0
+    positions = axis_spec.get("category_positions") or []
+    low, high = axis_spec.get("min"), axis_spec.get("max")
+    if plot_width_mm is None or len(positions) != len(labels) or low is None or high is None or low == high:
+        return 45
+    widths = _category_label_widths_mm(labels, family=str(style["font_family"]),
+        size_pt=float(axis_spec["tick_label_size_pt"]))
+    ordered = sorted(range(len(labels)), key=lambda index: positions[index])
+    return 0 if all((widths[left] + widths[right]) / 2 <=
+        abs(positions[right] - positions[left]) * plot_width_mm / abs(high - low)
+        for left, right in zip(ordered, ordered[1:], strict=False)) else 45
+
+
 def validate_category_display(document: Any, display: list[str], axis_label: str,
                               size_mm: list[float]) -> None:
     """Reject dropped or clipped wrapped text using the existing native renderer."""
@@ -72,16 +92,24 @@ def validate_category_display(document: Any, display: list[str], axis_label: str
 
     expected = Counter([*display, *([_veusz_axis_label(axis_label)] if axis_label else [])])
     original, observed = utils.Renderer, []
+    live_renderers: list[Any] = []
 
     def factory(*args: Any, **kwargs: Any) -> Any:
         renderer = original(*args, **kwargs)
-        render = renderer.render
+        # Inline Renderer(...).render() calls need temporary strong ownership
+        # through painting; the instance override itself must not form a cycle.
+        live_renderers.append(renderer)
+        renderer_ref = ref(renderer)
+        render = type(renderer).render
         widget = getattr(args[0], "widget", None)
 
         def measured() -> Any:
-            result = render()
+            live_renderer = renderer_ref()
+            if live_renderer is None:
+                raise RuntimeError("The native category renderer expired before measurement.")
+            result = render(live_renderer)
             if getattr(widget, "path", "") == "/page1/graph1/x":
-                observed.append((str(args[4]), [float(value) * 25.4 / 150 for value in renderer.getBounds()]))
+                observed.append((str(args[4]), [float(value) * 25.4 / 150 for value in live_renderer.getBounds()]))
             return result
 
         renderer.render = measured
@@ -93,6 +121,9 @@ def validate_category_display(document: Any, display: list[str], axis_label: str
         document.paintTo(helper, 0)
     finally:
         utils.Renderer = original
+        # Release painters while their PaintHelper-owned devices are still live,
+        # including when painting raises. Do not defer native teardown to GC.
+        live_renderers.clear()
     if Counter(text for text, _bounds in observed) != expected:
         raise ValueError("Category label layout suppressed text; the complete original category set must remain visible.")
     if any(left < -.30 or top < -.30 or right > size_mm[0] + .30 or bottom > size_mm[1] + .30
@@ -141,7 +172,8 @@ def _apply_key_position(
 
 
 def _add_veusz_axis(
-    interface: Any, axis: str, axis_spec: dict[str, Any], style: dict[str, Any]
+    interface: Any, axis: str, axis_spec: dict[str, Any], style: dict[str, Any],
+    *, plot_width_mm: float | None = None,
 ) -> None:
     interface.Add("axis", name=axis, autoadd=False)
     interface.To(axis)
@@ -154,22 +186,15 @@ def _add_veusz_axis(
     interface.Set("outerticks", True)
     foreground_color = str(axis_spec["foreground_color"])
     interface.Set("Line/color", foreground_color)
-    interface.Set("Line/width", _pt(float(axis_spec["line_width_pt"])))
+    for setting, field in AXIS_PT_STYLE_FIELDS.items():
+        interface.Set(setting, _pt(float(axis_spec[field])))
     interface.Set("Line/hide", False)
     interface.Set("Line/transparency", 0)
-    interface.Set(
-        "MajorTicks/width",
-        _pt(float(axis_spec["major_tick_width_pt"])),
-    )
     interface.Set(
         "MajorTicks/length",
         _pt(float(axis_spec["major_tick_length_pt"])),
     )
     interface.Set("MajorTicks/transparency", 0)
-    interface.Set(
-        "MinorTicks/width",
-        _pt(float(axis_spec["minor_tick_width_pt"])),
-    )
     interface.Set(
         "MinorTicks/length",
         _pt(float(axis_spec["minor_tick_length_pt"])),
@@ -184,22 +209,13 @@ def _add_veusz_axis(
     if minor_ticks:
         interface.Set("MinorTicks/hide", False)
         interface.Set("MinorTicks/manualTicks", [float(value) for value in minor_ticks])
-    interface.Set("Label/size", _pt(float(axis_spec["label_size_pt"])))
     interface.Set("Label/color", foreground_color)
     interface.Set("Label/hide", False)
     interface.Set("Label/offset", _pt(float(style["axes_labelpad_pt"])))
-    interface.Set(
-        "TickLabels/size",
-        _pt(float(axis_spec["tick_label_size_pt"])),
-    )
     interface.Set("TickLabels/color", foreground_color)
     interface.Set("TickLabels/format", str(axis_spec.get("tick_format") or "Auto"))
-    if (
-        axis == "x"
-        and axis_spec.get("mode") == "labels"
-        and len(axis_spec.get("category_labels") or []) > 4
-    ):
-        interface.Set("TickLabels/rotate", "45")
+    if axis == "x" and axis_spec.get("mode") == "labels":
+        interface.Set("TickLabels/rotate", str(category_label_rotation(axis_spec, style, plot_width_mm)))
     tick_offset = (
         style["xtick_major_pad_pt"] if axis == "x" else style["ytick_major_pad_pt"]
     )

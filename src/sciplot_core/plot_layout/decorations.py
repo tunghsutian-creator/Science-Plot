@@ -30,9 +30,11 @@ def suppression(layout: dict[str, Any], axes: list[dict[str, Any]]) -> set[str]:
                     if other["id"] == axis["id"] or other["scale_id"] != axis["scale_id"] or other["side"] != axis["side"]:
                         continue
                     peer = cells[other["view_id"]]
-                    aligned = own["column"] == peer["column"] if dimension == "x" else own["row"] == peer["row"]
-                    outer = {"bottom": peer["row"] > own["row"], "top": peer["row"] < own["row"],
-                             "left": peer["column"] < own["column"], "right": peer["column"] > own["column"]}[axis["side"]]
+                    track = "column" if dimension == "x" else "row"
+                    aligned = own[track] == peer[track] and own.get(track + "_span", 1) == peer.get(track + "_span", 1)
+                    outer = {"bottom": peer["row"] + peer.get("row_span", 1) > own["row"] + own.get("row_span", 1),
+                             "top": peer["row"] < own["row"], "left": peer["column"] < own["column"],
+                             "right": peer["column"] + peer.get("column_span", 1) > own["column"] + own.get("column_span", 1)}[axis["side"]]
                     if aligned and outer:
                         hidden.add(axis["id"])
     return hidden

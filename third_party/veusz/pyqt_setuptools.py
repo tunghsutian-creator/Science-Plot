@@ -8,6 +8,7 @@
 import os
 import shutil
 import subprocess
+import tempfile
 
 try:
     import tomllib
@@ -24,8 +25,6 @@ def find_on_path(names, mainname):
 
     mainname is the generic name to report
     """
-    path = os.getenv('PATH', os.path.defpath)
-    pathparts = path.split(os.path.pathsep)
     for cmd in names:
         resolved = shutil.which(cmd)
         if resolved:
@@ -212,27 +211,24 @@ class sip_build_ext(build_ext):
         generated_sources = []
 
         for sip in sip_sources:
-            sip_basename = os.path.basename(sip)[:-4]
-            sip_builddir = os.path.join(self.build_temp, 'sip-' + sip_basename)
-            if not os.path.exists(sip_builddir) or self.force:
-                os.makedirs(sip_builddir, exist_ok=True)
-                self._sip_compile(sip, sip_builddir)
-
-            # files get put in sip_builddir + modulename
-            modulename = os.path.splitext(os.path.basename(sip))[0]
-            dirname = os.path.join(sip_builddir, 'output', modulename)
-            if not os.path.exists(dirname) or self.force:
-                os.makedirs(dirname, exist_ok=True)
-
-            source_files = [
-                os.path.join(dirname, fn)
-                for fn in sorted(os.listdir(dirname))
-                if fn.endswith(".cpp") or fn.endswith(".c")
-            ]
-
-            generated_sources.extend(source_files)
+            generated_sources.extend(self._sip_sources(sip))
 
         return generated_sources + other_sources
+
+    def _sip_sources(self, source):
+        """Generate current bindings in an isolated directory; never reuse partial SIP output."""
+        modulename = os.path.splitext(os.path.basename(source))[0]
+        os.makedirs(self.build_temp, exist_ok=True)
+        builddir = tempfile.mkdtemp(prefix='sip-' + modulename + '-', dir=self.build_temp)
+        self._sip_compile(source, builddir)
+        dirname = os.path.join(builddir, 'output', modulename)
+        files = [os.path.join(dirname, name) for name in sorted(os.listdir(dirname))
+                 if name.endswith(('.cpp', '.c'))] if os.path.isdir(dirname) else []
+        if not any(os.path.basename(path) in (
+                'sip' + modulename + 'cmodule.cpp', 'sip' + modulename + 'cmodule.c')
+                for path in files):
+            raise RuntimeError('SIP did not generate the module entry for ' + modulename)
+        return files
 
     def _sip_compile(self, source, sip_builddir):
         """Compile sip file to sources."""
@@ -258,7 +254,7 @@ class sip_build_ext(build_ext):
 
         # location of sip output files
         output_dir = os.path.abspath(os.path.join(sip_builddir, 'output'))
-        os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
         def toml_esc(s):
             s = s.replace("\\", "\\\\").replace('"', r'\"')
@@ -289,7 +285,10 @@ protected-is-public=false
             fout.write(toml_text)
 
         # generate the source files for the bindings
-        build_cmd = shutil.which('sip-build')
+        # Direct venv Python invocations need not activate that venv on PATH.
+        build_cmd = os.path.join(get_path('scripts'), 'sip-build')
+        if not os.path.isfile(build_cmd) or not os.access(build_cmd, os.X_OK):
+            build_cmd = shutil.which('sip-build')
         if not build_cmd:
             raise RuntimeError('Could not find sip-build command on PATH')
         subprocess.check_call([build_cmd, '--no-compile'], cwd=sip_builddir)

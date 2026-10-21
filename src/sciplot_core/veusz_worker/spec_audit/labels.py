@@ -20,7 +20,10 @@ def audit_legends_and_labels(
     spec: dict[str, Any],
     series: list[dict[str, Any]],
 ) -> None:
-    from sciplot_core.performance_veusz import performance_label_contracts
+    from sciplot_core.performance_veusz.contracts import (
+        performance_label_contracts,
+        performance_literal_text,
+    )
     from sciplot_core.studio_core.legend_contracts import (
         categorical_component_legend_label_contracts,
         curve_factor_legend_label_contracts,
@@ -143,7 +146,7 @@ def audit_legends_and_labels(
                 "path": f"/page1/{raw_label['name']}"
                 if parent == "page"
                 else f"/page1/graph1/{raw_label['name']}",
-                "literal_label": veusz_literal_text(raw_label.get("label")),
+                "literal_label": performance_literal_text(spec, raw_label.get("label")),
             }
         )
 

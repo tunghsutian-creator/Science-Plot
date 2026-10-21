@@ -88,7 +88,7 @@ def test_saved_sample_styles_transfer_across_experiments_by_name(tmp_path, trans
 
         async def scenario():
             params = StdioServerParameters(command=sys.executable, args=["-m", "sciplot_core.mcp_server"],
-                cwd=REPO_ROOT, env={**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")})
+                cwd=REPO_ROOT, env={**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, (str(REPO_ROOT / "src"), os.environ.get("PYTHONPATH", ""))))})
             async with Client(params, read_timeout_seconds=180) as client:
                 result = await client.call_tool("sciplot_sample_style_capture", {
                     "project": str(source_project), "output_dir": str(tmp_path / "preset")})

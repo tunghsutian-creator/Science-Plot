@@ -25,6 +25,7 @@ _SAFE_SUFFIXES = {
     "label": frozenset({"Text/font", "Text/color", "Text/size", "Text/bold", "Text/italic"}),
     "key": frozenset({
         "Text/font", "Text/size", "Text/bold", "Text/italic",
+        "keyLength",
         "columns", "horzPosn", "vertPosn", "horzManual", "vertManual",
     }),
 }

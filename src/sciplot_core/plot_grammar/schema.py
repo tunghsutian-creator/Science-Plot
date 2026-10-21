@@ -4,6 +4,7 @@ from typing import Any
 from sciplot_core.plot_document.schema import IDENTIFIER, closed
 
 from sciplot_core.rendering_contract import binding_schema
+from sciplot_core.plot_layout.schema import grid_schema
 from .styles import COLOR, MARK_TYPES, NUMBER, POSITIVE, scope_schema, style_schema
 
 def rendering_binding_schema(contract_id: str) -> dict[str, Any]:
@@ -17,11 +18,27 @@ BOOL = {"type": "boolean"}
 PAIR = {"type": "array", "minItems": 2, "maxItems": 2, "items": NUMBER}
 
 
-def scale_schema() -> dict[str, Any]:
-    return closed({"id": IDENTIFIER, "dimension": {"enum": ["x", "y"]},
+def quantity_members_schema() -> dict[str, Any]:
+    return {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": True,
+            "items": {"type": "string", "minLength": 1, "maxLength": 128},
+            "description": "Explicit scientific quantities sharing this axis; units alone never establish membership."}
+
+
+def domain_rule_schema() -> dict[str, Any]:
+    endpoint = {"oneOf": [closed({"mode": {"const": "auto"}}),
+                           closed({"mode": {"const": "fixed"}, "value": NUMBER})]}
+    return closed({"minimum": endpoint, "maximum": endpoint})
+
+
+def scale_schema(*, resolved: bool = False) -> dict[str, Any]:
+    fields = {"id": IDENTIFIER, "dimension": {"enum": ["x", "y"]},
         "transform": {"enum": ["linear", "log", "symlog"]}, "domain": PAIR,
         "unit": TEXT, "quantity": {"type": "string", "minLength": 1, "maxLength": 128},
-        "direction": {"enum": ["ascending", "descending"]}})
+        "direction": {"enum": ["ascending", "descending"]},
+        "quantity_members": quantity_members_schema()}
+    if not resolved:
+        fields["domain_rule"] = domain_rule_schema()
+    return closed(fields, ["id", "dimension", "transform", "domain", "unit", "quantity", "direction"])
 
 
 def mark_schema(*, resolved: bool = False) -> dict[str, Any]:
@@ -30,11 +47,15 @@ def mark_schema(*, resolved: bool = False) -> dict[str, Any]:
         fields: dict[str, Any] = {"id": IDENTIFIER, "type": {"const": kind}, "style": style_schema(kind, resolved=resolved)}
         if kind == "bar":
             fields.update(baseline=NUMBER, width_data=POSITIVE)
+        elif kind == "line":
+            fields["interpolation"] = closed({"method": {"const": "pchip"},
+                "subdivisions": {"type": "integer", "minimum": 1, "maximum": 32},
+                "purpose": {"const": "display"}, "boundary": {"const": "preserve_gaps"}})
         elif kind == "rule":
             fields["orientation"] = {"enum": ["vertical", "horizontal"]}
         elif kind == "text":
             fields["text"] = {"type": "string", "minLength": 1, "maxLength": 500}
-        branches.append(closed(fields))
+        branches.append(closed(fields, [key for key in fields if key != "interpolation"]))
     return {"oneOf": branches}
 
 
@@ -53,7 +74,9 @@ def axis_schema(*, resolved: bool = False) -> dict[str, Any]:
     if resolved:
         fields.update(text_layout={"enum": ["physical-anchors", "axis-metric-flow"]},
             minor_ticks={"type": "array", "items": NUMBER}, tick_notation={"enum": ["general", "power10", "labels"]})
-    return closed(fields, [key for key in fields if key not in {"text_layout", "minor_ticks", "tick_notation", "tick_positions_mm", "label_position_mm", "label_angle", "tick_alignment", "tick_labels", "label_runs"}])
+    else:
+        fields["ticks_mode"] = {"enum": ["automatic", "fixed"]}
+    return closed(fields, [key for key in fields if key not in {"ticks_mode", "text_layout", "minor_ticks", "tick_notation", "tick_positions_mm", "label_position_mm", "label_angle", "tick_alignment", "tick_labels", "label_runs"}])
 
 
 def layer_schema(*, resolved: bool = False) -> dict[str, Any]:
@@ -62,10 +85,10 @@ def layer_schema(*, resolved: bool = False) -> dict[str, Any]:
         "mapping_semantics": closed({"x": TEXT, "y": TEXT}), "x_scale": IDENTIFIER, "y_scale": IDENTIFIER,
         "marks": {"type": "array", "minItems": 1, "items": mark_schema(resolved=resolved)},
         "role": {"type": "string", "minLength": 1}, "label": TEXT,
-        "legend": closed({"visible": BOOL, "label": TEXT}), "z_order": {"type": "integer"}}
+        "legend": closed({"visible": BOOL, "label": TEXT}), "z_order": {"type": "integer"}, "visible": BOOL}
     if not resolved:
         fields["style"] = scope_schema(layer=True)
-    return closed(fields)
+    return closed(fields, [key for key in fields if key != "visible"])
 
 
 def guide_schema(*, resolved: bool = False) -> dict[str, Any]:
@@ -110,13 +133,13 @@ def composition_schema() -> dict[str, Any]:
     integer = {"type": "integer", "minimum": 1, "maximum": 16}
     resolve = closed({"id": IDENTIFIER, "views": {"type": "array", "minItems": 2, "uniqueItems": True, "items": IDENTIFIER},
         **{axis: {"enum": ["shared", "independent"]} for axis in ("x", "y", "legend")}})
-    cell = closed({"view_id": IDENTIFIER, "row": {"type": "integer", "minimum": 0},
-        "column": {"type": "integer", "minimum": 0}, "row_span": {"const": 1}, "column_span": {"const": 1}})
-    return closed({"kind": {"enum": ["single", "hconcat", "vconcat", "grid"]}, "rows": integer, "columns": integer,
-        "cells": {"type": "array", "minItems": 1, "items": cell},
+    grid = grid_schema()["properties"]
+    fields = {"kind": {"enum": ["single", "hconcat", "vconcat", "grid"]}, "rows": integer, "columns": integer,
+        "cells": {**grid["cells"], "minItems": 1}, "capabilities": grid["capabilities"],
         "column_weights": {"type": "array", "minItems": 1, "items": POSITIVE},
         "row_weights": {"type": "array", "minItems": 1, "items": POSITIVE},
-        "resolve": {"type": "array", "items": resolve}})
+        "resolve": {"type": "array", "items": resolve}}
+    return closed(fields, [key for key in fields if key != "capabilities"])
 
 
 def figure_layout_schema() -> dict[str, Any]:
@@ -139,4 +162,6 @@ def figure_spec_schema() -> dict[str, Any]:
         "guides": {"type": "array", "items": guide_schema()}, "annotations": {"type": "array", "items": annotation_schema()},
         "rendering_contract": rendering_binding_schema("sciplot-house-style-v1"),
         "composition_policy": rendering_binding_schema("sciplot-figure-composition-v1")}
-    return closed(fields, [key for key in fields if key not in {"rendering_contract", "composition_policy"}])
+    fields["axis_layout_policy"] = {"const": "decorated_secondary_sides_v1"}
+    fields["domain_semantics"] = {"const": "current_view_v1"}
+    return closed(fields, [key for key in fields if key not in {"domain_semantics", "rendering_contract", "composition_policy", "axis_layout_policy"}])

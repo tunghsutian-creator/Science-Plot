@@ -11,7 +11,7 @@ from typing import Any
 
 from sciplot_core.plot_document import seal_document, validate_document
 from sciplot_core.plot_document.validation import finite_json
-from sciplot_core.source_coverage.file_snapshots import _stable_file_snapshot
+from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot as _stable_file_snapshot
 from sciplot_core.studio_core.project_query_paths import canonical_path
 
 from .errors import EngineError
@@ -141,19 +141,27 @@ def referenced_files(root: Path, document: dict[str, Any]) -> dict[str, str]:
     return {str(_reference_path(root, reference)): reference["sha256"] for _key, reference in _references(document)}
 
 
+def resolve_provenance_value(root: Path, document: dict[str, Any], key: str) -> Any:
+    """Read one provenance value through the existing immutable byte owner."""
+    value = document["scientific"]["provenance"].get(key)
+    if not isinstance(value, dict) or value.get("kind") != REFERENCE_KIND:
+        return deepcopy(value)
+    encoded = _verified_bytes(root, value)
+    try:
+        payload = json.loads(encoded)
+        finite_json(payload)
+    except (UnicodeError, ValueError) as exc:
+        raise EngineError("document_content_invalid_json", "Scientific content is not valid finite JSON.",
+                          action="inspect_document_content", sha256=value["sha256"]) from exc
+    if not isinstance(payload, (dict, list)) or _encoded(payload) != encoded:
+        raise EngineError("document_content_invalid_json", "Scientific content is not its declared canonical object or array.",
+                          action="inspect_document_content", sha256=value["sha256"])
+    return payload
+
+
 def resolve_document_content(root: Path, document: dict[str, Any]) -> dict[str, Any]:
     """Explicitly recover the full original scientific projection without writes."""
     result = validate_document(document)
-    for key, reference in _references(result):
-        encoded = _verified_bytes(root, reference)
-        try:
-            payload = json.loads(encoded)
-            finite_json(payload)
-        except (UnicodeError, ValueError) as exc:
-            raise EngineError("document_content_invalid_json", "Scientific content is not valid finite JSON.",
-                              action="inspect_document_content", sha256=reference["sha256"]) from exc
-        if not isinstance(payload, (dict, list)) or _encoded(payload) != encoded:
-            raise EngineError("document_content_invalid_json", "Scientific content is not its declared canonical object or array.",
-                              action="inspect_document_content", sha256=reference["sha256"])
-        result["scientific"]["provenance"][key] = deepcopy(payload)
+    for key, _reference_value in _references(result):
+        result["scientific"]["provenance"][key] = resolve_provenance_value(root, result, key)
     return seal_document(result)

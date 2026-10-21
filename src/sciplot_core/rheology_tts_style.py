@@ -17,6 +17,7 @@ from sciplot_core.studio_render.series_option_context import effective_render_op
 from sciplot_core.studio_render.series_options import resolve_series_encodings
 from sciplot_core.studio_render.style_contract import _veusz_style_contract
 from sciplot_core.studio_render.value_parsing import _size_mm, _string_list
+from sciplot_core.workflow.rheology_tts_prepared_contract import prepared_plan_contract
 
 
 POLICY_ID = "shared_template_roles_v1"
@@ -86,14 +87,14 @@ def tts_presentation_capabilities() -> dict:
         "palette": {"id": palette.palette_id, "colors": list(palette.colors), "source": palette.source},
         "processed_plan": {
             "owner": "AI or caller completes scientific processing before plotting",
-            "version": 1, "required": ["version", "source_binding", "figures"],
+            "version": 1, "required": prepared_plan_contract()["required"],
             "figure_required": ["id", "panels"],
             "panel_required": ["id", "x_label", "y_label", "series"],
             "series_required": ["role", "label", "x", "y"],
             "series_optional": ["template_id", "semantic_id", "kind", "bar_width", "legend", "color_index", "color", "error_values"],
             "program_owned": ["series_id", "presentation_provenance", "presentation_policy"],
             "color_binding": "Missing color uses the shared palette in series order. Optional color_index identifies repeated semantic groups. An explicit color must belong to that live palette and match its index.",
-            "fitting_region_overlay": "Supply full coordinates as context_curve and selected coordinates as fitting_region_points with the same color_index. Both use that index in the shared marker cycle; context markers are open and fitting markers filled. Put all fitting_region_points before all context_curve series: native siblings paint in reverse order, so the filled overlays then remain visible in the foreground. There is no point selection or fitting performed by the program.",
+            "fitting_region_overlay": "Supply full coordinates as context_curve and selected coordinates as fitting_region_points with the same color_index. Both use that index in the shared marker cycle; context markers are open and fitting markers filled. Preserve the declared semantic and legend order; the renderer keeps fitting-region overlays in the foreground. There is no point selection or fitting performed by the program.",
             "error_values": "Optional caller-supplied finite nonnegative symmetric Y errors, in y units, paired one-to-one with the supplied coordinates; zero is allowed and no errors are calculated by the plotting program.",
             "diagnostic_semantic_ids": dict(_METHOD_MARKERS),
             "template_identity": "Derived from role when omitted; a conflicting supplied template is rejected.",

@@ -2,70 +2,43 @@
 
 from __future__ import annotations
 
+import math
+import re
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import numpy as np
 
-from sciplot_core.data_mapping.column_choice import _original_text
-from sciplot_core.data_mapping.curve_support import supports_table_mapping
+from sciplot_core.data_mapping.raw_tables import _original_text
+from sciplot_core.data_mapping.curve_support import supports_replicate_mapping, supports_table_mapping
 from sciplot_core.data_mapping.table_metadata import resolve_column_metadata
 from sciplot_core.data_mapping.output_files import _safe_output_name
-from sciplot_core.data_mapping.raw_tables import _read_raw_table
+from sciplot_core.data_mapping.pair_choice import pair_proposal_contents
+from sciplot_core.data_mapping.original_tables import (
+    original_rows as _rows,
+    read_original_table as read_original_table,
+    source_table_snapshot as source_table_snapshot,
+)
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.mapping_contract import DataColumnMapping, DataMappingProposal, DataSourceReference
+from sciplot_core.mapping_contract.source_identity import source_view_id
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit
-from sciplot_core.source_tables.raw_readers import read_sheet_names
 from sciplot_core.source_tables.read_session import read_table_once
+from sciplot_core.semantic_sources.impact_sources import _is_impact_metric, _validated_impact_unit
 
 
-def _read(source: Path, sheet: str | None, digest: str) -> pd.DataFrame:
-    return _read_raw_table(DataSourceReference(
-        "source", source.name, digest, sheet=sheet, header_row=None,
-    ), source, preserve_cells=True).frame
+# Retained first-party compatibility name; new consumers use the original-table port.
+_read = read_original_table
 
 
-def _rows(frame: pd.DataFrame, indices: list[int]) -> list[dict[str, Any]]:
-    return [{"row_index": row, "cells": [_original_text(value) for value in frame.iloc[row]]}
-            for row in sorted(set(indices)) if 0 <= row < len(frame)]
-
-
-def table_choice_snapshot(source: Path, rule_id: str) -> dict[str, Any] | None:
+def table_choice_snapshot(source: Path, rule_id: str, *, sheets: list[str | None] | None = None) -> dict[str, Any] | None:
     source = source.expanduser().resolve()
     rule = get_rule(rule_id)
     if not supports_table_mapping(rule):
         return None
-    return source_table_snapshot(source, rule_id=rule_id)
-
-
-def source_table_snapshot(source: Path, *, rule_id: str | None = None) -> dict[str, Any] | None:
-    """Read original evidence even when the caller still needs to name the experiment."""
-    source = source.expanduser().resolve()
-    if not source.is_file() or source.suffix.casefold() not in {".csv", ".tsv", ".xlsx", ".xls", ".xlsm"}:
-        return None
-    before = file_sha256(source)
-    sheets: list[str | None] = [None]
-    if source.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}:
-        sheets = list(read_sheet_names(source))
-    tables = []
-    for sheet in sheets:
-        try:
-            frame = _read(source, sheet, before)
-        except ValueError as exc:
-            if "empty" not in str(exc):
-                raise
-            tables.append({"sheet": sheet, "row_count": 0, "column_count": 0, "rows": []})
-            continue
-        tables.append({"sheet": sheet, "row_count": len(frame), "column_count": frame.shape[1],
-                       "rows": _rows(frame.iloc[:, :64], list(range(min(32, len(frame))))),
-                       "preview_truncated": len(frame) > 32 or frame.shape[1] > 64})
-    if file_sha256(source) != before:
-        raise ValueError("Table-choice source changed while reading.")
-    return {"kind": "sciplot_table_choice", "version": 1, "source": str(source),
-            "file_sha256": before, "rule_id": rule_id, "tables": tables,
-            "indices": "zero_based; data_end_row is exclusive"}
+    return source_table_snapshot(source, rule_id=rule_id, sheets=sheets)
 
 
 def _numeric_summary(source: Path, sheet: str | None, digest: str,
@@ -90,7 +63,7 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
     source = Path(snapshot["source"])
     # Selection validates original evidence. Discovery/proposal callers retain
     # their rule-adapter eligibility gate in table_choice_snapshot itself.
-    fresh = source_table_snapshot(source, rule_id=snapshot["rule_id"])
+    fresh = source_table_snapshot(source, rule_id=snapshot["rule_id"], sheets=snapshot.get("observed_sheets"))
     if fresh != snapshot:
         raise ValueError("Table-choice original evidence changed.")
     required = {"sheet", "header_rows", "data_start_row", "data_end_row"}
@@ -117,8 +90,12 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
     frame = _read(source, selection["sheet"], snapshot["file_sha256"])
     if end > len(frame) or any(row >= start for row in metadata) or frame.shape[1] > 256:
         raise ValueError("Metadata must precede the selected data region; bounds must fit the table (up to 256 columns).")
-    rule = get_rule(snapshot["rule_id"])
-    expanded, anchors, associations = {}, {}, []
+    # A Managed original-value binding can carry ordinary XY context without
+    # declaring a registered experiment or inheriting its axis/analysis rules.
+    rule = None if snapshot["rule_id"] in {None, "ordinary_xy"} else get_rule(snapshot["rule_id"])
+    expanded: dict[tuple[int, int], str] = {}
+    anchors: dict[int, dict[str, str]] = {}
+    associations: list[dict[str, Any]] = []
     if selection.get("expand_merged_metadata"):
         from sciplot_core.data_mapping.merged_metadata import merged_metadata_ranges, selected_metadata_cells
 
@@ -164,20 +141,29 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
 
 
 def proposal_for_table_columns(
-    snapshot: dict[str, Any], *, pairs: list[dict[str, Any]], request_path: Path,
-    proposal_id: str, created_at: str,
+    snapshot: dict[str, Any], *, request_path: Path, proposal_id: str, created_at: str,
+    pairs: list[dict[str, Any]] | None = None, replicates: list[dict[str, Any]] | None = None,
+    structured_identity: bool = True,
 ) -> DataMappingProposal:
     if select_table(snapshot["table_snapshot"], snapshot["table_selection"], snapshot.get("metadata_confirmations")) != snapshot:
         raise ValueError("Selected table or original evidence changed.")
-    contents = _proposal_contents(snapshot, pairs)
+    if (pairs is None) == (replicates is None):
+        raise ValueError("Choose independent replicates or XY pairs, never both.")
+    if replicates is not None:
+        contents = replicate_proposal_contents(snapshot, replicates, structured_identity=structured_identity)
+    else:
+        assert pairs is not None
+        contents = _proposal_contents(snapshot, pairs, structured_identity=structured_identity)
     return DataMappingProposal(
         base_request_sha256=file_sha256(request_path), **contents,
         provider="explicit_table_choice", proposal_id=proposal_id, created_at=created_at,
         table_confirmation={"rule_id": snapshot["rule_id"], "selection": snapshot["table_selection"],
-                            "metadata_confirmations": snapshot.get("metadata_confirmations", []), "pairs": pairs,
-                            **({"sample_row_encoding": "explicit_json_v1"} if any(
+                            "metadata_confirmations": snapshot.get("metadata_confirmations", []),
+                            **({"replicates": replicates} if replicates is not None else {"pairs": pairs}),
+                            **({"sample_row_encoding": "explicit_json_v1"} if replicates is None and any(
                                 _numeric_label(label) for label in contents["sample_labels"].values()) else {})},
-        rationale="Explicit original worksheet, metadata evidence, data rows and x/y pairs; no raw cells rewritten.",
+        rationale=("Explicit original worksheet, metadata evidence, complete data rows and independent replicate columns; no raw cells rewritten."
+                   if replicates is not None else "Explicit original worksheet, metadata evidence, data rows and x/y pairs; no raw cells rewritten."),
     )
 
 
@@ -210,58 +196,91 @@ def _pair_columns(snapshot: dict[str, Any], pair: dict[str, Any]) -> dict[str, A
     return select_table(snapshot["table_snapshot"], selection, confirmations)
 
 
-def _proposal_contents(snapshot: dict[str, Any], pairs: list[dict[str, Any]]) -> dict[str, Any]:
-    if not isinstance(pairs, list) or not 1 <= len(pairs) <= 32:
-        raise ValueError("Select 1–32 explicit x/y pairs.")
+def replicate_proposal_contents(snapshot: dict[str, Any], replicates: list[dict[str, Any]], *,
+                                structured_identity: bool = False) -> dict[str, Any]:
+    """Bind complete physical domains, retaining null positions and metadata."""
+    if not supports_replicate_mapping(get_rule(snapshot["rule_id"])):
+        raise ValueError("This source adapter does not consume independent replicate columns.")
+    if not isinstance(replicates, list) or not 1 <= len(replicates) <= 32:
+        raise ValueError("Select 1–32 original replicate columns.")
     source = Path(snapshot["source"])
-    references, mappings, labels, units = [], [], {}, {}
-    selected_y: dict[tuple[str | None, int], list[tuple[int, int]]] = {}
-    for index, pair in enumerate(pairs):
-        selected = _pair_columns(snapshot, pair)
-        selection = selected["table_selection"]
-        columns = {column["index"]: column for column in selected["columns"]}
-        if any(pair[key] not in columns for key in ("x_column", "y_column")):
-            raise ValueError("Each pair needs original integer x_column/y_column indices.")
-        x, y = columns[pair["x_column"]], columns[pair["y_column"]]
-        if x["index"] == y["index"] or not x["x_eligible"] or not y["y_eligible"]:
-            raise ValueError(f"Pair {index} in {selection['sheet']!r} needs explicit axis names, observed units, and finite numeric values; "
-                             f"x_column={x['index']}: {x['x_rejection_reasons']}; y_column={y['index']}: {y['y_rejection_reasons']}.")
-        y_identity = (selection["sheet"], y["index"])
-        bounds = (selection["data_start_row"], selection["data_end_row"])
-        if any(max(bounds[0], start) < min(bounds[1], end) for start, end in selected_y.get(y_identity, [])):
-            raise ValueError("Overlapping rows of a response column cannot be assigned to multiple samples.")
-        selected_y.setdefault(y_identity, []).append(bounds)
-        sample = y["sample"] or x["sample"] or (source.stem if len(pairs) == 1 and selection.get("sample_row") is None else "")
-        if not sample or (x["sample"] and x["sample"] != sample):
-            raise ValueError("Selected columns belong to different samples or lack an original sample label; shared X requires an empty sample cell.")
-        sample = pair.get("label", sample)
-        if sample in labels.values():
-            raise ValueError("Duplicate sample labels require an explicit source correction; samples cannot be merged silently.")
-        source_id = f"series_{index:03}"
-        labels[source_id] = sample
-        references.append(DataSourceReference(
-            source_id, source.name, snapshot["file_sha256"], sheet=selection["sheet"], header_row=None,
-            data_start_row=selection["data_start_row"], data_end_row=selection["data_end_row"],
-            cell_evidence={**x["cell_evidence"], **y["cell_evidence"]},
-        ))
-        for role, column in (("x", x), ("y", y)):
-            mappings.append(DataColumnMapping(source_id, column["index"], column["output_header"], role,
-                                              expected_header=f"column_{column['index']}"))
-            if column["output_header"] in units and units[column["output_header"]] != column["unit"]:
-                raise ValueError("Selected output headers have conflicting units.")
-            units[column["output_header"]] = column["unit"]
-    contents = dict(sources=tuple(references), columns=tuple(mappings), sample_labels=labels, unit_overrides=units)
-    proposal = DataMappingProposal(
-        base_request_sha256="0" * 64, **contents,
-        provider="explicit_table_choice",
-    )
-    used: set[str] = set()
-    for reference in references:
-        if Path(_safe_output_name(reference, proposal, used=used)).stem != labels[reference.source_id]:
-            raise ValueError("The selected sample label cannot be preserved exactly in the mapped output filename.")
+    references, mappings = [], []
+    labels: dict[str, str] = {}
+    display_labels: dict[str, str] = {}
+    occupied: dict[tuple[str | None, int], list[tuple[int, int]]] = {}
+    for index, choice in enumerate(replicates):
+        if (not isinstance(choice, dict) or "column_index" not in choice
+                or set(choice) - {"column_index", "table_selection", "metadata_confirmations", "label"}
+                or type(choice["column_index"]) is not int or choice["column_index"] < 0):
+            raise ValueError("Each replicate needs an original integer column_index and optional region, metadata and label.")
+        selection = choice.get("table_selection", snapshot["table_selection"])
+        if not isinstance(selection, dict):
+            raise ValueError("A replicate region must be a complete original table_selection.")
+        inherited = snapshot.get("metadata_confirmations", []) if selection.get("sheet") == snapshot["table_selection"]["sheet"] else []
+        confirmations = choice.get("metadata_confirmations", inherited)
+        facts = select_table(snapshot["table_snapshot"], selection, confirmations)
+        column = next((item for item in facts["columns"] if item["index"] == choice["column_index"]), None)
+        if column is None or not column["sample"] or column["metadata_conflicts"]:
+            raise ValueError("A replicate column needs its exact original sample and unconflicted metadata.")
+        # Reuse the existing wide-source metric and unit contract, not XY eligibility.
+        metric = re.sub(r"\.\d+$", "", column["header"].strip().casefold())
+        if not _is_impact_metric(metric):
+            raise ValueError("The selected column must identify the existing replicate metric in original metadata.")
+        _validated_impact_unit([column["unit"]])
+        bounds = selection["data_start_row"], selection["data_end_row"]
+        key = selection["sheet"], column["index"]
+        if any(max(bounds[0], start) < min(bounds[1], end) for start, end in occupied.get(key, [])):
+            raise ValueError("Overlapping original replicate cells cannot become two groups.")
+        occupied.setdefault(key, []).append(bounds)
+        frame = read_original_table(source, selection["sheet"], snapshot["file_sha256"])
+        present = 0
+        for row in range(*bounds):
+            value = frame.iat[row, column["index"]]
+            if pd.isna(value) or not str(value).strip():
+                continue  # Original null position stays in the bound domain.
+            try:
+                number = float(str(value))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Nonnumeric original replicate at row {row}, column {column['index']}.") from exc
+            if not math.isfinite(number):
+                raise ValueError(f"Nonfinite original replicate at row {row}, column {column['index']}.")
+            present += 1
+        if not present:
+            raise ValueError("Each selected replicate group needs an original finite observation.")
+        label = choice.get("label", column["sample"])
+        if not isinstance(label, str) or not label.strip() or len(label) > 160 or label in display_labels.values():
+            raise ValueError("Group display labels must be nonempty and distinct; original identities remain in cell evidence.")
+        source_id = (source_view_id(str(source.resolve()), selection, [column["index"]])
+                     if structured_identity else f"series_{index:03}")
+        labels[source_id] = column["sample"] if structured_identity else label
+        display_labels[source_id] = label
+        references.append(DataSourceReference(source_id, source.name, snapshot["file_sha256"],
+            sheet=selection["sheet"], header_row=None, data_start_row=bounds[0], data_end_row=bounds[1],
+            cell_evidence=column["cell_evidence"],
+            identity=({"version": 1, "source_namespace": str(source.resolve()), "category": column["sample"],
+                       "condition": None} if structured_identity else {})))
+        mappings.append(DataColumnMapping(source_id, column["index"], "Impact strength", "value",
+                                          expected_header=f"column_{column['index']}"))
     if file_sha256(source) != snapshot["file_sha256"]:
-        raise ValueError("Table-choice source changed while creating the proposal.")
+        raise ValueError("Original replicate source changed while binding its columns.")
+    contents: dict[str, Any] = {"sources": tuple(references), "columns": tuple(mappings),
+                               "sample_labels": labels, "unit_overrides": {"Impact strength": "kJ/m2"}}
+    if structured_identity:
+        contents["display_labels"] = display_labels
+
+    if not structured_identity:
+        proposal = DataMappingProposal(base_request_sha256="0" * 64, **contents, provider="explicit_table_choice")
+        used: set[str] = set()
+        if any(Path(_safe_output_name(reference, proposal, used=used)).stem != labels[reference.source_id]
+               for reference in references):
+            raise ValueError("The selected sample label cannot be preserved exactly in the mapped output filename.")
     return contents
+
+
+def _proposal_contents(snapshot: dict[str, Any], pairs: list[dict[str, Any]], *,
+                       structured_identity: bool = False) -> dict[str, Any]:
+    return pair_proposal_contents(snapshot, pairs, select_pair=_pair_columns,
+                                  structured_identity=structured_identity)
 
 
 def verify_table_confirmation(proposal: DataMappingProposal, source: Path) -> None:
@@ -269,10 +288,18 @@ def verify_table_confirmation(proposal: DataMappingProposal, source: Path) -> No
     binding = proposal.table_confirmation
     if not binding:
         return  # Historical proposals retain their original signed contract.
-    snapshot = table_choice_snapshot(source, binding["rule_id"])
+    sheets = [binding["selection"]["sheet"],
+              *[item.get("table_selection", binding["selection"])["sheet"]
+                for item in binding.get("replicates", binding.get("pairs", []))]]
+    snapshot = (source_table_snapshot(source, rule_id=binding["rule_id"], sheets=sheets) if "replicates" in binding
+                else table_choice_snapshot(source, binding["rule_id"], sheets=sheets))
     if snapshot is None:
         raise ValueError("Confirmed table source is no longer supported.")
     columns = select_table(snapshot, binding["selection"], binding["metadata_confirmations"])
-    expected = _proposal_contents(columns, binding["pairs"])
+    if "replicates" in binding:
+        expected = replicate_proposal_contents(columns, binding["replicates"],
+                                               structured_identity=bool(proposal.sources[0].identity))
+    else:
+        expected = _proposal_contents(columns, binding["pairs"], structured_identity=bool(proposal.sources[0].identity))
     if any(getattr(proposal, key) != value for key, value in expected.items()) or proposal.transformations or proposal.request_patch:
         raise ValueError("Confirmed table metadata does not reproduce the proposed mapping.")

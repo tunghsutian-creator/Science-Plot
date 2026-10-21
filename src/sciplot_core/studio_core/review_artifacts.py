@@ -21,12 +21,27 @@ from sciplot_core.studio_core.registry_state import (
 )
 
 
-def _current_layout_issues(spec: dict[str, Any]) -> list[dict[str, Any]]:
+def _current_layout_issues(spec: dict[str, Any], *, document_path: Path | None = None,
+                           native_audit: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Keep generated diagnostics, distinguishing explicitly reviewed viewports."""
     from sciplot_core.studio_core.annotation_axes import require_scope
     from sciplot_core.studio_core.axis_data_visibility import validate_axis_data_visibility
 
     issues = [dict(item) for item in spec.get("layout_issues", []) if isinstance(item, dict)]
+    from sciplot_core.studio_core.document_edit_policy import ordinary_curve_paths
+
+    legend = spec.get("legend")
+    from sciplot_core.studio_core.current_layout_review import current_segmented_legend_issues
+
+    issues = current_segmented_legend_issues(issues, spec, document_path, native_audit)
+    if (document_path is not None and ordinary_curve_paths(spec)
+            and isinstance(legend, dict)
+            and (legend.get("show") is True or any(item.get("id") == "legend_curve_clearance_below_target"
+                                                  for item in issues))
+            and legend.get("presentation_kind") not in {"factorized_curve", "segmented_component"}):
+        from sciplot_core.studio_core.current_layout_review import current_legend_issues
+
+        issues = current_legend_issues(issues, document_path, native_audit or {})
     axes = spec.get("axes", {})
     authorized = {
         name: axis["display_window"]
@@ -73,7 +88,10 @@ def _run_studio_qa(
         for document_path in veusz_documents or []:
             spec_path = _veusz_spec_path(document_path)
             spec = _read_json(spec_path) if spec_path.exists() else {}
-            issues = _current_layout_issues(spec)
+            audit_set = qa.get("publication", {}).get("veusz_document_audit", {})
+            native_audit = next((item for item in audit_set.get("documents", [])
+                                 if Path(str(item.get("path", ""))).resolve() == document_path.resolve()), None)
+            issues = _current_layout_issues(spec, document_path=document_path, native_audit=native_audit)
             layout_documents.append(
                 {
                     "document": str(document_path),
@@ -109,7 +127,7 @@ def _run_studio_qa(
         }
 
 
-def _studio_layout_quality_from_spec(document_path: Path) -> dict[str, Any]:
+def _studio_layout_quality_from_spec(document_path: Path, *, qa: dict[str, Any] | None = None) -> dict[str, Any]:
     spec_path = _veusz_spec_path(document_path)
     spec = _read_json(spec_path) if spec_path.exists() else {}
     series = spec.get("series") if isinstance(spec.get("series"), list) else []
@@ -117,6 +135,10 @@ def _studio_layout_quality_from_spec(document_path: Path) -> dict[str, Any]:
     x_axis = axes.get("x") if isinstance(axes.get("x"), dict) else {}
     y_axis = axes.get("y") if isinstance(axes.get("y"), dict) else {}
     issues = _current_layout_issues(spec)
+    current = next((item for item in (qa or {}).get("studio_layout", {}).get("documents", [])
+                    if Path(str(item.get("document", ""))).resolve() == document_path.resolve()), None)
+    if current is not None:
+        issues = current["issues"]
     autofixes = [
         str(item) for item in spec.get("autofixes_applied", []) if isinstance(item, str)
     ]

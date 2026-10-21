@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core.data_mapping.raw_tables import _read_raw_table
+from sciplot_core.data_mapping.raw_tables import _original_text as _original_text, _read_raw_table
 from sciplot_core.data_mapping.output_files import _safe_output_name
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.mapping_contract import (
@@ -23,10 +23,6 @@ from sciplot_core.semantic_sources.paired_curve_table_metadata import (
     explicit_header_unit,
     looks_like_unit,
 )
-
-
-def _original_text(value: object) -> str:
-    return "" if value is None or pd.isna(value) else str(value)
 
 
 def _finite_numeric_column(values: pd.Series) -> bool:
