@@ -96,3 +96,48 @@ def test_live_endpoint_parent_lineage_cannot_move_to_next_item_via_an_ambient_la
     assert runtime._item_generation(same_item, frames, entered, 100) == "first-generation"
     assert runtime._item_generation(borrowed, frames, entered, 100) == "second-generation"
     assert runtime._item_generation({**bound, "epoch": "unobserved"}, frames, entered, 100) is None
+
+
+def test_confirmed_registration_preserves_the_persistent_spawn(tmp_path, monkeypatch):
+    from sciplot_core.verification import private_native_exit_port as port
+
+    observer = Observer(None)
+    monkeypatch.setattr(port, "register_server", lambda *args: True)
+    monkeypatch.setattr(runtime, "_held", [])
+    process = SimpleNamespace(pid=401)  # Any poll/signal/wait is a test failure.
+    runtime.hold_server(observer, process, "actual-token", {"socket": str(tmp_path / "engine.sock"), "default_owned": True})
+    assert [r["event"] for r in observer.frames] == ["audit_server_spawn"]
+    assert runtime._held == []
+
+
+def test_failed_registration_closes_only_the_held_spawn_and_retains_unknown(tmp_path, monkeypatch):
+    from sciplot_core.verification import private_native_exit_port as port
+    import subprocess
+
+    monkeypatch.setattr(port, "register_server", lambda *args: False)
+    monkeypatch.setattr(runtime, "_held", [])
+    class Process:
+        pid = 401
+        def __init__(self, polled, failure, calls):
+            self.polled, self.failure, self.calls = polled, failure, calls
+        def poll(self):
+            self.calls.append("poll")
+            return self.polled
+        def terminate(self):
+            self.calls.append("terminate")
+        def wait(self, *, timeout):
+            self.calls.append(("wait", timeout))
+            if self.failure:
+                raise subprocess.TimeoutExpired("modeled-child", timeout)
+            return 0
+    for polled, timeout in ((None, False), (0, False), (None, True)):
+        observer, calls = Observer(None), []
+        with pytest.raises(ValueError, match="registration failed"):
+            runtime.hold_server(observer, Process(polled, timeout, calls), "actual-token", {"socket": str(tmp_path / "engine.sock"), "default_owned": True})
+        assert calls == (["poll", "terminate", ("wait", 20)] if polled is None else ["poll", ("wait", 20)])
+        last = observer.frames[-1]
+        assert last["event"] == "audit_server_failed" and last["child_pid"] == 401 and last["child_token"] == "actual-token"
+        assert last["actual_wait_returncode"] == (None if timeout else 0)
+        if timeout:
+            assert last["error_class"] == "TimeoutExpired"
+        assert runtime._held == []

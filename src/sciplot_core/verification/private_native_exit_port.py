@@ -14,7 +14,59 @@ from typing import Any
 from sciplot_core.verification.native_exit_boundary import (
     NativeExitSensor, ProcessIdentity, read_identity, validate_exit_fact, validate_registration,
 )
-from sciplot_core.verification.private_process_boundaries import ZERO, frame_digest, source_hashes, owner_identity
+from sciplot_core.verification.private_process_boundaries import ZERO, executable_hash, frame_digest, source_hashes, owner_identity
+
+
+def _image(identity: ProcessIdentity) -> tuple[str, str]:
+    return identity.executable, identity.executable_sha256
+
+
+def _server_identity(pid: int, socket_path: str, deadline: float) -> ProcessIdentity:
+    """Resolve this one launch before registering; an UNKNOWN is never retried."""
+    producer = read_identity(os.getpid())
+    first = read_identity(pid)
+    entry = str(Path(sys.executable).resolve(strict=True)), executable_hash(sys.executable)
+    fields = ("pid", "ppid", "uid", "start_sec", "start_usec", "cwd")
+    generation = tuple(getattr(first, key) for key in fields)
+    if (first.ppid != producer.pid or first.uid != producer.uid
+            or first.cwd != str(Path(socket_path).parent.resolve(strict=True)) or entry[1] is None):
+        raise ValueError("Native server is not this source launch generation.")
+    current = first
+    while True:
+        if tuple(getattr(current, key) for key in fields) != generation or _image(current) not in {entry, _image(producer)}:
+            raise ValueError("Native server generation or launch image changed.")
+        if time.monotonic() >= deadline:
+            raise ValueError("Native server did not settle before registration.")
+        if _image(current) == _image(producer):
+            return current
+        time.sleep(.01)
+        current = read_identity(pid)
+
+
+def _startup_bound(frames: list[dict[str, Any]], request: dict[str, Any], attempt: dict[str, Any],
+                   binding: dict[str, Any]) -> bool:
+    """Keep the requested entrypoint and actual kernel executable independent."""
+    try:
+        identity, watcher = request["identity"], binding["watcher_identity"]
+        producer = [r for r in frames if r["event"] == "process_start" and r["epoch"] == request["epoch"]]
+        child = [r for r in frames if r["event"] == "process_start" and r["pid"] == identity["pid"]
+                 and r.get("parent_epoch") == request["epoch"] and r.get("child_token") == request["token"]
+                 and r.get("continuation") is None]
+        primary = [r for r in frames if r["event"] == "process_start" and r["pid"] == watcher["pid"]]
+        if len(producer) != 1 or len(child) != 1 or len(primary) != 1:
+            return False
+        runtime = primary[0]["python_runtime"]
+        entry = attempt.get("expected_executable_sha256")
+        if not isinstance(entry, str) or re.fullmatch("[0-9a-f]{64}", entry) is None:
+            return False
+        return bool(identity["ppid"] == producer[0]["pid"] and identity["uid"] == watcher["uid"]
+            and (identity["executable"], identity["executable_sha256"]) == (watcher["executable"], watcher["executable_sha256"])
+            and attempt["expected_executable_sha256"] == producer[0]["executable_sha256"] == child[0]["executable_sha256"]
+            and producer[0]["python_runtime"] == child[0]["python_runtime"] == runtime
+            and identity["executable_sha256"] in runtime["loaded_core_sha256"]
+            and binding["native_images"]["python_core"]["sha256"] in runtime["loaded_core_sha256"])
+    except (KeyError, TypeError, ValueError):
+        return False
 
 
 def _epoch_rows(directory: Path, epoch: str) -> list[dict[str, Any]]:
@@ -117,6 +169,9 @@ class _Port:
             raise ValueError("Native registration is outside the real item endpoint scope.")
         identity = ProcessIdentity.from_dict(request["identity"])
         _live_request(self.observer.directory, request, identity)
+        watcher = ProcessIdentity.from_dict(self.sensor.binding["watcher_identity"])
+        if _image(identity) != _image(watcher):
+            raise ValueError("Native server executable differs from the actual audit runtime.")
         with self.lock:
             fact = self.sensor.register(request["generation"], identity)
             bound = {"request": request, "registration": fact, "test_nodeid": scope[0]["test_nodeid"]}
@@ -179,10 +234,13 @@ def register_server(observer: Any, process: Any, token: str, actor: dict[str, An
     if not (directory / "requests").is_file():
         return None
     try:
-        identity = read_identity(process.pid)
+        deadline = time.monotonic() + 5
+        identity = _server_identity(process.pid, actor["socket"], deadline)
         request = {"generation": observer.epoch + ":" + token, "epoch": observer.epoch,
                    "token": token, "identity": identity.to_dict(), "actor": actor}
         observer.record({"event": "native_registration_request", "request": request}, sync=True)
+        if time.monotonic() >= deadline:
+            return False
         content = (json.dumps(request, sort_keys=True) + "\n").encode()
         descriptor = os.open(directory / "requests", os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
         try:
@@ -191,13 +249,12 @@ def register_server(observer: Any, process: Any, token: str, actor: dict[str, An
         finally:
             os.close(descriptor)
         ack = directory / (token + ".ack")
-        deadline = time.monotonic() + 5
         while not ack.exists() and time.monotonic() < deadline:
             time.sleep(.01)
         if not ack.exists():
             return False
         value = json.loads(ack.read_bytes())
-        return bool(value.get("status") == "REGISTERED" and value.get("generation") == request["generation"] and value.get("identity") == request["identity"])
+        return bool(time.monotonic() < deadline and value.get("status") == "REGISTERED" and value.get("generation") == request["generation"] and value.get("identity") == request["identity"])
     except (OSError, TypeError, ValueError):
         return False
 
@@ -234,7 +291,7 @@ def validated_exits(frames: list[dict[str, Any]], *, primary: int) -> dict[str, 
         if (len(sender) != 1 or len(spawned) != 1 or len(attempts) != 1 or len(terminal) != 1
                 or spawned[0].get("owner") != owner_identity("socket_client.py", "ensure_server")
                 or spawned[0].get("socket") != request["actor"]["socket"]
-                or attempts[0].get("expected_executable_sha256") != request["identity"]["executable_sha256"]
+                or not _startup_bound(frames, request, attempts[0], binding)
                 or request["generation"] != epoch + ":" + token
                 or not validate_registration(registration, expected_identity=ProcessIdentity.from_dict(request["identity"]),
                     generation=request["generation"], watcher_binding=binding)):

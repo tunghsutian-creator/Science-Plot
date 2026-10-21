@@ -215,7 +215,21 @@ def hold_server(observer: Any, process: subprocess.Popen[Any], token: str, actor
     if observer is not None:
         observer.record({"event": "audit_server_spawn", "child_token": token, "child_pid": process.pid, **actor}, sync=True)
         from sciplot_core.verification.private_native_exit_port import register_server
-        if register_server(observer, process, token, actor) is not None:
+        registered = register_server(observer, process, token, actor)
+        if registered is False:
+            cleanup: dict[str, Any] = {"actual_wait_returncode": None, "wait_called": False}
+            try:
+                cleanup["poll_returncode"] = process.poll()
+                if cleanup["poll_returncode"] is None:
+                    process.terminate()
+                cleanup["wait_called"] = True
+                cleanup["actual_wait_returncode"] = process.wait(timeout=20)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                cleanup["error_class"] = type(exc).__name__
+            observer.record({"event": "audit_server_failed", "child_token": token,
+                "child_pid": process.pid, "socket": actor["socket"], **cleanup}, sync=True)
+            raise ValueError("Audit server registration failed; started child cleanup is recorded.")
+        if registered is True:
             return
     if not actor["default_owned"]:
         return
