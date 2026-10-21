@@ -2,17 +2,26 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
+from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
 import pytest
 
 from sciplot_core.verification.process_private_exclusion import (
+    actual_launch_facts,
+    invocation_snapshot,
+    original_stdio_facts,
     prepare_private_exclusion,
+    source_private_exclusion,
+    validate_excluded_proof,
     validate_private_exclusion,
     wrap_private_exclusion,
 )
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
 
 pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="Actual Mac process boundary control")
 
@@ -154,3 +163,68 @@ def test_pinned_interpreter_loader_environment_is_preserved(generated):
 def test_actual_nonzero_and_signal_outcomes_are_retained(generated, code, expected):
     _, actual, _, _ = execute(generated[-1], code)
     assert actual == expected
+
+
+@pytest.fixture
+def short_socket_directory():
+    with tempfile.TemporaryDirectory(prefix="sp-central-", dir="/private/tmp") as directory:
+        yield Path(directory).resolve()
+
+
+def test_actual_same_launch_composition_preserves_two_finite_socket_endpoints(generated, tmp_path, short_socket_directory):
+    origin, canary, _, _, _, audit, _, witness, _ = generated
+    directory = short_socket_directory
+    assert not list(directory.iterdir())
+    value = directory.stat()
+    scope = {"sockets": [str(directory / "cold-engine.sock"), str(directory / "engine.sock")],
+        "directory": {"device": value.st_dev, "inode": value.st_ino, "uid": value.st_uid, "mode": 0o700},
+        "initial_absent": True}
+    outer = prepare_private_exclusion(origin, {}, audit_directory=audit, evidence_paths=[witness], socket_scope=scope)
+    inner_root = tmp_path / "inner-origin"
+    inner_raw = inner_root / "tests/fixtures/real_world/literal.txt"
+    inner_raw.parent.mkdir(parents=True)
+    inner_raw.write_bytes(b"literal generated inner bytes")
+    inner = prepare_private_exclusion(inner_root, {}, socket_scope=scope)
+    code = """
+import errno,hashlib,json,os,socket,sys
+result={'pid':os.getpid(),'endpoints':0,'raw_denied':0}
+for path in sys.argv[1:3]:
+    server=socket.socket(socket.AF_UNIX);server.bind(path);server.listen(1)
+    client=socket.socket(socket.AF_UNIX);client.connect(path);client.sendall(b'generated-protocol')
+    peer,_=server.accept();assert peer.recv(64)==b'generated-protocol'
+    peer.close();client.close();server.close();os.unlink(path);result['endpoints']+=1
+for path in sys.argv[3:]:
+    try: open(path,'rb').read()
+    except OSError as error: result['raw_denied']+=error.errno in (errno.EPERM,errno.EACCES)
+result['environment_sha256']=hashlib.sha256(json.dumps(dict(os.environ),sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
+print(json.dumps(result,sort_keys=True))
+"""
+    environment = dict(os.environ, GENERATED_INNER_ROUTE="inner", GENERATED_OUTER_ROUTE="old")
+    target = (sys.executable, "-I", "-c", code, *scope["sockets"], str(canary), str(inner_raw))
+    with wrap_private_exclusion(inner, target, environment=environment, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, drop_environment=["GENERATED_INNER_ROUTE"]) as source:
+        effective = dict(environment, GENERATED_OUTER_ROUTE="new")
+        reference = source_private_exclusion(source.argv, effective, stdio=source.stdio,
+            drop_environment=["GENERATED_OUTER_ROUTE"])
+        assert reference is not None
+        caller = actual_launch_facts(reference[0], source.argv, effective, stdio=source.stdio, drop_environment=reference[1])
+        with wrap_private_exclusion(outer, source.argv, environment=effective, stdin=source.stdio[0],
+                stdout=source.stdio[1], stderr=source.stdio[2], drop_environment=["GENERATED_OUTER_ROUTE"]) as combined:
+            assert combined.argv.count("/usr/bin/sandbox-exec") == 1
+            launch = actual_launch_facts(invocation_snapshot(combined), combined.argv, combined.environment,
+                stdio=combined.stdio, drop_environment=["GENERATED_INNER_ROUTE", "GENERATED_OUTER_ROUTE"])
+            validate_excluded_proof(combined.proof, expected_snapshot=outer,
+                original_argv_sha256=canonical_json_sha256(list(source.argv)), original_environment_sha256=canonical_json_sha256(effective),
+                original_executable_sha256=hashlib.sha256(Path("/usr/bin/sandbox-exec").read_bytes()).hexdigest(),
+                original_cwd=os.getcwd(), original_stdio=original_stdio_facts(*source.stdio), actual_launch=launch,
+                caller_launch=caller, drop_environment=["GENERATED_OUTER_ROUTE"])
+            process = subprocess.Popen(combined.argv, env=combined.environment, stdin=combined.stdio[0],
+                stdout=combined.stdio[1], stderr=combined.stdio[2], close_fds=True)
+            stdout, stderr = process.communicate(timeout=15)
+            assert process.returncode == 0, stderr
+            expected = launch["target_environment_sha256"]
+    observed = json.loads(stdout)
+    assert observed == {"pid": process.pid, "endpoints": 2, "raw_denied": 2, "environment_sha256": expected}
+    validate_private_exclusion(outer)
+    validate_private_exclusion(inner)
+    print(json.dumps({"same_launch_composition": observed, "exit": process.returncode}, sort_keys=True))
