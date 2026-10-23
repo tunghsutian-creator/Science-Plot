@@ -126,7 +126,7 @@ def _durable_context(proof: dict[str, Any], *, root: bool = False) -> dict[str, 
 def _diagnostic_bound(frame: dict[str, Any], context: dict[str, Any] | None, actors: set[int],
                       identify: Callable[[str, str], dict[str, str]] | None = None) -> bool:
     owner = frame.get("diagnostic_owner")
-    if context is None or frame["pid"] not in actors or not isinstance(owner, dict):
+    if context is None or frame["pid"] not in actors or not isinstance(owner, dict) or not owner:
         return False
     if owner != (owner_identity if identify is None else identify)(owner.get("owner", ""), owner.get("function", "")):
         return False

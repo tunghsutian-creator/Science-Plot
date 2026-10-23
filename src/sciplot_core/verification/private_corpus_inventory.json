@@ -3,13 +3,13 @@
   "version": 1,
   "gate": "private_corpus_preflight",
   "inventory_complete": false,
-  "note": "Full current pytest collection and all test/helper source bytes reviewed. Completeness remains false until a bound full-suite Python access audit reports no unmapped private accesses; static profile manifest expansion covers native fixture dependencies. 2026-10-21 additive Darwin27.2 baseline: four original private-native cases retain every original dependency and add the exact new descriptor with its complete pinned capture/process closure; no private node or responsibility is removed and inventory completeness is not asserted.",
+  "note": "Full current pytest collection and all test/helper source bytes reviewed. Completeness remains false until a bound full-suite Python access audit reports no unmapped private accesses; static profile manifest expansion covers native fixture dependencies. 2026-10-21 additive Darwin27.2 baseline: four original private-native cases retain every original dependency and add the exact new descriptor with its complete pinned capture/process closure; no private node or responsibility is removed and inventory completeness is not asserted. 2026-10-23 metadata collection01: actual unfiltered6552-node collection, zero bodies, exact14 generated public dispositions (13focused/1comprehensive) for the compiled metadata-producer and retained actor/node/receipt-byte boundaries. All old6538 node IDs/tiers,1710 reasons,private165 cases/dependencies,111 responsibilities and baseline-failure identity remain exact. Independent finite review file SHA256 acb2fce11ff40737c0a2dd6635c27cbb3ff6ec772c765735e1c7ef72fbfc7bda; existing 462-source membership reconstructed exactly to the old digest. No full, native, access or overall scientific acceptance is asserted; inventory_complete remains false. Original23 full body6538PASS/captureCOMPLETE/accessBLOCKED36 remains unchanged.",
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 6538,
-    "nodeids_sha256": "997e2a9aa563f67fdad4aa28840bc7899f2ddd155f795da8b87a8dfdaf27991c",
-    "test_sources_sha256": "b511ec8734b050883e1d8746aed92a250cc588588f46bf1bc5c72d4d685e93fc",
+    "nodeid_count": 6552,
+    "nodeids_sha256": "7b7cb269ac9995fb3b9600d55f241e553db939f89ec5028fe0dec2558662fe25",
+    "test_sources_sha256": "a83be30979f4938a93cb1f08511870908acd3932794447534b58dc172ee3ed3c",
     "test_source_count": 462,
     "candidate_nodeids": [
       "tests/test_bundled_runtime.py::test_selected_qt_keeps_real_python_framework_across_worker_gui_and_intake[None-False]",
@@ -952,8 +952,22 @@
       "tests/test_private_native_exit_port.py::test_unclosed_or_different_primary_sensor_never_supplies_exit_status[200]",
       "tests/test_private_native_exit_port.py::test_unrelated_parent_cannot_register_a_foreign_pid",
       "tests/test_private_native_exit_port.py::test_unsettled_or_unreadable_launch_cannot_submit_a_registration",
+      "tests/test_private_observer.py::test_archived_metadata_reads_keep_actual_root_and_node_boundaries",
       "tests/test_private_observer.py::test_suite_parent_collector_and_supervisor_share_actual_scope[False]",
       "tests/test_private_observer.py::test_suite_parent_collector_and_supervisor_share_actual_scope[True]",
+      "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[None]",
+      "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[actor]",
+      "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[bytecode]",
+      "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[changed_bytes]",
+      "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[context]",
+      "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[empty_owner]",
+      "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[function]",
+      "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[missing_owner]",
+      "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[missing_record]",
+      "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[source]",
+      "tests/test_private_observer_runtime.py::test_metadata_owner_requires_the_actual_compiled_source[qt_import_bindings]",
+      "tests/test_private_observer_runtime.py::test_metadata_owner_requires_the_actual_compiled_source[test_sources_sha256]",
+      "tests/test_private_observer_runtime.py::test_native_dependency_discovery_does_not_inherit_metadata_read_permission",
       "tests/test_process_private_composition.py::test_active_source_is_exact_and_caller_target_facts_are_separate",
       "tests/test_process_private_composition.py::test_finite_permissions_intersect_within_the_same_attested_namespace[disjoint-expected2]",
       "tests/test_process_private_composition.py::test_finite_permissions_intersect_within_the_same_attested_namespace[other_directory-expected3]",
@@ -5386,12 +5400,68 @@
         "reason": "Modeled entry/settled identities are injected into read_identity and an expired deadline requires refusal. A fresh native-exits/requests file is created empty under tmp_path. Injected PermissionError/ProcessLookupError responses make register_server return False before queue submission; queue bytes remain empty and fake observer records remain empty. This does not create _Port, NativeExitSensor, real process, service or scientific input."
       },
       {
+        "nodeid": "tests/test_private_observer.py::test_archived_metadata_reads_keep_actual_root_and_node_boundaries",
+        "reason": "Generated tmp_path archived Python comment bytes and generated identity inputs exercise the two real metadata producers through the actual source-owned root observer and existing external durable OS wait. Six observed producer opens distinguish blank-node diagnostics from nonblank synthetic-body accesses; a same-file direct read remains unclassified and final bytes are unchanged. No original private measurement, golden, rendering or scientific acceptance is used."
+      },
+      {
         "nodeid": "tests/test_private_observer.py::test_suite_parent_collector_and_supervisor_share_actual_scope[False]",
         "reason": "Each control writes generated sentinel and durable identity inputs under tmp_path. Actual child/exec/wrapper processes and deliberately failed observation channels prove the bounded capture contract; no private scientific acceptance is claimed."
       },
       {
         "nodeid": "tests/test_private_observer.py::test_suite_parent_collector_and_supervisor_share_actual_scope[True]",
         "reason": "Each control writes generated sentinel and durable identity inputs under tmp_path. Actual child/exec/wrapper processes and deliberately failed observation channels prove the bounded capture contract; no private scientific acceptance is claimed."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[None]",
+        "reason": "A generated byte file, actual compiled source-owner identity, synthetic actor set and matching generated receipt record exercise the positive diagnostic-bound predicate without reading any private scientific input."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[actor]",
+        "reason": "The same generated-file diagnostic frame is rejected after removing its PID from the synthetic admitted-actor set; no private data or real process launch is involved."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[bytecode]",
+        "reason": "A generated-file frame with a deliberately changed bytecode SHA is rejected against the actual source-compiled owner identity; no private scientific input is read."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[changed_bytes]",
+        "reason": "Generated file bytes are replaced after creating a synthetic receipt SHA, proving that a previously matching receipt cannot diagnose current changed bytes; original fixtures are untouched."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[context]",
+        "reason": "A generated-file frame is rejected with absent durable context, independently of its otherwise valid compiled owner and synthetic actor; no private corpus is required."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[empty_owner]",
+        "reason": "A generated-file frame clears its owner dictionary and must be rejected rather than matching the unknown-owner empty identity; this is an in-memory schema boundary control with generated bytes only."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[function]",
+        "reason": "A generated-file frame names the unregistered implementation_sources_sha256 function and is rejected, proving that another function in the same source module does not inherit metadata-owner permission."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[missing_owner]",
+        "reason": "A generated-file frame removes diagnostic_owner entirely and must remain unclassified despite matching generated actor and receipt bytes; no original private input is read."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[missing_record]",
+        "reason": "A generated-file frame is rejected when its synthetic durable receipt record is absent, preserving the existing byte-membership boundary without using private measurements or goldens."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards[source]",
+        "reason": "A generated-file frame with a deliberately changed source SHA is rejected against the actual current compiled owner identity; no private scientific input is read."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_owner_requires_the_actual_compiled_source[qt_import_bindings]",
+        "reason": "The actual Qt-import AST scanner reads only a generated tmp_path Python comment file. A Path.open probe observes its genuine compiled owner and bound source-map bytes; an external function with the same filename and qualname but different bytecode remains unowned. No Qt/native process or archived scientific baseline is executed."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_metadata_owner_requires_the_actual_compiled_source[test_sources_sha256]",
+        "reason": "The actual test-source digest function hashes only a generated tmp_path Python comment file. A Path.open probe observes its genuine compiled owner and bound source-map bytes; an external function with the same filename and qualname but different bytecode remains unowned. No original private scientific data is read."
+      },
+      {
+        "nodeid": "tests/test_private_observer_runtime.py::test_native_dependency_discovery_does_not_inherit_metadata_read_permission",
+        "reason": "The actual native_dependencies function enters a scoped replacement loader-environment probe which asserts no diagnostic owner and raises a sentinel before native discovery. The test proves exact-function separation without executing any native tool or touching private inputs."
       },
       {
         "nodeid": "tests/test_process_private_composition.py::test_active_source_is_exact_and_caller_target_facts_are_separate",

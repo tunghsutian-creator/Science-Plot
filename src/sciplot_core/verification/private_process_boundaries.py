@@ -25,7 +25,7 @@ def frame_digest(value: dict[str, Any]) -> str:
 
 def source_hashes() -> dict[str, str]:
     names = ["private_observer.py", "private_observer_pytest.py", "private_capture.py", "private_process_boundaries.py",
-             "suite_evidence.py", "evidence_scope.py", "durable_runner.py", "evidence_identity.py", "private_corpus.py",
+             "suite_evidence.py", "evidence_scope.py", "durable_runner.py", "evidence_identity.py", "private_corpus.py", "private_corpus_audit.py",
              "native_probe_boundary.py", "evidence_runtime.py", "evidence_environment.py",
              "process_private_exclusion.py", "process_private_launch.py", "private_exclusion_boundary.py", "private_audit_runtime.py",
              "private_native_exit_port.py", "native_exit_boundary.py",
@@ -294,14 +294,15 @@ def wrapper_call(bound: inspect.BoundArguments, environment: dict[str, str],
     return wrapper_boundary()
 
 
-_OWNERS = {"evidence_runtime.py": {"native_dependencies"}, "suite_evidence.py": {"_audit_environment"}, "durable_runner.py": {"start_run"},
+_OWNERS = {"evidence_runtime.py": {"native_dependencies", "qt_import_bindings"}, "suite_evidence.py": {"_audit_environment"}, "durable_runner.py": {"start_run"},
            "private_audit_runtime.py": {"start_node", "reserve_socket_fixture"}, "socket_client.py": {"ensure_server"},
            "server.py": {"serve"}, "private_native_exit_port.py": {"_Port.discover"},
            "evidence_scope.py": {"_repository_inputs"},
            "private_exclusion_boundary.py": {"begin_phase"},
            "process_private_exclusion.py": {"_members", "_ancestors", "_metadata", "_evidence_inodes"},
            "evidence_identity.py": {"_stable_file", "_members"},
-           "private_corpus.py": {"_readable_nonempty_file", "_listed_source_issues", "_case_dependencies"}}
+           "private_corpus.py": {"_readable_nonempty_file", "_listed_source_issues", "_case_dependencies"},
+           "private_corpus_audit.py": {"test_sources_sha256"}}
 
 
 def owner_identity(filename: str, function: str) -> dict[str, str]:
@@ -365,6 +366,8 @@ def live_native_request(observer: Any, request: dict[str, Any], recorded: dict[s
 
 
 def diagnostic_owner() -> dict[str, str] | None:
-    return next((value for filename in ("evidence_identity.py", "private_corpus.py", "process_private_exclusion.py")
-                 for function in _OWNERS[filename]
+    calls = [(filename, function) for filename in ("evidence_identity.py", "private_corpus.py", "process_private_exclusion.py")
+             for function in _OWNERS[filename]]
+    calls.extend((("evidence_runtime.py", "qt_import_bindings"), ("private_corpus_audit.py", "test_sources_sha256")))
+    return next((value for filename, function in calls
                  if (value := owned_caller(filename, function)) is not None), None)

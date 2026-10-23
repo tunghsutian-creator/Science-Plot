@@ -12,6 +12,9 @@ from types import SimpleNamespace
 import pytest
 
 from sciplot_core.verification import private_process_boundaries as boundary
+from sciplot_core.verification import evidence_runtime, private_corpus_audit
+from sciplot_core.verification.private_capture import _diagnostic_bound
+from sciplot_core.verification.evidence_identity import digest
 from sciplot_core.verification.private_observer import write_bootstrap
 from sciplot_core.verification.public_input_guard import ENVIRONMENT_KEY, rebind_bootstrap
 from private_observer_support import execute_observed
@@ -132,3 +135,67 @@ def test_failed_outer_root_reports_actual_exit_and_traceback(tmp_path: Path) -> 
     assert "ValueError" in actual["actual_outer_command_log"]
     assert "Audit roots must be absolute paths." in actual["actual_outer_command_log"]
     assert actual["actual_outer_state"]["child_pid"] > 0
+
+
+@pytest.mark.parametrize("producer", ["test_sources_sha256", "qt_import_bindings"])
+def test_metadata_owner_requires_the_actual_compiled_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, producer: str) -> None:
+    archived = tmp_path / "tests/fixtures/rendering_profiles/generated/capture-runner.py"
+    archived.parent.mkdir(parents=True)
+    archived.write_text("# generated archived producer, never an experiment\n")
+    owners, opened = [], Path.open
+    def observed(path: Path, *args, **kwargs):
+        if path == archived:
+            owners.append(boundary.diagnostic_owner())
+        return opened(path, *args, **kwargs)
+    module = private_corpus_audit if producer == "test_sources_sha256" else evidence_runtime
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", observed)
+        getattr(module, producer)(tmp_path if module is private_corpus_audit else [tmp_path / "tests"])
+    expected = boundary.owner_identity(Path(module.__file__).name, producer)
+    assert owners and all(owner == expected for owner in owners)
+    assert boundary.source_hashes()[Path(module.__file__).name] == expected["source_sha256"]
+    assert boundary.diagnostic_owner() is None
+    foreign = {}
+    exec(compile(f"def {producer}():\n return probe()\n", module.__file__, "exec"),
+         {"probe": boundary.diagnostic_owner}, foreign)
+    assert foreign[producer]() is None
+
+
+def test_native_dependency_discovery_does_not_inherit_metadata_read_permission(monkeypatch: pytest.MonkeyPatch) -> None:
+    class StopBeforeNativeDiscovery(Exception):
+        pass
+    def probe(environment):
+        assert boundary.diagnostic_owner() is None
+        raise StopBeforeNativeDiscovery
+    with monkeypatch.context() as patch:
+        patch.setattr(sys, "platform", "darwin")
+        patch.setattr(evidence_runtime, "runtime_loader_environment", probe)
+        with pytest.raises(StopBeforeNativeDiscovery):
+            evidence_runtime.native_dependencies([], executable=Path(sys.executable), environment={})
+
+
+@pytest.mark.parametrize("failure", [None, "actor", "context", "missing_record", "changed_bytes", "source", "bytecode", "function", "empty_owner", "missing_owner"])
+def test_metadata_diagnostic_keeps_actor_receipt_and_current_byte_guards(tmp_path: Path, failure: str | None) -> None:
+    archived = tmp_path / "capture-runner.py"
+    archived.write_bytes(b"generated original producer bytes")
+    owner = boundary.owner_identity("private_corpus_audit.py", "test_sources_sha256")
+    frame = {"event": "open", "pid": os.getpid(), "resolved_path": str(archived), "diagnostic_owner": owner}
+    context = {"records": {digest(str(archived)): {"sha256": hashlib.sha256(archived.read_bytes()).hexdigest()}}}
+    actors = {os.getpid()}
+    if failure == "actor":
+        actors.clear()
+    elif failure == "context":
+        context = None
+    elif failure == "missing_record":
+        context["records"].clear()
+    elif failure == "changed_bytes":
+        archived.write_bytes(b"replaced after the receipt")
+    elif failure in {"source", "bytecode"}:
+        owner[f"{failure}_sha256"] = "0" * 64
+    elif failure == "function":
+        owner["function"] = "implementation_sources_sha256"
+    elif failure == "empty_owner":
+        owner.clear()
+    elif failure == "missing_owner":
+        frame.pop("diagnostic_owner")
+    assert _diagnostic_bound(frame, context, actors) is (failure is None)

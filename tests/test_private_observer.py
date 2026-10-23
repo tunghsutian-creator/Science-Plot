@@ -22,6 +22,63 @@ ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.comprehensive
 
 
+def test_archived_metadata_reads_keep_actual_root_and_node_boundaries(tmp_path: Path) -> None:
+    """Real producer frames and OS waits, without a scientific acceptance claim."""
+    plugin = tmp_path / ".tmp_verify/bootstrap"
+    plugin.parent.mkdir()
+    write_bootstrap(plugin)
+    audit, durable = tmp_path / ".tmp_verify/raw", tmp_path / ".tmp_verify/execution"
+    archived = tmp_path / "tests/fixtures/rendering_profiles/generated/capture-runner.py"
+    archived.parent.mkdir(parents=True)
+    archived.write_text("# generated archived source; no measurements\n")
+    original_sha = hashlib.sha256(archived.read_bytes()).hexdigest()
+    inputs = {}
+    for domain in DOMAINS:
+        path = tmp_path / f"generated-{domain}"
+        path.write_text("generated metadata observation identity")
+        inputs[domain] = {"paths": [str(path)]}
+    inputs["tests"]["paths"].append(str(archived))
+    inputs["implementation"]["paths"].append(str(ROOT / "src/sciplot_core/verification/durable_runner.py"))
+    environment = dict(os.environ, PYTHONPATH=os.pathsep.join((str(ROOT / "src"), os.environ.get("PYTHONPATH", ""))))
+    environment["SCIPLOT_REFERENCE_DATA"] = str(tmp_path / ".local/reference_data")
+    for key in ("SCIPLOT_PRIVATE_AUDIT_DIR", "SCIPLOT_PRIVATE_AUDIT_ROOTS", RUN, PARENT, CHILD, CONTINUATION, "PYTEST_CURRENT_TEST"):
+        environment.pop(key, None)
+    code = ("import os,sys;from pathlib import Path;"
+            "from sciplot_core.verification.suite_evidence import _audit_environment;"
+            "from sciplot_core.verification.durable_runner import start_run;"
+            "from sciplot_core.verification.private_corpus_audit import test_sources_sha256;"
+            "from sciplot_core.verification.evidence_runtime import qt_import_bindings;"
+            "from sciplot_core.verification.private_observer import current_observer;"
+            f"root=Path({str(tmp_path)!r});target=Path({str(archived)!r});"
+            f"env,audit=_audit_environment(root,Path({str(durable)!r}),Path({str(plugin)!r}),Path({str(audit)!r}));"
+            "test_sources_sha256(root);qt_import_bindings([root/'tests']);"
+            "o=current_observer();o.nodeid='synthetic:body (call)';"
+            "test_sources_sha256(root);qt_import_bindings([root/'tests']);o.nodeid=None;target.read_bytes();"
+            "spec=dict(repo_root=str(root),command=[sys.executable,'-c','pass'],"
+            "scope=dict(kind='process',closure_policy='generated metadata-boundary control'),selected_tests=['synthetic:metadata'],"
+            f"inputs={inputs!r},environment=env,corpus=dict(mode='synthetic',complete=True,policy='generated control'));"
+            f"launched=start_run(directory=Path({str(durable)!r}),spec=spec);os.waitpid(launched['supervisor_pid'],0)")
+    pid, returncode, log, witness = launch_generated_suite([sys.executable, "-c", code], environment, tmp_path)
+    assert returncode == 0, log.decode()
+    state = json.loads((durable / "state.json").read_bytes())
+    proof = capture_proof(audit, root_pid=pid, primary_pid=state["child_pid"], durable_directory=durable,
+                          root_execution_directory=witness,
+                          expected_roots=[str(tmp_path / "tests/fixtures"), str(tmp_path / ".local/reference_data")])
+    result = review_capture(proof)
+    assert result["status"] == "COMPLETE", result["issues"]
+    assert result["root_actual_exit"] == 0 and run_status(durable)["status"] == "PASS"
+    producers = {"test_sources_sha256", "qt_import_bindings"}
+    reads = [row for row in result["frames"] if row["event"] == "open" and row["resolved_path"] == str(archived)]
+    metadata = [row for row in reads if (row.get("diagnostic_owner") or {}).get("function") in producers]
+    diagnostic_keys = {(row["epoch"], row["sequence"]) for row in result["diagnostic_observations"]}
+    assert len(metadata) == 6
+    for row in metadata:
+        assert ((row["epoch"], row["sequence"]) in diagnostic_keys) is (not row["nodeid"])
+    direct = [row for row in reads if row["pid"] == pid and row.get("diagnostic_owner") is None]
+    assert len(direct) == 1 and (direct[0]["epoch"], direct[0]["sequence"]) not in diagnostic_keys
+    assert hashlib.sha256(archived.read_bytes()).hexdigest() == original_sha
+
+
 @pytest.mark.parametrize("late_fault", [False, True])
 def test_suite_parent_collector_and_supervisor_share_actual_scope(tmp_path: Path, late_fault: bool) -> None:
     plugin = tmp_path / ".tmp_verify/bootstrap"

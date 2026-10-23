@@ -80,6 +80,20 @@ At handoff, run Doctor for command/runtime changes. Run smoke once at the final
 milestone for changes crossing Studio, worker, export, QA, delivery or runtime.
 Full pytest and ready-rule acceptance are release/merge gates, not every edit.
 
+Use the canonical wrapper or its absolute current-source binding for native
+verification, including child processes that change cwd. A relative PYTHONPATH
+can silently import another editable checkout. Before a long local Mac native
+gate, the same operation entry must record a short current-source child probe,
+temporary AF_UNIX bind/listen/close, sensor initialization, and child sandbox
+installation. A failure blocks before expensive preparation; use the normal
+executor approval path when needed, with no automatic elevation. These limited
+capabilities do not prove native exit observation or private exclusion: keep the
+actual owned-actor/original-wait and exclusion tests in the short composition.
+This release uses a versioned local operator under ignored .tmp_verify; ordinary
+pure leaf checks and daily Doctor retain their existing requirements. Short
+export reconciliation remains explicitly scoped; it cannot mint full inventory
+acceptance or replace the frozen unfiltered full and its strict exporter.
+
 For bounded native feedback use `skill/scripts/sciplot smoke --profile quick
 --out .tmp_verify/quick_smoke --json`. It performs one real source-bound native
 creation/export/QA/delivery path and explicitly defers the complete lifecycle.
@@ -240,6 +254,15 @@ Source-owner identities are local to one review, checked against its source map
 on first use and against the complete current map at exit. This is a source
 snapshot boundary, not continuous monitoring of transient edits. Filesystem
 census, exclusion snapshots and native proofs are still validated afresh.
+Archived native producer scripts remain members of the original test-source
+and Qt-import inventories. Preparation reads by the exact compiled
+`test_sources_sha256` and `qt_import_bindings` owners may be diagnostic only
+with no test node, an admitted root/collector/supervisor actor, and the original
+receipt's current file bytes. Bind both owner modules in the observer source
+map; reject an empty owner. Direct reads, scientific test reads and native
+dependency discovery do not inherit that diagnostic classification. A complete
+process capture and a passing full body run still require separate access-event
+reconciliation; preserve any earlier unbound-read failure unchanged.
 On macOS, dependency discovery calls the installed CLT Mach-O inspector directly
 with only fixed locale/search settings. Its finite boundary binds the source
 caller, exact argument and executable identities, target/tool/OS native bytes
