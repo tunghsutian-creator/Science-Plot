@@ -219,9 +219,11 @@ def prepare_studio_document(
     template: str | None = None,
     project_name: str | None = None,
     regenerate_generated: bool = False,
+    _new_creation: bool = False,
 ) -> dict[str, Any]:
     """Prepare through the split core while preserving transaction patch seams."""
 
+    creation_option: dict[str, Any] = {"_new_creation": True} if _new_creation else {}
     return _prepare_studio_document(
         target,
         output_root=output_root,
@@ -231,6 +233,7 @@ def prepare_studio_document(
         project_name=project_name,
         regenerate_generated=regenerate_generated,
         figure_set_path_replacer=_replace_studio_figure_set_path,
+        **creation_option,
     )
 
 

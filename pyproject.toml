@@ -74,6 +74,7 @@ files = [
   "src/sciplot_core/veusz_worker/categorical_rejection.py",
   "src/sciplot_core/source_coverage/document_audit.py",
   "src/sciplot_core/studio_render/component_legend.py",
+  "src/sciplot_core/studio_render/spectral_axis_display.py",
   "src/sciplot_core/studio_render/segmented_legend_clearance.py",
   "src/sciplot_core/veusz_audit/segmented_legend_geometry.py",
   "src/sciplot_core/studio_core/current_layout_review.py",

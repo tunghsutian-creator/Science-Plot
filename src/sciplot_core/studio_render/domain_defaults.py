@@ -178,7 +178,6 @@ def _apply_domain_render_defaults(
             "baseline": "none",
             "series_label_side": "left",
             "show_single_series_label": series_count == 1,
-            "show_y_ticks": False,
             "x_label_override": "Wavenumber (cm⁻¹)",
             "size": "120x55" if series_count == 1 else "120x110",
         }
@@ -196,8 +195,6 @@ def _apply_domain_render_defaults(
                 updated["series_label_vertical_align"] = "top"
         if detected_y_label and "y_label_override" not in explicit_contract:
             updated["y_label_override"] = detected_y_label
-        if "show_y_ticks" not in explicit_contract:
-            updated["show_y_ticks"] = series_count <= 1
         if legend_position in {"", "auto", "none", "hide", "hidden", "off"}:
             updated["legend_position"] = "none"
         if label_mode in {"", "auto", "legend", "inline", "edge"}:

@@ -117,7 +117,8 @@ def test_mapped_creation_enters_existing_canonical_request_studio_route(tmp_path
     plan = build_plan_preview(source, request=selection)
     calls = []
 
-    def prepare(target):
+    def prepare(target, *, _new_creation=False):
+        assert _new_creation is True
         request = json.loads(target.read_text())
         calls.append(request)
         return {"project_dir": str(target.parent), "request": str(target),

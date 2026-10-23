@@ -17,6 +17,20 @@ program never deletes or shifts observations to make it valid. Scientific
 instrument adapters retain their own scale contracts; the ordinary scale flags
 cannot silently replace an adapter's coordinate derivation.
 
+New registered `xrd_pattern`/`curve` creation defaults to qualitative peak-pattern
+comparison only with known linear Y and the recipe's `none` normalizer. It hides
+Y numbers and major/minor ticks, keeping the title, axis line and X ticks.
+The canonical plot request retains its existing `render_options.show_y_ticks`
+boolean. This is not a `task create`/`task start` request field. A recorded True
+or False wins; explicit native edits remain authoritative. Without a recorded
+boolean, explicit Y limits, manual ticks, log scale or unknown/non-`none`
+normalization keep the readout.
+Neither an `a.u.` label nor values in 0–1 establish this choice or normalization.
+UV–vis absorbance, SAXS log and generic Managed XY acquire no new hiding default;
+existing saved VSZ/native edits remain authoritative on reopen and export.
+This is a recipe default, not a universal journal rule: published
+[stacked and quantitative a.u. plots use different tick treatments](https://www.nature.com/articles/ncomms9920/figures/2).
+
 1. Start directly with the original source:
 
    ```bash

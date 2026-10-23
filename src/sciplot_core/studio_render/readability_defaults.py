@@ -216,6 +216,9 @@ def _apply_readability_render_defaults(
                 )
                 autofixes.append("stack_full_peak_envelope_axis")
         if _looks_like_wavenumber_axis(axis_info):
+            from sciplot_core.studio_render.spectral_axis_display import spectral_y_ticks
+
+            updated["show_y_ticks"] = spectral_y_ticks(request, series_count=len(series))
             y_label = str(
                 updated.get("y_label_override") or axis_info.get("y_label") or ""
             ).strip()
@@ -223,7 +226,6 @@ def _apply_readability_render_defaults(
                 len(series) == 1
                 and str(updated.get("baseline") or "none").casefold() == "none"
             ):
-                updated["show_y_ticks"] = True
                 updated.setdefault("show_single_series_label", True)
                 updated.setdefault("series_label_offset_fraction", 0.018)
                 updated.setdefault("series_label_vertical_align", "bottom")
@@ -242,7 +244,6 @@ def _apply_readability_render_defaults(
                         autofixes.append("single_spectrum_y_axis_compacted")
                 autofixes.append("single_spectrum_raw_y_scale")
             elif len(series) > 1:
-                updated["show_y_ticks"] = False
                 # Stacking is a presentation transform, not the measured
                 # quantity. Keep the scientific axis name unchanged instead
                 # of appending implementation language such as "(offset)".

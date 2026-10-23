@@ -21,6 +21,7 @@ from sciplot_core.workflow.project_state import (
 from sciplot_core.workflow.request_run import (
     run_request,
 )
+from sciplot_core.workflow.scientific_source_resolution import previous_workflow_request
 
 
 def run_one_step(
@@ -31,7 +32,7 @@ def run_one_step(
     delivery_root: Path | None = None,
     rule_id: str | None = None,
     template: str | None = None,
-    _request_runner: Callable[[Path], dict[str, Any]] = run_request,
+    _request_runner: Callable[..., dict[str, Any]] = run_request,
 ) -> dict[str, Any]:
     input_path = input_path.expanduser().resolve()
     output_root = output_root.expanduser().resolve()
@@ -43,6 +44,7 @@ def run_one_step(
     project_dir.mkdir(parents=True, exist_ok=True)
     run_dir = _next_run_dir(project_dir)
     request_path = project_dir / "plot_request.json"
+    previous = previous_workflow_request(request_path)
     request = {
         "recipe": "auto",
         "input": str(input_path),
@@ -62,7 +64,11 @@ def run_one_step(
         json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8"
     )
     try:
-        manifest = _request_runner(request_path)
+        manifest = _request_runner(
+            request_path,
+            _new_creation=True,
+            **({"_previous_request": previous} if previous is not None else {}),
+        )
     except ValueError as exc:
         status_path = run_dir / "one_step_status.json"
         if not status_path.exists():

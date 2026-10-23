@@ -73,6 +73,15 @@ aliases, bar colors, given-value marker styles and represented native-key layout
 Current source selectors and expected values bind the existing edit transaction;
 original observations, statistics and scientific identities remain unchanged.
 
+New registered `xrd_pattern`/`curve` figures use a qualitative peak-pattern default:
+with linear Y and no normalization by the recipe, hide Y numbers and major/minor
+ticks while retaining the axis title, axis line and X ticks. This is not inferred
+from `a.u.` labels or values in 0–1. A `render_options.show_y_ticks` boolean
+recorded in the canonical plot request takes priority; without it, explicit Y
+limits, manual ticks or log scale retain the readout. UV–vis absorbance, SAXS log
+plots and generic Managed XY get no new hiding default. Saved VSZ figures are
+not rewritten.
+
 Confirmed phase concatenation records original row lineage and its boundary
 policy. Unit conversion records both units and the exact conversion. Optional
 PCHIP interpolation creates a separate display curve through the measured knots;

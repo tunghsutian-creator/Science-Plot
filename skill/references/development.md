@@ -13,6 +13,19 @@ Preserve historical ledgers and scientific seals: Legacy import seals the whole
 recorded transform ledger, so correcting a future method declaration can change
 a new document's scientific hash even when its numerical output is unchanged.
 
+The qualitative XRD display default belongs to
+`studio_render/spectral_axis_display.py`, after resolved scientific selection at
+actual new creation and before the staged root/primary requests are frozen.
+It writes only the existing `render_options.show_y_ticks`; its derived value is
+not a user declaration in `explicit_render_option_keys`. Regeneration inherits
+the boolean for the same resolved presentation, independent of automatic versus
+explicit selection syntax. A new recipe uses its own default. Reopen/export of
+the exact-current VSZ does not infer defaults again. Old recorded booleans now
+survive terminal defaults on JSON reexecution, so formerly incorrect pixels are
+not promised identical. Keep sealed algorithms, pins and numerical/source/unit
+semantics unchanged. A new Legacy import seals its recorded request/provenance;
+do not claim its whole scientific hash is invariant across these display fixes.
+
 For work with independent module boundaries, implement in multiple isolated
 worktrees in parallel with explicit file ownership and integration order. Keep
 the integration worktree responsible for the final combined review. During

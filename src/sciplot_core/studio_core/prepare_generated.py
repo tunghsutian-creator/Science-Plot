@@ -36,6 +36,7 @@ from sciplot_core.semantic_sources.scientific_source import (
     resolve_scientific_source,
 )
 from sciplot_core.studio_render.models import StudioPreparationBlocked
+from sciplot_core.studio_render.spectral_axis_display import freeze_new_spectral_axis_display
 from sciplot_core.studio_render.value_parsing import _string_list
 from sciplot_core.terminal_source_binding import (
     SealedTerminalSourceBinding,
@@ -102,6 +103,7 @@ def generate_studio_document(
     figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
     _terminal_source_binding: SealedTerminalSourceBinding | None = None,
     _terminal_source_prepared: bool = False,
+    _new_creation: bool = False,
 ) -> dict[str, Any]:
     """Build a generated VSZ plus the publication and figure-set contracts."""
 
@@ -205,6 +207,10 @@ def generate_studio_document(
             )
     except (FigurePlanResolutionError, ScientificSourceResolutionError) as exc:
         raise StudioPreparationBlocked(exc.reason_code, str(exc)) from exc
+    if _new_creation:
+        transform = resolved_scientific_source.transform if resolved_scientific_source is not None else None
+        request = freeze_new_spectral_axis_display(request, rule_id=request_rule_id,
+            template=presentation_identity.template, transform_contract=transform.contract.to_payload() if transform is not None else None)
     primary_task = terminal_task or (
         primary_figure_task(figure_plan) if figure_plan is not None else None
     )

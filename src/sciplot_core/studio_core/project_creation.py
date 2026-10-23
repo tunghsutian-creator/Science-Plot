@@ -127,7 +127,7 @@ def _prepare_mapped_project(
     atomic_write_json(request_path, request)
     if verified["rule_id"] == "rheology_stress_relaxation":
         return prepare_studio_document(request_path, rule_id=verified["rule_id"], template=verified["template"])
-    return prepare_studio_document(request_path)
+    return prepare_studio_document(request_path, _new_creation=True)
 
 
 @with_table_reads

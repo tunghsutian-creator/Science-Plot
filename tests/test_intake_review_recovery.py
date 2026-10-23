@@ -314,7 +314,8 @@ def test_selected_worksheet_survives_intake_request_and_source_materialization(
     )
     inspected = []
 
-    def inspect_prepared_request(project_dir: Path):
+    def inspect_prepared_request(project_dir: Path, *, _new_creation=False):
+        assert _new_creation is True
         request = json.loads((project_dir / "plot_request.json").read_text())
         confirmations = request["column_confirmations"]
         assert confirmations[0]["sheet_selected"] is True

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +21,7 @@ def create_intake_project_from_session(
 ) -> dict[str, Any]:
     return _create_intake_project_from_session(
         session,
-        studio_preparer=prepare_studio_document,
+        studio_preparer=partial(prepare_studio_document, _new_creation=True),
     )
 
 
@@ -52,7 +53,7 @@ def create_intake_project(
         replicate_mode=replicate_mode,
         recognition=recognition,
         group_order_is_explicit=group_order_is_explicit,
-        studio_preparer=prepare_studio_document,
+        studio_preparer=partial(prepare_studio_document, _new_creation=True),
     )
 
 

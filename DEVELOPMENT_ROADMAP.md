@@ -328,6 +328,15 @@ Full pytest and ready-rule acceptance remain release/merge gates; a frozen full
 already contains both tiers. Do not substitute public subsets for authorized
 private/full release acceptance or repeat full for every small cleanup.
 
+Next, complete current acceptance and deliver this integration with the a.u./XRD
+display update. Then exercise complete real ordinary plotting, TTS and panel
+assembly tasks, checking the single template entry, explicit overrides and TTS
+interaction. Use this round's actual elapsed time and observed repeated work to
+review a finite dependency-selection, deduplication and reuse plan bound to exact
+version, environment and input identities before implementation. Then implement
+fast iteration feedback separately from release acceptance, retaining full and
+ready-rule coverage and all assertions without adding another audit framework.
+
 Keep one normal local entry and recoverable Git checkpoints. Preserve physical
 projects, raw inputs, existing figures, independent backups and unmerged work.
 Remote exact-commit CI, main merge, release publication/deployment and local

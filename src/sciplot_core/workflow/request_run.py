@@ -19,7 +19,6 @@ from sciplot_core.figure_plan import (
 )
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.materials_rules import get_rule
 from sciplot_core.materials_rules.catalog import resolve_rule_template
 from sciplot_core.one_step import build_one_step_project
 from sciplot_core.policy import layout_policy_for_semantic
@@ -51,7 +50,9 @@ from sciplot_core.workflow.source_binding import (
     verify_workflow_figure_plan_source_binding,
 )
 from sciplot_core.workflow.scientific_source_resolution import (
+    _validate_semantic_template,
     bind_workflow_semantic_render_options,
+    record_workflow_selection,
     resolve_workflow_scientific_source,
 )
 
@@ -60,6 +61,8 @@ def run_request(
     request_path: Path,
     *,
     _classifier: Callable[..., dict[str, Any]] = classify_source,
+    _new_creation: bool = False,
+    _previous_request: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute a request transactionally under its declared output path."""
 
@@ -78,6 +81,8 @@ def run_request(
             base_dir=base_dir,
             output_dir=output_dir,
             classifier=_classifier,
+            new_creation=_new_creation,
+            previous_request=_previous_request,
         )
 
 
@@ -88,6 +93,8 @@ def _run_request_in_managed_output(
     base_dir: Path,
     output_dir: Path,
     classifier: Callable[..., dict[str, Any]] = classify_source,
+    new_creation: bool = False,
+    previous_request: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Resolve inputs, enforce semantic gates, then render and publish."""
 
@@ -170,7 +177,13 @@ def _run_request_in_managed_output(
         semantic=semantic,
         figure_plan=figure_plan,
         resolved_scientific_source=resolved_scientific_source,
+        new_creation=new_creation,
+        previous_request=previous_request,
+        selected_template=effective_template,
     )
+    if new_creation:
+        source_request = record_workflow_selection(source_request, request)
+        atomic_write_json(request_path, source_request)
     atomic_write_json(
         output_dir / "request_snapshot.json",
         json_safe(request),
@@ -272,23 +285,6 @@ def _archive_request_inputs(
             output_dir,
         )
     return raw_archive
-
-
-def _validate_semantic_template(
-    semantic: dict[str, Any],
-    *,
-    request: dict[str, Any],
-) -> None:
-    rule_id = semantic.get("rule_id")
-    if isinstance(rule_id, str) and rule_id.strip():
-        resolve_rule_template(
-            get_rule(rule_id),
-            (
-                request.get("template")
-                if isinstance(request.get("template"), str)
-                else None
-            ),
-        )
 
 
 def _initial_transform_steps(

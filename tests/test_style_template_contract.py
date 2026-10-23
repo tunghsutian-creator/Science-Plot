@@ -693,7 +693,8 @@ def test_autoplot_writes_a_canonical_default_render_request(
 ) -> None:
     captured: dict[str, object] = {}
 
-    def fake_run_request(request_path: Path) -> dict[str, object]:
+    def fake_run_request(request_path: Path, *, _new_creation: bool = False) -> dict[str, object]:
+        assert _new_creation is True
         captured.update(json.loads(request_path.read_text(encoding="utf-8")))
         return {"state": "ready", "one_step": {}}
 
@@ -718,7 +719,8 @@ def test_autoplot_preserves_an_explicit_rule_and_supported_presentation_template
 ) -> None:
     captured: dict[str, object] = {}
 
-    def fake_run_request(request_path: Path) -> dict[str, object]:
+    def fake_run_request(request_path: Path, *, _new_creation: bool = False) -> dict[str, object]:
+        assert _new_creation is True
         captured.update(json.loads(request_path.read_text(encoding="utf-8")))
         return {"state": "ready", "one_step": {}}
 

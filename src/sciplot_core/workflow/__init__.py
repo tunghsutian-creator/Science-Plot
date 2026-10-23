@@ -29,10 +29,18 @@ from sciplot_core.workflow.one_step_entry import (
 )
 
 
-def run_request(request_path: Path) -> dict[str, Any]:
+def run_request(
+    request_path: Path,
+    *,
+    _new_creation: bool = False,
+    _previous_request: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Run a request through the stable facade and injectable classifier seam."""
 
-    return _run_request_impl(request_path, _classifier=classify_source)
+    context: dict[str, Any] = {"_new_creation": True} if _new_creation else {}
+    if _previous_request is not None:
+        context["_previous_request"] = _previous_request
+    return _run_request_impl(request_path, _classifier=classify_source, **context)
 
 
 def run_one_step(

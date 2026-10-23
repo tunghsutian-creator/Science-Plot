@@ -124,6 +124,14 @@ def _apply_studio_request_overrides(
                 else set(current_options)
             )
             explicit_options = {key: current_options[key] for key in explicit_keys}
+            if (
+                selected_rule.rule_id == original_rule_id
+                and selected_template == (original_template or resolve_rule_template(selected_rule))
+                and isinstance(current_options.get("show_y_ticks"), bool)
+            ):
+                # A frozen display default survives regeneration of the same
+                # selected presentation without becoming a user override.
+                explicit_options["show_y_ticks"] = current_options["show_y_ticks"]
             current_options = dict(
                 (selected_rule_payload or {}).get("render_options") or {}
             )

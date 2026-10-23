@@ -46,6 +46,7 @@ def prepare_studio_document(
     figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
     _terminal_source_binding: SealedTerminalSourceBinding | None = None,
     _terminal_source_prepared: bool = False,
+    _new_creation: bool = False,
 ) -> dict[str, Any]:
     resolved = Path(target).expanduser().resolve()
     target_info = _resolve_studio_target(
@@ -102,11 +103,13 @@ def prepare_studio_document(
             request_path=request_path,
             document_path=existing_document,
         )
-    binding_option = (
+    binding_option: dict[str, Any] = (
         {"_terminal_source_binding": _terminal_source_binding}
         if _terminal_source_binding is not None
         else {}
     )
+    if _new_creation:
+        binding_option["_new_creation"] = True
     return generate_studio_document(
         project_dir=project_dir,
         request_path=request_path,
@@ -211,6 +214,7 @@ def _qt_first_project_from_source(
                 template=None,
                 project_name=None,
                 figure_set_path_replacer=figure_set_path_replacer,
+                _new_creation=True,
             )
             prepared = payload
         except Exception as exc:
