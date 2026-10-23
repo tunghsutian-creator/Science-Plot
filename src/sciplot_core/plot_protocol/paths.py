@@ -136,3 +136,19 @@ def lifecycle_lock(socket_path: Path, name: str, *, timeout: float = 15.0) -> It
         if locked:
             fcntl.flock(descriptor, fcntl.LOCK_UN)
         os.close(descriptor)
+
+
+def kernel_peer_pid(connection: Any) -> int | None:
+    """Read the connected local peer from the kernel, independently of owner JSON."""
+    import socket
+    import struct
+    import sys
+    if sys.platform == 'darwin':  # sys/un.h SOL_LOCAL=0, LOCAL_PEERPID=2.
+        pid = connection.getsockopt(0, 2)
+    elif hasattr(socket, 'SO_PEERCRED'):
+        pid = struct.unpack('3i', connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
+    else:
+        return None
+    if type(pid) is not int or pid <= 0:
+        raise ValueError('Connected local peer PID is unavailable.')
+    return pid

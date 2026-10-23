@@ -71,6 +71,13 @@ incomplete runs in local evidence. Final metadata must bind the actual unfiltere
 collection, preserving private scope and static inventory incompleteness until
 fresh runtime evidence is independently closed.
 
+The frozen a48e59d full run completed 6512 test bodies successfully, but its
+access review remained BLOCKED on producer identity, fresh external cwd and
+socket readiness/lifetime evidence. Preserve that result as a failed acceptance
+gate. The isolated repair uses the existing launch, endpoint and primary sensor
+owners; its pure/static checks do not substitute for the affected composed native
+run or a subsequent complete frozen full capture.
+
 The checked-in private dependency inventory remains preliminary. Available
 inputs, successful original-data test bodies and complete child-inclusive
 access capture are separate claims. Neither public CI nor a prior full PASS

@@ -337,3 +337,64 @@ def validate_exit_fact(value: Any, registration: dict[str, Any]) -> bool:
                 and type(value['returncode']) is int and value['returncode'] == os.waitstatus_to_exitcode(raw))
     except (ValueError, TypeError, KeyError):
         return False
+def namespace_identity(path: Path) -> dict[str, int]:
+    import stat
+    row = path.lstat()
+    if not stat.S_ISDIR(row.st_mode) or row.st_uid != os.getuid() or stat.S_IMODE(row.st_mode) != 0o700:
+        raise ValueError('Audit engine namespace is not a private owned directory.')
+    return dict(device=row.st_dev, inode=row.st_ino, uid=row.st_uid, mode=stat.S_IMODE(row.st_mode))
+
+def endpoint_identity(address: Any, *, ready: bool = False) -> tuple[Path, dict[str, int]]:
+    import stat
+    path = Path(os.fsdecode(address)).absolute().resolve(strict=True)
+    row = path.lstat()
+    if not stat.S_ISSOCK(row.st_mode) or (ready and (path != Path(os.fsdecode(address)).absolute() or row.st_uid != os.getuid()
+            or row.st_nlink != 1 or stat.S_IMODE(row.st_mode) != 0o600)):
+        raise ValueError('Native actor endpoint is not the owned ready socket.')
+    if ready:
+        namespace_identity(path.parent)
+    return path, dict(device=row.st_dev, inode=row.st_ino, ctime_ns=row.st_ctime_ns,
+                      uid=row.st_uid, mode=stat.S_IMODE(row.st_mode))
+
+def validate_actor_launch(request: dict[str, Any], frames: list[dict[str, Any]], primary: int, exclusions: set[str]) -> bool:
+    """One fenced source launch, genuine live parentage and kernel peer readiness."""
+    from sciplot_core.verification.private_process_boundaries import owner_identity
+    try:
+        actor, epoch = request['actor'], request['epoch']
+        launch = actor['launch']
+        origin, parent, peer = (ProcessIdentity.from_dict(v) for v in
+                               (launch['initial'], launch['parent'], request['identity']))
+        rows = [r for r in frames if r['epoch'] == epoch and r.get('child_token') == launch['token']]
+        attempts = [r for r in rows if r['event'] == 'spawn_attempt']
+        children = [r for r in rows if r['event'] == 'child_spawn' and r.get('child_pid') == origin.pid]
+        sent = [r for r in frames if r['event'] == 'native_registration_request' and r['epoch'] == epoch and r.get('request') == request]
+        fields = ('pid', 'ppid', 'uid', 'start_sec', 'start_usec')
+        endpoint, owner = actor['ready']['endpoint'], actor['ready']['socket_owner']
+        return (set(actor) == {'socket','default_owned','owner','launch','ready'} and type(actor['default_owned']) is bool
+            and set(launch) == {'token','attempt_sha256','initial','parent'} and set(actor['ready']) == {'endpoint','socket_owner','peer_pid'}
+            and len(attempts) == len(children) == len(sent) == 1 and attempts[0]['sha256'] == launch['attempt_sha256']
+            and attempts[0]['sequence'] < children[0]['sequence'] < sent[0]['sequence']
+            and attempts[0]['monotonic_ns'] <= children[0]['monotonic_ns'] < sent[0]['monotonic_ns']
+            and epoch + ':' + launch['token'] in exclusions and origin.ppid == primary
+            and tuple(getattr(origin,k) for k in fields) == tuple(getattr(parent,k) for k in fields)
+            and (peer.pid == parent.pid or peer.ppid == parent.pid) and peer.uid == parent.uid
+            and actor['owner'] == owner_identity('private_native_exit_port.py','_Port.discover')
+            and actor['ready']['peer_pid'] == owner['pid'] == peer.pid and owner['device'] == endpoint['device'] and owner['inode'] == endpoint['inode']
+            and endpoint['uid'] == peer.uid and endpoint['mode'] == 0o600)
+    except (OSError, KeyError, TypeError, ValueError):
+        return False
+
+def settled_binding(row: dict[str, Any], creations: list[dict[str, Any]]) -> bool:
+    from sciplot_core.verification.private_process_boundaries import owner_identity
+    return (row.get('owner') == owner_identity('server.py','serve') and row.get('endpoint',{}).get('mode') == 0o600
+        and len([old for old in creations if old.get('sha256') == row.get('creation_sha256')
+            and all(old[k] == row[k] for k in ('pid','epoch','binding_token','socket')) and old['sequence'] < row['sequence']
+            and all(old['endpoint'][k] == row['endpoint'][k] for k in ('device','inode','uid'))]) == 1)
+
+def explicit_exit_bound(spawned: dict[str, Any], exits: list[dict[str, Any]], exclusions: set[str]) -> bool:
+    from sciplot_core.verification.private_process_boundaries import owner_identity
+    actual = [r for r in exits if r['epoch'] == spawned['epoch'] and r.get('child_token') == spawned['child_token']
+              and r.get('child_pid') == spawned['child_pid']]
+    return (spawned.get('owner') == owner_identity('socket_client.py','ensure_server') and len(actual) == 1
+        and type(actual[0].get('returncode')) is int and (actual[0]['returncode'] == 0
+             or spawned['epoch'] + ':' + spawned['child_token'] in exclusions))

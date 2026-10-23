@@ -158,7 +158,7 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
             key = (filename, function)
             if key not in identities:
                 value = owner_identity(filename, function)
-                source = "../plot_protocol/socket_client.py" if filename == "socket_client.py" else filename
+                source = "../plot_protocol/" + filename if filename in {"socket_client.py", "server.py"} else filename
                 if value and value.get("source_sha256") != proof["observer_sources_sha256"].get(source):
                     raise ValueError("source owner differs from the bound review snapshot")
                 identities[key] = value
@@ -182,7 +182,6 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
         primary = proof.get("primary_pid")
         if type(primary) is not int or not any(records[0]["pid"] == primary for records in epochs.values()):
             raise ValueError("actual primary process startup is absent")
-        native_exits = validated_exits(frames, primary=primary)
         starts = [records[0] for records in epochs.values()]
         child_starts_by_token: dict[tuple[Any, Any], list[dict[str, Any]]] = {}
         for start in starts:
@@ -229,6 +228,13 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
                or (s.get("bootstrap_sha256") not in {value for name, value in bootstrap_hashes().items() if name.endswith("sitecustomize.py")}
                    and not (s is roots[0] and s.get("activation") == identify("suite_evidence.py", "_audit_environment"))) for s in starts):
             issues.append("supported observer was not installed by the bound startup bootstrap")
+        source_exclusions = {epoch + ":" + a["child_token"] for epoch, idx in indexes.items()
+            for a in idx["event"].get("spawn_attempt", []) if excluded_bound(a.get("input_boundary"), a, epochs[epoch],
+                primary=primary, expected_nodeids=expected_nodeids, directory=directory, durable=durable,
+                suite_start=roots[0], audit_keys=AUDIT_KEYS, root_pid=proof["root_pid"], caller=caller,
+                review_index=idx, node_scope=node_scope, identify=identify)}
+        native_actors: dict[str, dict[str, Any]] = {}
+        native_exits = validated_exits(frames, primary=primary, source_exclusions=source_exclusions, actors=native_actors)
         successors: dict[str, list[dict[str, Any]]] = {}
         for start in starts:
             continuation = start.get("continuation")
@@ -294,10 +300,7 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
                     and attempt.get("directory_sha256") == durable["directory_sha256"]
                     and outcome.get("child_pid") == durable["state"]["supervisor_pid"])
                 native_probe = bool(durable and native_probe_bound(attempt.get("input_boundary"), durable["native_records"], attempt))
-                excluded = excluded_bound(attempt.get("input_boundary"), attempt, records,
-                    primary=primary, expected_nodeids=expected_nodeids, directory=directory, durable=durable,
-                    suite_start=roots[0], audit_keys=AUDIT_KEYS, root_pid=proof["root_pid"], caller=caller,
-                    review_index=indexed, node_scope=node_scope, identify=identify)
+                excluded = epoch + ":" + str(token) in source_exclusions
                 auxiliary = attempt.get("input_boundary") == uname_boundary() or native_probe or excluded
                 if (attempt.get("input_boundary") is not None and not auxiliary
                         and attempt["input_boundary"] != wrapper_boundary()):
@@ -351,7 +354,8 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
                 if node_scope is not None:
                     node_scope["suite_root_sha256"] = roots[0]["sha256"]
                 issues.extend(review_sockets(frames, primary=primary, scope=node_scope,
-                    records=durable["records"] if durable else {}, native_exits=native_exits))
+                    records=durable["records"] if durable else {}, native_exits=native_exits,
+                    source_exclusions=source_exclusions, native_actors=native_actors))
         actors = {proof["root_pid"]}
         if durable:
             actors.add(durable["state"]["supervisor_pid"])

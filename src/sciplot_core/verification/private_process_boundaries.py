@@ -296,6 +296,7 @@ def wrapper_call(bound: inspect.BoundArguments, environment: dict[str, str],
 
 _OWNERS = {"evidence_runtime.py": {"native_dependencies"}, "suite_evidence.py": {"_audit_environment"}, "durable_runner.py": {"start_run"},
            "private_audit_runtime.py": {"start_node", "reserve_socket_fixture"}, "socket_client.py": {"ensure_server"},
+           "server.py": {"serve"}, "private_native_exit_port.py": {"_Port.discover"},
            "evidence_scope.py": {"_repository_inputs"},
            "private_exclusion_boundary.py": {"begin_phase"},
            "process_private_exclusion.py": {"_members", "_ancestors", "_metadata", "_evidence_inodes"},
@@ -306,22 +307,26 @@ _OWNERS = {"evidence_runtime.py": {"native_dependencies"}, "suite_evidence.py": 
 def owner_identity(filename: str, function: str) -> dict[str, str]:
     if function not in _OWNERS.get(filename, set()):
         return {}
-    path = (Path(__file__).parents[1] / "plot_protocol/socket_client.py"
-            if filename == "socket_client.py" else Path(__file__).with_name(filename))
+    path = (Path(__file__).parents[1] / "plot_protocol" / filename
+            if filename in {"socket_client.py", "server.py"} else Path(__file__).with_name(filename))
     source = path.read_bytes()
     module = compile(source, str(path), "exec", dont_inherit=True, optimize=sys.flags.optimize)
-    code = next(c for c in module.co_consts if isinstance(c, CodeType) and c.co_name == function)
+    code = module
+    for part in function.split("."):
+        code = next(c for c in code.co_consts if isinstance(c, CodeType) and c.co_name == part)
+    if code.co_qualname != function:
+        raise ValueError("Source owner qualified name differs.")
     return {"owner": filename, "function": function, "source_sha256": hashlib.sha256(source).hexdigest(),
             "bytecode_sha256": _code_hash(code)}
 
 
 def owned_caller(filename: str, function: str) -> dict[str, str] | None:
     frame = inspect.currentframe()
-    path = (Path(__file__).parents[1] / "plot_protocol/socket_client.py"
-            if filename == "socket_client.py" else Path(__file__).with_name(filename))
+    path = (Path(__file__).parents[1] / "plot_protocol" / filename
+            if filename in {"socket_client.py", "server.py"} else Path(__file__).with_name(filename))
     try:
         while frame is not None:
-            if frame.f_code.co_name == function and Path(frame.f_code.co_filename).resolve() == path.resolve():
+            if frame.f_code.co_qualname == function and Path(frame.f_code.co_filename).resolve() == path.resolve():
                 identity = owner_identity(filename, function)
                 if _code_hash(frame.f_code) == identity.get("bytecode_sha256"):
                     return identity

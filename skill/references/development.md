@@ -153,6 +153,15 @@ with the original nonblocking OS wait under their wait lock. A cached Popen
 return code or its ECHILD fallback cannot establish a previously missing exit;
 live, externally reaped or otherwise unknown children keep capture blocked.
 
+Private-exclusion descriptors bind the producer's actual running image separately
+from the requested target interpreter and argv. Editable-runtime tests may select
+a different launcher without changing the running producer. Canonicalize a fresh
+internal external-transform workspace before freezing its cwd and request/output
+paths; do not canonicalize user inputs to evade alias checks or extend timeouts.
+Within one capture review, validate each complete source exclusion once and reuse
+that call-local result for process and socket closure. Retain source drift checks,
+all original validators and the distinction between observed and managed actors.
+
 Input scope is independent of lifecycle depth. For a public source checkout use
 `pytest -q --input-scope public-focused`. The public comprehensive CI entry is
 `python -m sciplot_core.verification.public_stage --profile public-comprehensive

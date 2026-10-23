@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import signal
 import socket
-import stat
 import subprocess
 import sys
 import tempfile
@@ -17,6 +16,8 @@ import weakref
 from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.plot_protocol.paths import kernel_peer_pid
+from sciplot_core.verification.native_exit_boundary import endpoint_identity as _endpoint, namespace_identity as _directory, settled_binding, explicit_exit_bound
 from sciplot_core.verification.private_process_boundaries import owned_caller, owner_identity
 
 SOCKET = "SCIPLOT_ENGINE_SOCKET"
@@ -25,17 +26,8 @@ _held: list[tuple[Any, subprocess.Popen[Any], Path, str]] = []
 _actor_installed = False
 _fixture_observer: Any = None
 
-
-def _endpoint(address: Any) -> tuple[Path, dict[str, int]]:
-    path = Path(os.fsdecode(address)).absolute().resolve(strict=True)
-    row = path.lstat()
-    if not stat.S_ISSOCK(row.st_mode):
-        raise ValueError("Connected AF_UNIX endpoint is not a socket.")
-    return path, {"device": row.st_dev, "inode": row.st_ino, "ctime_ns": row.st_ctime_ns, "uid": row.st_uid}
-
-
 def install_socket_ports(observer: Any) -> None:
-    original_bind, original_connect = socket.socket.bind, socket.socket.connect
+    original_bind, original_connect, original_listen = socket.socket.bind, socket.socket.connect, socket.socket.listen
     bindings: dict[str, tuple[Any, dict[str, Any]]] = {}
 
     def bind(endpoint: socket.socket, address: Any) -> None:
@@ -50,7 +42,21 @@ def install_socket_ports(observer: Any) -> None:
             facts = {"event": "audit_socket_bind", "socket": str(path), "endpoint": identity,
                      "binding_token": uuid4().hex, "initial_absent": absent}
             bindings[str(path)] = weakref.ref(endpoint), facts
-            observer.record(facts, sync=True)
+            recorded = observer.record(facts, sync=True)
+            if recorded is not None:
+                facts["sha256"] = recorded["sha256"]
+
+    def listen(endpoint: socket.socket, *args: Any, **kwargs: Any) -> None:
+        original_listen(endpoint, *args, **kwargs)
+        for name, (held, creation) in list(bindings.items()):
+            if held() is endpoint:
+                _, identity = _endpoint(name)
+                ready = {**creation, "event": "audit_socket_listen", "endpoint": identity,
+                         "creation_sha256": creation.get("sha256"),
+                         "owner": owned_caller("server.py", "serve")}
+                ready.pop("sha256", None)
+                observer.record(ready, sync=True)
+                bindings[name] = held, ready
 
     def connect(endpoint: socket.socket, address: Any) -> None:
         before = _endpoint(address) if endpoint.family == socket.AF_UNIX else None
@@ -73,18 +79,11 @@ def install_socket_ports(observer: Any) -> None:
             except (OSError, ValueError):
                 owner = None
             observer.record({"event": "audit_socket_connect", "socket": str(path), "endpoint": identity,
-                             "local_binding_token": token, "socket_owner": owner}, sync=True)
+                             "local_binding_token": token, "socket_owner": owner,
+                             "peer_pid": kernel_peer_pid(endpoint)}, sync=True)
 
-    for name, operation in (("bind", bind), ("connect", connect)):
+    for name, operation in (("bind", bind), ("listen", listen), ("connect", connect)):
         setattr(socket.socket, name, operation)
-
-
-def _directory(path: Path) -> dict[str, int]:
-    info = path.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
-        raise ValueError("Audit engine namespace is not a private owned directory.")
-    return {"device": info.st_dev, "inode": info.st_ino, "uid": info.st_uid, "mode": stat.S_IMODE(info.st_mode)}
-
 
 def start_node(observer: Any, item: Any) -> None:
     global _fixture_observer
@@ -108,7 +107,6 @@ def start_node(observer: Any, item: Any) -> None:
     os.environ[ACTOR] = str(path)
     observer.record({"event": "audit_socket_enter", **facts}, sync=True)
 
-
 def reserve_socket_fixture(names: tuple[str, ...]) -> Path | None:
     """Reserve only fresh exact endpoints in the current primary item scope."""
     observer = _fixture_observer
@@ -129,14 +127,12 @@ def reserve_socket_fixture(names: tuple[str, ...]) -> Path | None:
                      "initial_absent": True, "owner": owner_identity("private_audit_runtime.py", "reserve_socket_fixture")}, sync=True)
     return directory
 
-
 def active_socket_scope(observer: Any) -> dict[str, Any] | None:
     active = getattr(observer, "_audit_socket_scope", None)
     if active is None:
         return None
     facts, _ = active
     return {key: facts[key] for key in ("sockets", "directory", "initial_absent")}
-
 
 def saved_socket_scope(records: list[dict[str, Any]], attempt: dict[str, Any]) -> dict[str, Any] | None:
     enters = [row for row in records if row["event"] == "audit_socket_enter"
@@ -153,7 +149,6 @@ def saved_socket_scope(records: list[dict[str, Any]], attempt: dict[str, Any]) -
         facts = reserved
     return {key: facts[key] for key in ("sockets", "directory", "initial_absent")}
 
-
 def _stop_owned(path: Path, process: subprocess.Popen[Any]) -> dict[str, Any]:
     from sciplot_core.plot_protocol.paths import read_owner
 
@@ -167,7 +162,6 @@ def _stop_owned(path: Path, process: subprocess.Popen[Any]) -> dict[str, Any]:
     if path.exists() or path.with_name(path.name + ".owner.json").exists():
         raise ValueError("Audit-owned server did not release its socket.")
     return {"server": owner, "actual_wait_returncode": code}
-
 
 def finish_node(observer: Any, item: Any) -> None:
     global _fixture_observer
@@ -200,7 +194,6 @@ def finish_node(observer: Any, item: Any) -> None:
         if _fixture_observer is observer:
             _fixture_observer = None
 
-
 def server_call(command: Any, environment: dict[str, str]) -> dict[str, Any] | None:
     owner = owned_caller("socket_client.py", "ensure_server")
     if (owner is None or not isinstance(command, (list, tuple)) or len(command) != 7
@@ -209,8 +202,9 @@ def server_call(command: Any, environment: dict[str, str]) -> dict[str, Any] | N
         return None
     return {"socket": command[4], "owner": owner, "default_owned": environment.get(ACTOR) == command[4]}
 
-
-def hold_server(observer: Any, process: subprocess.Popen[Any], token: str, actor: dict[str, Any] | None) -> None:
+def hold_server(observer: Any, process: subprocess.Popen[Any], token: str, actor: dict[str, Any] | None, attempt: dict[str, Any] | None = None) -> None:
+    from sciplot_core.verification.private_native_exit_port import observe_launch
+    observe_launch(observer, process, token, attempt, actor)
     if actor is None:
         return
     # The observer's child marker coordinates cleanup; it is no native proof.
@@ -248,7 +242,6 @@ def hold_server(observer: Any, process: subprocess.Popen[Any], token: str, actor
     if len(_held) == 1:
         atexit.register(close_servers)
 
-
 def close_servers(socket: Path | None = None) -> None:
     for observer, process, path, token in list(_held):
         if socket is not None and path != socket:
@@ -266,7 +259,6 @@ def close_servers(socket: Path | None = None) -> None:
             if observer is not None:
                 observer.record({"event": "audit_server_failed", "child_token": token, "child_pid": process.pid,
                                  "socket": str(path), "error_class": type(exc).__name__}, sync=True)
-
 
 def install_actor_cleanup() -> None:
     """Only own newly launched source servers; this grants no audit exemption."""
@@ -291,7 +283,6 @@ def install_actor_cleanup() -> None:
 
 _FrameIndex = tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]
 
-
 def _socket_review_index(frames: list[dict[str, Any]]) -> _FrameIndex:
     events: dict[str, list[dict[str, Any]]] = {}
     exits: dict[str, list[dict[str, Any]]] = {}
@@ -301,7 +292,6 @@ def _socket_review_index(frames: list[dict[str, Any]]) -> _FrameIndex:
         if row["event"] == "audit_socket_exit" and isinstance(socket, str):
             exits.setdefault(socket, []).append(row)
     return events, exits
-
 
 def _item_generation(frame: dict[str, Any], frames: list[dict[str, Any]], entries: list[dict[str, Any]], primary: int,
                      index: _FrameIndex | None = None) -> str | None:
@@ -332,9 +322,9 @@ def _item_generation(frame: dict[str, Any], frames: list[dict[str, Any]], entrie
                       and frame["sequence"] < end["sequence"] for end in exits.get(row["socket"], []))]
     return owners[0]["sha256"] if len(owners) == 1 else None
 
-
 def review_sockets(frames: list[dict[str, Any]], *, primary: int, scope: dict[str, Any] | None,
-                   records: dict[str, Any], native_exits: dict[str, dict[str, Any]]) -> list[str]:
+                   records: dict[str, Any], native_exits: dict[str, dict[str, Any]],
+                   source_exclusions: set[str] | None = None, native_actors: dict[str, dict[str, Any]] | None = None) -> list[str]:
     """Recheck the finite namespace facts; never trust an environment approval."""
     issues = []
     index = events, socket_exits = _socket_review_index(frames)
@@ -369,13 +359,25 @@ def review_sockets(frames: list[dict[str, Any]], *, primary: int, scope: dict[st
             closed = [row for row in events.get("audit_server_close", []) if row["pid"] == spawned["pid"]
                       and row.get("child_token") == spawned["child_token"] and row.get("child_pid") == spawned["child_pid"]]
             native = native_exits.get(spawned["epoch"] + ":" + spawned["child_token"])
+            matches = [native_exits[g] for g, actor in (native_actors or {}).items() if g in native_exits
+                       and actor["launch_epoch"] == spawned["epoch"] and actor["launch_token"] == spawned["child_token"]
+                       and actor["identity"]["pid"] == spawned["child_pid"]]
+            native = native if native is not None else matches[0] if len(matches) == 1 else None
+            if spawned.get("default_owned") is False:
+                if not explicit_exit_bound(spawned, events.get("child_exit", []), source_exclusions or set()):
+                    issues.append("observed explicit engine has no closed actual exit")
+                continue
             if (spawned.get("owner") != owner_identity("socket_client.py", "ensure_server")
                     or not ((len(closed) == 1 and closed[0].get("actual_wait_returncode") == 0)
                             or (native is not None and native["returncode"] == 0))):
                 issues.append("observed default engine has no source-owned normal actual child wait")
+    for actor in (native_actors or {}).values():
+        launches = [r for r in events.get("spawn_attempt", []) if r["epoch"] == actor["launch_epoch"] and r.get("child_token") == actor["launch_token"]]
+        actor["item_generation"] = _item_generation(launches[0], frames, entries, primary, index) if len(launches) == 1 else None
     for connected in events.get("audit_socket_connect", []):
         generation = _item_generation(connected, frames, entries, primary, index)
-        bound = [row for row in events.get("audit_socket_bind", []) if row.get("initial_absent") is True
+        ready = [row for row in events.get("audit_socket_listen", []) if settled_binding(row, events.get("audit_socket_bind", []))]
+        bound = [row for row in [*events.get("audit_socket_bind", []), *ready] if row.get("initial_absent") is True
                  and row.get("socket") == connected["socket"] and row.get("endpoint") == connected.get("endpoint")
                  and generation is not None and _item_generation(row, frames, entries, primary, index) == generation
                  and row["monotonic_ns"] < connected["monotonic_ns"]
@@ -383,7 +385,12 @@ def review_sockets(frames: list[dict[str, Any]], *, primary: int, scope: dict[st
                       or (isinstance(connected.get("socket_owner"), dict) and connected["socket_owner"].get("pid") == row["pid"]
                           and connected["socket_owner"].get("device") == row["endpoint"]["device"]
                           and connected["socket_owner"].get("inode") == row["endpoint"]["inode"]))]
-        if not bound:
+        native_bound = [actor for actor in (native_actors or {}).values() if actor["socket"] == connected["socket"]
+                  and actor["ready"]["endpoint"] == connected.get("endpoint")
+                  and actor["identity"]["pid"] == connected.get("peer_pid")
+                  and actor["item_generation"] == generation
+                  and actor["ready_monotonic_ns"] < connected["monotonic_ns"]]
+        if not bound and not native_bound:
             issues.append("AF_UNIX connection has no observed fresh actor binding")
     if events.get("untracked_socket_connect"):
         issues.append("AF_UNIX connection bypassed its successful endpoint owner")

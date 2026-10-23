@@ -257,7 +257,7 @@ def _install_process_ports(observer: Observer) -> None:
                 input_boundary, snapshot, effective_drop = exclusion
                 # These facts come from the immutable actual call, not proof.actual.
                 launch_args, launch_kwargs, target_hash, fields = final_launch(bound, spawn_signature, snapshot, input_boundary, effective_drop)
-            observer.record({"event": "spawn_attempt", "child_token": token, "expected_executable_sha256": target_hash,
+            attempt = observer.record({"event": "spawn_attempt", "child_token": token, "expected_executable_sha256": target_hash,
                              "argv_sha256": frame_digest({"argv": [os.fsdecode(value) for value in command]}) if isinstance(command, (list, tuple)) else None,
                              "same_capture_scope": same_scope,
                              "same_observer_routing": same_scope and environment.get(RUN) == observer.run,
@@ -276,7 +276,7 @@ def _install_process_ports(observer: Observer) -> None:
         process.__dict__["_sciplot_audit_child"] = token
         children[process.pid] = token, process
         observer.record({"event": "child_spawn", "child_token": token, "child_pid": process.pid})
-        hold_server(observer, process, token, actor)
+        hold_server(observer, process, token, actor, attempt)
         observed_exit(process, process.returncode)
 
     def observed_exit(process: subprocess.Popen[Any], code: int | None) -> None:
