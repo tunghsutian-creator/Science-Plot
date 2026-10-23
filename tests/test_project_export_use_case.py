@@ -109,7 +109,8 @@ def test_intake_creates_one_prepared_document_then_exports_it_once(
 
     calls = []
 
-    def prepare(project_dir: Path):
+    def prepare(project_dir: Path, *, _new_creation: bool = False):
+        assert _new_creation is True
         calls.append(("prepare", project_dir))
         document = project_dir / "studio" / "document.vsz"
         document.parent.mkdir()

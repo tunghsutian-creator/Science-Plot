@@ -122,7 +122,8 @@ NATIVE_PRESENTATION_STRICT_ADDITIONS = frozenset(
      "src/sciplot_core/source_coverage/spec_units.py",
      "src/sciplot_core/studio_core/style_transfer_storage.py",
      "src/sciplot_core/studio_core/axis_presentation.py",
-     "src/sciplot_core/studio_core/series_encoding_contract.py"}
+     "src/sciplot_core/studio_core/series_encoding_contract.py",
+     "src/sciplot_core/studio_render/spectral_axis_display.py"}
 )
 VERIFICATION_CAPTURE_STRICT_ADDITIONS = frozenset(
     {
