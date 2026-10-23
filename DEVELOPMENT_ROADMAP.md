@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-21. External AI is the task interface. Current behavior belongs
+Status: 2026-10-23. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -58,6 +58,14 @@ entrypoints, safety refusals and historical rendering evidence. Source and
 packaged browser assets have distinct build, runtime and license obligations.
 
 ## Private scientific acceptance and complete access capture
+
+Close the current composed-process milestone using a fresh frozen source: preserve
+constructor binding and one cleanup holder per process object, then verify actual
+native exits and capture. The original ea293 full remains6402PASS/73FAIL and its
+scale-bound review INCOMPLETE. The local event index retains duplicates and strict
+closure predicates; pure and source review are not full/capture acceptance. Final
+metadata must bind the actual unfiltered collection, preserving private scope and
+static inventory incompleteness until fresh runtime evidence is independently closed.
 
 The checked-in private dependency inventory remains preliminary. Available
 inputs, successful original-data test bodies and complete child-inclusive

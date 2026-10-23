@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import atexit
 from collections.abc import Callable
+from functools import wraps
 import hashlib
 import inspect
 import json
@@ -214,6 +215,7 @@ def _install_process_ports(observer: Observer) -> None:
     spawn_signature = inspect.signature(original_init)
     children: dict[int, tuple[str, subprocess.Popen[Any]]] = {}
 
+    @wraps(original_init)
     def spawn(process: subprocess.Popen[Any], *args: Any, **kwargs: Any) -> None:
         token = uuid4().hex
         bound = spawn_signature.bind(process, *args, **kwargs)

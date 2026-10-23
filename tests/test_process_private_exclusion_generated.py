@@ -21,6 +21,7 @@ from sciplot_core.verification.process_private_exclusion import (
     wrap_private_exclusion,
 )
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.verification.private_observer import reserve_child_environment
 
 pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="Actual Mac process boundary control")
 
@@ -220,11 +221,17 @@ print(json.dumps(result,sort_keys=True))
                 original_executable_sha256=hashlib.sha256(Path("/usr/bin/sandbox-exec").read_bytes()).hexdigest(),
                 original_cwd=os.getcwd(), original_stdio=original_stdio_facts(*source.stdio), actual_launch=launch,
                 caller_launch=caller, drop_environment=["GENERATED_OUTER_ROUTE"])
+            dropped = {"GENERATED_INNER_ROUTE", "GENERATED_OUTER_ROUTE"}
+            before_public = {key: value for key, value in combined.environment.items() if key not in dropped}
+            assert launch["target_environment_sha256"] == canonical_json_sha256(before_public)
+            # Bind the same finite target projection used by the actual public launch.
+            # This preview does not reserve a child token or grant an exclusion proof.
+            target_environment = reserve_child_environment(combined.environment, reserve=False)
+            expected = canonical_json_sha256({key: value for key, value in target_environment.items() if key not in dropped})
             process = subprocess.Popen(combined.argv, env=combined.environment, stdin=combined.stdio[0],
                 stdout=combined.stdio[1], stderr=combined.stdio[2], close_fds=True)
             stdout, stderr = process.communicate(timeout=15)
             assert process.returncode == 0, stderr
-            expected = launch["target_environment_sha256"]
     observed = json.loads(stdout)
     assert observed == {"pid": process.pid, "endpoints": 2, "raw_denied": 2, "environment_sha256": expected}
     validate_private_exclusion(outer)

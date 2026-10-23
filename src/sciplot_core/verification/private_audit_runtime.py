@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import atexit
+from functools import wraps
 import inspect
 import os
 from pathlib import Path
@@ -212,7 +213,17 @@ def server_call(command: Any, environment: dict[str, str]) -> dict[str, Any] | N
 def hold_server(observer: Any, process: subprocess.Popen[Any], token: str, actor: dict[str, Any] | None) -> None:
     if actor is None:
         return
+    # The observer's child marker coordinates cleanup; it is no native proof.
+    if observer is None and getattr(process, "_sciplot_audit_child", None):
+        return
     if observer is not None:
+        # Transfer only this actual held object, preserving earlier children.
+        for entry in list(_held):
+            if entry[0] is None and entry[1] is process:
+                try:
+                    _held.remove(entry)
+                except ValueError:
+                    pass  # The existing holder already closed this entry.
         observer.record({"event": "audit_server_spawn", "child_token": token, "child_pid": process.pid, **actor}, sync=True)
         from sciplot_core.verification.private_native_exit_port import register_server
         registered = register_server(observer, process, token, actor)
@@ -265,6 +276,7 @@ def install_actor_cleanup() -> None:
     original = subprocess.Popen.__init__
     signature = inspect.signature(original)
 
+    @wraps(original)
     def spawn(process: subprocess.Popen[Any], *args: Any, **kwargs: Any) -> None:
         bound = signature.bind(process, *args, **kwargs)
         environment = bound.arguments.get("env")
@@ -277,31 +289,47 @@ def install_actor_cleanup() -> None:
     _actor_installed = True
 
 
-def _item_generation(frame: dict[str, Any], frames: list[dict[str, Any]], entries: list[dict[str, Any]], primary: int) -> str | None:
+_FrameIndex = tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]
+
+
+def _socket_review_index(frames: list[dict[str, Any]]) -> _FrameIndex:
+    events: dict[str, list[dict[str, Any]]] = {}
+    exits: dict[str, list[dict[str, Any]]] = {}
+    for row in frames:
+        events.setdefault(row["event"], []).append(row)
+        socket = row.get("socket")
+        if row["event"] == "audit_socket_exit" and isinstance(socket, str):
+            exits.setdefault(socket, []).append(row)
+    return events, exits
+
+
+def _item_generation(frame: dict[str, Any], frames: list[dict[str, Any]], entries: list[dict[str, Any]], primary: int,
+                     index: _FrameIndex | None = None) -> str | None:
     """Trace actual source launches to the primary's one live item interval."""
+    events, exits = _socket_review_index(frames) if index is None else index
     seen = set()
     while frame["pid"] != primary:
         if frame["epoch"] in seen:
             return None
         seen.add(frame["epoch"])
-        starts = [row for row in frames if row["event"] == "process_start" and row["epoch"] == frame["epoch"]]
+        starts = [row for row in events.get("process_start", []) if row["epoch"] == frame["epoch"]]
         if len(starts) != 1:
             return None
         start = starts[0]
         continuation = start.get("continuation")
         if isinstance(continuation, dict):
-            parents = [row for row in frames if row["event"] == "exec_seal" and row["pid"] == frame["pid"]
+            parents = [row for row in events.get("exec_seal", []) if row["pid"] == frame["pid"]
                        and row["epoch"] == continuation.get("epoch") and row["sha256"] == continuation.get("sha256")]
         else:
-            parents = [row for row in frames if row["event"] == "child_spawn" and row["epoch"] == start.get("parent_epoch")
+            parents = [row for row in events.get("child_spawn", []) if row["epoch"] == start.get("parent_epoch")
                        and row.get("child_token") == start.get("child_token") and row.get("child_pid") == frame["pid"]]
         if len(parents) != 1:
             return None
         frame = parents[0]
     owners = [row for row in entries if row["epoch"] == frame["epoch"] and row["sequence"] < frame["sequence"]
-              and any(end["event"] == "audit_socket_exit" and end["pid"] == primary and end["epoch"] == row["epoch"]
+              and any(end["pid"] == primary and end["epoch"] == row["epoch"]
                       and end.get("socket") == row["socket"] and end.get("test_nodeid") == row["test_nodeid"]
-                      and frame["sequence"] < end["sequence"] for end in frames)]
+                      and frame["sequence"] < end["sequence"] for end in exits.get(row["socket"], []))]
     return owners[0]["sha256"] if len(owners) == 1 else None
 
 
@@ -309,7 +337,8 @@ def review_sockets(frames: list[dict[str, Any]], *, primary: int, scope: dict[st
                    records: dict[str, Any], native_exits: dict[str, dict[str, Any]]) -> list[str]:
     """Recheck the finite namespace facts; never trust an environment approval."""
     issues = []
-    entries = [row for row in frames if row["event"] == "audit_socket_enter" and row["pid"] == primary]
+    index = events, socket_exits = _socket_review_index(frames)
+    entries = [row for row in events.get("audit_socket_enter", []) if row["pid"] == primary]
     if scope is None:
         return ["engine actor scope has no frozen primary collection"] if entries else []
     if len(entries) != len(scope["nodes"]) or {row["test_nodeid"] for row in entries} != scope["nodes"]:
@@ -322,7 +351,7 @@ def review_sockets(frames: list[dict[str, Any]], *, primary: int, scope: dict[st
         source = Path(__file__).resolve().parents[3] / entered["test_nodeid"].split("::", 1)[0]
         from sciplot_core.foundation.json_hashing import canonical_json_sha256
 
-        exits = [row for row in frames if row["event"] == "audit_socket_exit" and row["pid"] == primary
+        exits = [row for row in socket_exits.get(str(path), []) if row["pid"] == primary
                  and row.get("socket") == str(path)]
         if (entered.get("owner") != owner_identity("private_audit_runtime.py", "start_node")
                 or entered.get("initial_absent") is not True or path.name != "engine.sock"
@@ -336,19 +365,19 @@ def review_sockets(frames: list[dict[str, Any]], *, primary: int, scope: dict[st
                 or entered["directory"] != _directory(path.parent) or exits[0]["directory"] != entered["directory"]
                 or path.exists() or path.with_name(path.name + ".owner.json").exists()):
             issues.append("default engine namespace identity or normal closure differs")
-        for spawned in [row for row in frames if row["event"] == "audit_server_spawn" and row.get("socket") == str(path)]:
-            closed = [row for row in frames if row["event"] == "audit_server_close" and row["pid"] == spawned["pid"]
+        for spawned in [row for row in events.get("audit_server_spawn", []) if row.get("socket") == str(path)]:
+            closed = [row for row in events.get("audit_server_close", []) if row["pid"] == spawned["pid"]
                       and row.get("child_token") == spawned["child_token"] and row.get("child_pid") == spawned["child_pid"]]
             native = native_exits.get(spawned["epoch"] + ":" + spawned["child_token"])
             if (spawned.get("owner") != owner_identity("socket_client.py", "ensure_server")
                     or not ((len(closed) == 1 and closed[0].get("actual_wait_returncode") == 0)
                             or (native is not None and native["returncode"] == 0))):
                 issues.append("observed default engine has no source-owned normal actual child wait")
-    for connected in [row for row in frames if row["event"] == "audit_socket_connect"]:
-        generation = _item_generation(connected, frames, entries, primary)
-        bound = [row for row in frames if row["event"] == "audit_socket_bind" and row.get("initial_absent") is True
+    for connected in events.get("audit_socket_connect", []):
+        generation = _item_generation(connected, frames, entries, primary, index)
+        bound = [row for row in events.get("audit_socket_bind", []) if row.get("initial_absent") is True
                  and row.get("socket") == connected["socket"] and row.get("endpoint") == connected.get("endpoint")
-                 and generation is not None and _item_generation(row, frames, entries, primary) == generation
+                 and generation is not None and _item_generation(row, frames, entries, primary, index) == generation
                  and row["monotonic_ns"] < connected["monotonic_ns"]
                  and ((row["pid"] == connected["pid"] and row["binding_token"] == connected.get("local_binding_token"))
                       or (isinstance(connected.get("socket_owner"), dict) and connected["socket_owner"].get("pid") == row["pid"]
@@ -356,8 +385,8 @@ def review_sockets(frames: list[dict[str, Any]], *, primary: int, scope: dict[st
                           and connected["socket_owner"].get("inode") == row["endpoint"]["inode"]))]
         if not bound:
             issues.append("AF_UNIX connection has no observed fresh actor binding")
-    if any(row["event"] == "untracked_socket_connect" for row in frames):
+    if events.get("untracked_socket_connect"):
         issues.append("AF_UNIX connection bypassed its successful endpoint owner")
-    if any(row["event"] in {"audit_socket_failed", "audit_server_failed"} for row in frames):
+    if events.get("audit_socket_failed") or events.get("audit_server_failed"):
         issues.append("default engine actor cleanup failed")
     return issues
