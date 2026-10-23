@@ -6,6 +6,13 @@ guessing: record cause, replacement contract, verification and limitations.
 Use `.venv/bin/python` and `skill/scripts/sciplot`. Development evidence belongs
 under ignored `.tmp_verify/`; preserve user data and exact-current VSZ authority.
 
+Stress-relaxation preparation records its per-series method in the typed
+scientific transform and source diagnostics. Its outer normalization summary
+references those fields instead of declaring a second selection algorithm.
+Preserve historical ledgers and scientific seals: Legacy import seals the whole
+recorded transform ledger, so correcting a future method declaration can change
+a new document's scientific hash even when its numerical output is unchanged.
+
 For work with independent module boundaries, implement in multiple isolated
 worktrees in parallel with explicit file ownership and integration order. Keep
 the integration worktree responsible for the final combined review. During

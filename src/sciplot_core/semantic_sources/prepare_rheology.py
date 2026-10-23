@@ -354,13 +354,9 @@ def prepare_rheology_source(
             operation="extract_and_normalize_stress_relaxation_curves",
             parameters={
                 "normalization_definition": (
-                    "strain-controlled interval sources: detect the terminal "
-                    "shear-strain hold, crop the loading ramp, preserve source "
-                    "time, retain the hold-onset point, and divide by the onset "
-                    "response; "
-                    "sources without a control signal: preserve source time "
-                    "and divide by the first finite non-zero response; already "
-                    "normalized sources are preserved"
+                    "See scientific_transform.normalizer.series and "
+                    "source_normalizations for source-bound per-series "
+                    "normalization definitions and point-selection evidence."
                 ),
                 "series_order": [series.sample for series in series_list],
                 "automatic_visual_ordering": not bool(_series_order_map(series_order))

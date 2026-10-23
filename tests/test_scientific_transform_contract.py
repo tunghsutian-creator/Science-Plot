@@ -149,6 +149,29 @@ def _write_interval_unit_layout(path: Path, *, blank_before_units: bool) -> None
     path.write_text("\n".join(rows) + "\n", encoding="utf-16")
 
 
+def _assert_preparation_normalization_authority(source, output_dir, resolved, *, prepared=None):
+    if prepared is None:
+        prepared = prepare_semantic_source(source, output_dir=output_dir, semantic={
+            "semantic_family": "rheology_stress_relaxation", "rule_id": "rheology_stress_relaxation"})
+    parameters = prepared["transform_steps"][0]["parameters"]
+    contract = resolved.contract.to_payload()
+    assert parameters["scientific_transform"] == contract
+    assert parameters["source_normalizations"] == [
+        {"sample": series.sample, **(series.diagnostics or {})} for series in resolved.series]
+    definitions = {row["sample"]: row["normalization_definition"] for row in parameters["source_normalizations"]}
+    assert all(row["definition"] == definitions[row["sample"]] for row in contract["normalizer"]["series"])
+    table = pd.read_csv(prepared["processed_source"], header=None)
+    assert len(table) - 3 == max(len(series.points) for series in resolved.series)
+    for index, series in enumerate(resolved.series):
+        pairs = table.iloc[3:3 + len(series.points), 2 * index:2 * index + 2]
+        assert tuple((float(x), float(y)) for x, y in pairs.itertuples(index=False, name=None)) == series.points
+    definition = parameters["normalization_definition"]
+    assert isinstance(definition, str)
+    assert "scientific_transform.normalizer.series" in definition
+    assert "source_normalizations" in definition
+    assert not any(word in definition.casefold() for word in ("detect", "crop", "threshold"))
+
+
 def test_stress_transform_contract_is_shared_by_preview_and_materialization(
     tmp_path: Path,
 ) -> None:
@@ -279,6 +302,7 @@ def test_stress_transform_contract_is_shared_by_preview_and_materialization(
     assert step["parameters"]["scientific_transform"] == contract
     table = pd.read_csv(prepared["processed_source"], header=None)
     assert [float(value) for value in table.iloc[3, :2]] == [0.2, 1.0]
+    _assert_preparation_normalization_authority(source, tmp_path / "prepared", resolved, prepared=prepared)
 
 
 def test_stress_transform_binds_columns_from_the_actual_hold_interval(
@@ -326,6 +350,9 @@ def test_short_drifting_final_interval_uses_source_boundary_without_thresholds(
     assert output_evidence["source_point_count"] == output_evidence[
         "retained_point_count"
     ] + sum(output_evidence["excluded_by_reason"].values())
+    assert diagnostics["normalization_baseline_value"] == 80.0
+    assert contract["normalizer"]["series"][0]["operation"] == "divide_by_final_common_interval_first_aligned_response"
+    _assert_preparation_normalization_authority(source, tmp_path / "prepared_drifting", resolved)
 
 
 def test_final_interval_boundary_still_requires_a_nonzero_response(
@@ -517,6 +544,8 @@ def test_plain_wide_stress_source_retains_the_non_interval_fallback(
 
     assert resolved.series[0].points == ((0.01, 1.0), (0.02, 0.9))
     assert resolved.series[0].x_unit == "s"
+    assert resolved.contract.normalizer["series"][0]["operation"] == "divide_by_first_finite_nonzero_response"
+    _assert_preparation_normalization_authority(source, tmp_path / "prepared_wide", resolved)
 
 
 def test_wide_transform_finds_a_retained_anchor_beyond_the_first_point(
@@ -546,7 +575,8 @@ def test_already_normalized_source_marks_anchor_not_applicable(
         encoding="utf-8",
     )
 
-    contract = resolve_stress_relaxation_transform(source).contract.to_payload()
+    resolved = resolve_stress_relaxation_transform(source)
+    contract = resolved.contract.to_payload()
 
     # Original sample metadata outranks the materialized/source filename.
     assert contract["output"]["series_order"] == ["E0"]
@@ -559,6 +589,9 @@ def test_already_normalized_source_marks_anchor_not_applicable(
             "retained": None,
         }
     ]
+    assert resolved.series[0].points == ((0.1, 1.0), (0.2, 0.8), (0.3, 0.6))
+    assert contract["normalizer"]["series"][0]["operation"] == "preserve_source_normalized_response"
+    _assert_preparation_normalization_authority(source, tmp_path / "prepared_normalized", resolved)
 
 
 def test_resolved_stress_snapshot_materializes_without_a_second_parse(
