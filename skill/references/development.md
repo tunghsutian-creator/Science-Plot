@@ -128,6 +128,10 @@ its native exclusion proof. During teardown, an observation activation failure
 must allow fixture restoration and original cleanup before reporting the same
 failure; it never supplies a missing phase or a successful receipt. Keep no-I/O
 test replacements scoped to the product call they assert.
+Before the observer's terminal record, collect already-exited held children
+with the original nonblocking OS wait under their wait lock. A cached Popen
+return code or its ECHILD fallback cannot establish a previously missing exit;
+live, externally reaped or otherwise unknown children keep capture blocked.
 
 Input scope is independent of lifecycle depth. For a public source checkout use
 `pytest -q --input-scope public-focused`. The public comprehensive CI entry is

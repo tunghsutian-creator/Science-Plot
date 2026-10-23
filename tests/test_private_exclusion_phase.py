@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import json
 import os
 import sys
+import threading
 
 import pytest
 
@@ -243,3 +244,68 @@ def test_setup_and_call_activation_failures_still_refuse_before_yield(monkeypatc
             next(generator)
     assert result.value is original
     assert calls == (["start", "begin"] if phase_name == "setup" else ["begin"])
+
+
+def test_finish_collects_only_original_nonblocking_child_waits(tmp_path, monkeypatch):
+    from contextlib import nullcontext
+
+    for mode in ("zero", "nonzero", "signal", "live", "reaped", "cached_reaped", "busy", "wrong_pid", "not_exit", "already_waited"):
+        frames, waits = [], []
+
+        class Process:
+            def __init__(self, args, *, env=None):
+                self.pid, self.returncode = 401, None
+                self._waitpid_lock = threading.Lock()
+
+            def wait(self, *args, **kwargs):
+                pytest.fail("Terminal collection must not block or use Popen's ECHILD fallback")
+
+            def poll(self, *args, **kwargs):
+                pytest.fail("Popen.poll cannot prove a previously uncollected exit")
+
+        def original_waitpid(pid, options, *, mode=mode, waits=waits):
+            waits.append((pid, options))
+            if mode in {"reaped", "cached_reaped"}:
+                raise ChildProcessError("An external reap has no original status")
+            return ((0, 0) if mode == "live" else (402, 0) if mode == "wrong_pid"
+                    else (pid, 127) if mode == "not_exit" else
+                    (pid, 256 if mode == "nonzero" else 15 if mode == "signal" else 0))
+
+        def record(value, *, frames=frames, **_):
+            frames.append(value)
+            return value
+
+        observer = SimpleNamespace(directory=tmp_path, run="generated-run", epoch="generated-parent", reserved={}, wrapper_environment={},
+            guard=threading.local(), record=record)
+        with monkeypatch.context() as control:
+            control.setattr(observation, "subprocess", SimpleNamespace(Popen=Process))
+            control.setattr(observation, "install_socket_ports", lambda _: None)
+            control.setattr(observation, "server_call", lambda *_: None)
+            control.setattr(observation, "hold_server", lambda *_: None)
+            control.setattr(observation, "executable_hash", lambda *_, **__: None)
+            control.setattr(observation, "owned_caller", lambda *_: None)
+            control.setattr(observation, "excluded_launch", lambda *_: nullcontext(None))
+            for name in ("uname_call", "wrapper_call", "native_probe_call"):
+                control.setattr(observation, name, lambda *_: None)
+            control.setattr(observation.os, "waitpid", original_waitpid)
+            for name in ("execve", "execvpe"):
+                control.setattr(observation.os, name, getattr(observation.os, name))
+            observation._install_process_ports(observer)
+            child = Process(["generated-child"])
+            if mode == "cached_reaped":
+                child.returncode = 0
+            if mode == "busy":
+                child._waitpid_lock.acquire()
+            if mode == "already_waited":
+                observation.os.waitpid(child.pid, 0)
+            observer._collect_children()
+            observation.Observer.finish(observer)
+            if mode == "busy":
+                child._waitpid_lock.release()
+        exits = [frame for frame in frames if frame["event"] == "child_exit"]
+        expected = {"zero": 0, "nonzero": 1, "signal": -15, "already_waited": 0}
+        assert [row["returncode"] for row in exits] == ([expected[mode]] if mode in expected else [])
+        assert all(row["child_pid"] == child.pid for row in exits)
+        assert frames[-1]["event"] == "process_finish"
+        assert waits == ([(child.pid, 0)] if mode == "already_waited" else [] if mode == "busy" else
+                         [(child.pid, os.WNOHANG)] * (1 if mode in expected else 2))

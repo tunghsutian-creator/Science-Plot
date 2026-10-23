@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import atexit
+from collections.abc import Callable
 import hashlib
 import inspect
 import json
@@ -52,10 +53,6 @@ def bootstrap_hashes() -> dict[str, str]:
     if public.is_file():
         result["public_guard_bootstrap/sitecustomize.py"] = hashlib.sha256(public.read_bytes()).hexdigest()
     return result
-
-
-
-
 class Observer:
     def __init__(self, environment: dict[str, str], *, activation: dict[str, str] | None = None) -> None:
         self.directory = Path(environment[DIRECTORY]).resolve(strict=True)
@@ -71,6 +68,7 @@ class Observer:
         self.sequence, self.lost, self.head = 0, 0, ZERO
         self.lock = threading.RLock()
         self.reserved: dict[str, str] = {}
+        self._collect_children: Callable[[], None] = lambda: None
         self.guard = threading.local()
         self.writer, self.sync = os.write, os.fsync
         self.fd = os.open(self.directory / f"{self.epoch}.jsonl",
@@ -190,6 +188,7 @@ class Observer:
             self.record({"event": "unsupported_exec"})
 
     def finish(self) -> None:
+        self._collect_children()
         if self.record({"event": "process_finish"}, sync=True) is None:
             self.record({"event": "sensor_failure", "operation": "terminal_write_or_sync"})
 
@@ -299,6 +298,25 @@ def _install_process_ports(observer: Observer) -> None:
     for name, method in (("__init__", spawn), ("wait", wait), ("poll", poll)):
         setattr(subprocess.Popen, name, method)
     original_waitpid = os.waitpid
+
+    def collect_children() -> None:
+        # Reap only exited children held by this port. Popen.poll can turn an
+        # ECHILD into zero; it cannot witness an otherwise uncollected exit.
+        for child_pid, (_, process) in list(children.items()):
+            lock = getattr(process, "_waitpid_lock", None)
+            if lock is None or not lock.acquire(False):
+                continue
+            try:
+                pid, status = original_waitpid(child_pid, os.WNOHANG)
+                if pid == child_pid and (os.WIFEXITED(status) or os.WIFSIGNALED(status)):
+                    process.returncode = os.waitstatus_to_exitcode(status)
+                    observed_exit(process, process.returncode)
+            except OSError:
+                pass  # No original status: leave the exit ledger incomplete.
+            finally:
+                lock.release()
+
+    observer._collect_children = collect_children
 
     def waitpid(pid: int, options: int) -> tuple[int, int]:
         result = original_waitpid(pid, options)

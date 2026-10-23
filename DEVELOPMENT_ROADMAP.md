@@ -78,6 +78,8 @@ its actual failures. Static and generated native component successes cannot clos
 that gate. Preserve one environment identity across intent sealing and actual
 launch, bind the current source across child working directories, declare each
 generated socket endpoint, and retain fixture cleanup when observation fails.
+Close held-child exit ledgers with original nonblocking kernel waits before
+the observer finish; never infer an exit from cached status or ECHILD defaults.
 A blocked native action stays blocked until the exact
 required approval is obtained; retain the original execution or non-execution evidence.
 Historical interrupted/failed epochs and the original scientific files stay intact.
