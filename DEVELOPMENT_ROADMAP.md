@@ -61,11 +61,15 @@ packaged browser assets have distinct build, runtime and license obligations.
 
 Close the current composed-process milestone using a fresh frozen source: preserve
 constructor binding and one cleanup holder per process object, then verify actual
-native exits and capture. The original ea293 full remains6402PASS/73FAIL and its
-scale-bound review INCOMPLETE. The local event index retains duplicates and strict
-closure predicates; pure and source review are not full/capture acceptance. Final
-metadata must bind the actual unfiltered collection, preserving private scope and
-static inventory incompleteness until fresh runtime evidence is independently closed.
+native exits and capture. Review each original epoch with ordered event, token,
+phase and socket lists that retain duplicates, missing members and all closure
+predicates. Reuse source-owner identities only within that review's bound source
+snapshot, and check the complete source map again at exit. Current namespace facts
+and native evidence still require their original validators. Pure controls and
+source review are not full/capture acceptance; retain historical failed and
+incomplete runs in local evidence. Final metadata must bind the actual unfiltered
+collection, preserving private scope and static inventory incompleteness until
+fresh runtime evidence is independently closed.
 
 The checked-in private dependency inventory remains preliminary. Available
 inputs, successful original-data test bodies and complete child-inclusive

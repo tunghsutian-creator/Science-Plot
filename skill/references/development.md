@@ -191,6 +191,13 @@ capture without this witness stays BLOCKED. Missing, truncated, interrupted, sha
 observation remains BLOCKED even when a test intentionally triggers that path.
 The prior 108 unclosed historical epochs are retained as limited evidence;
 new normal-operation receipts do not retroactively complete them.
+Capture review groups each original epoch once into ordered event, token, phase
+and socket lists. These lists retain every duplicate and original row; they do
+not replace unique-parent, sequence, source, actual-exit or namespace checks.
+Source-owner identities are local to one review, checked against its source map
+on first use and against the complete current map at exit. This is a source
+snapshot boundary, not continuous monitoring of transient edits. Filesystem
+census, exclusion snapshots and native proofs are still validated afresh.
 On macOS, dependency discovery calls the installed CLT Mach-O inspector directly
 with only fixed locale/search settings. Its finite boundary binds the source
 caller, exact argument and executable identities, target/tool/OS native bytes

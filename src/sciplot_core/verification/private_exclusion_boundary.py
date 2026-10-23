@@ -8,7 +8,7 @@ import json
 import os
 from pathlib import Path
 import stat
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.verification.input_scope import load_manifest
@@ -37,6 +37,22 @@ def _scope(nodes: list[str]) -> dict[str, Any] | None:
         return None
     return {"manifest_sha256": _hash(MANIFEST), "collection_sha256": canonical_json_sha256(sorted(nodes)),
             "public": public, "nodes": set(nodes)}
+
+
+def _review_index(records: list[dict[str, Any]]) -> dict[str, dict[Any, list[dict[str, Any]]]]:
+    """Local original-order multimaps; duplicate evidence remains duplicated."""
+    index: dict[str, dict[Any, list[dict[str, Any]]]] = {name: {} for name in ("event", "token", "enter", "exit", "socket")}
+    for row in records:
+        event = row["event"]
+        index["event"].setdefault(event, []).append(row)
+        if event in {"spawn_attempt", "child_spawn", "spawn_failed", "child_exit"}:
+            index["token"].setdefault(row.get("child_token"), []).append(row)
+        if event in {"pytest_phase_enter", "pytest_phase_exit"}:
+            name, key = ("enter", "sha256") if event == "pytest_phase_enter" else ("exit", "phase_enter_sha256")
+            index[name].setdefault(row.get(key), []).append(row)
+        if event in {"audit_socket_enter", "audit_socket_reserve"}:
+            index["socket"].setdefault(None, []).append(row)
+    return index
 
 
 def bind_collection(observer: Any, nodes: list[str]) -> None:
@@ -220,7 +236,10 @@ def final_launch(bound: inspect.BoundArguments, signature: inspect.Signature, sn
 def excluded_bound(value: Any, attempt: dict[str, Any], records: list[dict[str, Any]], *,
                    primary: int, expected_nodeids: set[str] | None, directory: Path,
                    durable: dict[str, Any] | None, suite_start: dict[str, Any], audit_keys: tuple[str, ...],
-                   root_pid: int, caller: dict[str, Any] | None) -> bool:
+                   root_pid: int, caller: dict[str, Any] | None,
+                   review_index: dict[str, dict[Any, list[dict[str, Any]]]] | None = None,
+                   node_scope: dict[str, Any] | None = None,
+                   identify: Callable[[str, str], dict[str, str]] | None = None) -> bool:
     if not isinstance(value, dict) or value.get("kind") != KIND:
         return False
     expected_keys = {"kind", "version", "phase_enter_sha256", "process_proof", "drop_environment",
@@ -231,26 +250,29 @@ def excluded_bound(value: Any, attempt: dict[str, Any], records: list[dict[str, 
     root_listing = value.get("root_listing_owner") is not None
     if set(value) != expected_keys or value["version"] != 1 or expected_nodeids is None or durable is None:
         return False
+    identity = owner_identity if identify is None else identify
     try:
         if root_listing:
             if (attempt["pid"] != root_pid or caller is None or value["phase_enter_sha256"] is not None
-                    or value["root_listing_owner"] != owner_identity("evidence_scope.py", "_repository_inputs")
+                    or value["root_listing_owner"] != identity("evidence_scope.py", "_repository_inputs")
                     or value["original_argv_sha256"] != canonical_json_sha256(_GIT_LISTING)
                     or value["original_cwd"] != str(REPO)):
                 return False
         elif attempt["pid"] != primary:
             return False
-        scope = _scope(sorted(expected_nodeids))
-        enters = [row for row in records if row["event"] == "pytest_phase_enter" and row["sha256"] == value["phase_enter_sha256"]]
+        scope = _scope(sorted(expected_nodeids)) if review_index is None else node_scope
+        enters = ([row for row in records if row["event"] == "pytest_phase_enter" and row["sha256"] == value["phase_enter_sha256"]]
+                  if review_index is None else review_index["enter"].get(value["phase_enter_sha256"], []))
         if not root_listing and (scope is None or len(enters) != 1):
             return False
         entered = enters[0] if enters else {}
-        exits = [row for row in records if row["event"] == "pytest_phase_exit" and row.get("phase_enter_sha256") == entered.get("sha256")]
+        exits = ([row for row in records if row["event"] == "pytest_phase_exit" and row.get("phase_enter_sha256") == entered.get("sha256")]
+                 if review_index is None else review_index["exit"].get(entered.get("sha256"), []))
         node = entered.get("test_nodeid", next(iter(expected_nodeids)))
         source = REPO / node.split("::", 1)[0]
         if not root_listing and (scope is None or node not in scope["public"] or entered.get("phase") not in _PHASES or entered["pid"] != primary
-                or entered.get("phase_owner") != owner_identity("private_exclusion_boundary.py", "begin_phase")
-                or suite_start.get("activation") != owner_identity("suite_evidence.py", "_audit_environment")
+                or entered.get("phase_owner") != identity("private_exclusion_boundary.py", "begin_phase")
+                or suite_start.get("activation") != identity("suite_evidence.py", "_audit_environment")
                 or entered.get("suite_root_sha256") != suite_start["sha256"]
                 or entered.get("manifest_sha256") != scope["manifest_sha256"]
                 or entered.get("collection_sha256") != scope["collection_sha256"]
@@ -259,7 +281,7 @@ def excluded_bound(value: Any, attempt: dict[str, Any], records: list[dict[str, 
                 or len(exits) != 1 or exits[0].get("test_nodeid") != node or exits[0].get("phase") != entered["phase"]
                 or not entered["sequence"] < attempt["sequence"] < exits[0]["sequence"]):
             return False
-        if (suite_start.get("activation") != owner_identity("suite_evidence.py", "_audit_environment")
+        if (suite_start.get("activation") != identity("suite_evidence.py", "_audit_environment")
                 or value["original_argv_sha256"] != attempt.get("excluded_original_argv_sha256")
                 or value["original_environment_sha256"] != attempt.get("excluded_original_environment_sha256")
                 or value["original_executable_sha256"] != attempt.get("excluded_original_executable_sha256")
@@ -277,7 +299,8 @@ def excluded_bound(value: Any, attempt: dict[str, Any], records: list[dict[str, 
         evidence = tuple(Path(context["directory"]) / name for name in
                          ("request.json", "state.json", "completion.json", "receipt.json", "launch.json", "finish.json"))
         expected_snapshot = prepare_private_exclusion(REPO, environment, audit_directory=directory,
-            evidence_paths=evidence, socket_scope=None if root_listing else saved_socket_scope(records, attempt))
+            evidence_paths=evidence, socket_scope=None if root_listing else saved_socket_scope(
+                records if review_index is None else review_index["socket"].get(None, []), attempt))
         if attempt.get("expected_executable_sha256") != expected_snapshot.to_dict()["identity"]["sandbox"]["sha256"]:
             return False
         validate_excluded_proof(value["process_proof"], expected_snapshot=expected_snapshot,
@@ -291,11 +314,15 @@ def excluded_bound(value: Any, attempt: dict[str, Any], records: list[dict[str, 
         return False
 
 
-def metadata_diagnostic(frame: dict[str, Any], snapshots: list[dict[str, Any]]) -> bool:
+def metadata_diagnostic(frame: dict[str, Any], snapshots: list[dict[str, Any]], *,
+                        owners: list[dict[str, str]] | None = None,
+                        members: dict[Any, list[dict[str, Any] | None]] | None = None) -> bool:
     if frame["event"] not in {"os.scandir", "os.listdir"}:
         return False
     owner = frame.get("diagnostic_owner")
-    if owner not in [owner_identity("process_private_exclusion.py", name) for name in ("_members", "_evidence_inodes")]:
+    if owner not in (owners if owners is not None else [owner_identity("process_private_exclusion.py", name) for name in ("_members", "_evidence_inodes")]):
         return False
     path = frame.get("resolved_path")
+    if members is not None:
+        return any(row is not None and stat.S_ISDIR(row["st_mode"]) for row in members.get(path, []))
     return any((row := snapshot["members"].get(path)) is not None and stat.S_ISDIR(row["st_mode"]) for snapshot in snapshots)
