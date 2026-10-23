@@ -384,7 +384,11 @@ def test_only_closed_stdlib_kernel_query_has_nonpython_input_boundary(tmp_path: 
         executable.chmod(0o755)
         code += f"os.environ['PATH']={str(executable.parent)!r}+os.pathsep+os.environ['PATH']\nplatform._Processor.from_subprocess()\n"
     elif mode == "unknown_exit":
-        code += "def no_wait(args,**kwargs):\n child=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)\n return child.stdout.read()\nsubprocess.check_output=no_wait\nplatform._Processor.from_subprocess()\n"
+        code += ("import posix\ndef no_wait(args,**kwargs):\n"
+                 " child=subprocess.Popen(args,stdout=subprocess.PIPE,**kwargs)\n"
+                 " output=child.stdout.read()\n pid,status=posix.waitpid(child.pid,0)\n assert pid==child.pid\n"
+                 " child.returncode=os.waitstatus_to_exitcode(status)\n child.stdout.close()\n return output\n"
+                 "subprocess.check_output=no_wait\nplatform._Processor.from_subprocess()\n")
     else:
         code += "platform._Processor.from_subprocess()\n"
     _, result = observed(tmp_path, code)
@@ -392,3 +396,10 @@ def test_only_closed_stdlib_kernel_query_has_nonpython_input_boundary(tmp_path: 
     if mode == "owned":
         assert len(result["bounded_auxiliary"]) == 1
         assert result["bounded_auxiliary"][0]["terminal_counters"] == "not_observed_non_python_kernel_query"
+    if mode == "unknown_exit":
+        assert result["root_actual_exit"] == 0, result["issues"]
+        assert len(result["bounded_auxiliary"]) == 1
+        child_pid = result["bounded_auxiliary"][0]["child_pid"]
+        spawn = next(row for row in result["frames"] if row["event"] == "child_spawn" and row.get("child_pid") == child_pid)
+        assert not any(row["event"] == "child_exit" and row.get("child_pid") == child_pid for row in result["frames"])
+        assert f"child signalled or exit ledger invalid:{spawn['epoch']}:{spawn['child_token']}" in result["issues"]
