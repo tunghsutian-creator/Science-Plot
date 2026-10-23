@@ -1,7 +1,10 @@
 """Explicit transform execution and content identities cannot hide scientific work."""
 
+from contextlib import contextmanager
 from copy import deepcopy
+import json
 from pathlib import Path
+import subprocess
 import sys
 
 import pytest
@@ -146,6 +149,43 @@ def test_external_timeout_never_returns_or_reuses_an_uncertain_result(tmp_path):
     with pytest.raises(DocumentError) as error:
         execute_node(node, datasets, external_executors={"fixed": executor})
     assert error.value.reason_code == "transform_external_timeout"
+
+
+def test_external_timeout_uses_canonical_owned_working_directory(tmp_path, monkeypatch):
+    from sciplot_core.plot_transforms import external
+
+    directory = tmp_path / "actual-work"
+    directory.mkdir()
+    alias = tmp_path / "work-alias"
+    alias.symlink_to(directory, target_is_directory=True)
+    calls = []
+
+    @contextmanager
+    def temporary_directory(*, prefix):
+        assert prefix == "sciplot-transform-"
+        yield str(alias)
+
+    def timed_out(command, *, cwd, stdin, stdout, stderr, timeout, check):
+        calls.append(command)
+        assert cwd == directory.resolve(strict=True)
+        assert Path(command[command.index("--request") + 1]).parent == cwd
+        assert Path(command[command.index("--response") + 1]).parent == cwd
+        assert stdin == subprocess.DEVNULL and stdout is stderr
+        assert timeout == .05 and check is False
+        request = json.loads(Path(command[command.index("--request") + 1]).read_bytes())
+        assert request["kind"] == "sciplot_transform_request"
+        raise subprocess.TimeoutExpired(command, timeout)
+
+    monkeypatch.setattr(external.tempfile, "TemporaryDirectory", temporary_directory)
+    monkeypatch.setattr(external.subprocess, "run", timed_out)
+    executor, node = _external(tmp_path)
+    executor = ExternalExecutor(executor.executable, executor.script, executor.parameter_schema, timeout_seconds=.05)
+    node["executor"] = executor.descriptor("fixed")
+    _, _, datasets = managed_example()
+    with pytest.raises(DocumentError) as error:
+        execute_node(node, datasets, external_executors={"fixed": executor})
+    assert error.value.reason_code == "transform_external_timeout"
+    assert len(calls) == 1 and not (directory / "response.json").exists()
 
 
 def test_raw_snapshot_cannot_silently_drop_rows_or_change_source_identity():

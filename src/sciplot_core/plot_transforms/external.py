@@ -100,7 +100,8 @@ def run_external(node: dict[str, Any], source: dict[str, Any], registry: dict[st
                "parameters": node["parameters"], "input": source}
     request_hash = canonical_json_sha256(request, allow_nan=False)
     with tempfile.TemporaryDirectory(prefix="sciplot-transform-") as directory:
-        root = Path(directory)
+        # Bind our fresh internal workspace, not a platform temporary-path alias.
+        root = Path(directory).resolve(strict=True)
         request_path, response_path = root / "request.json", root / "response.json"
         request_path.write_text(json.dumps({**request, "request_sha256": request_hash}, allow_nan=False), encoding="utf-8")
         with tempfile.TemporaryFile() as output:

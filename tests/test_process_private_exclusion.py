@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
 from sciplot_core.verification import process_private_exclusion as runtime
+from sciplot_core.verification.native_exit_boundary import ProcessIdentity
 from process_private_descriptor_support import descriptor_boundary
 
 
@@ -52,6 +55,76 @@ def validate(boundary, invocation, frozen, *, drop=(), stdio=(subprocess.DEVNULL
         original_stdio=boundary.original_stdio_facts(*stdio), actual_launch=launch,
         original_executable_sha256=hashlib.sha256(boundary.DESCRIPTOR_TARGET.read_bytes()).hexdigest(), original_cwd=str(Path.cwd()),
         drop_environment=drop)
+
+
+def producer_descriptor(boundary, tmp_path, monkeypatch):
+    path = tmp_path / "generated-producer-image"
+    path.write_bytes(b"producer descriptor data; never executed\n")
+    producer = ProcessIdentity(os.getpid(), 1, os.getuid(), 123, 456, str(path), str(tmp_path),
+                               hashlib.sha256(path.read_bytes()).hexdigest())
+    monkeypatch.setattr(boundary, "read_identity", lambda pid: producer)
+    return path, producer
+
+
+def test_actual_producer_and_each_requested_target_have_independent_exact_bindings(resources, tmp_path, monkeypatch, boundary):
+    path, _ = producer_descriptor(boundary, tmp_path, monkeypatch)
+    synthetic_identity = boundary._identity
+    monkeypatch.setattr(boundary, "_identity", lambda: dict(synthetic_identity(), interpreter=boundary._producer_interpreter()))
+    tools = []
+    for index in range(2):
+        target = tmp_path / f"requested-entry-{index}"
+        target.write_bytes(path.read_bytes() if index == 0 else b"different requested target bytes\n")
+        monkeypatch.setattr(boundary, "DESCRIPTOR_TARGET", target)
+        with monkeypatch.context() as requested:
+            requested.setattr(sys, "executable", str(target))
+            frozen = snapshot(resources, boundary)
+            with boundary.wrap_private_exclusion(frozen, [str(target)], environment={},
+                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as invocation:
+                assert frozen.to_dict()["identity"]["interpreter"] == boundary._tool(path)
+                tool = invocation.proof["original"]["executable"]
+                assert tool == boundary._tool(target)
+                tools.append(tool)
+                validate(boundary, invocation, frozen)
+                actual = boundary.actual_launch_facts(frozen, invocation.argv, invocation.environment, stdio=invocation.stdio)
+                with pytest.raises(ValueError, match="original/actual"):
+                    boundary.validate_excluded_proof(invocation.proof, expected_snapshot=frozen,
+                        original_argv_sha256=sha([str(tmp_path / "other-entry")]), original_environment_sha256=sha({}),
+                        original_executable_sha256=tool["sha256"], original_cwd=str(Path.cwd()),
+                        original_stdio=boundary.original_stdio_facts(subprocess.DEVNULL, subprocess.PIPE, subprocess.PIPE),
+                        actual_launch=actual)
+        boundary.validate_private_exclusion(frozen)
+    assert tools[0]["path"] != tools[1]["path"]
+    assert tools[0]["metadata"]["st_ino"] != tools[1]["metadata"]["st_ino"]
+    assert tools[0]["sha256"] != tools[1]["sha256"]
+
+
+@pytest.mark.parametrize("change", ["generation", "image", "bytes", "metadata", "unavailable"])
+def test_producer_runtime_generation_and_complete_tool_drift_fail_closed(tmp_path, monkeypatch, boundary, change):
+    path, producer = producer_descriptor(boundary, tmp_path, monkeypatch)
+    if change in {"generation", "image"}:
+        changed = replace(producer, start_usec=457) if change == "generation" else replace(producer, executable=str(tmp_path / "another-image"))
+        reads = iter((producer, changed))
+        monkeypatch.setattr(boundary, "read_identity", lambda pid: next(reads))
+    elif change == "bytes":
+        path.write_bytes(b"different producer bytes\n")
+    elif change == "metadata":
+        original = boundary._metadata
+        reads = 0
+        def metadata(current):
+            nonlocal reads
+            value = original(current)
+            if current == path:
+                reads += 1
+                if reads == 2:
+                    value = dict(value, st_ctime_ns=value["st_ctime_ns"] + 1)
+            return value
+        monkeypatch.setattr(boundary, "_metadata", metadata)
+    else:
+        def unavailable(pid):
+            raise OSError("actual producer identity unavailable")
+        monkeypatch.setattr(boundary, "read_identity", unavailable)
+    with pytest.raises((ValueError, OSError), match="runtime changed|capability changed|identity unavailable"):
+        boundary._producer_interpreter()
 
 
 def test_exact_origin_stage_domains_missing_roots_and_metadata_only(resources, tmp_path, monkeypatch, boundary):

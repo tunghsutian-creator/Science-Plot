@@ -16,6 +16,7 @@ import sys
 from typing import Any, Mapping, Sequence
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.verification.native_exit_boundary import read_identity
 from sciplot_core.verification.private_process_boundaries import runtime_loader_environment
 from sciplot_core.verification.private_process_boundaries import forbidden_roots
 from sciplot_core.verification.process_private_launch import bound_source_invocation, hold_stdio, launch_facts, launch_prefix, socket_scope_facts, validate_stdio
@@ -84,16 +85,26 @@ def _tool(path: Path) -> dict[str, Any]:
     return {"path": str(actual), "sha256": hashed, "metadata": before}
 
 
+def _producer_interpreter() -> dict[str, Any]:
+    """Bind the actual running image, independently of a requested launcher."""
+    producer = read_identity(os.getpid())
+    tool = _tool(Path(producer.executable))
+    if tool["sha256"] != producer.executable_sha256 or read_identity(os.getpid()) != producer:
+        raise ValueError("Private exclusion producer runtime changed during binding.")
+    return tool
+
+
 def _identity() -> dict[str, Any]:
     if sys.platform != "darwin":
         raise ValueError("Private process exclusion requires the actual Mac capability.")
     uname = os.uname()
     return {"sandbox": _tool(SANDBOX), "env": _tool(ENV), "system": _tool(SYSTEM),
-            "interpreter": _tool(Path(sys.executable)),
+            "interpreter": _producer_interpreter(),
             "os": {"release": uname.release, "version": uname.version, "machine": uname.machine},
             "sources": [_tool(Path(__file__)), _tool(Path(__file__).with_name("public_input_guard.py")),
                         _tool(Path(__file__).with_name("private_process_boundaries.py")),
-                        _tool(Path(__file__).with_name("process_private_launch.py"))]}
+                        _tool(Path(__file__).with_name("process_private_launch.py")),
+                        _tool(Path(__file__).with_name("native_exit_boundary.py"))]}
 
 
 @dataclass(frozen=True)
