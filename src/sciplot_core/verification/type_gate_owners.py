@@ -45,6 +45,7 @@ CHANGED_VERIFICATION_TEST_TARGETS = (
     'tests/test_private_exclusion_phase.py',
     'tests/test_private_audit_runtime.py',
     'tests/test_private_native_exit_port.py',
+    'tests/test_private_live_registration.py',
 )
 
 CHANGED_VERIFICATION_OWNER = ChangedOwner(

@@ -8,6 +8,36 @@ from sciplot_core.verification.private_observer import ZERO, frame_digest, sourc
 from sciplot_core.verification.private_native_exit_port import _live_request, _parent_exit, validated_exits
 
 
+@pytest.mark.comprehensive
+def test_real_metadata_history_precedes_native_registration():
+    """A real public-fixture metadata prefix models the original full-run history.
+
+    Selected before native CLI cases, this supplies the missing composition
+    condition. A full run already beyond this boundary does no duplicate work.
+    It neither invents observer frames nor establishes a kernel actor binding.
+    """
+    import os
+    from pathlib import Path
+    from sciplot_core.verification import private_audit_runtime
+
+    directory = Path(__file__).parent / 'fixtures' / 'performance_comparison'
+    expected = {'material_performance_dense_16.csv', 'material_performance_long.csv'}
+    observer = private_audit_runtime._fixture_observer
+    count = 0
+    while count < 231_000 and (observer.sequence if observer is not None else count) < 231_000:
+        previous = observer.sequence if observer is not None else count
+        with os.scandir(directory) as entries:
+            assert {entry.name for entry in entries} == expected
+        if observer is not None:
+            assert observer.sequence > previous
+        count += 1
+    if observer is not None:
+        assert observer.sequence >= 231_000
+    else:
+        assert count == 231_000
+    assert {entry.name for entry in directory.iterdir()} == expected
+
+
 def producer(tmp_path, pid):
     epoch, token = "a" * 32, "b" * 32
     frame = {"event": "process_start", "pid": pid, "sequence": 0, "previous_sha256": ZERO,
@@ -260,15 +290,18 @@ def _peer_scene(monkeypatch, *, changed_parent=False, peer_pid=302, live=True):
     root = ProcessIdentity(201, 101, os.getuid(), 12, 2, '/modeled/Python', '/tmp', 'a' * 64)
     peer = ProcessIdentity(302, root.pid, root.uid, 13, 3, root.executable, root.cwd, root.executable_sha256)
     calls, frames, registrations = [], [], []
+    def record(row, **kwargs):
+        frame = {**row,'epoch':'primary','pid':101,'sequence':3,'monotonic_ns':3}
+        frames.append(frame)
+        return frame
     observer = SimpleNamespace(epoch='primary', guard=SimpleNamespace(active=False),
-        _audit_socket_scope=({'sockets':['/tmp/source-owned.sock'],'test_nodeid':'actual-node'}, {}),
-        record=lambda row, **kwargs: frames.append({**row,'epoch':'primary','pid':101,'sequence':3,'monotonic_ns':3}))
+        _audit_socket_scope=({'sockets':['/tmp/source-owned.sock'],'test_nodeid':'actual-node'}, {}), record=record)
     instance = port._Port.__new__(port._Port)
     instance.observer, instance.discovered = observer, set()
     attempt = {'nodeid':'actual-node','sha256':'actual-attempt','event':'spawn_attempt',
                'epoch':'primary','child_token':'actual-token','sequence':1,'monotonic_ns':1}
     instance.launches = {'actual-token':(SimpleNamespace(pid=root.pid),attempt,root,False)}
-    instance.register = lambda request: registrations.append(request)
+    instance.register = lambda request, **kwargs: registrations.append(request)
     endpoint = {'device':1,'inode':2,'uid':root.uid,'ctime_ns':3,'mode':0o600}
     owner = {'pid':peer.pid,'device':1,'inode':2,'instance_id':'actual-instance'}
     def identity(pid):

@@ -162,6 +162,19 @@ Within one capture review, validate each complete source exclusion once and reus
 that call-local result for process and socket closure. Retain source drift checks,
 all original validators and the distinction between observed and managed actors.
 
+Keep real-time native registration independent of accumulated primary history.
+The actual source-owned discovery call passes its successfully written current
+request frame, held Popen generation, kernel peer and matching management bit.
+That internal source capability does not replay its own primary stream before
+observing the live identity. A supplied frame from another caller is rejected;
+queued declarations retain their complete historical admission. Final capture
+still checks the entire source exclusion, chained stream, actor launch,
+registration and genuine kernel exit. A registration event may contain UNKNOWN;
+its name does not supply a successful registration or missing terminal fact.
+Retain short/long-prefix and parent-exit ordering controls, including refusal of
+identity drift before the sensor and no retry of UNKNOWN. Generated controls
+do not replace the composed native run and subsequent frozen full capture.
+
 Input scope is independent of lifecycle depth. For a public source checkout use
 `pytest -q --input-scope public-focused`. The public comprehensive CI entry is
 `python -m sciplot_core.verification.public_stage --profile public-comprehensive

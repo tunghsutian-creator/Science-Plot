@@ -78,6 +78,18 @@ gate. The isolated repair uses the existing launch, endpoint and primary sensor
 owners; its pure/static checks do not substitute for the affected composed native
 run or a subsequent complete frozen full capture.
 
+The subsequent frozen 4d09752 run completed 6523 test bodies with 11 warnings,
+but capture remained BLOCKED on 34 connections belonging to four actors. All
+four nodes were in the successful 17-node diagnostic. Their same-source
+component registration took 13–68 ms; full registration took 2.8–5.2 seconds,
+after the CLI parent exited and ppid changed to 1. The sensor correctly returned
+UNKNOWN. Remove duplicate primary-history replay from the actual internal live
+registration path, retaining the successful source frame, held generation,
+kernel peer and management responsibility. Preserve queued historical admission
+and every final chain/source/registration/exit predicate. Deterministic
+short/long-prefix and parent-exit controls must precede composed native and full
+acceptance; neither this diagnosis nor generated controls closes the gate.
+
 The checked-in private dependency inventory remains preliminary. Available
 inputs, successful original-data test bodies and complete child-inclusive
 access capture are separate claims. Neither public CI nor a prior full PASS

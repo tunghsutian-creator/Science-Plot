@@ -336,6 +336,33 @@ def owned_caller(filename: str, function: str) -> dict[str, str] | None:
     return None
 
 
+def live_native_request(observer: Any, request: dict[str, Any], recorded: dict[str, Any] | None,
+                        *, primary: int, node: str) -> bool:
+    """Admit a just-written internal source fact, never a queued declaration.
+
+    A queue has no live frame and retains complete historical admission. An
+    alleged live frame must come from the actual discover call and its successful
+    synchronous writer. Full capture still validates every source/chain/exit.
+    """
+    if recorded is None:
+        return False
+    try:
+        caller = owned_caller('private_native_exit_port.py', '_Port.discover')
+        valid = (caller is not None and caller == request['actor']['owner']
+            and recorded['event'] == 'native_registration_request'
+            and recorded['request'] is request
+            and recorded['epoch'] == request['epoch'] == observer.epoch
+            and recorded['pid'] == primary == os.getpid()
+            and recorded['test_nodeid'] == node
+            and type(recorded['sequence']) is int and recorded['sequence'] >= 0
+            and recorded['sha256'] == frame_digest({key: value for key, value in recorded.items() if key != 'sha256'}))
+    except (AttributeError, KeyError, OSError, TypeError, ValueError):
+        valid = False
+    if not valid:
+        raise ValueError('Native live request has no actual current source record.')
+    return True
+
+
 
 def diagnostic_owner() -> dict[str, str] | None:
     return next((value for filename in ("evidence_identity.py", "private_corpus.py", "process_private_exclusion.py")

@@ -16,7 +16,7 @@ from sciplot_core.plot_protocol.paths import kernel_peer_pid
 from sciplot_core.verification.native_exit_boundary import (
     NativeExitSensor, ProcessIdentity, read_identity, endpoint_identity, validate_exit_fact, validate_registration,
 )
-from sciplot_core.verification.private_process_boundaries import ZERO, executable_hash, frame_digest, source_hashes, owner_identity, owned_caller
+from sciplot_core.verification.private_process_boundaries import ZERO, executable_hash, frame_digest, source_hashes, owner_identity, owned_caller, live_native_request
 
 def _image(identity: ProcessIdentity) -> tuple[str, str]:
     return identity.executable, identity.executable_sha256
@@ -207,14 +207,17 @@ class _Port:
                     request = {"epoch": self.observer.epoch, "token": token if identity.pid == process.pid else uuid4().hex,
                                "identity": identity.to_dict(), "actor": actor}
                     request["generation"] = request["epoch"] + ":" + request["token"]
-                    self.observer.record({"event": "native_registration_request", "request": request}, sync=True)
-                    self.register(request)
+                    recorded = self.observer.record({"event": "native_registration_request", "request": request,
+                        "test_nodeid": active[0]["test_nodeid"]}, sync=True)
+                    if recorded is None:
+                        raise ValueError("Native request was not recorded.")
+                    self.register(request, recorded=recorded)
                     self.discovered.add(generation)
                     break
             except (OSError, ValueError, KeyError, TypeError):
                 continue  # No real peer/ancestry/registration: never invent binding.
 
-    def register(self, request: dict[str, Any]) -> None:
+    def register(self, request: dict[str, Any], *, recorded: dict[str, Any] | None = None) -> None:
         keys = {"generation", "epoch", "token", "identity", "actor"}
         if set(request) != keys or request["generation"] != request["epoch"] + ":" + request["token"]:
             raise ValueError("Native registration request is not closed.")
@@ -229,9 +232,13 @@ class _Port:
             held = self.launches.get(launch["token"])
             if (held is None or held[1]["sha256"] != launch["attempt_sha256"]
                     or held[2].to_dict() != launch["initial"]
+                    or request["actor"].get("default_owned") is not held[3]
+                    or identity.uid != held[2].uid or not (identity.pid == held[0].pid or identity.ppid == held[0].pid)
                     or read_identity(held[0].pid).to_dict() != launch["parent"]):
                 raise ValueError("Native request lost its actual held launch generation.")
-        _live_request(self.observer.directory, request, identity)
+        if not live_native_request(self.observer, request, recorded,
+                primary=self.sensor.binding["watcher_identity"]["pid"], node=scope[0]["test_nodeid"]):
+            _live_request(self.observer.directory, request, identity)
         watcher = ProcessIdentity.from_dict(self.sensor.binding["watcher_identity"])
         if _image(identity) != _image(watcher):
             raise ValueError("Native server executable differs from the actual audit runtime.")
