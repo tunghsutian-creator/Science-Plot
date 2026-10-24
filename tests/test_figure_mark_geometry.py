@@ -53,6 +53,39 @@ LEGACY_HASHES = {
     "interpolated": "770023db2863dea17e9482669b008c8aee0089149ddd7e6e95e0fd14722d793b"}
 
 
+# Errorbar caps include libm results. The unchanged f7063a7 producer matches
+# current geometry exactly on each captured runtime, but log10(11) differs by
+# one ULP between them. Bind these generated structural hashes to the complete
+# response for every log input and the physical half-cap, without OS selection.
+# This does not change scientific hashes or native visual golden authority.
+ERRORBAR_LOG10_INPUTS = (1, 3, 4, 5, 7, 9, 11)
+ERRORBAR_LEGACY_MATH_HASHES = {
+    # Original Darwin CPython 3.14.7 capture, independently checked against the
+    # original f7063a7 functions and the finite reference below on 2026-10-24.
+    (("0x0.0p+0", "0x1.e8927964fd5fdp-2", "0x1.34413509f79ffp-1",
+      "0x1.65df657b04301p-1", "0x1.b0b0b0b78cc3fp-1", "0x1.e8927964fd5fdp-1",
+      "0x1.0a98b6050c56fp+0"), "0x1.ce64945dc0bd4p-8"): LEGACY_HASHES["errorbar"],
+    # Actual Linux CPython 3.12.3, CI run 40056937673 / job 120761870257 at
+    # df3b40d: frozen f7063a7 and current output have identical keys/168 scalars.
+    (("0x0.0p+0", "0x1.e8927964fd5fdp-2", "0x1.34413509f79ffp-1",
+      "0x1.65df657b04301p-1", "0x1.b0b0b0b78cc3fp-1", "0x1.e8927964fd5fdp-1",
+      "0x1.0a98b6050c56ep+0"), "0x1.ce64945dc0bd4p-8"):
+        "f656ee2a797ef444ea4973960c1b85c6d89c8ab5975faea41cc799d0ac796d93",
+}
+
+
+def _errorbar_math_response(ir, view, mark):
+    panel = next(p for p in ir["layout"]["panels"] if p["view_id"] == view["id"])
+    half_cap = mark["style"]["cap_width_pt"] * 25.4 / 72 / panel["plot_mm"][2] / 2
+    return tuple(log10(value).hex() for value in ERRORBAR_LOG10_INPUTS), half_cap.hex()
+
+
+def _errorbar_expected_hash(ir, view, mark):
+    response = _errorbar_math_response(ir, view, mark)
+    assert response in ERRORBAR_LEGACY_MATH_HASHES, f"Uncaptured errorbar math response: {response!r}"
+    return ERRORBAR_LEGACY_MATH_HASHES[response]
+
+
 # Errorbar-only reference from f7063a78a3f24b1f63df9d2298d31696841a9a21,
 # src/sciplot_core/plot_backends/figure_marks.py, source SHA-256
 # 06de119b2a2ef993c6cc254cd0c262d3b2ff7d00f0347e8307f0a2d2b63d8800.
@@ -117,14 +150,16 @@ def errorbar_geometry_diagnostic():
     current_keys = [[list(primitive) for primitive in variant] for variant in current]
     legacy_keys = [[list(primitive) for primitive in variant] for variant in legacy]
     half_cap = mark["style"]["cap_width_pt"] * 25.4 / 72 / ir["layout"]["panels"][0]["plot_mm"][2] / 2
+    response = _errorbar_math_response(ir, view, mark)
     return {"python": sys.version, "platform": sys.platform, "configurations": configurations,
-            "expected_sha256": LEGACY_HASHES["errorbar"],
+            "original_sha256": LEGACY_HASHES["errorbar"],
+            "expected_sha256": ERRORBAR_LEGACY_MATH_HASHES.get(response), "math_response": response,
             "current_sha256": canonical_json_sha256(current, allow_nan=False),
             "legacy_sha256": canonical_json_sha256(legacy, allow_nan=False),
             "same_runtime_exact": current_keys == legacy_keys and current_records == legacy_records,
             "half_cap": {"repr": repr(half_cap), "hex": half_cap.hex()},
             "log10": [{"input": value, "repr": repr(log10(value)), "hex": log10(value).hex()}
-                      for value in (1, 3, 4, 5, 7, 9, 11)],
+                      for value in ERRORBAR_LOG10_INPUTS],
             "current_scalars": current_records,
             "legacy_scalars": legacy_records if current_records != legacy_records else "identical",
             "current_keys": current_keys, "legacy_keys": legacy_keys if current_keys != legacy_keys else "identical"}
@@ -146,7 +181,8 @@ def test_legacy_primitive_dictionary_order_and_numeric_types_are_exact(case):
                 json.dumps(errorbar_geometry_diagnostic()))
             assert _geometry_scalar_records([variants[-1]]) == _geometry_scalar_records([
                 legacy]), json.dumps(errorbar_geometry_diagnostic())
-    assert canonical_json_sha256(variants, allow_nan=False) == LEGACY_HASHES[case], (
+    expected_hash = _errorbar_expected_hash(ir, view, mark) if case == "errorbar" else LEGACY_HASHES[case]
+    assert canonical_json_sha256(variants, allow_nan=False) == expected_hash, (
         json.dumps(errorbar_geometry_diagnostic(), ensure_ascii=False, separators=(",", ":"))
         if case == "errorbar" else case)
     assert ir["datasets"] == original["datasets"]
