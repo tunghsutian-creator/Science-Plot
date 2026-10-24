@@ -60,6 +60,35 @@ contains both focused and comprehensive tiers for its bound runtime and input
 scope; those same tiers do not need separate reruns. Retain the supported-platform
 CI checks. Different evidence modes have different timing contracts, so
 their elapsed-time difference is not an algorithmic speedup measurement.
+For that final snapshot, inspect `--changed --base BASE --plan-only --json`,
+retain its owner mapping and actually collected changed-target node IDs, and
+reconcile them against successfully completed full bodies. The full can supply that assertion
+coverage without executing the changed pytest subset again. Run required
+lint/types/whitespace separately; do not label an unexecuted changed-record
+command PASS. A different snapshot, runtime or input scope cannot share this
+coverage proof. Standard pytest `--durations=30` reports the slowest setup/call/
+teardown reports in the same required run; it does not change selection or
+replace completion/access evidence. Keep `PYTEST_ADDOPTS` unset for known suites.
+
+Recorded changed-check preparation shares only successful raw Mach-O `otool`
+metadata within that one preparation. The memo belongs to the existing runtime
+module; the low-level native observation boundary retains its original duties.
+Each target/tool/source/environment/OS identity and inspector execute permission
+remains fresh, while loader paths, missing candidates, aliases and final captures
+are resolved again. The inspector itself is actually inspected on each graph
+walk; a non-system inspector dependency disables this optimization. Requested or
+active observation keeps the original actual probes. Observation activation after
+a memo hit rejects the preparation without replay. Direct/suite/full and reuse
+validation retain their original preparation path. No graph, PASS, receipt or
+actor proof is cached, and no memo survives the preparation.
+
+One local record/record comparison retained all 1260 selected bodies in order,
+Ruff, scoped types and whitespace: 159.81 seconds before and 148.87 after.
+Commands and inherited environment matched; scientific inputs and Qt/native/font
+bytes matched across modes, with stable identities within each run. The Git index fingerprint
+differed between modes and its prior bytes were not archived. This is a bounded
+single-pair observation, not a stable percentage or full/CI speed claim. Keep
+diagnostic micro timings separate from this end-to-end measurement.
 
 Unknown changed owners fail closed; do not compensate with a full-suite fallback.
 Group and paper leaf owners retain their creation/revision, selection/publication

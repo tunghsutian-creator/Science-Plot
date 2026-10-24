@@ -5,6 +5,7 @@ changed verification does not import this optional fingerprinting path.
 """
 from __future__ import annotations
 
+from contextvars import ContextVar
 import os
 from pathlib import Path
 import re
@@ -14,6 +15,8 @@ from typing import Any
 from sciplot_core.verification.durable_runner import artifact_hashes, run_status, start_run
 from sciplot_core.verification.evidence import atomic_json, check_reuse, load_receipt
 from sciplot_core.verification.evidence_identity import capture_identity, digest
+
+_RECORD_PREPARATION: ContextVar[bool] = ContextVar('sciplot_record_preparation', default=False)
 
 
 def _closed_directory(repo_root: Path, directory: Path) -> Path:
@@ -36,8 +39,10 @@ def _closed_directory(repo_root: Path, directory: Path) -> Path:
 
 def _prepare_specs(plan: dict[str, Any], repo_root: Path, directory: Path) -> list[dict[str, Any]]:
     from sciplot_core.verification.evidence_scope import build_check_spec
+    from sciplot_core.verification.evidence_runtime import _StaticNativeInspections
 
     specs = []
+    inspections = _StaticNativeInspections() if _RECORD_PREPARATION.get() else None
     seen: set[str] = set()
     for check in plan["checks"]:
         check_id = check["check_id"]
@@ -47,7 +52,7 @@ def _prepare_specs(plan: dict[str, Any], repo_root: Path, directory: Path) -> li
         check_dir = _closed_directory(repo_root, directory / check_id)
         environment = dict(os.environ, SCIPLOT_VERIFY_FINISH=str(check_dir / "finish.json"))
         specs.append(build_check_spec(plan, check, repo_root, environment=environment,
-                                      finish_path=check_dir / "finish.json"))
+                                      finish_path=check_dir / "finish.json", _inspections=inspections))
     return specs
 
 
@@ -95,7 +100,11 @@ without restarting missing or interrupted checks.
                 raise ValueError("The requested verification record is unavailable.")
         elif output.exists():
             raise ValueError("The record directory already exists; inspect or reuse its evidence.")
-        specs = _prepare_specs(plan, repo_root, output)
+        preparation = _RECORD_PREPARATION.set(not reuse)
+        try:
+            specs = _prepare_specs(plan, repo_root, output)
+        finally:
+            _RECORD_PREPARATION.reset(preparation)
         recorded_checks = [{"check_id": check["check_id"], "command": spec["command"]}
                            for check, spec in zip(plan["checks"], specs, strict=True)]
         specs = [{**spec, "scope": {**spec["scope"], "check_id": check["check_id"],

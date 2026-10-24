@@ -17,12 +17,60 @@ import sysconfig
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.verification.private_process_boundaries import runtime_loader_environment as runtime_loader_environment
-from sciplot_core.verification.evidence_identity import digest
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
+import sciplot_core.verification.native_probe_boundary as native_probe_boundary
+from sciplot_core.verification.private_process_boundaries import owned_caller, runtime_loader_environment as runtime_loader_environment
+from sciplot_core.verification.evidence_identity import _stable_file, digest
 from sciplot_core.verification.native_probe_boundary import inspector_path, probe_environment, system_identity
 
 QT_MODULES = frozenset({"QtCore", "QtGui", "QtWidgets", "QtPrintSupport", "QtSvg", "QtSvgWidgets", "QtTest", "sip", "uic"})
 QT_PLUGIN_KINDS = frozenset({"platforms", "imageformats", "iconengines", "printsupport", "styles", "platforminputcontexts"})
+
+
+def _observation_requested(environment: dict[str, str]) -> bool:
+    from sciplot_core.verification.private_observer import current_observer
+
+    return (current_observer() is not None or any(key.startswith('SCIPLOT_PRIVATE_AUDIT_')
+            for values in (environment, os.environ) for key in values))
+
+
+class _StaticNativeInspections:
+    """Raw metadata only, owned by one non-observed changed-record preparation."""
+
+    def __init__(self) -> None:
+        self.outputs: dict[str, tuple[str, str]] = {}
+
+    def _unobserved(self, environment: dict[str, str]) -> bool:
+        return not _observation_requested(environment)
+
+    def key(self, tool: Path, target: Path, target_sha: str, inspector_sha: str,
+            environment: dict[str, str], bindings: dict[str, str], bindings_sha: str,
+            owner: dict[str, str] | None, inspector_environment: dict[str, str]) -> str | None:
+        if not self._unobserved(environment):
+            return None
+        if inspector_environment != native_probe_boundary.probe_environment():
+            raise ValueError('native inspector environment is not the fixed probe environment')
+        current = native_probe_boundary.inspector_path()
+        tool_bytes = _stable_file(current)
+        if current != tool or tool_bytes['sha256'] != inspector_sha:
+            raise ValueError('native inspector changed during dependency discovery')
+        source = Path(native_probe_boundary.__file__).resolve()
+        source_bytes = _stable_file(source)
+        runtime_source = Path(__file__).resolve()
+        runtime_bytes = _stable_file(runtime_source)
+        if (owner is None or bindings.get(canonical_json_sha256(str(source), allow_nan=False)) != source_bytes['sha256']
+                or runtime_bytes['sha256'] != owner['source_sha256']
+                or bindings.get(canonical_json_sha256(str(runtime_source), allow_nan=False)) != runtime_bytes['sha256']):
+            raise ValueError('static native inspection has no current source binding')
+        from sciplot_core.verification.private_process_boundaries import runtime_loader_environment
+
+        return canonical_json_sha256({
+            'argv': [[str(tool), mode, str(target)] for mode in ('-L', '-l')],
+            'target_sha256': target_sha, 'tool': tool_bytes,
+            'probe_environment': inspector_environment, 'loader_environment': runtime_loader_environment(environment),
+            'system': _stable_file(native_probe_boundary._SYSTEM), 'host': native_probe_boundary.system_identity(native_probe_boundary._SYSTEM),
+            'owner': owner, 'source': source_bytes, 'runtime_source': runtime_bytes, 'bindings_sha256': bindings_sha,
+        }, allow_nan=False)
 
 
 def qt_import_bindings(roots: list[Path]) -> dict[str, str]:
@@ -70,7 +118,8 @@ def _expand_loader(path: str, binary: Path, executable: Path) -> Path:
 
 def native_dependencies(files: list[str], *, executable: Path,
                         environment: dict[str, str], bindings: dict[str, str] | None = None,
-                        aliases: dict[str, str] | None = None, repo_root: Path | None = None) -> list[Path]:
+                        aliases: dict[str, str] | None = None, repo_root: Path | None = None,
+                        _inspections: _StaticNativeInspections | None = None) -> list[Path]:
     """Resolve the linked non-system native closure, rejecting unknown loaders."""
     if sys.platform != "darwin":
         raise ValueError("default native evidence currently requires macOS")
@@ -82,6 +131,12 @@ def native_dependencies(files: list[str], *, executable: Path,
         known = {Path(name).resolve() for name in files}
         visited: set[Path] = set()
         found: set[Path] = {tool}
+        source_bindings = dict(bindings or {})
+        source_binding_sha = digest(source_bindings) if _inspections is not None else ''
+        pending: dict[str, tuple[str, str]] = {}
+        used_cache = False
+        inspection_owner = owned_caller('evidence_runtime.py', 'native_dependencies') if _inspections is not None else None
+        static_inspector, inspector_sha = False, ''
         def bind_candidates(candidates: set[Path] | list[Path]) -> None:
             found.update(candidates)
             if aliases is not None:
@@ -105,14 +160,36 @@ def native_dependencies(files: list[str], *, executable: Path,
                 continue
             found.add(binary)
             before = file_sha256(binary)
-            output = subprocess.run([str(tool), "-L", str(binary)],
-                                    capture_output=True, text=True, check=True, env=probe_environment()).stdout
-            loads = subprocess.run([str(tool), "-l", str(binary)],
-                                   capture_output=True, text=True, check=True, env=probe_environment()).stdout
+            key = (_inspections.key(tool, binary, before, inspector_sha, environment, source_bindings, source_binding_sha,
+                                    inspection_owner, probe_environment())
+                   if _inspections is not None and static_inspector else None)
+            cached = _inspections.outputs.get(key) if _inspections is not None and key is not None else None
+            if cached is None:
+                output = subprocess.run([str(tool), "-L", str(binary)],
+                                        capture_output=True, text=True, check=True, env=probe_environment()).stdout
+                loads = subprocess.run([str(tool), "-l", str(binary)],
+                                       capture_output=True, text=True, check=True, env=probe_environment()).stdout
+            else:
+                output, loads = cached
+                used_cache = True
             rpaths = re.findall(r"cmd LC_RPATH\s+cmdsize \d+\s+path (.*?) \(offset", loads)
             self_names = set(re.findall(r"cmd LC_ID_DYLIB\s+cmdsize \d+\s+name (.*?) \(offset", loads))
             if before != file_sha256(binary):
                 raise ValueError("native input changed during dependency discovery")
+            if _inspections is not None and static_inspector:
+                after_key = _inspections.key(tool, binary, before, inspector_sha, environment, source_bindings, source_binding_sha,
+                                            inspection_owner, probe_environment())
+                if key is not None and after_key != key:
+                    raise ValueError('static native inspection scope changed during discovery')
+                if key is not None and after_key == key:
+                    pending[key] = (output, loads)
+            if _inspections is not None and binary == tool:
+                # Inspect the tool itself for real on every call. Do not reuse
+                # its output if a future CLT tool loads non-system libraries.
+                inspector_sha = before
+                static_inspector = all(name in self_names or name.startswith(('/usr/lib/', '/System/Library/'))
+                    for line in output.splitlines()[1:] if line.startswith('\t')
+                    if (name := line.strip().split(' (compatibility', 1)[0]))
             if bindings is not None:
                 bindings[digest(str(binary))] = before
             for line in output.splitlines()[1:]:
@@ -147,6 +224,12 @@ def native_dependencies(files: list[str], *, executable: Path,
                 # Missing loader candidates can become preferred without old bytes changing.
                 bind_candidates(candidates)
                 queue.extend(logical)
+        if _inspections is not None:
+            unobserved = _inspections._unobserved(environment)
+            if used_cache and not unobserved:
+                raise ValueError('static native inspection scope changed before discovery completed')
+            if unobserved:
+                _inspections.outputs.update(pending)
         return sorted(found)
 
 

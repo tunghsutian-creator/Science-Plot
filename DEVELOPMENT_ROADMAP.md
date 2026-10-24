@@ -372,6 +372,25 @@ Use the existing unrecorded changed-owner entry for daily feedback and request
 recorded identities when reuse or capture is needed. Measure these evidence modes
 as separate contracts, and retain every assertion and complete release scope.
 
+The next finite preparation slice keeps successful raw native inspector text in
+one operation-local runtime memo. Fresh content/source/tool/environment/OS and
+permission checks remain mandatory; loader/alias/missing membership and canonical
+before/after captures remain uncached. Observation disables reuse, including a
+final activation check after a hit. The original native observation boundary,
+suite/full path and evidence reuse authority stay unchanged. Generated portable
+component controls retain the real unsupported-platform rejection, while actual
+Mac CLT/native workflows still require the real host and complete access evidence.
+A same-environment local record pair retained the same 1260 bodies and four gates:
+159.81 to 148.87 seconds, with the difference chiefly in preparation. It is one
+pair with different Git index fingerprints, not a stable full-suite speedup.
+Long native comprehensive behavior remains a separate cost to reduce; progress
+reporting and the different quick/record evidence contracts do not solve it.
+The next required final full also emits standard pytest slow-report durations;
+existing timestamp gaps alone cannot attribute call/fixture cost. Reconcile the
+changed-owner plan against that exact completed full, preserving standalone
+lint/types/whitespace, native capture and readiness gates instead of repeating
+the changed pytest subset. Do not add another full just to obtain a profile.
+
 Only after speed acceptance, resume complete real ordinary plotting, TTS and
 panel-assembly tasks and the plotting/AI-communication/edit module-boundary review.
 Check the single template entry, explicit overrides and TTS interaction. Derive

@@ -21,7 +21,7 @@ from sciplot_core.verification.evidence_identity import (
     PUBLIC_GOLDEN_REASON, PUBLIC_INPUT_POLICY, PUBLIC_RAW_REASON,
     capture_identity, digest, discover_files, public_test_members,
 )
-from sciplot_core.verification.evidence_runtime import QT_MODULES, native_dependencies, qt_import_bindings, runtime_inputs
+from sciplot_core.verification.evidence_runtime import QT_MODULES, _StaticNativeInspections, native_dependencies, qt_import_bindings, runtime_inputs
 from sciplot_core.verification.input_scope import MANIFEST, PROFILES, load_manifest
 
 POLICY = "changed-owner-repository-runtime-closure-v1"
@@ -208,7 +208,8 @@ def _git_inputs(root: Path) -> list[Path]:
 
 
 def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Path, *,
-                     environment: dict[str, str], finish_path: Path) -> dict[str, Any]:
+                     environment: dict[str, str], finish_path: Path,
+                     _inspections: _StaticNativeInspections | None = None) -> dict[str, Any]:
     """Build the sole trusted CLI default, with fresh discovery on every call."""
     root = repo_root.expanduser().resolve()
     module = _validate_check(plan, check, root)
@@ -297,7 +298,7 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
     native = native_dependencies(sorted({name for key in ("native", "python", "dependencies", "qt")
                                           for name in discovered[key]}),
                                  executable=Path(sys.executable), environment=environment,
-                                 bindings=discovery_bindings, aliases=aliases, repo_root=root)
+                                 bindings=discovery_bindings, aliases=aliases, repo_root=root, _inspections=_inspections)
     inputs["native"]["paths"] = sorted(set(inputs["native"]["paths"]) | {str(path) for path in native})
     # Seal additions/alias changes during graph discovery, as well as file bytes.
     for domain, roots in paths.items():
