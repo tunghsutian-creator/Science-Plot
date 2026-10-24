@@ -139,9 +139,24 @@ def test_original_and_mapped_byte_tampering_cannot_be_hidden_by_group_projection
         [{"column_index": 0}], "tamper")
     execution = load_data_mapping_execution(request["data_mapping_execution"])
     output = Path(execution["outputs"][0]["path"])
-    output.write_text(output.read_text() + "999\n")
-    with pytest.raises(ValueError, match="does not reproduce"):
+    original_source, original_output = source.read_bytes(), output.read_bytes()
+    tampered_output = original_output + b"999\n"
+    output.write_bytes(tampered_output)
+    # Sealed bytes are checked before numeric replay or group projection.
+    with pytest.raises(ValueError) as error:
         _series_from_request(request, base_dir=tmp_path)
+    assert str(error.value) == f"Mapped data output hash mismatch: {output}"
+    assert source.read_bytes() == original_source
+    assert output.read_bytes() == tampered_output
+
+    output.write_bytes(original_output)
+    tampered_source = original_source + b"999,999,999\n"
+    source.write_bytes(tampered_source)
+    with pytest.raises(ValueError) as error:
+        _series_from_request(request, base_dir=tmp_path)
+    assert str(error.value) == "Data mapping source hash changed: original.csv"
+    assert source.read_bytes() == tampered_source
+    assert output.read_bytes() == original_output
 
 
 def test_whole_impact_noninjective_sample_sheet_names_refuse_merge(tmp_path):
