@@ -12,6 +12,7 @@ from sciplot_core.mapping_contract import (
 from sciplot_core.materials_rules import convert_value
 
 from sciplot_core.data_mapping.raw_tables import (
+    MAPPING_NUMERIC_V3, MappingNumericContract, MappingNumericRejected,
     _require_columns,
     _numeric_series,
     _deterministic_sort_key,
@@ -23,6 +24,7 @@ def _apply_transformation(
     frame: pd.DataFrame,
     units: dict[str, str],
     transformation: DeclarativeTransformation,
+    *, numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3,
 ) -> tuple[pd.DataFrame, dict[str, str], dict[str, Any]]:
     operation = transformation.transformation_type
     parameters = transformation.parameters
@@ -62,13 +64,13 @@ def _apply_transformation(
             indexes = [int(index) for index in parameters["row_indices"]]
             outside = [index for index in indexes if index >= len(result)]
             if outside:
-                raise ValueError(
+                raise MappingNumericRejected(
                     f"exclude row_indices are outside the current table: {outside}"
                 )
             result = result.drop(index=result.index[indexes])
         if "where" in parameters:
             masks = [
-                _condition_mask(result, dict(condition))
+                _condition_mask(result, dict(condition), numeric_contract=numeric_contract)
                 for condition in parameters["where"]
             ]
             combined = masks[0]
@@ -96,12 +98,12 @@ def _apply_transformation(
             ascending=parameters.get("ascending", True),
             na_position=str(parameters.get("na_position") or "last"),
             kind="mergesort",
-            key=_deterministic_sort_key,
+            key=lambda values: _deterministic_sort_key(values, numeric_contract=numeric_contract),
         ).reset_index(drop=True)
     elif operation == "unit_convert":
         column = str(parameters["column"])
         output = str(parameters.get("output_column") or column)
-        numeric = _numeric_series(result, column, operation=operation)
+        numeric = _numeric_series(result, column, operation=operation, numeric_contract=numeric_contract)
         converted = numeric.map(
             lambda value: (
                 pd.NA
@@ -119,10 +121,10 @@ def _apply_transformation(
         updated_units[output] = str(parameters["to_unit"])
     elif operation == "derive_ratio":
         numerator = _numeric_series(
-            result, str(parameters["numerator"]), operation=operation
+            result, str(parameters["numerator"]), operation=operation, numeric_contract=numeric_contract
         )
         denominator = _numeric_series(
-            result, str(parameters["denominator"]), operation=operation
+            result, str(parameters["denominator"]), operation=operation, numeric_contract=numeric_contract
         )
         output = str(parameters["output"])
         if output in result.columns:
@@ -130,7 +132,7 @@ def _apply_transformation(
         zero = denominator == 0.0
         if zero.any() and parameters.get("zero_policy", "error") == "error":
             rows = [int(index) for index in denominator.index[zero].tolist()[:8]]
-            raise ValueError(f"derive_ratio denominator is zero at rows {rows}.")
+            raise MappingNumericRejected(f"derive_ratio denominator is zero at rows {rows}.")
         denominator = denominator.mask(zero)
         result[output] = numerator / denominator * float(parameters.get("scale", 1.0))
     elif operation == "normalize_baseline":
@@ -138,10 +140,10 @@ def _apply_transformation(
         output = str(parameters["output"])
         if output in result.columns:
             raise ValueError(f"normalize_baseline output column exists: {output!r}")
-        numeric = _numeric_series(result, column, operation=operation)
+        numeric = _numeric_series(result, column, operation=operation, numeric_contract=numeric_contract)
         finite = numeric[numeric.map(math.isfinite)]
         if finite.empty:
-            raise ValueError("normalize_baseline has no finite values.")
+            raise MappingNumericRejected("normalize_baseline has no finite values.")
         method = str(parameters.get("method") or "first_finite")
         if method == "first_finite":
             baseline = float(finite.iloc[0])
@@ -154,7 +156,7 @@ def _apply_transformation(
         else:
             baseline = float(parameters["value"])
         if not math.isfinite(baseline) or baseline == 0.0:
-            raise ValueError(
+            raise MappingNumericRejected(
                 "normalize_baseline resolved a non-finite or zero baseline."
             )
         result[output] = numeric / baseline
@@ -164,7 +166,7 @@ def _apply_transformation(
         value_columns = [str(column) for column in parameters["value_columns"]]
         _require_columns(result, [*group_by, *value_columns], operation=operation)
         for column in value_columns:
-            result[column] = _numeric_series(result, column, operation=operation)
+            result[column] = _numeric_series(result, column, operation=operation, numeric_contract=numeric_contract)
         grouped = result.groupby(group_by, dropna=False, sort=False)
         method = str(parameters.get("method") or "mean")
         if method == "mean":

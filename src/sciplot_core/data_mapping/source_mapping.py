@@ -24,6 +24,7 @@ from sciplot_core.data_mapping.contracts import (
 )
 
 from sciplot_core.data_mapping.raw_tables import (
+    MAPPING_NUMERIC_V3, MappingNumericContract, MappingNumericRejected,
     _RawTable,
     _read_raw_table,
     _column_mappings_for_source,
@@ -39,6 +40,7 @@ from sciplot_core.data_mapping.transformations import (
 def _apply_source_mapping(
     proposal: DataMappingProposal,
     raw: _RawTable,
+    *, numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3,
 ) -> tuple[pd.DataFrame, dict[str, str], list[dict[str, Any]]]:
     mappings = _column_mappings_for_source(proposal, raw.source.source_id)
     frame = _map_columns(raw, mappings)
@@ -59,7 +61,7 @@ def _apply_source_mapping(
             and raw.source.source_id not in transformation.source_ids
         ):
             continue
-        frame, units, event = _apply_transformation(frame, units, transformation)
+        frame, units, event = _apply_transformation(frame, units, transformation, numeric_contract=numeric_contract)
         parameters = transformation.parameters
         operation = transformation.transformation_type
         if operation == "rename":
@@ -104,7 +106,7 @@ def _apply_source_mapping(
             + ", ".join(dangling_units)
         )
     if frame.empty:
-        raise ValueError(
+        raise MappingNumericRejected(
             f"Data mapping removed every row from {raw.source.source_id!r}."
         )
     primary_numeric_columns &= {str(column) for column in frame.columns}
@@ -119,11 +121,12 @@ def _apply_source_mapping(
             frame,
             column,
             operation="final data mapping validation",
+            numeric_contract=numeric_contract,
         )
         infinite = numeric.notna() & ~numeric.map(math.isfinite)
         if infinite.any():
             rows = [int(index) for index in numeric.index[infinite].tolist()[:8]]
-            raise ValueError(
+            raise MappingNumericRejected(
                 "Final data mapping validation found non-finite values "
                 f"in {column!r} at rows {rows}."
             )
@@ -131,7 +134,7 @@ def _apply_source_mapping(
             numeric.map(math.isfinite).any()
         )
     if not finite_value_found:
-        raise ValueError(
+        raise MappingNumericRejected(
             "Data mapping produced no finite numeric values for "
             f"{raw.source.source_id!r}."
         )
@@ -143,6 +146,7 @@ def _prepare_mapping_frames(
     proposal: DataMappingProposal,
     *,
     source_root: Path,
+    numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3,
 ) -> tuple[
     dict[str, Path],
     dict[str, pd.DataFrame],
@@ -154,14 +158,14 @@ def _prepare_mapping_frames(
     if proposal.table_confirmation:
         from sciplot_core.data_mapping.table_choice import verify_table_confirmation
 
-        verify_table_confirmation(proposal, resolved_sources[proposal.sources[0].source_id])
+        verify_table_confirmation(proposal, resolved_sources[proposal.sources[0].source_id], numeric_contract=numeric_contract)
     frames: dict[str, pd.DataFrame] = {}
     units: dict[str, dict[str, str]] = {}
     events: dict[str, list[dict[str, Any]]] = {}
     headers: dict[str, tuple[str, ...]] = {}
     for reference in proposal.sources:
         raw = _read_raw_table(reference, resolved_sources[reference.source_id])
-        mapped, mapped_units, mapped_events = _apply_source_mapping(proposal, raw)
+        mapped, mapped_units, mapped_events = _apply_source_mapping(proposal, raw, numeric_contract=numeric_contract)
         frames[reference.source_id] = mapped
         units[reference.source_id] = mapped_units
         events[reference.source_id] = mapped_events
@@ -179,7 +183,7 @@ def preview_data_mapping_proposal(
     root = _resolve_source_root(source_root)
     request = _verify_request_binding(resolved, request_path=request_path)
     sources, frames, units, events, headers = _prepare_mapping_frames(
-        resolved, source_root=root
+        resolved, source_root=root, numeric_contract=MAPPING_NUMERIC_V3
     )
     return {
         "kind": DATA_MAPPING_PREVIEW_KIND,

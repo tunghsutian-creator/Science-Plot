@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core.data_mapping.raw_tables import _original_text as _original_text, _read_raw_table
+from sciplot_core.data_mapping.raw_tables import _coerce_mapping_numeric, _original_text as _original_text, _read_raw_table
 from sciplot_core.data_mapping.output_files import _safe_output_name
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.mapping_contract import (
@@ -26,7 +26,7 @@ from sciplot_core.semantic_sources.paired_curve_table_metadata import (
 
 
 def _finite_numeric_column(values: pd.Series) -> bool:
-    numbers = pd.to_numeric(values, errors="coerce")
+    numbers = _coerce_mapping_numeric(values)
     return bool(
         len(numbers)
         and numbers.notna().all()

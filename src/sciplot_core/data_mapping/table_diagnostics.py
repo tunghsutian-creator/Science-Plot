@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
 
 from sciplot_core.data_mapping.table_choice import read_original_table, select_table
+from sciplot_core.data_mapping.raw_tables import _coerce_mapping_numeric
 
 
 def table_diagnostics(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -17,7 +17,7 @@ def table_diagnostics(snapshot: dict[str, Any]) -> dict[str, Any]:
         frame = read_original_table(source, table["sheet"], snapshot["file_sha256"])
         columns = []
         for index in range(min(frame.shape[1], 24)):
-            values = pd.to_numeric(frame.iloc[:, index], errors="coerce").to_numpy(dtype=float)
+            values = _coerce_mapping_numeric(frame.iloc[:, index]).to_numpy(dtype=float)
             rows = np.flatnonzero(np.isfinite(values))
             if not len(rows):
                 continue

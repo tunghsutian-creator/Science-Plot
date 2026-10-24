@@ -13,7 +13,6 @@ from sciplot_core.mapping_contract import (
 
 from sciplot_core.data_mapping.contracts import (
     DATA_MAPPING_EXECUTION_KIND,
-    DATA_MAPPING_EXECUTION_VERSION,
     DATA_MAPPING_PROPOSAL_FILENAME,
     DATA_MAPPING_CONFIRMATION_FILENAME,
     DATA_MAPPING_PREVIEW_FILENAME,
@@ -29,6 +28,7 @@ from sciplot_core.data_mapping.contracts import (
     _resolve_source_root,
     _validate_confirmation,
     _validate_confirmation_paths,
+    verify_data_mapping_sources,
 )
 
 from sciplot_core.data_mapping.source_mapping import (
@@ -43,6 +43,14 @@ from sciplot_core.data_mapping.output_files import (
 from sciplot_core.data_mapping.execution_shared import (
     _mapping_step_parameters,
 )
+from sciplot_core.data_mapping.raw_tables import (
+    LEGACY_MAPPING_NUMERIC_CONTRACTS, MAPPING_NUMERIC_V3,
+    MappingNumericContract, MappingNumericRejected,
+)
+
+
+class MappingReplayMismatch(ValueError):
+    """An admitted historical pipeline does not reproduce the recorded output."""
 
 
 def load_data_mapping_execution(
@@ -59,7 +67,7 @@ def load_data_mapping_execution(
     execution_version = payload.get("version")
     if (
         type(execution_version) is not int
-        or execution_version not in {1, DATA_MAPPING_EXECUTION_VERSION}
+        or execution_version not in {1, 2, 3}
     ):
         raise ValueError(
             f"Unsupported data mapping execution version: {execution_version!r}"
@@ -68,6 +76,21 @@ def load_data_mapping_execution(
         raise ValueError("Data mapping execution is not in passed state.")
     if not verify:
         return payload
+    if execution_version == 3:
+        return _verify_mapping_execution(path, payload, numeric_contract=MAPPING_NUMERIC_V3)
+    mismatch: ValueError | None = None
+    for numeric_contract in LEGACY_MAPPING_NUMERIC_CONTRACTS:
+        try:
+            return _verify_mapping_execution(path, payload, numeric_contract=numeric_contract)
+        except (MappingNumericRejected, MappingReplayMismatch) as exc:
+            mismatch = exc
+    assert mismatch is not None
+    raise mismatch
+
+
+def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
+                              numeric_contract: MappingNumericContract) -> dict[str, Any]:
+    execution_version = payload["version"]
     execution_root = path.parent.resolve()
     proposal_path = Path(str(payload.get("proposal") or "")).expanduser()
     confirmation_path = Path(str(payload.get("confirmation") or "")).expanduser()
@@ -142,10 +165,7 @@ def load_data_mapping_execution(
     if payload.get("request_patch") != json_safe(proposal.request_patch):
         raise ValueError("Data mapping execution request patch mismatch.")
     source_root = _resolve_source_root(str(payload.get("source_root") or ""))
-    sources, frames, units, events, _headers = _prepare_mapping_frames(
-        proposal,
-        source_root=source_root,
-    )
+    sources = verify_data_mapping_sources(proposal, source_root=source_root)
     expected_raw_hashes = {
         source_id: file_sha256(source_path)
         for source_id, source_path in sources.items()
@@ -187,38 +207,14 @@ def load_data_mapping_execution(
             raise ValueError(f"Mapped output path changed for {reference.source_id!r}.")
         if not expected_path.is_file():
             raise FileNotFoundError(f"Mapped data output not found: {expected_path}")
-        expected_frame = frames[reference.source_id]
-        expected_hash = _mapped_csv_sha256(expected_frame, full_precision=proposal.provider == "explicit_table_choice")
-        if (
-            file_sha256(expected_path) != expected_hash
-            or output.get("sha256") != expected_hash
-        ):
-            raise ValueError(f"Mapped data output does not reproduce: {expected_path}")
-        expected_record = {
-            "source_relative_path": reference.relative_path,
-            "source_sha256": reference.sha256,
-            "rows": int(expected_frame.shape[0]),
-            "columns": [str(column) for column in expected_frame.columns],
-            "units": dict(units[reference.source_id]),
-            "sample_label": proposal.sample_labels.get(reference.source_id),
-            "transformations": events[reference.source_id],
-        }
-        for field, expected_value in expected_record.items():
-            if output.get(field) != expected_value:
-                raise ValueError(
-                    "Mapped output metadata mismatch for "
-                    f"{reference.source_id!r}: {field}."
-                )
+        if file_sha256(expected_path) != output.get("sha256"):
+            raise ValueError(f"Mapped data output hash mismatch: {expected_path}")
         expected_output_paths.append(expected_path)
     expected_effective_input = (
         expected_output_paths[0] if len(expected_output_paths) == 1 else data_dir
     )
     if proposal.provider == "explicit_table_choice":
-        from sciplot_core.data_mapping.output_files import paired_table_text
-
         expected_effective_input = execution_root / "selected_pairs.csv"
-        if expected_effective_input.read_bytes() != paired_table_text(proposal, frames).encode("utf-8"):
-            raise ValueError("Selected paired table does not reproduce original values and metadata.")
         expected_output_paths.append(expected_effective_input)
     if (
         Path(str(payload.get("effective_input") or "")).expanduser().resolve()
@@ -277,7 +273,7 @@ def load_data_mapping_execution(
         or mapping_step.get("implementation_ref")
         != "sciplot_core.data_mapping.execute_data_mapping_proposal"
         or mapping_step.get("parameters")
-        != _mapping_step_parameters(proposal, confirmation)
+        != _mapping_step_parameters(proposal, confirmation, execution_version=execution_version)
     ):
         raise ValueError(
             "Active data mapping step no longer matches the confirmed proposal."
@@ -342,6 +338,43 @@ def load_data_mapping_execution(
         or payload.get("superseded_base_transform_ledger_sha256") is not None
     ):
         raise ValueError("Data mapping execution invented superseded base lineage.")
+    # A historical parser is admitted only inside these already verified source,
+    # output, request and ledger seals. Every candidate must reproduce all sources.
+    _sources, frames, units, events, _headers = _prepare_mapping_frames(
+        proposal, source_root=source_root, numeric_contract=numeric_contract,
+    )
+    post_sources = verify_data_mapping_sources(proposal, source_root=source_root)
+    if {source_id: file_sha256(source_path) for source_id, source_path in post_sources.items()} != expected_raw_hashes:
+        raise ValueError("Data mapping execution raw-source proof changed while reconstructing frames.")
+    for reference in proposal.sources:
+        output = output_by_source[reference.source_id]
+        expected_path = Path(str(output["path"])).expanduser().resolve()
+        expected_frame = frames[reference.source_id]
+        expected_hash = _mapped_csv_sha256(expected_frame, full_precision=proposal.provider == "explicit_table_choice")
+        if file_sha256(expected_path) != expected_hash or output.get("sha256") != expected_hash:
+            raise MappingReplayMismatch(f"Mapped data output does not reproduce: {expected_path}")
+        expected_record = {
+            "source_relative_path": reference.relative_path, "source_sha256": reference.sha256,
+            "rows": int(expected_frame.shape[0]), "columns": [str(column) for column in expected_frame.columns],
+            "units": dict(units[reference.source_id]), "sample_label": proposal.sample_labels.get(reference.source_id),
+            "transformations": events[reference.source_id],
+        }
+        for field, expected_value in expected_record.items():
+            if output.get(field) != expected_value:
+                raise MappingReplayMismatch(f"Mapped output metadata mismatch for {reference.source_id!r}: {field}.")
+    if proposal.provider == "explicit_table_choice":
+        from sciplot_core.data_mapping.output_files import paired_table_text
+        if expected_effective_input.read_bytes() != paired_table_text(proposal, frames).encode("utf-8"):
+            raise MappingReplayMismatch("Selected paired table does not reproduce original values and metadata.")
+    # Retain the original late seed/ledger checks after complete frame/output replay.
+    post_frame_seals = [(seed, payload.get("request_seed_sha256"), "Immutable mapped request seed hash mismatch."),
+                        (ledger, payload.get("transform_ledger_sha256"), "Active data mapping transform ledger hash mismatch.")]
+    if base_transform_ledger is not None:
+        post_frame_seals.append((Path(str(superseded_ledger_value)).expanduser(),
+                                 payload.get("superseded_base_transform_ledger_sha256"), "Superseded base transform ledger hash mismatch."))
+    for sealed_path, sealed_sha256, message in post_frame_seals:
+        if not sealed_path.is_file() or file_sha256(sealed_path) != sealed_sha256:
+            raise ValueError(message)
     verified = deepcopy(payload)
     verified["confirmation_schema_version"] = 1 if legacy_confirmation else 2
     verified["confirmation_migration_required"] = legacy_confirmation

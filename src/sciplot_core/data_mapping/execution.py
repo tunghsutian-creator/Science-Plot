@@ -42,6 +42,7 @@ from sciplot_core.data_mapping.contracts import (
     _verify_request_binding,
     _validate_confirmation,
     _validate_confirmation_paths,
+    verify_data_mapping_sources,
 )
 
 from sciplot_core.data_mapping.source_mapping import (
@@ -67,6 +68,7 @@ from sciplot_core.data_mapping.execution_shared import (
 from sciplot_core.data_mapping.execution_loading import (
     load_data_mapping_execution,
 )
+from sciplot_core.data_mapping.raw_tables import MAPPING_NUMERIC_V3
 
 
 def _validate_existing_execution(
@@ -124,6 +126,13 @@ def execute_data_mapping_proposal(
         request_path=request_file,
         output_root=mapping_root,
     )
+    verify_data_mapping_sources(resolved, source_root=root)
+    final_root = mapping_root / resolved.proposal_id
+    final_execution = final_root / DATA_MAPPING_EXECUTION_FILENAME
+    if final_root.exists():
+        return _validate_existing_execution(
+            final_execution, proposal=resolved, confirmation=receipt, request_path=request_file,
+        )
     base_request = _read_json(request_file)
     preview = preview_data_mapping_proposal(
         resolved,
@@ -131,18 +140,9 @@ def execute_data_mapping_proposal(
         request_path=request_file,
     )
     sources, frames, units, events, _headers = _prepare_mapping_frames(
-        resolved, source_root=root
+        resolved, source_root=root, numeric_contract=MAPPING_NUMERIC_V3
     )
     mapping_root.mkdir(parents=True, exist_ok=True)
-    final_root = mapping_root / resolved.proposal_id
-    final_execution = final_root / DATA_MAPPING_EXECUTION_FILENAME
-    if final_root.exists():
-        return _validate_existing_execution(
-            final_execution,
-            proposal=resolved,
-            confirmation=receipt,
-            request_path=request_file,
-        )
 
     temporary = Path(
         tempfile.mkdtemp(
@@ -198,7 +198,7 @@ def execute_data_mapping_proposal(
             implementation_ref=(
                 "sciplot_core.data_mapping.execute_data_mapping_proposal"
             ),
-            parameters=_mapping_step_parameters(resolved, receipt),
+            parameters=_mapping_step_parameters(resolved, receipt, execution_version=DATA_MAPPING_EXECUTION_VERSION),
         )
         final_step = _rebase_paths(step, source=temporary, target=final_root)
         study_model = (

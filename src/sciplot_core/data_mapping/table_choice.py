@@ -10,7 +10,9 @@ from typing import Any
 import pandas as pd
 import numpy as np
 
-from sciplot_core.data_mapping.raw_tables import _original_text
+from sciplot_core.data_mapping.raw_tables import (
+    MAPPING_NUMERIC_V3, MappingNumericContract, MappingNumericRejected, _coerce_mapping_numeric, _original_text,
+)
 from sciplot_core.data_mapping.curve_support import supports_replicate_mapping, supports_table_mapping
 from sciplot_core.data_mapping.table_metadata import resolve_column_metadata
 from sciplot_core.data_mapping.output_files import _safe_output_name
@@ -42,23 +44,26 @@ def table_choice_snapshot(source: Path, rule_id: str, *, sheets: list[str | None
 
 
 def _numeric_summary(source: Path, sheet: str | None, digest: str,
-                     frame: pd.DataFrame, start: int, end: int) -> pd.DataFrame:
+                     frame: pd.DataFrame, start: int, end: int, *,
+                     numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3) -> pd.DataFrame:
     """Reuse byte-bound numeric facts, never scientific eligibility or declarations."""
     def scan() -> pd.DataFrame:
         summaries = []
         for column in range(frame.shape[1]):
-            numbers = pd.to_numeric(frame.iloc[start:end, column], errors="coerce").to_numpy(dtype=float)
+            numbers = _coerce_mapping_numeric(frame.iloc[start:end, column], numeric_contract=numeric_contract,
+                                              legacy_pandas=True).to_numpy(dtype=float)
             invalid = np.flatnonzero(~np.isfinite(numbers))
             rows = (invalid[:16] + start).tolist()
             summaries.append([len(invalid), *rows, *([-1] * (16 - len(rows)))])
         return pd.DataFrame(summaries)
 
-    return read_table_once(source, ("mapping_numeric_facts", sheet, start, end), scan,
+    return read_table_once(source, ("mapping_numeric_facts", sheet, start, end, numeric_contract), scan,
                            expected_sha256=digest, content_only=True)
 
 
 def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
-                 metadata_confirmations: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+                 metadata_confirmations: list[dict[str, Any]] | None = None, *,
+                 numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3) -> dict[str, Any]:
     """Bind explicit metadata/data rows without filling blanks or guessing samples."""
     source = Path(snapshot["source"])
     # Selection validates original evidence. Discovery/proposal callers retain
@@ -101,7 +106,8 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
 
         expanded, anchors, associations = selected_metadata_cells(
             frame, metadata, ranges=merged_metadata_ranges(source, selection["sheet"]), data_start=start)
-    numeric_summary = _numeric_summary(source, selection["sheet"], snapshot["file_sha256"], frame, start, end)
+    numeric_summary = _numeric_summary(source, selection["sheet"], snapshot["file_sha256"], frame, start, end,
+                                       numeric_contract=numeric_contract)
     columns = []
     for column in range(frame.shape[1]):
         evidence = {f"{row},{column}": _original_text(frame.iat[row, column]) for row in metadata}
@@ -175,7 +181,8 @@ def _numeric_label(label: str) -> bool:
     return True
 
 
-def _pair_columns(snapshot: dict[str, Any], pair: dict[str, Any]) -> dict[str, Any]:
+def _pair_columns(snapshot: dict[str, Any], pair: dict[str, Any], *,
+                  numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3) -> dict[str, Any]:
     required = {"x_column", "y_column"}
     if (not isinstance(pair, dict) or not required <= set(pair)
             or set(pair) - required - {"table_selection", "metadata_confirmations", "label"}
@@ -192,12 +199,19 @@ def _pair_columns(snapshot: dict[str, Any], pair: dict[str, Any]) -> dict[str, A
     if confirmations is None:
         raise ValueError("metadata_confirmations must be a complete list; use [] to withdraw.")
     if selection == snapshot["table_selection"] and confirmations == snapshot.get("metadata_confirmations", []):
-        return snapshot
-    return select_table(snapshot["table_snapshot"], selection, confirmations)
+        selected = snapshot
+    else:
+        selected = select_table(snapshot["table_snapshot"], selection, confirmations, numeric_contract=numeric_contract)
+    if numeric_contract != MAPPING_NUMERIC_V3:
+        columns = {column["index"]: column for column in selected["columns"]}
+        if any(not columns[pair[axis]]["numeric"]["valid"] for axis in ("x_column", "y_column") if pair[axis] in columns):
+            raise MappingNumericRejected("Confirmed XY cells are not finite under this historical mapping pipeline.")
+    return selected
 
 
 def replicate_proposal_contents(snapshot: dict[str, Any], replicates: list[dict[str, Any]], *,
-                                structured_identity: bool = False) -> dict[str, Any]:
+                                structured_identity: bool = False,
+                                numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3) -> dict[str, Any]:
     """Bind complete physical domains, retaining null positions and metadata."""
     if not supports_replicate_mapping(get_rule(snapshot["rule_id"])):
         raise ValueError("This source adapter does not consume independent replicate columns.")
@@ -218,7 +232,7 @@ def replicate_proposal_contents(snapshot: dict[str, Any], replicates: list[dict[
             raise ValueError("A replicate region must be a complete original table_selection.")
         inherited = snapshot.get("metadata_confirmations", []) if selection.get("sheet") == snapshot["table_selection"]["sheet"] else []
         confirmations = choice.get("metadata_confirmations", inherited)
-        facts = select_table(snapshot["table_snapshot"], selection, confirmations)
+        facts = select_table(snapshot["table_snapshot"], selection, confirmations, numeric_contract=numeric_contract)
         column = next((item for item in facts["columns"] if item["index"] == choice["column_index"]), None)
         if column is None or not column["sample"] or column["metadata_conflicts"]:
             raise ValueError("A replicate column needs its exact original sample and unconflicted metadata.")
@@ -278,12 +292,15 @@ def replicate_proposal_contents(snapshot: dict[str, Any], replicates: list[dict[
 
 
 def _proposal_contents(snapshot: dict[str, Any], pairs: list[dict[str, Any]], *,
-                       structured_identity: bool = False) -> dict[str, Any]:
-    return pair_proposal_contents(snapshot, pairs, select_pair=_pair_columns,
+                       structured_identity: bool = False,
+                       numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3) -> dict[str, Any]:
+    return pair_proposal_contents(snapshot, pairs,
+                                  select_pair=lambda table, pair: _pair_columns(table, pair, numeric_contract=numeric_contract),
                                   structured_identity=structured_identity)
 
 
-def verify_table_confirmation(proposal: DataMappingProposal, source: Path) -> None:
+def verify_table_confirmation(proposal: DataMappingProposal, source: Path, *,
+                               numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3) -> None:
     """Rebuild mapping meaning from source and frozen evidence at preview/execution/export."""
     binding = proposal.table_confirmation
     if not binding:
@@ -295,11 +312,11 @@ def verify_table_confirmation(proposal: DataMappingProposal, source: Path) -> No
                 else table_choice_snapshot(source, binding["rule_id"], sheets=sheets))
     if snapshot is None:
         raise ValueError("Confirmed table source is no longer supported.")
-    columns = select_table(snapshot, binding["selection"], binding["metadata_confirmations"])
+    columns = select_table(snapshot, binding["selection"], binding["metadata_confirmations"], numeric_contract=numeric_contract)
     if "replicates" in binding:
         expected = replicate_proposal_contents(columns, binding["replicates"],
-                                               structured_identity=bool(proposal.sources[0].identity))
+                                               structured_identity=bool(proposal.sources[0].identity), numeric_contract=numeric_contract)
     else:
-        expected = _proposal_contents(columns, binding["pairs"], structured_identity=bool(proposal.sources[0].identity))
+        expected = _proposal_contents(columns, binding["pairs"], structured_identity=bool(proposal.sources[0].identity), numeric_contract=numeric_contract)
     if any(getattr(proposal, key) != value for key, value in expected.items()) or proposal.transformations or proposal.request_patch:
         raise ValueError("Confirmed table metadata does not reproduce the proposed mapping.")

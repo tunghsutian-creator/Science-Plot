@@ -12,12 +12,16 @@ from sciplot_core.mapping_contract import (
 from sciplot_core.data_mapping.contracts import (
     data_mapping_proposal_sha256,
 )
+from sciplot_core.source_tables.parsing import DECIMAL_ROUND_TRIP_ENCODING_V2
 
 
 def _mapping_step_parameters(
     proposal: DataMappingProposal,
     confirmation: DataMappingConfirmation | LegacyDataMappingConfirmation,
+    *, execution_version: int = 2,
 ) -> dict[str, Any]:
+    if execution_version not in {1, 2, 3}:
+        raise ValueError(f"Unsupported data mapping execution version: {execution_version!r}")
     return {
         "proposal_id": proposal.proposal_id,
         "proposal_sha256": data_mapping_proposal_sha256(proposal),
@@ -32,4 +36,5 @@ def _mapping_step_parameters(
         "request_patch": proposal.request_patch,
         "raw_sources_preserved": True,
         "silent_omission_allowed": False,
+        **({"source_numeric_encoding": DECIMAL_ROUND_TRIP_ENCODING_V2} if execution_version == 3 else {}),
     }

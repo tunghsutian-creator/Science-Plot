@@ -10,7 +10,8 @@ import pandas as pd
 
 SOURCE_NUMERIC_ENCODING_KEY = "source_numeric_encoding"
 DECIMAL_ROUND_TRIP_ENCODING_V1 = "decimal_float64_round_trip_v1"
-DECIMAL_ROUND_TRIP_ENCODING = "decimal_float64_round_trip_v2"
+DECIMAL_ROUND_TRIP_ENCODING_V2 = "decimal_float64_round_trip_v2"
+DECIMAL_ROUND_TRIP_ENCODING = DECIMAL_ROUND_TRIP_ENCODING_V2
 _DECIMAL = re.compile(r"[ \t\r\n\v\f]*([+-]?)([0-9]*)(?:\.([0-9]*))?(?:[eE]([ \t\r\n\v\f]*[+-]?[0-9]+))?[ \t\r\n\v\f]*\Z")
 _POWERS_OF_TEN = tuple(float(f"1e{index}") for index in range(309))
 
@@ -102,7 +103,7 @@ def coerce_numeric_series(values: pd.Series, *, encoding: str = DECIMAL_ROUND_TR
     The compatibility order affects only v1's old fallback; None reconstructs
     its later strict grammar. Valid ordinary decimals always round exactly.
     """
-    if encoding not in (DECIMAL_ROUND_TRIP_ENCODING_V1, DECIMAL_ROUND_TRIP_ENCODING):
+    if encoding not in (DECIMAL_ROUND_TRIP_ENCODING_V1, DECIMAL_ROUND_TRIP_ENCODING_V2):
         raise ValueError("Unknown managed source numeric encoding.")
     return _coerce_numeric_series(values, encoding=encoding, fused_digits=None, compatibility_fused_digits=compatibility_fused_digits)
 
@@ -150,7 +151,7 @@ def _numeric_text(value: Any, *, encoding: str, fused_digits: bool | None,
         except UnicodeDecodeError:
             return math.nan
     if "\x00" in value:
-        if encoding == DECIMAL_ROUND_TRIP_ENCODING or compatibility_fused_digits is None:
+        if encoding == DECIMAL_ROUND_TRIP_ENCODING_V2 or compatibility_fused_digits is None:
             return math.nan
         token = value.partition("\x00")[0]
     else:
@@ -166,7 +167,7 @@ def _numeric_text(value: Any, *, encoding: str, fused_digits: bool | None,
                 return integer
     if fused_digits is not None:
         return _legacy_decimal(match, fused_digits=fused_digits)
-    if encoding == DECIMAL_ROUND_TRIP_ENCODING and match[4] is not None:
+    if encoding == DECIMAL_ROUND_TRIP_ENCODING_V2 and match[4] is not None:
         return float(f"{match[1]}{match[2]}.{match[3] or ''}e{match[4].strip()}")
     try:
         return float(value)

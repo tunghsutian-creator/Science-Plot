@@ -6,12 +6,15 @@ from dataclasses import dataclass
 from io import StringIO
 import csv
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 import pandas as pd
 from sciplot_core.foundation.text_files import decode_text
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.source_tables.read_session import read_table_once
-from sciplot_core.source_tables.parsing import coerce_numeric_series
+from sciplot_core.source_tables.parsing import (
+    DECIMAL_ROUND_TRIP_ENCODING_V1, DECIMAL_ROUND_TRIP_ENCODING_V2,
+    coerce_legacy_numeric_series, coerce_numeric_series,
+)
 from sciplot_core.mapping_contract import (
     DataColumnMapping,
     DataMappingProposal,
@@ -23,6 +26,30 @@ from sciplot_core.data_mapping.contracts import (
     _NUMERIC_COLUMN_ROLES,
     _DECIMAL_COMMA_NUMBER,
 )
+
+MappingNumericContract = Literal["v3", "legacy_fused", "legacy_round_trip"]
+MAPPING_NUMERIC_V3: MappingNumericContract = "v3"
+LEGACY_MAPPING_NUMERIC_CONTRACTS: tuple[MappingNumericContract, ...] = (
+    "legacy_fused", "legacy_round_trip",
+)
+
+
+class MappingNumericRejected(ValueError):
+    """One reconstruction rejects numeric cells or a declared numeric domain."""
+
+
+def _coerce_mapping_numeric(values: pd.Series, *, numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3,
+                            legacy_pandas: bool = False) -> pd.Series:
+    """Keep one coherent historical pipeline, including its old sort distinction."""
+    if numeric_contract == "v3":
+        return coerce_numeric_series(values, encoding=DECIMAL_ROUND_TRIP_ENCODING_V2)
+    if numeric_contract == "legacy_round_trip":
+        return coerce_numeric_series(values, encoding=DECIMAL_ROUND_TRIP_ENCODING_V1, compatibility_fused_digits=None)
+    if numeric_contract == "legacy_fused":
+        if legacy_pandas:
+            return coerce_legacy_numeric_series(values, fused_digits=True)
+        return coerce_numeric_series(values, encoding=DECIMAL_ROUND_TRIP_ENCODING_V1, compatibility_fused_digits=True)
+    raise ValueError(f"Unsupported mapping numeric contract: {numeric_contract!r}")
 
 
 @dataclass
@@ -227,26 +254,28 @@ def _numeric_series(
     column: str,
     *,
     operation: str,
+    numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3,
 ) -> pd.Series:
     _require_columns(frame, [column], operation=operation)
     source = frame[column]
-    numeric = coerce_numeric_series(source)
+    numeric = _coerce_mapping_numeric(source, numeric_contract=numeric_contract)
     invalid = source.notna() & numeric.isna()
     if invalid.any():
         rows = [int(index) for index in source.index[invalid].tolist()[:8]]
-        raise ValueError(
+        raise MappingNumericRejected(
             f"{operation} found non-numeric values in {column!r} at rows {rows}."
         )
     return numeric.astype(float)
 
 
-def _deterministic_sort_key(series: pd.Series) -> pd.Series:
-    numeric = pd.to_numeric(series, errors="coerce")
+def _deterministic_sort_key(series: pd.Series, *, numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3) -> pd.Series:
+    numeric = _coerce_mapping_numeric(series, numeric_contract=numeric_contract, legacy_pandas=True)
     invalid = series.notna() & numeric.isna()
     return series if invalid.any() else numeric
 
 
-def _condition_mask(frame: pd.DataFrame, condition: dict[str, Any]) -> pd.Series:
+def _condition_mask(frame: pd.DataFrame, condition: dict[str, Any], *,
+                    numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3) -> pd.Series:
     column = str(condition["column"])
     _require_columns(frame, [column], operation="exclude where")
     operator = str(condition["operator"])
@@ -264,7 +293,7 @@ def _condition_mask(frame: pd.DataFrame, condition: dict[str, Any]) -> pd.Series
         return series.isin(value)
     if operator == "not_in":
         return ~series.isin(value)
-    numeric = _numeric_series(frame, column, operation=f"exclude {operator}")
+    numeric = _numeric_series(frame, column, operation=f"exclude {operator}", numeric_contract=numeric_contract)
     scalar = float(value)
     if operator == "lt":
         return numeric < scalar
