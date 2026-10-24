@@ -55,6 +55,11 @@ to shared task contracts, storage or CLI parser/dispatch retain the broad task g
 Run the scoped static type gate when changing a file
 declared under `[tool.mypy]` in `pyproject.toml`.
 Its exact scope and strictness belong to `pyproject.toml`.
+CI checks both `mypy --platform linux` and `mypy --platform darwin` over that
+same scope. Keep platform-only implementations in explicit guarded branches;
+an unconditional raising guard followed by a platform-only body can become an
+unreachable-code error on the other target. Retain the runtime platform/ABI
+rejections and `warn_unreachable`; target selection never changes the host OS.
 Do not weaken checks or remove coverage to pass a gate.
 
 Historical native goldens bind the actual Python binary, Qt and font identities.

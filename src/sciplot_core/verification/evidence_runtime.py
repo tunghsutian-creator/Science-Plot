@@ -74,79 +74,80 @@ def native_dependencies(files: list[str], *, executable: Path,
     """Resolve the linked non-system native closure, rejecting unknown loaders."""
     if sys.platform != "darwin":
         raise ValueError("default native evidence currently requires macOS")
-    runtime_loader_environment(environment)
-    queue = [Path(name) for name in files if _native_entrypoint(name)]
-    tool = inspector_path()
-    queue.extend((executable.resolve(), tool))
-    known = {Path(name).resolve() for name in files}
-    visited: set[Path] = set()
-    found: set[Path] = {tool}
-    def bind_candidates(candidates: set[Path] | list[Path]) -> None:
-        found.update(candidates)
-        if aliases is not None:
-            for candidate in candidates:
-                aliases[digest(str(candidate.absolute()))] = digest(str(candidate.resolve()) if candidate.exists() else "missing")
+    else:
+        runtime_loader_environment(environment)
+        queue = [Path(name) for name in files if _native_entrypoint(name)]
+        tool = inspector_path()
+        queue.extend((executable.resolve(), tool))
+        known = {Path(name).resolve() for name in files}
+        visited: set[Path] = set()
+        found: set[Path] = {tool}
+        def bind_candidates(candidates: set[Path] | list[Path]) -> None:
+            found.update(candidates)
+            if aliases is not None:
+                for candidate in candidates:
+                    aliases[digest(str(candidate.absolute()))] = digest(str(candidate.resolve()) if candidate.exists() else "missing")
 
-    child_root = repo_root if repo_root is not None else Path.cwd()
-    overrides = [Path(value) if Path(value).is_absolute() else child_root / value
-                 for value in environment.get("DYLD_FRAMEWORK_PATH", "").split(os.pathsep) if value]
-    # Loader-inherited rpaths may point to other already bound Qt framework dirs.
-    framework_roots = {Path(str(path).split(".framework/", 1)[0] + ".framework").parent for path in known
-                       if ".framework/Versions/" in str(path) and path.is_file()}
-    while queue:
-        binary = queue.pop().resolve()
-        if binary in visited:
-            continue
-        visited.add(binary)
-        with binary.open("rb") as stream:
-            magic = stream.read(4)
-        if magic not in {b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca"}:
-            continue
-        found.add(binary)
-        before = file_sha256(binary)
-        output = subprocess.run([str(tool), "-L", str(binary)],
-                                capture_output=True, text=True, check=True, env=probe_environment()).stdout
-        loads = subprocess.run([str(tool), "-l", str(binary)],
-                               capture_output=True, text=True, check=True, env=probe_environment()).stdout
-        rpaths = re.findall(r"cmd LC_RPATH\s+cmdsize \d+\s+path (.*?) \(offset", loads)
-        self_names = set(re.findall(r"cmd LC_ID_DYLIB\s+cmdsize \d+\s+name (.*?) \(offset", loads))
-        if before != file_sha256(binary):
-            raise ValueError("native input changed during dependency discovery")
-        if bindings is not None:
-            bindings[digest(str(binary))] = before
-        for line in output.splitlines()[1:]:
-            if not line.startswith("\t"):
-                continue  # Universal Mach-O repeats an architecture header.
-            name = line.strip().split(" (compatibility", 1)[0]
-            if name in self_names or not name:
+        child_root = repo_root if repo_root is not None else Path.cwd()
+        overrides = [Path(value) if Path(value).is_absolute() else child_root / value
+                     for value in environment.get("DYLD_FRAMEWORK_PATH", "").split(os.pathsep) if value]
+        # Loader-inherited rpaths may point to other already bound Qt framework dirs.
+        framework_roots = {Path(str(path).split(".framework/", 1)[0] + ".framework").parent for path in known
+                           if ".framework/Versions/" in str(path) and path.is_file()}
+        while queue:
+            binary = queue.pop().resolve()
+            if binary in visited:
                 continue
-            # dyld tries framework overrides in declared order before the
-            # install name, including existing absolute and system frameworks.
-            framework = re.search(r"(?:^|/)([^/]+)\.framework/(?:Versions/[^/]+/)?\1$", name)
-            preferred = [root / framework.group(0).lstrip("/") for root in overrides] if framework else []
-            bind_candidates(preferred)
-            selected_override = next((path for path in preferred if path.is_file()), None)
-            if selected_override is not None:
-                queue.append(selected_override)
+            visited.add(binary)
+            with binary.open("rb") as stream:
+                magic = stream.read(4)
+            if magic not in {b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca"}:
                 continue
-            if name.startswith(("/usr/lib/", "/System/Library/")):
-                continue
-            if name.startswith("@rpath/"):
-                suffix = name.removeprefix("@rpath/")
-                candidates = {_expand_loader(path, binary, executable) / suffix for path in rpaths}
-                if not any(path.is_file() for path in candidates):
-                    candidates.update(root / suffix for root in framework_roots)
-            else:
-                candidates = {_expand_loader(name, binary, executable)}
-            resolved = {path.resolve() for path in candidates if path.is_file()}
-            if len(resolved) != 1:
-                raise ValueError(f"native dependency is unresolved or ambiguous: {binary.name} -> {Path(name).name}")
-            dependency = resolved.pop()
-            logical = [path for path in candidates if path.is_file() and path.resolve() == dependency]
-            # Missing loader candidates can become preferred without old bytes changing.
-            bind_candidates(candidates)
-            queue.extend(logical)
-    return sorted(found)
+            found.add(binary)
+            before = file_sha256(binary)
+            output = subprocess.run([str(tool), "-L", str(binary)],
+                                    capture_output=True, text=True, check=True, env=probe_environment()).stdout
+            loads = subprocess.run([str(tool), "-l", str(binary)],
+                                   capture_output=True, text=True, check=True, env=probe_environment()).stdout
+            rpaths = re.findall(r"cmd LC_RPATH\s+cmdsize \d+\s+path (.*?) \(offset", loads)
+            self_names = set(re.findall(r"cmd LC_ID_DYLIB\s+cmdsize \d+\s+name (.*?) \(offset", loads))
+            if before != file_sha256(binary):
+                raise ValueError("native input changed during dependency discovery")
+            if bindings is not None:
+                bindings[digest(str(binary))] = before
+            for line in output.splitlines()[1:]:
+                if not line.startswith("\t"):
+                    continue  # Universal Mach-O repeats an architecture header.
+                name = line.strip().split(" (compatibility", 1)[0]
+                if name in self_names or not name:
+                    continue
+                # dyld tries framework overrides in declared order before the
+                # install name, including existing absolute and system frameworks.
+                framework = re.search(r"(?:^|/)([^/]+)\.framework/(?:Versions/[^/]+/)?\1$", name)
+                preferred = [root / framework.group(0).lstrip("/") for root in overrides] if framework else []
+                bind_candidates(preferred)
+                selected_override = next((path for path in preferred if path.is_file()), None)
+                if selected_override is not None:
+                    queue.append(selected_override)
+                    continue
+                if name.startswith(("/usr/lib/", "/System/Library/")):
+                    continue
+                if name.startswith("@rpath/"):
+                    suffix = name.removeprefix("@rpath/")
+                    candidates = {_expand_loader(path, binary, executable) / suffix for path in rpaths}
+                    if not any(path.is_file() for path in candidates):
+                        candidates.update(root / suffix for root in framework_roots)
+                else:
+                    candidates = {_expand_loader(name, binary, executable)}
+                resolved = {path.resolve() for path in candidates if path.is_file()}
+                if len(resolved) != 1:
+                    raise ValueError(f"native dependency is unresolved or ambiguous: {binary.name} -> {Path(name).name}")
+                dependency = resolved.pop()
+                logical = [path for path in candidates if path.is_file() and path.resolve() == dependency]
+                # Missing loader candidates can become preferred without old bytes changing.
+                bind_candidates(candidates)
+                queue.extend(logical)
+        return sorted(found)
 
 
 def runtime_inputs(*, repo_root: Path, environment: dict[str, str]) -> tuple[dict[str, list[Path]], dict[str, Any]]:

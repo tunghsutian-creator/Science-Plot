@@ -66,12 +66,13 @@ class ProcessIdentity:
 def _libproc() -> ctypes.CDLL:
     if sys.platform != 'darwin' or struct.calcsize('P') != 8 or sys.byteorder != 'little':
         raise OSError('unsupported libproc ABI')
-    lib = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
-    lib.proc_pidinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
-    lib.proc_pidinfo.restype = ctypes.c_int
-    lib.proc_pidpath.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
-    lib.proc_pidpath.restype = ctypes.c_int
-    return lib
+    else:
+        lib = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+        lib.proc_pidinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
+        lib.proc_pidinfo.restype = ctypes.c_int
+        lib.proc_pidpath.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+        lib.proc_pidpath.restype = ctypes.c_int
+        return lib
 
 
 def read_identity(pid: int) -> ProcessIdentity:
@@ -109,7 +110,6 @@ class _DlInfo(ctypes.Structure):
 def _runtime_binding() -> dict[str, Any]:
     """Bind actual function-address images; shared-cache images bind sealed OS bytes."""
     import _ctypes
-
     loader, lib = ctypes.CDLL(None), _libproc()
     loader.dladdr.argtypes = [ctypes.c_void_p, ctypes.POINTER(_DlInfo)]
     loader.dladdr.restype = ctypes.c_int

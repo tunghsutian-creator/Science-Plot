@@ -97,14 +97,15 @@ def _producer_interpreter() -> dict[str, Any]:
 def _identity() -> dict[str, Any]:
     if sys.platform != "darwin":
         raise ValueError("Private process exclusion requires the actual Mac capability.")
-    uname = os.uname()
-    return {"sandbox": _tool(SANDBOX), "env": _tool(ENV), "system": _tool(SYSTEM),
-            "interpreter": _producer_interpreter(),
-            "os": {"release": uname.release, "version": uname.version, "machine": uname.machine},
-            "sources": [_tool(Path(__file__)), _tool(Path(__file__).with_name("public_input_guard.py")),
-                        _tool(Path(__file__).with_name("private_process_boundaries.py")),
-                        _tool(Path(__file__).with_name("process_private_launch.py")),
-                        _tool(Path(__file__).with_name("native_exit_boundary.py"))]}
+    else:
+        uname = os.uname()
+        return {"sandbox": _tool(SANDBOX), "env": _tool(ENV), "system": _tool(SYSTEM),
+                "interpreter": _producer_interpreter(),
+                "os": {"release": uname.release, "version": uname.version, "machine": uname.machine},
+                "sources": [_tool(Path(__file__)), _tool(Path(__file__).with_name("public_input_guard.py")),
+                            _tool(Path(__file__).with_name("private_process_boundaries.py")),
+                            _tool(Path(__file__).with_name("process_private_launch.py")),
+                            _tool(Path(__file__).with_name("native_exit_boundary.py"))]}
 
 
 @dataclass(frozen=True)

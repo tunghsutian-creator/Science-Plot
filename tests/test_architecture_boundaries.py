@@ -556,7 +556,8 @@ def test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint() -> None
         REPO_ROOT / ".github" / "workflows" / "minimal-repository.yml"
     ).read_text(encoding="utf-8")
     assert "Run scoped static type gate" in workflow
-    assert "run: python3 -m mypy" in workflow
+    assert "python3 -m mypy --platform linux" in workflow
+    assert "python3 -m mypy --platform darwin" in workflow
 
 
 def test_first_party_source_does_not_import_the_removed_src_namespace() -> None:

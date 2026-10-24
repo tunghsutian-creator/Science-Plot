@@ -124,7 +124,9 @@ jobs:
       - name: Run lint gate
         run: python3 -m ruff check src tests
       - name: Run scoped static type gate
-        run: python3 -m mypy
+        run: |
+          python3 -m mypy --platform linux
+          python3 -m mypy --platform darwin
       - name: Build vendored Veusz helpers
         working-directory: third_party/veusz
         run: QMAKE_EXE="$(command -v qmake6)" python3 setup.py build_ext --inplace
