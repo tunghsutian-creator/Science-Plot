@@ -1,5 +1,8 @@
 """Literal legacy native primitive controls for the shared data geometry owner."""
 from copy import deepcopy
+import json
+from math import log10
+import sys
 
 import pytest
 
@@ -50,6 +53,83 @@ LEGACY_HASHES = {
     "interpolated": "770023db2863dea17e9482669b008c8aee0089149ddd7e6e95e0fd14722d793b"}
 
 
+# Errorbar-only reference from f7063a78a3f24b1f63df9d2298d31696841a9a21,
+# src/sciplot_core/plot_backends/figure_marks.py, source SHA-256
+# 06de119b2a2ef993c6cc254cd0c262d3b2ff7d00f0347e8307f0a2d2b63d8800.
+# Keep the original arithmetic, paired-presence rule and primitive/key order.
+def _legacy_errorbar_geometry(ir, view, layer, mark):
+    def fraction(value, scale):
+        low, high = scale["domain"]
+        if scale["transform"] == "log":
+            value, low, high = log10(value), log10(low), log10(high)
+        result = (value - low) / (high - low)
+        return float(1 - result if scale["direction"] == "descending" else result)
+
+    columns = ir["datasets"][layer["dataset_id"]]["columns"]
+    data = {channel: list(columns[column]["values"]) for channel, column in layer["mappings"].items()}
+    rows = list(zip(data["x"], data["y"], strict=True))
+    scales = {scale["id"]: scale for scale in ir["scales"]}
+    x_scale, y_scale = scales[layer["x_scale"]], scales[layer["y_scale"]]
+    result = []
+    for index, (x, y) in enumerate(rows):
+        if x is None or y is None:
+            continue
+        low, high = data["y_low"][index], data["y_high"][index]
+        if low is None or high is None:
+            continue
+        result.append({"xPos": [x], "yPos": [low], "xPos2": [x], "yPos2": [high]})
+        panel = next(p for p in ir["layout"]["panels"] if p["view_id"] == view["id"])
+        half_cap = mark["style"]["cap_width_pt"] * 25.4 / 72 / panel["plot_mm"][2] / 2
+        fx = fraction(x, x_scale)
+        for end in (low, high):
+            fy = fraction(end, y_scale)
+            result.append({"positioning": "relative", "xPos": [fx - half_cap], "yPos": [fy],
+                           "xPos2": [fx + half_cap], "yPos2": [fy]})
+    return result
+
+
+def _geometry_scalar_records(variants):
+    """Record original key/array order, scalar types and exact float values."""
+    records = []
+    for variant_index, primitives in enumerate(variants):
+        for primitive_index, primitive in enumerate(primitives):
+            for key, values in primitive.items():
+                items = enumerate(values) if type(values) is list else [(None, values)]
+                for index, value in items:
+                    records.append({"path": [variant_index, primitive_index, key, index],
+                                    "type": type(value).__name__, "repr": repr(value),
+                                    **({"hex": value.hex()} if type(value) is float else {})})
+    return records
+
+
+def errorbar_geometry_diagnostic():
+    """Pure generated control for the actual runtime; no native worker or data."""
+    ir, view, layer, mark = geometry_fixture("errorbar")
+    current, legacy = [], []
+    configurations = [("linear", "ascending"), ("linear", "descending"),
+                      ("log", "ascending"), ("log", "descending")]
+    for transform, direction in configurations:
+        for scale in ir["scales"]:
+            scale.update(transform=transform, direction=direction)
+        current.append(mark_geometry(ir, view, layer, mark))
+        legacy.append(_legacy_errorbar_geometry(ir, view, layer, mark))
+    current_records, legacy_records = _geometry_scalar_records(current), _geometry_scalar_records(legacy)
+    current_keys = [[list(primitive) for primitive in variant] for variant in current]
+    legacy_keys = [[list(primitive) for primitive in variant] for variant in legacy]
+    half_cap = mark["style"]["cap_width_pt"] * 25.4 / 72 / ir["layout"]["panels"][0]["plot_mm"][2] / 2
+    return {"python": sys.version, "platform": sys.platform, "configurations": configurations,
+            "expected_sha256": LEGACY_HASHES["errorbar"],
+            "current_sha256": canonical_json_sha256(current, allow_nan=False),
+            "legacy_sha256": canonical_json_sha256(legacy, allow_nan=False),
+            "same_runtime_exact": current_keys == legacy_keys and current_records == legacy_records,
+            "half_cap": {"repr": repr(half_cap), "hex": half_cap.hex()},
+            "log10": [{"input": value, "repr": repr(log10(value)), "hex": log10(value).hex()}
+                      for value in (1, 3, 4, 5, 7, 9, 11)],
+            "current_scalars": current_records,
+            "legacy_scalars": legacy_records if current_records != legacy_records else "identical",
+            "current_keys": current_keys, "legacy_keys": legacy_keys if current_keys != legacy_keys else "identical"}
+
+
 @pytest.mark.parametrize("case", CASES)
 def test_legacy_primitive_dictionary_order_and_numeric_types_are_exact(case):
     ir, view, layer, mark = geometry_fixture(case)
@@ -60,7 +140,15 @@ def test_legacy_primitive_dictionary_order_and_numeric_types_are_exact(case):
         for scale in ir["scales"]:
             scale.update(transform=transform, direction=direction)
         variants.append(mark_geometry(ir, view, layer, mark))
-    assert canonical_json_sha256(variants, allow_nan=False) == LEGACY_HASHES[case]
+        if case == "errorbar":
+            legacy = _legacy_errorbar_geometry(ir, view, layer, mark)
+            assert [list(primitive) for primitive in variants[-1]] == [list(primitive) for primitive in legacy], (
+                json.dumps(errorbar_geometry_diagnostic()))
+            assert _geometry_scalar_records([variants[-1]]) == _geometry_scalar_records([
+                legacy]), json.dumps(errorbar_geometry_diagnostic())
+    assert canonical_json_sha256(variants, allow_nan=False) == LEGACY_HASHES[case], (
+        json.dumps(errorbar_geometry_diagnostic(), ensure_ascii=False, separators=(",", ":"))
+        if case == "errorbar" else case)
     assert ir["datasets"] == original["datasets"]
 
 
