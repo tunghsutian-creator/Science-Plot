@@ -58,7 +58,12 @@ jobs:
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
           .venv/bin/python -m pip install --upgrade pip setuptools wheel
       - name: Install local runtime
-        run: python3 -m pip install -e '.[studio,dev,mcp]'
+        # Explicit Linux/Python 3.12 validation anchor; keep pandas 3.1 exercised.
+        # This is not a universal freeze for the Python 3.11 language floor.
+        run: >-
+          python3 -m pip install -e '.[studio,dev,mcp]'
+          'numpy==2.4.6' 'pandas==3.1.0' 'scipy==1.18.1'
+          'Pillow==13.0.0' 'PyMuPDF==2.0'
       - name: Verify Qt build and runtime identity
         run: |
           python3 - <<'PY'

@@ -452,6 +452,25 @@ macOS installer has not been published yet.
 Source installation requires **Python 3.11+**, a **C/C++ compiler**, and
 **Qt 6 development tools**, including `qmake`.
 
+The declared numerical dependency window for this source version is
+**NumPy 2.4.6–2.4.x** and **pandas 3.0.6–3.1.x**. Upgrading outside that window
+requires a compatibility review. These bounds define the compatibility target;
+they do not certify every admitted combination. The concrete references used
+for these checks are:
+
+| Reference | Python | NumPy / pandas / SciPy | PyQt / loaded Qt |
+| --- | --- | --- | --- |
+| Local macOS native runtime | 3.14.7 | 2.4.6 / 3.0.6 / 1.18.1 | 6.11.0 / 6.11.2 |
+| Ubuntu 24.04 CI | 3.12.3 | 2.4.6 / 3.1.0 / 1.18.1 | 6.6.1 / 6.4.2 |
+
+These references identify installation and compatibility checks; they do not
+certify every combination admitted by the Python 3.11+ language floor. CI pins
+its numerical, PDF and image package versions to keep those listed versions
+fixed during repair; other dependencies and OS packages can still change.
+Its SciPy pin applies only to that Python 3.12
+job. Package versions alone cannot reproduce system Qt, native helpers or fonts;
+Doctor and the corresponding native/data acceptance remain necessary.
+
 ```bash
 git clone https://github.com/tunghsutian-creator/Science-Plot.git
 cd Science-Plot
