@@ -192,6 +192,7 @@ CATEGORICAL_SOURCE_OWNER = ChangedOwner(
             "src/sciplot_core/task_categorical_contract.py",
             "src/sciplot_core/task_categorical_creation.py",
             "src/sciplot_core/studio_render/categorical_bindings.py",
+            "src/sciplot_core/studio_render/categorical_components.py",
             "src/sciplot_core/studio_render/categorical_plot_spec.py",
             "src/sciplot_core/studio_render/categorical_bound_series.py",
             "src/sciplot_core/studio_render/source_group_series.py",
