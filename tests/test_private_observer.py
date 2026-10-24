@@ -22,6 +22,46 @@ ROOT = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.comprehensive
 
 
+def _suite_environment(root: Path, parent: dict[str, str]) -> dict[str, str]:
+    environment = dict(parent, PYTHONPATH=os.pathsep.join((str(root / "src"), parent.get("PYTHONPATH", ""))))
+    for key in ("SCIPLOT_PRIVATE_AUDIT_DIR", "SCIPLOT_PRIVATE_AUDIT_ROOTS", RUN, PARENT, CHILD, CONTINUATION, "PYTEST_CURRENT_TEST"):
+        environment.pop(key, None)
+    return environment
+
+
+def test_generated_suite_environment_retains_public_stage_reference_rejection(tmp_path: Path) -> None:
+    from sciplot_core.verification.public_stage import assert_private_absent
+
+    stage = tmp_path / "source"
+    public = {
+        "SCIPLOT_REPO": str(stage), "SCIPLOT_SOURCE_ROOT": str(stage / "src"),
+        "SCIPLOT_RUNTIME_REPO": str(stage), "SCIPLOT_VEUSZ_ROOT": str(stage / "third_party/veusz"),
+        "SCIPLOT_PUBLIC_INPUT_GUARD": json.dumps([str(stage / "tests/fixtures")]),
+        "SCIPLOT_PUBLIC_GUARD_BOOTSTRAP": str(stage / "bootstrap"),
+        "SCIPLOT_PUBLIC_GUARD_WRAPPER_BOOTSTRAP": str(stage / "bootstrap/sitecustomize.py"),
+    }
+    for reference in (None, "", str(tmp_path / "inherited-reference")):
+        parent = {**public, "PYTHONPATH": "earlier-source", RUN: "old-routing", "PYTEST_CURRENT_TEST": "outer (call)"}
+        if reference is not None:
+            parent["SCIPLOT_REFERENCE_DATA"] = reference
+        original = dict(parent)
+        environment = _suite_environment(stage, parent)
+        assert parent == original
+        assert all(environment[key] == value for key, value in public.items())
+        assert environment["PYTHONPATH"].split(os.pathsep) == [str(stage / "src"), "earlier-source"]
+        assert RUN not in environment and "PYTEST_CURRENT_TEST" not in environment
+        if reference is None:
+            assert "SCIPLOT_REFERENCE_DATA" not in environment
+            assert_private_absent(stage, environment)
+            injected = {**environment, "SCIPLOT_REFERENCE_DATA": str(tmp_path / "child-reference")}
+            with pytest.raises(ValueError, match="inherited reference-data"):
+                assert_private_absent(stage, injected)
+        else:
+            assert environment["SCIPLOT_REFERENCE_DATA"] == reference
+            with pytest.raises(ValueError, match="inherited reference-data"):
+                assert_private_absent(stage, environment)
+
+
 def test_archived_metadata_reads_keep_actual_root_and_node_boundaries(tmp_path: Path) -> None:
     """Real producer frames and OS waits, without a scientific acceptance claim."""
     plugin = tmp_path / ".tmp_verify/bootstrap"
@@ -39,10 +79,7 @@ def test_archived_metadata_reads_keep_actual_root_and_node_boundaries(tmp_path: 
         inputs[domain] = {"paths": [str(path)]}
     inputs["tests"]["paths"].append(str(archived))
     inputs["implementation"]["paths"].append(str(ROOT / "src/sciplot_core/verification/durable_runner.py"))
-    environment = dict(os.environ, PYTHONPATH=os.pathsep.join((str(ROOT / "src"), os.environ.get("PYTHONPATH", ""))))
-    environment["SCIPLOT_REFERENCE_DATA"] = str(tmp_path / ".local/reference_data")
-    for key in ("SCIPLOT_PRIVATE_AUDIT_DIR", "SCIPLOT_PRIVATE_AUDIT_ROOTS", RUN, PARENT, CHILD, CONTINUATION, "PYTEST_CURRENT_TEST"):
-        environment.pop(key, None)
+    environment = _suite_environment(ROOT, dict(os.environ))
     code = ("import os,sys;from pathlib import Path;"
             "from sciplot_core.verification.suite_evidence import _audit_environment;"
             "from sciplot_core.verification.durable_runner import start_run;"
@@ -50,6 +87,7 @@ def test_archived_metadata_reads_keep_actual_root_and_node_boundaries(tmp_path: 
             "from sciplot_core.verification.evidence_runtime import qt_import_bindings;"
             "from sciplot_core.verification.private_observer import current_observer;"
             f"root=Path({str(tmp_path)!r});target=Path({str(archived)!r});"
+            "os.environ['SCIPLOT_REFERENCE_DATA']=str(root/'.local/reference_data');"
             f"env,audit=_audit_environment(root,Path({str(durable)!r}),Path({str(plugin)!r}),Path({str(audit)!r}));"
             "test_sources_sha256(root);qt_import_bindings([root/'tests']);"
             "o=current_observer();o.nodeid='synthetic:body (call)';"
@@ -94,14 +132,13 @@ def test_suite_parent_collector_and_supervisor_share_actual_scope(tmp_path: Path
         path.write_text("generated observation identity")
         inputs[domain] = {"paths": [str(path)]}
     inputs["implementation"]["paths"].append(str(ROOT / "src/sciplot_core/verification/durable_runner.py"))
-    environment = dict(os.environ, PYTHONPATH=os.pathsep.join((str(ROOT / "src"), os.environ.get("PYTHONPATH", ""))))
-    environment["SCIPLOT_REFERENCE_DATA"] = str(tmp_path / ".local/reference_data")
-    for key in ("SCIPLOT_PRIVATE_AUDIT_DIR", "SCIPLOT_PRIVATE_AUDIT_ROOTS", RUN, PARENT, CHILD, CONTINUATION, "PYTEST_CURRENT_TEST"):
-        environment.pop(key, None)
+    environment = _suite_environment(ROOT, dict(os.environ))
     code = ("import json,os,sys,subprocess;from pathlib import Path;"
             "from sciplot_core.verification.suite_evidence import _audit_environment;"
             "from sciplot_core.verification.durable_runner import start_run;"
-            f"env,audit=_audit_environment(Path({str(tmp_path)!r}),Path({str(durable)!r}),Path({str(plugin)!r}),Path({str(audit)!r}));"
+            f"root=Path({str(tmp_path)!r});"
+            "os.environ['SCIPLOT_REFERENCE_DATA']=str(root/'.local/reference_data');"
+            f"env,audit=_audit_environment(root,Path({str(durable)!r}),Path({str(plugin)!r}),Path({str(audit)!r}));"
             f"subprocess.run([sys.executable,'-m','pytest','--rootdir',{str(tmp_path)!r},'--confcutdir',{str(tmp_path)!r},'--collect-only','-q',{str(fake)!r}],env=env,check=True);"
             f"spec=dict(repo_root={str(tmp_path)!r},command=[sys.executable,'-c','pass'],"
             "scope=dict(kind='process',closure_policy='generated suite-observation contract'),selected_tests=['synthetic:scope'],"
