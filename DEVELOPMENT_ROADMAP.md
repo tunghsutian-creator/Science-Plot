@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-23. External AI is the task interface. Current behavior belongs
+Status: 2026-10-24. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -71,24 +71,23 @@ incomplete runs in local evidence. Final metadata must bind the actual unfiltere
 collection, preserving private scope and static inventory incompleteness until
 fresh runtime evidence is independently closed.
 
-The frozen a48e59d full run completed 6512 test bodies successfully, but its
-access review remained BLOCKED on producer identity, fresh external cwd and
-socket readiness/lifetime evidence. Preserve that result as a failed acceptance
-gate. The isolated repair uses the existing launch, endpoint and primary sensor
-owners; its pure/static checks do not substitute for the affected composed native
-run or a subsequent complete frozen full capture.
+Preserve the historical failed acceptance records for producer identity,
+external cwd, socket lifetime and unbound metadata reads. Their diagnoses and
+repairs are recorded in Git and local evidence; they are not new acceptance
+results or a reason to repeat completed diagnostics. Live registration retains
+the successful current source frame, held generation, kernel peer and management
+responsibility without replaying accumulated primary history before observation.
+Queued historical admission and final chain/source/registration/exit checks
+remain complete. Preparation metadata reads retain their exact source owners;
+unknown reads do not inherit a path exemption. Short/long-prefix, parent-exit
+and composed native evidence must agree with the eventual complete current run.
 
-The subsequent frozen 4d09752 run completed 6523 test bodies with 11 warnings,
-but capture remained BLOCKED on 34 connections belonging to four actors. All
-four nodes were in the successful 17-node diagnostic. Their same-source
-component registration took 13–68 ms; full registration took 2.8–5.2 seconds,
-after the CLI parent exited and ppid changed to 1. The sensor correctly returned
-UNKNOWN. Remove duplicate primary-history replay from the actual internal live
-registration path, retaining the successful source frame, held generation,
-kernel peer and management responsibility. Preserve queued historical admission
-and every final chain/source/registration/exit predicate. Deterministic
-short/long-prefix and parent-exit controls must precede composed native and full
-acceptance; neither this diagnosis nor generated controls closes the gate.
+The current compatibility milestone also requires cold replay of original sealed
+DataMapping executions and strict new version-3 creation. Generated legacy-record
+controls prove their declared reader boundary, not native recreation or every
+historical environment. Freeze the integrated parser, metadata and exact node
+set before the remaining public CI, native/full and access-export gates; do not
+promote a prior snapshot's full acceptance to the repaired snapshot.
 
 The checked-in private dependency inventory remains preliminary. Available
 inputs, successful original-data test bodies and complete child-inclusive
@@ -347,14 +346,24 @@ Full pytest and ready-rule acceptance remain release/merge gates; a frozen full
 already contains both tiers. Do not substitute public subsets for authorized
 private/full release acceptance or repeat full for every small cleanup.
 
-Next, complete current acceptance and deliver this integration with the a.u./XRD
-display update. Then exercise complete real ordinary plotting, TTS and panel
-assembly tasks, checking the single template entry, explicit overrides and TTS
-interaction. Use this round's actual elapsed time and observed repeated work to
-review a finite dependency-selection, deduplication and reuse plan bound to exact
-version, environment and input identities before implementation. Then implement
-fast iteration feedback separately from release acceptance, retaining full and
-ready-rule coverage and all assertions without adding another audit framework.
+First complete current compatibility and acceptance, including the persistent
+a.u./XRD display default, historical DataMapping cold replay, main and exact-commit
+CI. The next implementation phase is verification speed alone. Use actual
+monotonic stage costs to choose a small dependency-selection, deduplication or
+operation-local preparation change; bind reuse to exact version, environment
+and input identities. Long stages must expose actual progress or an explicit
+UNKNOWN, and required environment capabilities must fail before expensive work.
+Preserve the original canonical test order, coverage, assertions and complete
+post-execution checks. Accept this phase only with comparable before/after
+end-to-end time, individual stage costs and evidence that coverage did not shrink.
+Different test selections or historical wall clocks cannot establish speedup.
+Do not add another audit framework.
+
+Only after speed acceptance, resume complete real ordinary plotting, TTS and
+panel-assembly tasks and the plotting/AI-communication/edit module-boundary review.
+Check the single template entry, explicit overrides and TTS interaction. Derive
+any restructuring from actual dependencies and workflow failures; splitting
+files alone is not a product or architecture improvement.
 
 Keep one normal local entry and recoverable Git checkpoints. Preserve physical
 projects, raw inputs, existing figures, independent backups and unmerged work.

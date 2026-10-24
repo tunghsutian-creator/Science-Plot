@@ -146,6 +146,70 @@ jobs:
           python3 -m pip wheel . --no-deps --no-build-isolation \
             --wheel-dir /tmp/sciplot-wheel
           python3 tests/test_wheel_surface.py /tmp/sciplot-wheel/*.whl
+      - name: Check known native CI regressions before the public suites
+        # This bounded diagnostic keeps the original five failures visible.
+        # Both complete canonical suites still run below without filters.
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          from sciplot_core.verification.public_stage import RECEIPT, create_stage, review_stage_reports, runtime_binding
+
+          root = Path.cwd().resolve()
+          output = root / ".tmp_verify/ci_known_native_regressions"
+          environment = dict(os.environ)
+          assert not environment.get("PYTEST_ADDOPTS", "").strip()
+          expected = {
+              "tests/test_mechanical_rendering_profile_native.py::test_wide_category_native_labels_fit_and_clipped_rotation_cannot_commit",
+              "tests/test_private_observer.py::test_archived_metadata_reads_keep_actual_root_and_node_boundaries",
+              "tests/test_private_observer.py::test_suite_parent_collector_and_supervisor_share_actual_scope[False]",
+              "tests/test_private_observer.py::test_suite_parent_collector_and_supervisor_share_actual_scope[True]",
+              "tests/test_render_worker_rejection.py::test_real_public_radar_size_conflict_retains_clear_reason_and_no_artifacts",
+          }
+          expression = " or ".join(sorted({node.split("::", 1)[1].split("[", 1)[0] for node in expected}))
+          stage, child_environment, before = create_stage(root, output, environment)
+          receipt_path = stage / RECEIPT
+          assert json.loads(receipt_path.read_bytes()) == before
+          receipt_sha256 = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+          # The validator must be loaded by the actual staged source owner.
+          # Its receipt remains fixed to create_stage's original in-memory seal.
+          validate = [sys.executable, "-c", "import hashlib,os,sys;from pathlib import Path;from sciplot_core.verification.public_stage import RECEIPT,validate_stage;assert hashlib.sha256((Path.cwd()/RECEIPT).read_bytes()).hexdigest()==sys.argv[1];validate_stage(Path.cwd(),dict(os.environ))", receipt_sha256]
+          subprocess.run(validate, cwd=stage, env=child_environment, check=True)
+          finish, reports_path = output / "finish.json", output / "reports.json"
+          child_environment.update(SCIPLOT_VERIFY_FINISH=str(finish), SCIPLOT_PUBLIC_STAGE_REPORT=str(reports_path))
+          command = [sys.executable, "-m", "pytest", "-vv", "-p", "sciplot_core.verification.pytest_finish",
+                     "-p", "sciplot_core.verification.public_stage", "--input-scope", "public-all", "-k", expression,
+                     "--basetemp", str(output / "pytest-tmp")]
+          result = subprocess.run(command, cwd=stage, env=child_environment, stdin=subprocess.DEVNULL, check=False)
+          post = subprocess.run(validate, cwd=stage, env=child_environment, check=False)
+          marker = json.loads(finish.read_bytes()) if finish.is_file() else {}
+          reports = json.loads(reports_path.read_bytes()) if reports_path.is_file() else {}
+          issues = review_stage_reports(marker, reports, platform=sys.platform)
+          if set(marker.get("selected_tests", [])) != expected:
+              issues.append("The bounded CI regression selection must contain exactly the original five nodes.")
+          phases = [(row.get("nodeid"), row.get("when"), row.get("outcome")) for row in reports.get("reports", [])]
+          required = {(node, phase, "passed") for node in expected for phase in ("setup", "call", "teardown")}
+          if len(phases) != 15 or set(phases) != required:
+              issues.append("All fifteen original regression phases must pass without skips or duplicates.")
+          origin_runtime_equal = runtime_binding(root, environment) == before["runtime"]
+          if post.returncode != 0 or not origin_runtime_equal:
+              issues.append("Original or staged source/runtime binding changed.")
+          summary = {"kind": "sciplot_bounded_ci_regression_preflight", "origin_head": before["origin_head"],
+                     "actual_exit_code": result.returncode, "finish_complete": marker.get("complete"),
+                     "selected_nodes": marker.get("selected_tests", []), "phase_count": len(phases), "issues": issues,
+                     "full_public_acceptance": False, "scientific_acceptance": False, "access_capture_complete": False}
+          (output / "scoped-result.json").write_text(json.dumps(summary, indent=2) + "\n")
+          print(json.dumps(summary))
+          if result.returncode or issues:
+              for log in sorted((output / "pytest-tmp").rglob("native-worker.log")):
+                  print(f"Generated regression diagnostic: {log}")
+                  print(log.read_text(errors="replace"))
+          raise SystemExit(result.returncode if result.returncode else (4 if issues else 0))
+          PY
       - name: Run reviewed public focused behavior
         run: python3 -m pytest -q --input-scope public-focused
       - name: Run reviewed public comprehensive behavior

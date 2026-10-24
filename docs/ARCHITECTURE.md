@@ -1417,6 +1417,27 @@ and source-artifact signatures must still match exactly. Unknown encodings fail
 closed. This audit does not rewrite a historical specification or native document,
 and introduces no numeric tolerance or reinterpretation of old measurements.
 
+DataMapping proposals remain version-2 declarations of source, columns, units
+and operations. A proposal alone does not authorize historical numeric parsing.
+New execution manifests use version 3: the envelope fixes
+`decimal_float64_round_trip_v2` for validation, numeric transformations, sort
+keys and table eligibility; the transform step records that derived encoding.
+The current-parser alias cannot choose a different meaning for this version.
+Fresh preview and execution use this contract even for an old proposal.
+
+Completed execution versions 1 and 2 retain their original files and ledger
+parameters. After validating the existing source, output, request and lineage
+seals, the loader reconstructs the complete execution using one coherent,
+bounded historical pipeline. Actual synthetic old-producer records distinguish
+the pandas 3.0.6 fused sort from its round-trip numeric transformations and the
+later 3.1 parsing behavior. A candidate must reproduce every source's exact
+output bytes and all row, column, unit, sample, selection and transform facts;
+different sources or operations cannot select independent candidates.
+Unknown versions and mismatches fail closed. Matching content does not attest
+a historical compiler or certify a new planning/native workflow. Existing
+execution reuse passes the same complete loader before fresh strict preview;
+neither reuse nor cold load rewrites the old record or weakens source checks.
+
 Impact display statistics are declared by `materials_rules/impact_presentation.py`
 and consumed by public rule descriptions and explicit task-presentation guards.
 The existing executors still own the calculation: box/box-strip use median/IQR;
