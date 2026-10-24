@@ -5,14 +5,16 @@ on:
   pull_request:
 
 jobs:
-  runtime-integrity:
+  preflight:
     runs-on: ubuntu-24.04
-    env:
+    env: &runtime_environment
       QT_QPA_PLATFORM: offscreen
       PYTHONNOUSERSITE: "1"
     steps:
-      - uses: actions/checkout@v4
-      - name: Enforce minimal runtime distribution
+      - &checkout
+        uses: actions/checkout@v4
+      - &distribution_policy
+        name: Enforce minimal runtime distribution
         shell: bash
         run: |
           set -euo pipefail
@@ -42,9 +44,11 @@ jobs:
             printf '%s\n' "$forbidden" >&2
             exit 1
           fi
-      - name: Compile SciPlot-owned Python
+      - &compile_owned
+        name: Compile SciPlot-owned Python
         run: python3 -m compileall -q src/sciplot_core src/sciplot_gui src/sciplot_recipes
-      - name: Install matching system Python and Qt toolchain
+      - &install_toolchain
+        name: Install matching system Python and Qt toolchain
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
@@ -57,14 +61,16 @@ jobs:
           /usr/bin/python3 -m venv --system-site-packages .venv
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
           .venv/bin/python -m pip install --upgrade pip setuptools wheel
-      - name: Install local runtime
+      - &install_runtime
+        name: Install local runtime
         # Explicit Linux/Python 3.12 validation anchor; keep pandas 3.1 exercised.
         # This is not a universal freeze for the Python 3.11 language floor.
         run: >-
           python3 -m pip install -e '.[studio,dev,mcp]'
           'numpy==2.4.6' 'pandas==3.1.0' 'scipy==1.18.1'
           'Pillow==13.0.0' 'PyMuPDF==2.0'
-      - name: Verify Qt build and runtime identity
+      - &verify_qt
+        name: Verify Qt build and runtime identity
         run: |
           python3 - <<'PY'
           import subprocess
@@ -112,7 +118,8 @@ jobs:
               "py_enable_shared_build_flag": sysconfig.get_config_var("Py_ENABLE_SHARED"),
           }, sort_keys=True))
           PY
-      - name: Verify Chinese glyph fallback in the system Qt runtime
+      - &verify_glyphs
+        name: Verify Chinese glyph fallback in the system Qt runtime
         run: |
           python3 - <<'PYFONT'
           from PyQt6.QtGui import QFont, QGuiApplication, QTextLayout
@@ -132,10 +139,12 @@ jobs:
         run: |
           python3 -m mypy --platform linux
           python3 -m mypy --platform darwin
-      - name: Build vendored Veusz helpers
+      - &build_helpers
+        name: Build vendored Veusz helpers
         working-directory: third_party/veusz
         run: QMAKE_EXE="$(command -v qmake6)" python3 setup.py build_ext --inplace
-      - name: Verify vendored Veusz helpers
+      - &verify_helpers
+        name: Verify vendored Veusz helpers
         env:
           PYTHONPATH: third_party/veusz
         run: python3 -c 'from veusz.helpers import _nc_cntr, qtmml, qtloops, recordpaint, threed; assert all((qtloops, qtmml, recordpaint, threed, _nc_cntr))'
@@ -210,9 +219,32 @@ jobs:
                   print(log.read_text(errors="replace"))
           raise SystemExit(result.returncode if result.returncode else (4 if issues else 0))
           PY
+
+  public-behavior:
+    name: Public behavior (${{ matrix.profile }})
+    needs: preflight
+    runs-on: ubuntu-24.04
+    strategy:
+      # Keep the other complete profile and its failure evidence running.
+      fail-fast: false
+      matrix:
+        profile: [public-focused, public-comprehensive]
+    env: *runtime_environment
+    steps:
+      - *checkout
+      - *distribution_policy
+      - *compile_owned
+      - *install_toolchain
+      - *install_runtime
+      - *verify_qt
+      - *verify_glyphs
+      - *build_helpers
+      - *verify_helpers
       - name: Run reviewed public focused behavior
+        if: matrix.profile == 'public-focused'
         run: python3 -m pytest -q --input-scope public-focused
       - name: Run reviewed public comprehensive behavior
+        if: matrix.profile == 'public-comprehensive'
         # Original generated observer negatives genuinely disable Python hooks.
         # Execute every public comprehensive node in a bound source-only stage;
         # raw/golden private namespaces remain outside its input closure.
@@ -239,8 +271,25 @@ jobs:
           fi
           exit "$stage_status"
       - name: Verify source-checkout wrapper bootstrap
+        if: matrix.profile == 'public-focused'
         run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
       - name: Run readiness check
+        if: matrix.profile == 'public-focused'
         run: skill/scripts/sciplot doctor --json
       - name: Run fixture-free lifecycle smoke
+        if: matrix.profile == 'public-focused'
         run: skill/scripts/sciplot smoke --out .tmp_verify/ci_runtime_smoke --json
+
+  runtime-integrity:
+    # Keep the existing required check, including failure/cancellation cases.
+    if: ${{ always() }}
+    needs: [preflight, public-behavior]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require complete CI gates
+        env:
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          PUBLIC_BEHAVIOR_RESULT: ${{ needs['public-behavior'].result }}
+        run: |
+          test "$PREFLIGHT_RESULT" = success
+          test "$PUBLIC_BEHAVIOR_RESULT" = success

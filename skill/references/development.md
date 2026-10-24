@@ -90,6 +90,29 @@ differed between modes and its prior bytes were not archived. This is a bounded
 single-pair observation, not a stable percentage or full/CI speed claim. Keep
 diagnostic micro timings separate from this end-to-end measurement.
 
+Public CI first runs the existing distribution/runtime/lint/types/wheel and exact
+five-node native preflight. After that succeeds, two isolated Ubuntu runners run
+the complete public-focused and public-comprehensive profiles concurrently. Each
+builds and verifies its own matching Python/Qt/Veusz helpers. The workflow reuses
+whole setup step maps through [YAML anchors](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases),
+including their environment, shell and working directory; no binary crosses
+runner boundaries. Suite argv, node membership, order and assertions stay intact.
+The comprehensive source-only stage retains its before/after origin, stage,
+runtime and private-namespace checks. Wrapper, Doctor and full smoke run once in
+the focused job. The final `runtime-integrity` check uses `always()` and accepts
+only success from both preflight and the complete profile matrix; failed,
+cancelled, skipped or missing dependencies cannot pass.
+
+Separate runners remove the old shared-runner state continuity. A focused failure
+no longer prevents an already-started comprehensive job from finishing; its failure
+evidence is retained. These are explicit scheduling changes, not scientific
+coverage claims. Keep the unfiltered serial full release gate for composed-state
+and private coverage. Do not replace it with the union of partial shards.
+Compare end-to-end CI time, queue/setup time and total runner minutes on the same
+profile scope, dependency/platform matrix and evidence strength. Extra independent
+setup can reduce the theoretical saving from overlapping focused work. A prior
+SHA or a simulated schedule is not a measured parallel speedup.
+
 Unknown changed owners fail closed; do not compensate with a full-suite fallback.
 Group and paper leaf owners retain their creation/revision, selection/publication
 and public-entry regressions without selecting unrelated task workflows. Changes

@@ -346,10 +346,12 @@ Full pytest and ready-rule acceptance remain release/merge gates; a frozen full
 already contains both tiers. Do not substitute public subsets for authorized
 private/full release acceptance or repeat full for every small cleanup.
 
-Keep the current compatibility candidate frozen while its original CI continues,
-including the persistent a.u./XRD display default and historical DataMapping cold
-replay. Verification speed now proceeds in a separate worktree, with independent
-source-specific acceptance; main and exact-commit CI gates remain unchanged.
+The compatibility and first preparation-speed slice reached main at `42569c1`:
+6615 local bodies passed with complete capture and strict whole-run access review;
+the exact-commit public CI also passed. Static private inventory and historical
+source authentication retain their documented limits. Verification scheduling
+continues in a separate worktree with independent source-specific acceptance;
+main and exact-commit CI gates remain unchanged.
 Plotting and AI module work stays behind speed acceptance. Use actual
 monotonic stage costs to choose a small dependency-selection, deduplication or
 operation-local preparation change; bind reuse to exact version, environment
@@ -390,6 +392,25 @@ existing timestamp gaps alone cannot attribute call/fixture cost. Reconcile the
 changed-owner plan against that exact completed full, preserving standalone
 lint/types/whitespace, native capture and readiness gates instead of repeating
 the changed pytest subset. Do not add another full just to obtain a profile.
+
+The next bounded change overlaps the complete focused and comprehensive public
+profiles after the original preflight. Each isolated runner builds and validates
+its own runtime; existing source-only stage, complete node order and all post-run
+checks stay intact. A required final check fails on any non-success prerequisite.
+Keep the serial unfiltered release gate: separate CI runners do not reproduce
+old shared-runner contamination, and node unions alone cannot replace sequence
+coverage. Two-way comprehensive sharding remains an unimplemented diagnostic.
+
+Baseline CI 40088282850 took 11516 seconds; comprehensive accounted for 10107
+seconds and focused for 909. Focused and its handoff tail can overlap with
+comprehensive, with additional isolated-runner setup and queue costs to measure. The
+largest comprehensive tests contain repeated cold CLI, real previews/exports,
+recovery and distinct audit boundaries; their time is not one rendering call.
+The slow metadata-history control also constructs real observer history. Existing
+durations do not separate startup, native work, fresh identity reads and polling.
+No fixed long sleep or safely removable audit has been established. Measure the
+new workflow's actual complete wall time and runner cost before accepting speed
+or proceeding to plotting/AI modularity; do not add speculative caches.
 
 Only after speed acceptance, resume complete real ordinary plotting, TTS and
 panel-assembly tasks and the plotting/AI-communication/edit module-boundary review.
