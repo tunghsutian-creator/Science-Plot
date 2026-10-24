@@ -1,10 +1,10 @@
-"""Keep one known categorical rejection closed despite native settings chatter."""
+"""Keep typed preparation rejections closed despite native settings chatter."""
 from collections.abc import Iterator
 from contextlib import contextmanager
 import json
 import sys
 
-from sciplot_core.studio_core.categorical_display_errors import CategoricalPresentationConflict
+from sciplot_core.studio_render.models import StudioPreparationBlocked
 from sciplot_core.veusz_worker.persistent import _capture
 
 
@@ -15,8 +15,10 @@ def categorical_rejection_frame() -> Iterator[None]:
         with _capture() as (output, error):
             try:
                 yield
-            except CategoricalPresentationConflict as exc:
+            except StudioPreparationBlocked as exc:
                 # The exception type is authoritative; never infer a conflict from stderr text.
+                output.seek(0)
+                output.truncate()
                 error.seek(0)
                 error.truncate()
                 print(json.dumps({"kind": "sciplot_worker_preparation_blocked", "version": 1,
