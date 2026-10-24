@@ -9,7 +9,7 @@
     "static_review_complete": true,
     "nodeid_count": 6561,
     "nodeids_sha256": "951adfb2f4c90fac6edb0aa26acfb7ad171f23ea9bcffbe69f265671ca3f6ae2",
-    "test_sources_sha256": "020c03ba3c82c94daa41c9a14eff4ef13c58f036273852223c323ddcc7bb02aa",
+    "test_sources_sha256": "b30e2f2a0533a61f50382cb70a02d3d9ae17b6f315f7595bde94fe0ae15e152e",
     "test_source_count": 463,
     "candidate_nodeids": [
       "tests/test_bundled_runtime.py::test_selected_qt_keeps_real_python_framework_across_worker_gui_and_intake[None-False]",

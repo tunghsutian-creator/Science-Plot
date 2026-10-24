@@ -240,6 +240,7 @@ CATEGORICAL_SOURCE_OWNER = ChangedOwner(
     owned_test_paths=frozenset(CATEGORICAL_TESTS),
     pytest_targets=(
         *CATEGORICAL_TESTS,
+        "tests/test_source_numeric_encodings.py::test_component_numeric_encoding_preserves_its_original_v1_pipeline",
         *REPLICATE_TESTS,
         "tests/test_replicate_distribution_contract.py",
         "tests/test_column_choice.py",

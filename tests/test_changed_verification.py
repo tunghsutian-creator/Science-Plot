@@ -1508,6 +1508,13 @@ def test_consolidated_contract_owners_bind_current_and_removed_paths(path, owner
                 "tests/test_task_ordinary_raw_points_native.py",
                 "tests/test_legacy_core_migration.py"} <= set(numeric_command)
         assert "tests/test_source_numeric_encodings.py" in command
+        component = build_changed_verification_plan(
+            ["src/sciplot_core/studio_render/categorical_components.py"], repo_root=REPO_ROOT,
+        )
+        assert component["unowned_paths"] == []
+        component_command = next(check["command"] for check in component["checks"]
+                                 if check["check_id"] == "pytest_changed_owners")
+        assert "tests/test_source_numeric_encodings.py::test_component_numeric_encoding_preserves_its_original_v1_pipeline" in component_command
         # Studio's independent terminal reread must select the same numeric
         # owner, including its binary64 and downstream source/series controls.
         terminal = build_changed_verification_plan(
