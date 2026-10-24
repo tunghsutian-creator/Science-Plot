@@ -11,7 +11,7 @@ import pytest
 from rendering_profile_mechanical import mechanical_document, replay_legacy
 from rendering_profile_mechanical_projection import mechanical_projection
 from rendering_profile_baselines import select_baseline
-from rendering_profiles_helpers import assert_accepted_golden, assert_three_way, capture_native, load_profile
+from rendering_profiles_helpers import assert_accepted_golden, assert_three_way, capture_generated_native, capture_native, load_profile
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
 from sciplot_core.plot_engine.managed_sources import load_sources
 from sciplot_core.plot_ir import compile_document
@@ -38,10 +38,13 @@ def test_wide_category_native_labels_fit_and_clipped_rotation_cannot_commit(tmp_
     project, document = Path(prepared["project_dir"]), Path(prepared["document"])
     spec_path = document.with_name("spec.json")
     spec = json.loads(spec_path.read_text())
-    captured = capture_native(document, tmp_path / "wide-capture", lambda payload: {"pages": payload["geometry"]["pages"]})
-    assert captured.inventory["/page1/graph1/x"]["settings"]["TickLabels/rotate"] == "0"
-    assert captured.datasets["category_axis_labels"]["data"] == labels
-    texts = captured.capture["painted_text"]
+    capture_dir = tmp_path / "wide-capture"
+    captured = capture_generated_native(document, capture_dir)["capture"]
+    assert not (capture_dir / "environment.json").exists()
+    assert not (capture_dir / "producer-identity.json").exists()
+    assert captured["inventory"]["/page1/graph1/x"]["settings"]["TickLabels/rotate"] == "0"
+    assert captured["datasets"]["category_axis_labels"]["data"] == labels
+    texts = captured["painted_text"]
     for label in [*labels, spec["axes"]["x"]["label"]]:
         assert sum(item["text"] == label for item in texts) == 1
     width, height = spec["size_mm"]

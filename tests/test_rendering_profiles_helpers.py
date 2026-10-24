@@ -1,6 +1,7 @@
 """The golden gate must reject coordinated renderer drift and changed authority."""
 
 import json
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 import pytest
@@ -174,3 +175,129 @@ def test_native_capture_releases_renderers_without_cycle_gc(monkeypatch, paint_f
     finally:
         if was_enabled:
             gc.enable()
+
+
+def _capture_environment_inputs(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import rendering_profiles_native as capture
+    from sciplot_core import _paths
+
+    renderer = tmp_path / "renderer"
+    (renderer / "veusz").mkdir(parents=True)
+    (renderer / "veusz/generated.py").write_text("# generated renderer identity\n")
+    monkeypatch.setattr(_paths, "VEUSZ_ROOT", renderer)
+    font = tmp_path / "generated-font.ttf"
+    font.write_bytes(b"generated font identity, not a native font\n")
+    modules = {}
+    for name in ("QtCore", "QtGui", "QtWidgets", "QtSvg", "QtPrintSupport"):
+        path = tmp_path / (name + ".so")
+        path.write_bytes(("generated binding identity: " + name).encode())
+        modules["PyQt6." + name] = SimpleNamespace(__file__=str(path))
+    modules["PyQt6.QtCore"].QT_VERSION_STR = "compiled-qt-version"
+    modules["PyQt6.QtCore"].qVersion = lambda: "loaded-qt-runtime"
+    modules["PyQt6.QtWidgets"].QApplication = SimpleNamespace(platformName=lambda: "generated-platform")
+    monkeypatch.setattr(capture, "import_module", modules.__getitem__)
+    packages = {name: "distribution:" + name for name in
+                ("PyQt6", "PyQt6-Qt6", "PyQt6-sip", "numpy", "Pillow", "PyMuPDF")}
+
+    def version(name):
+        if name not in packages:
+            raise capture.metadata.PackageNotFoundError(name)
+        return packages[name]
+
+    monkeypatch.setattr(capture.metadata, "version", version)
+    return capture, {"generated-font.ttf": str(font)}, [{"resolved_font_family": "Generated font"}], packages
+
+
+@pytest.mark.parametrize("wheel_installed", [False, True])
+def test_native_capture_separates_optional_qt_wheel_from_loaded_runtime(tmp_path, monkeypatch, wheel_installed):
+    capture, fonts, text, packages = _capture_environment_inputs(tmp_path, monkeypatch)
+    if not wheel_installed:
+        del packages["PyQt6-Qt6"]
+    environment = capture._environment(fonts, text)
+    assert environment["packages"] == {**packages, **({"PyQt6-Qt6": "not-installed"} if not wheel_installed else {})}
+    assert environment["qt_compiled"] == "compiled-qt-version"
+    assert environment["qt_runtime"] == "loaded-qt-runtime"
+    assert environment["qt_platform"] == "generated-platform"
+    assert environment["qt_modules_sha256"] == {
+        name: file_sha256(tmp_path / (name + ".so"))
+        for name in ("QtCore", "QtGui", "QtWidgets", "QtSvg", "QtPrintSupport")}
+    assert environment["font_files_sha256"] == {name: file_sha256(Path(path)) for name, path in fonts.items()}
+
+
+def test_native_capture_still_requires_binding_distribution_metadata(tmp_path, monkeypatch):
+    capture, fonts, text, packages = _capture_environment_inputs(tmp_path, monkeypatch)
+    del packages["PyQt6"]
+    with pytest.raises(capture.metadata.PackageNotFoundError, match="PyQt6"):
+        capture._environment(fonts, text)
+
+
+def test_native_capture_wheel_metadata_cannot_replace_missing_qt(tmp_path, monkeypatch):
+    capture, fonts, text, _packages = _capture_environment_inputs(tmp_path, monkeypatch)
+
+    def missing_qt(name):
+        raise ImportError("Generated missing Qt binding: " + name)
+
+    monkeypatch.setattr(capture, "import_module", missing_qt)
+    with pytest.raises(ImportError, match="Generated missing Qt binding: PyQt6.QtCore"):
+        capture._environment(fonts, text)
+
+
+def test_native_capture_optional_qt_wheel_does_not_relax_font_pins(tmp_path, monkeypatch):
+    capture, _fonts, text, packages = _capture_environment_inputs(tmp_path, monkeypatch)
+    del packages["PyQt6-Qt6"]
+    with pytest.raises(ValueError, match="must pin its actual font files"):
+        capture._environment({}, text)
+
+
+def test_generated_capture_payload_cannot_supply_golden_authority(tmp_path, monkeypatch):
+    import rendering_profiles_helpers as helpers
+    import rendering_profiles_native as capture
+
+    payload = {"document_sha256": "generated-document", "painted_text": [], "export": {"pdf_pages": 1}}
+
+    def generated_core(document, output, font_files):
+        assert document == tmp_path / "generated.vsz" and output == tmp_path and font_files is None
+        return payload
+
+    monkeypatch.setattr(capture, "_capture_document", generated_core)
+    result = capture.capture_generated_geometry(tmp_path / "generated.vsz", tmp_path)
+    assert result == {"kind": "sciplot_generated_native_geometry", "version": 1, "capture": payload}
+    assert json.loads((tmp_path / "generated-geometry.json").read_text()) == result
+    assert not isinstance(result, NativeSnapshot)
+    assert not (tmp_path / "environment.json").exists()
+    assert not (tmp_path / "producer-identity.json").exists()
+    with pytest.raises(AssertionError, match="requires complete native profile evidence"):
+        helpers.assert_accepted_golden(object(), result, output_dir=tmp_path / "comparison")
+    with pytest.raises(AssertionError, match="requires complete native profile evidence"):
+        helpers._compare_golden(object(), result, tmp_path / "comparison")
+
+
+def test_native_capture_request_keeps_profile_default_and_explicit_generated_kind(monkeypatch):
+    import rendering_profiles_native as capture
+
+    calls = []
+    monkeypatch.setattr(capture, "capture", lambda *args: calls.append(("profile", args)))
+    monkeypatch.setattr(capture, "capture_generated_geometry", lambda *args: calls.append(("generated", args)))
+    capture.capture_request({"document": "original.vsz", "output": "profile-output", "font_files": {"font": "face.ttf"}})
+    capture.capture_request({"kind": "generated_geometry", "document": "generated.vsz", "output": "generated-output"})
+    assert calls == [("profile", (Path("original.vsz"), Path("profile-output"), {"font": "face.ttf"})),
+                     ("generated", (Path("generated.vsz"), Path("generated-output")))]
+
+
+@pytest.mark.parametrize("capture_request_data", [
+    {"kind": "unknown", "document": "doc.vsz", "output": "out"},
+    {"kind": "generated_geometry", "document": "doc.vsz", "output": "out", "font_files": {}},
+    {"document": "doc.vsz", "output": "out"},
+    {"document": "doc.vsz", "output": "out", "font_files": None},
+])
+def test_native_capture_rejects_unknown_or_incomplete_request_before_native(monkeypatch, capture_request_data):
+    import rendering_profiles_native as capture
+
+    def no_native(*_args):
+        raise AssertionError("Invalid request reached native capture")
+
+    monkeypatch.setattr(capture, "_capture_document", no_native)
+    with pytest.raises(ValueError):
+        capture.capture_request(capture_request_data)

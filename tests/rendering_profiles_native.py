@@ -150,7 +150,15 @@ def _environment(font_files, text):
     qt_widgets = import_module("PyQt6.QtWidgets")
     packages = {}
     for name in ("PyQt6", "PyQt6-Qt6", "PyQt6-sip", "numpy", "Pillow", "PyMuPDF"):
-        packages[name] = metadata.version(name)
+        try:
+            packages[name] = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            if name != "PyQt6-Qt6":
+                raise
+            # This optional wheel distributes Qt on PyPI. A system Qt runtime
+            # has no such Python distribution; its actual version and binding
+            # bytes remain recorded independently below.
+            packages[name] = "not-installed"
     fonts = {name: file_sha256(Path(path)) for name, path in sorted(font_files.items())}
     if not fonts:
         raise ValueError("A rendering profile must pin its actual font files")
@@ -170,11 +178,10 @@ def _environment(font_files, text):
     }
 
 
-def capture(document_path, output, font_files):
+def _capture_document(document_path, output, font_files):
     from sciplot_core.veusz_worker.document_edit import loaded_native_document
     from sciplot_core.veusz_audit.pages import collect_page_geometry
     from sciplot_core.veusz_audit.layout import collect_layout_inventory
-    from sciplot_core.native_process.identity import current_identity
     import pymupdf
 
     before = file_sha256(document_path)
@@ -209,13 +216,45 @@ def capture(document_path, output, font_files):
         write_json(output / "capture.json", payload)
         write_json(output / "full-native-settings.json", inventory)
         write_json(output / "datasets.json", datasets)
-        write_json(output / "environment.json", _environment(font_files, text))
-        write_json(output / "producer-identity.json", {"runtime_identity": current_identity(),
-                   "capture_helper_sha256": file_sha256(Path(__file__)), "document_sha256": before})
+        if font_files is not None:
+            from sciplot_core.native_process.identity import current_identity
+            write_json(output / "environment.json", _environment(font_files, text))
+            write_json(output / "producer-identity.json", {"runtime_identity": current_identity(),
+                       "capture_helper_sha256": file_sha256(Path(__file__)), "document_sha256": before})
     if before != file_sha256(document_path):
         raise AssertionError("Native capture mutated its input document")
+    return payload
+
+
+def capture(document_path, output, font_files):
+    """Complete immutable-profile capture retains mandatory font evidence."""
+    if not isinstance(font_files, dict):
+        raise ValueError("A rendering profile requires its font file mapping")
+    _capture_document(document_path, output, font_files)
+
+
+def capture_generated_geometry(document_path, output):
+    """Generated behavior evidence cannot certify a historical golden profile."""
+    payload = _capture_document(document_path, output, None)
+    result = {"kind": "sciplot_generated_native_geometry", "version": 1, "capture": payload}
+    write_json(output / "generated-geometry.json", result)
+    return result
+
+
+def capture_request(request):
+    if not isinstance(request, dict):
+        raise ValueError("Invalid native capture request")
+    kind = request.get("kind", "profile")
+    if kind == "profile":
+        required = {"document", "output", "font_files"} | ({"kind"} if "kind" in request else set())
+        if set(request) != required:
+            raise ValueError("Invalid profile capture request")
+        return capture(Path(request["document"]), Path(request["output"]), request["font_files"])
+    if kind != "generated_geometry" or set(request) != {"kind", "document", "output"}:
+        raise ValueError("Unknown or invalid native capture kind")
+    return capture_generated_geometry(Path(request["document"]), Path(request["output"]))
 
 
 if __name__ == "__main__":
     request = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    capture(Path(request["document"]), Path(request["output"]), request["font_files"])
+    capture_request(request)

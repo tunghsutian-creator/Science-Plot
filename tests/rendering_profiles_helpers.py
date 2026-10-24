@@ -136,27 +136,31 @@ def project_xy_snapshot(payload, projection):
     return effective_channels(result)
 
 
-def capture_native(document, output_dir, projection, *, font_files=None):
-    """Run native capture in its correct Qt environment, then project declared roles.
-
-    A custom projection callable receives the complete captured evidence for
-    categorical primitives. The built-in dictionary form supports XY profiles.
-    """
+def _run_native_capture(document, output_dir, request_fields):
     document, output = Path(document).resolve(), Path(output_dir).resolve()
     if document.is_relative_to(output):
         raise AssertionError("Capture output must be separate from its immutable input")
     output.mkdir(parents=True, exist_ok=True)
-    if font_files is None:
-        font_files = {path.name: str(path) for path in sorted(Path("/System/Library/Fonts/Supplemental").glob("Arial*.ttf"))}
     request = output / "capture-request.json"
-    _write(request, {"document": str(document), "output": str(output),
-                     "font_files": {name: str(path) for name, path in font_files.items()}})
+    _write(request, {"document": str(document), "output": str(output), **request_fields})
     result = subprocess.run([sys.executable, str(Path(__file__).with_name("rendering_profiles_native.py")), str(request)],
                             env=veusz_worker_environment(), capture_output=True, text=True, timeout=120, check=False)
     (output / "native-worker.log").write_text(result.stdout + result.stderr, encoding="utf-8")
     if result.returncode:
         raise AssertionError(f"Native profile capture failed ({result.returncode}): {output / 'native-worker.log'}\n{result.stderr[-2000:]}")
-    payload = _read(output / "capture.json")
+    return output, _read(output / "capture.json")
+
+
+def capture_native(document, output_dir, projection, *, font_files=None):
+    """Capture complete profile evidence, then project its declared roles.
+
+    A custom projection callable receives the complete captured evidence for
+    categorical primitives. The built-in dictionary form supports XY profiles.
+    """
+    if font_files is None:
+        font_files = {path.name: str(path) for path in sorted(Path("/System/Library/Fonts/Supplemental").glob("Arial*.ttf"))}
+    output, payload = _run_native_capture(document, output_dir,
+        {"font_files": {name: str(path) for name, path in font_files.items()}})
     structure = projection(payload) if callable(projection) else project_xy_snapshot(payload, projection)
     if not structure:
         raise AssertionError("Profile projection must retain a nonempty resolved structure")
@@ -165,7 +169,19 @@ def capture_native(document, output_dir, projection, *, font_files=None):
                           payload["inventory"], payload["datasets"], payload)
 
 
+def capture_generated_native(document, output_dir):
+    """Return generated geometry/export behavior, without golden evidence claims."""
+    output, payload = _run_native_capture(document, output_dir, {"kind": "generated_geometry"})
+    result = _read(output / "generated-geometry.json")
+    if (set(result) != {"kind", "version", "capture"} or result["kind"] != "sciplot_generated_native_geometry"
+            or type(result["version"]) is not int or result["version"] != 1 or result["capture"] != payload):
+        raise AssertionError("Invalid generated native geometry evidence")
+    return result
+
+
 def _assert_authority(profile, accepted):
+    if not isinstance(accepted, NativeSnapshot):
+        raise AssertionError("Golden comparison requires complete native profile evidence")
     fresh = load_profile(profile.manifest_path)
     if fresh.manifest != profile.manifest:
         raise AssertionError("Profile manifest changed during its regression run")
@@ -203,6 +219,8 @@ def _normalize_native_text(structure, policy):
 
 
 def _compare_golden(profile, snapshot, output):
+    if not isinstance(snapshot, NativeSnapshot):
+        raise AssertionError("Golden comparison requires complete native profile evidence")
     golden = _read(profile.files["golden_structure"])
     policy = profile.manifest.get("native_text_equivalences", [])
     result = rendering_contract_regression(
