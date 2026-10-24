@@ -14,6 +14,8 @@ from sciplot_core.source_tables.read_session import read_table_once
 
 def _read_delimited(path: Path, **kwargs: Any) -> pd.DataFrame:
     kwargs.setdefault("skip_blank_lines", False)
+    kwargs.setdefault("engine", "python")
+    kwargs.setdefault("dtype", object)
     try:
         return pd.read_csv(StringIO(decode_text_file(path)), **kwargs)
     except (csv.Error, pd.errors.ParserError) as exc:
@@ -86,6 +88,7 @@ def _read_table(table_path: Path, sheet_name: str | int, *, preserve_na_tokens: 
         return pd.read_excel(
             table_path,
             header=None,
+            dtype=object,
             sheet_name=sheet_name,
             keep_default_na=not preserve_na_tokens,
         )

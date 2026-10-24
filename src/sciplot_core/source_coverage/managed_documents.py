@@ -8,6 +8,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 
 from sciplot_core.source_tables.parsing import (
     DECIMAL_ROUND_TRIP_ENCODING,
+    DECIMAL_ROUND_TRIP_ENCODING_V1,
     SOURCE_NUMERIC_ENCODING_KEY,
 )
 
@@ -160,7 +161,7 @@ def _verify_prepared_data(
 
     replicate_audit = verify_replicate_summary_request(request)
     encoding = spec.get(SOURCE_NUMERIC_ENCODING_KEY)
-    if encoding not in (None, DECIMAL_ROUND_TRIP_ENCODING):
+    if encoding not in (None, DECIMAL_ROUND_TRIP_ENCODING_V1, DECIMAL_ROUND_TRIP_ENCODING):
         raise ValueError("Unknown managed source numeric encoding.")
     inventory = {str(item["path"]): item["sha256"] for item in snapshots}
     expected = _spec_render_data_units(spec, artifact_inventory=inventory)
@@ -180,11 +181,38 @@ def _verify_prepared_data(
                 "path": str(source),
                 "sha256": snapshot["sha256"],
             }
-        derived = _derive_prepared_data(
-            request=request, private_sources=private_sources,
-            source_artifact_origins=mapping if ((request.get("data_mapping_application") or {}).get("source_groups")
-                or (request.get("categorical_binding") or {}).get("source_identity_version")) else None,
-        )
+        origins = mapping if ((request.get("data_mapping_application") or {}).get("source_groups")
+            or (request.get("categorical_binding") or {}).get("source_identity_version")) else None
+        def candidate_signatures(candidate: dict[str, Any]) -> list[str] | None:
+            rows = candidate.get("units")
+            if candidate.get("status") != "passed" or not isinstance(rows, list) or not rows:
+                return None
+            if "performance_selection" in request:
+                from sciplot_core.performance_comparison.selected_scatter import selected_source_evidence
+                performance = spec.get("performance_comparison")
+                if not isinstance(performance, dict) or canonical_json_sha256(selected_source_evidence(performance), allow_nan=False) != canonical_json_sha256(candidate.get("performance_selection_evidence"), allow_nan=False):
+                    return None
+            return [render_data_unit_signature({**unit, "source_artifacts": _remap_derived_source_artifacts(
+                unit.get("source_artifacts"), private_to_original=mapping, label="managed prepared data",
+            )}) for unit in rows]
+        expected_signatures = [render_data_unit_signature(unit) for unit in expected]
+        if encoding == DECIMAL_ROUND_TRIP_ENCODING_V1:
+            # Only v1's actual old pandas parts vary: component coercion and
+            # nonstandard accepted-text fallback. Ordinary valid decimals keep
+            # round-trip parsing in every candidate; this is no legacy downgrade.
+            for order in (True, False, None):
+                try:
+                    derived = _derive_prepared_data(request=request, private_sources=private_sources,
+                        source_numeric_encoding=encoding, legacy_fused_digits=order, source_artifact_origins=origins)
+                except ValueError:
+                    continue
+                if candidate_signatures(derived) == expected_signatures:
+                    break
+            else:
+                raise ValueError("Managed specification values, axes, or sample identities do not reproduce from the exact prepared source tables.")
+        else:
+            derived = _derive_prepared_data(request=request, private_sources=private_sources,
+                source_numeric_encoding=encoding or DECIMAL_ROUND_TRIP_ENCODING_V1, source_artifact_origins=origins)
         if "performance_selection" in request:
             from sciplot_core.performance_comparison.selected_scatter import selected_source_evidence
             performance = spec.get("performance_comparison")
@@ -197,19 +225,15 @@ def _verify_prepared_data(
         if encoding is None and request.get("rule_id") != "performance_comparison":
             current_units = derived.get("units")
             if derived.get("status") == "passed" and isinstance(current_units, list) and current_units:
-                remapped = [
-                    {**unit, "source_artifacts": _remap_derived_source_artifacts(
-                        unit.get("source_artifacts"), private_to_original=mapping,
-                        label="managed prepared data",
-                    )} for unit in current_units
-                ]
-                if [render_data_unit_signature(unit) for unit in remapped] != [
-                    render_data_unit_signature(unit) for unit in expected
-                ]:
-                    derived = _derive_prepared_data(
-                        request=request, private_sources=private_sources,
-                        legacy_numeric_parser=True,
-                    )
+                if candidate_signatures(derived) != expected_signatures:
+                    for fused_digits in (True, False):
+                        derived = _derive_prepared_data(
+                            request=request, private_sources=private_sources,
+                            legacy_numeric_parser=True, legacy_fused_digits=fused_digits,
+                            source_artifact_origins=origins,
+                        )
+                        if candidate_signatures(derived) == expected_signatures:
+                            break
         units = derived.get("units")
         if (
             derived.get("status") != "passed"
@@ -236,6 +260,8 @@ def _verify_prepared_data(
 def _derive_prepared_data(
     *, request: dict[str, Any], private_sources: list[Path],
     legacy_numeric_parser: bool = False,
+    source_numeric_encoding: str = DECIMAL_ROUND_TRIP_ENCODING,
+    legacy_fused_digits: bool | None = True,
     source_artifact_origins: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.studio_render import derive_terminal_render_data_contract
@@ -244,6 +270,8 @@ def _derive_prepared_data(
         return derive_terminal_render_data_contract(
             request=request, terminal_sources=private_sources,
             legacy_numeric_parser=legacy_numeric_parser,
+            source_numeric_encoding=source_numeric_encoding,
+            legacy_fused_digits=legacy_fused_digits,
             **({"source_artifact_origins": source_artifact_origins} if source_artifact_origins is not None else {}),
         )
     from sciplot_core.performance_comparison import prepare_performance_comparison
@@ -257,6 +285,8 @@ def _derive_prepared_data(
     payload = prepare_performance_comparison(
         private_sources[0], template_id=str(request["template"]),
         selection=performance_selection_from_request(request),
+        source_numeric_encoding=source_numeric_encoding,
+        compatibility_fused_digits=legacy_fused_digits,
     )
     derived_spec = build_performance_veusz_spec(payload=payload, request=request)
     units = _spec_render_data_units(

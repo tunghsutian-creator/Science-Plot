@@ -17,11 +17,12 @@ from sciplot_core.performance_comparison.metadata import (
 from sciplot_core.performance_comparison.models import PerformanceComparisonError
 from sciplot_core.performance_comparison.selection import parse_performance_selection
 from sciplot_core.performance_comparison.source_values import _REQUIRED_COLUMNS, _text
-from sciplot_core.source_tables.parsing import coerce_numeric_series
+from sciplot_core.source_tables.parsing import DECIMAL_ROUND_TRIP_ENCODING, coerce_legacy_numeric_series, coerce_numeric_series
 
 
 def normalize_selected_rows(
-    source: str | Path, selection: Any
+    source: str | Path, selection: Any, *, source_numeric_encoding: str = DECIMAL_ROUND_TRIP_ENCODING,
+    compatibility_fused_digits: bool | None = True,
 ) -> tuple[Path, pd.DataFrame, dict[str, int], dict[str, int], int]:
     chosen = parse_performance_selection(selection)
     path, frame, columns, digest = read_metadata_table(source)
@@ -65,9 +66,10 @@ def normalize_selected_rows(
             )
         units[metric] = declaration["unit"] if declaration is not None else original[0]
     numeric = (
-        pd.to_numeric(frame[columns["value"]], errors="coerce")
+        coerce_legacy_numeric_series(frame[columns["value"]])
         if frame.attrs.get("sciplot_legacy_numeric_parser") is True
-        else coerce_numeric_series(frame[columns["value"]])
+        else coerce_numeric_series(frame[columns["value"]], encoding=source_numeric_encoding,
+                                   compatibility_fused_digits=compatibility_fused_digits)
     )
     rows: list[dict[str, Any]] = []
     materials: dict[str, int] = {}

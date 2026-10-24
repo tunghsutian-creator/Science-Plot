@@ -193,7 +193,9 @@ def test_legacy_grouped_parser_replay_stays_distinct_from_new_decimal_precision(
     frame.attrs["sciplot_legacy_numeric_parser"] = True
     historical, _ = _categorical_grouped_series_from_frames([StudioSourceFrame("input", source, "a" * 64, frame)])
     assert current[0].y_values == (float("0.12345678901234567"),) * 2
-    assert historical[0].y_values == (float(pd.to_numeric(pd.Series(["0.12345678901234567"])).iloc[0]),) * 2
+    # Independently captured from pandas 3.0.6; ambient pandas 3.1 rounds this
+    # token correctly and is no longer a historical reference.
+    assert historical[0].y_values == (float.fromhex("0x1.f9add3746f659p-4"),) * 2
     assert current[0].y_values != historical[0].y_values
 
 

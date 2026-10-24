@@ -37,7 +37,6 @@ def test_single_categorical_tick_audit_keeps_exact_axis_guards_and_rejects_other
 
 
 def test_raw_categorical_decimal_parsing_preserves_precision_and_unversioned_legacy_contract(tmp_path):
-    import pandas as pd
     from sciplot_core.source_tables.parsing import DECIMAL_ROUND_TRIP_ENCODING, SOURCE_NUMERIC_ENCODING_KEY
     from sciplot_core.source_coverage.file_snapshots import _stable_file_snapshot
     from sciplot_core.source_coverage.managed_documents import _verify_prepared_data
@@ -57,7 +56,9 @@ def test_raw_categorical_decimal_parsing_preserves_precision_and_unversioned_leg
 
     current, historical = source_spec(legacy=False), source_spec(legacy=True)
     exact = [float(value) for value in tokens]
-    legacy = pd.to_numeric(pd.Series(tokens), errors="coerce").tolist()
+    legacy = [float.fromhex(value) for value in (
+        "0x1.f9add3746f659p-4", "0x1.0000000000001p+0", "0x1.2b851eb851eb9p+1",
+    )]
     assert [value.hex() for value in current["series"][0]["y_values"]] == [value.hex() for value in exact]
     assert [value.hex() for value in historical["series"][0]["y_values"]] == [value.hex() for value in legacy]
     assert legacy[0].hex() != exact[0].hex()
@@ -74,6 +75,33 @@ def _impact(tmp_path):
     source = tmp_path / "impact.csv"
     source.write_text("Impact strength,Impact strength\nkJ/m2,kJ/m2\nB,A\n8,4\n8,\n8,7\n8,7\n8,\n")
     return source
+
+
+def test_sealed_v1_numeric_grammar_replays_without_downgrading_v2(tmp_path):
+    from sciplot_core.source_tables.parsing import (
+        DECIMAL_ROUND_TRIP_ENCODING, DECIMAL_ROUND_TRIP_ENCODING_V1, SOURCE_NUMERIC_ENCODING_KEY,
+    )
+    from sciplot_core.source_coverage.file_snapshots import _stable_file_snapshot
+    from sciplot_core.source_coverage.managed_documents import _verify_prepared_data
+    from sciplot_core.studio_render import derive_terminal_render_data_contract
+
+    source = tmp_path / "sealed-v1.csv"
+    source.write_text("Impact strength\nkJ/m2\nAmber\n0.12345678901234567\x00suffix\n1.0000000000000002\n2.3400000000000003\n")
+    before = source.read_bytes()
+    request = {"rule_id": "impact_metric", "template": "box_strip", "render_options": {"summary_statistic": "raw_only"}}
+    units = derive_terminal_render_data_contract(request=request, terminal_sources=[source],
+                source_numeric_encoding=DECIMAL_ROUND_TRIP_ENCODING_V1)["units"]
+    assert [value.hex() for value in units[0]["y_values"]] == [
+        "0x1.f9add3746f659p-4", "0x1.0000000000001p+0", "0x1.2b851eb851eb9p+1",
+    ]
+    spec = {"source_request": request, "series": units, "axes": units[0]["axes"],
+            "categorical": units[0]["categorical_contract"], "reference_guides": units[0]["reference_guides"],
+            "direct_labels": units[0]["direct_labels"], SOURCE_NUMERIC_ENCODING_KEY: DECIMAL_ROUND_TRIP_ENCODING_V1}
+    snapshots = [_stable_file_snapshot(source, label="generated sealed v1 grammar")]
+    assert _verify_prepared_data(spec, snapshots)["status"] == "passed"
+    with pytest.raises(ValueError, match="do not reproduce"):
+        _verify_prepared_data({**spec, SOURCE_NUMERIC_ENCODING_KEY: DECIMAL_ROUND_TRIP_ENCODING}, snapshots)
+    assert source.read_bytes() == before
 
 
 @pytest.mark.parametrize("template", ["box", "box_strip"])

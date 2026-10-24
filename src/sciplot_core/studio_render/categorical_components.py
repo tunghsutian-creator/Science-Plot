@@ -5,6 +5,10 @@ from __future__ import annotations
 import math
 from typing import Any
 import pandas as pd
+from sciplot_core.source_tables.parsing import (
+    DECIMAL_ROUND_TRIP_ENCODING_V1, SOURCE_NUMERIC_ENCODING_KEY,
+    coerce_frame_numeric_series, coerce_legacy_numeric_series,
+)
 from sciplot_core.policy import (
     CATEGORICAL_STACK_MAX_COMPONENTS,
 )
@@ -24,6 +28,15 @@ from sciplot_core.studio_render.categorical_values import (
 from sciplot_core.studio_render.metric_columns import (
     _axis_label_from_column,
 )
+
+
+def _component_numeric_series(values: pd.Series, frame: pd.DataFrame) -> pd.Series:
+    # This source kind used uncorrected pandas coercion even in sealed v1.
+    if frame.attrs.get(SOURCE_NUMERIC_ENCODING_KEY) == DECIMAL_ROUND_TRIP_ENCODING_V1:
+        fused_digits = frame.attrs.get("sciplot_legacy_fused_digits", True)
+        if fused_digits is not None:
+            return coerce_legacy_numeric_series(values, fused_digits=fused_digits)
+    return coerce_frame_numeric_series(values, frame)
 
 
 def _categorical_component_series_from_frames(
@@ -63,7 +76,7 @@ def _categorical_component_series_from_frames(
             if column in {sample_column, component_column}:
                 continue
             nonblank = frame[column].map(_clean_studio_cell).ne("")
-            numeric = pd.to_numeric(frame[column], errors="coerce")
+            numeric = _component_numeric_series(frame[column], frame)
             if nonblank.any() and numeric[nonblank].notna().all():
                 numeric_candidates.append(column)
         if len(numeric_candidates) != 1:
@@ -85,9 +98,9 @@ def _categorical_component_series_from_frames(
                     "incomplete_categorical_component_row",
                     "Every stacked-component row needs Sample, Component, and value.",
                 )
-            numeric_value = pd.to_numeric(
+            numeric_value = _component_numeric_series(
                 pd.Series([frame.at[row_index, value_column]]),
-                errors="coerce",
+                frame,
             ).iloc[0]
             if pd.isna(numeric_value) or not math.isfinite(float(numeric_value)):
                 raise StudioPreparationBlocked(

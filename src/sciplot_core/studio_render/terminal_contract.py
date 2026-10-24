@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.source_tables.parsing import DECIMAL_ROUND_TRIP_ENCODING
 from sciplot_core.scalar_visual import (
     scalar_visual_contract,
 )
@@ -98,6 +99,8 @@ def derive_terminal_render_data_contract(
     request: dict[str, Any],
     terminal_sources: list[Path],
     legacy_numeric_parser: bool = False,
+    source_numeric_encoding: str = DECIMAL_ROUND_TRIP_ENCODING,
+    legacy_fused_digits: bool | None = True,
     source_artifact_origins: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Replay terminal tables into the numeric units the renderer must consume."""
@@ -149,6 +152,8 @@ def derive_terminal_render_data_contract(
         for source in resolved_sources:
             frames.extend(_read_source_frame_records(
                 source, request=request, legacy_numeric_parser=legacy_numeric_parser,
+                source_numeric_encoding=source_numeric_encoding,
+                legacy_fused_digits=legacy_fused_digits,
                 source_artifact_origin=(source_artifact_origins or {}).get(str(source)),
             ))
         series, axis_info = _series_from_frame_records(request, frames=frames)

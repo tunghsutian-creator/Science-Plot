@@ -7,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core.source_tables.parsing import coerce_numeric_series
+from sciplot_core.source_tables.parsing import coerce_frame_numeric_series
 from sciplot_core.studio_render.categorical_groups import grouped_series_from_records
 from sciplot_core.studio_render.categorical_values import _clean_studio_cell
 from sciplot_core.studio_render.models import (
@@ -41,9 +41,7 @@ def bound_categorical_series(frames: list[StudioSourceFrame], *,
     condition_column = binding.get("condition_column")
     fields = binding["value_columns"]
     value_facts = frame.attrs["categorical_value_facts"]
-    numeric = {field["column_index"]: (pd.to_numeric(frame.iloc[:, field["column_index"]], errors="coerce")
-               if frame.attrs.get("sciplot_legacy_numeric_parser") is True
-               else coerce_numeric_series(frame.iloc[:, field["column_index"]])) for field in fields}
+    numeric = {field["column_index"]: coerce_frame_numeric_series(frame.iloc[:, field["column_index"]], frame) for field in fields}
     records: list[tuple[str, str, int, float, int]] = []
     samples: list[str] = []
     conditions: list[str] = []

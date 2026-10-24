@@ -5,14 +5,13 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 from typing import Any
-import pandas as pd
 from sciplot_core.policy.categorical import (
     CATEGORICAL_BOX_FILL_FRACTION,
     DEFAULT_RAW_POINT_JITTER_FRACTION,
     categorical_raw_point_half_spread,
 )
 from sciplot_core.policy.render_options import normalize_raw_point_jitter_fraction
-from sciplot_core.source_tables.parsing import coerce_numeric_series
+from sciplot_core.source_tables.parsing import coerce_frame_numeric_series
 
 from sciplot_core.studio_render.models import (
     DEFAULT_PALETTE,
@@ -62,9 +61,7 @@ def _categorical_series_from_frames(
             original = frame[column].iloc[2:]
             # Unversioned saved specifications replay their original parser;
             # current source encodings retain correctly rounded decimal cells.
-            numeric_values = (pd.to_numeric(original, errors="coerce")
-                              if frame.attrs.get("sciplot_legacy_numeric_parser") is True
-                              else coerce_numeric_series(original)).dropna()
+            numeric_values = coerce_frame_numeric_series(original, frame).dropna()
             if numeric_values.empty:
                 continue
             sample = (

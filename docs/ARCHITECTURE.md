@@ -1383,8 +1383,8 @@ a cross-session identity.
 | Upstream Veusz | `third_party/veusz/` | Preserve upstream identity; SciPlot integration stays outside. |
 
 Accepted decimal text for paired curves and numeric mapping operations shares
-`source_tables/parsing.py:coerce_numeric_series`. It retains the existing numeric
-grammar, missing-value validation and integer dtypes while correctly rounding
+`source_tables/parsing.py:coerce_numeric_series`. It owns numeric text recognition,
+missing-value validation and integer dtypes while correctly rounding
 accepted floating text to binary64 before the native persistence boundary.
 Raw cell strings, curve order, independent lengths and scientific transforms
 remain separate authorities; this parser performs no normalization or conversion.
@@ -1393,11 +1393,26 @@ numeric coercion, so its independent source reread cannot truncate the values
 before the existing native round-trip writer and audit.
 
 New ordinary specifications declare the source parser separately as
-`source_numeric_encoding=decimal_float64_round_trip_v1`. A versioned specification
-must reproduce through this parser. An unversioned historical specification can
-instead reproduce through the original table inference and pandas coercion,
+`source_numeric_encoding=decimal_float64_round_trip_v2`. This encoding coerces
+embedded NUL text to missing rather than discarding its suffix, and rounds all
+accepted ASCII decimal spellings exactly. Delimited raw reads preserve object
+cells through the Python parser so a tokenizer cannot discard a NUL suffix first;
+Excel retains numeric text and native numeric cells separately. Sealed v1 keeps
+its original source-kind pipeline and correctly rounded ordinary valid decimals.
+Only its historically ambient stacked-component coercion and nonstandard-text
+fallback may reconstruct the known fused, unfused or later round-trip behavior,
+selected by the complete exact saved signature, including unpaired performance
+observations. This same-version reconstruction cannot apply lossy parsing to an
+ordinary valid v1 decimal or downgrade its encoding. No saved encoding,
+source hash, scientific signature or VSZ is upgraded by this declaration.
+A versioned specification must reproduce through its own parser. An unversioned
+historical specification can instead reproduce through the original table
+inference and frozen pandas 3.0.6 17-digit accumulation/scaling,
 only after the current parser's exact signature does not match. That compatibility
-reader is local to the audited private frame; complete values, axes, identities
+reader is local to the audited private frame. Its fused and unfused binary64
+evaluation candidates are selected only by the complete exact saved signature;
+neither OS detection nor an ambient dependency selects scientific values. A
+match proves values, not a historical compiler identity. Complete values, axes, identities
 and source-artifact signatures must still match exactly. Unknown encodings fail
 closed. This audit does not rewrite a historical specification or native document,
 and introduces no numeric tolerance or reinterpretation of old measurements.

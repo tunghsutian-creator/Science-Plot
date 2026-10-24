@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 import pandas as pd
-from sciplot_core.source_tables.parsing import coerce_numeric_series
+from sciplot_core.source_tables.parsing import coerce_frame_numeric_series
 from sciplot_core.policy.categorical import (
     CATEGORICAL_GROUPED_BAR_CENTER_OFFSET,
     CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION,
@@ -174,12 +174,11 @@ def _categorical_grouped_series_from_frames(
             continue
         detected = True
         numeric_candidates: list[Any] = []
-        legacy = frame.attrs.get("sciplot_legacy_numeric_parser") is True
         for column in frame.columns:
             if column in {sample_column, condition_column}:
                 continue
             nonblank = frame[column].map(_clean_studio_cell).ne("")
-            numeric = pd.to_numeric(frame[column], errors="coerce") if legacy else coerce_numeric_series(frame[column])
+            numeric = coerce_frame_numeric_series(frame[column], frame)
             if nonblank.any() and numeric[nonblank].notna().all():
                 numeric_candidates.append(column)
         if len(numeric_candidates) != 1:
@@ -202,7 +201,7 @@ def _categorical_grouped_series_from_frames(
                     "Every grouped-bar row needs Sample, Condition, and value.",
                 )
             raw_value = pd.Series([frame.at[row_index, value_column]])
-            parsed = pd.to_numeric(raw_value, errors="coerce") if legacy else coerce_numeric_series(raw_value)
+            parsed = coerce_frame_numeric_series(raw_value, frame)
             numeric_value = parsed.iloc[0]
             if pd.isna(numeric_value) or not math.isfinite(float(numeric_value)):
                 raise StudioPreparationBlocked(

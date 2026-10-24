@@ -11,6 +11,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.semantic_sources.registered_paired_curve_transform import _comparable_unit
 from sciplot_core.studio_render.models import StudioPreparationBlocked, StudioSourceFrame
 from sciplot_core.mapping_contract.categorical import validate_categorical_binding
+from sciplot_core.source_tables.parsing import DECIMAL_ROUND_TRIP_ENCODING, SOURCE_NUMERIC_ENCODING_KEY
 
 
 def categorical_table_facts(source: Path, binding: dict[str, Any]) -> dict[str, Any]:
@@ -28,6 +29,8 @@ def categorical_table_facts(source: Path, binding: dict[str, Any]) -> dict[str, 
 
 def read_categorical_frame(source: Path, binding: dict[str, Any], *,
                            legacy_numeric_parser: bool = False,
+                           source_numeric_encoding: str = DECIMAL_ROUND_TRIP_ENCODING,
+                           legacy_fused_digits: bool | None = True,
                            source_artifact_origin: dict[str, str] | None = None) -> StudioSourceFrame:
     validate_categorical_binding(binding, complete=True)
     if binding.get("source_identity_version") == 1:
@@ -69,6 +72,8 @@ def read_categorical_frame(source: Path, binding: dict[str, Any], *,
     frame.attrs["categorical_value_facts"] = value_facts
     if legacy_numeric_parser:
         frame.attrs["sciplot_legacy_numeric_parser"] = True
+    frame.attrs["sciplot_legacy_fused_digits"] = legacy_fused_digits
+    frame.attrs[SOURCE_NUMERIC_ENCODING_KEY] = source_numeric_encoding
     if file_sha256(source) != binding["source_sha256"]:
         raise StudioPreparationBlocked("source_changed_during_read", "The categorical source changed during its original-table read.")
     return StudioSourceFrame(source.stem, source.resolve(), binding["source_sha256"], frame)

@@ -11,7 +11,10 @@ from sciplot_core.foundation.file_hashing import (
     file_sha256,
 )
 from sciplot_core.foundation.text_files import decode_text
-from sciplot_core.source_tables.parsing import coerce_numeric_series
+from sciplot_core.source_tables.parsing import (
+    DECIMAL_ROUND_TRIP_ENCODING, SOURCE_NUMERIC_ENCODING_KEY,
+    coerce_frame_numeric_series, coerce_legacy_numeric_series,
+)
 
 from sciplot_core.studio_render.models import (
     StudioPreparationBlocked,
@@ -29,6 +32,8 @@ def _read_source_frame_records(
     *,
     request: dict[str, Any] | None = None,
     legacy_numeric_parser: bool = False,
+    source_numeric_encoding: str = DECIMAL_ROUND_TRIP_ENCODING,
+    legacy_fused_digits: bool | None = True,
     source_artifact_origin: dict[str, str] | None = None,
 ) -> list[StudioSourceFrame]:
     groups = []
@@ -61,6 +66,8 @@ def _read_source_frame_records(
         validate_categorical_context(request)
         return [read_categorical_frame(source, request["categorical_binding"],
                                        legacy_numeric_parser=legacy_numeric_parser,
+                                       source_numeric_encoding=source_numeric_encoding,
+                                       legacy_fused_digits=legacy_fused_digits,
                                        source_artifact_origin=source_artifact_origin)]
     files: list[Path]
     if source.is_dir():
@@ -88,10 +95,9 @@ def _read_source_frame_records(
         try:
             resolved = path.expanduser().resolve()
             before_sha256 = file_sha256(resolved)
-            frame = (
-                _read_table(resolved, legacy_numeric_parser=True)
-                if legacy_numeric_parser else _read_table(resolved)
-            )
+            frame = _read_table(resolved, legacy_numeric_parser=legacy_numeric_parser,
+                                source_numeric_encoding=source_numeric_encoding,
+                                legacy_fused_digits=legacy_fused_digits)
             after_sha256 = file_sha256(resolved)
             if after_sha256 != before_sha256:
                 raise StudioPreparationBlocked(
@@ -133,7 +139,9 @@ def _source_label_from_path(path: Path) -> str:
     return stem
 
 
-def _read_table(path: Path, *, legacy_numeric_parser: bool = False) -> pd.DataFrame:
+def _read_table(path: Path, *, legacy_numeric_parser: bool = False,
+                source_numeric_encoding: str = DECIMAL_ROUND_TRIP_ENCODING,
+                legacy_fused_digits: bool | None = True) -> pd.DataFrame:
     """Read current cells, or exactly replay an unversioned historical parser.
 
     The compatibility mode is local to this frame and only used by the exact
@@ -142,7 +150,18 @@ def _read_table(path: Path, *, legacy_numeric_parser: bool = False) -> pd.DataFr
     """
     frame = _read_table_cells(path, dtype=None if legacy_numeric_parser else object)
     if legacy_numeric_parser:
+        if legacy_fused_digits is None:
+            raise ValueError("Unversioned legacy parsing requires an explicit arithmetic order.")
+        # Preserve old inference for labels/bools/integers, but reconstruct float
+        # columns from their original cells before current pandas rounds them.
+        cells = _read_table_cells(path, dtype=object)
+        for column in frame.columns:
+            numeric = coerce_legacy_numeric_series(cells[column], fused_digits=legacy_fused_digits)
+            if numeric[cells[column].notna()].notna().all():
+                frame[column] = numeric
         frame.attrs["sciplot_legacy_numeric_parser"] = True
+    frame.attrs["sciplot_legacy_fused_digits"] = legacy_fused_digits
+    frame.attrs[SOURCE_NUMERIC_ENCODING_KEY] = source_numeric_encoding
     return frame
 
 
@@ -170,10 +189,7 @@ def _read_table_cells(path: Path, *, dtype: Any) -> pd.DataFrame:
 
 def _coerced_numeric_frame(frame: pd.DataFrame) -> pd.DataFrame:
     metadata_rows = _structured_metadata_prefix_rows(frame)
-    if frame.attrs.get("sciplot_legacy_numeric_parser") is True:
-        numeric = frame.iloc[metadata_rows:].apply(pd.to_numeric, errors="coerce")
-    else:
-        numeric = frame.iloc[metadata_rows:].apply(coerce_numeric_series)
+    numeric = frame.iloc[metadata_rows:].apply(lambda values: coerce_frame_numeric_series(values, frame))
     useful_columns = [
         column for column in numeric.columns if numeric[column].notna().sum() >= 2
     ]

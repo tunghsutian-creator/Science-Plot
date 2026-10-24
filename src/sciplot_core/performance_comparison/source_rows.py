@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from sciplot_core.source_tables.parsing import DECIMAL_ROUND_TRIP_ENCODING
 
 from sciplot_core.performance_comparison.models import PerformanceComparisonError
 from sciplot_core.performance_comparison.field_validation import (
@@ -26,12 +27,15 @@ from sciplot_core.performance_comparison.source_values import (
 def normalize_performance_rows(
     source: str | Path,
     *, selection: dict[str, Any] | None = None,
+    source_numeric_encoding: str = DECIMAL_ROUND_TRIP_ENCODING,
+    compatibility_fused_digits: bool | None = True,
 ) -> tuple[Path, pd.DataFrame, dict[str, int], dict[str, int], int]:
     """Read required columns and return normalized rows plus stable orders."""
 
     if selection is not None:
         from sciplot_core.performance_comparison.selection_rows import normalize_selected_rows
-        return normalize_selected_rows(source, selection)
+        return normalize_selected_rows(source, selection, source_numeric_encoding=source_numeric_encoding,
+                                       compatibility_fused_digits=compatibility_fused_digits)
     source_path = _resolve_source(Path(source))
     frame = _read_source_frame(source_path).dropna(how="all").reset_index(drop=True)
     columns = _canonical_header_map(frame.columns)

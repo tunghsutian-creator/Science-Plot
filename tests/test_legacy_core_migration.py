@@ -97,7 +97,10 @@ def test_curve_table_parser_preserves_labels_units_and_numeric_pairs(
     assert [value.hex() for value in _coerced_numeric_frame(_read_table(plain))["y"]] == [
         "0x1.f9add3746f65fp-4", "0x1.1cac067affebcp-53",
     ]
-    assert coerce_numeric_series(pd.Series(["1.0\x00", "1e2\x00x"])).tolist() == [1.0, 100.0]
+    from sciplot_core.source_tables.parsing import DECIMAL_ROUND_TRIP_ENCODING_V1
+    malformed = pd.Series(["1.0\x00", "1e2\x00x"])
+    assert coerce_numeric_series(malformed).isna().all()
+    assert coerce_numeric_series(malformed, encoding=DECIMAL_ROUND_TRIP_ENCODING_V1).tolist() == [1.0, 100.0]
 
     # An old document must exactly reproduce the old parser's values. A new
     # spec cannot downgrade its declared source encoding to accept those values.
@@ -131,10 +134,9 @@ def test_curve_table_parser_preserves_labels_units_and_numeric_pairs(
     assert _verify_prepared_data(current, snapshots)["status"] == "passed"
     versioned = {**current, SOURCE_NUMERIC_ENCODING_KEY: DECIMAL_ROUND_TRIP_ENCODING}
     assert _verify_prepared_data(versioned, snapshots)["status"] == "passed"
-    with pytest.raises(ValueError, match="do not reproduce"):
-        _verify_prepared_data(
-            {**historical, SOURCE_NUMERIC_ENCODING_KEY: DECIMAL_ROUND_TRIP_ENCODING}, snapshots
-        )
+    for encoding in (DECIMAL_ROUND_TRIP_ENCODING_V1, DECIMAL_ROUND_TRIP_ENCODING):
+        with pytest.raises(ValueError, match="do not reproduce"):
+            _verify_prepared_data({**historical, SOURCE_NUMERIC_ENCODING_KEY: encoding}, snapshots)
     with pytest.raises(ValueError, match="Unknown managed source numeric encoding"):
         _verify_prepared_data({**current, SOURCE_NUMERIC_ENCODING_KEY: "unknown"}, snapshots)
     for field, replacement in (("y_values", [1, 2, 3]), ("label", "Other sample")):

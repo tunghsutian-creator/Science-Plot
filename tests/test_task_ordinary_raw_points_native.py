@@ -34,7 +34,7 @@ def test_public_raw_categorical_decimal_values_are_exact_in_saved_native_documen
     document = Path(created["current_project"]["figures"][0]["document"])
     spec_path = _veusz_spec_path(document)
     spec = json.loads(spec_path.read_text())
-    assert spec["source_numeric_encoding"] == "decimal_float64_round_trip_v1"
+    assert spec["source_numeric_encoding"] == "decimal_float64_round_trip_v2"
     assert [value.hex() for value in spec["series"][0]["y_values"]] == expected
     assert [value.hex() for value in spec["categorical"]["groups"][0]["raw_values"]] == expected
     assert spec["categorical"]["summary_calculation"] == "none"
