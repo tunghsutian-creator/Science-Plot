@@ -346,9 +346,11 @@ Full pytest and ready-rule acceptance remain release/merge gates; a frozen full
 already contains both tiers. Do not substitute public subsets for authorized
 private/full release acceptance or repeat full for every small cleanup.
 
-First complete current compatibility and acceptance, including the persistent
-a.u./XRD display default, historical DataMapping cold replay, main and exact-commit
-CI. The next implementation phase is verification speed alone. Use actual
+Keep the current compatibility candidate frozen while its original CI continues,
+including the persistent a.u./XRD display default and historical DataMapping cold
+replay. Verification speed now proceeds in a separate worktree, with independent
+source-specific acceptance; main and exact-commit CI gates remain unchanged.
+Plotting and AI module work stays behind speed acceptance. Use actual
 monotonic stage costs to choose a small dependency-selection, deduplication or
 operation-local preparation change; bind reuse to exact version, environment
 and input identities. Long stages must expose actual progress or an explicit
@@ -358,6 +360,17 @@ post-execution checks. Accept this phase only with comparable before/after
 end-to-end time, individual stage costs and evidence that coverage did not shrink.
 Different test selections or historical wall clocks cannot establish speedup.
 Do not add another audit framework.
+
+The first progress implementation uses the existing finish/supervisor/status
+path, synchronous checkpoints and monotonic ages. It preserves original waits,
+completion and immutable receipts; complete release/capture acceptance is still
+required. A measured Qt text-projection memo prototype was rejected: one pair's
+2.28% elapsed difference with different inherited environment hashes did not
+establish a stable benefit. Root-overlap analysis also did not justify pruning
+missing candidates or alias layout. Keep these prototypes out of the delivery.
+Use the existing unrecorded changed-owner entry for daily feedback and request
+recorded identities when reuse or capture is needed. Measure these evidence modes
+as separate contracts, and retain every assertion and complete release scope.
 
 Only after speed acceptance, resume complete real ordinary plotting, TTS and
 panel-assembly tasks and the plotting/AI-communication/edit module-boundary review.

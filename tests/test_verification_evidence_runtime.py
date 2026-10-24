@@ -112,10 +112,17 @@ def test_real_session_finish_blocks_unreviewed_dynamically_loaded_qt(tmp_path, m
     import json
     from sciplot_core.verification import pytest_finish
     finish = tmp_path / "finish.json"
-    monkeypatch.setenv("SCIPLOT_VERIFY_FINISH", str(finish))
-    monkeypatch.setenv("SCIPLOT_VERIFY_QT_MODULES", json.dumps(sorted(runtime.QT_MODULES)))
-    monkeypatch.setitem(sys.modules, "PyQt6.QtQuick", SimpleNamespace())
-    pytest_finish.pytest_sessionfinish(SimpleNamespace(items=[]), 0)
+    original_passed, original_progress = pytest_finish._passed, pytest_finish._progress
+    original_contents = list(original_passed)
+    with monkeypatch.context() as hooks:
+        hooks.setenv("SCIPLOT_VERIFY_FINISH", str(finish))
+        hooks.setenv("SCIPLOT_VERIFY_QT_MODULES", json.dumps(sorted(runtime.QT_MODULES)))
+        hooks.setitem(sys.modules, "PyQt6.QtQuick", SimpleNamespace())
+        hooks.setattr(pytest_finish, "_passed", [])
+        hooks.setattr(pytest_finish, "_progress", None)
+        pytest_finish.pytest_sessionfinish(SimpleNamespace(items=[]), 0)
+    assert pytest_finish._passed is original_passed and original_passed == original_contents
+    assert pytest_finish._progress is original_progress
     assert json.loads(finish.read_text())["complete"] is False
 
 

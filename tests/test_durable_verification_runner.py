@@ -129,6 +129,14 @@ def test_abrupt_pytest_process_exit_has_no_session_finish(run_spec):
     directory = root / ".tmp_verify" / "abrupt"
     start_run(directory=directory, spec=run_spec)
     assert await_completion(directory)["reason"] == "session_finish_missing"
+    original_finish = (directory / "finish.json").read_bytes()
+    progress = json.loads((directory / "pytest-progress.json").read_bytes())
+    progress.update(latest_phase="session_finish", completed=1, passed=1, updated_at=time.time(), written_at=time.time(),
+                    updated_monotonic=time.monotonic(), written_monotonic=time.monotonic())
+    (directory / "pytest-progress.json").write_text(json.dumps(progress))
+    forged = run_status(directory)
+    assert forged["reason"] == "session_finish_missing" and forged["progress"]["pytest"]["available"]
+    assert (directory / "finish.json").read_bytes() == original_finish
 
 
 def test_artifact_recursion_and_nonlocal_destinations_refused(run_spec):
@@ -295,3 +303,228 @@ def test_progress_pid_cannot_replace_sealed_original_wait(run_spec, field):
     (directory / "state.json").write_text(json.dumps(state))
     assert (directory / "completion.json").read_bytes() == original
     assert run_status(directory)["status"] == "BLOCKED"
+
+
+def _pytest_spec(run_spec, body):
+    root = Path(run_spec["repo_root"])
+    source = root / "test_progress.py"
+    source.write_text(body)
+    run_spec["command"] = [sys.executable, "-m", "pytest", "--rootdir", str(root), "--confcutdir", str(root),
+                           "-q", "-s", "-p", "sciplot_core.verification.pytest_finish", source.name]
+    run_spec["scope"]["kind"] = "pytest"
+    run_spec["selected_tests"] = [source.name + "::test_live"]
+    run_spec["inputs"]["tests"]["paths"].append(str(source))
+    return root / ".tmp_verify/progress"
+
+
+def test_running_progress_exposes_actual_node_and_log_growth(run_spec):
+    from sciplot_core.verification.changed_evidence import changed_record_status
+
+    _pytest_spec(run_spec, "def test_live():\n import time\n print('actual body started',flush=True)\n time.sleep(1.5)\n")
+    record = Path(run_spec["repo_root"]) / ".tmp_verify/live-record"
+    directory = record / "pytest_live"
+    checks = [{"check_id": "pytest_live", "command": run_spec["command"]}]
+    run_spec["scope"].update(check_id="pytest_live", changed_record_checks_sha256=digest(checks))
+    record.mkdir(parents=True)
+    atomic_json(record / "plan.json", {"kind": "sciplot_changed_verification_record", "version": 1,
+        "claim": "selected_checks_only", "scientific_acceptance": False, "checks": checks})
+    start_run(directory=directory, spec=run_spec)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        result = run_status(directory)
+        progress = result.get("progress", {})
+        if (progress.get("pytest", {}).get("latest_phase") == "call"
+                and progress.get("log", {}).get("growth_since_checkpoint_bytes", 0) > 0):
+            break
+        time.sleep(.01)
+    else:
+        pytest.fail(f"actual running node was not visible: {result}")
+    assert result["status"] == "RUNNING"
+    actual = progress["pytest"]
+    assert actual["latest_node"] == run_spec["selected_tests"][0]
+    assert actual["pid"] == load_receipt(directory / "state.json")["child_pid"]
+    assert actual["completed"] == actual["passed"] == actual["failed"] == 0
+    assert actual["request_sha256"] == file_sha256(directory / "request.json")
+    assert actual["update_age_seconds"] >= 0
+    projected = changed_record_status(record, repo_root=Path(run_spec["repo_root"]))
+    assert projected["status"] == "RUNNING"
+    assert projected["checks"][0]["progress"]["pytest"]["latest_node"] == actual["latest_node"]
+    done = await_completion(directory)
+    assert done["status"] == "PASS"
+    assert {key: done["progress"]["pytest"][key] for key in ("completed", "passed", "failed")} == {
+        "completed": 1, "passed": 1, "failed": 0}
+    assert set(load_receipt(directory / "finish.json")) == {"complete", "exit_code", "selected_tests", "executed_tests"}
+
+
+def test_progress_report_counts_are_duplicate_safe_constant_time_and_without_fsync(tmp_path, monkeypatch):
+    from sciplot_core.verification import run_progress
+
+    class NoScan(dict):
+        def values(self):
+            pytest.fail("A report must not rescan all previous nodes")
+
+    monkeypatch.setattr(run_progress.os, "fsync", lambda *_: pytest.fail("diagnostic writes must not fsync"))
+    monkeypatch.setattr(run_progress, "WRITE_INTERVAL", 1000)
+    writer = run_progress.PytestProgress(tmp_path, ["passed", "failed", "skipped"])
+    writer.rows = NoScan()
+    writer.event("passed", "call")
+    assert load_receipt(tmp_path / run_progress.PYTEST_PROGRESS)["latest_phase"] == "call"
+    for _ in range(3):
+        writer.event("passed", "call", "passed")
+        writer.event("passed", "teardown", "passed")
+        writer.event("failed", "setup", "failed")
+        writer.event("failed", "teardown", "passed")
+        writer.event("skipped", "setup", "skipped")
+        writer.event("skipped", "teardown", "passed")
+    assert writer.value["passed"] == 1
+    writer.event("passed", "teardown", "failed")
+    writer.finish()
+    actual = load_receipt(tmp_path / run_progress.PYTEST_PROGRESS)
+    assert {key: actual[key] for key in ("completed", "passed", "failed", "skipped")} == {
+        "completed": 3, "passed": 0, "failed": 2, "skipped": 1}
+    original = (tmp_path / run_progress.PYTEST_PROGRESS).read_bytes()
+    writer.event("unknown", "call")
+    assert (tmp_path / run_progress.PYTEST_PROGRESS).read_bytes() == original
+
+
+def test_malformed_unbound_and_stale_progress_never_upgrade_failed_execution(run_spec, monkeypatch):
+    from sciplot_core.verification import run_progress
+
+    directory = _pytest_spec(run_spec, "def test_live(): assert False\n")
+    start_run(directory=directory, spec=run_spec)
+    assert await_completion(directory)["status"] == "FAIL"
+    path = directory / run_progress.PYTEST_PROGRESS
+    original = path.read_text()
+    for field, value in (("version", 99), ("source", {}), ("pid", 1), ("request_sha256", "0" * 64),
+                         ("selected_tests_sha256", "0" * 64), ("latest_node", "unknown::test"),
+                         ("updated_monotonic", 0), ("status", "PASS")):
+        changed = json.loads(original)
+        changed[field] = value
+        path.write_text(json.dumps(changed))
+        result = run_status(directory)
+        assert result["status"] == "FAIL"
+        assert result["progress"]["pytest"]["available"] is False
+    path.write_text("malformed")
+    assert run_status(directory)["status"] == "FAIL"
+    path.write_text(original)
+    future = time.monotonic() + 60
+    monkeypatch.setattr(run_progress.time, "monotonic", lambda: future)
+    result = run_status(directory)
+    assert result["status"] == "FAIL" and result["progress"]["pytest"]["stale"] is True
+
+
+def test_wall_clock_jumps_preserve_monotonic_ages_and_invalid_relation_only_hides_progress(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from sciplot_core.verification import run_progress
+
+    clock = {"utc": 10000.0, "monotonic": 100.0}
+    monkeypatch.setattr(run_progress, "time", SimpleNamespace(time=lambda: clock["utc"], monotonic=lambda: clock["monotonic"]))
+    atomic_json(tmp_path / "request.json", {"scope": {"kind": "pytest"}, "selected_tests": ["test_live"]})
+    writer = run_progress.PytestProgress(tmp_path, ["test_live"])
+    for index, jump in enumerate((897.93, -897.93)):
+        clock.update(utc=10000 + jump, monotonic=101.0 + index * 10)
+        writer.event("test_live", "call" if index == 0 else "teardown")
+        stage = run_progress.stage_progress(tmp_path, file_sha256(tmp_path / "request.json"), "command", {},
+                                           10000.0, clock["utc"], 100.0, clock["monotonic"])
+        atomic_json(tmp_path / "state.json", {"phase": "blocked", "reason": "synthetic", "child_pid": os.getpid(), "diagnostic": stage})
+        (tmp_path / "command.log").write_text("actual log growth")
+        clock.update(utc=10000 - jump, monotonic=clock["monotonic"] + 2)
+        result = run_status(tmp_path)
+        assert result["status"] == "BLOCKED" and result["reason"] == "synthetic"
+        for channel in ("pytest", "runner"):
+            actual = result["progress"][channel]
+            assert actual["available"] and actual["update_age_seconds"] == 2 and not actual["stale"]
+            assert actual["updated_at"] == 10000 + jump
+        assert result["progress"]["runner"]["stage_elapsed_seconds"] == 2
+        assert result["progress"]["log"]["observation_age_seconds"] == 2
+        clock["monotonic"] -= 3
+        invalid = run_status(tmp_path)
+        assert invalid["status"] == "BLOCKED" and invalid["reason"] == "synthetic"
+        assert not invalid["progress"]["pytest"]["available"] and not invalid["progress"]["runner"]["available"]
+
+
+def test_progress_failure_does_not_mask_canonical_session_finish(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from sciplot_core.verification import pytest_finish, run_progress
+
+    destination = tmp_path / "finish.json"
+    def unavailable(*_args):
+        raise OSError("generated unavailable diagnostic output")
+    session = SimpleNamespace(items=[SimpleNamespace(nodeid="generated::test")])
+    original_passed, original_progress = pytest_finish._passed, pytest_finish._progress
+    original_contents = list(original_passed)
+    with monkeypatch.context() as hooks:
+        hooks.setenv("SCIPLOT_VERIFY_FINISH", str(destination))
+        hooks.delenv("SCIPLOT_VERIFY_QT_MODULES", raising=False)
+        hooks.setattr(run_progress, "write_diagnostic", unavailable)
+        hooks.setattr(pytest_finish, "_passed", [])
+        hooks.setattr(pytest_finish, "_progress", None)
+        pytest_finish.pytest_sessionstart(session)
+        pytest_finish.pytest_collection_finish(session)
+        pytest_finish.pytest_runtest_logreport(SimpleNamespace(when="call", passed=True, nodeid="generated::test"))
+        pytest_finish.pytest_sessionfinish(session, 0)
+    assert pytest_finish._passed is original_passed and original_passed == original_contents
+    assert pytest_finish._progress is original_progress
+    assert load_receipt(destination) == {"complete": True, "exit_code": 0,
+                                         "selected_tests": ["generated::test"], "executed_tests": ["generated::test"]}
+
+
+def test_standalone_finish_plugin_needs_no_request_and_cannot_mint_durable_completion(run_spec):
+    directory = _pytest_spec(run_spec, "def test_live(): pass\n").parent
+    directory.mkdir(parents=True)
+    environment = {**run_spec["environment"], "SCIPLOT_VERIFY_FINISH": str(directory / "finish.json")}
+    completed = subprocess.run(run_spec["command"], cwd=run_spec["repo_root"], env=environment,
+                               capture_output=True, text=True, check=False)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    result = run_status(directory)
+    assert result["status"] == "BLOCKED" and result["reason"] == "completion_unavailable"
+    assert result["progress"]["pytest"]["available"] is True
+    assert result["progress"]["pytest"]["request_sha256"] is None
+    assert result["progress"]["pytest"]["completed"] == result["progress"]["pytest"]["passed"] == 1
+    assert not (directory / "state.json").exists()
+
+
+def test_preparation_diagnostic_does_not_create_authoritative_state(run_spec):
+    from sciplot_core.verification.durable_runner import prepare_run
+
+    directory = Path(run_spec["repo_root"]) / ".tmp_verify/prepared"
+    prepare_run(directory=directory, spec=run_spec)
+    assert not (directory / "state.json").exists() and not (directory / "launch.json").exists()
+    assert run_status(directory) == {"status": "BLOCKED", "reused": False, "reason": "completion_unavailable"}
+
+
+def test_real_capture_stages_and_timings_are_visible_without_changing_completion_schema(run_spec):
+    root = Path(run_spec["repo_root"])
+    run_spec["command"] = [sys.executable, "-c", "import time;print('actual command',flush=True);time.sleep(.2)"]
+    spec_path = root / "driver-spec.json"
+    spec_path.write_text(json.dumps({key: value for key, value in run_spec.items() if key != "environment"}))
+    directory = root / ".tmp_verify/timed"
+    code = ("import json,os,time;from pathlib import Path;"
+            "from sciplot_core.verification import durable_runner as runner;"
+            f"root=Path({str(root)!r});directory=Path({str(directory)!r});"
+            f"spec=json.loads(Path({str(spec_path)!r}).read_text());spec['environment']=dict(os.environ);"
+            "directory,environment,request_hash=runner.prepare_run(directory=directory,spec=spec);"
+            "os.environ.clear();os.environ.update(environment);original=runner._capture;calls=0\n"
+            "def capture(spec,environment):\n global calls\n calls+=1\n"
+            " (root/('before' if calls==1 else 'after')).write_text('entered actual capture')\n"
+            " time.sleep(.25)\n return original(spec,environment)\n"
+            "runner._capture=capture\nraise SystemExit(runner.supervise(directory,request_hash))")
+    with subprocess.Popen([sys.executable, "-c", code], cwd=root, env=run_spec["environment"],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
+        for marker, stage in (("before", "capture_before"), ("after", "capture_after")):
+            deadline = time.monotonic() + 5
+            while not (root / marker).exists() and time.monotonic() < deadline:
+                time.sleep(.01)
+            assert (root / marker).exists()
+            result = run_status(directory)
+            assert result["status"] == "RUNNING" and result["progress"]["runner"]["stage"] == stage
+        stdout, stderr = process.communicate(timeout=5)
+    assert process.returncode == 0, stdout + stderr
+    result = run_status(directory)
+    assert result["status"] == "PASS"
+    timings = result["progress"]["runner"]["timings"]
+    assert timings["preparation_seconds"] >= 0
+    assert timings["capture_before_seconds"] >= .25 and timings["capture_after_seconds"] >= .25
+    assert timings["command_seconds"] >= .2
+    assert set(load_receipt(directory / "completion.json")["timings"]) == {
+        "capture_before_seconds", "command_seconds", "capture_after_seconds"}

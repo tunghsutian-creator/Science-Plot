@@ -19,6 +19,7 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.verification.evidence import ARTIFACT_NAMES, atomic_json, load_receipt, make_receipt
 from sciplot_core.verification.evidence_identity import capture_identity, digest
+from sciplot_core.verification.run_progress import preparation_seconds, read_progress, record_preparation, stage_progress, write_diagnostic
 
 def artifact_hashes(directory: Path) -> dict[str, str]:
     """Hash known execution files, never paths supplied by a receipt."""
@@ -41,6 +42,7 @@ For pytest, command must explicitly load ``sciplot_core.verification.pytest_fini
 and selected_tests must contain collected nodeids, in execution order. Pass the
 complete effective child environment; this function adds its bound finish path.
 """
+    preparation_started = time.monotonic()
     directory = directory.expanduser().resolve()
     root = Path(spec["repo_root"]).expanduser().resolve()
     if not directory.is_relative_to(root / ".tmp_verify"):
@@ -71,6 +73,7 @@ complete effective child environment; this function adds its bound finish path.
     directory.mkdir(parents=True, exist_ok=False, mode=0o700)
     atomic_json(directory / "request.json", spec)
     request_hash = file_sha256(directory / "request.json")
+    record_preparation(directory, request_hash, time.monotonic() - preparation_started)
     return directory, environment, request_hash
 
 
@@ -105,7 +108,7 @@ def _supervisor_exists(pid: int) -> bool | None:
     return True
 
 
-def run_status(directory: Path) -> dict[str, Any]:
+def _execution_status(directory: Path) -> dict[str, Any]:
     """Read status only; disconnection never launches or repeats a command."""
     state = load_receipt(directory / "state.json")
     if not isinstance(state, dict):
@@ -167,10 +170,32 @@ def run_status(directory: Path) -> dict[str, Any]:
             "supervisor_pid": state["supervisor_pid"]}
 
 
+def run_status(directory: Path) -> dict[str, Any]:
+    result = _execution_status(directory)
+    progress = read_progress(directory)
+    if progress is not None:
+        result["progress"] = progress
+    return result
+
+
 def supervise(directory: Path, expected_request_hash: str) -> int:
     """Execute once. No completion receipt exists after abrupt interruption."""
     started = time.monotonic()
+    started_at = time.time()
+    prepared = preparation_seconds(directory, expected_request_hash)
+    diagnostic_timings = {"preparation_seconds": prepared} if prepared is not None else {}
     state = {"phase": "running", "supervisor_pid": os.getpid()}
+
+    def publish(stage: str, *, required: bool = False) -> None:
+        progress = stage_progress(directory, expected_request_hash, stage, diagnostic_timings,
+                                  started_at, time.time(), started, time.monotonic())
+        if progress is not None:
+            state["diagnostic"] = progress
+        if required:
+            atomic_json(directory / "state.json", state)
+        else:
+            write_diagnostic(directory / "state.json", state)
+
     atomic_json(directory / "state.json", state)
     try:
         request_hash = file_sha256(directory / "request.json")
@@ -186,8 +211,11 @@ def supervise(directory: Path, expected_request_hash: str) -> int:
 
         environment = reserve_child_environment(environment)
         capture_started = time.monotonic()
+        publish("capture_before")
         before = _capture(spec, environment)
         command_started = time.monotonic()
+        diagnostic_timings["capture_before_seconds"] = command_started - capture_started
+        publish("command")
         with (directory / "command.log").open("xb") as stream:
             child = subprocess.Popen(spec["command"], cwd=spec["repo_root"],
                                      env=environment, stdin=subprocess.DEVNULL,
@@ -199,8 +227,11 @@ def supervise(directory: Path, expected_request_hash: str) -> int:
             stream.flush()
             os.fsync(stream.fileno())
         command_ended = time.monotonic()
+        diagnostic_timings["command_seconds"] = command_ended - command_started
+        publish("capture_after")
         after = _capture(spec, environment)
         capture_ended = time.monotonic()
+        diagnostic_timings["capture_after_seconds"] = capture_ended - command_ended
         if request_hash != file_sha256(directory / "request.json"):
             raise ValueError("request changed during execution")
         if spec["scope"]["kind"] != "pytest":
@@ -226,13 +257,13 @@ def supervise(directory: Path, expected_request_hash: str) -> int:
                                session_finish=finish, wall_seconds=wall,
                                artifacts=artifact_hashes(directory), provenance={"timings": timings})
         atomic_json(directory / "receipt.json", receipt)
-        atomic_json(directory / "state.json", {**state, "phase": "completed",
-                                              "receipt_digest": digest(receipt)})
+        state.update(phase="completed", receipt_digest=digest(receipt))
+        publish("completed", required=True)
         return 0 if receipt["status"] == "PASS" else 1
     except Exception as exc:
         # Error text can reveal private paths; local log retains traceback class only.
-        atomic_json(directory / "state.json", {**state, "phase": "blocked",
-                                              "reason": type(exc).__name__})
+        state.update(phase="blocked", reason=type(exc).__name__)
+        publish("blocked", required=True)
         return 1
 
 

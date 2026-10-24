@@ -48,6 +48,19 @@ paths. Renames/deletions retain both owner endpoints. Tests execute the current
 worktree, not a different staged-index image. A clean default comparison reports
 `NO_TESTS`, zero executed checks and exit 2; a plan is not a test pass.
 
+Use this unrecorded mode for routine feedback. `--record DIRECTORY` runs the same
+owner-selected assertions and also collects exact input/runtime identities and
+original completion evidence. Request that extra work when a reusable record or
+capture is needed; do not add it to every edit. A fast-check pass is selected
+software behavior, with no reusable receipt or full scientific/access claim.
+Release verification stays in the same `verify` entry point: freeze the intended
+candidate, use `--start full --out FRESH_DIRECTORY`, then inspect that original
+run with `--status`. Keep the required Doctor/smoke/rules gates. A frozen full
+contains both focused and comprehensive tiers for its bound runtime and input
+scope; those same tiers do not need separate reruns. Retain the supported-platform
+CI checks. Different evidence modes have different timing contracts, so
+their elapsed-time difference is not an algorithmic speedup measurement.
+
 Unknown changed owners fail closed; do not compensate with a full-suite fallback.
 Group and paper leaf owners retain their creation/revision, selection/publication
 and public-entry regressions without selecting unrelated task workflows. Changes
@@ -125,6 +138,22 @@ snapshot reuse: only `--changed --reuse` validates fresh content/scope bindings.
 Unstarted checks stay unstarted; status never restarts the plan or falls back to full.
 Each new record seals its complete check list in the existing per-check request;
 older unbound records cannot prove aggregate completion, but retain per-check status.
+
+Current runs also expose diagnostic preparation/capture/command timings, the latest
+actual pytest node/phase, completion counters, checkpoint age and log observation
+age/growth. Ages and stage elapsed time use same-host monotonic samples; UTC values
+are descriptive and wall-clock jumps cannot make a run stale. An invalid monotonic
+relation makes that diagnostic unavailable. Log observation age measures time since
+the sampled checkpoint, not time since an unobserved write. Counters classify unique
+completed nodes: a teardown error can retract passed and classify that node failed.
+They are not pytest's final F/E summary; raw final completion remains authoritative.
+Phase starts use synchronous atomic replacements without fsync; report checkpoints
+are throttled and session finish publishes final counters. These mutable, unsigned
+correlations never supply completion, original wait, capture or reuse authority.
+An old checkpoint or a live PID does not prove advancing tests. Standalone stage
+pytest uses the same finish plugin; GitHub job summaries/live-log APIs do not expose
+these runner-local files, so remote node progress still requires an available log
+or explicitly retrieved checkpoint. Legacy runs without progress remain readable.
 
 With a supported active observer, semantic identity excludes only its two
 per-launch parent/child routing nonces. A finite binding retains the exact audit

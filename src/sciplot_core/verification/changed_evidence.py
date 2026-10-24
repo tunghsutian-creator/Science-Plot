@@ -190,7 +190,8 @@ def changed_record_status(directory: Path, *, repo_root: Path) -> dict[str, Any]
             selected = current.get("selected_tests", [])
             checks.append({"check_id": check["check_id"], "status": current["status"],
                            "reason": current.get("reason"), "evidence_directory": str(check_dir),
-                           "selected_test_count": len(selected), "wall_seconds": current.get("wall_seconds")})
+                           "selected_test_count": len(selected), "wall_seconds": current.get("wall_seconds"),
+                           **({"progress": current["progress"]} if "progress" in current else {})})
         statuses = {check["status"] for check in checks}
         result.update(checks=checks, check_count=len(checks),
                       completed_check_count=sum(check["status"] in {"PASS", "FAIL", "NO_TESTS"} for check in checks),
