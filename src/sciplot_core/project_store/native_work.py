@@ -12,12 +12,16 @@ import sciplot_core.project_store.state as state
 _ADAPTER = "native_suite_create_v1"
 
 
-def resolve(io: StoreIO, actual: Path, *, expected_sha256: str | None = None,
+def resolve(io: StoreIO, value: dict[str, Any], actual: Path, *, expected_sha256: str | None = None,
             source_id: str | None = None) -> Path | None:
     base = io.root / STORE / "native_work"
-    if not actual.is_relative_to(base):
+    origin = Path(value["locators"][""]) / STORE / "native_work"
+    if actual.is_relative_to(origin):
+        relative = actual.relative_to(origin).parts
+    elif actual.is_relative_to(base):
+        relative = actual.relative_to(base).parts
+    else:
         return None
-    relative = actual.relative_to(base).parts
     if len(relative) < 2 or relative[1] != "candidate" or source_id is not None:
         raise ProjectConflict("A private native candidate cannot assert an unrelated scientific source identity.")
     record = io.read("commands/" + relative[0] + ".json")
@@ -45,6 +49,11 @@ def resolve(io: StoreIO, actual: Path, *, expected_sha256: str | None = None,
         raise ProjectConflict("The private native candidate differs from its exact observed bytes.")
     verify(io, record)
     return workspace / Path(*relative[2:])
+
+
+def literal(io: StoreIO, value: dict[str, Any], actual: Path) -> str | None:
+    selected = resolve(io, value, actual)
+    return str(Path(value["locators"][""]) / selected.relative_to(io.root)) if selected is not None else None
 
 
 def _binding(record: dict[str, Any]) -> dict[str, str]:

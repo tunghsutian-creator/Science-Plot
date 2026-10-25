@@ -39,6 +39,9 @@ def test_unknown_native_workspace_and_failure_fact_survive_cold_bundle_without_r
     assert after["native_failures"] == before["native_failures"]
     workspace = cold.claim_native_workspace(command.key, command.command_digest, "native_suite_create_v1")
     assert (workspace / "native-receipt.json").read_bytes() == b"fixed native evidence"
+    original_workspace = Path(before["native_workspace_path"])
+    assert cold.literal_path(workspace) == str(original_workspace)
+    assert cold.resolve_path(original_workspace / "native-receipt.json") == workspace / "native-receipt.json"
     assert cold.snapshot()["generation"] == snapshot["generation"]
 
 

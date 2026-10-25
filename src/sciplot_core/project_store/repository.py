@@ -277,7 +277,7 @@ class FileProjectStore:
         literal = str(original)
         with self._locked() as (io, current):
             value = state.reachable(io, current, generation) if generation else current
-            private = native_work.resolve(io, Path(literal), expected_sha256=expected_sha256, source_id=source_id)
+            private = native_work.resolve(io, value, Path(literal), expected_sha256=expected_sha256, source_id=source_id)
             if private is not None:
                 return private
             import sciplot_core.project_store.directories as directories
@@ -343,9 +343,9 @@ class FileProjectStore:
 
         with self._locked() as (io, current):
             value = state.reachable(io, current, generation) if generation else current
-            private = native_work.resolve(io, actual)
+            private = native_work.literal(io, value, actual)
             if private is not None:
-                return str(private)
+                return private
             import sciplot_core.project_store.directories as directories
             owned = locators.owned_source_view(io, value, actual)
             if owned is None:
