@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from sciplot_core.project_commands import (
-    NativeAdoption, ProjectCommand, ProjectCommands, ProjectMutation, ProjectCommandUnknown,
+    NativeAdoption, ProjectCommand, ProjectCommands, ProjectMutation, ProjectCommandError, ProjectCommandUnknown,
 )
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.project_store import state
@@ -75,6 +75,27 @@ def test_exact_preview_artifacts_and_reply_loss_share_the_real_store_owner(tmp_p
     assert retry["result"]["export_status"] == "pending"
     assert native_calls == ["native"]
     assert Path(retry["artifact_paths"]["preview.png"]).read_bytes() == b"sealed-pixels"
+
+
+def test_invalid_resume_and_decision_cannot_repair_a_pending_project(tmp_path, monkeypatch):
+    project, store, original = prepared(tmp_path)
+    def stop(point):
+        if point == "after_head":
+            raise LostAfterHead()
+    monkeypatch.setattr(state, "boundary", stop)
+    request = make_command(original)
+    app = ProjectCommands(store)
+    with pytest.raises(LostAfterHead):
+        app.execute(request, lambda: ProjectMutation({"A.vsz": b"new-A"}, {}))
+    with pytest.raises(ProjectCommandError, match="No saved"):
+        app.resume(make_command(original, key="missing"))
+    with pytest.raises(ProjectCommandError, match="different immutable command"):
+        app.resume(make_command(original, expected_revision="wrong-base"))
+    with pytest.raises(ProjectCommandError, match="wrong candidate"):
+        app.decide(request, decision_id="invalid", accept=True)
+    assert (project / "A.vsz").read_bytes() == b"old-A"
+    assert app.resume(request)["phase"] == "complete"
+    assert (project / "A.vsz").read_bytes() == b"new-A"
 
 
 def test_unrelated_figure_generation_does_not_invalidate_exact_A_readset(tmp_path):

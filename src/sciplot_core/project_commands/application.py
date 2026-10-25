@@ -120,6 +120,8 @@ class ProjectCommands:
         if prior is None:
             raise ProjectCommandError("project_command_unknown", "No saved preview belongs to this command.")
         record = self._bound(command, prior)
+        if not isinstance(decision_id, str) or decision_id != record.get("decision_id"):
+            raise ProjectCommandError("project_command_decision_mismatch", "The decision names a wrong candidate; use its exact saved identity.")
         if record.get("phase") not in {"needs_review", "accepted", "rejected", "complete"}:
             raise ProjectCommandUnknown()
         decided = self._bound(command, self.store.decide(
