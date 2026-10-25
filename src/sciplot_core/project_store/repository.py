@@ -43,9 +43,18 @@ class FileProjectStore:
         roots = [self.root, *self.locations.values()]
         if len(set(roots)) != len(roots):
             raise ProjectStoreError("Trusted resource roots must have distinct identities.")
+        for key, path in self.locations.items():
+            if path.is_relative_to(self.root) and not path.is_relative_to(self.root / ".sciplot_resources"):
+                raise ProjectStoreError("An internal resource uses project-relative members instead of a second physical root alias.")
+            if self.root.is_relative_to(path) and self.location_members[key] is None:
+                raise ProjectStoreError("An ancestor resource requires a finite explicit file capability.")
+            for other_key, other in self.locations.items():
+                if key != other_key and path.is_relative_to(other) and self.location_members[other_key] is None:
+                    raise ProjectStoreError("Overlapping whole-directory resource roots cannot have two authorities.")
 
     @contextmanager
-    def _locked(self, *, import_legacy: bool = False, repair: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any]]]:
+    def _locked(self, *, import_legacy: bool = False, repair: bool = False,
+                allow_pending: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any]]]:
         with StoreIO(self.root, self.locations, self.location_members).locked() as io:
             current = state.head(io)
             if current is None:
@@ -54,19 +63,26 @@ class FileProjectStore:
                 current = state.import_legacy(io)
             if repair:
                 projection.recover(io, current)
-            elif projection.pending(io, current):
+            elif not allow_pending and projection.pending(io, current):
                 raise ProjectRecoveryRequired("A complete generation is committed; explicitly recover its derived files first.")
             yield io, current
 
     def snapshot(self, *, import_legacy: bool = False) -> dict[str, Any]:
         with self._locked(import_legacy=import_legacy) as (io, current):
-            drift = {}
+            drift: dict[str, str | None] = {}
+            metadata_drift: dict[str, str] = {}
             for name, entry in current["files"].items():
-                physical = io.physical(name)
+                try:
+                    physical = io.physical(name)
+                except ProjectConflict as exc:
+                    drift[name] = None
+                    metadata_drift[name] = str(exc)
+                    continue
                 actual = sha(physical[0]) if physical else None
-                if actual != entry["sha256"]:
+                if actual != entry["sha256"] or physical is not None and physical[1] != entry["mode"]:
                     drift[name] = actual
-            return {**current, "projection_status": "conflict" if drift else "current", "outside_changes": drift}
+            return {**current, "projection_status": "conflict" if drift else "current",
+                    "outside_changes": drift, "outside_metadata": metadata_drift}
 
     def reserve(self, command_id: str, command_digest: str, *, expected_generation: str | None,
                 read_set: Mapping[str, str | None], write_set: Sequence[str],
@@ -130,14 +146,14 @@ class FileProjectStore:
     def query(self, command_id: str) -> dict[str, Any] | None:
         if not (self.root / STORE / "head.json").exists():
             return None
-        with self._locked() as (io, _current):
+        with self._locked(allow_pending=True) as (io, current):
             record = state.command(io, command_id)
-            return commands.public(io, record) if record else None
+            return commands.public(io, record, projection_pending=projection.pending(io, current)) if record else None
 
     def commands(self) -> tuple[dict[str, Any], ...]:
         import os
 
-        with self._locked() as (io, _current):
+        with self._locked(allow_pending=True) as (io, current):
             try:
                 with directory(io.fd, ("commands",)) as parent:
                     names = sorted(name for name in os.listdir(parent) if name.endswith(".json"))
@@ -147,7 +163,7 @@ class FileProjectStore:
             for name in names:
                 record = io.read("commands/" + name)
                 if record is not None:
-                    result.append(commands.public(io, record))
+                    result.append(commands.public(io, record, projection_pending=projection.pending(io, current)))
             return tuple(result)
 
     def recover(self) -> dict[str, Any]:
@@ -177,25 +193,25 @@ class FileProjectStore:
 
     def logical_path(self, path: Path) -> str:
         candidate = Path(path).expanduser().absolute()
-        for key, root in sorted(self.locations.items(), key=lambda item: len(str(item[1])), reverse=True):
+        roots = {"": self.root, **self.locations}
+        for key, root in sorted(roots.items(), key=lambda item: len(str(item[1])), reverse=True):
             if candidate.is_relative_to(root):
                 relative = candidate.relative_to(root).as_posix()
                 parts(relative)
                 allowed = self.location_members.get(key)
                 if allowed is not None and relative not in allowed:
-                    raise ProjectStoreError("This file is outside the trusted member capability.")
-                return f"@{key}/{relative}"
-        if candidate.is_relative_to(self.root):
-            relative = candidate.relative_to(self.root).as_posix()
-            parts(relative)
-            return relative
+                    continue
+                if not key and relative.split("/", 1)[0] == ".sciplot_resources":
+                    continue
+                return f"@{key}/{relative}" if key else relative
         raise ProjectStoreError("This path is outside all explicitly trusted resource roots.")
 
     def projection_path(self, logical: str) -> Path:
         with self._locked() as (io, current):
             expected = current["files"].get(logical)
             physical = io.physical(logical)
-            if expected is None or physical is None or sha(physical[0]) != expected["sha256"]:
+            if (expected is None or physical is None or sha(physical[0]) != expected["sha256"]
+                    or physical[1] != expected["mode"]):
                 raise ProjectConflict("The derived path has unregistered outside bytes or is absent.")
             components = parts(logical)
             if components[0].startswith("@"):
@@ -250,7 +266,10 @@ class FileProjectStore:
                 except ProjectStoreError:
                     pass
             if logical is not None:
-                locators.checked_member(io, value, logical, expected_sha256)
+                entry = locators.checked_member(io, value, logical, expected_sha256)
+                if source_id is not None:
+                    locators.source_entry(io, value, locators.original_for_logical(value, logical),
+                        expected_sha256=entry["sha256"], source_id=source_id)
                 components = parts(logical)
                 return (self.locations[components[0][1:]] / Path(*components[1:])
                         if components[0].startswith("@") else self.root / Path(*components))

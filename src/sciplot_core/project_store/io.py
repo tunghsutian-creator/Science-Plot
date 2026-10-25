@@ -38,12 +38,13 @@ def owned_io(root: Path) -> StoreIO | None:
 
 
 @contextmanager
-def _leases(root: Path, *, blocking: bool) -> Iterator[DirectoryWriterLease]:
+def _leases(root: Path, locations: Mapping[str, Path], *, blocking: bool) -> Iterator[dict[Path, DirectoryWriterLease]]:
     while True:
         stack = ExitStack()
         try:
             stack.enter_context(external_project_session(root))
-            lease = stack.enter_context(exclusive_directory_lease(root))
+            leases = {path: stack.enter_context(exclusive_directory_lease(path))
+                      for path in sorted({root, *locations.values()}, key=str)}
             break
         except (ProjectSessionBusy, WriterLeaseBusy):
             stack.close()
@@ -56,7 +57,7 @@ def _leases(root: Path, *, blocking: bool) -> Iterator[DirectoryWriterLease]:
             stack.close()
             raise
     try:
-        yield lease
+        yield leases
     finally:
         stack.close()
 
@@ -78,16 +79,34 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def member_names(fd: int, prefix: str = "", *, exclude: tuple[str, ...] = ()) -> set[str]:
+    result = set()
+    for name in os.listdir(fd):
+        if name == STORE or not prefix and name in exclude:
+            continue
+        info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+        if stat.S_ISDIR(info.st_mode):
+            with directory(fd, (name,)) as child:
+                result.update(member_names(child, prefix + name + "/"))
+        elif stat.S_ISREG(info.st_mode):
+            result.add(prefix + name)
+        else:
+            raise ProjectConflict("The logical namespace has symbolic or special outside members.")
+    return result
+
+
 def _identity(info: os.stat_result) -> tuple[int, ...]:
-    return (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
-def read_file(fd: int, name: str) -> tuple[bytes, int]:
+def read_file(fd: int, name: str, *, owned: bool = False) -> tuple[bytes, int]:
     opened = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
     with os.fdopen(opened, "rb") as handle:
         before = os.fstat(handle.fileno())
         if not stat.S_ISREG(before.st_mode):
             raise ProjectStoreError("Project members must be ordinary files.")
+        if owned and before.st_nlink != 1:
+            raise ProjectConflict("A declared project resource is hard-linked outside its owned projection.")
         data = handle.read()
         after = os.fstat(handle.fileno())
     current = os.stat(name, dir_fd=fd, follow_symlinks=False)
@@ -115,10 +134,13 @@ def directory(fd: int, components: tuple[str, ...], *, create: bool = False) -> 
 
 
 def install(fd: int, name: str, data: bytes, *, mode: int = 0o600, exclusive: bool = False) -> None:
+    if type(mode) is not int or not 0 <= mode <= 0o777:
+        raise ProjectStoreError("Project outputs require explicit ordinary permission bits.")
     temporary = ".sciplot-write-" + uuid4().hex
     descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
                          mode, dir_fd=fd)
     try:
+        os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(data)
             handle.flush()
@@ -157,20 +179,22 @@ class StoreIO:
                 return
             if process != os.getpid() or thread != get_ident():
                 _ACTIVE.set(None)
-        with _leases(self.root, blocking=blocking) as lease:
+        with _leases(self.root, self.locations, blocking=blocking) as leases:
+            lease = leases[self.root]
             try:
                 self.root_fds[""] = os.dup(lease.fd)
                 for key, path in self.locations.items():
                     if not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", key):
                         raise ProjectStoreError("Invalid trusted resource-root ID.")
-                    self.root_fds[key] = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                    self.root_fds[key] = os.dup(leases[path].fd)
                 with directory(lease.fd, (STORE,), create=True) as store_fd:
                     self.fd = store_fd
                     token = _ACTIVE.set((self, os.getpid(), get_ident()))
                     try:
                         yield self
                         self.verify_roots()
-                        lease.verify()
+                        for held in leases.values():
+                            held.verify()
                     finally:
                         _ACTIVE.reset(token)
             finally:
@@ -191,6 +215,8 @@ class StoreIO:
         key = components[0][1:] if components[0].startswith("@") else ""
         if key:
             components = components[1:]
+        elif components[0] == ".sciplot_resources":
+            raise ProjectStoreError("Use the registered resource-root ID, not its private physical view alias.")
         if not components or key not in self.root_fds:
             raise ProjectRecoveryRequired("The project needs its explicitly trusted resource-root mapping.")
         permitted = self.location_members.get(key)
@@ -202,7 +228,10 @@ class StoreIO:
         fd, components = self.split(logical)
         try:
             with directory(fd, components[:-1]) as parent:
-                return read_file(parent, components[-1])
+                value = read_file(parent, components[-1], owned=True)
+                if os.stat(components[-1], dir_fd=parent, follow_symlinks=False).st_nlink != 1:
+                    raise ProjectConflict("A declared project resource is hard-linked outside its owned projection.")
+                return value
         except FileNotFoundError:
             return None
 
@@ -267,6 +296,10 @@ class StoreIO:
             for name in sorted(os.listdir(fd)):
                 if name == STORE or name.startswith(".sciplot-write-"):
                     continue
+                if not prefix and name == ".sciplot_resources":
+                    if not any(path.is_relative_to(self.root / name) for path in self.locations.values()):
+                        raise ProjectStoreError("An unregistered directory occupies the reserved resource-view namespace.")
+                    continue
                 info = os.stat(name, dir_fd=fd, follow_symlinks=False)
                 logical = prefix + name
                 if stat.S_ISDIR(info.st_mode):
@@ -274,6 +307,8 @@ class StoreIO:
                         walk(child, logical + "/")
                 elif stat.S_ISREG(info.st_mode):
                     data, mode = read_file(fd, name)
+                    if not 0 <= mode <= 0o777:
+                        raise ProjectStoreError("Legacy project import refuses special permission bits.")
                     files[logical] = {**self.put(data), "mode": mode}
                 else:
                     raise ProjectStoreError("Portable project import refuses symlink or special members.")

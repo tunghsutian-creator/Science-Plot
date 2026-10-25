@@ -125,7 +125,12 @@ def test_readonly_query_commands_snapshot_never_repair_interrupted_active_files(
     process.communicate(timeout=5)
     members = [path for root in (store.root, delivery) for path in root.rglob("*") if path.is_file()]
     before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in members}
-    for inspect in (lambda: store.query("owned-fault"), store.commands, store.snapshot):
+    receipt = store.query("owned-fault")
+    assert receipt["projection_pending"] is True and receipt["phase"] != "complete"
+    records = store.commands()
+    assert records[0]["projection_pending"] is True and records[0]["phase"] != "complete"
+    assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in members} == before
+    for inspect in (store.snapshot,):
         with pytest.raises(ProjectRecoveryRequired):
             inspect()
         assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in members} == before

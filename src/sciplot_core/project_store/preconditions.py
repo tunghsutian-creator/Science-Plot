@@ -6,6 +6,7 @@ from typing import Any
 from .errors import ProjectConflict, ProjectStoreError
 from .io import StoreIO, sha
 import sciplot_core.project_store.state as state
+from .membership import require_memberships
 
 
 def projected_writes(record: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -47,16 +48,22 @@ def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, 
     baseline = state.reachable(io, dict(current), record["expected_generation"])
     if baseline["project_id"] != current["project_id"]:
         raise ProjectConflict("The expected generation belongs to another project.")
+    require_memberships(io, baseline, dict(current), dict(record))
     for name, expected in record["read_set"].items():
         old = baseline["files"].get(name)
         latest = current["files"].get(name)
         if expected != (old["sha256"] if old else None) or expected != (latest["sha256"] if latest else None):
             raise ProjectConflict(f"A declared project read changed: {name}")
+        if old is not None and latest is not None and old["mode"] != latest["mode"]:
+            raise ProjectConflict(f"A declared project resource changed permission mode: {name}")
         physical = io.physical(name)
         actual = sha(physical[0]) if physical else None
         observed = adoptions[name]["observed_sha256"] if name in adoptions else expected
         if actual != observed:
             raise ProjectConflict(f"Outside bytes changed a declared project read: {name}")
+        expected_mode = record.get("adoption_modes", {}).get(name) if name in adoptions else old["mode"] if old else None
+        if physical is not None and expected_mode is not None and physical[1] != expected_mode:
+            raise ProjectConflict(f"Outside permissions changed a declared project read: {name}")
     projected = record.get("projected_reads", [])
     if projected:
         from sciplot_core.project_commands.read_projections import projection_digest
@@ -68,7 +75,8 @@ def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, 
             if before is None or after is None:
                 raise ProjectConflict("A projected read resource is missing.")
             physical = io.physical(name)
-            if physical is None or sha(physical[0]) != after["sha256"]:
+            if (physical is None or sha(physical[0]) != after["sha256"] or physical[1] != after["mode"]
+                    or before["mode"] != after["mode"]):
                 raise ProjectRecoveryRequired("A projected resource has unregistered outside bytes.")
             for entry in (before, after):
                 if projection_digest(io.get(entry), kind=item["kind"], key=item["key"]) != item["sha256"]:

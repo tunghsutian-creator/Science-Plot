@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import stat
 from typing import Any
 from uuid import uuid4
 
 from .errors import ProjectConflict, ProjectStoreError
-from .io import STORE, StoreIO, digest, directory, install, parts, read_file, sha
+from .io import STORE, StoreIO, digest, directory, install, member_names as _names, parts, read_file, sha
 import sciplot_core.project_store.state as state
 
 
@@ -32,22 +31,6 @@ def _prefix(value: dict[str, Any], literal: Path, locations: dict[str, Path]) ->
     if len(matches) > 1:
         raise ProjectConflict("The source directory matches multiple registered generation roots.")
     return next(iter(matches.items())) if matches else None
-
-
-def _names(fd: int, prefix: str = "") -> set[str]:
-    result = set()
-    for name in os.listdir(fd):
-        if name == STORE:
-            continue
-        info = os.stat(name, dir_fd=fd, follow_symlinks=False)
-        if stat.S_ISDIR(info.st_mode):
-            with directory(fd, (name,)) as child:
-                result.update(_names(child, prefix + name + "/"))
-        elif stat.S_ISREG(info.st_mode):
-            result.add(prefix + name)
-        else:
-            raise ProjectConflict("A registered source directory contains symbolic or special outside members.")
-    return result
 
 
 def _verify_tree(fd: int, members: dict[str, Any], io: StoreIO) -> None:
@@ -85,7 +68,8 @@ def resolve(io: StoreIO, value: dict[str, Any], literal: Path, *, expected_sha25
     relative_parts = components[1:] if key else components
     if io.location_members.get(key) is None:
         with directory(io.root_fds[key], relative_parts) as actual:
-            if _names(actual) != set(members):
+            names = _names(actual, exclude=(".sciplot_resources",) if not key and not relative_parts else ())
+            if names != set(members):
                 raise ProjectConflict("The original source directory has unregistered outside members.")
     descriptor = {"generation": value["generation"], "prefix": prefix, "original": original, "members": members}
     identity = digest(descriptor)

@@ -29,7 +29,8 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     if set(writes) != set(record["write_set"]):
         raise ProjectConflict("Publication does not cover the exact reserved write set.")
     for name, adoption in preconditions.native_adoptions(record).items():
-        if writes[name] is None or writes[name]["sha256"] != adoption["observed_sha256"]:
+        if (writes[name] is None or writes[name]["sha256"] != adoption["observed_sha256"]
+                or writes[name]["mode"] != record["adoption_modes"][name]):
             raise ProjectConflict("The imported native candidate differs from the explicitly audited outside bytes.")
     projected = preconditions.projected_writes(record)
     for name in {item["resource"] for item in projected}:
@@ -58,8 +59,20 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
         destination = value["sources"].setdefault(source_id, {})
         for version, entry in versions.items():
             if version in destination and destination[version] != entry:
-                raise ProjectConflict("A stable source version already has different provenance.")
+                before = destination[version]
+                before_core = {key: item for key, item in before.items() if key != "aliases"}
+                after_core = {key: item for key, item in entry.items() if key != "aliases"}
+                if (before_core != after_core or not set(before.get("aliases", [])).issubset(entry.get("aliases", []))):
+                    raise ProjectConflict("A stable source version already has different provenance or lost an explicit alias.")
             destination[version] = entry
+    alias_owners: dict[tuple[str, str, str], str] = {}
+    for source_id, versions in value["sources"].items():
+        for version, entry in versions.items():
+            for alias in entry.get("aliases", []):
+                identity = (entry["locator"], version, alias)
+                if identity in alias_owners and alias_owners[identity] != source_id:
+                    raise ProjectConflict("A logical source alias is ambiguous for the exact original locator/version.")
+                alias_owners[identity] = source_id
     outcome = {"command_id": record["command_id"], "command_digest": record["command_digest"],
         "project_id": current["project_id"], "generation": value["generation"],
         "phase": "complete", "result": frozen["result"], "review": record.get("review", {}),

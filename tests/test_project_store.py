@@ -224,7 +224,7 @@ def test_audited_native_import_adopts_only_exact_observed_native_bytes(tmp_path,
         expected_generation=before["generation"], read_set={name: before["files"][name]["sha256"]},
         write_set=[name], request={"audit": "owned domain audit"}, native_adoptions=[NativeAdoption(
             name, before["files"][name]["sha256"], sha(outside), sha(b"synthetic audit identity"))])
-    receipt = ProjectCommands(store).execute(command, lambda: ProjectMutation({name: outside}, {"adopted": True}))
+    receipt = ProjectCommands(store).execute(command, lambda: ProjectMutation({name: store.root / name}, {"adopted": True}))
     assert receipt["phase"] == "complete" and store.read_bytes(name) == outside
     assert (store.root / name).read_bytes() == outside
     next_before = store.snapshot()
@@ -241,7 +241,7 @@ def test_audited_native_import_adopts_only_exact_observed_native_bytes(tmp_path,
 
     monkeypatch.setattr(state, "boundary", drift)
     with pytest.raises(ProjectConflict):
-        ProjectCommands(store).execute(next_command, lambda: ProjectMutation({name: observed}, {}))
+        ProjectCommands(store).execute(next_command, lambda: ProjectMutation({name: store.root / name}, {}))
     assert (store.root / name).read_bytes() == b"third outside bytes"
     assert store.snapshot()["generation"] == next_before["generation"]
 

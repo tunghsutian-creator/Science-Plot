@@ -138,5 +138,7 @@ def import_writes(io: StoreIO, writes: Mapping[str, bytes | Path | None]) -> dic
                 os.close(parent)
         else:
             raise ProjectStoreError("Writes must contain bytes, trusted staged Paths, or explicit deletion.")
+        if not 0 <= mode <= 0o777:
+            raise ProjectStoreError("A staged project output has unsupported special permission bits.")
         result[name] = {**io.put(data), "mode": mode}
     return result

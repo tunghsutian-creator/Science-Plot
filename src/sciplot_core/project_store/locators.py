@@ -42,9 +42,9 @@ def source_entry(io: StoreIO, value: dict[str, Any], original: str, *, expected_
         raise ProjectStoreError("An external source locator requires its exact registered version hash.")
     matches = []
     for identity, versions in value["sources"].items():
-        if source_id is not None and source_id != identity:
-            continue
         entry = versions.get(expected_sha256)
+        if source_id is not None and source_id != identity and (entry is None or source_id not in entry.get("aliases", [])):
+            continue
         if entry is not None and entry.get("locator") == original:
             io.get(entry)
             matches.append((identity, expected_sha256, entry))
@@ -76,7 +76,7 @@ def owned_source_view(io: StoreIO, value: dict[str, Any], actual: Path, *,
         raise ProjectConflict("An immutable source view must identify one exact source version.")
     identity, version, name = components
     entry = value["sources"].get(identity, {}).get(version)
-    if (entry is None or source_id is not None and source_id != identity
+    if (entry is None or source_id is not None and source_id != identity and source_id not in entry.get("aliases", [])
             or expected_sha256 is not None and expected_sha256 != version
             or name != Path(entry.get("locator") or entry.get("logical") or "source.bin").name):
         raise ProjectConflict("The immutable source view does not match the selected source identity/version.")

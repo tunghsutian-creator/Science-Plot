@@ -27,7 +27,13 @@ def reserve(io: StoreIO, current: dict[str, Any], command_id: str, command_diges
         "read_set": dict(read_set), "write_set": sorted(set(write_set)),
         "projected_reads": list(projected_reads), "metadata": metadata or {}, "result": {}, "review": {}}
     projected = {item["resource"] for item in preconditions.projected_writes(record)}
-    preconditions.native_adoptions(record)
+    adoptions = preconditions.native_adoptions(record)
+    record["adoption_modes"] = {}
+    for name in adoptions:
+        physical = io.physical(name)
+        if physical is None:
+            raise ProjectConflict("The audited native import resource disappeared.")
+        record["adoption_modes"][name] = physical[1]
     for name in [*record["read_set"], *record["write_set"]]:
         parts(name)
         io.split(name)
@@ -56,11 +62,29 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
         source_id = item.get("source_id") or uuid4().hex
         if not isinstance(source_id, str) or len(source_id) != 32 or any(c not in "0123456789abcdef" for c in source_id):
             raise ProjectStoreError("A source identity must be a stable UUID hex value.")
-        path = Path(item["path"])
         local = io.read("local_sources.json") or {"versions": {}}
         current = state.head(io)
         version = item.get("version")
         prior = current["sources"].get(source_id, {}).get(version) if current else None
+        if "data" in item:
+            from sciplot_core.project_commands.resources import PreparedSource
+
+            source = PreparedSource(source_id, item["locator"], item["version"], item["data"],
+                                    tuple(item.get("aliases", ())), item.get("mode", 0o600))
+            if item.get("size", len(source.data)) != len(source.data):
+                raise ProjectConflict("The prepared source size differs from its exact bytes.")
+            entry = {**io.put(source.data), "source_id": source_id, "locator": source.locator,
+                     "version": source.version, "mode": source.mode}
+            if prior is not None:
+                if any(prior.get(key) != entry[key] for key in entry):
+                    raise ProjectConflict("A prepared source conflicts with the existing immutable source version.")
+                entry = dict(prior)
+            aliases = sorted(set(entry.get("aliases", [])) | set(source.aliases))
+            if aliases:
+                entry["aliases"] = aliases
+            result.setdefault(source_id, {})[source.version] = entry
+            continue
+        path = Path(item["path"])
         if prior is not None and local["versions"].get(source_id, {}).get(version) == prior["sha256"]:
             if str(item.get("locator") or path) != prior.get("locator"):
                 raise ProjectConflict("The relocated source descriptor changed its preserved original locator.")
@@ -81,6 +105,9 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
             if prior is None or prior.get("locator") != entry["locator"] or prior["sha256"] != version:
                 raise ProjectConflict("Only an existing source ID/version can preserve a different host read locator.")
             entry = dict(prior)
+        aliases = sorted(set(entry.get("aliases", [])) | set(item.get("aliases", [])))
+        if aliases:
+            entry["aliases"] = aliases
         result.setdefault(source_id, {})[entry["version"]] = entry
     return result
 
@@ -127,19 +154,26 @@ def decide(io: StoreIO, record: dict[str, Any], decision_id: str, accept: bool) 
     return record
 
 
-def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False) -> dict[str, Any]:
+def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
+           projection_pending: bool = False) -> dict[str, Any]:
     result = dict(record)
     current = state.head(io)
     outcome = current["commands"].get(record["command_id"]) if current else None
     if outcome is not None:
-        bound = ("command_digest", "project_id", "generation", "result", "metadata", "read_set", "write_set")
+        own_pending = record.get("phase") != "complete" and record.get("install_generation") == outcome["generation"]
+        bound = ("command_digest", "project_id", "result", "metadata", "read_set", "write_set")
         if (any(record.get(key) != outcome.get(key) for key in bound)
+                or not own_pending and record.get("generation") != outcome["generation"]
                 or record.get("decision_id") != outcome.get("candidate_digest")):
             raise ProjectConflict("A derived command receipt differs from its immutable generation outcome.")
+        if own_pending:
+            result["committed_generation"] = outcome["generation"]
+            projection_pending = True
     elif record["phase"] == "complete":
         raise ProjectConflict("A command cannot claim completion without a committed generation outcome.")
     if result["phase"] == "applying":
         result["phase"] = "unknown"
+    result["projection_pending"] = projection_pending
     draft = record.get("draft")
     if draft is not None:
         expected = digest({"command_digest": record["command_digest"], "candidate": draft})

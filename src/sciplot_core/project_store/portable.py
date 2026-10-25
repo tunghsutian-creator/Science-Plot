@@ -19,7 +19,8 @@ class BundleStore(Protocol):
     locations: dict[str, Path]
     location_members: dict[str, tuple[str, ...] | None]
 
-    def _locked(self, *, import_legacy: bool = False, repair: bool = False) -> AbstractContextManager[tuple[StoreIO, dict[str, Any]]]: ...
+    def _locked(self, *, import_legacy: bool = False, repair: bool = False,
+                allow_pending: bool = False) -> AbstractContextManager[tuple[StoreIO, dict[str, Any]]]: ...
 
 
 StoreT = TypeVar("StoreT", bound=BundleStore)

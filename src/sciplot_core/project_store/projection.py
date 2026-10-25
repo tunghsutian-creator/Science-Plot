@@ -35,14 +35,14 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
     for name in names:
         before, after = old["files"].get(name), current["files"].get(name)
         physical = io.physical(name)
-        actual = sha(physical[0]) if physical else None
-        allowed = {entry["sha256"] if entry else None for entry in (before, after)}
+        actual = (sha(physical[0]), physical[1]) if physical else None
+        allowed = {(entry["sha256"], entry["mode"]) if entry else None for entry in (before, after)}
         if actual not in allowed:
             raise ProjectRecoveryRequired(f"Outside bytes prevent generation recovery: {name}")
     for name in names:
         after = current["files"].get(name)
         physical = io.physical(name)
-        if (sha(physical[0]) if physical else None) == (after["sha256"] if after else None):
+        if ((sha(physical[0]), physical[1]) if physical else None) == ((after["sha256"], after["mode"]) if after else None):
             continue
         state.boundary("before_projection")
         io.verify_roots()
@@ -50,9 +50,9 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
         with directory(fd, components[:-1], create=after is not None) as parent:
             # Check again at this physical boundary, after staging predecessor IO.
             current_physical = io.physical(name)
-            actual = sha(current_physical[0]) if current_physical else None
+            actual = (sha(current_physical[0]), current_physical[1]) if current_physical else None
             before = old["files"].get(name)
-            if actual not in {entry["sha256"] if entry else None for entry in (before, after)}:
+            if actual not in {(entry["sha256"], entry["mode"]) if entry else None for entry in (before, after)}:
                 raise ProjectConflict("A derived view changed during generation materialization.")
             if after is None:
                 os.unlink(components[-1], dir_fd=parent)
@@ -101,7 +101,7 @@ def relocate(io: StoreIO, current: dict[str, Any]) -> None:
         raise ProjectRecoveryRequired("The cold relocation plan no longer matches the complete generation.")
     for name in plan["files"]:
         physical = io.physical(name)
-        if physical is not None and sha(physical[0]) != current["files"][name]["sha256"]:
+        if physical is not None and (sha(physical[0]), physical[1]) != (current["files"][name]["sha256"], current["files"][name]["mode"]):
             raise ProjectRecoveryRequired("Cold relocation found conflicting outside bytes.")
     for name in plan["files"]:
         if io.physical(name) is not None:
