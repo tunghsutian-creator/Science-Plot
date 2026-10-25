@@ -504,7 +504,7 @@ def test_export_only_refuses_any_missing_native_receipt(scenario, monkeypatch):
 def test_saved_creation_export_child_records_completion_without_replaying_parent(scenario, monkeypatch, tmp_path):
     from sciplot_core import rheology_tts_render
     from sciplot_core.project_store import FileProjectStore
-    from sciplot_core.workflow.native_suite_creation import _finish_saved_exports
+    from sciplot_core.workflow.native_suite_creation_facts import _finish_saved_exports
     from sciplot_core.workflow.native_suite_generation import command_for
     case = scenario
     workspace, delivery = tmp_path / "project", tmp_path / "delivery"

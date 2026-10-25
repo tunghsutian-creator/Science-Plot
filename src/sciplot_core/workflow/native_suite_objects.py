@@ -12,7 +12,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.plot_engine.description_scope import require_selector
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.studio_core.source_update_commit import reject_symlink_path
-from sciplot_core.workflow.rheology_tts_suite import _check_sources, _compiled_figures, _active_receipts
+from sciplot_core.workflow.rheology_tts_saved_state import _check_sources, _compiled_figures, _active_receipts
 from sciplot_core.rheology_tts_native_display import native_targets as native_targets
 from sciplot_core.workflow.native_suite_runtime import current_store, delivery_path, native_path, native_runtime, suite_runtime
 

@@ -14,10 +14,11 @@ from uuid import uuid4
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
-from sciplot_core.rheology_tts_spec import _identifier
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.studio_core.runtime import _export_suffix
 from sciplot_core.studio_core.source_update_commit import reject_symlink_path
+
+from sciplot_core.rheology_tts_creation_bindings import _check_sources, _literal, _context
 
 _KIND = "sciplot_rheology_tts_creation_checkpoint"
 _FORMATS = ("pdf", "tiff_300", "png_300")
@@ -110,28 +111,6 @@ def _stage(out: Path, identifier: str, attempt: str) -> Path:
     return out / ".creation" / f"{identifier}.exports" / attempt / "exports"
 
 
-def _check_sources(spec: dict[str, Any]) -> None:
-    binding = spec["source_binding"]
-    sources = binding.get("sources", [])
-    if not isinstance(sources, list):
-        raise ValueError("Native creation requires a list of explicit source bindings.")
-    if "prepared_plan" in binding:
-        sources = [*sources, binding["prepared_plan"]]
-    for source in sources:
-        if not isinstance(source, dict) or not {"path", "sha256"} <= source.keys():
-            raise ValueError("Native creation source binding requires path and SHA256.")
-        from sciplot_core.foundation.source_locations import resolve_source_path as resolve_runtime_path
-        original = Path(source["path"])
-        path = resolve_runtime_path(original, expected_sha256=source["sha256"])
-        if not original.is_absolute() or not path.is_file() or file_sha256(path) != source["sha256"]:
-            raise ValueError(f"Native creation source changed; preserve the saved documents: {path}")
-
-
-def _sidecar(spec: dict[str, Any], figure: dict[str, Any]) -> dict[str, Any]:
-    return {"kind": spec["kind"], "version": 1, "source_binding": spec["source_binding"],
-            "transform_ledger": spec["transform_ledger"], "figure": figure}
-
-
 def _read_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -145,11 +124,6 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _same_json(left: object, right: object) -> bool:
     return canonical_json_sha256(left, allow_nan=False) == canonical_json_sha256(right, allow_nan=False)
 
-
-
-def _literal(path: Path) -> str:
-    from sciplot_core.foundation.source_locations import literal_source_path as literal_runtime_path
-    return literal_runtime_path(path) if path.exists() else str(path)
 
 def _check_receipt(state: dict[str, Any], out: Path, identifier: str, *, native_out: Path | None = None) -> None:
     receipt, artifacts, names = state["receipt"], state["artifacts"], _names(identifier)
@@ -294,16 +268,6 @@ def _stage_exports(spec: dict[str, Any], out: Path, figure: dict[str, Any], stat
     return {**state, "receipt": receipt, "artifacts": artifacts, "sealed_attempt": attempt}
 
 
-def _context(spec: dict[str, Any], out: Path) -> tuple[list[str], list[dict], list[dict]]:
-    identifiers = [_identifier(figure["id"]) for figure in spec["figures"]]
-    if len(set(name.casefold() for name in identifiers)) != len(identifiers):
-        raise ValueError("Native creation figure names must be unique, including case.")
-    plan_sha = canonical_json_sha256(spec, allow_nan=False)
-    bindings = [{"out": _literal(out), "plan_sha256": plan_sha, "figure_id": identifier}
-                for identifier in identifiers]
-    return identifiers, bindings, [_sidecar(spec, figure) for figure in spec["figures"]]
-
-
 def _read_states(out: Path, context: tuple[list[str], list[dict], list[dict]]) -> list[tuple[dict | None, bool]]:
     identifiers, bindings, expected_specs = context
     _inventory(out, identifiers)
@@ -337,7 +301,6 @@ def verify_native_creation(compiled_spec: dict[str, Any], out: Path) -> dict[str
     out = out.resolve()
     with external_project_session(out):
         return check_native_continuation(compiled_spec, out, completed=True)
-
 
 
 def check_saved_native_creation(compiled_spec: dict[str, Any], out: Path) -> dict[str, Any]:

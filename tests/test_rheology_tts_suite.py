@@ -384,7 +384,8 @@ def test_compiled_spec_change_between_validation_and_snapshot_blocks_export(tmp_
         path.write_bytes(path.read_bytes() + b"\nchanged after validation")
         return figures
 
-    monkeypatch.setattr(suite, "_compiled_figures", changed_after_read)
+    from sciplot_core.workflow import rheology_tts_saved_state
+    monkeypatch.setattr(rheology_tts_saved_state, "_compiled_figures", changed_after_read)
     with pytest.raises(ValueError, match="Outside bytes changed a declared project read: initial_render/Panel_d.spec.json"):
         suite.export_suite(workspace)
     assert snapshot([Path(p) for p in original]) == original

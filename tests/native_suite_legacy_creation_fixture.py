@@ -11,11 +11,16 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.workflow.rheology_tts_creation import (
-    CHECKPOINT, _check_sources, _existing, _input_file, _known_workspace, _launcher,
-    _publication_evidence, _publication_inventory, _publish, _result,
-    _validate_checkpoint, _verify_bound_native, _write_index, check_prepared_continuation,
+    _check_sources, _launcher, _publish, _result, _write_index,
     write_json, write_plot_tables,
 )
+
+from sciplot_core.workflow.rheology_tts_creation_inputs import CHECKPOINT, _input_file
+from sciplot_core.workflow.rheology_tts_creation_history import (
+    _existing, _known_workspace, _publication_evidence, _publication_inventory,
+    _validate_checkpoint, _verify_bound_native, check_prepared_continuation,
+)
+
 
 def _install_delivery(candidate: Path, delivery: Path) -> None:
     """Retain the prepared-creation seam while sharing exclusive installation."""
@@ -39,7 +44,7 @@ def _finish(workspace: Path, delivery: Path, checkpoint: dict, compiled: dict, *
         raise ValueError("Installed prepared delivery changed before completion.")
     checkpoint["phase"] = "completed"
     atomic_write_json(workspace / CHECKPOINT, checkpoint)
-    from sciplot_core.workflow.native_suite_creation import creation_inventory
+    from sciplot_core.workflow.native_suite_creation_projection import creation_inventory
     result = _result(manifest, compiled=compiled, resumed=resumed)
     result["_candidate_files"] = creation_inventory(workspace, delivery, checkpoint["native_result"],
         publication["files"], {"request.json": checkpoint["binding"]["request"], "figure_plan.json": spec},

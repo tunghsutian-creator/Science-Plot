@@ -99,7 +99,7 @@ def command_key(adapter: str, request: Any) -> str:
 
 def suite_paths(workspace: Path, manifest: dict[str, Any], identifiers: tuple[str, ...] | None = None,
                 *, native_writes: bool = False) -> tuple[list[Path], list[Path]]:
-    from sciplot_core.workflow.rheology_tts_suite import _active_receipts, _figure_folder, _selected_documents
+    from sciplot_core.workflow.rheology_tts_saved_state import _active_receipts, _figure_folder, _selected_documents
     from sciplot_core.workflow.native_suite_runtime import delivery_path, native_path
     from sciplot_core.project_store.runtime import resolve_runtime_path
     delivery = delivery_path(manifest)
@@ -140,7 +140,7 @@ def adopt_saved_native(store: FileProjectStore, manifest: dict[str, Any],
     """
     from sciplot_core.project_commands import NativeAdoption
     from sciplot_core.rheology_tts_render import audit_tts_document
-    from sciplot_core.workflow.rheology_tts_suite import _check_sources, _compiled_figures, _selected_documents
+    from sciplot_core.workflow.rheology_tts_saved_state import _check_sources, _compiled_figures, _selected_documents
 
     current = store.snapshot()
     documents = _selected_documents(manifest, identifiers)

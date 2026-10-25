@@ -17,41 +17,7 @@ from sciplot_core.veusz_runtime import (
 )
 
 
-# The creator owns this scoped observation; it never turns an exception into a
-# successful OS exit. A missing observation after hard exit remains unknown.
-from contextlib import contextmanager
-from contextvars import ContextVar
-from dataclasses import dataclass
-from collections.abc import Callable, Iterator
-
-
-@dataclass
-class NativeInvocationObservation:
-    dispatch_entered: bool = False
-    owned_invocation_closed: bool = True
-
-
-_NATIVE_OBSERVATION: ContextVar[NativeInvocationObservation | None] = ContextVar("tts_native_observation", default=None)
-_NATIVE_RESULT: ContextVar[Callable[[dict[str, Any], Path, dict[str, Any]], None] | None] = ContextVar("tts_native_result", default=None)
-
-
-@contextmanager
-def observe_native_creation(callback: Callable[[dict[str, Any], Path, dict[str, Any]], None] | None = None) -> Iterator[NativeInvocationObservation]:
-    observation = NativeInvocationObservation()
-    token = _NATIVE_OBSERVATION.set(observation)
-    result_token = _NATIVE_RESULT.set(callback)
-    try:
-        yield observation
-    finally:
-        _NATIVE_RESULT.reset(result_token)
-        _NATIVE_OBSERVATION.reset(token)
-
-
-def native_result_received(compiled: dict[str, Any], out: Path, result: dict[str, Any]) -> None:
-    callback = _NATIVE_RESULT.get()
-    if callback is not None:
-        callback(compiled, out, result)
-
+from sciplot_core.rheology_tts_native_invocation import current_native_observation, native_result_received
 
 def render_tts_figures(spec: dict[str, Any], out: Path, *, resume: bool = False) -> dict[str, Any]:
     """Save editable native figures and export their exact bytes in three formats."""
@@ -66,7 +32,6 @@ def render_tts_figures(spec: dict[str, Any], out: Path, *, resume: bool = False)
         figure["spec_sha256"] = file_sha256(Path(figure["spec_path"]))
     native_result_received(compiled, out.resolve(), result)
     return result
-
 
 
 def complete_tts_creation_exports(compiled: dict[str, Any], out: Path) -> dict[str, Any]:
@@ -221,7 +186,7 @@ def _validate_export_batch(request: dict[str, Any]) -> list[tuple[Path, Path, di
 
 
 def _dispatch(request: dict[str, Any]) -> dict[str, Any]:
-    observation = _NATIVE_OBSERVATION.get()
+    observation = current_native_observation()
     if observation is not None:
         observation.dispatch_entered = True
         observation.owned_invocation_closed = False
@@ -247,7 +212,7 @@ def _dispatch_observed(request: dict[str, Any]) -> dict[str, Any]:
                 command.extend(["--project-runtime", binding["path"], binding["sha256"]])
             result = subprocess.run(command, env=veusz_worker_environment(), capture_output=True,
                                     text=True, check=False)
-        observation = _NATIVE_OBSERVATION.get()
+        observation = current_native_observation()
         if observation is not None:
             observation.owned_invocation_closed = True  # subprocess.run actually waited.
         if result.returncode:

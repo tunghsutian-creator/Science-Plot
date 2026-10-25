@@ -2,144 +2,30 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import shlex
-import shutil
 from pathlib import Path
 import tempfile
 
-from sciplot_core._paths import REPO_ROOT
 from sciplot_core.workflow.native_suite_runtime import current_store, delivery_path, literal_directory, literal_resource, native_path, native_runtime
 from sciplot_core.workflow.rheology_tts_tables import write_json, write_methods, write_plot_tables
 
 
-def _sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _bound_sources(request: dict) -> list[dict]:
-    paths = [Path(request["frequency_source"]).expanduser().resolve()]
-    paths.extend(Path(s["tts_source"]).expanduser().resolve() for s in request["samples"] if s.get("tts_source"))
-    from sciplot_core.project_store.runtime import resolve_runtime_path
-    store = current_store()
-    result = []
-    for path in dict.fromkeys(paths):
-        if store is None:
-            version = _sha(path)
-        else:
-            versions = {version for entries in store.snapshot()["sources"].values() for version, entry in entries.items()
-                        if entry.get("locator") == str(path)}
-            if len(versions) != 1:
-                raise ValueError("Analysis continuation requires its exact registered original source version.")
-            version = versions.pop()
-            if _sha(resolve_runtime_path(path, expected_sha256=version)) != version:
-                raise ValueError("The original analysis source version changed.")
-        result.append({"path": str(path), "sha256": version})
-    return result
-
-
-def _check_sources(sources: list[dict]) -> None:
-    for source in sources:
-        from sciplot_core.project_store.runtime import resolve_runtime_path
-        path = resolve_runtime_path(source["path"], expected_sha256=source["sha256"], source_id=source.get("source_id"))
-        if not path.is_file() or _sha(path) != source["sha256"]:
-            raise ValueError(f"Original source changed: {path}; a new analysis is required.")
-
-
-def launcher_bytes(arguments: list[str]) -> bytes:
-    command = [str(REPO_ROOT / "skill/scripts/sciplot"), *arguments]
-    return ("#!/bin/zsh\nset -e\nexec " + " ".join(shlex.quote(value) for value in command) + "\n").encode()
-
-
-def _launcher(path: Path, arguments: list[str]) -> None:
-    path.write_bytes(launcher_bytes(arguments))
-    path.chmod(0o755)
-
-
-def _figure_folder(delivery: Path, identifier: str) -> Path:
-    if identifier.startswith("Figure_X"):
-        return delivery
-    return delivery / ("SI" if identifier.startswith("SI_") else "panels")
-
-
-def _output_paths(source: Path, requested: str | Path) -> tuple[Path, Path]:
-    """Allow new sibling suites and an explicit revision inside an existing suite."""
-    delivery = Path(requested).expanduser().resolve()
-    parent = source.parent
-    if delivery.parent != parent:
-        previous_manifest = delivery.parent / "data" / "delivery_manifest.json"
-        if delivery.parent.parent != parent or not previous_manifest.is_file():
-            raise ValueError("TTS output must be beside its original data or a new revision inside an existing source-adjacent suite.")
-        previous = json.loads(previous_manifest.read_text(encoding="utf-8"))
-        original_paths = {Path(s["path"]).resolve() for s in previous.get("sources", [])}
-        if previous.get("kind") != "sciplot_rheology_tts_suite" or source not in original_paths:
-            raise ValueError("Revision parent is not a source-bound suite for this frequency source.")
-    if delivery == parent or ".sciplot" in delivery.relative_to(parent).parts:
-        raise ValueError("Visible delivery must be a dedicated folder outside hidden evidence.")
-    relative_name = "__".join(delivery.relative_to(parent).parts)
-    return delivery, parent / ".sciplot" / relative_name
-
-
-def _publish(stage: Path, delivery: Path, spec: dict, native_result: dict) -> list[dict]:
-    """Copy known new outputs; visible native files become the sole edit authority."""
-    from sciplot_core.studio_core.source_update_commit import reject_symlink_path
-
-    reject_symlink_path(stage)
-    reject_symlink_path(delivery)
-    # Creation checkpoints retain sealed and failed exports below .creation.
-    # Those historical bytes are not another candidate for visible publication.
-    for item in stage.iterdir():
-        reject_symlink_path(item)
-        if item.is_dir() and item.name != ".creation":
-            raise ValueError(f"Unexpected nested native publication output: {item}")
-
-    def bound_file(name: str, receipt_path: str, digest: str) -> Path:
-        path = stage / name
-        reject_symlink_path(path)
-        if (not path.is_file() or path.stat().st_nlink != 1
-                or Path(receipt_path) != path or _sha(path) != digest):
-            raise ValueError(f"Missing, changed or aliased receipt-bound native output: {path}")
-        return path
-
-    receipts = native_result["figures"]
-    by_id = {r["id"]: r for r in receipts}
-    expected_ids = [f["id"] for f in spec["figures"]]
-    if len(by_id) != len(receipts) or set(by_id) != set(expected_ids):
-        raise ValueError("Native render receipts do not match the selected figure set.")
-    prepared = []
-    # Check the complete set before publishing any figure, including missing TIFFs.
-    for identifier in expected_ids:
-        receipt = by_id[identifier]
-        native = bound_file(identifier + ".vsz", receipt["document"], receipt["document_sha256"])
-        expected_names = {identifier + suffix for suffix in (".pdf", "_300dpi.tiff", "_300dpi.png")}
-        exported = {Path(r["path"]).name: r for r in receipt["exports"]}
-        if len(exported) != len(receipt["exports"]) or set(exported) != expected_names:
-            raise ValueError(f"Expected exactly PDF, TIFF and PNG receipts for {identifier}.")
-        sources = []
-        for name in sorted(expected_names):
-            digest = exported[name]["sha256"]
-            sources.append((bound_file(name, exported[name]["path"], digest), digest))
-        prepared.append((identifier, native, receipt["document_sha256"], sources))
-    documents = []
-    for identifier, source_native, native_sha, sources in prepared:
-        native = delivery / "editable" / f"{identifier}.vsz"
-        native.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_native, native)
-        if _sha(native) != native_sha or _sha(source_native) != native_sha:
-            raise RuntimeError(f"Native delivery byte mismatch: {native}")
-        destination = _figure_folder(delivery, identifier)
-        destination.mkdir(parents=True, exist_ok=True)
-        files = []
-        for path, digest in sources:
-            target = destination / path.name
-            shutil.copy2(path, target)
-            if _sha(target) != digest or _sha(path) != digest:
-                raise RuntimeError(f"Delivery byte mismatch: {target}")
-            files.append(str(target))
-        documents.append({"id": identifier, "path": str(native), "sha256": _sha(native), "exports": files})
-        _launcher(delivery / "editable" / f"Open_{identifier}.command", ["studio", str(native)])
-    return documents
+# Compatibility names forward to the sole leaf owners.
+from sciplot_core.workflow.rheology_tts_saved_state import (
+    _active_receipts as _active_receipts,
+    _bound_sources as _bound_sources,
+    _check_sources as _check_sources,
+    _compiled_figures as _compiled_figures,
+    _figure_folder as _figure_folder,
+    _selected_documents as _selected_documents,
+    _sha as _sha,
+)
+from sciplot_core.workflow.rheology_tts_delivery_files import (
+    _launcher as _launcher,
+    _output_paths as _output_paths,
+    _publish as _publish,
+    launcher_bytes as launcher_bytes,
+)
 
 
 @native_runtime(repair=True, role="analysis_request")
@@ -209,7 +95,7 @@ def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Pat
     else:
         from sciplot_core.rheology_tts_spec import compile_tts_spec
         from sciplot_core.rheology_tts_render_creation import check_native_continuation
-        from sciplot_core.workflow.native_suite_creation import _remap
+        from sciplot_core.workflow.native_suite_creation_projection import _remap
         from sciplot_core.workflow.native_suite_generation import candidate_file
         from sciplot_core.project_store.runtime import resolve_runtime_path, literal_runtime_path
         original = known_workspace / "initial_render"
@@ -238,7 +124,7 @@ def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Pat
     for figure in native_result["figures"]:
         figure["spec_sha256"] = _sha(Path(figure["spec_path"]))
     if known_workspace is None:
-        from sciplot_core.rheology_tts_render import native_result_received
+        from sciplot_core.rheology_tts_native_invocation import native_result_received
         from sciplot_core.rheology_tts_spec import compile_tts_spec
         native_result_received(compile_tts_spec(spec), workspace / "initial_render", native_result)
     _check_sources(sources)
@@ -268,64 +154,12 @@ def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Pat
     if layout == "separate_polymer_modulus":
         write_revision_methods(delivery, analysis, spec)
     from sciplot_core.studio_core.source_update_commit import file_inventory
-    from sciplot_core.workflow.native_suite_creation import creation_inventory
+    from sciplot_core.workflow.native_suite_creation_projection import creation_inventory
     expected_files = creation_inventory(workspace, delivery, native_result, file_inventory(delivery),
         {"request.json": request, "analysis.json": analysis, "figure_plan.json": spec})
     return {"_candidate_files": expected_files, "status": "ready", "delivery": str(delivery), "workspace": str(workspace), "figures": len(documents),
             "manual_edit": str(delivery / "Open_in_SciPlot.command"), "native_result": native_result,
             "scientific_scope": manifest["scientific_scope"]}
-
-
-def _selected_documents(manifest: dict, figure_ids: tuple[str, ...] | None = None) -> list[dict]:
-    documents = manifest["documents"]
-    identifiers = [document["id"] for document in documents]
-    if len(set(identifiers)) != len(identifiers):
-        raise ValueError("Saved document identities are not unique.")
-    if figure_ids is None:
-        return documents
-    if (not isinstance(figure_ids, tuple) or not figure_ids or len(set(figure_ids)) != len(figure_ids)
-            or any(identifier not in identifiers for identifier in figure_ids)):
-        raise ValueError("Select exact, unique existing figure IDs before native execution.")
-    return [document for document in documents if document["id"] in figure_ids]
-
-
-def _active_receipts(manifest: dict) -> list[dict]:
-    """Select the active spec per figure; unrelated overlays never erase it."""
-    original = {item["id"]: item for item in manifest["native_result"]["figures"]}
-    overlay = manifest.get("presentation_revision", {}).get("figures", [])
-    if len({item["id"] for item in overlay}) != len(overlay):
-        raise ValueError("Active compiled figure identities are not unique.")
-    original.update({item["id"]: item for item in overlay})
-    return [original[document["id"]] for document in manifest["documents"]]
-
-
-def _compiled_figures(manifest: dict, *, figure_ids: tuple[str, ...] | None = None) -> dict:
-    """Read creation-bound numeric baselines without accepting edited spec bytes."""
-    by_id = {}
-    selected = {document["id"] for document in _selected_documents(manifest, figure_ids)}
-    receipts = _active_receipts(manifest)
-    for receipt in receipts:
-        if receipt["id"] not in selected:
-            continue
-        from sciplot_core.project_store.runtime import resolve_runtime_path
-        path = resolve_runtime_path(receipt["spec_path"], expected_sha256=receipt.get("spec_sha256"))
-        digest = receipt.get("spec_sha256")
-        if not digest:
-            raise ValueError("Compiled figure specification lacks its creation SHA; explicit receipt migration is required.")
-        if not path.is_file() or _sha(path) != digest:
-            raise ValueError(f"Compiled figure specification changed: {path}")
-        spec = json.loads(path.read_text(encoding="utf-8"))
-        if _sha(path) != digest:
-            raise ValueError(f"Compiled figure specification changed while reading: {path}")
-        identifier = receipt["id"]
-        if identifier in by_id or spec["figure"]["id"] != identifier:
-            raise ValueError("Compiled figure identities disagree with creation receipts.")
-        if spec["source_binding"].get("sources") != manifest["sources"]:
-            raise ValueError("Compiled figure source bindings disagree with suite sources.")
-        by_id[identifier] = spec["figure"]
-    if set(by_id) != selected:
-        raise ValueError("Saved document identities disagree with compiled figure receipts.")
-    return by_id
 
 
 @native_runtime(repair=True)

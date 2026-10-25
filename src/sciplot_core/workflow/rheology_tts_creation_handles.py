@@ -7,7 +7,7 @@ def created_object_handles(manifest: dict[str, Any], compiled: dict[str, Any]) -
     from sciplot_core.plot_engine.object_operations import plot_object_handle
     from sciplot_core.workflow.native_suite_objects import native_identity, native_targets
 
-    from sciplot_core.workflow.rheology_tts_suite import _active_receipts
+    from sciplot_core.workflow.rheology_tts_saved_state import _active_receipts
     receipts = {item["id"]: item for item in _active_receipts(manifest)}
     figures = {item["id"]: item for item in compiled["figures"]}
     handles = []

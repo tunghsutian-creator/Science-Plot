@@ -99,7 +99,7 @@ def _prepare_style_preview(workspace: Path, directory: Path, *, presentation_pla
     from sciplot_core.rheology_tts_render import audit_tts_document, export_tts_document, restyle_tts_document
     from sciplot_core.rheology_tts_spec import compile_tts_spec
     from sciplot_core.workflow.rheology_tts_contract import rheology_capabilities
-    from sciplot_core.workflow.rheology_tts_suite import _check_sources, _compiled_figures
+    from sciplot_core.workflow.rheology_tts_saved_state import _check_sources, _compiled_figures
 
     workspace, manifest = _load(workspace)
     _check_sources(manifest["sources"])
@@ -129,11 +129,11 @@ def _prepare_style_preview(workspace: Path, directory: Path, *, presentation_pla
                         if "prepared_input" not in manifest or path.exists() or path.is_symlink())
     for document in manifest["documents"]:
         dependencies.extend([native_path(manifest, document), *(delivery / Path(p).relative_to(Path(manifest["delivery"])) for p in document["exports"])])
-        from sciplot_core.workflow.rheology_tts_suite import _figure_folder
+        from sciplot_core.workflow.rheology_tts_saved_state import _figure_folder
         audit_path = _figure_folder(delivery, document["id"]) / f"{document['id']}.native-audit.json"
         if audit_path.exists():
             dependencies.append(audit_path)
-    from sciplot_core.workflow.rheology_tts_suite import _active_receipts
+    from sciplot_core.workflow.rheology_tts_saved_state import _active_receipts
     receipts = _active_receipts(manifest)
     from sciplot_core.project_store.runtime import resolve_runtime_path
     dependencies.extend(resolve_runtime_path(r["spec_path"], expected_sha256=r["spec_sha256"]) for r in receipts)
@@ -186,7 +186,7 @@ def _prepare_style_preview(workspace: Path, directory: Path, *, presentation_pla
 def publication_updates(workspace: Path, manifest: dict, preview: dict, directory: Path,
                         *, native_display: bool = False, spec_targets: dict[str, Path] | None = None) -> dict:
     """Build exact audited byte writes; no mutable source survives this callback."""
-    from sciplot_core.workflow.rheology_tts_suite import _figure_folder
+    from sciplot_core.workflow.rheology_tts_saved_state import _figure_folder
     from sciplot_core.workflow.native_suite_generation import candidate_bytes, json_bytes
 
     updated = deepcopy(manifest)
@@ -322,7 +322,7 @@ def _apply_suite_style_admitted(workspace: Path, preview_path: Path, *, native_d
                                _session_held: bool = False) -> dict:
     from sciplot_core.project_commands import ProjectCommand, ProjectCommands
     from sciplot_core.workflow.native_suite_generation import open_store
-    from sciplot_core.workflow.rheology_tts_suite import _check_sources
+    from sciplot_core.workflow.rheology_tts_saved_state import _check_sources
 
     workspace, manifest = _load(workspace, native_display=native_display, repair=True)
     app = ProjectCommands(open_store(workspace, delivery_path(manifest)))

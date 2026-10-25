@@ -9,7 +9,7 @@ from typing import Any
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.workflow.native_suite_objects import selected_spec
 from sciplot_core.workflow.rheology_tts_style_storage import check_snapshot, snapshot
-from sciplot_core.workflow.rheology_tts_suite import _figure_folder
+from sciplot_core.workflow.rheology_tts_saved_state import _figure_folder
 
 
 def baseline_files(context: dict[str, Any]) -> dict[str, Any]:
@@ -28,7 +28,7 @@ def check_acceptance(context: dict[str, Any], record: dict[str, Any], path: Path
     """Require current reviewed evidence before durably accepting its mutation."""
     from sciplot_core.studio_core.source_update_commit import reject_symlink_path
     from sciplot_core.workflow.rheology_tts_contract import rheology_capabilities
-    from sciplot_core.workflow.rheology_tts_suite import _check_sources
+    from sciplot_core.workflow.rheology_tts_saved_state import _check_sources
 
     preview_path = path.parent / "preview.json"
     reject_symlink_path(preview_path)
