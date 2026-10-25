@@ -14,6 +14,7 @@ class ImportTarget:
     root: Path
     project: Path
     figure_id: str
+    plot_id: str | None = None
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,7 @@
 """Concrete application composition and explicitly separate native authorities."""
 from typing import Any
 
-from .repository import FileProjectRepository
+from .repository_router import ComposedProjectRepository
 from .ports import ProjectRepository
 
 
@@ -20,5 +20,8 @@ def components(backend: Any, repository: ProjectRepository | None, capabilities:
     if repository is None:
         from sciplot_core.studio_core.project_session import external_project_session
 
-        repository = FileProjectRepository(lease=external_project_session)
+        repository = ComposedProjectRepository(lease=external_project_session)
+        from .backend_paths import RepositoryBackendPaths
+
+        backend = RepositoryBackendPaths(backend, repository)
     return backend, repository, COMPATIBILITY_CAPABILITIES if capabilities is None else capabilities, resolve_figure

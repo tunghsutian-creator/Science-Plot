@@ -5,7 +5,7 @@ helpers cannot fall back to another writer; token reset also covers exceptions.
 The stateless default serves historical standalone storage callers only.
 """
 from collections.abc import Iterator, Callable
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack, nullcontext
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
@@ -28,7 +28,11 @@ def repository_scope(selected: ProjectRepository, *, capabilities: dict[str, Any
     token = _repository.set(selected)
     profile = _capabilities.set(capabilities)
     try:
-        yield
+        with ExitStack() as scopes:
+            invocation = getattr(selected, "invocation_scope", None)
+            if invocation is not None:
+                scopes.enter_context(invocation())
+            yield
     finally:
         _capabilities.reset(profile)
         _repository.reset(token)
@@ -128,6 +132,11 @@ def reserve(root: Path, transaction: dict[str, Any]) -> None:
 
 def external_project_session(root: Path) -> Any:
     return repository().lease(root)
+
+
+def scientific_source_scope(root: Path, request: dict[str, Any]) -> Any:
+    scope = getattr(repository(), "scientific_request_scope", None)
+    return scope(root, request) if scope is not None else nullcontext()
 
 
 def prepare_namespace(root: Path) -> None:

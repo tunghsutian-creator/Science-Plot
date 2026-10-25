@@ -19,6 +19,13 @@ class FilesystemProjectTargets:
 
     def resolve_open(self, target: Path, figure_id: str | None = None) -> OpenTarget:
         target = canonical_path(target)
+        from .repository_router import ComposedProjectRepository
+        if isinstance(self.repository, ComposedProjectRepository):
+            from .attachment_targets import resolve_attached_open
+
+            attached = resolve_attached_open(self.repository, target, figure_id, self.resolve_figure)
+            if attached is not None:
+                return attached
         delivery_index = target / "index.json"
         package = read_json_object(delivery_index) if delivery_index.is_file() and not delivery_index.is_symlink() else None
         if package is not None and package.get("kind") == "sciplot_managed_delivery":
@@ -46,6 +53,13 @@ class FilesystemProjectTargets:
         return transaction_path(source.parent / ".sciplot_documents" / "creations", key).parent
 
     def managed_creation(self, request: dict[str, Any]) -> ManagedCreationLocation:
+        from .repository_router import ComposedProjectRepository
+        if isinstance(self.repository, ComposedProjectRepository):
+            from .attachment_targets import attached_managed_creation
+
+            attached = attached_managed_creation(self.repository, request)
+            if attached is not None:
+                return attached
         sources = request["data_binding"]["data_sources"]
         if not sources:
             raise EngineError("managed_source_required", "Managed creation requires explicit original data sources.")

@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from collections.abc import Callable
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
+from collections.abc import Iterator
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
@@ -49,14 +50,37 @@ class FileProjectRepository:
         self._lease, self._validate_snapshot = lease, snapshot_validator
 
     def lease(self, root: Path) -> AbstractContextManager[Any]:
+        from .attachment_index import require_local_owner
+
+        require_local_owner(root)
         if self._lease is None:
             raise RuntimeError("Application writes require an explicitly composed repository lease.")
         return self._lease(root)
+
+    @contextmanager
+    def storage_batch(self, root: Path) -> Iterator[None]:
+        """One logical publication; attached adapters replace only physical IO."""
+        from .attachment_index import require_local_owner
+
+        require_local_owner(root)
+        yield
+
+    def validation_root(self, root: Path) -> Path:
+        return root
+
+    def runtime_envelope(self, root: Path, envelope: dict[str, Any]) -> dict[str, Any]:
+        return envelope
+
+    def storage_binding(self, root: Path, binding: dict[str, Any]) -> dict[str, Any]:
+        return binding
 
     def content_snapshot(self, path: Path) -> dict[str, Any]:
         return file_content.read_snapshot(path)
 
     def publish_content(self, path: Path, payload: bytes, verify_existing: Callable[[], None]) -> None:
+        from .attachment_index import require_local_owner
+
+        require_local_owner(path)
         file_content.publish(path, payload, verify_existing)
 
     def json_members(self, directory: Path, pattern: str) -> list[Path]:
@@ -64,10 +88,16 @@ class FileProjectRepository:
         return sorted(directory.glob(pattern))
 
     def create_namespace(self, root: Path) -> None:
+        from .attachment_index import require_local_owner
+
+        require_local_owner(root)
         canonical_path(root)
         root.mkdir()
 
     def prepare_namespace(self, root: Path) -> None:
+        from .attachment_index import require_local_owner
+
+        require_local_owner(root)
         canonical_path(root)
         root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
@@ -87,17 +117,23 @@ class FileProjectRepository:
         return path.exists()
 
     def load_revision(self, root: Path, revision: int) -> dict[str, Any]:
+        return self.runtime_envelope(root, self._load_revision_envelope(root, revision))
+
+    def _load_revision_envelope(self, root: Path, revision: int) -> dict[str, Any]:
         if type(revision) is not int or revision < 0:
             raise EngineError("document_state_invalid", "The revision number is invalid.")
         envelope = self.read(root / "revisions" / f"{revision:08d}.json")
         validate_document(envelope["document"])
-        verify_document_content(root, envelope["document"], read_snapshot=self.content_snapshot)
+        verify_document_content(self.validation_root(root), envelope["document"], read_snapshot=self.content_snapshot)
         if envelope["document"]["revision"] != revision:
             raise EngineError("document_state_invalid", "Document revision and snapshot disagree.")
         return envelope
 
 
     def write(self, path: Path, payload: dict[str, Any]) -> None:
+        from .attachment_index import require_local_owner
+
+        require_local_owner(path)
         canonical_path(path)
         atomic_write_json(path, payload)
         fd = os.open(path.parent, os.O_RDONLY)
@@ -119,16 +155,20 @@ class FileProjectRepository:
 
 
     def load_head(self, root: Path) -> dict[str, Any]:
+        return self.runtime_envelope(root, self._head_envelope(root))
+
+    def _head_envelope(self, root: Path) -> dict[str, Any]:
         head = self.read(root / "head.json")
         revision = head.get("revision")
         if type(revision) is not int or revision < 0:
             raise EngineError("document_state_invalid", "The revision pointer is invalid.")
-        envelope = self.load_revision(root, revision)
+        envelope = self._load_revision_envelope(root, revision)
         if digest(envelope) != head.get("sha256"):
             raise EngineError("document_state_invalid", "The revision does not match its committed pointer.")
         validate_document(envelope["document"])
-        verify_document_content(root, envelope["document"], read_snapshot=self.content_snapshot)
-        if envelope["binding"].get("scientific_content_files", {}) != referenced_files(root, envelope["document"]):
+        origin = self.validation_root(root)
+        verify_document_content(origin, envelope["document"], read_snapshot=self.content_snapshot)
+        if envelope["binding"].get("scientific_content_files", {}) != referenced_files(origin, envelope["document"]):
             raise EngineError("document_content_binding_invalid", "Scientific content references and currentness guards disagree.")
         if envelope["document"]["revision"] != revision:
             raise EngineError("document_state_invalid", "Document revision and pointer disagree.")
@@ -136,11 +176,16 @@ class FileProjectRepository:
 
 
     def commit(self, root: Path, document: dict[str, Any], binding: dict[str, Any], transaction: str) -> None:
-        verify_document_content(root, document, read_snapshot=self.content_snapshot)
-        if binding.get("scientific_content_files", {}) != referenced_files(root, document):
+        with self.storage_batch(root):
+            self._commit(root, document, self.storage_binding(root, binding), transaction)
+
+    def _commit(self, root: Path, document: dict[str, Any], binding: dict[str, Any], transaction: str) -> None:
+        origin = self.validation_root(root)
+        verify_document_content(origin, document, read_snapshot=self.content_snapshot)
+        if binding.get("scientific_content_files", {}) != referenced_files(origin, document):
             raise EngineError("document_content_binding_invalid", "Scientific content references lack their currentness guards.")
         if self._validate_snapshot is None:
-            validate_snapshot(root, document, read_snapshot=self.content_snapshot)
+            validate_snapshot(origin, document, read_snapshot=self.content_snapshot)
         else:
             self._validate_snapshot(root, document)
         envelope = {"document": validate_document(document), "binding": binding,
@@ -150,7 +195,7 @@ class FileProjectRepository:
         if self.exists(target) and self.read(target) != envelope:
             raise EngineError("document_revision_collision", "A different snapshot already occupies this revision.")
         if self.exists(root / "head.json"):
-            current = self.load_head(root)
+            current = self._head_envelope(root)
             previous = current["document"]
             if (document["plot_id"] != previous["plot_id"]
                     or AuthorityMode.of(document) != AuthorityMode.of(previous)):
@@ -194,5 +239,6 @@ class FileProjectRepository:
 
 
     def reserve(self, root: Path, transaction: dict[str, Any]) -> None:
-        self.persist(root, transaction)
-        self.write(root / "active.json", {"key": transaction["request"]["idempotency_key"]})
+        with self.storage_batch(root):
+            self.persist(root, transaction)
+            self.write(root / "active.json", {"key": transaction["request"]["idempotency_key"]})

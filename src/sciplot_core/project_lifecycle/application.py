@@ -94,7 +94,8 @@ class ProjectApplication(CommandDispatch):
                     if snapshot["transaction"] != "import" or document["revision"] != 0:
                         raise EngineError("document_state_invalid", "The interrupted import snapshot is invalid.")
                 else:
-                    document, binding = self.backend.import_project(project, selected_id)
+                    document, binding = (self.backend.import_project(project, selected_id, plot_id=destination.plot_id)
+                        if destination.plot_id is not None else self.backend.import_project(project, selected_id))
                     if "document" in binding:
                         from sciplot_core.plot_engine.external_mutation import capture_baseline
 
@@ -167,7 +168,9 @@ class ProjectApplication(CommandDispatch):
     def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         request = validate_patch(request)
         root = canonical_path(plot)
-        with external_project_session(root), admitted(root, "patch", request):
+        from .context import scientific_source_scope
+
+        with external_project_session(root), admitted(root, "patch", request), scientific_source_scope(root, request):
             return self._patch(root, request)
 
     @usecase

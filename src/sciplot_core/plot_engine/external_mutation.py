@@ -7,10 +7,8 @@ managed document authority.
 
 from copy import deepcopy
 import hashlib
-import os
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
@@ -148,28 +146,13 @@ def capture_baseline(root: Path, binding: dict[str, Any]) -> dict[str, Any]:
     if observed != expected or file_sha256(source) != expected:
         raise EngineError("external_mutation_baseline_changed", "The saved native document changed while capturing its immutable baseline.")
     target = canonical_path(root / "native-baselines" / f"{expected}.vsz")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        if file_sha256(target) != expected:
+    from sciplot_core.project_lifecycle.context import content_snapshot, publish_content
+
+    def verify_existing() -> None:
+        if content_snapshot(target)["sha256"] != expected:
             raise EngineError("external_mutation_baseline_corrupt", "The immutable native baseline no longer matches its recorded bytes.")
-    else:
-        temporary = target.with_name(target.name + "." + uuid4().hex + ".tmp")
-        try:
-            with temporary.open("xb") as stream:
-                stream.write(raw)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.link(temporary, target)
-        except FileExistsError:
-            if not target.is_file() or file_sha256(target) != expected:
-                raise EngineError("external_mutation_baseline_corrupt", "A different native baseline occupies the content address.") from None
-        finally:
-            temporary.unlink(missing_ok=True)
-        descriptor = os.open(target.parent, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
+
+    publish_content(target, raw, verify_existing)
     if file_sha256(source) != expected:
         raise EngineError("external_mutation_baseline_changed", "The saved native document changed before its baseline could be bound.")
     result = deepcopy(binding)
@@ -188,10 +171,16 @@ def record_legacy_mutation(root: Path, head: dict[str, Any], binding: dict[str, 
     if reference is not None:
         baseline = canonical_path(Path(reference["path"]))
         expected_path = canonical_path(root / "native-baselines" / f"{before}.vsz")
-        if baseline != expected_path or reference["sha256"] != before or not baseline.is_file():
+        from sciplot_core.project_lifecycle.context import content_snapshot
+
+        if baseline != expected_path or reference["sha256"] != before:
             raise EngineError("external_mutation_baseline_corrupt", "The frozen native baseline no longer identifies this revision.")
-        baseline_raw = baseline.read_bytes()
-        if hashlib.sha256(baseline_raw).hexdigest() != before or file_sha256(baseline) != before:
+        try:
+            saved = content_snapshot(baseline)
+        except (OSError, ValueError) as exc:
+            raise EngineError("external_mutation_baseline_corrupt", "The frozen native baseline bytes are unavailable.") from exc
+        baseline_raw = saved["bytes"]
+        if hashlib.sha256(baseline_raw).hexdigest() != before or saved["sha256"] != before:
             raise EngineError("external_mutation_baseline_corrupt", "The frozen native baseline bytes changed.")
         observed = canonical_path(Path(native)).read_bytes()
         if hashlib.sha256(observed).hexdigest() != after or file_sha256(Path(native)) != after:
