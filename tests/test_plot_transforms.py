@@ -61,14 +61,12 @@ def test_normalization_divides_directly_without_overflowing_a_reciprocal():
 
 
 def test_builtin_code_identity_and_determinism_are_checked_before_work(monkeypatch):
-    from sciplot_core.plot_transforms import execution
-
     _, _, datasets = managed_example()
     node = builtin("scale", {"columns": ["column:1"], "factor": 2})
     with pytest.raises(DocumentError) as error:
         execute_node({**node, "determinism": "non_deterministic"}, datasets)
     assert error.value.reason_code == "transform_nondeterministic_unsupported"
-    monkeypatch.setattr(execution, "builtin_executor", lambda: {**node["executor"], "content_hash": "0" * 64})
+    node["executor"] = {**node["executor"], "content_hash": "0" * 64}
     with pytest.raises(DocumentError) as error:
         execute_node(node, datasets)
     assert error.value.reason_code == "transform_executor_changed"

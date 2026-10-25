@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.plot_document import build_keys, invalidated_nodes
+from sciplot_core.plot_transforms import builtin_files
 
 from .backend import PlotBackend
 from .errors import EngineError
@@ -46,15 +47,20 @@ def describe_managed(root: Path, head: dict[str, Any], result: dict[str, Any], b
     dirty = ["source:" + item["source_id"] for item in document["scientific"]["data_sources"]
              if str(Path(item["path"]).resolve()) in canonical_changed]
     registry = document["scientific"]["provenance"]["managed"].get("executors", {})
-    source_paths = {str(Path(item["path"]).resolve()) for item in document["scientific"]["data_sources"]}
-    external_paths = {str(Path(executor[field]).resolve()) for executor in registry.values() for field in ("script", "executable")}
-    builtin_changes = canonical_changed & (set(binding["fingerprint"]["files"]) - source_paths - external_paths)
+    builtin_targets = []
     for node in document["scientific"]["transforms"]:
         executor = registry.get(node["executor"].get("id"))
         if executor and {executor["script"], executor["executable"]} & changed:
             dirty.append("transform:" + node["id"])
-        if node["executor"]["kind"] == "builtin" and builtin_changes:
-            dirty.append("transform:" + node["id"])
+        if node["executor"]["kind"] == "builtin":
+            try:
+                implementation = builtin_files(node["kind"], node["executor"])
+            except ValueError:
+                implementation = {}
+                builtin_targets.append("transform:" + node["id"])
+            if canonical_changed & {str(Path(path).resolve()) for path in implementation}:
+                builtin_targets.append("transform:" + node["id"])
+    dirty.extend(builtin_targets)
     native = Path(binding["document"])
     if str(native) in changed or not native.is_file():
         dirty.append("render")
@@ -89,17 +95,10 @@ def describe_managed(root: Path, head: dict[str, Any], result: dict[str, Any], b
         result["status"] = "dirty"
         result["next_step"] = {"action": "plot.export", "plot": str(root), "reason": "rebuild_disposable_artifacts"}
     elif dirty:
-        result["next_step"] = {"action": "refresh_builtin_executor" if builtin_changes else "refresh_scientific_binding",
+        result["next_step"] = {"action": "restore_builtin_executor" if builtin_targets else "refresh_scientific_binding",
                                "requires_intent_class": "scientific"}
-        if builtin_changes:
-            from sciplot_core.plot_transforms import builtin_executor
-
-            result["next_step"].update({"property": "transform.executor", "targets": [
-                "transform:" + node["id"] for node in document["scientific"]["transforms"] if node["executor"]["kind"] == "builtin"]})
-            try:
-                result["next_step"]["value"] = builtin_executor()
-            except OSError:
-                result["next_step"].update({"action": "restore_builtin_executor", "implementation_available": False})
+        if builtin_targets:
+            result["next_step"].update({"targets": builtin_targets, "automatic_refresh": False})
         elif any(target in dirty for target in source_targets):
             result["next_step"].update(action="plot.describe", description_scope="edit",
                                        property="source.sha256", targets=[target for target in source_targets if target in dirty],

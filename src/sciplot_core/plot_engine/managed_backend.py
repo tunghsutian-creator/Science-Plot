@@ -9,6 +9,7 @@ from sciplot_core.foundation.file_hashing import existing_file_sha256, file_sha2
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler, compiler_identity
 
 from .errors import EngineError
+from .builtin_history import fingerprint_for_read
 from .managed_state import make_binding, read_canonical, require_inputs, resolved_ir
 from .storage import read, write
 from sciplot_core.project_lifecycle.context import exists
@@ -36,7 +37,7 @@ class ManagedBackend:
         return value
 
     def fingerprint(self, binding: dict[str, Any]) -> dict[str, Any]:
-        files = {name: existing_file_sha256(Path(name)) for name in binding["fingerprint"]["files"]}
+        files = {name: existing_file_sha256(Path(name)) for name in fingerprint_for_read(binding)["files"]}
         native = Path(binding["document"])
         expected = binding["ir_hash"]
         if native.exists():
@@ -65,7 +66,7 @@ class ManagedBackend:
         intent = self._owned_intent(binding)
         rebuild = not native.exists()
         if native.exists():
-            if self.fingerprint(binding) != binding["fingerprint"]:
+            if self.fingerprint(binding) != fingerprint_for_read(binding):
                 raise EngineError("managed_external_mutation", "An existing managed artifact changed outside its document.",
                                   action="inspect_external_mutation")
             record = read(marker) if exists(marker) else None

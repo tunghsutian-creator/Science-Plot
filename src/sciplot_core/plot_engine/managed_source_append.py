@@ -212,7 +212,7 @@ def prepare_append(document: dict[str, Any], request: dict[str, Any]) -> tuple[d
     output = "append:" + identity
     node = {"id": "append-select:" + identity, "kind": "select", "inputs": [source["source_id"]], "output": output,
             "parameters": {"columns": list(dict.fromkeys(f"column:{column['index']}" for pair in pairs for column in pair.values()))},
-            "executor": builtin_executor(), "determinism": "deterministic"}
+            "executor": builtin_executor("select"), "determinism": "deterministic"}
     if output in outputs | {item["source_id"] for item in science["data_sources"]} or any(
             item["id"] == node["id"] for item in science["transforms"]):
         raise EngineError("managed_append_identity_collision", "The generated append identity collides with an existing scientific object.")
@@ -236,7 +236,7 @@ def prepare_append(document: dict[str, Any], request: dict[str, Any]) -> tuple[d
             raise EngineError("managed_append_identity_collision", "The generated unit projection identity already exists.")
         science["transforms"].append({"id": projected, "kind": "convert_unit", "inputs": [output], "output": projected,
             "parameters": {"columns": [column], "from_unit": relation["from_unit"], "to_unit": relation["to_unit"]},
-            "executor": builtin_executor(), "determinism": "deterministic"})
+            "executor": builtin_executor("convert_unit"), "determinism": "deterministic"})
         output = projected
     view = next(view for view in spec["views"] if view["id"] == target)
     new_layers = []

@@ -8,6 +8,10 @@ native scientific audit, or publication inventory.
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.plot_transforms import builtin_files
+
+from .builtin_history import fingerprint_for_read
+
 from sciplot_core.foundation.json_io import read_json_object
 
 _MAX_NOT_MARKED_IDS = 32
@@ -74,10 +78,16 @@ def explain_rebuild(result: dict[str, Any], document: dict[str, Any], binding: d
 
     source_paths = {source["path"] for source in document["scientific"]["data_sources"]}
     external_paths = {executor[field] for executor in registry.values() for field in ("script", "executable")}
-    builtin_changes = changed & (set(binding["fingerprint"]["files"]) - source_paths - external_paths)
+    builtin_changes = changed & (set(fingerprint_for_read(binding)["files"]) - source_paths - external_paths)
     for path in sorted(builtin_changes):
-        nodes = ["transform:" + node["id"] for node in document["scientific"]["transforms"]
-                 if node["executor"]["kind"] == "builtin"]
+        nodes = []
+        for node in document["scientific"]["transforms"]:
+            if node["executor"]["kind"] == "builtin":
+                try:
+                    if path in builtin_files(node["kind"], node["executor"]):
+                        nodes.append("transform:" + node["id"])
+                except ValueError:
+                    pass  # Unsupported history supplies no invented path-to-node mapping.
         if nodes:
             reasons.append({"code": "builtin_executor_missing" if not Path(path).is_file()
                             else "builtin_executor_changed", "input": path, "nodes": nodes})

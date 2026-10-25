@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.plot_transforms import builtin_executor, validate_node
+from sciplot_core.plot_transforms import require_builtin, validate_node
 from sciplot_core.source_inspection.rheology_evidence import instrument_candidate
 from sciplot_core.source_inspection.semantic_evidence import _column
 from sciplot_core.task_semantic_coordinates import resolved_binding
@@ -68,7 +68,11 @@ def mapped_derivations(document: dict[str, Any], dataset: str, column: str) -> l
         if name in seen:
             raise EngineError("managed_source_reconfirmation_required", "A source derivation requires an acyclic current graph.")
         node = validate_node(nodes[name])
-        if node["executor"] != builtin_executor() or node["determinism"] != "deterministic":
+        if node["kind"] == "external" or node["determinism"] != "deterministic":
+            return []
+        try:
+            require_builtin(node)
+        except ValueError:
             return []
         params = node["parameters"]
         if node["kind"] == "rheology_complex_viscosity" and key == params["output_column"]:

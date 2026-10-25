@@ -3,8 +3,8 @@
 import re
 from typing import Literal, TypedDict
 
-from sciplot_core.materials_rules.unit_conversion import convert_value
-from sciplot_core.materials_rules.unit_data import _UNIT_RULES
+from .versions.v1.unit_conversion import convert_value
+from .versions.v1.unit_data import _UNIT_RULES
 from sciplot_core.plot_document.errors import fail
 
 

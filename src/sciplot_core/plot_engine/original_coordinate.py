@@ -2,7 +2,7 @@
 
 from typing import Any, NoReturn
 
-from sciplot_core.plot_transforms import builtin_executor
+from sciplot_core.plot_transforms import require_builtin
 from sciplot_core.plot_transforms.schema import validate_node
 from sciplot_core.plot_transforms.unit_relations import resolve_unit_relation
 
@@ -95,7 +95,6 @@ def coordinate_origins(document: dict[str, Any], dataset: str, column: str, unit
     if len(nodes) != len(science["transforms"]) or sources.keys() & nodes.keys():
         _unsupported()
     raw = datasets if datasets is not None else science["provenance"].get("datasets", {})
-    executor = builtin_executor()
 
     def walk(name: str, key: str, expected: str, visiting: frozenset[str]) -> list[Origin]:
         if name in visiting:
@@ -119,7 +118,11 @@ def coordinate_origins(document: dict[str, Any], dataset: str, column: str, unit
             _unsupported()
         node = validate_node(nodes[name])
         kind, params = node["kind"], node["parameters"]
-        if node["determinism"] != "deterministic" or node["executor"] != executor:
+        if node["determinism"] != "deterministic" or node["kind"] == "external":
+            _unsupported()
+        try:
+            require_builtin(node)
+        except ValueError:
             _unsupported()
         if kind == "select" and key not in params["columns"]:
             _unsupported()

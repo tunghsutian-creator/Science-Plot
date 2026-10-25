@@ -86,14 +86,16 @@ def prepare_update(document: dict[str, Any], request: dict[str, Any], *, root: P
 def _scientific(document: dict[str, Any], target: str, prop: str, value: Any) -> Any:
     scientific = document["scientific"]
     if prop in {"transform.parameters", "transform.executor"}:
-        from sciplot_core.plot_transforms import builtin_executor, validate_node
+        from sciplot_core.plot_transforms import require_builtin, validate_node
 
         node = next((item for item in scientific["transforms"] if target == "transform:" + item["id"]), None)
         if node is None:
             raise EngineError("document_unknown_target", "Name an existing transform:<transform_id>.")
         field = "parameters" if prop == "transform.parameters" else "executor"
-        if prop == "transform.executor" and (node["executor"]["kind"] != "builtin" or value != builtin_executor()):
-            raise EngineError("managed_builtin_executor_identity", "Bind exactly the current builtin executor descriptor; external executors use executor.registration.")
+        if prop == "transform.executor":
+            if node["executor"]["kind"] != "builtin":
+                raise EngineError("managed_builtin_executor_identity", "Choose an installed builtin version; external executors use executor.registration.")
+            require_builtin({**node, "executor": value})
         before, node[field] = deepcopy(node[field]), deepcopy(value)
         validate_node(node)
         return before

@@ -4,22 +4,19 @@ from copy import deepcopy
 from collections.abc import Callable
 from typing import Any
 
-from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.plot_document import seal_document, validate_document
 from sciplot_core.plot_document.errors import fail
 
-from .builtins import run_builtin
 from .datasets import dataset_hash, numeric_hash, validate_dataset
 from .external import ExternalExecutor, executor_files, run_external
 from .schema import ordered_nodes, validate_node
-from .identity import builtin_executor, require_builtin_runtime_current
-from .series import run_series_builtin
-from .units import run_unit_builtin
-from .rheology import run_rheology_builtin
+from .identity import require_builtin
+from .versions.v1.runtime import record_result
+from .versions.v1.hashing import canonical_json_sha256 as execution_digest
 
 
 def digest(value: Any) -> str:
-    return canonical_json_sha256(value, allow_nan=False)
+    return execution_digest(value, allow_nan=False)
 
 
 def execute_node(node: Any, inputs: dict[str, dict[str, Any]], *,
@@ -27,31 +24,17 @@ def execute_node(node: Any, inputs: dict[str, dict[str, Any]], *,
     node = validate_node(node)
     if node["determinism"] != "deterministic":
         fail("transform_nondeterministic_unsupported", "Non-deterministic execution requires durable output adoption; automatic scientific recomputation is disabled.", "/determinism", "deterministic_execution")
-    if node["kind"] != "external" and node["executor"] != builtin_executor():
-        fail("transform_executor_changed", "Builtin executor bytes changed; bind the current registered implementation.", "/executor", "exact_executor_identity")
-    if node["kind"] != "external":
-        require_builtin_runtime_current()
+    implementation = require_builtin(node) if node["kind"] != "external" else None
     if any(name not in inputs for name in node["inputs"]):
         fail("transform_input_missing", "The named input dataset has not been resolved.", "/inputs", "existing_dataset")
     sources = [validate_dataset(inputs[name]) for name in node["inputs"]]
     source = sources[0]
     input_hashes = [dataset_hash(value) for value in sources]
     key = digest({"node": node, "inputs": input_hashes})
-    if node["kind"] == "external":
-        result, details = run_external(node, source, external_executors or {})
-    elif node["kind"] in {"row_slice", "concat_time"}:
-        result, details = run_series_builtin(node, sources)
-    elif node["kind"] in {"convert_unit", "time_offset"}:
-        result, details = run_unit_builtin(node, source)
-    elif node["kind"] == "rheology_complex_viscosity":
-        result, details = run_rheology_builtin(node, source)
-    else:
-        result, details = run_builtin(node, source)
-    result["provenance"] = deepcopy(result["provenance"])
-    result["provenance"]["transforms"].append({"node_id": node["id"], "cache_key": key,
-        "executor_hash": digest(node["executor"]), "input_hashes": input_hashes,
-        "output_hash": numeric_hash(result), "parameters": deepcopy(node["parameters"]), "details": details})
-    return validate_dataset(result), key
+    if implementation is not None:
+        return implementation.execute(node, sources)
+    result, details = run_external(node, source, external_executors or {})
+    return record_result(node, result, details, input_hashes, key), key
 
 
 def resolve_transforms(document: Any, datasets: dict[str, dict[str, Any]], *,
@@ -83,8 +66,10 @@ def resolve_transforms(document: Any, datasets: dict[str, dict[str, Any]], *,
     saved, executed, reused = deepcopy(cache or {}), [], []
     records = []
     for node in nodes:
-        if node["determinism"] != "deterministic" or node["kind"] != "external" and node["executor"] != builtin_executor():
-            fail("transform_executor_changed", "Transform determinism or registered implementation cannot be reused.", "/transforms", "current_deterministic_executor")
+        if node["determinism"] != "deterministic":
+            fail("transform_executor_changed", "Transform determinism or registered implementation cannot be reused.", "/transforms", "registered_deterministic_executor")
+        if node["kind"] != "external":
+            require_builtin(node)
         key = digest({"node": node, "inputs": [dataset_hash(values[name]) for name in node["inputs"]]})
         candidate = saved.get(key)
         if candidate is not None:

@@ -15,7 +15,9 @@ from sciplot_core.project_lifecycle.context import content_sha256
 
 
 def changed_inputs(backend: PlotBackend, binding: dict[str, Any]) -> list[str]:
-    expected = {**binding["fingerprint"], "scientific_content": binding.get("scientific_content_files", {})}
+    from .builtin_history import fingerprint_for_read
+
+    expected = {**fingerprint_for_read(binding), "scientific_content": binding.get("scientific_content_files", {})}
     actual = {**backend.fingerprint(binding), "scientific_content": {
         path: content_sha256(Path(path)) for path in binding.get("scientific_content_files", {})}}
     changed: list[str] = []

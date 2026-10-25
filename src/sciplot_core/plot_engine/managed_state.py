@@ -6,7 +6,8 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.plot_document import validate_document
-from sciplot_core.plot_transforms import builtin_executor, builtin_files
+from sciplot_core.plot_document.errors import DocumentError
+from sciplot_core.plot_transforms import builtin_files, require_builtin
 
 from .content_store import referenced_files, resolve_document_content
 from .errors import EngineError
@@ -28,17 +29,16 @@ def input_files(document: dict[str, Any]) -> dict[str, str]:
         add_input(files, executor["executable"], executor["identity"]["executable_sha256"])
         add_input(files, executor["script"], executor["identity"]["script_sha256"])
     builtins = [node for node in document["scientific"]["transforms"] if node["executor"]["kind"] == "builtin"]
-    if builtins:
+    for node in builtins:
         try:
-            current, implementation = builtin_executor(), builtin_files()
-        except OSError as exc:
-            raise EngineError("managed_builtin_executor_unavailable", "A pinned builtin implementation file is unavailable.",
-                              action="restore_builtin_executor") from exc
-        outdated = [node["id"] for node in builtins if node["executor"] != current]
-        if outdated:
-            raise EngineError("managed_builtin_executor_changed", "Builtin scientific implementation changed; explicitly refresh its pinned descriptor before recomputing.",
-                              action="refresh_builtin_executor", targets=["transform:" + name for name in outdated],
-                              property="transform.executor", current_executor=current)
+            require_builtin(node)
+            implementation = builtin_files(node["kind"], node["executor"])
+        except (OSError, DocumentError) as exc:
+            changed = getattr(exc, "reason_code", None) == "transform_runtime_changed"
+            raise EngineError("managed_builtin_executor_changed" if changed else "managed_builtin_executor_unavailable",
+                              "Restore the saved immutable builtin version before scientific reconstruction.",
+                              action="restore_builtin_executor", targets=["transform:" + node["id"]],
+                              automatic_refresh=False, automatic_retry=False) from exc
         for path, sha256 in implementation.items():
             add_input(files, path, sha256)
     return files

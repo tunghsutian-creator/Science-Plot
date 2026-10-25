@@ -115,11 +115,11 @@ def test_external_mixed_sample_inputs_need_explicit_lineage_or_prior_selection(t
 
 
 def test_builtin_identity_exposes_every_bound_implementation_file():
-    files = builtin_files()
-    assert {Path(name).name for name in files} == {"builtins.py", "datasets.py", "execution.py", "schema.py", "identity.py",
-                                                "series.py", "lineage.py", "units.py", "unit_conversion.py", "unit_data.py",
-                                                "rheology.py", "rheology_frequency_metrics.py", "rheology_units.py", "unit_formatting.py",
-                                                "text_values.py", "paired_curve_table_metadata.py", "frame_export.py"}
+    files = builtin_files("select")
+    assert {Path(name).name for name in files} == {"__init__.py", "columns.py", "datasets.py", "runtime.py",
+                                                "hashing.py", "json_values.py", "selection.py", "wire.py", "schema.py", "node_contract.py"}
+    assert set(files) < set(builtin_files())
+    assert all("/versions/" in name for name in builtin_files())
     assert all(Path(name).is_absolute() and file_sha256(Path(name)) == value for name, value in files.items())
 
 
@@ -192,6 +192,8 @@ def test_large_managed_control_metadata_stays_inline_while_dataset_payload_is_in
 
 def test_existing_binding_observes_builtin_byte_drift_and_description_remains_usable(tmp_path, monkeypatch):
     from sciplot_core.plot_engine import managed_state
+    from sciplot_core.plot_engine import managed_backend
+    from sciplot_core.plot_transforms import identity
     from sciplot_core.plot_engine.managed_description import describe_managed
     from sciplot_core.plot_engine.managed_backend import ManagedBackend
     from sciplot_core.plot_engine.current import changed_inputs
@@ -203,14 +205,13 @@ def test_existing_binding_observes_builtin_byte_drift_and_description_remains_us
         path.write_text("original source")
         source.update(path=str(path), sha256=file_sha256(path))
     document = seal_document(document)
-    implementation = tmp_path / "builtin.py"
-    implementation.write_text("version = 1")
-    monkeypatch.setattr(managed_state, "builtin_files", lambda: {str(implementation): file_sha256(implementation)})
+    implementation = next(Path(path) for path in builtin_files() if path.endswith("/columns.py"))
     files = managed_state.input_files(document)
     native = tmp_path / "deleted-document.vsz"
     binding = {"document": str(native), "ir_hash": "d" * 64, "ir_path": str(tmp_path / "deleted-ir.json"),
                "fingerprint": {"files": files, "artifacts": {str(native): "d" * 64}}, "graph": resolved["graph"]}
-    implementation.write_text("version = 2")
+    original = managed_backend.existing_file_sha256
+    monkeypatch.setattr(managed_backend, "existing_file_sha256", lambda path: "e" * 64 if path == implementation else original(path))
     backend = ManagedBackend()
     try:
         changed = changed_inputs(backend, binding)
@@ -220,9 +221,10 @@ def test_existing_binding_observes_builtin_byte_drift_and_description_remains_us
         assert "transform:normalize-A" in result["dependencies"]["invalidated"]
         assert "transform:normalize-B" in result["dependencies"]["invalidated"]
         assert "source:A" not in result["dependencies"]["invalidated"]
-        assert result["next_step"]["action"] == "refresh_builtin_executor"
-        current = builtin_executor()
-        monkeypatch.setattr(managed_state, "builtin_executor", lambda: {**current, "content_hash": "e" * 64})
+        assert result["next_step"]["action"] == "restore_builtin_executor"
+        assert result["next_step"]["automatic_refresh"] is False
+        original_hash = identity.file_sha256
+        monkeypatch.setattr(identity, "file_sha256", lambda path: "e" * 64 if path == implementation else original_hash(path))
         with pytest.raises(EngineError) as error:
             managed_state.require_inputs(document)
         assert error.value.reason_code == "managed_builtin_executor_changed"
@@ -234,7 +236,7 @@ def test_loaded_builtin_code_cannot_execute_under_a_new_file_identity(monkeypatc
     from sciplot_core.plot_transforms import identity, execute_node
 
     resolved, raw = resolved_example()
-    monkeypatch.setattr(identity, "_LOADED_FILES", {"old-runtime": "0" * 64})
+    monkeypatch.setattr(identity, "file_sha256", lambda _: "0" * 64)
     with pytest.raises(ValueError) as error:
         execute_node(resolved["document"]["scientific"]["transforms"][0], raw)
     assert error.value.reason_code == "transform_runtime_changed"

@@ -156,7 +156,6 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
     intent, plan = state["request"]["intent"], state["semantic_plan"]
 
     temperature_source = plan["temperature_source"]
-    executor = builtin_executor()
     transforms: list[dict[str, Any]] = []
     data_sources, records = [], []
     datasets: dict[str, Any] = {}
@@ -164,7 +163,7 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
         index = len(transforms)
         output = f'derived:{index}'
         node = {"id": f'transform:{index}', "kind": kind, "inputs": inputs, "output": output,
-                "parameters": parameters, "executor": executor, "determinism": "deterministic"}
+                "parameters": parameters, "executor": builtin_executor(kind), "determinism": "deterministic"}
         # The same registered builtins determine preview domains and later
         # resolve the authoritative Managed model; there is no AI numeric data.
         dataset, _key = execute_node(node, datasets)
@@ -212,7 +211,7 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
                 # restricts numeric loading before any coordinate transform.
                 first_select = {"id": f"transform:{len(transforms)}", "kind": "select", "inputs": [stage_source],
                                 "output": f"derived:{len(transforms)}", "parameters": {"columns": columns},
-                                "executor": executor, "determinism": "deterministic"}
+                                "executor": builtin_executor("select"), "determinism": "deterministic"}
                 raw_document = {"scientific": {"data_sources": [binding], "mappings": {}, "transforms": [first_select]}}
                 raw_samples.update(_original_samples(source, plan["resolved_rule_id"], region, columns))
                 datasets.update(load_sources(raw_document, plan["resolved_rule_id"]))

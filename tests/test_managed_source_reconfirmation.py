@@ -145,9 +145,12 @@ def test_source_executable_script_and_builtin_inputs_cannot_overwrite_conflictin
         with pytest.raises(ValueError, match="conflicting"):
             input_files(document)
     document["scientific"]["provenance"]["managed"]["executors"] = {}
-    document["scientific"]["transforms"] = [{"id": "fake", "executor": {"kind": "builtin"}}]
-    monkeypatch.setattr(managed_state, "builtin_executor", lambda: {"kind": "builtin"})
-    monkeypatch.setattr(managed_state, "builtin_files", lambda: {source["path"]: "b" * 64})
+    from sciplot_core.plot_transforms import builtin_executor
+
+    document["scientific"]["transforms"] = [{"id": "fake", "kind": "select", "inputs": [source["source_id"]],
+        "output": "selected", "parameters": {"columns": ["column:0"]},
+        "executor": builtin_executor("select"), "determinism": "deterministic"}]
+    monkeypatch.setattr(managed_state, "builtin_files", lambda *_: {source["path"]: "b" * 64})
     with pytest.raises(ValueError, match="conflicting"):
         input_files(document)
 

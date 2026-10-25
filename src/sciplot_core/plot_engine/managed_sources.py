@@ -22,12 +22,13 @@ def _selected_original_columns(document: dict[str, Any], source_id: str) -> set[
         return None
     # Validate the original typed nodes, including executor descriptors, before
     # treating their declared columns as a source loading restriction.
-    from sciplot_core.plot_transforms import builtin_executor, validate_node
+    from sciplot_core.plot_transforms import require_builtin, validate_node
 
     for node in consumers:
         validate_node(node)
-        if node["executor"] != builtin_executor() or node["determinism"] != "deterministic":
-            raise EngineError("managed_source_select_invalid", "Original column selection requires the current deterministic builtin executor.")
+        require_builtin(node)
+        if node["determinism"] != "deterministic":
+            raise EngineError("managed_source_select_invalid", "Original column selection requires its saved registered deterministic builtin version.")
     return {name for node in consumers for name in node["parameters"]["columns"]}
 
 
