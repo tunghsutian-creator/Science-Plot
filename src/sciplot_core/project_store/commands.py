@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.project_commands.resources import PreparedFile
+
 from .errors import ProjectCommandConflict, ProjectConflict, ProjectStoreError
 from .io import StoreIO, digest, directory, install, parts, read_file, sha
 import sciplot_core.project_store.state as state
@@ -112,8 +114,8 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
     return result
 
 
-def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | Path | None],
-          result: dict[str, Any], review: dict[str, Any], artifacts: Mapping[str, bytes | Path] | None,
+def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | Path | PreparedFile | None],
+          result: dict[str, Any], review: dict[str, Any], artifacts: Mapping[str, bytes | Path | PreparedFile] | None,
           sources: Sequence[dict[str, Any]] | None) -> dict[str, Any]:
     if record["phase"] in {"needs_review", "accepted", "rejected", "complete"}:
         return record

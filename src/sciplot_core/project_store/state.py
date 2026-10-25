@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+
+from sciplot_core.project_commands.resources import PreparedFile
 from uuid import uuid4
 
 from .errors import ProjectConflict, ProjectStoreError
@@ -115,7 +117,7 @@ def save_command(io: StoreIO, value: dict[str, Any]) -> None:
     io.write(command_path(value["command_id"]), value)
 
 
-def import_writes(io: StoreIO, writes: Mapping[str, bytes | Path | None]) -> dict[str, Any]:
+def import_writes(io: StoreIO, writes: Mapping[str, bytes | Path | PreparedFile | None]) -> dict[str, Any]:
     from .io import parts
 
     result: dict[str, Any] = {}
@@ -127,6 +129,9 @@ def import_writes(io: StoreIO, writes: Mapping[str, bytes | Path | None]) -> dic
             continue
         if isinstance(source, bytes):
             data, mode = source, 0o600
+        elif isinstance(source, PreparedFile):
+            source.__post_init__()
+            data, mode = source.data, source.mode
         elif isinstance(source, Path):
             from .io import read_file
             import os

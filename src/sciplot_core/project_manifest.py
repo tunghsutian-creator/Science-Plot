@@ -15,6 +15,7 @@ from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import safe_filename
 from sciplot_core.foundation.project_archives import write_project_archive
+from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore, ProjectConflict, ResourceRoot
 from sciplot_core.project_store.adapters import project_storage_scope, publish_files, store_for_project
 from sciplot_core.project_store.io import directory, owned_io
@@ -137,7 +138,7 @@ def _stage_manifest_bytes(project: Path, payload: dict[str, Any], *, mirror_path
     return writes
 
 
-def _stage_snapshot(store: FileProjectStore, payload: dict[str, Any], writes: Mapping[str, bytes | Path | None],
+def _stage_snapshot(store: FileProjectStore, payload: dict[str, Any], writes: Mapping[str, bytes | Path | PreparedFile | None],
                     snapshot_writer: Callable[[Path, dict[str, Any]], None] | None = None) -> bytes:
     snapshot = store.snapshot()
     if any(not name.startswith("@") for name in snapshot["outside_changes"]):
@@ -154,13 +155,13 @@ def _stage_snapshot(store: FileProjectStore, payload: dict[str, Any], writes: Ma
             target.parent.mkdir(parents=True, exist_ok=True)
             data = writes[name] if name in writes else store.read_bytes(name, generation=snapshot["generation"])
             assert data is not None
-            target.write_bytes(data.read_bytes() if isinstance(data, Path) else data)
+            target.write_bytes(data.read_bytes() if isinstance(data, Path) else data.data if isinstance(data, PreparedFile) else data)
             os.utime(target, (315532800, 315532800))
         for name, data in writes.items():
             if not name.startswith("@") and data is not None:
                 target = candidate / name
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(data.read_bytes() if isinstance(data, Path) else data)
+                target.write_bytes(data.read_bytes() if isinstance(data, Path) else data.data if isinstance(data, PreparedFile) else data)
                 os.utime(target, (315532800, 315532800))
         capability = intake_snapshot_location(store.root, payload)
         assert capability.members is not None
@@ -181,7 +182,7 @@ def _stage_snapshot(store: FileProjectStore, payload: dict[str, Any], writes: Ma
 def stage_intake_project_manifest(project: Path, payload: dict[str, Any], *, include_snapshot: bool = True,
                                   store: FileProjectStore | None = None,
                                   mirror_path: Path | None = None,
-                                  project_writes: Mapping[str, bytes | Path | None] | None = None) -> dict[str, bytes]:
+                                  project_writes: Mapping[str, bytes | Path | PreparedFile | None] | None = None) -> dict[str, bytes]:
     """Build one complete private manifest/mirror/ZIP mutation; never install it."""
     root = project.expanduser().resolve(strict=True)
     selected = store or _manifest_store(root, payload)

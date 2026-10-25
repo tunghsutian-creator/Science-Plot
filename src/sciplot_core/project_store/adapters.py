@@ -6,6 +6,8 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+from sciplot_core.project_commands.resources import PreparedFile
 from uuid import uuid4
 
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
@@ -42,10 +44,10 @@ def project_storage_scope(project: Path, *, locations: Mapping[str, Path | Resou
         yield store
 
 
-def publish_files(store: FileProjectStore, writes: Mapping[str, bytes | Path | None], *,
+def publish_files(store: FileProjectStore, writes: Mapping[str, bytes | Path | PreparedFile | None], *,
                   kind: str, baseline: dict[str, Any] | None = None,
                   result: dict[str, Any] | None = None,
-                  artifacts: Mapping[str, bytes | Path] | None = None) -> dict[str, Any]:
+                  artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None) -> dict[str, Any]:
     snapshot = store.snapshot(import_legacy=True)
     expected = baseline or {"project_id": snapshot["project_id"], "generation": snapshot["generation"],
         "files": {name: snapshot["files"].get(name, {}).get("sha256") for name in writes}}

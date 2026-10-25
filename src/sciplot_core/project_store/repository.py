@@ -7,6 +7,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.project_commands.resources import PreparedFile
+
 import sciplot_core.project_store.commands as commands
 import sciplot_core.project_store.projection as projection
 import sciplot_core.project_store.publication as publication
@@ -101,9 +103,9 @@ class FileProjectStore:
             # Return the admitted applying phase only to this one successful CAS.
             return commands.mark_applying(io, record)
 
-    def stage(self, command_id: str, command_digest: str, *, writes: Mapping[str, bytes | Path | None],
+    def stage(self, command_id: str, command_digest: str, *, writes: Mapping[str, bytes | Path | PreparedFile | None],
               result: dict[str, Any], review: dict[str, Any],
-              artifacts: Mapping[str, bytes | Path] | None = None,
+              artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None,
               sources: Sequence[dict[str, Any]] | None = None) -> dict[str, Any]:
         with self._locked(repair=True) as (io, _current):
             record = state.command(io, command_id, command_digest)
@@ -119,9 +121,9 @@ class FileProjectStore:
                 raise ProjectStoreError("The frozen candidate does not exist.")
             return commands.public(io, commands.decide(io, record, decision_id, accept))
 
-    def publish(self, command_id: str, command_digest: str, *, writes: Mapping[str, bytes | Path | None],
+    def publish(self, command_id: str, command_digest: str, *, writes: Mapping[str, bytes | Path | PreparedFile | None],
                 result: dict[str, Any], sources: Sequence[dict[str, Any]] | None = None,
-                artifacts: Mapping[str, bytes | Path] | None = None) -> dict[str, Any]:
+                artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None) -> dict[str, Any]:
         with self._locked(repair=True) as (io, current):
             record = state.command(io, command_id, command_digest)
             if record is None:

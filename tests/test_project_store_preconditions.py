@@ -1,15 +1,28 @@
 """Finite source registration, membership and owned output metadata controls."""
 
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
-from sciplot_core.project_commands.resources import MembershipRead, PreparedSource
+from sciplot_core.project_commands.resources import MembershipRead, PreparedFile, PreparedSource
 from sciplot_core.project_store import ProjectConflict
 from sciplot_core.project_store.io import sha
 
 from test_project_store import fixture_store, reserve
+
+
+def test_prepared_bytes_preserve_explicit_native_launcher_and_artifact_modes(tmp_path):
+    store, baseline = fixture_store(tmp_path)
+    reserve(store, baseline, "modes", ("launch.command",))
+    receipt = store.publish("modes", "modes-digest", writes={"launch.command": PreparedFile(b"#!/bin/sh\n", 0o755)},
+        artifacts={"before.vsz": PreparedFile(b"native evidence", 0o640)}, result={})
+    assert (store.root / "launch.command").stat().st_mode & 0o777 == 0o755
+    artifact = receipt["artifact_paths"]["before.vsz"]
+    assert Path(artifact).read_bytes() == b"native evidence"
+    assert receipt["draft"]["artifacts"]["before.vsz"]["mode"] == 0o640
+    assert store.snapshot()["files"]["launch.command"]["mode"] == 0o755
 
 
 @pytest.mark.parametrize("managed", [False, True])
