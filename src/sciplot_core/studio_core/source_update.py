@@ -35,6 +35,10 @@ from sciplot_core.studio_core.source_update_annotations import transfer_annotati
 from sciplot_core.studio_core.annotation_contracts import annotation_records
 from sciplot_core.studio_core.annotation_rebinding import relocate_annotation_evidence
 
+from sciplot_core.studio_core.source_update_state import (
+    _delivery_inventory as _delivery_inventory, _check_external_state as _check_external_state,
+    _applied_result as _applied_result,
+)
 
 def _selected_worksheet(request: dict[str, Any], worksheet: str | None) -> str | None:
     if worksheet is not None:
@@ -51,20 +55,7 @@ def _selected_worksheet(request: dict[str, Any], worksheet: str | None) -> str |
     return next(iter(old), None)
 
 
-def _delivery_inventory(delivery: Path) -> dict[str, str] | None:
-    return file_inventory(delivery) if delivery.exists() else None
 
-
-def _check_external_state(project: Path, source: Path, review: dict[str, Any]) -> None:
-    request = json.loads((project / "plot_request.json").read_text())
-    delivery = requested_delivery_root({"request": request}, run_output=project)
-    if (
-        file_inventory(source) != review["source_files"]
-        or payload_hash(_delivery_inventory(delivery)) != review["delivery_sha256"]
-    ):
-        raise ValueError(
-            "The selected source or visible delivery changed; preview it again before applying."
-        )
 
 
 @contextmanager
@@ -236,21 +227,6 @@ def apply_project_source_update(
     return _applied_result(project, preview, archive, status="updated")
 
 
-def _applied_result(
-    project: Path, preview: dict[str, Any], archive: Path, *, status: str,
-) -> dict[str, Any]:
-    return {
-        "kind": "sciplot_project_source_update",
-        "version": 1,
-        "status": status,
-        "project": str(project),
-        "document": str(project / "studio" / "document.vsz"),
-        "archive": str(archive),
-        "changes": preview["changes"],
-        "styles": preview["styles"],
-        "ready_to_use": False,
-        "next_action": "save_and_export",
-    }
 
 
 __all__ = ["preview_project_source_update", "apply_project_source_update"]

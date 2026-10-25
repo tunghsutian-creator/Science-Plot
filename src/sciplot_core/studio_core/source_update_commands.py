@@ -11,7 +11,7 @@ from sciplot_core.project_commands import ProjectCommand, ProjectCommands, Proje
 from sciplot_core.studio_core.project_command_scope import command_for_binding, project_store, query_for_apply, whole_memberships
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore
-from sciplot_core.studio_core.source_update_commit import project_inventory, relocate_metadata
+from sciplot_core.studio_core.source_update_files import project_inventory, relocate_metadata
 
 
 def source_mutation(project: Path, candidate: Path, review: dict[str, Any], *,
@@ -92,7 +92,7 @@ def stage_source_update(project: Path, candidate: Path, review: dict[str, Any], 
 
 
 def decide_source_update(project: Path, supplied: dict[str, Any]) -> dict[str, Any]:
-    from sciplot_core.studio_core.source_update import _applied_result, _check_external_state
+    from sciplot_core.studio_core.source_update_state import _applied_result, _check_external_state
 
     app = ProjectCommands(project_store(project))
     record = query_for_apply(app, str(supplied.get("command_key") or ""))

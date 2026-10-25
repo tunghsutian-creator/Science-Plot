@@ -576,14 +576,6 @@ def test_finalize_rejects_split_rule_readiness_before_any_write_or_registration(
     assert effects == []
 
 
-def _prepare_inventory(**kwargs):
-    output = kwargs["project_dir"].parent / "private-publication"
-    result = inventory_module.prepare_studio_export_inventory(**kwargs, output_dir=output / "run",
-        secondary_output_dir=output / "secondary")
-    result.output_dir.mkdir(parents=True, exist_ok=True)
-    return result
-
-
 def _finalize_run(**kwargs):
     from sciplot_core.studio_core.publish_finalize import finalize_studio_run
     output = kwargs["inventory"].output_dir.parent

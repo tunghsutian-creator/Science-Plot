@@ -6,24 +6,22 @@ import hashlib
 import json
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadata
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.output_contract import requested_delivery_root
-from sciplot_core.source_coverage.managed_documents import source_records
-from sciplot_core.studio_core.delivery_recovery import _audit_candidate
+from sciplot_core.studio_core.native_scientific_audit import audit_edited_document as audit_edited_document
 from sciplot_core.studio_core.delivery_recovery_state import canonical_path
-from sciplot_core.studio_core.source_update_commit import (
+from sciplot_core.studio_core.source_update_files import (
     file_inventory,
     project_inventory,
 )
 from sciplot_core.veusz_runtime import veusz_worker_environment
 from sciplot_core.native_process import run_worker
 from sciplot_core.studio_core.project_command_scope import project_read_runtime
-from sciplot_core.project_store.runtime import project_runtime, resolve_runtime_path
+from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.foundation.source_locations import selected_source_resolver
 
 
@@ -122,36 +120,6 @@ def _run_document_worker(*arguments: object) -> dict[str, Any]:
     return result
 
 
-def audit_edited_document(
-    document: Path, spec: Path, *, native_audit: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    specification = spec.read_bytes()
-    native_bytes = document.read_bytes()
-    native_digest = hashlib.sha256(native_bytes).hexdigest()
-    records = source_records(json.loads(specification))
-
-    def verify_sources() -> None:
-        if spec.read_bytes() != specification or any(
-            not resolve_runtime_path(path, expected_sha256=digest).is_file()
-            or file_sha256(resolve_runtime_path(path, expected_sha256=digest)) != digest
-            for path, digest in records.items()
-        ):
-            raise ValueError(
-                "Prepared scientific sources or their specification changed."
-            )
-
-    verify_sources()
-    with tempfile.TemporaryDirectory(prefix="sciplot-observed-native-audit-") as temporary:
-        candidate = Path(temporary) / "observed.vsz"
-        candidate.write_bytes(native_bytes)
-        rebound = ({**native_audit, "document": {**native_audit["document"], "path": str(candidate)}}
-                   if native_audit is not None else None)
-        audit = _audit_candidate(candidate, spec, native_audit=rebound)
-    verify_sources()
-    if file_sha256(document) != native_digest:
-        raise ValueError("The observed native document changed during its exact scientific audit")
-    return {**audit, "document_sha256": native_digest,
-            "spec_sha256": hashlib.sha256(specification).hexdigest()}
 
 
 def preview_identity(preview: dict[str, Any]) -> str:

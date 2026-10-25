@@ -7,15 +7,7 @@ from sciplot_core.studio_core.project_command_scope import project_command_runti
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.source_coverage.document_audit import _audit_exact_document_data
-from sciplot_core.source_coverage.file_snapshots import (
-    _assert_snapshot_current,
-    stable_file_snapshot,
-)
-from sciplot_core.source_coverage.managed_documents import (
-    source_records,
-    _verify_prepared_data,
-)
+from sciplot_core.studio_core.native_scientific_audit import audit_native_candidate as _audit_candidate
 from sciplot_core.studio_core.delivery_recovery_state import (
     RecoveryBlocked,
     canonical_path,
@@ -23,25 +15,6 @@ from sciplot_core.studio_core.delivery_recovery_state import (
 )
 
 
-def _audit_candidate(
-    candidate: Path, spec_path: Path, *, native_audit: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    audit, spec = _audit_exact_document_data(
-        document_path=candidate, spec_path=spec_path, check_presentation=False,
-        native_audit=native_audit,
-    )
-    snapshots = [
-        stable_file_snapshot(path, label="recovery prepared source")
-        for path in source_records(spec)
-    ]
-    derived = _verify_prepared_data(spec, snapshots)
-    for snapshot in snapshots:
-        _assert_snapshot_current(snapshot, label="recovery prepared source")
-    return {
-        "status": "passed",
-        "unit_count": audit["unit_count"],
-        "prepared_unit_count": derived["unit_count"],
-    }
 
 
 @project_command_runtime

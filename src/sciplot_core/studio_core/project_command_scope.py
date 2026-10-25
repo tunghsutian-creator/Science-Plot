@@ -94,6 +94,11 @@ def project_store(project: Path, *, create_delivery: bool = False, with_snapshot
                 if len(parts) == 2 and parts[0] == "@snapshot" and parts[1].endswith(".zip"):
                     if parts[1] not in {".zip", "..zip"} and "\\" not in parts[1]:
                         members.add(parts[1])
+        if not members and any("snapshot" in record.get("resource_roots", {}) for record in repository.commands()):
+            from sciplot_core.project_manifest import intake_snapshot_location
+
+            selected_locations["snapshot"] = intake_snapshot_location(project, {})
+            return FileProjectStore(project, locations=selected_locations)
         if members:
             from sciplot_core.project_store import ResourceRoot
 
@@ -144,7 +149,7 @@ def figure_binding(project: Path, selected: dict[str, Any], *, store: FileProjec
 def adopt_saved_native(project: Path, selected: dict[str, Any]) -> dict[str, Any]:
     """Register one domain-audited external Legacy save without replacing bytes."""
     from sciplot_core.project_commands import ProjectMutation
-    from sciplot_core.studio_core.document_edit import audit_edited_document
+    from sciplot_core.studio_core.native_scientific_audit import audit_edited_document
 
     repository = project_store(project)
     reads = figure_read_state(project, selected)

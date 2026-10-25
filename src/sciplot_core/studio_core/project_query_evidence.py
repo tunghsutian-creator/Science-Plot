@@ -61,7 +61,7 @@ def source_indicators(
             if source is None:
                 raise ValueError("The categorical project lost its original source.")
             expected_file = request["categorical_binding"]["source_sha256"]
-            actual_file = existing_file_sha256(canonical_path(source))
+            actual_file = existing_file_sha256(canonical_path(resolve_runtime_path(source, expected_sha256=expected_file)))
             input_state = _indicator(actual_file == expected_file, path=str(source),
                 sha256=actual_file, expected_sha256=expected_file,
                 scope="categorical_original_file_sha256")
@@ -95,7 +95,7 @@ def source_indicators(
             )
             # The owner above checked the original file against its immutable
             # proposal. Keep its file hash in the ordinary raw-source indicator.
-            raw_digest = existing_file_sha256(source)
+            raw_digest = existing_file_sha256(resolve_runtime_path(source))
             if raw_digest is not None:
                 mapped_raw[str(source)] = raw_digest
         except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -242,7 +242,7 @@ def _exports_match(
     for figure in figures:
         relative = Path(figure["document"]).relative_to(run.parent.parent)
         if not {"pdf", "tiff_300"}.issubset(
-            document_formats.get(str(run / relative), set())
+            document_formats.get(literal_runtime_path(run / relative), set())
         ):
             return False
     return True
@@ -302,7 +302,7 @@ def publication_indicators(
             root = Path(value).expanduser()
             if not root.is_absolute():
                 root = project / root
-            root = canonical_path(root)
+            root = canonical_path(resolve_runtime_path(root))
             binding_current = bound_delivery_project(root) == project
             for member in root.rglob("*"):
                 canonical_path(member)

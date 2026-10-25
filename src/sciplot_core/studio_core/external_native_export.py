@@ -29,6 +29,9 @@ def _dedicated_output(root: Path, document: Path) -> None:
         if path.is_symlink():
             raise ValueError("Standalone export cannot follow an output symlink")
     receipt = root / "standalone_export_receipt.json"
+    if not receipt.exists() and any(path.is_file() for path in root.rglob("*")
+                                    if ".sciplot_store" not in path.relative_to(root).parts):
+        raise ValueError("Existing standalone files have no owning receipt; all files were preserved")
     if receipt.exists():
         import json
 
@@ -47,8 +50,8 @@ def _current_output(root: Path, record: dict[str, Any]) -> None:
 
 def export_external_native(document: Path, *, formats: list[str], output_root: Path) -> dict[str, Any]:
     """Publish PDF/TIFF/QA together; source bytes and native history stay read-only."""
-    from sciplot_core.studio_core.export_execution import export_studio_document
-    from sciplot_core.studio_core.project_publication_commands import _stage_tree, relocate_candidate
+    from sciplot_core.studio_core.native_export_adapter import export_studio_document
+    from sciplot_core.studio_core.publication_candidates import _stage_tree, relocate_candidate
     from sciplot_core.studio_core.standalone_receipt import publish_standalone_export_receipt
     from sciplot_core.policy import normalize_export_formats
 
@@ -69,18 +72,20 @@ def export_external_native(document: Path, *, formats: list[str], output_root: P
         witness = figure_read_state(project, selected)
         request = {"document": str(document), "figure_id": selected["figure_id"], "formats": formats,
                    "source_read_witness": witness, "authority": "standalone_output_artifacts"}
-        key = canonical_json_sha256({"project_id": before["project_id"], "request": request})
+        from sciplot_core.studio_core.export_replay import current_export
         app = ProjectCommands(output_store)
-        prior = app.query(key)
+        prior, automatic = current_export(app, output_store, request, kind="export", whole_output=True)
         if prior is not None:
-            record = app.resume(ProjectCommand.from_payload(prior["metadata"]))
-            _current_output(root, record)
+            _current_output(root, prior)
             if figure_read_state(project, selected) != witness:
                 raise ValueError("The source native revision changed during standalone replay")
-            return export_projection(record, output_store, document=document, spec=Path(selected["spec"]),
+            return export_projection(prior, output_store, document=document, spec=Path(selected["spec"]),
                                      receipt_key="output_command")
+        before = output_store.snapshot()
+        request.update(automatic)
+        key = canonical_json_sha256({"project_id": before["project_id"], "request": request})
         with TemporaryDirectory(prefix="sciplot-standalone-export-") as temporary:
-            private = Path(temporary) / "artifacts"
+            private = Path(temporary).resolve() / "artifacts"
             exported = export_studio_document(document, formats=formats, output_dir=private / "figures",
                                                audit_spec_path=Path(selected["spec"]))
             receipt = publish_standalone_export_receipt(document_path=document, requested_formats=formats,

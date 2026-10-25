@@ -19,37 +19,9 @@ from sciplot_core.studio_core.project_command_scope import command_for_binding, 
 from sciplot_core.studio_core.request_paths import _canonical_publish_paths
 
 
-def relocate_candidate(value: Any, roots: dict[Path, Path]) -> Any:
-    """Relocate only private output paths, leaving scientific source literals intact."""
-    if isinstance(value, dict):
-        return {relocate_candidate(key, roots): relocate_candidate(item, roots) for key, item in value.items()}
-    if isinstance(value, list):
-        return [relocate_candidate(item, roots) for item in value]
-    if isinstance(value, str):
-        for old, new in roots.items():
-            if value == str(old) or value.startswith(str(old) + "/"):
-                return str(new) + value[len(str(old)):]
-    return value
-
-
-def _stage_tree(root: Path, destination: str, writes: dict[str, bytes | Path | PreparedFile | None],
-                roots: dict[Path, Path]) -> None:
-    for path in sorted(root.rglob("*")):
-        if path.is_symlink():
-            raise ValueError("A private publication candidate cannot contain symlinks")
-        if not path.is_file():
-            continue
-        if path.suffix == ".json":
-            data = json.loads(path.read_text(encoding="utf-8"))
-            relocated = relocate_candidate(data, roots)
-            if relocated != data:
-                path.write_text(json.dumps(relocated, ensure_ascii=False, indent=2), encoding="utf-8")
-        elif path.suffix in {".html", ".md"}:
-            content = path.read_text(encoding="utf-8")
-            for old, new in roots.items():
-                content = content.replace(str(old), str(new))
-            path.write_text(content, encoding="utf-8")
-        writes[(destination + "/" if destination else "") + path.relative_to(root).as_posix()] = path
+from sciplot_core.studio_core.publication_candidates import (
+    relocate_candidate as relocate_candidate, _stage_tree as _stage_tree,
+)
 
 
 def _publication_store(project: Path) -> FileProjectStore:
@@ -81,8 +53,8 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
                             primary_native_audit: dict[str, Any] | None = None) -> dict[str, Any]:
     """Render privately, then CAS all run/delivery/registry/snapshot bytes together."""
     from sciplot_core.project_manifest import read_intake_project_manifest, stage_intake_project_manifest
-    from sciplot_core.studio_core.export_execution import export_studio_document
-    from sciplot_core.studio_core.publish_run import prepare_studio_export_run
+    from sciplot_core.studio_core.native_export_adapter import export_studio_document
+    from sciplot_core.studio_core.publication_prepare import prepare_studio_export_run
     from sciplot_core.studio_core.registry_writes import studio_run_registration
 
     project, request, document = _canonical_publish_paths(project_dir=project_dir,
@@ -129,7 +101,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
             if figure["status"] == "ready":
                 external_sources.update(figure_read_state(project, figure)["source_files"])
         binding["source_files"] = external_sources
-        candidate = Path(temporary)
+        candidate = Path(temporary).resolve()
         run, primary, secondary, delivery = (candidate / name for name in ("run", "primary", "secondary", "delivery"))
         run.mkdir()
         if exports is None:

@@ -11,7 +11,7 @@ from sciplot_core.studio_core.project_export import export_project_document
 def publication(tmp_path, monkeypatch):
     import json
     from sciplot_core.foundation.file_hashing import file_sha256
-    from sciplot_core.studio_core import export_execution, publish_run, categorical_display_preflight
+    from sciplot_core.studio_core import native_export_adapter, publication_prepare, categorical_display_preflight
     project = tmp_path / "project"
     native = project / "studio/document.vsz"
     native.parent.mkdir(parents=True)
@@ -40,8 +40,8 @@ def publication(tmp_path, monkeypatch):
         (kwargs["output_dir"] / "manifest.json").write_text(json.dumps(manifest))
         published.update(ready_to_use=True, state="ready", exports=kwargs["exports"], delivery_package={"complete": True})
         return published
-    monkeypatch.setattr(export_execution, "export_studio_document", export)
-    monkeypatch.setattr(publish_run, "prepare_studio_export_run", prepare)
+    monkeypatch.setattr(native_export_adapter, "export_studio_document", export)
+    monkeypatch.setattr(publication_prepare, "prepare_studio_export_run", prepare)
     return project, calls, published
 
 
@@ -79,13 +79,13 @@ def test_managed_export_requests_inline_science_and_passes_only_this_call_eviden
 
 
 def test_failed_inline_export_audit_never_enters_publication(publication, monkeypatch):
-    from sciplot_core.studio_core import export_execution
+    from sciplot_core.studio_core import native_export_adapter
     from sciplot_core.project_store import FileProjectStore
     project, calls, _ = publication
     before = {str(p.relative_to(project)): p.read_bytes() for p in project.rglob("*") if p.is_file()}
     def export(*_a, **_k):
         raise ValueError("Exact-current Veusz data-consumption audit did not pass.")
-    monkeypatch.setattr(export_execution, "export_studio_document", export)
+    monkeypatch.setattr(native_export_adapter, "export_studio_document", export)
     with pytest.raises(ValueError, match="audit did not pass"):
         export_project_document(project_dir=project, formats=["pdf", "tiff_300"])
     assert not calls and not FileProjectStore(project).commands()

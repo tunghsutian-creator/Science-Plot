@@ -6,6 +6,7 @@ from copy import deepcopy
 import json
 from pathlib import Path
 from typing import Any
+from collections.abc import Callable
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
@@ -78,8 +79,9 @@ def rebind_document_edit_review(project: Path, original: dict[str, Any]) -> dict
 def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_dir: Path,
                         figure_id: str | None, expected_document_sha256: str,
                         operations: list[dict[str, Any]] | None,
-                        expected_spec_sha256: str | None) -> dict[str, Any]:
-    from sciplot_core.studio_core import document_edit as native
+                        expected_spec_sha256: str | None,
+                        candidate_builder: Callable[..., dict[str, Any]],
+                        audit_document: Callable[..., dict[str, Any]]) -> dict[str, Any]:
 
     project = resolve_project_path(project)
     selected = resolve_project_figure(project, figure_id)
@@ -120,8 +122,8 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
     output = new_preview_directory(project, output_dir)
 
     def prepare() -> ProjectMutation:
-        native.audit_edited_document(document, spec)
-        candidate = native._candidate(document, spec, changes, output, operations=operations,
+        audit_document(document, spec)
+        candidate = candidate_builder(document, spec, changes, output, operations=operations,
                                       figure_id=selected["figure_id"])
         Path(candidate["candidate"]["path"]).chmod(document.stat().st_mode & 0o777)
         artifacts: dict[str, bytes | Path] = {"before.vsz": document.read_bytes(), "after.vsz": Path(candidate["candidate"]["path"]),

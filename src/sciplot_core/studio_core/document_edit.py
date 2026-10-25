@@ -124,7 +124,7 @@ def preview_document_edit(
 
     return preview_native_edit(project, changes, output_dir=output_dir, figure_id=figure_id,
         expected_document_sha256=expected_document_sha256, operations=operations,
-        expected_spec_sha256=expected_spec_sha256)
+        expected_spec_sha256=expected_spec_sha256, candidate_builder=_candidate, audit_document=audit_edited_document)
 
 
 def apply_document_edit(project: Path, preview: dict[str, Any]) -> dict[str, Any]:

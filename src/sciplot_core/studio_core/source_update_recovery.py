@@ -16,7 +16,7 @@ def installation_identity(record: dict[str, Any]) -> str:
 
 
 def restore_legacy_generation(project: Path, record: dict[str, Any], review: dict[str, Any]) -> None:
-    from sciplot_core.studio_core.source_update_commit import project_inventory, reject_symlink_path
+    from sciplot_core.studio_core.source_update_files import project_inventory, reject_symlink_path
 
     if (record.get("version") != 2 or record.get("status") not in {"pending", "recovering"}
             or record.get("installation_sha256") != installation_identity(record)):
