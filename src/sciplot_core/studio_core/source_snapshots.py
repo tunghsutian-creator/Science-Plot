@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 
 
 def _studio_snapshot_sources(
@@ -20,7 +21,7 @@ def _studio_snapshot_sources(
     workbook and exact rendered-source evidence.
     """
     supported_suffixes = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
-    resolved_project = project_dir.resolve()
+    resolved_project = Path(literal_source_path(project_dir))
     if isinstance(transform_ledger, dict):
         steps = (
             transform_ledger.get("steps")
@@ -44,8 +45,9 @@ def _studio_snapshot_sources(
                 path_value = artifact.get("path")
                 if not isinstance(path_value, str) or not path_value.strip():
                     continue
-                candidate = Path(path_value).expanduser().resolve()
-                if not candidate.is_relative_to(resolved_project):
+                candidate = resolve_source_path(Path(path_value).expanduser().absolute(),
+                    expected_sha256=artifact.get("sha256"), source_id=artifact.get("source_id"))
+                if not Path(literal_source_path(candidate)).is_relative_to(resolved_project):
                     continue
                 if not candidate.exists():
                     continue
@@ -59,7 +61,7 @@ def _studio_snapshot_sources(
             unique_candidates = list(dict.fromkeys(candidates))
             if unique_candidates:
                 return unique_candidates
-    return [input_path.expanduser().resolve()] if input_path is not None else []
+    return [resolve_source_path(input_path.expanduser().absolute())] if input_path is not None else []
 
 
 def _studio_metric_source(source: Path | None) -> Path | None:
@@ -67,6 +69,7 @@ def _studio_metric_source(source: Path | None) -> Path | None:
 
     if source is None:
         return None
+    source = resolve_source_path(source)
     if source.is_file():
         return source
     if not source.is_dir():

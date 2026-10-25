@@ -32,6 +32,9 @@ from sciplot_core.studio_core.native_save_storage import (
     publish_native_save,
 )
 from sciplot_core.studio_core.native_serialization import serialize_native
+from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.native_process import run_cold_worker
+from sciplot_core.project_store.runtime import selected_project_store
 
 
 def _is_project_secondary_document(document_path: Path) -> bool:
@@ -267,7 +270,7 @@ def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
     the same atomic VSZ lifecycle used by Studio.
     """
 
-    resolved = document_path.expanduser().resolve()
+    resolved = resolve_source_path(document_path.expanduser().absolute())
     if not resolved.is_file() or resolved.suffix.casefold() != ".vsz":
         raise FileNotFoundError(f"Veusz document not found: {resolved}")
 
@@ -277,7 +280,7 @@ def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
     )
 
     if needs_veusz_worker_process():
-        result = subprocess.run(
+        result = run_cold_worker(
             [
                 sys.executable,
                 "-m",
@@ -289,6 +292,7 @@ def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
             capture_output=True,
             check=True,
             env=veusz_worker_environment(),
+            cold_runner=subprocess.run,
         )
         payload = json.loads(result.stdout)
         if not isinstance(payload, dict):
@@ -314,7 +318,9 @@ def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
 
         context = _project_context_for_document(resolved)
         if context is not None:
-            loaded._sciplot_project_read_set = project_save_binding(Path(context["project_dir"]), resolved)
+            selected = selected_project_store()
+            loaded._sciplot_project_read_set = project_save_binding(Path(context["project_dir"]), resolved, store=selected)
+            loaded._sciplot_project_store = selected
         candidates: list[tuple[str, Any, str, str]] = []
 
         def collect(widget_path: str, widget: Any) -> None:
