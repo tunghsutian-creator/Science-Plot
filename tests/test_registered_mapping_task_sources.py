@@ -265,3 +265,62 @@ def test_verified_xy_pairs_keep_actual_semantic_prepared_table_proof(tmp_path, m
         registered_task_snapshot_sources(request=seed, project_dir=project, documents=[document],
             existing_sources=[], data_mapping_application=application)
     assert source.read_bytes() == original_bytes
+
+
+@pytest.mark.parametrize("selected", ["directory", "file"])
+def test_cold_registered_originals_do_not_become_extra_tables_through_physical_views(tmp_path, selected):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.foundation.source_locations import resolve_source_path
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+
+    root = tmp_path / "project"
+    source = root / "source/A.csv"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"Time,Stress\ns,Pa\n0,1\n1,2\n")
+    document = root / "studio/document.vsz"
+    document.parent.mkdir()
+    document.write_bytes(b"generated native placeholder")
+    spec = {"series": [{"source_artifacts": [{"path": str(source), "sha256": file_sha256(source)}]}],
+            "source_request": {"input": str(source.parent)}}
+    spec_bytes = json.dumps(spec).encode()
+    document.with_name("spec.json").write_bytes(spec_bytes)
+    store = FileProjectStore(root)
+    before = store.snapshot(import_legacy=True)
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "cold")
+    root.rename(tmp_path / "original-offline")
+    with project_runtime(cold):
+        actual = resolve_source_path(source.parent if selected == "directory" else source)
+        assert actual.exists() and not source.exists()
+        result = registered_task_snapshot_sources(request={}, project_dir=cold.root,
+            documents=[document], existing_sources=[actual])
+        assert result == [actual]
+    assert cold.read_bytes("studio/spec.json") == spec_bytes
+    assert cold.snapshot()["generation"] == before["generation"]
+
+
+def test_cold_directory_membership_does_not_admit_same_name_unregistered_group(tmp_path):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.foundation.source_locations import resolve_source_path
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+
+    root = tmp_path / "project"
+    source = root / "source/A.csv"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"x,y\n1,2\n")
+    outside = root / "other/A.csv"
+    outside.parent.mkdir()
+    outside.write_bytes(source.read_bytes())
+    document = root / "studio/document.vsz"
+    document.parent.mkdir()
+    document.write_bytes(b"generated placeholder")
+    spec = {"series": [{"source_artifacts": [{"path": str(outside), "sha256": file_sha256(outside)}]}]}
+    document.with_name("spec.json").write_text(json.dumps(spec))
+    store = FileProjectStore(root)
+    store.snapshot(import_legacy=True)
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "cold")
+    root.rename(tmp_path / "original-offline")
+    with project_runtime(cold), pytest.raises(ValueError, match="registered FigureTask"):
+        registered_task_snapshot_sources(request={}, project_dir=cold.root,
+            documents=[document], existing_sources=[resolve_source_path(source.parent)])

@@ -41,6 +41,10 @@ def registered_task_snapshot_sources(
     plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
     additions: list[Path] = []
     root = Path(literal_source_path(project_dir))
+    # Membership is scientific/literal identity; directory checks are physical
+    # IO through the selected locator. A closed cold view is not a new source.
+    existing_inventory = [(Path(literal_source_path(source)), resolve_source_path(source).is_dir())
+                          for source in existing_sources]
     for document in documents:
         spec_path = (
             document.with_name("spec.json")
@@ -54,8 +58,8 @@ def registered_task_snapshot_sources(
             path
             for path in records
             if not any(
-                path == source or source.is_dir() and path.is_relative_to(source)
-                for source in existing_sources
+                path == source or is_directory and path.is_relative_to(source)
+                for source, is_directory in existing_inventory
             )
         ]
         if not extra:
