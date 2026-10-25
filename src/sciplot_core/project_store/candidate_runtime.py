@@ -13,7 +13,7 @@ from .io import STORE, digest, directory, member_names, parts, read_file, sha
 from .repository import FileProjectStore
 from .source_resolver import ProjectSourceResolver
 from .incoming_sources import selected_sealed_view
-from .candidate_resources import CandidateResources
+from .candidate_resources import CandidateResources, overlaps_resource_grant
 
 
 class ProjectCandidateResolver(ProjectSourceResolver):
@@ -22,9 +22,11 @@ class ProjectCandidateResolver(ProjectSourceResolver):
                  bound_resources: dict[str, Any] | None = None) -> None:
         super().__init__(store, generation)
         self.candidate_root = candidate_root.expanduser().absolute()
+        active = (store.root, *store.locations.values()) if resources_root is None else (store.root,)
         if (self.candidate_root.resolve(strict=True) != self.candidate_root
                 or any(self.candidate_root.is_relative_to(root) or root.is_relative_to(self.candidate_root)
-                       for root in (store.root, *store.locations.values()))):
+                       for root in active)
+                or resources_root is not None and overlaps_resource_grant(self.candidate_root, store)):
             raise ProjectConflict("A private candidate cannot alias or overlap an active project resource root.")
         info = self.candidate_root.stat(follow_symlinks=False)
         if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:

@@ -37,6 +37,15 @@ def validate_resources_binding(value: Any) -> None:
             raise ProjectStoreError("Invalid closed private resource directory identity.")
 
 
+def overlaps_resource_grant(path: Path, store: FileProjectStore) -> bool:
+    for key, root in store.locations.items():
+        members = store.location_members[key]
+        granted = [root] if members is None else [root / relative for relative in members]
+        if any(path.is_relative_to(member) or member.is_relative_to(path) for member in granted):
+            return True
+    return False
+
+
 class CandidateResources:
     def __init__(self, store: FileProjectStore, snapshot: dict[str, Any], root: Path,
                  primary: Path, *, bound: dict[str, Any] | None = None) -> None:
@@ -44,7 +53,7 @@ class CandidateResources:
         self.root = root.expanduser().absolute()
         if (self.root.resolve(strict=True) != self.root
                 or any(self.root.is_relative_to(path) or path.is_relative_to(self.root)
-                       for path in (primary, store.root, *store.locations.values()))):
+                       for path in (primary, store.root)) or overlaps_resource_grant(self.root, store)):
             raise ProjectConflict("A private resource root cannot alias or overlap another resource namespace.")
         self.identity = _identity(self.root.stat(follow_symlinks=False))
         self.views: dict[str, dict[str, int]] = {}
@@ -129,7 +138,9 @@ class CandidateResources:
                     if relative != ".":
                         parts(relative)
                     if not self.admits(key, relative):
-                        raise ProjectConflict("The private resource path exceeds its finite host capability.")
+                        if root == self.root / key or f"@{key}/{relative}" in self.snapshot["files"]:
+                            raise ProjectConflict("The private resource path exceeds its finite host capability.")
+                        continue  # A finite original parent never claims its unselected siblings.
                     with self.open(key):
                         matches.add(f"@{key}" if relative == "." else f"@{key}/{relative}")
         if len(matches) > 1:

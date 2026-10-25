@@ -234,6 +234,40 @@ def test_narrow_selected_capability_clones_only_its_exact_members(tmp_path):
     assert store.snapshot() == before
 
 
+def test_finite_original_parent_keeps_primary_and_new_explicit_siblings_separate(tmp_path, monkeypatch):
+    from test_project_runtime_capabilities import finite_store
+    store, before, archive = finite_store(tmp_path)
+    primary, resources = tmp_path / "private-primary", tmp_path / "private-resources"
+    primary.mkdir(mode=0o700)
+    resources.mkdir(mode=0o700)
+    for logical, entry in before["files"].items():
+        if logical.startswith("@"):
+            continue
+        target = primary / logical
+        target.write_bytes(store.read_bytes(logical))
+        target.chmod(entry["mode"])
+    incoming = tmp_path / "explicit-new.csv"
+    incoming.write_bytes(b"new separately admitted source")
+    with project_candidate_runtime(store, primary, resources_root=resources):
+        assert resolve_source_path(store.root / "source.csv") == primary / "source.csv"
+        assert resolve_source_path(archive) == resources / "snapshot/project.zip"
+        assert resolve_source_path(incoming) == incoming
+        assert literal_source_path(incoming) == str(incoming)
+        assert logical_runtime_resource(incoming) is None
+        with pytest.raises(ProjectConflict):
+            resolve_runtime_output_path(incoming)
+        with pytest.raises(ProjectConflict):
+            resolve_source_path(resources / "snapshot/explicit-new.csv")
+        argv = ["inspect-document-state", str(archive)]
+        with native_runtime_binding(argv) as reference:
+            monkeypatch.setattr(os, "getppid", os.getpid)
+            with worker_project_runtime(reference, argv):
+                assert resolve_source_path(archive) == resources / "snapshot/project.zip"
+                assert resolve_source_path(store.root / "source.csv") == primary / "source.csv"
+                assert resolve_source_path(incoming) == incoming
+    assert store.snapshot() == before
+
+
 @pytest.mark.parametrize("failure", ["unknown-key", "missing-key", "unknown-field", "view-identity", "root-identity", "missing-view", "argv", "parent"])
 def test_worker_resource_binding_is_closed_and_cannot_mint_or_recreate_views(tmp_path, monkeypatch, failure):
     with selected_resource_candidate(tmp_path) as (_store, _before, _primary, resources):
