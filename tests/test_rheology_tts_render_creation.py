@@ -31,15 +31,16 @@ def scenario(tmp_path, monkeypatch):
     prepared.write_text('{"fixture": "not measurement"}')
     def binding(path):
         return {"path": str(path), "sha256": file_sha256(path)}
-    spec = compile_tts_spec({"version": 1,
+    plan = {"version": 1,
         "source_binding": {"sources": [binding(source)], "prepared_plan": binding(prepared)},
         "transform_ledger": {"operation": "fixture identity"},
         "figures": [{"id": identifier, "width_mm": 60, "height_mm": 55, "panels": [{
             "id": "panel", "rect_mm": [0, 0, 60, 55], "x_label": "x", "y_label": "y",
             "series": [{"label": "fixture", "x": [1, 2], "y": [3, 4],
                         "color": "#222222", "marker": "circle"}]}]}
-            for identifier in ("Alpha", "Beta")]})
-    case = SimpleNamespace(spec=spec, out=tmp_path / "native", source=source,
+            for identifier in ("Alpha", "Beta")]}
+    spec = compile_tts_spec(plan)
+    case = SimpleNamespace(plan=deepcopy(plan), spec=spec, out=tmp_path / "native", source=source,
                            prepared=prepared, saves=[], exports=[])
 
     def save(figure, path):
@@ -472,3 +473,68 @@ def test_native_audit_json_round_trip_accepts_tuples_but_rejects_changed_values(
         assert case.run(resume=True) == result == creation.verify_native_creation(case.spec, case.out)
         assert _snapshot(case.out) == before
         assert case.saves == ["Alpha", "Beta"] and case.exports == ["Alpha", "Beta"]
+
+
+def test_export_only_continuation_cannot_enter_native_save(scenario, monkeypatch):
+    case = scenario
+    _fail_second(case)
+    saved = {path: (file_sha256(path), path.stat().st_ino, path.stat().st_mtime_ns)
+             for path in case.out.glob("*.vsz")}
+    proof = creation.check_saved_native_creation(case.spec, case.out)
+    assert [item["id"] for item in proof["figures"]] == ["Alpha", "Beta"]
+    monkeypatch.setattr(native, "save_native_figure", lambda *_a, **_k: pytest.fail("Export-only cannot Save"))
+    result = case.run(resume=True, export_only=True)
+    assert result["status"] == "completed" and case.saves == ["Alpha", "Beta"]
+    assert all((file_sha256(path), path.stat().st_ino, path.stat().st_mtime_ns) == value for path, value in saved.items())
+
+
+def test_export_only_refuses_any_missing_native_receipt(scenario, monkeypatch):
+    case = scenario
+    def interrupted_export(*_args, **_kwargs):
+        raise RuntimeError("Stopped before the second native figure was created")
+    with pytest.raises(RuntimeError, match="second native figure"):
+        case.run(export=interrupted_export)
+    before = _snapshot(case.out)
+    monkeypatch.setattr(native, "save_native_figure", lambda *_a, **_k: pytest.fail("Missing receipt cannot authorize Save"))
+    with pytest.raises(ValueError, match="Every figure"):
+        case.run(resume=True, export_only=True)
+    assert _snapshot(case.out) == before and case.saves == ["Alpha"]
+
+
+def test_saved_creation_export_child_records_completion_without_replaying_parent(scenario, monkeypatch, tmp_path):
+    from sciplot_core import rheology_tts_render
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.workflow.native_suite_creation import _finish_saved_exports
+    from sciplot_core.workflow.native_suite_generation import command_for
+    case = scenario
+    workspace, delivery = tmp_path / "project", tmp_path / "delivery"
+    workspace.mkdir()
+    delivery.mkdir()
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    store.snapshot(import_legacy=True)
+    parent = command_for(store, "native_create", "fixture-native", request={"fixture": "orchestration only"}, reads=[], writes=[])
+    store.reserve(parent.key, parent.command_digest, expected_generation=parent.expected_generation,
+                  read_set={}, write_set=[], metadata=parent.to_payload())
+    store.mark_applying(parent.key, parent.command_digest)
+    owned = store.claim_native_workspace(parent.key, parent.command_digest, "native_suite_create_v1")
+    case.out = owned / "workspace/initial_render"
+    case.out.parent.mkdir()
+    _write_json(case.out.parent / "figure_plan.json", case.plan)
+    _fail_second(case)
+    store.append_native_failure(parent.key, parent.command_digest, original_error="injected partial export failure",
+                                renderer_dispatch_entered=True, owned_invocation_closed=True)
+    calls = []
+    def complete(compiled, out):
+        assert compiled == case.spec and out == case.out
+        calls.append("export-only")
+        return case.run(resume=True, export_only=True)
+    monkeypatch.setattr(rheology_tts_render, "complete_tts_creation_exports", complete)
+    saved = {path: (file_sha256(path), path.stat().st_ino, path.stat().st_mtime_ns) for path in case.out.glob("*.vsz")}
+    _finish_saved_exports(store, parent, case.out.parent, [*case.spec["source_binding"]["sources"], case.spec["source_binding"]["prepared_plan"]])
+    assert calls == ["export-only"] and case.saves == ["Alpha", "Beta"]
+    assert store.query(parent.key)["phase"] == "unknown"
+    assert store.query(parent.key + ":exports")["phase"] == "complete"
+    assert store.query(parent.key + ":native-fact")["phase"] == "complete"
+    assert all((file_sha256(path), path.stat().st_ino, path.stat().st_mtime_ns) == value for path, value in saved.items())
+    _finish_saved_exports(store, parent, case.out.parent, [*case.spec["source_binding"]["sources"], case.spec["source_binding"]["prepared_plan"]])
+    assert calls == ["export-only"] and case.saves == ["Alpha", "Beta"]

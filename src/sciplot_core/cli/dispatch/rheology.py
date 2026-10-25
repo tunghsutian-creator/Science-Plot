@@ -84,7 +84,7 @@ def dispatch_rheology(args: Any) -> int | None:
         result = (plot_prepared_suite(args.request, resume=True) if getattr(args, "resume", False)
                   else plot_prepared_suite(args.request))
     elif args.rheology_command == "tts":
-        result = create_suite(args.request)
+        result = create_suite(args.request, resume=True) if getattr(args, "resume", False) else create_suite(args.request)
     elif args.rheology_command == "export":
         result = export_suite(args.workspace)
     elif args.rheology_command == "capabilities":

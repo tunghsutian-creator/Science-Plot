@@ -186,7 +186,9 @@ def test_creation_native_reply_loss_discovers_sealed_artifacts_before_atomic_pub
         launcher = candidate_delivery / 'Open.command'
         launcher.write_text('#!/bin/zsh\n')
         launcher.chmod(0o755)
-        return {'status': 'ready', 'workspace': str(candidate_workspace), 'delivery': str(candidate_delivery)}
+        return {'status': 'ready', 'workspace': str(candidate_workspace), 'delivery': str(candidate_delivery),
+                '_candidate_files': {str(path): file_sha256(path) for root in (candidate_workspace, candidate_delivery)
+                                     for path in root.rglob('*') if path.is_file()}}
     execute = ProjectCommands.execute
     def lose_reply(self, command, callback):
         result = execute(self, command, callback)
@@ -327,7 +329,8 @@ def test_whole_style_preview_and_cold_apply_use_same_store_not_old_publication(b
         return {'kind': 'sciplot_rheology_style_preview', 'version': 1, 'status': 'preview_ready',
             'contract_sha256': 'f' * 64, 'sources': manifest['sources'], 'figures': specs,
             'candidates': [{'id': 'A', 'edit': {'changes': [{'field': 'legend'}]}, 'export': exported}],
-            'plan': str(directory / 'figure_plan.json')}
+            'plan': str(directory / 'figure_plan.json'),
+            'candidate_files': {str(directory / 'figure_plan.json'): file_sha256(directory / 'figure_plan.json')}}
     monkeypatch.setattr(style, '_prepare_style_preview', prepare)
     preview = style.preview_suite_style(workspace)
     assert Path(documents[0]['path']).read_bytes() == before
@@ -390,16 +393,19 @@ def test_immediate_creation_sealed_before_head_resumes_without_native_callback(t
         candidate_workspace.mkdir()
         candidate_delivery.mkdir()
         (candidate_delivery / 'A.vsz').write_bytes(b'exact sealed candidate')
-        return {'status': 'ready', 'workspace': str(candidate_workspace), 'delivery': str(candidate_delivery)}
+        return {'status': 'ready', 'workspace': str(candidate_workspace), 'delivery': str(candidate_delivery),
+                '_candidate_files': {str(path): file_sha256(path) for root in (candidate_workspace, candidate_delivery)
+                                     for path in root.rglob('*') if path.is_file()}}
     def fail(name):
-        if name == 'before_storage':
+        if name == 'before_storage' and calls == ['native']:
             raise RuntimeError('complete candidate sealed before head')
     monkeypatch.setattr(state, 'boundary', fail)
     sources = [{'path': str(source), 'sha256': file_sha256(source)}]
     with pytest.raises(RuntimeError, match='sealed before head'):
         create_project(workspace, delivery, {'same': 'request'}, sources, prepare)
     store = FileProjectStore(workspace, locations={'delivery': delivery})
-    assert store.commands()[0]['phase'] == 'accepted'
+    parent = next(item for item in store.commands() if item['metadata']['kind'] == 'native_create')
+    assert parent['phase'] == 'accepted'
     assert not (delivery / 'A.vsz').exists()
     monkeypatch.setattr(state, 'boundary', lambda _name: None)
     result = create_project(workspace, delivery, {'same': 'request'}, sources, prepare, resume=True)
@@ -569,3 +575,138 @@ def test_source_version_reuses_existing_registered_identity(tmp_path):
                     if versions.get(file_sha256(source), {}).get('locator') == str(source))
     supplied = source_versions(store, [{'path': str(source), 'sha256': file_sha256(source)}])
     assert supplied == [{'source_id': existing, 'path': str(source), 'version': file_sha256(source)}]
+
+
+@pytest.mark.parametrize('unbound', ['outside_json', 'wrong_ancestor_member', 'fake_delivery'])
+def test_wrong_target_cannot_repair_a_pending_victim_project(bound, monkeypatch, unbound):
+    from sciplot_core.project_store import state
+    workspace, delivery, *_ = bound
+    path = Path(bound[3][0]['path'])
+    req = request(bound)
+    preview = native.patch_native(path, req)
+    def fail(name):
+        if name == 'after_head':
+            raise RuntimeError('owned synthetic pending projection')
+    monkeypatch.setattr(state, 'boundary', fail)
+    with pytest.raises(RuntimeError, match='pending projection'):
+        native.decide_native(path, preview['next_step']['request'])
+    monkeypatch.setattr(state, 'boundary', lambda _name: None)
+    victim_before = {item: item.read_bytes() for item in (
+        workspace / '.sciplot_store/head.json', workspace / 'suite.json',
+        delivery / 'data/delivery_manifest.json', path)}
+    value = json.loads((workspace / 'suite.json').read_bytes())
+    if unbound == 'outside_json':
+        target = workspace.parent / 'unbound.json'
+    elif unbound == 'wrong_ancestor_member':
+        target = workspace / 'unbound.json'
+    else:
+        fake_delivery = workspace.parent / 'unbound-delivery'
+        value['delivery'] = str(fake_delivery)
+        target = fake_delivery / 'data/delivery_manifest.json'
+    write_json(target, value)
+    repairs = []
+    recover = FileProjectStore.recover
+    def record(store):
+        repairs.append(store.root)
+        return recover(store)
+    monkeypatch.setattr(FileProjectStore, 'recover', record)
+    with pytest.raises(ValueError):
+        native.export_native(target)
+    assert repairs == []
+    assert all(item.read_bytes() == data for item, data in victim_before.items())
+    assert bound[5] == ['patch', 'export']
+    # The exact original native member still authorizes its own explicit resume.
+    resumed = native.resume_native(path, {key: req[key] for key in ('plot_id', 'base_revision', 'idempotency_key')})
+    assert resumed['ready_to_use'] and repairs
+    assert set(repairs) == {workspace}
+    assert bound[5] == ['patch', 'export']
+
+
+def test_candidate_change_after_native_audit_cannot_enter_shared_draft(bound, monkeypatch):
+    from sciplot_core.workflow import rheology_tts_style_update as style
+    path = Path(bound[3][0]['path'])
+    before = path.read_bytes()
+    prepare = style.publication_updates
+    def change(workspace, manifest, preview, directory, **kwargs):
+        candidate = Path(preview['candidates'][0]['export']['document'])
+        candidate.write_bytes(candidate.read_bytes() + b':unreviewed candidate drift')
+        return prepare(workspace, manifest, preview, directory, **kwargs)
+    monkeypatch.setattr(style, 'publication_updates', change)
+    req = request(bound)
+    with pytest.raises(ValueError, match='changed after'):
+        native.patch_native(path, req)
+    assert path.read_bytes() == before and bound[5] == ['patch', 'export']
+    with pytest.raises(ProjectCommandUnknown):
+        native.patch_native(path, req)
+    assert bound[5] == ['patch', 'export']
+
+
+def test_creation_freeze_requires_exact_private_inventory_bytes(tmp_path):
+    workspace, delivery = tmp_path / 'workspace', tmp_path / 'delivery'
+    source = tmp_path / 'raw.csv'
+    source.write_bytes(b'raw preserved')
+    calls = []
+    def prepare(candidate_workspace, candidate_delivery):
+        calls.append('native')
+        candidate_workspace.mkdir()
+        candidate_delivery.mkdir()
+        candidate = candidate_delivery / 'A.vsz'
+        candidate.write_bytes(b'exact native candidate')
+        expected = {str(candidate): file_sha256(candidate)}
+        candidate.write_bytes(b'unreviewed change after native receipt')
+        return {'status': 'ready', '_candidate_files': expected}
+    sources = [{'path': str(source), 'sha256': file_sha256(source)}]
+    with pytest.raises(ValueError, match='changed after'):
+        create_project(workspace, delivery, {'request': 'same'}, sources, prepare)
+    assert not (delivery / 'A.vsz').exists()
+    with pytest.raises(ProjectCommandUnknown):
+        create_project(workspace, delivery, {'request': 'same'}, sources, prepare, resume=True)
+    assert calls == ['native'] and source.read_bytes() == b'raw preserved'
+
+
+@pytest.mark.parametrize('invalid', ['wrong_patch', 'unknown_resume', 'unknown_decision', 'invalid_accept', 'foreign_style'])
+def test_invalid_request_cannot_repair_another_pending_native_command(bound, monkeypatch, invalid):
+    from sciplot_core.project_store import state
+    from sciplot_core.project_store.errors import ProjectRecoveryRequired
+    from sciplot_core.plot_engine.errors import EngineError
+    from sciplot_core.workflow import rheology_tts_style_update as style
+    workspace, delivery, _source, documents, *_ = bound
+    path = Path(documents[0]['path'])
+    req = request(bound)
+    preview = native.patch_native(path, req)
+    def interrupt(name):
+        if name == 'after_head':
+            raise OSError('pending native view')
+    monkeypatch.setattr(state, 'boundary', interrupt)
+    with pytest.raises(OSError, match='pending native view'):
+        native.decide_native(path, preview['next_step']['request'])
+    monkeypatch.setattr(state, 'boundary', lambda _name: None)
+    before = {item: item.read_bytes() for item in (workspace / '.sciplot_store/head.json', workspace / 'suite.json',
+              delivery / 'data/delivery_manifest.json', path)}
+    repairs = []
+    recover = FileProjectStore.recover
+    def watched(store):
+        repairs.append(store.root)
+        return recover(store)
+    monkeypatch.setattr(FileProjectStore, 'recover', watched)
+    with pytest.raises((EngineError, ProjectRecoveryRequired, ValueError)):
+        if invalid == 'wrong_patch':
+            changed = deepcopy(req)
+            changed['changes'][0]['value'] = 'bottom-left'
+            native.patch_native(path, changed)
+        elif invalid == 'unknown_resume':
+            native.resume_native(path, {**{key: req[key] for key in ('plot_id', 'base_revision', 'idempotency_key')},
+                                        'idempotency_key': 'unrelated'})
+        elif invalid == 'unknown_decision':
+            native.decide_native(path, {**preview['next_step']['request'], 'decision_id': 'unknown-decision'})
+        elif invalid == 'invalid_accept':
+            native.decide_native(path, {**preview['next_step']['request'], 'accept': 'yes'})
+        else:
+            foreign = workspace.parent / 'unbound-style.json'
+            foreign.write_text('{}')
+            style.apply_suite_style(workspace, foreign)
+    assert repairs == [] and bound[5] == ['patch', 'export']
+    assert all(item.read_bytes() == data for item, data in before.items())
+    result = native.resume_native(path, {key: req[key] for key in ('plot_id', 'base_revision', 'idempotency_key')})
+    assert result['ready_to_use'] and repairs and set(repairs) == {workspace}
+    assert bound[5] == ['patch', 'export']

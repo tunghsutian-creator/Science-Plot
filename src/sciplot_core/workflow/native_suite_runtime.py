@@ -25,35 +25,125 @@ def delivery_path(manifest: dict[str, Any]) -> Path:
     return store.locations['delivery'] if store is not None else Path(manifest['delivery'])
 
 
-@contextmanager
-def suite_runtime(target: Path, *, repair: bool = False) -> Iterator[None]:
-    from sciplot_core.project_store.runtime import project_runtime
+def _suite_value(path: Path) -> dict[str, Any]:
+    from sciplot_core.studio_core.source_update_commit import reject_symlink_path
+    reject_symlink_path(path)
+    value = json.loads(path.read_bytes())
+    if not isinstance(value, dict) or value.get("kind") != "sciplot_rheology_tts_suite":
+        raise ValueError("The selected member has no bound NativeSuite manifest.")
+    return value
+
+
+def _bound_selection(target: Path, workspace: Path, delivery: Path,
+                     value: dict[str, Any], *, role: str) -> None:
+    """Authorize the selected role before a manifest pointer can cause repair."""
+    hidden, visible = workspace / "suite.json", delivery / "data/delivery_manifest.json"
+    origin_workspace, origin_delivery = Path(value["workspace"]), Path(value["delivery"])
+    if not origin_workspace.is_absolute() or not origin_delivery.is_absolute():
+        raise ValueError("NativeSuite origins must be exact absolute locations.")
+    allowed = {workspace, delivery, hidden, visible}
+    if role in {"prepared_request", "analysis_request"}:
+        if target != workspace / "request.json":
+            raise ValueError("A prepared continuation requires its exact registered request member.")
+        request = json.loads(target.read_bytes())
+        if not isinstance(request, dict) or request.get("out", str(origin_delivery)) != str(origin_delivery):
+            raise ValueError("The selected request is not bound to this suite's delivery.")
+        if role == "prepared_request" and request.get("prepared_plan") != value.get("prepared_input", {}).get("path"):
+            raise ValueError("The selected prepared request is not bound to this suite.")
+        if role == "analysis_request" and request.get("frequency_source") not in {item["path"] for item in value["sources"]}:
+            raise ValueError("The selected analysis request is not bound to this suite's original source.")
+    elif role == "native":
+        if target not in allowed:
+            documents = value.get("documents")
+            if (not isinstance(documents, list) or target.suffix.lower() != ".vsz"
+                    or any(not isinstance(item, dict) for item in documents)):
+                raise ValueError("The target is not an exact NativeSuite member.")
+            matches = [item for item in documents if isinstance(item.get("id"), str)
+                       and Path(item.get("path", "")) == origin_delivery / "editable" / (item["id"] + ".vsz")
+                       and target == delivery / "editable" / (item["id"] + ".vsz")]
+            if len(matches) != 1:
+                raise ValueError("The target is not an exact selected NativeSuite figure.")
+    else:
+        raise ValueError("Unknown host NativeSuite selection role.")
+    # Existing update generations retain root links even while one derived
+    # manifest has advanced. Read both links before any store/recovery action;
+    # an outside fake manifest cannot grant repair of another project.
+    for manifest in (hidden, visible):
+        linked = _suite_value(manifest)
+        if (linked.get("workspace"), linked.get("delivery")) != (str(origin_workspace), str(origin_delivery)):
+            raise ValueError("NativeSuite root links disagree; no project repair is authorized.")
+
+
+def _pending_request_store(workspace: Path, target: Path, *, role: str) -> FileProjectStore:
+    """A pending suite has no manifest; only its registered original request binds it."""
+    probe = FileProjectStore(workspace)
+    adapter = "prepared_native_suite" if role == "prepared_request" else "analysis_native_suite"
+    candidates = []
+    for record in probe.commands():
+        value = record.get("metadata", {}).get("request", {})
+        source = value.get("request_file", {})
+        if (record.get("metadata", {}).get("kind") != "native_create"
+                or value.get("adapter") != adapter or "continuation_of" in value or not source):
+            continue
+        if probe.resolve_path(source["path"], expected_sha256=source["sha256"]) == target:
+            if json.loads(target.read_bytes()) != value["request"]:
+                raise ValueError("The selected pending request differs from its frozen command.")
+            candidates.append(value)
+    if len(candidates) != 1:
+        raise ValueError("Only the exact registered original request can continue this pending suite.")
+    if (workspace / ".sciplot_store/local_locations.json").is_file():
+        return probe
+    delivery = Path(candidates[0]["binding"]["delivery"])
+    return FileProjectStore(workspace, locations={"delivery": delivery})
+
+
+def read_bound_store(target: Path, *, role: str = "native") -> FileProjectStore | None:
+    """Resolve exact target membership without repairing or entering source IO."""
     from sciplot_core.studio_core.source_update_commit import reject_symlink_path
 
     reject_symlink_path(target)
     target = target.expanduser().resolve()
     roots = [path for path in (target, *target.parents) if (path / '.sciplot_store/head.json').is_file()]
     workspace = roots[0] if roots else None
+    if workspace is not None and not (workspace / "suite.json").is_file():
+        if role not in {"prepared_request", "analysis_request"}:
+            raise ValueError("Pending native creation has no selected saved figure authority.")
+        return _pending_request_store(workspace, target, role=role)
+    value = _suite_value(workspace / "suite.json") if workspace is not None else None
     if workspace is None:
         candidates = [target / 'suite.json', target / 'data/delivery_manifest.json'] if target.is_dir() else [target]
         if target.suffix.lower() == '.vsz':
             candidates = [target.parent.parent / 'data/delivery_manifest.json']
         for path in candidates:
             if path.is_file() and path.suffix == '.json':
-                value = json.loads(path.read_bytes())
-                if isinstance(value, dict) and value.get('kind') == 'sciplot_rheology_tts_suite':
-                    root = Path(value['workspace'])
+                candidate = json.loads(path.read_bytes())
+                if isinstance(candidate, dict) and candidate.get('kind') == 'sciplot_rheology_tts_suite':
+                    root = Path(candidate['workspace'])
+                    # Exact role membership is checked before dereferencing an
+                    # untrusted workspace pointer into a recoverable store.
+                    delivery = Path(candidate['delivery'])
+                    _bound_selection(target, root, delivery, candidate, role=role)
                     if (root / '.sciplot_store/head.json').is_file():
-                        workspace = root
+                        workspace, value = root, candidate
                     break
     if workspace is None:
-        yield  # Explicit legacy host context, before its first store import.
+        return None  # Explicit legacy host context, before first store import.
+    assert value is not None
+    cold = (workspace / '.sciplot_store/local_locations.json').is_file()
+    delivery = workspace / '.sciplot_resources/delivery' if cold else Path(value['delivery'])
+    _bound_selection(target, workspace, delivery, value, role=role)
+    reject_symlink_path(workspace)
+    reject_symlink_path(delivery)
+    return FileProjectStore(workspace) if cold else FileProjectStore(workspace, locations={'delivery': delivery})
+
+
+@contextmanager
+def suite_runtime(target: Path, *, repair: bool = False, role: str = "native") -> Iterator[None]:
+    from sciplot_core.project_store.runtime import project_runtime
+    store = read_bound_store(target, role=role)
+    if store is None:
+        yield
         return
-    if (workspace / '.sciplot_store/local_locations.json').is_file():
-        store = FileProjectStore(workspace)
-    else:
-        value = json.loads((workspace / 'suite.json').read_bytes())
-        store = FileProjectStore(workspace, locations={'delivery': Path(value['delivery'])})
     store.recover() if repair else store.snapshot()
     token = _STORE.set(store)
     try:
@@ -63,7 +153,7 @@ def suite_runtime(target: Path, *, repair: bool = False) -> Iterator[None]:
         _STORE.reset(token)
 
 
-def native_runtime(*, repair: bool = False) -> Callable[[Callable[P, T]], Callable[P, T]]:
+def native_runtime(*, repair: bool = False, role: str = "native") -> Callable[[Callable[P, T]], Callable[P, T]]:
     def decorate(function: Callable[P, T]) -> Callable[P, T]:
         @wraps(function)
         def wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
@@ -71,7 +161,7 @@ def native_runtime(*, repair: bool = False) -> Callable[[Callable[P, T]], Callab
             if not isinstance(first, (str, Path)):
                 raise TypeError('NativeSuite composition requires an explicit host path.')
             target = Path(first)
-            with suite_runtime(target, repair=repair):
+            with suite_runtime(target, repair=repair, role=role):
                 return function(*args, **kwargs)
         return wrapped
     return decorate

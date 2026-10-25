@@ -13,7 +13,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation, ProjectionRead
+from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation, ProjectionRead, MembershipRead, PreparedFile
 from sciplot_core.project_commands.read_projections import projection_digest
 from sciplot_core.project_store import FileProjectStore
 
@@ -59,28 +59,37 @@ def saved_command(app: ProjectCommands, key: str, request: dict[str, Any]) -> Pr
 
 def command_for(store: FileProjectStore, kind: str, key: str, *, request: dict[str, Any],
                 reads: Iterable[Path], writes: Iterable[Path], figure_id: str | None = None,
-                expected_revision: int | None = None) -> ProjectCommand:
+                expected_revision: int | None = None, whole: bool = False,
+                figure_ids: tuple[str, ...] | None = None) -> ProjectCommand:
     current = store.snapshot()
     read_set = {}
     write_set = [store.logical_path(path) for path in writes]
-    manifest_names = {"suite.json", "@delivery/data/delivery_manifest.json"} if figure_id else set()
+    selectors = figure_ids or ((figure_id,) if figure_id else ())
+    manifest_names = {"suite.json", "@delivery/data/delivery_manifest.json"} if selectors else set()
     for path in [*reads, *writes]:
         logical = store.logical_path(path)
         if logical not in manifest_names:
             read_set[logical] = current["files"].get(logical, {}).get("sha256")
-    selected = [ProjectionRead(name, "native_suite_figure_v1", figure_id,
-                projection_digest(store.read_bytes(name), kind="native_suite_figure_v1", key=figure_id))
-                for name in sorted(manifest_names)] if figure_id else []
+    selected = [ProjectionRead(name, "native_suite_figure_v1", identifier,
+                projection_digest(store.read_bytes(name), kind="native_suite_figure_v1", key=identifier))
+                for name in sorted(manifest_names) for identifier in selectors]
     return ProjectCommand.create(kind, key, project_id=current["project_id"],
         expected_generation=current["generation"], read_set=read_set, write_set=write_set,
         projected_reads=selected, projected_writes=[item for item in selected if item.resource in write_set],
-        expected_revision=expected_revision, request=request)
+        expected_revision=expected_revision, request=request,
+        read_memberships=[MembershipRead.capture(current["files"], prefix) for prefix in ("", "@delivery")] if whole else ())
 
 
-def mutation(store: FileProjectStore, updates: Mapping[Path, bytes | Path | None], result: dict[str, Any], *,
+def mutation(store: FileProjectStore, updates: Mapping[Path, bytes | Path | PreparedFile | None], result: dict[str, Any], *,
              sources: list[dict[str, Any]], review: dict[str, Any] | None = None,
-             artifacts: Mapping[str, bytes | Path] | None = None) -> ProjectMutation:
-    return ProjectMutation({store.logical_path(path): value for path, value in updates.items()}, result,
+             artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None) -> ProjectMutation:
+    current = store.snapshot()
+    writes = {}
+    for path, value in updates.items():
+        logical = store.logical_path(path)
+        writes[logical] = (PreparedFile(value, current["files"].get(logical, {}).get("mode", 0o600))
+                           if isinstance(value, bytes) else value)
+    return ProjectMutation(writes, result,
         sources=source_versions(store, sources), review=review, artifacts=artifacts or {})
 
 
@@ -186,10 +195,37 @@ def adopt_saved_native(store: FileProjectStore, manifest: dict[str, Any],
                 expected_generation=base.expected_generation, read_set=dict(base.read_set), write_set=base.write_set,
                 projected_reads=base.projected_reads, request=request,
                 native_adoptions=[NativeAdoption(logical, before, observed, audit_sha)])
-        candidate = mutation(store, {path: path.read_bytes()},
+        candidate = mutation(store, {path: candidate_file(path, observed)},
             {'status': 'native_imported', 'native_sha256': observed, 'audit_artifact': 'native-audit.json'},
             sources=manifest['sources'], artifacts={'native-audit.json': json_bytes(audit)})
         def frozen_candidate(value: ProjectMutation = candidate) -> ProjectMutation:
             return value
         app.execute(command, frozen_candidate)
         current = store.snapshot()
+
+
+
+def candidate_file(path: Path, expected_sha256: str, *, unaliased: bool = True) -> PreparedFile:
+    """Capture audited bytes and ordinary mode from one stable descriptor."""
+    import os
+    import stat
+    from sciplot_core.studio_core.source_update_commit import reject_symlink_path
+    reject_symlink_path(path)
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, 'rb') as stream:
+        info = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(info.st_mode) or unaliased and info.st_nlink != 1
+                or info.st_mode & 0o7000):
+            raise ValueError('A candidate must have ordinary mode and its declared alias policy.')
+        data = stream.read()
+        after = os.fstat(stream.fileno())
+        fields = ('st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_size', 'st_mtime_ns', 'st_ctime_ns')
+        if any(getattr(info, field) != getattr(after, field) for field in fields):
+            raise ValueError('Candidate bytes or mode changed while being captured.')
+    if canonical_sha(data) != expected_sha256:
+        raise ValueError('Candidate changed after its native/scientific audit; no active output published.')
+    return PreparedFile(data, info.st_mode & 0o777)
+
+
+def candidate_bytes(path: Path, expected_sha256: str) -> bytes:
+    return candidate_file(path, expected_sha256).data

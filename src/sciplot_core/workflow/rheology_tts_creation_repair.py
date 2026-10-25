@@ -21,6 +21,9 @@ def _blocked(message: str, reason: str, request: Path, workspace: Path,
 def attach_creation_repair(exc: Exception, request: Path, workspace: Path, *,
                            check: Callable[[], object] | None = None) -> None:
     """Only inspect shared continuation guards while the caller owns its lease."""
+    existing = getattr(exc, "repair", None)
+    if existing is not None and existing.get("action") == "export_saved_suite":
+        return
     if (workspace / ".sciplot_store/head.json").is_file():
         # New generations own recovery. Historical checkpoint files are never
         # written or used to restart an unknown shared native command.
@@ -37,9 +40,15 @@ def attach_creation_repair(exc: Exception, request: Path, workspace: Path, *,
             if len(parents) == 1:
                 parent = parents[0]
                 repair.update(command_id=parent["command_id"], phase=parent["phase"])
-                if parent["phase"] in {"complete", "accepted"}:
+                failures = parent.get("native_failures", [])
+                fact = store.query(parent["command_id"] + ":native-fact")
+                closed = bool(failures and failures[-1]["owned_invocation_closed"])
+                if (parent["phase"] in {"complete", "accepted"}
+                        or fact is not None and fact.get("phase") == "complete"
+                        or closed and (not failures[-1]["renderer_dispatch_entered"]
+                            or any(Path(parent["native_workspace_path"]).rglob("*.vsz")))):
                     repair.update(action="resume_prepared_creation",
-                                  next_step="Resume the same request to publish its already sealed native candidate without native reexecution.",
+                                  next_step="Resume the same request for read-only native receipt validation and pure publication; the original unknown effect is never replayed.",
                                   command=["rheology", "plot", "--request", str(request), "--resume", "--json"])
         except (KeyError, ValueError, OSError):
             pass

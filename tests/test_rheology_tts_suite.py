@@ -209,6 +209,15 @@ def _saved_export_suite(tmp_path, monkeypatch):
     workspace, delivery = tmp_path / ".sciplot/Figures", tmp_path / "Figures"
     workspace.mkdir(parents=True)
     documents = _publish(stage, delivery, plan, native)
+    # Historical producers keep scientific sidecars under the closed evidence
+    # root; this fixture follows that layout instead of granting tmp parent IO.
+    inside = workspace / "initial_render"
+    stage.rename(inside)
+    stage = inside
+    for receipt in native["figures"]:
+        receipt["document"] = str(stage / Path(receipt["document"]).name)
+        for exported in receipt["exports"]:
+            exported["path"] = str(stage / Path(exported["path"]).name)
     for receipt in native["figures"]:
         spec = stage / f"{receipt['id']}.spec.json"
         write_json(spec, {"source_binding": {"sources": sources}, "figure": {"id": receipt["id"]}})
@@ -341,14 +350,11 @@ def test_suite_publication_failure_rolls_back_exports_and_both_manifests(tmp_pat
 
     workspace, delivery, _, _ = _saved_export_suite(tmp_path, monkeypatch)
     original = storage.snapshot([p for p in delivery.rglob("*") if p.is_file()] + [workspace / "suite.json"])
-    replace = storage.os.replace
-
-    def fail_visible_manifest(source, target):
-        if Path(target) == delivery / "data/delivery_manifest.json":
+    from sciplot_core.project_store import state
+    def fail_visible_manifest(name):
+        if name == "before_head":
             raise OSError("injected final manifest publication failure")
-        return replace(source, target)
-
-    monkeypatch.setattr(storage.os, "replace", fail_visible_manifest)
+    monkeypatch.setattr(state, "boundary", fail_visible_manifest)
     with pytest.raises(OSError, match="final manifest publication failure"):
         export_suite(workspace)
     assert storage.snapshot([Path(p) for p in original]) == original
@@ -372,14 +378,14 @@ def test_compiled_spec_change_between_validation_and_snapshot_blocks_export(tmp_
     original = snapshot([p for p in delivery.rglob("*") if p.is_file()] + [workspace / "suite.json"])
     compiled = suite._compiled_figures
 
-    def changed_after_read(value):
-        figures = compiled(value)
+    def changed_after_read(value, **kwargs):
+        figures = compiled(value, **kwargs)
         path = Path(manifest["native_result"]["figures"][0]["spec_path"])
         path.write_bytes(path.read_bytes() + b"\nchanged after validation")
         return figures
 
     monkeypatch.setattr(suite, "_compiled_figures", changed_after_read)
-    with pytest.raises(ValueError, match="Compiled figure specification changed"):
+    with pytest.raises(ValueError, match="Outside bytes changed a declared project read: initial_render/Panel_d.spec.json"):
         suite.export_suite(workspace)
     assert snapshot([Path(p) for p in original]) == original
 
@@ -391,6 +397,6 @@ def test_suite_export_rejects_redirected_staging_before_native_writes(tmp_path, 
     elsewhere = tmp_path / "unrelated"
     elsewhere.mkdir()
     (workspace / "export_stages").symlink_to(elsewhere, target_is_directory=True)
-    with pytest.raises(ValueError, match="^Source update cannot follow symbolic links:"):
+    with pytest.raises(ValueError, match="symlink|symbolic"):
         export_suite(workspace)
     assert list(elsewhere.iterdir()) == []

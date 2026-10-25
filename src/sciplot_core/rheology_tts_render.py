@@ -17,6 +17,42 @@ from sciplot_core.veusz_runtime import (
 )
 
 
+# The creator owns this scoped observation; it never turns an exception into a
+# successful OS exit. A missing observation after hard exit remains unknown.
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
+from collections.abc import Callable, Iterator
+
+
+@dataclass
+class NativeInvocationObservation:
+    dispatch_entered: bool = False
+    owned_invocation_closed: bool = True
+
+
+_NATIVE_OBSERVATION: ContextVar[NativeInvocationObservation | None] = ContextVar("tts_native_observation", default=None)
+_NATIVE_RESULT: ContextVar[Callable[[dict[str, Any], Path, dict[str, Any]], None] | None] = ContextVar("tts_native_result", default=None)
+
+
+@contextmanager
+def observe_native_creation(callback: Callable[[dict[str, Any], Path, dict[str, Any]], None] | None = None) -> Iterator[NativeInvocationObservation]:
+    observation = NativeInvocationObservation()
+    token = _NATIVE_OBSERVATION.set(observation)
+    result_token = _NATIVE_RESULT.set(callback)
+    try:
+        yield observation
+    finally:
+        _NATIVE_RESULT.reset(result_token)
+        _NATIVE_OBSERVATION.reset(token)
+
+
+def native_result_received(compiled: dict[str, Any], out: Path, result: dict[str, Any]) -> None:
+    callback = _NATIVE_RESULT.get()
+    if callback is not None:
+        callback(compiled, out, result)
+
+
 def render_tts_figures(spec: dict[str, Any], out: Path, *, resume: bool = False) -> dict[str, Any]:
     """Save editable native figures and export their exact bytes in three formats."""
     from sciplot_core.studio_core.source_update_commit import reject_symlink_path
@@ -25,8 +61,18 @@ def render_tts_figures(spec: dict[str, Any], out: Path, *, resume: bool = False)
         raise ValueError("Native creation resume must be a boolean.")
     reject_symlink_path(out)
     compiled = compile_tts_spec(spec)
-    return _dispatch({"action": "render", "spec": compiled, "out": str(out.resolve()), "resume": resume})
+    result = _dispatch({"action": "render", "spec": compiled, "out": str(out.resolve()), "resume": resume})
+    for figure in result["figures"]:
+        figure["spec_sha256"] = file_sha256(Path(figure["spec_path"]))
+    native_result_received(compiled, out.resolve(), result)
+    return result
 
+
+
+def complete_tts_creation_exports(compiled: dict[str, Any], out: Path) -> dict[str, Any]:
+    """Finish only proven saved native outputs; the worker cannot enter Save."""
+    return _dispatch({"action": "complete_creation_exports", "spec": compiled,
+                      "out": str(out.resolve()), "resume": True})
 
 def audit_tts_document(
     path: Path, figure_spec: dict[str, Any], *, check_presentation: bool = False
@@ -175,6 +221,17 @@ def _validate_export_batch(request: dict[str, Any]) -> list[tuple[Path, Path, di
 
 
 def _dispatch(request: dict[str, Any]) -> dict[str, Any]:
+    observation = _NATIVE_OBSERVATION.get()
+    if observation is not None:
+        observation.dispatch_entered = True
+        observation.owned_invocation_closed = False
+    result = _dispatch_observed(request)
+    if observation is not None:
+        observation.owned_invocation_closed = True
+    return result
+
+
+def _dispatch_observed(request: dict[str, Any]) -> dict[str, Any]:
     if not needs_veusz_worker_process():
         return _run_native(request)
     with tempfile.TemporaryDirectory(prefix="sciplot-tts-native-") as temporary:
@@ -190,6 +247,9 @@ def _dispatch(request: dict[str, Any]) -> dict[str, Any]:
                 command.extend(["--project-runtime", binding["path"], binding["sha256"]])
             result = subprocess.run(command, env=veusz_worker_environment(), capture_output=True,
                                     text=True, check=False)
+        observation = _NATIVE_OBSERVATION.get()
+        if observation is not None:
+            observation.owned_invocation_closed = True  # subprocess.run actually waited.
         if result.returncode:
             failure = RuntimeError(f"Native TTS figure operation failed:\n{result.stderr}")
             try:
@@ -218,7 +278,7 @@ def _worker_result(request: dict[str, Any]) -> dict[str, Any]:
 def _run_native(request: dict[str, Any]) -> dict[str, Any]:
     action = request.get("action")
     batch = _validate_export_batch(request) if action == "export_batch" else None
-    if action not in {"audit", "export", "export_batch", "restyle", "render", "display_state", "display_patch"}:
+    if action not in {"audit", "export", "export_batch", "restyle", "render", "complete_creation_exports", "display_state", "display_patch"}:
         raise ValueError("Unknown native TTS operation.")
     from sciplot_core.studio_core.runtime import _ensure_veusz_on_path
 
@@ -275,12 +335,13 @@ def _run_native(request: dict[str, Any]) -> dict[str, Any]:
                 request["new_figure"],
                 request["expected_sha256"],
             )
-        if action != "render":
+        if action not in {"render", "complete_creation_exports"}:
             raise ValueError("Unknown native TTS operation.")
         from sciplot_core.rheology_tts_render_creation import render_native_creation
 
         return render_native_creation(request["spec"], Path(request["out"]),
-                                      resume=request.get("resume", False), export_figure=_export)
+                                      resume=request.get("resume", False), export_figure=_export,
+                                      export_only=action == "complete_creation_exports")
     finally:
         if existing is None:
             app.quit()

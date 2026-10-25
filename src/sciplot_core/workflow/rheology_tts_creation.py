@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import html
 import json
 from pathlib import Path
 import re
-from uuid import uuid4
 from urllib.parse import quote
 
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -132,14 +130,7 @@ def _known_workspace(workspace: Path, checkpoint: dict) -> None:
                 raise ValueError("Unknown file in prepared publication stage.")
 
 
-def _install_delivery(candidate: Path, delivery: Path) -> None:
-    """Retain the prepared-creation seam while sharing exclusive installation."""
-    from sciplot_core.delivery.install import install_new_delivery
-
-    install_new_delivery(candidate, delivery)
-
-
-def _result(manifest: dict, *, compiled: dict, resumed: bool) -> dict:
+def _result(manifest: dict, *, compiled: dict, resumed: bool, include_handles: bool = True) -> dict:
     from sciplot_core.workflow.rheology_tts_creation_handles import created_object_handles
 
     return {"status": "ready", "delivery": manifest["delivery"], "workspace": manifest["workspace"],
@@ -147,7 +138,7 @@ def _result(manifest: dict, *, compiled: dict, resumed: bool) -> dict:
         "prepared_plan_sha256": manifest["prepared_input"]["sha256"],
         "manual_edit": str(Path(manifest["delivery"]) / "Open_in_SciPlot.command"),
         "native_result": manifest["native_result"], "scientific_scope": manifest["scientific_scope"],
-        "plot_objects": created_object_handles(manifest, compiled),
+        **({"plot_objects": created_object_handles(manifest, compiled)} if include_handles else {"_creation_handles": True}),
         **({"resumed": True} if resumed else {})}
 
 
@@ -201,57 +192,6 @@ def _publication_evidence(workspace: Path, delivery: Path, checkpoint: dict, com
     if json.loads(((delivery if delivery.exists() else candidate) / "data/delivery_manifest.json").read_text()) != manifest:
         raise ValueError("Prepared suite manifests disagree before installation.")
     return candidate, manifest
-
-
-def _finish(workspace: Path, delivery: Path, checkpoint: dict, compiled: dict, *, resumed: bool) -> dict:
-    candidate, manifest = _publication_evidence(workspace, delivery, checkpoint, compiled)
-    publication = checkpoint["publication"]
-    if not delivery.exists():
-        _install_delivery(candidate, delivery)
-    if _publication_inventory(delivery, checkpoint) != publication["files"]:
-        raise ValueError("Installed prepared delivery differs from its sealed inventory.")
-    _input_file(workspace / "suite.json", manifest)
-    if json.loads((delivery / "data/delivery_manifest.json").read_text()) != manifest:
-        raise ValueError("Prepared suite manifests disagree after installation.")
-    _verify_bound_native(workspace, checkpoint, compiled)
-    if _publication_inventory(delivery, checkpoint) != publication["files"]:
-        raise ValueError("Installed prepared delivery changed before completion.")
-    checkpoint["phase"] = "completed"
-    atomic_write_json(workspace / CHECKPOINT, checkpoint)
-    return _result(manifest, compiled=compiled, resumed=resumed)
-
-
-def _build_publication(workspace: Path, delivery: Path, spec: dict, native: dict, binding: dict,
-                       checkpoint: dict) -> None:
-    attempt = uuid4().hex
-    checkpoint["attempts"].append(attempt)
-    atomic_write_json(workspace / CHECKPOINT, checkpoint)
-    stage = workspace / "publication_stages" / attempt
-    candidate = stage / "delivery"
-    staged_documents = _publish(workspace / "initial_render", candidate, spec, native)
-    write_plot_tables(spec, candidate / "data")
-    write_json(candidate / "data/figure_plan.json", spec)
-    _write_index(candidate, spec, staged_documents)
-    documents = deepcopy(staged_documents)
-    for item in documents:
-        item["path"] = str(delivery / Path(item["path"]).relative_to(candidate))
-        item["exports"] = [str(delivery / Path(path).relative_to(candidate)) for path in item["exports"]]
-        _launcher(candidate / "editable" / f"Open_{item['id']}.command", ["studio", item["path"]])
-    manifest = {"version": 1, "kind": "sciplot_rheology_tts_suite", "delivery": str(delivery),
-        "workspace": str(workspace), "sources": binding["sources"], "documents": documents, "native_result": native,
-        "prepared_input": binding["prepared_input"], "figure_layout": spec.get("figure_layout", "prepared"),
-        "contract_sha256": binding["contract_sha256"],
-        "visual_authority": "visible editable/*.vsz; initial_render is historical creation evidence",
-        "scientific_scope": "Externally processed coordinates; no scientific calculations or interpretation performed by plot."}
-    write_json(stage / "suite.json", manifest)
-    write_json(candidate / "data/delivery_manifest.json", manifest)
-    _launcher(candidate / "Open_in_SciPlot.command", ["studio", documents[0]["path"]])
-    _launcher(candidate / "Update_exports.command", ["rheology", "export", str(workspace), "--json"])
-    _check_sources(binding["sources"])
-    checkpoint.update(phase="publication_ready", publication={"attempt": attempt,
-        "files": file_inventory(candidate), "manifest_sha256": file_sha256(stage / "suite.json")})
-    _validate_checkpoint(checkpoint, workspace)
-    atomic_write_json(workspace / CHECKPOINT, checkpoint)
 
 
 def _creation_binding(request: dict, spec: dict, compiled: dict, delivery: Path,
@@ -315,21 +255,44 @@ def create_prepared_suite(request_path: Path, request: dict, spec: dict, compile
                           delivery: Path, workspace: Path, *, contract_sha256: str, resume: bool) -> dict:
     from sciplot_core.workflow.native_suite_creation import create_project
 
+    # An already open legacy/native session must refuse before allocating any
+    # new active workspace or delivery. The store still owns actual admission.
+    workspace.parent.mkdir(parents=True, exist_ok=True)
+    from sciplot_core.foundation.project_session_lease import external_project_session
+    with external_project_session(workspace):
+        pass
     request_path = request_path.expanduser().resolve()
-    original = {"adapter": "prepared_native_suite", "request": request,
+    if not (workspace / ".sciplot_store/head.json").is_file() and (workspace.exists() or delivery.exists()):
+        if not resume:
+            _existing(request_path, workspace, delivery)
+        binding = _creation_binding(request, spec, compiled, delivery, workspace, contract_sha256)
+        checkpoint = check_prepared_continuation(request_path, request, spec, compiled, delivery, workspace, binding)
+        if checkpoint["phase"] == "completed":
+            return _result(read_json_object(workspace / "suite.json"), compiled=compiled, resumed=True)
+        raise _blocked("Legacy creation evidence is read-only; preserve its exact candidate and original failure for inspection.",
+                       "prepared_creation_legacy_inspection_required", request_path, workspace)
+    if not resume and (workspace / ".sciplot_store/head.json").is_file():
+        raise _blocked("Native creation already has an admitted command; explicitly resume its saved identity.",
+                       "prepared_creation_resume_required", request_path, workspace,
+                       "export_saved_suite" if (workspace / "suite.json").is_file() else "resume_prepared_creation")
+    from sciplot_core.project_store.runtime import literal_runtime_path
+    request_file = {"path": literal_runtime_path(request_path), "sha256": file_sha256(request_path)}
+    original = {"adapter": "prepared_native_suite", "request": request, "request_file": request_file,
                 "binding": _creation_binding(request, spec, compiled, delivery, workspace, contract_sha256)}
     from sciplot_core.workflow.native_suite_runtime import current_store
     active = current_store()
     if active is not None:
         matching = [item for item in active.commands()
                     if item.get("metadata", {}).get("request", {}).get("adapter") == "prepared_native_suite"
-                    and item["metadata"]["request"].get("request") == request]
+                    and item["metadata"]["request"].get("request") == request
+                    and "continuation_of" not in item["metadata"]["request"]]
         if len(matching) > 1:
             raise ValueError("Prepared creation identity is ambiguous; preserve its original commands.")
         if matching:
             saved = matching[0]["metadata"]["request"]
             binding = saved["binding"]
-            if (binding["compiled_sha256"] != canonical_json_sha256(compiled)
+            if (saved.get("request_file") != request_file
+                    or binding["compiled_sha256"] != canonical_json_sha256(compiled)
                     or binding["sources"] != spec["source_binding"]["sources"]
                     or binding["prepared_input"]["sha256"] != spec["source_binding"]["prepared_plan"]["sha256"]
                     or binding["contract_sha256"] != contract_sha256):
@@ -337,46 +300,93 @@ def create_prepared_suite(request_path: Path, request: dict, spec: dict, compile
             original = saved
     def prepare(candidate_workspace: Path, candidate_delivery: Path) -> dict:
         binding = _creation_binding(request, spec, compiled, candidate_delivery, candidate_workspace, contract_sha256)
-        return _create_locked(request_path, request, spec, compiled, candidate_delivery, candidate_workspace,
-                              binding, resume=False)
+        return _prepare_candidate(request_path, request, spec, compiled, candidate_delivery, candidate_workspace, binding)
     inputs = [*spec["source_binding"]["sources"],
               {"path": spec["source_binding"]["prepared_plan"]["path"],
                "sha256": spec["source_binding"]["prepared_plan"]["sha256"]},
-              {"path": str(request_path), "sha256": file_sha256(request_path)}]
-    return create_project(workspace, delivery, original, inputs, prepare, resume=resume)
+              {"path": request_file["path"], "sha256": request_file["sha256"]}]
+    def recover(old_workspace: Path, old_delivery: Path, new_workspace: Path, new_delivery: Path) -> dict:
+        origin_workspace, origin_delivery = old_workspace, old_delivery
+        if active is not None:
+            origin_workspace = Path(active.snapshot()["locators"][""]) / old_workspace.relative_to(active.root)
+            origin_delivery = origin_workspace.parent / "delivery"
+        binding = _creation_binding(request, spec, compiled, origin_delivery, origin_workspace, contract_sha256)
+        _input_file(old_workspace / "request.json", binding["request"], create=False)
+        _input_file(old_workspace / "figure_plan.json", spec, create=False)
+        from sciplot_core.rheology_tts_render_creation import check_native_continuation
+        native = check_native_continuation(compiled, old_workspace / "initial_render", completed=True)
+        if native is None:
+            raise ValueError("No complete verified native effect exists; preserve its unknown command.")
+        return _prepare_candidate(request_path, request, spec, compiled, new_delivery, new_workspace,
+            _creation_binding(request, spec, compiled, new_delivery, new_workspace, contract_sha256),
+            known_native=(old_workspace / "initial_render", native))
+    try:
+        return create_project(workspace, delivery, original, inputs, prepare, resume=resume, recover_prepare=recover)
+    except FileExistsError as exc:
+        raise _blocked(str(exc), "prepared_creation_binding_changed", request_path, workspace) from exc
 
 
-def _create_locked(request_path: Path, request: dict, spec: dict, compiled: dict, delivery: Path,
-                   workspace: Path, binding: dict, *, resume: bool) -> dict:
-    from sciplot_core.rheology_tts_render import render_tts_figures
 
-    checkpoint_path = workspace / CHECKPOINT
-    if not resume and (workspace.exists() or delivery.exists()):
-        _existing(request_path, workspace, delivery)
-    if resume:
-        checkpoint = check_prepared_continuation(request_path, request, spec, compiled, delivery, workspace, binding)
-    else:
-        workspace.mkdir(parents=True)
-        checkpoint = {"kind": "sciplot_prepared_creation", "version": 1, "binding": binding,
-                      "phase": "initialized", "attempts": []}
-        atomic_write_json(checkpoint_path, checkpoint)
-    _check_sources(binding["sources"])
+def _prepare_candidate(request_path: Path, request: dict, spec: dict, compiled: dict,
+                       delivery: Path, workspace: Path, binding: dict, *,
+                       known_native: tuple[Path, dict] | None = None) -> dict:
+    """Private creation/pure publication; no workflow checkpoint is an owner."""
+    from sciplot_core.rheology_tts_render import render_tts_figures, native_result_received
+    from sciplot_core.workflow.native_suite_creation import _remap, creation_inventory
+    from sciplot_core.workflow.native_suite_generation import candidate_file
+    if workspace.exists() or delivery.exists():
+        raise FileExistsError("Private creation output already exists; preserve its admitted evidence.")
+    workspace.mkdir(parents=True)
     _input_file(workspace / "request.json", binding["request"])
     _input_file(workspace / "figure_plan.json", spec)
-    if checkpoint["phase"] in {"publication_ready", "completed"}:
-        return _finish(workspace, delivery, checkpoint, compiled, resumed=resume)
-    if checkpoint["phase"] == "native_complete":
-        _verify_bound_native(workspace, checkpoint, compiled)
-        native = checkpoint["native_result"]
+    _check_sources(binding["sources"])
+    if known_native is None:
+        native = render_tts_figures(spec, workspace / "initial_render")
+        for figure in native["figures"]:
+            figure["spec_sha256"] = file_sha256(Path(figure["spec_path"]))
+        native_result_received(compiled, workspace / "initial_render", native)
     else:
-        native = render_tts_figures(spec, workspace / "initial_render", resume=resume)
-        for item in native["figures"]:
-            item["spec_sha256"] = file_sha256(Path(item["spec_path"]))
-        checkpoint.update(phase="native_complete", native_result=native)
-        atomic_write_json(checkpoint_path, checkpoint)
-    _build_publication(workspace, delivery, spec, native, binding, checkpoint)
-    _known_workspace(workspace, checkpoint)
-    return _finish(workspace, delivery, checkpoint, compiled, resumed=resume)
+        original, prior = known_native
+        out = workspace / "initial_render"
+        out.mkdir()
+        from sciplot_core.project_store.runtime import resolve_runtime_path
+        for figure in prior["figures"]:
+            paths = [(resolve_runtime_path(figure["document"], expected_sha256=figure["document_sha256"]), figure["document_sha256"]),
+                     (resolve_runtime_path(figure["spec_path"]), file_sha256(resolve_runtime_path(figure["spec_path"]))),
+                     (resolve_runtime_path(figure["native_audit_path"]), file_sha256(resolve_runtime_path(figure["native_audit_path"]))),
+                     *((resolve_runtime_path(item["path"], expected_sha256=item["sha256"]), item["sha256"]) for item in figure["exports"])]
+            for path, digest in paths:
+                captured = candidate_file(path, digest)
+                target = out / path.name
+                target.write_bytes(captured.data)
+                target.chmod(captured.mode)
+        from sciplot_core.project_store.runtime import literal_runtime_path
+        native = _remap(prior, ((Path(literal_runtime_path(original)), out),))
+        for figure in native["figures"]:
+            figure["spec_sha256"] = file_sha256(Path(figure["spec_path"]))
+            # The audit receipt has only declared host path fields rewritten;
+            # numeric/spec/source values are preserved byte-for-byte.
+            write_json(Path(figure["native_audit_path"]), figure["native_audit"])
+    delivery.mkdir()
+    documents = _publish(workspace / "initial_render", delivery, spec, native)
+    write_plot_tables(spec, delivery / "data")
+    write_json(delivery / "data/figure_plan.json", spec)
+    _write_index(delivery, spec, documents)
+    manifest = {"version": 1, "kind": "sciplot_rheology_tts_suite", "delivery": str(delivery),
+        "workspace": str(workspace), "sources": binding["sources"], "documents": documents, "native_result": native,
+        "prepared_input": binding["prepared_input"], "figure_layout": spec.get("figure_layout", "prepared"),
+        "contract_sha256": binding["contract_sha256"],
+        "visual_authority": "visible editable/*.vsz; initial_render is historical creation evidence",
+        "scientific_scope": "Externally processed coordinates; no scientific calculations or interpretation performed by plot."}
+    write_json(workspace / "suite.json", manifest)
+    write_json(delivery / "data/delivery_manifest.json", manifest)
+    _launcher(delivery / "Open_in_SciPlot.command", ["studio", documents[0]["path"]])
+    _launcher(delivery / "Update_exports.command", ["rheology", "export", str(workspace), "--json"])
+    _check_sources(binding["sources"])
+    result = _result(manifest, compiled=compiled, resumed=False, include_handles=False)
+    result["_candidate_files"] = creation_inventory(workspace, delivery, native, file_inventory(delivery),
+        {"request.json": binding["request"], "figure_plan.json": spec})
+    return result
 
 def _write_index(delivery: Path, spec: dict, documents: list[dict]) -> None:
     rows = []

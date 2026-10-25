@@ -1,6 +1,7 @@
 """Native object commands prepare privately and publish one project generation."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 import tempfile
@@ -21,6 +22,60 @@ from sciplot_core.workflow.native_suite_generation import (
 from sciplot_core.workflow.native_suite_objects import capture_object, descriptor, require_object, native_identity, selected_spec
 from sciplot_core.workflow.native_suite_storage import result_for
 from sciplot_core.workflow.native_suite_runtime import native_runtime, suite_runtime
+
+
+NativeHandler = Callable[[Path, dict[str, Any]], dict[str, Any]]
+
+
+def _admit_wire_before_runtime(operation: str) -> Callable[[NativeHandler], NativeHandler]:
+    from functools import wraps
+    def decorate(function: NativeHandler) -> NativeHandler:
+        @wraps(function)
+        def wrapped(target: Path, request: dict[str, Any]) -> dict[str, Any]:
+            target = Path(target)
+            value = ({"patch": validate_patch, "resume": validate_resume, "decide": validate_decide}[operation])(request)
+            from sciplot_core.workflow.native_suite_runtime import read_bound_store
+            store = read_bound_store(target)
+            if store is not None:
+                manifest = json.loads((store.root / "suite.json").read_bytes())
+                selected = ([item["id"] for item in manifest["documents"] if item["id"] == target.stem]
+                            if target.suffix.lower() == ".vsz" else [item["id"] for item in manifest["documents"]])
+                if len(selected) != 1:
+                    raise EngineError("native_object_figure_required", "Select one exact existing native figure.")
+                identifier = selected[0]
+                app = ProjectCommands(store)
+                if operation == "decide":
+                    if set(value) != {"decision_id", "base_revision", "accept"}:
+                        raise EngineError("document_invalid_decision", "Native display decisions require boolean accept.")
+                    record = app.query_decision(value["decision_id"])
+                    if record is None:
+                        aliases = [item for item in app.commands() if item.get("review", {}).get("legacy_decision_id") == value["decision_id"]]
+                        if len(aliases) > 1:
+                            raise EngineError("document_invalid_decision", "The decision identity is ambiguous.")
+                        record = aliases[0] if aliases else None
+                    if record is not None and (record.get("review", {}).get("adapter") != "native_display"
+                            or record["result"].get("figure_id") != identifier
+                            or record["result"].get("request", {}).get("base_revision") != value["base_revision"]):
+                        raise EngineError("document_invalid_decision", "Use the exact saved decision for this selected figure.")
+                else:
+                    identity = native_identity(manifest["workspace"], identifier, [], "", "")["plot_id"]
+                    if value["plot_id"] != identity:
+                        raise EngineError("document_identity_conflict", "The request belongs to another native figure.")
+                    record = app.query(command_key("native_patch", {"figure": identifier, "key": value["idempotency_key"]}))
+                    if record is not None:
+                        saved = record["metadata"]["request"]
+                        saved_request = saved.get("request", {})
+                        matches = (saved_request == value if operation == "patch" else
+                                   all(saved_request.get(key) == item for key, item in value.items()))
+                        if saved.get("adapter") != "native_display" or saved.get("figure_id") != identifier or not matches:
+                            raise EngineError("document_idempotency_conflict", "Use the command's exact original identity.")
+                # A new/unknown operation cannot repair another pending command.
+                # Legacy record discovery proceeds only while all views are current.
+                if record is None:
+                    store.snapshot()
+            return function(target, value)
+        return wrapped
+    return decorate
 
 def _check_identity(context: dict[str, Any], request: dict[str, Any]) -> None:
     if request["plot_id"] != context["plot_id"]:
@@ -246,7 +301,7 @@ def _prepare_current(context: dict[str, Any], captured: dict[str, Any], request:
             # never invokes the native edit callback again.
             error = {"reason_code": "native_preview_export_pending", "message": str(exc)[:500]}
             exported = {"document": str(candidate), "document_sha256": digest, "exports": [],
-                        "native_audit": deepcopy(edit.get("native_audit", {}))}
+                        "native_audit": deepcopy(edit.get("candidate_audit", edit.get("native_audit", {})))}
         if exported["document_sha256"] != digest:
             raise ValueError("Native candidate changed during export.")
         from sciplot_core.workflow.rheology_tts_suite import _active_receipts
@@ -320,6 +375,7 @@ def _import_legacy_preview(context: dict[str, Any], record: dict[str, Any], path
             or edit.get("candidate_audit", {}).get("changed_presentation", {}).get("unrelated_native_state_unchanged") is not True):
         raise ValueError("Legacy display candidate lacks its original full-state preservation audit.")
     reads, writes = suite_paths(Path(context["workspace"]), context["manifest"], (context["figure_id"],), native_writes=True)
+    reads.extend(Path(name) for name in record["baseline"] if any(Path(name).is_relative_to(root) for root in roots))
     command = command_for(store, "native_patch", _key(context, request), request=_request(context, request),
         reads=reads, writes=writes, figure_id=context["figure_id"], expected_revision=request["base_revision"])
     def prepare() -> ProjectMutation:
@@ -349,6 +405,7 @@ def _import_legacy_preview(context: dict[str, Any], record: dict[str, Any], path
     return imported
 
 
+@_admit_wire_before_runtime("patch")
 @native_runtime(repair=True)
 def patch_native(target: Path, request: dict[str, Any]) -> dict[str, Any]:
     request = validate_patch(request)
@@ -478,6 +535,7 @@ def _publish_reviewed_exports(context: dict[str, Any], parent: dict[str, Any], c
     return app.execute(command, prepare)
 
 
+@_admit_wire_before_runtime("resume")
 @native_runtime(repair=True)
 def resume_native(target: Path, request: dict[str, Any]) -> dict[str, Any]:
     request = validate_resume(request)
@@ -507,6 +565,7 @@ def resume_native(target: Path, request: dict[str, Any]) -> dict[str, Any]:
     return _public(context, resumed, replayed=True)
 
 
+@_admit_wire_before_runtime("decide")
 @native_runtime(repair=True)
 def decide_native(target: Path, request: dict[str, Any]) -> dict[str, Any]:
     from sciplot_core.workflow.rheology_tts_suite import _check_sources

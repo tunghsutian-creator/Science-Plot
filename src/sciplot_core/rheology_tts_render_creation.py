@@ -120,8 +120,10 @@ def _check_sources(spec: dict[str, Any]) -> None:
     for source in sources:
         if not isinstance(source, dict) or not {"path", "sha256"} <= source.keys():
             raise ValueError("Native creation source binding requires path and SHA256.")
-        path = Path(source["path"])
-        if not path.is_absolute() or not path.is_file() or file_sha256(path) != source["sha256"]:
+        from sciplot_core.foundation.source_locations import resolve_source_path as resolve_runtime_path
+        original = Path(source["path"])
+        path = resolve_runtime_path(original, expected_sha256=source["sha256"])
+        if not original.is_absolute() or not path.is_file() or file_sha256(path) != source["sha256"]:
             raise ValueError(f"Native creation source changed; preserve the saved documents: {path}")
 
 
@@ -144,15 +146,20 @@ def _same_json(left: object, right: object) -> bool:
     return canonical_json_sha256(left, allow_nan=False) == canonical_json_sha256(right, allow_nan=False)
 
 
+
+def _literal(path: Path) -> str:
+    from sciplot_core.foundation.source_locations import literal_source_path as literal_runtime_path
+    return literal_runtime_path(path) if path.exists() else str(path)
+
 def _check_receipt(state: dict[str, Any], out: Path, identifier: str, *, native_out: Path | None = None) -> None:
     receipt, artifacts, names = state["receipt"], state["artifacts"], _names(identifier)
     native_out = native_out or out
     if not isinstance(receipt, dict) or set(artifacts) != set(names.values()):
         raise ValueError(f"Incomplete sealed native creation receipt: {identifier}")
     if any(receipt.get(key) != value for key, value in {
-        "id": identifier, "spec_path": str(native_out / f"{identifier}.spec.json"),
-        "document": str(native_out / f"{identifier}.vsz"), "document_sha256": state["document_sha256"],
-        "export_dir": str(out), "native_audit_path": str(out / names["audit"]),
+        "id": identifier, "spec_path": _literal(native_out / f"{identifier}.spec.json"),
+        "document": _literal(native_out / f"{identifier}.vsz"), "document_sha256": state["document_sha256"],
+        "export_dir": _literal(out), "native_audit_path": _literal(out / names["audit"]),
     }.items()):
         raise ValueError(f"Native creation receipt bindings changed: {identifier}")
     exports = receipt.get("exports")
@@ -164,7 +171,7 @@ def _check_receipt(state: dict[str, Any], out: Path, identifier: str, *, native_
         raise ValueError(f"Invalid native creation export formats: {identifier}")
     for fmt in _FORMATS:
         item = by_format[fmt]
-        if item.get("path") != str(out / names[fmt]) or item.get("sha256") != artifacts[names[fmt]]:
+        if item.get("path") != _literal(out / names[fmt]) or item.get("sha256") != artifacts[names[fmt]]:
             raise ValueError(f"Native creation export binding changed: {identifier}")
     audit = receipt.get("native_audit")
     if (not isinstance(audit, dict) or audit.get("status") != "passed"
@@ -292,7 +299,7 @@ def _context(spec: dict[str, Any], out: Path) -> tuple[list[str], list[dict], li
     if len(set(name.casefold() for name in identifiers)) != len(identifiers):
         raise ValueError("Native creation figure names must be unique, including case.")
     plan_sha = canonical_json_sha256(spec, allow_nan=False)
-    bindings = [{"out": str(out), "plan_sha256": plan_sha, "figure_id": identifier}
+    bindings = [{"out": _literal(out), "plan_sha256": plan_sha, "figure_id": identifier}
                 for identifier in identifiers]
     return identifiers, bindings, [_sidecar(spec, figure) for figure in spec["figures"]]
 
@@ -332,15 +339,29 @@ def verify_native_creation(compiled_spec: dict[str, Any], out: Path) -> dict[str
         return check_native_continuation(compiled_spec, out, completed=True)
 
 
+
+def check_saved_native_creation(compiled_spec: dict[str, Any], out: Path) -> dict[str, Any]:
+    """Read-only proof that exports can finish without entering any Save branch."""
+    reject_symlink_path(out)
+    _check_sources(compiled_spec)
+    context = _context(compiled_spec, out)
+    states = _read_states(out, context)
+    if any(state is None for state, _missing in states):
+        raise ValueError("Every figure must already have an exact saved native receipt; no new Save is admitted.")
+    return {"compiled_sha256": canonical_json_sha256(compiled_spec, allow_nan=False),
+            "figures": [{"id": identifier, "document_sha256": state["document_sha256"],
+                         "spec_sha256": state["spec_sha256"]}
+                        for identifier, (state, _missing) in zip(context[0], states, strict=True) if state is not None]}
+
 def render_native_creation(
     spec: dict[str, Any], out: Path, *, resume: bool,
-    export_figure: Callable[..., dict[str, Any]],
+    export_figure: Callable[..., dict[str, Any]], export_only: bool = False,
 ) -> dict[str, Any]:
     """Create each VSZ at most once; durable uncertain Save states fail closed."""
     from sciplot_core.rheology_tts_native import save_native_figure
 
-    if not isinstance(resume, bool):
-        raise ValueError("Native creation resume must be a boolean.")
+    if type(resume) is not bool or type(export_only) is not bool or export_only and not resume:
+        raise ValueError("Native creation resume/export-only flags must be explicit booleans.")
     reject_symlink_path(out)
     out = out.resolve()
     context = identifiers, bindings, expected_specs = _context(spec, out)
@@ -351,6 +372,8 @@ def render_native_creation(
         if not resume and out.exists() and any(path.is_file() for path in out.rglob("*")):
             raise FileExistsError("Native creation evidence already exists; use explicit resume or exact saved export.")
         _read_states(out, context)
+        if export_only:
+            check_saved_native_creation(spec, out)
         out.mkdir(parents=True, exist_ok=True)
         for figure, binding, sidecar in zip(
             spec["figures"], bindings, expected_specs, strict=True,
@@ -362,6 +385,8 @@ def render_native_creation(
             _inventory(out, identifiers)
             state, missing = _read_state(out, identifier, binding, sidecar)
             if state is None:
+                if export_only:
+                    raise ValueError("Export-only continuation cannot create a missing native figure.")
                 # Durable saving precedes Save: a missing VSZ after this point
                 # is uncertainty, never permission to create the document again.
                 _new_json(spec_path, sidecar)

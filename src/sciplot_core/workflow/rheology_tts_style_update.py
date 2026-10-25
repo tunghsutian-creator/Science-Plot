@@ -185,56 +185,63 @@ def _prepare_style_preview(workspace: Path, directory: Path, *, presentation_pla
 
 def publication_updates(workspace: Path, manifest: dict, preview: dict, directory: Path,
                         *, native_display: bool = False, spec_targets: dict[str, Path] | None = None) -> dict:
-    """Build the complete finite write map; never install an active file."""
+    """Build exact audited byte writes; no mutable source survives this callback."""
     from sciplot_core.workflow.rheology_tts_suite import _figure_folder
+    from sciplot_core.workflow.native_suite_generation import candidate_bytes, json_bytes
 
     updated = deepcopy(manifest)
-    by_id = {d["id"]: d for d in updated["documents"]}
+    by_id = {document["id"]: document for document in updated["documents"]}
     delivery = delivery_path(manifest)
-    updates = []
-    current_exports = {Path(v["document"]).stem: v for v in updated.get("last_export", updated["native_result"]["figures"])}
-    for candidate in preview["candidates"]:
-        identifier = candidate["id"]
+    writes = {}
+    current_exports = {Path(item["document"]).stem: item for item in
+                       updated.get("last_export", updated["native_result"]["figures"])}
+    for item in preview["candidates"]:
+        identifier = item["id"]
         document = by_id[identifier]
-        receipt = deepcopy(candidate["export"])
+        receipt = deepcopy(item["export"])
         native = native_path(manifest, document)
-        updates.append((Path(receipt["document"]), native))
+        writes[native] = candidate_bytes(Path(receipt["document"]), receipt["document_sha256"])
         document["sha256"] = receipt["document_sha256"]
         receipt["document"] = literal_resource(native)
         receipt["export_dir"] = literal_directory(_figure_folder(delivery, identifier))
+        actual_exports = set()
         for exported in receipt["exports"]:
             source = Path(exported["path"])
             target = _figure_folder(delivery, identifier) / source.name
-            if literal_resource(target) not in document["exports"]:
-                raise ValueError("Candidate export target differs from the bound suite export inventory.")
-            updates.append((source, target))
-            exported["path"] = literal_resource(target)
+            literal = literal_resource(target)
+            if literal not in document["exports"] or target in actual_exports:
+                raise ValueError("Candidate export target differs from its exact bound inventory.")
+            writes[target] = candidate_bytes(source, exported["sha256"])
+            actual_exports.add(target)
+            exported["path"] = literal
+        # Native success/export pending retains old protected outputs. Complete
+        # exports must cover the entire expected set, never a plausible subset.
+        if receipt["exports"] and {literal_resource(path) for path in actual_exports} != set(document["exports"]):
+            raise ValueError("Candidate export set is incomplete.")
         receipt["native_audit"]["document"] = literal_resource(native)
-        audit_source = directory / "published_audits" / f"{identifier}.native-audit.json"
-        audit_target = _figure_folder(delivery, identifier) / audit_source.name
-        write_json(audit_source, receipt["native_audit"])
-        updates.append((audit_source, audit_target))
-        receipt["native_audit_path"] = literal_resource(audit_target)
+        audit = _figure_folder(delivery, identifier) / (identifier + ".native-audit.json")
+        writes[audit] = json_bytes(receipt["native_audit"])
+        receipt["native_audit_path"] = literal_resource(audit)
         current_exports[identifier] = receipt
-    updated["last_export"] = [current_exports[d["id"]] for d in updated["documents"]]
+    updated["last_export"] = [current_exports[item["id"]] for item in updated["documents"]]
     updated["presentation_revision"] = {"version": 1, "preview": "preview.json",
-        "contract_sha256": preview["contract_sha256"], "figures": preview["figures"],
+        "contract_sha256": preview["contract_sha256"], "figures": deepcopy(preview["figures"]),
         "presentation_plan": preview.get("presentation_plan", {}),
         "scope": "Changed shared-template fields and caller-supplied display labels/legend positions only; numeric analysis and unrelated native edits preserved."}
-    staged_manifest = directory / "applied_manifest.json"
-    write_json(staged_manifest, updated)
-    if not native_display:
-        updates.extend([(Path(preview["plan"]), workspace / "figure_plan.json"),
-                        (Path(preview["plan"]), delivery / "data/figure_plan.json")])
-    updates.extend([(staged_manifest, workspace / "suite.json"),
-                    (staged_manifest, delivery / "data/delivery_manifest.json")])
     if spec_targets:
         for receipt in updated["presentation_revision"]["figures"]:
             target = spec_targets[receipt["id"]]
-            updates.append((Path(receipt["spec_path"]), target))
+            writes[target] = candidate_bytes(Path(receipt["spec_path"]), receipt["spec_sha256"])
             receipt["spec_path"] = literal_resource(target)
-        write_json(staged_manifest, updated)
-    return {target: source.read_bytes() for source, target in updates}
+    if not native_display:
+        plan = Path(preview["plan"])
+        data = candidate_bytes(plan, preview["candidate_files"][str(plan)])
+        writes[workspace / "figure_plan.json"] = data
+        writes[delivery / "data/figure_plan.json"] = data
+    data = json_bytes(updated)
+    writes[workspace / "suite.json"] = data
+    writes[delivery / "data/delivery_manifest.json"] = data
+    return writes
 
 
 @native_runtime(repair=True)
@@ -257,7 +264,7 @@ def preview_suite_style(workspace: Path, *, presentation_plan: Path | None = Non
     specs = {item["id"]: workspace / "presentation_specs" / key.replace(":", "_") / (item["id"] + ".spec.json")
              for item in manifest["documents"]}
     writes.extend(specs.values())
-    command = command_for(store, "style", key, request=request, reads=reads, writes=writes)
+    command = command_for(store, "style", key, request=request, reads=reads, writes=writes, whole=True)
     app = ProjectCommands(store)
     with tempfile.TemporaryDirectory(prefix="sciplot-suite-style-") as temporary:
         directory = Path(temporary).resolve()
@@ -295,9 +302,24 @@ def preview_suite_style(workspace: Path, *, presentation_plan: Path | None = Non
                     if name.endswith(".png")], "next_step": "Inspect the frozen candidate images, then apply this preview."}
 
 
-@native_runtime(repair=True)
 def apply_suite_style(workspace: Path, preview_path: Path, *, native_display: bool = False,
                       _session_held: bool = False) -> dict:
+    from sciplot_core.project_commands import ProjectCommands
+    from sciplot_core.workflow.native_suite_runtime import read_bound_store
+    from sciplot_core.studio_core.source_update_commit import reject_symlink_path
+    store = read_bound_store(workspace)
+    reject_symlink_path(preview_path)
+    path = preview_path.expanduser().resolve()
+    if store is None or len([record for record in ProjectCommands(store).commands()
+            if record.get("review", {}).get("adapter") == "suite_style"
+            and record.get("artifact_paths", {}).get("preview.json") == str(path)]) != 1:
+        raise ValueError("Apply requires the exact sealed generation preview before any project recovery.")
+    return _apply_suite_style_admitted(workspace, path, native_display=native_display, _session_held=_session_held)
+
+
+@native_runtime(repair=True)
+def _apply_suite_style_admitted(workspace: Path, preview_path: Path, *, native_display: bool = False,
+                               _session_held: bool = False) -> dict:
     from sciplot_core.project_commands import ProjectCommand, ProjectCommands
     from sciplot_core.workflow.native_suite_generation import open_store
     from sciplot_core.workflow.rheology_tts_suite import _check_sources

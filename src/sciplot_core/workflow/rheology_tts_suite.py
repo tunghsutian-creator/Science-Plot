@@ -21,7 +21,22 @@ def _sha(path: Path) -> str:
 def _bound_sources(request: dict) -> list[dict]:
     paths = [Path(request["frequency_source"]).expanduser().resolve()]
     paths.extend(Path(s["tts_source"]).expanduser().resolve() for s in request["samples"] if s.get("tts_source"))
-    return [{"path": str(p), "sha256": _sha(p)} for p in dict.fromkeys(paths)]
+    from sciplot_core.project_store.runtime import resolve_runtime_path
+    store = current_store()
+    result = []
+    for path in dict.fromkeys(paths):
+        if store is None:
+            version = _sha(path)
+        else:
+            versions = {version for entries in store.snapshot()["sources"].values() for version, entry in entries.items()
+                        if entry.get("locator") == str(path)}
+            if len(versions) != 1:
+                raise ValueError("Analysis continuation requires its exact registered original source version.")
+            version = versions.pop()
+            if _sha(resolve_runtime_path(path, expected_sha256=version)) != version:
+                raise ValueError("The original analysis source version changed.")
+        result.append({"path": str(path), "sha256": version})
+    return result
 
 
 def _check_sources(sources: list[dict]) -> None:
@@ -32,9 +47,13 @@ def _check_sources(sources: list[dict]) -> None:
             raise ValueError(f"Original source changed: {path}; a new analysis is required.")
 
 
-def _launcher(path: Path, arguments: list[str]) -> None:
+def launcher_bytes(arguments: list[str]) -> bytes:
     command = [str(REPO_ROOT / "skill/scripts/sciplot"), *arguments]
-    path.write_text("#!/bin/zsh\nset -e\nexec " + " ".join(shlex.quote(v) for v in command) + "\n", encoding="utf-8")
+    return ("#!/bin/zsh\nset -e\nexec " + " ".join(shlex.quote(value) for value in command) + "\n").encode()
+
+
+def _launcher(path: Path, arguments: list[str]) -> None:
+    path.write_bytes(launcher_bytes(arguments))
     path.chmod(0o755)
 
 
@@ -123,20 +142,40 @@ def _publish(stage: Path, delivery: Path, spec: dict, native_result: dict) -> li
     return documents
 
 
-def create_suite(request_path: Path) -> dict:
+@native_runtime(repair=True, role="analysis_request")
+def create_suite(request_path: Path, *, resume: bool = False) -> dict:
     from sciplot_core.workflow.native_suite_creation import create_project
     request_path = request_path.expanduser().resolve()
     request = json.loads(request_path.read_text(encoding="utf-8"))
     from sciplot_core.workflow.rheology_tts_contract import validate_creation_request
     validate_creation_request(request)
     source = Path(request["frequency_source"]).expanduser().resolve()
-    delivery, workspace = _output_paths(source, request.get("out", source.parent / "TTS_SciPlot"))
-    return create_project(workspace, delivery, {"adapter": "analysis_native_suite", "request": request},
-        [*_bound_sources(request), {"path": str(request_path), "sha256": _sha(request_path)}], lambda candidate_workspace, candidate_delivery:
-        _create_suite_candidate(request_path, output_paths=(candidate_delivery, candidate_workspace)))
+    store = current_store()
+    delivery, workspace = ((store.locations["delivery"], store.root) if store is not None else
+        _output_paths(source, request.get("out", source.parent / "TTS_SciPlot")))
+    from sciplot_core.project_store.runtime import literal_runtime_path
+    request_file = {"path": literal_runtime_path(request_path), "sha256": _sha(request_path)}
+    sources = _bound_sources(request)
+    original = {"adapter": "analysis_native_suite", "request": request, "request_file": request_file,
+                "binding": {"workspace": str(workspace), "delivery": str(delivery), "sources": sources}}
+    if store is not None:
+        matching = [item["metadata"]["request"] for item in store.commands()
+                    if item.get("metadata", {}).get("request", {}).get("adapter") == "analysis_native_suite"
+                    and item["metadata"]["request"].get("request_file") == request_file
+                    and "continuation_of" not in item["metadata"]["request"]]
+        if len(matching) != 1 or matching[0]["request"] != request or matching[0]["binding"]["sources"] != sources:
+            raise ValueError("The analysis request/source binding differs from its original native command.")
+        original = matching[0]
+    return create_project(workspace, delivery, original,
+        [*sources, {"path": request_file["path"], "sha256": request_file["sha256"]}],
+        lambda candidate_workspace, candidate_delivery:
+        _create_suite_candidate(request_path, output_paths=(candidate_delivery, candidate_workspace)), resume=resume,
+        recover_prepare=lambda old_workspace, _old_delivery, new_workspace, new_delivery:
+        _create_suite_candidate(request_path, output_paths=(new_delivery, new_workspace), known_workspace=old_workspace))
 
 
-def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Path]) -> dict:
+def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Path],
+                            known_workspace: Path | None = None) -> dict:
     from sciplot_core.semantic_sources.rheology_tts import analyze_tts_request
     from sciplot_core.workflow.rheology_tts_figures import build_tts_figures
     from sciplot_core.rheology_tts_render import render_tts_figures
@@ -148,19 +187,60 @@ def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Pat
     if delivery.exists() or workspace.exists():
         raise FileExistsError("Delivery or evidence workspace already exists; re-export the saved suite or select a new name.")
     sources = _bound_sources(request)
-    analysis = analyze_tts_request({k: v for k, v in request.items()
-                                   if k not in {"out", "figure_layout", "expected_contract_sha256"}})
+    if known_workspace is None:
+        analysis = analyze_tts_request({k: v for k, v in request.items()
+                                       if k not in {"out", "figure_layout", "expected_contract_sha256"}})
+    else:
+        if json.loads((known_workspace / "request.json").read_bytes()) != request:
+            raise ValueError("The original analysis request changed; preserve its native effect.")
+        analysis = json.loads((known_workspace / "analysis.json").read_bytes())
     _check_sources(sources)
     layout = request.get("figure_layout", "legacy")
     spec = build_tts_figures(analysis, layout=layout)
     spec["source_binding"] = {"sources": sources, "request": request}
+    if known_workspace is not None and json.loads((known_workspace / "figure_plan.json").read_bytes()) != spec:
+        raise ValueError("The original analysis/spec binding changed; native reanalysis is refused.")
     workspace.mkdir(parents=True)
     write_json(workspace / "request.json", request)
     write_json(workspace / "analysis.json", analysis)
     write_json(workspace / "figure_plan.json", spec)
-    native_result = render_tts_figures(spec, workspace / "initial_render")
+    if known_workspace is None:
+        native_result = render_tts_figures(spec, workspace / "initial_render")
+    else:
+        from sciplot_core.rheology_tts_spec import compile_tts_spec
+        from sciplot_core.rheology_tts_render_creation import check_native_continuation
+        from sciplot_core.workflow.native_suite_creation import _remap
+        from sciplot_core.workflow.native_suite_generation import candidate_file
+        from sciplot_core.project_store.runtime import resolve_runtime_path, literal_runtime_path
+        original = known_workspace / "initial_render"
+        native_result = check_native_continuation(compile_tts_spec(spec), original, completed=True)
+        if native_result is None:
+            raise ValueError("The original native effect has no complete verified receipt.")
+        out = workspace / "initial_render"
+        out.mkdir()
+        for item in native_result["figures"]:
+            for key in ("document", "spec_path", "native_audit_path"):
+                path = resolve_runtime_path(item[key])
+                expected = item["document_sha256"] if key == "document" else _sha(path)
+                captured = candidate_file(path, expected)
+                target = out / path.name
+                target.write_bytes(captured.data)
+                target.chmod(captured.mode)
+            for exported in item["exports"]:
+                path = resolve_runtime_path(exported["path"], expected_sha256=exported["sha256"])
+                captured = candidate_file(path, exported["sha256"])
+                target = out / path.name
+                target.write_bytes(captured.data)
+                target.chmod(captured.mode)
+        native_result = _remap(native_result, ((Path(literal_runtime_path(original)), out),))
+        for item in native_result["figures"]:
+            write_json(Path(item["native_audit_path"]), item["native_audit"])
     for figure in native_result["figures"]:
         figure["spec_sha256"] = _sha(Path(figure["spec_path"]))
+    if known_workspace is None:
+        from sciplot_core.rheology_tts_render import native_result_received
+        from sciplot_core.rheology_tts_spec import compile_tts_spec
+        native_result_received(compile_tts_spec(spec), workspace / "initial_render", native_result)
     _check_sources(sources)
     delivery.mkdir()
     documents = _publish(workspace / "initial_render", delivery, spec, native_result)
@@ -187,7 +267,11 @@ def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Pat
     _launcher(delivery / "Update_exports.command", ["rheology", "export", str(workspace), "--json"])
     if layout == "separate_polymer_modulus":
         write_revision_methods(delivery, analysis, spec)
-    return {"status": "ready", "delivery": str(delivery), "workspace": str(workspace), "figures": len(documents),
+    from sciplot_core.studio_core.source_update_commit import file_inventory
+    from sciplot_core.workflow.native_suite_creation import creation_inventory
+    expected_files = creation_inventory(workspace, delivery, native_result, file_inventory(delivery),
+        {"request.json": request, "analysis.json": analysis, "figure_plan.json": spec})
+    return {"_candidate_files": expected_files, "status": "ready", "delivery": str(delivery), "workspace": str(workspace), "figures": len(documents),
             "manual_edit": str(delivery / "Open_in_SciPlot.command"), "native_result": native_result,
             "scientific_scope": manifest["scientific_scope"]}
 
@@ -270,7 +354,7 @@ def _export_saved_suite(workspace: Path, *, figure_ids: tuple[str, ...] | None =
     if command is None:
         reads, writes = suite_paths(workspace, manifest, figure_ids)
         command = command_for(store, "native_export", key, request=request, reads=reads, writes=writes,
-                              figure_id=figure_ids[0] if figure_ids and len(figure_ids) == 1 else None)
+                              figure_ids=figure_ids, whole=figure_ids is None)
     with tempfile.TemporaryDirectory(prefix="sciplot-native-export-") as temporary:
         record = app.execute(command, lambda: _prepare_saved_export(workspace, figure_ids=figure_ids, store=store, stage=Path(temporary).resolve()))
     from copy import deepcopy
@@ -328,7 +412,7 @@ def _prepare_saved_export(workspace: Path, *, figure_ids: tuple[str, ...] | None
     native_results = export_tts_documents([
         (native_path(manifest, document), stage / "exports" / document["id"], by_id[document["id"]])
         for document in documents])
-    results, updates, candidates = [], [], {}
+    results, updates, candidates, generated_audits = [], [], {}, {}
     for document, result in zip(documents, native_results, strict=True):
         path = native_path(manifest, document)
         identifier = document["id"]
@@ -351,6 +435,8 @@ def _prepare_saved_export(workspace: Path, *, figure_ids: tuple[str, ...] | None
         audit_source = stage / "published_audits" / f"{identifier}.native-audit.json"
         audit_target = folder / audit_source.name
         result["native_audit"]["document"] = literal_resource(path)
+        from sciplot_core.workflow.native_suite_generation import json_bytes
+        generated_audits[audit_target] = json_bytes(result["native_audit"])
         write_json(audit_source, result["native_audit"])
         updates.append((audit_source, audit_target))
         candidates.update(snapshot([audit_source]))
@@ -370,12 +456,15 @@ def _prepare_saved_export(workspace: Path, *, figure_ids: tuple[str, ...] | None
     write_json(staged_manifest, manifest)
     candidates.update(snapshot([staged_manifest]))
     updates.extend([(staged_manifest, manifest_path), (staged_manifest, visible_manifest)])
-    from sciplot_core.workflow.native_suite_generation import mutation
+    from sciplot_core.workflow.native_suite_generation import candidate_bytes, json_bytes, mutation
     # Consume the finite private candidates inside the same command publication.
     check_snapshot(candidates, label="suite export candidates")
     result = {"status": "ready", "delivery": str(delivery), "figures": len(results), "exact_saved_export": True,
             "selected_figures": [document["id"] for document in documents],
             "exports": [exported for result in results for exported in result["exports"]],
             "transform_execution": {"executed": [], "reused": []}}
-    return mutation(store, dict((target, source) for source, target in updates), result,
-                    sources=manifest["sources"])
+    writes = {target: candidate_bytes(source, candidates[str(source.resolve())]) for source, target in updates}
+    writes.update(generated_audits)
+    writes[manifest_path] = json_bytes(manifest)
+    writes[visible_manifest] = json_bytes(manifest)
+    return mutation(store, writes, result, sources=manifest["sources"])

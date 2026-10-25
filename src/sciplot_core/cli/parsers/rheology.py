@@ -16,6 +16,7 @@ def register_rheology_commands(subparsers: Any) -> None:
     plot.add_argument("--full", action="store_true", help="Include full native creation evidence; the default receipt links its saved manifest.")
     create = commands.add_parser("tts", help="Create a source-bound TTS figure suite.")
     create.add_argument("--request", type=Path, required=True)
+    create.add_argument("--resume", action="store_true", help="Continue the exact saved command without repeating completed native saves or analysis.")
     create.add_argument("--json", action="store_true")
     create.add_argument("--full", action="store_true", help="Include full native creation evidence; the default receipt links its saved manifest.")
     export = commands.add_parser("export", help="Export exact saved TTS suite documents.")

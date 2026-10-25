@@ -8,7 +8,7 @@ import pytest
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.rheology_tts_render import render_tts_figures
-from sciplot_core.workflow.rheology_tts_style_storage import publish_files, snapshot
+from sciplot_core.workflow.rheology_tts_style_storage import snapshot
 from sciplot_core.workflow.rheology_tts_style_update import apply_suite_style, preview_suite_style
 from sciplot_core.workflow.rheology_tts_suite import _compiled_figures, _publish, export_suite
 from sciplot_core.workflow.rheology_tts_tables import write_json
@@ -99,50 +99,68 @@ def test_stale_or_modified_preview_is_rejected_without_delivery_changes(tmp_path
 
 
 def test_partial_publication_rolls_back_all_applied_files(tmp_path, monkeypatch):
-    from sciplot_core.workflow import rheology_tts_style_storage as storage
+    """Before head nothing changes; after head readers block until full repair."""
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.project_store import FileProjectStore, ProjectRecoveryRequired, state
 
-    old = [tmp_path / "one", tmp_path / "two"]
-    new = [tmp_path / "new_one", tmp_path / "new_two"]
-    for index, (a, b) in enumerate(zip(old, new, strict=True)):
-        a.write_text(f"old {index}")
-        b.write_text(f"new {index}")
-    baseline = snapshot(old)
-    replace = storage.os.replace
-    calls = 0
-
-    def fail_second(source, target):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise OSError("simulated publication failure")
-        return replace(source, target)
-
-    monkeypatch.setattr(storage.os, "replace", fail_second)
-    with pytest.raises(OSError, match="simulated"):
-        publish_files(list(zip(new, old, strict=True)), tmp_path / "backup", expected=baseline,
-                      candidates=snapshot(new), allowed_roots=(tmp_path,))
-    assert snapshot(old) == baseline
+    for boundary in ("after_generation", "after_projection"):
+        project = tmp_path / boundary
+        project.mkdir()
+        old = [project / "one", project / "two"]
+        new = {"one": b"new 0", "two": b"new 1"}
+        for index, path in enumerate(old):
+            path.write_text(f"old {index}")
+        baseline = snapshot(old)
+        store = FileProjectStore(project)
+        initial = store.snapshot(import_legacy=True)
+        app = ProjectCommands(store)
+        command = ProjectCommand.create("style", "same-style", project_id=initial["project_id"],
+            expected_generation=initial["generation"], read_set={name: initial["files"][name]["sha256"] for name in new},
+            write_set=list(new), request={"same": "reviewed style"})
+        calls = []
+        def prepare(calls=calls, new=new):
+            calls.append("prepare")
+            return ProjectMutation(new, {"status": "ready", "numerical_refit": False})
+        def fail(name, boundary=boundary):
+            if name == boundary:
+                raise OSError("simulated publication failure")
+        monkeypatch.setattr(state, "boundary", fail)
+        with pytest.raises(OSError, match="simulated"):
+            app.execute(command, prepare)
+        if boundary == "after_generation":
+            assert snapshot(old) == baseline
+            assert store.snapshot()["generation"] == initial["generation"]
+        else:
+            with pytest.raises(ProjectRecoveryRequired):
+                store.snapshot()  # A mixed derived view cannot be read as current.
+        monkeypatch.setattr(state, "boundary", lambda _name: None)
+        store.recover()
+        result = app.resume(command)
+        assert result["phase"] == "complete" and calls == ["prepare"]
+        assert {path.name: path.read_bytes() for path in old} == new
+        assert not list(project.rglob("journal.json"))
 
 
 def test_candidate_change_during_staging_cannot_publish_unreviewed_bytes(tmp_path, monkeypatch):
-    from sciplot_core.workflow import rheology_tts_style_storage as storage
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.workflow.native_suite_generation import candidate_bytes
 
     source, target = tmp_path / "candidate", tmp_path / "visible"
     source.write_text("reviewed candidate")
     target.write_text("original")
     before, reviewed = snapshot([target]), snapshot([source])
-    copy = storage.shutil.copy2
-
-    def change_candidate(a, b, **kwargs):
-        if Path(a) == source:
-            source.write_text("unreviewed mutation")
-        return copy(a, b, **kwargs)
-
-    monkeypatch.setattr(storage.shutil, "copy2", change_candidate)
-    with pytest.raises(ValueError, match="changed during staging"):
-        publish_files([(source, target)], tmp_path / "backup", expected=before,
-                      candidates=reviewed, allowed_roots=(tmp_path,))
+    store = FileProjectStore(tmp_path)
+    initial = store.snapshot(import_legacy=True)
+    command = ProjectCommand.create("style", "reviewed-style", project_id=initial["project_id"],
+        expected_generation=initial["generation"], read_set={"visible": initial["files"]["visible"]["sha256"]},
+        write_set=["visible"], request={"reviewed_sha256": reviewed[str(source)]})
+    source.write_text("unreviewed mutation")
+    with pytest.raises(ValueError, match="changed after"):
+        ProjectCommands(store).preview(command, lambda: ProjectMutation(
+            {"visible": candidate_bytes(source, reviewed[str(source)])}, {"status": "ready"}))
     assert snapshot([target]) == before
+    assert store.query(command.key)["phase"] == "unknown"
 
 
 @pytest.mark.comprehensive

@@ -101,15 +101,18 @@ def test_prepared_resume_reuses_saved_native_after_each_creation_failure(tmp_pat
     elif stage == "manifest":
         _interrupt(monkeypatch, creation, "write_json", predicate=lambda path, _: path.name == "delivery_manifest.json")
     else:
-        _interrupt(monkeypatch, creation, "atomic_write_json",
-                   predicate=lambda path, value: path.name == creation.CHECKPOINT and value["phase"] == "completed")
+        from sciplot_core.project_commands import ProjectCommands
+        _interrupt(monkeypatch, ProjectCommands, "decide", after=True,
+                   predicate=lambda self, command, **kwargs: command.kind.value == "create")
     with pytest.raises(OSError, match="injected creation interruption"):
         plot_prepared_suite(request_path)
     saved = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in workspace.rglob("*.vsz")}
-    assert delivery.exists() is (stage == "installed_checkpoint")
+    assert (delivery / "editable/Custom.vsz").exists() is (stage == "installed_checkpoint")
+    assert (workspace / "suite.json").exists() is (stage == "installed_checkpoint")
+    assert not (workspace / creation.CHECKPOINT).exists()
     with pytest.raises(creation.PreparedCreationBlocked) as error:
         plot_prepared_suite(request_path)
-    assert error.value.repair["action"] == ("export_saved_suite" if delivery.exists() else "resume_prepared_creation")
+    assert error.value.repair["action"] == ("export_saved_suite" if (workspace / "suite.json").exists() else "resume_prepared_creation")
     result = plot_prepared_suite(request_path, resume=True)
     assert result["status"] == "ready" and result["resumed"] is True
     assert native_stub["saves"] == 1
@@ -130,11 +133,14 @@ def test_prepared_resume_reuses_saved_native_after_each_creation_failure(tmp_pat
 def test_creation_rechecks_bound_evidence_after_atomic_install(tmp_path, monkeypatch, native_stub, drift):
     request_path, request, plan = _request(tmp_path)
     workspace, delivery = _paths(tmp_path)
-    install = creation._install_delivery
+    from sciplot_core.project_commands import ProjectCommands
+    decide = ProjectCommands.decide
     changed = []
 
-    def install_then_change(candidate, destination):
-        install(candidate, destination)
+    def install_then_change(self, command, **kwargs):
+        result = decide(self, command, **kwargs)
+        if command.kind.value != "create":
+            return result
         target = {"source": Path(plan["source_binding"]["sources"][0]["path"]),
                   "plan": Path(request["prepared_plan"]), "native": workspace / "initial_render/Custom.vsz",
                   "spec": workspace / "initial_render/Custom.spec.json",
@@ -142,13 +148,18 @@ def test_creation_rechecks_bound_evidence_after_atomic_install(tmp_path, monkeyp
                   "delivery": delivery / "editable/Custom.vsz"}[drift]
         target.write_bytes(target.read_bytes() + b" ")
         changed.append((target, target.read_bytes()))
+        return result
 
-    monkeypatch.setattr(creation, "_install_delivery", install_then_change)
+    monkeypatch.setattr(ProjectCommands, "decide", install_then_change)
     with pytest.raises(ValueError):
         plot_prepared_suite(request_path)
     assert delivery.is_dir() and native_stub["saves"] == 1
     assert all(path.read_bytes() == content for path, content in changed)
-    assert json.loads((workspace / creation.CHECKPOINT).read_text())["phase"] == "publication_ready"
+    from sciplot_core.project_store import FileProjectStore
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    publication = next(item for item in store.commands() if item["metadata"]["kind"] == "create")
+    assert publication["phase"] == "complete"  # commit and returned readiness remain independent
+    assert not (workspace / creation.CHECKPOINT).exists()
 
 
 @pytest.mark.parametrize("drift", ["prepared_bytes", "source", "contract", "unknown_file", "symlink", "request_out", "checkpoint"])
@@ -180,7 +191,7 @@ def test_resume_refuses_changed_or_unknown_bindings_without_native_writes(tmp_pa
     before = {p: p.read_bytes() for p in workspace.rglob("*") if p.is_file()}
     with pytest.raises((ValueError, creation.PreparedCreationBlocked)):
         plot_prepared_suite(request_path, resume=True)
-    assert native_stub["saves"] == 0 and not delivery.exists()
+    assert native_stub["saves"] == 0 and not list(delivery.iterdir())
     assert all(p.read_bytes() == data for p, data in before.items())
 
 
@@ -200,18 +211,28 @@ def test_existing_unknown_partial_is_never_adopted(tmp_path, native_stub, resume
 def test_atomic_install_never_replaces_empty_directory_created_concurrently(tmp_path, monkeypatch, native_stub):
     request_path, _, _ = _request(tmp_path)
     workspace, delivery = _paths(tmp_path)
-    install = creation._install_delivery
-
-    def race(candidate, destination):
-        destination.mkdir()
-        install(candidate, destination)
-
-    monkeypatch.setattr(creation, "_install_delivery", race)
-    with pytest.raises(FileExistsError):
+    from sciplot_core.project_store import state
+    from sciplot_core.project_store.errors import ProjectRecoveryRequired
+    swapped = []
+    def race(name):
+        if name == "before_head" and (workspace / "suite.json").exists() is False:
+            # No nested store lock: the files-to-publish appear in the private
+            # workspace only after native saving; earlier source seals skip.
+            if not list((workspace / ".sciplot_store/native_work").glob("*/candidate/workspace/suite.json")):
+                return
+            if not swapped:
+                original = delivery.with_name("original-empty-root")
+                delivery.rename(original)
+                delivery.mkdir()
+                swapped.append(original)
+    monkeypatch.setattr(state, "boundary", race)
+    with pytest.raises(ProjectRecoveryRequired):
         plot_prepared_suite(request_path)
     assert delivery.is_dir() and not list(delivery.iterdir())
-    assert list((workspace / "publication_stages").glob("*/delivery/editable/Custom.vsz"))
-    with pytest.raises(ValueError, match="Visible delivery already exists"):
+    assert swapped[0].is_dir() and not list(swapped[0].iterdir())
+    assert list((workspace / ".sciplot_store/native_work").glob("*/candidate/workspace/initial_render/Custom.vsz"))
+    monkeypatch.setattr(state, "boundary", lambda _name: None)
+    with pytest.raises(ValueError):
         plot_prepared_suite(request_path, resume=True)
     assert not list(delivery.iterdir()) and native_stub["saves"] == 1
 
@@ -240,20 +261,38 @@ def test_cli_resume_is_explicit_and_preserves_compact_default(tmp_path, monkeypa
     assert calls == [(path, True)] and json.loads(capsys.readouterr().out)["resumed"] is True
 
 
+def _seed_legacy_creation(request_path, workspace, delivery):
+    """Construct historical v1 bytes explicitly, outside new-command admission."""
+    from sciplot_core.rheology_tts_spec import compile_tts_spec
+    from sciplot_core.rheology_tts_style import prepare_tts_presentation
+    from sciplot_core.workflow.rheology_tts_contract import rheology_capabilities
+    request = json.loads(request_path.read_text())
+    plan = Path(request["prepared_plan"])
+    spec = prepare_tts_presentation(json.loads(plan.read_text()))
+    spec["source_binding"]["prepared_plan"] = {"path": str(plan), "sha256": file_sha256(plan),
+        "authority": "External AI processing; local plotting preserves the supplied numeric coordinates."}
+    compiled = compile_tts_spec(spec)
+    binding = creation._creation_binding(request, spec, compiled, delivery, workspace,
+                                         rheology_capabilities()["contract_sha256"])
+    from native_suite_legacy_creation_fixture import _create_locked
+    return _create_locked(request_path, request, spec, compiled, delivery, workspace, binding, resume=False)
+
+
 def _stop_at_phase(tmp_path, monkeypatch, phase):
     from sciplot_core import rheology_tts_render
 
     request_path, _, _ = _request(tmp_path)
     workspace, delivery = _paths(tmp_path)
+    import native_suite_legacy_creation_fixture as legacy
     seams = {"initialized": (rheology_tts_render, "render_tts_figures"),
-             "native_complete": (creation, "write_plot_tables"),
-             "publication_ready": (creation, "_install_delivery")}
+             "native_complete": (legacy, "write_plot_tables"),
+             "publication_ready": (legacy, "_install_delivery")}
     if phase == "completed":
-        plot_prepared_suite(request_path)
+        _seed_legacy_creation(request_path, workspace, delivery)
     else:
         _interrupt(monkeypatch, *seams[phase])
         with pytest.raises(OSError, match="injected creation interruption"):
-            plot_prepared_suite(request_path)
+            _seed_legacy_creation(request_path, workspace, delivery)
     assert json.loads((workspace / creation.CHECKPOINT).read_text())["phase"] == phase
     return request_path, workspace, delivery
 
@@ -379,9 +418,148 @@ def test_initialized_with_native_work_requires_original_input_evidence(tmp_path,
     workspace, delivery = _paths(tmp_path)
     _interrupt(monkeypatch, rheology_tts_render, "render_tts_figures", after=True)
     with pytest.raises(OSError):
-        plot_prepared_suite(request_path)
+        _seed_legacy_creation(request_path, workspace, delivery)
     (workspace / missing).unlink()
     before = file_inventory(workspace)
     with pytest.raises(ValueError, match="input evidence is missing"):
         plot_prepared_suite(request_path, resume=True)
     assert file_inventory(workspace) == before and not delivery.exists() and native_stub["saves"] == 1
+
+
+@pytest.mark.parametrize("closure", ["missing", "unclosed"])
+def test_unknown_native_creation_requires_recorded_child_closure(tmp_path, monkeypatch, native_stub, closure):
+    from sciplot_core import rheology_tts_render
+    from sciplot_core.project_commands.errors import ProjectCommandUnknown
+    from sciplot_core.project_store import FileProjectStore
+    request_path, _, _ = _request(tmp_path)
+    workspace, delivery = _paths(tmp_path)
+    append = FileProjectStore.append_native_failure
+    def preserve_unknown(self, *args, **kwargs):
+        if closure == "unclosed":
+            return append(self, *args, **{**kwargs, "owned_invocation_closed": False})
+        return None  # synthetic abrupt parent loss before failure-fact persistence
+    monkeypatch.setattr(FileProjectStore, "append_native_failure", preserve_unknown)
+    _interrupt(monkeypatch, rheology_tts_render, "render_tts_figures", after=True)
+    with pytest.raises(OSError, match="injected creation interruption"):
+        plot_prepared_suite(request_path)
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    parent = next(item for item in store.commands() if item["metadata"]["kind"] == "native_create")
+    assert parent["phase"] == "unknown" and native_stub["saves"] == 1
+    before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in Path(parent["native_workspace_path"]).rglob("*") if p.is_file()}
+    calls = len(native_stub["calls"])
+    with pytest.raises(ProjectCommandUnknown):
+        plot_prepared_suite(request_path, resume=True)
+    assert len(native_stub["calls"]) == calls and native_stub["saves"] == 1
+    assert not list(delivery.iterdir()) and store.query(parent["command_id"])["phase"] == "unknown"
+    assert all((p.read_bytes(), p.stat().st_mtime_ns) == value for p, value in before.items())
+
+
+@pytest.mark.parametrize("drift", ["native", "spec", "audit", "unknown"])
+def test_known_native_creation_recovery_rejects_changed_receipt_without_save(tmp_path, monkeypatch, native_stub, drift):
+    from sciplot_core import rheology_tts_render
+    from sciplot_core.project_store import FileProjectStore
+    request_path, _, _ = _request(tmp_path)
+    workspace, delivery = _paths(tmp_path)
+    _interrupt(monkeypatch, rheology_tts_render, "render_tts_figures", after=True)
+    with pytest.raises(OSError):
+        plot_prepared_suite(request_path)
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    parent = next(item for item in store.commands() if item["metadata"]["kind"] == "native_create")
+    out = Path(parent["native_workspace_path"]) / "workspace/initial_render"
+    target = out / {"native": "Custom.vsz", "spec": "Custom.spec.json", "audit": "Custom.native-audit.json", "unknown": "foreign.txt"}[drift]
+    target.write_bytes(target.read_bytes() + b" " if target.exists() else b"unknown owner")
+    before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in out.rglob("*") if p.is_file()}
+    calls = len(native_stub["calls"])
+    with pytest.raises(ValueError):
+        plot_prepared_suite(request_path, resume=True)
+    assert native_stub["saves"] == 1 and len(native_stub["calls"]) == calls
+    assert not list(delivery.iterdir()) and store.query(parent["command_id"])["phase"] == "unknown"
+    assert all((p.read_bytes(), p.stat().st_mtime_ns) == value for p, value in before.items())
+
+
+def test_pending_creation_cold_resume_uses_registered_original_request_and_native_fact(tmp_path, monkeypatch, native_stub):
+    from sciplot_core import rheology_tts_render_creation
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.foundation.json_hashing import canonical_json_sha256
+    original = tmp_path / "original"
+    original.mkdir()
+    request_path, _, _ = _request(original)
+    workspace, delivery = _paths(original)
+    _interrupt(monkeypatch, creation, "write_plot_tables", after=True)
+    with pytest.raises(OSError):
+        plot_prepared_suite(request_path)
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    parent = next(item for item in store.commands() if item["metadata"]["kind"] == "native_create")
+    assert parent["phase"] == "unknown" and store.query(parent["command_id"] + ":native-fact")["phase"] == "complete"
+    bundle = store.export_bundle(tmp_path / "bundle")
+    moved = FileProjectStore.import_bundle(bundle, tmp_path / "relocated")
+    original.rename(tmp_path / "offline-original")
+    source = parent["metadata"]["request"]["request_file"]
+    local_request = moved.resolve_path(source["path"], expected_sha256=source["sha256"])
+    assert not request_path.exists() and local_request.is_relative_to(moved.root)
+    expected_native = deepcopy(native_stub["result"])
+    expected_spec = parent["metadata"]["request"]["binding"]["compiled_sha256"]
+    def read_only_complete(compiled, out, *, completed=False):
+        assert completed and canonical_json_sha256(compiled) == expected_spec
+        assert file_inventory(out) == native_stub["inventory"]
+        return deepcopy(expected_native)
+    # The workflow fixture's original paths are deliberately offline. Validate
+    # exact imported bytes at the actual directory; this is a synthetic renderer
+    # proof, not evidence of native kernel/runtime execution.
+    monkeypatch.setattr(rheology_tts_render_creation, "check_native_continuation", read_only_complete)
+    calls = len(native_stub["calls"])
+    result = plot_prepared_suite(local_request, resume=True)
+    assert result["status"] == "ready" and native_stub["saves"] == 1 and len(native_stub["calls"]) == calls
+    assert (moved.locations["delivery"] / "editable/Custom.vsz").is_file()
+    assert moved.query(parent["command_id"])["phase"] == "unknown"
+    manifest = json.loads(moved.read_bytes("suite.json"))
+    assert manifest["sources"] == parent["metadata"]["request"]["binding"]["sources"]
+    assert json.loads(moved.read_bytes("initial_render/Custom.spec.json"))["source_binding"] == json.loads(
+        Path(moved.query(parent["command_id"] + ":native-fact")["artifact_paths"]["Custom.spec.json"]).read_bytes())["source_binding"]
+
+
+def test_legacy_analysis_creation_resume_does_not_repeat_analysis_or_native_save(tmp_path, monkeypatch, native_stub):
+    from sciplot_core.semantic_sources import rheology_tts as analysis_owner
+    from sciplot_core.workflow import rheology_tts_figures as figures, rheology_tts_suite as suite
+    from sciplot_core.rheology_tts_style import prepare_tts_presentation
+    _, _, plan = _request(tmp_path)
+    spec = prepare_tts_presentation(plan)
+    source = plan["source_binding"]["sources"][0]["path"]
+    request = {"version": 1, "frequency_source": source, "reference_temperature_C": 210,
+        "frequency_temperature_C": 210, "out": str(tmp_path / "Figures"),
+        "samples": [{"sample_id": "fixture", "polymer": "HDPE", "udc_wt_percent": 0,
+                     "frequency_test": "explicit synthetic fixture"}]}
+    request_path = tmp_path / "analysis-request.json"
+    _write_json(request_path, request)
+    analyses = []
+    def analyze(value):
+        analyses.append(deepcopy(value))
+        return {"fixture": "Fixed analysis result; not a scientific runtime test"}
+    monkeypatch.setattr(analysis_owner, "analyze_tts_request", analyze)
+    monkeypatch.setattr(figures, "build_tts_figures", lambda *_a, **_k: deepcopy(spec))
+    monkeypatch.setattr(figures, "write_analysis_tables", lambda _value, root: (root / "analysis.csv").write_text("fixed fixture"))
+    monkeypatch.setattr(suite, "write_methods", lambda path, _value: path.write_text("fixed methods"))
+    _interrupt(monkeypatch, suite, "write_plot_tables", after=True)
+    with pytest.raises(OSError):
+        suite.create_suite(request_path)
+    workspace, delivery = _paths(tmp_path)
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in workspace.rglob("*.vsz")}
+    calls = len(native_stub["calls"])
+    result = suite.create_suite(request_path, resume=True)
+    assert result["status"] == "ready" and (delivery / "editable/Custom.vsz").is_file()
+    assert len(analyses) == 1 and native_stub["saves"] == 1 and len(native_stub["calls"]) == calls
+    assert all((path.read_bytes(), path.stat().st_mtime_ns) == value for path, value in before.items())
+    assert suite.create_suite(request_path, resume=True)["status"] == "ready"
+    assert len(analyses) == 1 and native_stub["saves"] == 1 and len(native_stub["calls"]) == calls
+
+
+def test_legacy_tts_resume_cli_is_explicit(tmp_path, monkeypatch, capsys):
+    from sciplot_core.cli.dispatch.rheology import dispatch_rheology
+    from sciplot_core.cli.parsers import build_parser
+    from sciplot_core.workflow import rheology_tts_suite as suite
+    calls = []
+    monkeypatch.setattr(suite, "create_suite", lambda request, *, resume: calls.append((request, resume)) or {"status": "ready"})
+    request = tmp_path / "same-request.json"
+    args = build_parser().parse_args(["rheology", "tts", "--request", str(request), "--resume", "--json"])
+    assert dispatch_rheology(args) == 0 and calls == [(request, True)]
+    assert json.loads(capsys.readouterr().out)["status"] == "ready"

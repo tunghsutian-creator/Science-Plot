@@ -17,7 +17,7 @@ from sciplot_core.workflow.native_suite_runtime import current_store, native_run
 from sciplot_core.project_store.runtime import literal_runtime_path, resolve_runtime_path
 
 
-@native_runtime(repair=True)
+@native_runtime(repair=True, role="prepared_request")
 def plot_prepared_suite(request_path: Path, *, resume: bool = False) -> dict:
     """The AI owns all values and roles. This route only validates and draws them."""
     from sciplot_core.rheology_tts_spec import compile_tts_spec
