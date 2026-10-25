@@ -7,6 +7,7 @@ from .contracts import AuthorityMode, NormalizedCommand
 from typing import Any
 
 from sciplot_core.plot_ir import create_managed_document
+from sciplot_core.host_grants import admit_document_executors
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.project_lifecycle.context import external_project_session
 
@@ -24,18 +25,26 @@ from sciplot_core.project_lifecycle.context import commit, digest, load_head, re
 @with_table_reads
 def create_managed(request: dict[str, Any], backend: PlotBackend, *, location: ManagedCreationLocation) -> dict[str, Any]:
     root, output, identifier = location.root, location.output, location.plot_id
+    path = root / "managed-creation.json"
+    initial = None
+    if not exists(path):
+        # New requests cannot allocate a journal or reserve execution by declaring
+        # their own executable, permissions or alternate host configuration.
+        initial = create_managed_document(request["template_definition"], request["data_binding"],
+                                          plot_id=identifier, theme=request.get("theme"))
+        executors = admit_document_executors(initial, request.get("scientific_executors", {}))
+        initial = resolved_metadata(initial, rule_id=request["rule_id"], executors=executors)
     prepare_namespace(root)
     with external_project_session(root):
-        path = root / "managed-creation.json"
         if exists(path):
             state = read(path)
             if state["request_hash"] != digest(request):
                 raise EngineError("document_idempotency_conflict", "This creation key belongs to a different managed request.")
         else:
             require_empty_output(output)
-            document = create_managed_document(request["template_definition"], request["data_binding"],
-                                               plot_id=identifier, theme=request.get("theme"))
-            document = resolved_metadata(document, rule_id=request["rule_id"], executors=request.get("scientific_executors", {}))
+            if initial is None:
+                raise EngineError("document_state_changed", "The existing creation state disappeared; inspect it rather than starting new work.")
+            document = initial
             admit_current_units(root, document)
             state = {"request_hash": digest(request), "request": request, "document": document,
                      "output": str(output), "phase": "resolving",

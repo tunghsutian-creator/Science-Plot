@@ -44,8 +44,11 @@ def resolve_science(root: Path, document: dict[str, Any]) -> tuple[dict[str, Any
             raise EngineError("managed_transform_nondeterministic", "A deterministic executor returned different output for the same sealed request.")
         write(path, record)
 
-    result = resolve_transforms(document, load_sources(document, marker["rule_id"]), cache=cache,
-                                external_executors=registry, before_execute=before_execute, on_result=on_result)
+    from sciplot_core.host_grants import execution_context
+
+    with execution_context(document["scientific"]["data_sources"]):
+        result = resolve_transforms(document, load_sources(document, marker["rule_id"]), cache=cache,
+                                    external_executors=registry, before_execute=before_execute, on_result=on_result)
     from sciplot_core.plot_grammar.current_view import is_current_view, resolve_current_view
     from sciplot_core.plot_ir.figure_document import figure_spec, is_figure, store_spec
 

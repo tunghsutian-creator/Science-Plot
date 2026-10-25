@@ -72,7 +72,8 @@ def prepare_update(document: dict[str, Any], request: dict[str, Any], *, root: P
                 before, after = prepare_source_revision(result, target, value, root=root)
             else:
                 before = _scientific(result, target, prop, value)
-                after = deepcopy(value)
+                after = (deepcopy(result["scientific"]["provenance"]["managed"]["executors"][target.removeprefix("executor:")])
+                         if prop == "executor.registration" else deepcopy(value))
         if canonical_json_sha256(before, allow_nan=False) != canonical_json_sha256(after, allow_nan=False):
             diff.append({"target": target, "property": prop, "before": before,
                          "after": after, "risk": "scientific" if science else "presentation"})
@@ -98,17 +99,19 @@ def _scientific(document: dict[str, Any], target: str, prop: str, value: Any) ->
         return before
     if prop == "executor.registration":
         from sciplot_core.plot_transforms import ExternalExecutor
+        from sciplot_core.host_grants import admit_registration
 
         registry = scientific["provenance"]["managed"].get("executors", {})
         identifier = target.removeprefix("executor:")
         if target != "executor:" + identifier or identifier not in registry:
             raise EngineError("document_unknown_target", "Name an existing executor:<executor_id>.")
-        executor = ExternalExecutor.from_dict(value)
-        if executor.descriptor(identifier) != value["identity"]:
+        registration = admit_registration(document, identifier, value)
+        executor = ExternalExecutor.from_dict(registration)
+        if executor.descriptor(identifier) != registration["identity"]:
             raise EngineError("managed_executor_identity", "The new executor definition must retain its stable executor ID.")
-        before, registry[identifier] = deepcopy(registry[identifier]), deepcopy(value)
+        before, registry[identifier] = deepcopy(registry[identifier]), deepcopy(registration)
         for node in scientific["transforms"]:
             if node["executor"].get("id") == identifier:
-                node["executor"] = deepcopy(value["identity"])
+                node["executor"] = deepcopy(registration["identity"])
         return before
     raise EngineError("managed_update_unsupported", "This managed scientific update is not supported.")

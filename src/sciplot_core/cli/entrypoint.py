@@ -22,6 +22,7 @@ from sciplot_core.cli.parser_errors import ArgumentParseError, requests_json
 from sciplot_core.cli.dispatch.rheology import dispatch_rheology
 from sciplot_core.cli.dispatch.plots import dispatch_plot
 from sciplot_core.cli.dispatch.composition import dispatch_composition
+from sciplot_core.cli.dispatch.host import dispatch_host
 
 
 def main(
@@ -39,6 +40,7 @@ def main(
         return 2
     try:
         handlers = (
+            lambda: dispatch_host(args),
             lambda: dispatch_composition(args),
             lambda: dispatch_plot(args),
             lambda: dispatch_rheology(args),

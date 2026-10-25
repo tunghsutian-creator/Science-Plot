@@ -11,10 +11,18 @@ from sciplot_core._paths import REPO_ROOT
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_transforms import ExternalExecutor
 from managed_plot_helpers import patch, request_for_source
+from sciplot_core.host_grants import EXECUTE_TRANSFORM, HostRegistry, SourceScope, using_host_registry
+
+
+@pytest.fixture
+def trusted_host(tmp_path):
+    registry = HostRegistry(tmp_path.resolve() / "explicit-host/grants.json")
+    with using_host_registry(registry):
+        yield registry
 
 
 @pytest.mark.comprehensive
-def test_same_filename_changed_script_invalidates_only_dependent_managed_plot(tmp_path):
+def test_same_filename_changed_script_invalidates_only_dependent_managed_plot(tmp_path, trusted_host):
     request = request_for_source(tmp_path)
     script = tmp_path / "scientific_pipeline.py"
     shutil.copyfile(REPO_ROOT / "tests/fixtures/managed_normalize_executor.py", script)
@@ -25,6 +33,8 @@ def test_same_filename_changed_script_invalidates_only_dependent_managed_plot(tm
     request["data_binding"]["transforms"] = [{"id": "external-A", "kind": "external", "inputs": ["A"],
         "output": "A-normalized", "parameters": {"factor": .1}, "executor": executor.descriptor("fixed-normalizer"),
         "determinism": "deterministic"}]
+    scope = SourceScope.local_file("A", Path(request["data_binding"]["data_sources"][0]["path"]))
+    trusted_host.grant("fixed-normalizer", executor.to_dict("fixed-normalizer"), [scope], action=EXECUTE_TRANSFORM)
     service = PlotService()
     try:
         created = service.create(request)
@@ -41,6 +51,7 @@ def test_same_filename_changed_script_invalidates_only_dependent_managed_plot(tm
         assert service.describe(unrelated_root)["status"] == "current"
         registration = executor.to_dict("fixed-normalizer")
         assert registration["identity"]["content_hash"] != old_registration["identity"]["content_hash"]
+        trusted_host.grant("fixed-normalizer", registration, [scope], action=EXECUTE_TRANSFORM)
         updated = service.patch(root, patch(before, "executor-version-two", "executor.registration", registration,
                                             "executor:fixed-normalizer", scientific=True))
         assert updated["ready_to_use"] and updated["scientific_hash"] != before["scientific_hash"], updated

@@ -12,6 +12,7 @@ import pytest
 from sciplot_core.plot_document import DocumentError, seal_document
 from sciplot_core.plot_transforms import ExternalExecutor, builtin_executor, execute_node, executor_files, ordered_nodes, resolve_transforms, validate_node
 from test_plot_ir import managed_example, resolved_example
+from host_grants_helpers import trusted_external
 
 
 def builtin(kind, parameters, *, output="output", input_id="A"):
@@ -116,19 +117,22 @@ def test_same_filename_new_script_bytes_change_executor_output_and_cache_key(tmp
     executor, node = _external(tmp_path)
     registered = executor.to_dict("fixed")
     loaded = ExternalExecutor.from_dict(registered)
-    first, key = execute_node(node, datasets, external_executors={"fixed": loaded})
-    assert first["columns"]["column:1"]["values"] == [4, None, 8]
-    previous_files = executor_files([node], {"fixed": loaded})
-    changed, new_node = _external(tmp_path, 3)
-    with pytest.raises(DocumentError) as error:
-        execute_node(node, datasets, external_executors={"fixed": changed})
-    assert error.value.reason_code == "transform_executor_changed"
-    with pytest.raises(DocumentError):
-        ExternalExecutor.from_dict(registered)
-    second, new_key = execute_node(new_node, datasets, external_executors={"fixed": changed})
-    assert new_key != key and new_node["executor"]["content_hash"] != node["executor"]["content_hash"]
-    assert second["columns"]["column:1"]["values"] == [6, None, 12]
-    assert previous_files[str(executor.script)] != executor_files([new_node], {"fixed": changed})[str(executor.script)]
+    with trusted_external(loaded, datasets, tmp_path) as (host, source):
+        first, key = execute_node(node, datasets, external_executors={"fixed": loaded})
+        assert first["columns"]["column:1"]["values"] == [4, None, 8]
+        previous_files = executor_files([node], {"fixed": loaded})
+        changed, new_node = _external(tmp_path, 3)
+        with pytest.raises(DocumentError) as error:
+            execute_node(node, datasets, external_executors={"fixed": changed})
+        assert error.value.reason_code == "transform_executor_changed"
+        with pytest.raises(DocumentError):
+            ExternalExecutor.from_dict(registered)
+        from sciplot_core.host_grants import EXECUTE_TRANSFORM
+        host.grant("fixed", changed.to_dict("fixed"), [source], action=EXECUTE_TRANSFORM)
+        second, new_key = execute_node(new_node, datasets, external_executors={"fixed": changed})
+        assert new_key != key and new_node["executor"]["content_hash"] != node["executor"]["content_hash"]
+        assert second["columns"]["column:1"]["values"] == [6, None, 12]
+        assert previous_files[str(executor.script)] != executor_files([new_node], {"fixed": changed})[str(executor.script)]
 
 
 def test_external_contract_rejects_source_snippets_and_undeclared_parameters(tmp_path):
@@ -136,7 +140,7 @@ def test_external_contract_rejects_source_snippets_and_undeclared_parameters(tmp
     _, _, datasets = managed_example()
     with pytest.raises(DocumentError):
         validate_node({**node, "source_code": "print('unapproved')"})
-    with pytest.raises(DocumentError):
+    with trusted_external(executor, datasets, tmp_path), pytest.raises(DocumentError):
         execute_node({**node, "parameters": {"code": "print('unapproved')"}}, datasets, external_executors={"fixed": executor})
 
 
@@ -146,7 +150,7 @@ def test_external_timeout_never_returns_or_reuses_an_uncertain_result(tmp_path):
     executor = ExternalExecutor(executor.executable, executor.script, executor.parameter_schema, timeout_seconds=.05)
     node["executor"] = executor.descriptor("fixed")
     _, _, datasets = managed_example()
-    with pytest.raises(DocumentError) as error:
+    with trusted_external(executor, datasets, tmp_path), pytest.raises(DocumentError) as error:
         execute_node(node, datasets, external_executors={"fixed": executor})
     assert error.value.reason_code == "transform_external_timeout"
 
@@ -182,7 +186,7 @@ def test_external_timeout_uses_canonical_owned_working_directory(tmp_path, monke
     executor = ExternalExecutor(executor.executable, executor.script, executor.parameter_schema, timeout_seconds=.05)
     node["executor"] = executor.descriptor("fixed")
     _, _, datasets = managed_example()
-    with pytest.raises(DocumentError) as error:
+    with trusted_external(executor, datasets, tmp_path), pytest.raises(DocumentError) as error:
         execute_node(node, datasets, external_executors={"fixed": executor})
     assert error.value.reason_code == "transform_external_timeout"
     assert len(calls) == 1 and not (directory / "response.json").exists()
