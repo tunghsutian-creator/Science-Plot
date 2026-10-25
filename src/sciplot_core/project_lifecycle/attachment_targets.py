@@ -13,6 +13,7 @@ from .targets import ImportTarget, ManagedCreationLocation, OpenTarget, StoredTa
 from .errors import EngineError
 from .legacy_namespace import known_head
 from .store_composition import existing_store, tracked_namespace_store
+from .paths import canonical_path
 
 
 def _store(repository: ComposedProjectRepository, target: Path | None = None) -> FileProjectStore | None:
@@ -124,9 +125,15 @@ def attached_managed_creation(repository: ComposedProjectRepository,
     existing = index["attachments"].get(identity)
     if existing is None:
         root = store.root / ".sciplot_semantic" / identity
-        output = Path(request["out"]).expanduser().absolute() if "out" in request else store.root / STORE / "semantic-derived" / identity / "output"
-        if not output.is_relative_to(store.root):
-            raise EngineError("managed_output_conflict", "Attached creation requires a project-owned disposable output location.")
+        default_output = store.root / STORE / "semantic-derived" / identity / "output"
+        try:
+            output = canonical_path(Path(request["out"])) if "out" in request else default_output
+        except ValueError as exc:
+            raise EngineError("managed_output_conflict", "An attached output cannot follow a symbolic alias.") from exc
+        protected = (store.root / ".sciplot_semantic", store.root / STORE, store.root / ".sciplot_resources")
+        if (output == store.root or not output.is_relative_to(store.root)
+                or output != default_output and any(output == path or output.is_relative_to(path) for path in protected)):
+            raise EngineError("managed_output_conflict", "Attached output must be separate from canonical semantic state and project storage.")
         plot_id = "plot:" + digest([snapshot["project_id"], key])[:24]
         existing = entry_for(store, key=key, figure_id=key, origin=root, plot_id=plot_id, managed_output=str(output))
     attachment = Attachment(store, existing)
