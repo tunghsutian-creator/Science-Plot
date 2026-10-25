@@ -45,7 +45,7 @@ def stop():
     print('holding', flush=True)
     signal.pause()
 
-atomic, link, replace = storage.atomic_write_json, storage.os.link, storage.os.replace
+atomic, link, replace = storage._write_stage, storage.os.link, storage.os.replace
 def stage(path, payload):
     result = atomic(path, payload)
     if fault == 'staging':
@@ -74,7 +74,7 @@ def publish_replace(src, dst, *args, **kwargs):
     if selected and fault == 'after_replace':
         stop()
     return result
-storage.atomic_write_json = stage
+storage._write_stage = stage
 storage.os.link = publish_link
 storage.os.replace = publish_replace
 save_document(document, target, expected_revision=expected)
@@ -175,7 +175,7 @@ def test_swapped_fence_cannot_steal_live_writer_lease(tmp_path, monkeypatch, rep
     original = target.read_bytes()
     fence = tmp_path / f".{target.name}.assembly-lock"
     retained = tmp_path / "retained-fence"
-    atomic = storage.atomic_write_json
+    atomic = storage._write_stage
 
     def swap(path, payload):
         result = atomic(path, payload)
@@ -189,7 +189,7 @@ def test_swapped_fence_cannot_steal_live_writer_lease(tmp_path, monkeypatch, rep
         assert captured.value.code == "assembly_file_busy"
         return result
 
-    monkeypatch.setattr(storage, "atomic_write_json", swap)
+    monkeypatch.setattr(storage, "_write_stage", swap)
     with pytest.raises(AssemblyError) as captured:
         updated = apply_operations(document, [{"op": "set_page", "width_mm": 200, "height_mm": 140}])
         save_document(updated, target, expected_revision=0)
@@ -265,7 +265,7 @@ def test_parent_path_swap_does_not_publish_into_replacement_directory(tmp_path, 
     save_document(document, target)
     original = target.read_bytes()
     moved = tmp_path / "moved"
-    atomic = storage.atomic_write_json
+    atomic = storage._write_stage
 
     def swap(path, payload):
         result = atomic(path, payload)
@@ -277,7 +277,7 @@ def test_parent_path_swap_does_not_publish_into_replacement_directory(tmp_path, 
         assert captured.value.code == "assembly_file_busy"
         return result
 
-    monkeypatch.setattr(storage, "atomic_write_json", swap)
+    monkeypatch.setattr(storage, "_write_stage", swap)
     with pytest.raises(AssemblyError) as captured:
         updated = apply_operations(document, [{"op": "set_page", "width_mm": 200, "height_mm": 140}])
         save_document(updated, target, expected_revision=0)
@@ -285,6 +285,32 @@ def test_parent_path_swap_does_not_publish_into_replacement_directory(tmp_path, 
     assert (moved / "figure.json").read_bytes() == original
     assert target.read_text() == "foreign replacement directory"
     assert not [path for path in moved.glob(".*assembly-*") if path.is_dir()]
+
+
+def test_parent_swap_before_stage_write_never_writes_into_replacement_directory(tmp_path, monkeypatch):
+    directory = tmp_path / "layout"
+    directory.mkdir()
+    target = directory / "figure.json"
+    document = new_document()
+    save_document(document, target)
+    original = target.read_bytes()
+    moved = tmp_path / "moved"
+    atomic = storage._write_stage
+
+    def swap_before_write(path, payload):
+        directory.rename(moved)
+        directory.mkdir()
+        (directory / "foreign.txt").write_text("preserve replacement directory")
+        return atomic(path, payload)
+
+    monkeypatch.setattr(storage, "_write_stage", swap_before_write)
+    with pytest.raises(AssemblyError) as captured:
+        updated = apply_operations(document, [{"op": "set_page", "width_mm": 200, "height_mm": 140}])
+        save_document(updated, target, expected_revision=0)
+    assert captured.value.code == "assembly_file_conflict"
+    assert (moved / "figure.json").read_bytes() == original
+    assert list(directory.iterdir()) == [directory / "foreign.txt"]
+    assert (directory / "foreign.txt").read_text() == "preserve replacement directory"
 
 
 def test_alias_load_and_save_share_the_same_revision_baseline(tmp_path):

@@ -18,7 +18,7 @@ import secrets
 import stat
 from typing import Any
 
-from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.foundation.json_io import write_json_object
 from sciplot_core.foundation.writer_lease import (
     DirectoryWriterLease,
     WriterLeaseBusy,
@@ -126,14 +126,14 @@ def _fence_snapshot(lease: DirectoryWriterLease, name: str) -> _Snapshot:
 
 
 @contextmanager
-def _save_stage(lease: DirectoryWriterLease, target: Path) -> Iterator[tuple[Path, int]]:
+def _save_stage(lease: DirectoryWriterLease, target: Path) -> Iterator[tuple[str, int]]:
     """Keep cleanup and publication attached to the directory we actually own."""
     name = f".{target.name}.assembly-{secrets.token_hex(16)}"
     os.mkdir(name, mode=0o700, dir_fd=lease.fd)
     descriptor = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=lease.fd)
     opened = os.fstat(descriptor)
     try:
-        yield target.parent / name, descriptor
+        yield name, descriptor
     finally:
         try:
             os.unlink("document.json", dir_fd=descriptor)
@@ -148,6 +148,16 @@ def _save_stage(lease: DirectoryWriterLease, target: Path) -> Iterator[tuple[Pat
             pass
 
 
+def _write_stage(stage_fd: int, document: dict[str, Any]) -> str:
+    """Create complete private bytes without resolving any stage pathname."""
+    name = "document.json"
+    descriptor = os.open(name, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
+                         0o600, dir_fd=stage_fd)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        write_json_object(handle, document)
+    return name
+
+
 def _ensure_fence(lease: DirectoryWriterLease, target: Path, name: str) -> _Snapshot:
     try:
         return _fence_snapshot(lease, name)
@@ -155,7 +165,7 @@ def _ensure_fence(lease: DirectoryWriterLease, target: Path, name: str) -> _Snap
         pass
     # Stage complete bytes before the exclusive link. An old writer can win
     # this race, in which case its unknown marker is preserved and refused.
-    with _save_stage(lease, target) as (stage, stage_fd):
+    with _save_stage(lease, target) as (_stage, stage_fd):
         descriptor = os.open("document.json", os.O_CREAT | os.O_EXCL | os.O_WRONLY,
                              0o600, dir_fd=stage_fd)
         with os.fdopen(descriptor, "wb") as handle:
@@ -182,9 +192,9 @@ def save(document: dict[str, Any], path: Path, *, expected_revision: int | None)
             fence = _ensure_fence(lease, target, fence_name)
             before = _check_existing(target, document, expected_revision)
             with _save_stage(lease, target) as (stage, stage_fd):
-                staged = atomic_write_json(stage / "document.json", document)
+                staged = _write_stage(stage_fd, document)
                 lease.verify()
-                stage_stat = os.stat(stage.name, dir_fd=lease.fd, follow_symlinks=False)
+                stage_stat = os.stat(stage, dir_fd=lease.fd, follow_symlinks=False)
                 if (stage_stat.st_dev, stage_stat.st_ino) != (os.fstat(stage_fd).st_dev, os.fstat(stage_fd).st_ino):
                     raise AssemblyError("assembly_file_conflict", "The layout save stage changed.")
                 try:
@@ -196,7 +206,7 @@ def save(document: dict[str, Any], path: Path, *, expected_revision: int | None)
                 if before is None:
                     # Exclusive link never replaces a destination created meanwhile.
                     try:
-                        os.link(staged.name, target.name, src_dir_fd=stage_fd,
+                        os.link(staged, target.name, src_dir_fd=stage_fd,
                                 dst_dir_fd=lease.fd, follow_symlinks=False)
                     except FileExistsError as exc:
                         raise AssemblyError("assembly_file_conflict", "A layout appeared at the new save destination.") from exc
@@ -205,7 +215,7 @@ def save(document: dict[str, Any], path: Path, *, expected_revision: int | None)
                     if current_snapshot != before:
                         raise AssemblyError("assembly_file_conflict", "The layout changed while the save was prepared.")
                     lease.verify()
-                    os.replace(staged.name, target.name, src_dir_fd=stage_fd, dst_dir_fd=lease.fd)
+                    os.replace(staged, target.name, src_dir_fd=stage_fd, dst_dir_fd=lease.fd)
             lease.verify()
             _current, snapshot = _read(target)
             lease.verify()

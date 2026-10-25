@@ -158,14 +158,14 @@ def test_validation_and_atomic_stage_failure_preserve_original_bytes(tmp_path, m
     def fail_stage(*args):
         raise OSError("disk unavailable")
 
-    atomic = storage.atomic_write_json
-    monkeypatch.setattr(storage, "atomic_write_json", fail_stage)
+    atomic = storage._write_stage
+    monkeypatch.setattr(storage, "_write_stage", fail_stage)
     with pytest.raises(AssemblyError) as captured:
         save_document(changed(document), target, expected_revision=0)
     assert captured.value.code == "assembly_file_write"
     assert target.read_bytes() == before
     assert list(tmp_path.glob(".*assembly*")) == [tmp_path / f".{target.name}.assembly-lock"]
-    monkeypatch.setattr(storage, "atomic_write_json", atomic)
+    monkeypatch.setattr(storage, "_write_stage", atomic)
     save_document(changed(document), target, expected_revision=0)
     assert load_document(target)["revision"] == 1
 
@@ -174,7 +174,7 @@ def test_foreign_edit_during_staging_refuses_before_replace(tmp_path, monkeypatc
     target = tmp_path / "figure.json"
     document = new_document()
     save_document(document, target)
-    atomic = storage.atomic_write_json
+    atomic = storage._write_stage
     foreign = {**document, "revision": 5}
 
     def change_while_staging(path, payload):
@@ -182,7 +182,7 @@ def test_foreign_edit_during_staging_refuses_before_replace(tmp_path, monkeypatc
         target.write_text(json.dumps(foreign))
         return result
 
-    monkeypatch.setattr(storage, "atomic_write_json", change_while_staging)
+    monkeypatch.setattr(storage, "_write_stage", change_while_staging)
     with pytest.raises(AssemblyError, match="while the save"):
         save_document(changed(document), target, expected_revision=0)
     assert json.loads(target.read_text()) == foreign
@@ -190,14 +190,14 @@ def test_foreign_edit_during_staging_refuses_before_replace(tmp_path, monkeypatc
 
 def test_new_destination_created_during_staging_is_preserved(tmp_path, monkeypatch):
     target = tmp_path / "figure.json"
-    atomic = storage.atomic_write_json
+    atomic = storage._write_stage
 
     def create_while_staging(path, payload):
         result = atomic(path, payload)
         target.write_text("foreign content")
         return result
 
-    monkeypatch.setattr(storage, "atomic_write_json", create_while_staging)
+    monkeypatch.setattr(storage, "_write_stage", create_while_staging)
     with pytest.raises(AssemblyError, match="appeared"):
         save_document(new_document(), target)
     assert target.read_text() == "foreign content"
@@ -207,7 +207,7 @@ def test_simultaneous_writer_lease_refuses_without_waiting(tmp_path, monkeypatch
     target = tmp_path / "figure.json"
     document = new_document()
     save_document(document, target)
-    atomic = storage.atomic_write_json
+    atomic = storage._write_stage
     started, release = threading.Event(), threading.Event()
 
     def wait_stage(path, payload):
@@ -215,7 +215,7 @@ def test_simultaneous_writer_lease_refuses_without_waiting(tmp_path, monkeypatch
         assert release.wait(5)
         return atomic(path, payload)
 
-    monkeypatch.setattr(storage, "atomic_write_json", wait_stage)
+    monkeypatch.setattr(storage, "_write_stage", wait_stage)
     with ThreadPoolExecutor(max_workers=1) as pool:
         first = pool.submit(save_document, changed(document), target, 0)
         assert started.wait(5)
