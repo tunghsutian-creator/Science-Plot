@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from sciplot_core.foundation.source_locations import resolve_source_path
 
 from sciplot_core.source_coverage.artifacts import (
     _result_path_list,
@@ -85,18 +86,19 @@ def verify_rendered_mapping_source_coverage(
         zip(spec_paths, document_paths, strict=True),
         start=1,
     ):
-        if not spec_path.is_file():
+        if not resolve_source_path(spec_path).is_file():
             raise FileNotFoundError(
                 f"Mapped render Veusz specification not found: {spec_path}"
             )
-        if not document_path.is_file():
+        if not resolve_source_path(document_path).is_file():
             raise FileNotFoundError(
                 f"Mapped render Veusz document not found: {document_path}"
             )
+        audit_options: dict[str, Any] = {} if check_presentation else {"check_presentation": False}
         document_audit, spec = _audit_exact_document_data(
             document_path=document_path,
             spec_path=spec_path,
-            **({} if check_presentation else {"check_presentation": False}),
+            **audit_options,
         )
         template = str(spec.get("template") or result.get("template") or "")
         templates.add(template)

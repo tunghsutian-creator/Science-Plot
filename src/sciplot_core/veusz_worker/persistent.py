@@ -55,7 +55,8 @@ def serve() -> int:
             if len(raw) > MAX_REQUEST_BYTES or not raw.endswith(b"\n"):
                 return 2
             try:
-                request_id, argv = validate_request(decode(raw))
+                request = decode(raw)
+                request_id, argv = validate_request(request)
             except (ValueError, UnicodeError):
                 return 2
             with _capture() as (output, error):
@@ -64,7 +65,10 @@ def serve() -> int:
                         app = _application()
                     from sciplot_core.veusz_worker.cli import main
 
-                    code = main(argv)
+                    from sciplot_core.project_store.worker_binding import worker_project_runtime
+
+                    with worker_project_runtime(request.get("project_runtime"), argv):
+                        code = main(argv)
                 except SystemExit as exc:
                     code = exc.code if type(exc.code) is int else 1
                 except CategoricalPresentationConflict as exc:

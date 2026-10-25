@@ -7,6 +7,7 @@ import stat
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.writer_lease import exclusive_directory_lease
 from sciplot_core.plot_document.errors import DocumentError
@@ -82,7 +83,7 @@ class HostRegistry:
         if executor.descriptor(identifier) != registration["identity"] or action != EXECUTE_TRANSFORM or not sources:
             denied("host_grant_invalid", "Grant one exact executor, supported action and nonempty source scope.")
         for source in sources:
-            if file_sha256(Path(source.path)) != source.sha256:
+            if file_sha256(resolve_source_path(source.path, expected_sha256=source.sha256, source_id=source.source_id)) != source.sha256:
                 denied("host_executor_source_denied", "The explicitly selected host source changed before granting.")
         self._parent(create=True)
         with exclusive_directory_lease(self.path.parent):
@@ -109,6 +110,6 @@ class HostRegistry:
         if not sources or any(source not in allowed for source in sources):
             denied("host_executor_source_denied", "This executor is not host-granted for every actual input source.")
         for source in sources:
-            if file_sha256(Path(source.path)) != source.sha256:
+            if file_sha256(resolve_source_path(source.path, expected_sha256=source.sha256, source_id=source.source_id)) != source.sha256:
                 denied("host_executor_source_denied", "A granted source's current bytes do not match its explicit scope.")
         return deepcopy(grant["registration"])

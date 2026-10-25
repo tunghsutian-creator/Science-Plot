@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 from sciplot_core.data_mapping.source_projection import verified_mapping_source_groups
 from sciplot_core.figure_plan import resolved_figure_plan_from_payload
 from sciplot_core.source_coverage.file_snapshots import (
@@ -39,7 +40,7 @@ def registered_task_snapshot_sources(
 
     plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
     additions: list[Path] = []
-    root = project_dir.expanduser().resolve()
+    root = Path(literal_source_path(project_dir))
     for document in documents:
         spec_path = (
             document.with_name("spec.json")
@@ -79,7 +80,7 @@ def registered_task_snapshot_sources(
         if not isinstance(input_value, str) or not input_value:
             raise ValueError("Registered task table has no exact source input.")
         input_path = Path(input_value).expanduser()
-        if input_path.resolve() != input_path or not input_path.is_file():
+        if input_path.resolve() != input_path or not resolve_source_path(input_path).is_file():
             raise ValueError("Registered task table input is not a canonical file.")
         groups = verified_mapping_source_groups(
             {"data_mapping_application": data_mapping_application}, replicates=True,
@@ -151,7 +152,7 @@ def _verify_registered_mapping_sources(
     # rows/null masks, mapped bytes and the composite adapter input. Display
     # labels or an unverified source_artifacts list cannot grant source access.
     execution = load_data_mapping_execution(application["execution"])
-    seed = json.loads(Path(execution["request_seed"]).read_text())
+    seed = json.loads(resolve_source_path(execution["request_seed"]).read_text())
     effective_input = Path(execution["effective_input"]).resolve()
     if execution.get("handoff_allowed") is not True or any((
         input_path != Path(seed["input"]).resolve(),

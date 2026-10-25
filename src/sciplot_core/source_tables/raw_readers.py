@@ -5,10 +5,11 @@ from __future__ import annotations
 import csv
 from io import StringIO
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from sciplot_core.foundation.text_decoding import decode_text_file
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.source_tables.read_session import read_table_once
 
 
@@ -17,7 +18,7 @@ def _read_delimited(path: Path, **kwargs: Any) -> pd.DataFrame:
     kwargs.setdefault("engine", "python")
     kwargs.setdefault("dtype", object)
     try:
-        return pd.read_csv(StringIO(decode_text_file(path)), **kwargs)
+        return cast(pd.DataFrame, pd.read_csv(StringIO(decode_text_file(path)), **kwargs))
     except (csv.Error, pd.errors.ParserError) as exc:
         raise ValueError(f"Failed to parse {path}") from exc
 
@@ -67,13 +68,14 @@ def read_raw_table(
 ) -> pd.DataFrame:
     """Read CSV/TSV/TXT/XLSX without assigning a header row."""
 
-    table_path = Path(path)
+    table_path = resolve_source_path(path)
     return read_table_once(table_path, ("raw_table", sheet_name, preserve_na_tokens),
                            lambda: _read_table(table_path, sheet_name, preserve_na_tokens=preserve_na_tokens), content_only=True)
 
 
 def read_sheet_names(path: Path) -> list[str]:
     """Reuse only byte-bound workbook structure within the active read session."""
+    path = resolve_source_path(path)
     def read() -> pd.DataFrame:
         with pd.ExcelFile(path) as workbook:
             return pd.DataFrame({"name": workbook.sheet_names})

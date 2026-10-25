@@ -17,7 +17,7 @@ _SELECTED: ContextVar[SourceResolver | None] = ContextVar("sciplot_selected_sour
 
 
 @contextmanager
-def source_location_scope(resolver: SourceResolver) -> Iterator[None]:
+def source_location_scope(resolver: SourceResolver | None) -> Iterator[None]:
     """Only trusted host composition installs a resolver; no path infers one."""
     token = _SELECTED.set(resolver)
     try:

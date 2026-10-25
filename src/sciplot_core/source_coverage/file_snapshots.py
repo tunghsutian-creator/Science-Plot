@@ -8,6 +8,7 @@ import stat
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 
 
 def _canonical_sha256(value: object) -> str:
@@ -28,7 +29,8 @@ def _stat_identity(value: os.stat_result) -> dict[str, int]:
 
 def stable_file_snapshot(path: Path, *, label: str) -> dict[str, Any]:
     """Capture exact bytes and file identity, rejecting concurrent source changes."""
-    resolved = path.expanduser().resolve()
+    literal = Path(literal_source_path(path))
+    resolved = resolve_source_path(path).expanduser().resolve()
     flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
@@ -57,7 +59,7 @@ def stable_file_snapshot(path: Path, *, label: str) -> dict[str, Any]:
     if len(payload) != identity["size"]:
         raise ValueError(f"{label} size changed while it was captured: {resolved}")
     return {
-        "path": resolved,
+        "path": literal,
         "identity": identity,
         "bytes": payload,
         "sha256": digest,

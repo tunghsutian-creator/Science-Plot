@@ -117,11 +117,12 @@ class PersistentWorker:
         if hasattr(self, "_process"):
             self._stop(graceful=True)
 
-    def run(self, command: list[str], *, timeout: float = 120, check: bool = False) -> subprocess.CompletedProcess[str]:
+    def run(self, command: list[str], *, timeout: float = 120, check: bool = False,
+            project_runtime: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         if command[:3] != [sys.executable, "-m", "sciplot_core.veusz_worker"]:
             raise ValueError("Only the existing native worker entry point may use this session.")
         request_id = uuid4().hex
-        request = {"id": request_id, "argv": command[3:]}
+        request = {"id": request_id, "argv": command[3:], **({"project_runtime": project_runtime} if project_runtime is not None else {})}
         validate_request(request)
         encoded = encode(request)
         if len(encoded) > MAX_REQUEST_BYTES or not 0 < timeout <= 3600:

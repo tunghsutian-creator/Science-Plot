@@ -115,6 +115,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _execute(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+    from sciplot_core.foundation.source_locations import resolve_source_path
+
+    # Only explicit read arguments are relocated. Outputs and all serialized
+    # scientific paths inside saved specs stay untouched.
+    for name in ("document", "spec", "request", "ir", "previous", "current", "previous_spec",
+                 "current_spec", "changes", "operations", "audit_spec"):
+        value = getattr(args, name, None)
+        if value is not None:
+            setattr(args, name, resolve_source_path(value))
+    if hasattr(args, "documents"):
+        args.documents = [resolve_source_path(path) for path in args.documents]
     if args.command == "font-families":
         from sciplot_core.veusz_worker.font_catalog import font_families
 
@@ -200,7 +211,16 @@ def main(argv: list[str] | None = None) -> int:
     from sciplot_core.plot_document import DocumentError
 
     try:
-        return _execute(argv)
+        arguments = sys.argv[1:] if argv is None else argv
+        if arguments[:1] == ["--project-runtime"]:
+            from sciplot_core.project_store.worker_binding import worker_project_runtime
+
+            if len(arguments) < 5 or arguments[3] != "--":
+                raise ValueError("Invalid closed native project locator arguments.")
+            reference = {"path": arguments[1], "sha256": arguments[2]}
+            with worker_project_runtime(reference, arguments[4:]):
+                return _execute(arguments[4:])
+        return _execute(arguments)
     except DocumentError as exc:
         traceback.print_exc()
         print(json.dumps({"kind": "sciplot_worker_failure", "version": 1,

@@ -35,8 +35,12 @@ def encode(value: dict[str, Any]) -> bytes:
 
 
 def validate_request(value: dict[str, Any]) -> tuple[str, list[str]]:
-    if set(value) != {"id", "argv"} or not isinstance(value["id"], str) or not 1 <= len(value["id"]) <= 64:
+    if set(value) not in ({"id", "argv"}, {"id", "argv", "project_runtime"}) or not isinstance(value["id"], str) or not 1 <= len(value["id"]) <= 64:
         raise ValueError("Invalid internal request identity.")
+    if "project_runtime" in value:
+        from sciplot_core.project_store.worker_binding import validate_binding_reference
+
+        validate_binding_reference(value["project_runtime"])
     argv = value["argv"]
     if (not isinstance(argv, list) or not 1 <= len(argv) <= 128
             or not all(isinstance(arg, str) and len(arg) <= 8192 and "\x00" not in arg for arg in argv)

@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_locations import resolve_source_path
 
 from sciplot_core.source_coverage.file_snapshots import (
     _stable_file_snapshot,
@@ -31,9 +32,10 @@ def _current_source_artifact(
         raise ValueError(f"{label} has no source path.")
     path = Path(path_value).expanduser().resolve()
     digest = _required_sha256(sha256_value, label=f"{label} sha256")
-    if not path.is_file():
+    actual = resolve_source_path(path, expected_sha256=digest)
+    if not actual.is_file():
         raise FileNotFoundError(f"{label} is not a current file: {path}")
-    if file_sha256(path) != digest:
+    if file_sha256(actual) != digest:
         raise ValueError(f"{label} changed after rendering: {path}")
     return {"path": str(path), "sha256": digest}
 
