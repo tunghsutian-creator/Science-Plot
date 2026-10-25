@@ -131,6 +131,52 @@ def test_immediate_commit_keeps_native_before_after_artifacts_in_same_owner():
     assert port.calls == ["reserve", "begin", "publish"]
 
 
+def prepared_command(mutation):
+    return ProjectCommand.create("semantic_record", "store-a", project_id="project-a",
+        expected_generation="generation-a", read_set={"head.json": None}, write_set=["head.json"],
+        request={"prepared_digest": mutation.prepared_digest})
+
+
+def test_prepared_storage_publication_never_enters_native_execution():
+    port = MemoryPort()
+    mutation = ProjectMutation({"head.json": b"fixed-json"}, {})
+    result = ProjectCommands(port).publish_prepared(prepared_command(mutation), mutation)
+    assert result["phase"] == "complete"
+    assert "begin" not in port.calls
+    assert port.calls == ["recover", "reserve", "stage", "decide", "publish_staged"]
+
+
+def test_prepared_storage_resumes_exact_staged_bytes_after_lost_stage_reply():
+    class LostStageReplyPort(MemoryPort):
+        def stage(self, *args, **kwargs):
+            result = super().stage(*args, **kwargs)
+            if self.calls.count("stage") == 1:
+                raise RuntimeError("lost stage reply")
+            return result
+    port = LostStageReplyPort()
+    mutation = ProjectMutation({"head.json": b"fixed-json"}, {})
+    request = prepared_command(mutation)
+    with pytest.raises(RuntimeError, match="lost stage reply"):
+        ProjectCommands(port).publish_prepared(request, mutation)
+    assert ProjectCommands(port).publish_prepared(request, mutation)["phase"] == "complete"
+    assert port.calls.count("stage") == 1
+    assert "begin" not in port.calls
+    with pytest.raises(ProjectCommandError, match="exact storage command"):
+        ProjectCommands(port).publish_prepared(request, ProjectMutation({"head.json": b"different"}, {}))
+
+
+def test_prepared_storage_cannot_accept_an_interactive_preview_or_read_a_path():
+    port = MemoryPort()
+    mutation = ProjectMutation({"head.json": b"fixed-json"}, {})
+    request = prepared_command(mutation)
+    ProjectCommands(port).preview(request, lambda: mutation)
+    with pytest.raises(ProjectCommandError, match="interactive"):
+        ProjectCommands(port).publish_prepared(request, mutation)
+    from pathlib import Path
+    with pytest.raises(ValueError, match="byte values"):
+        _ = ProjectMutation({"head.json": Path("never-open")}, {}).prepared_digest
+
+
 def test_preview_decision_reuses_frozen_candidate_without_native_callback():
     port = MemoryPort()
     app = ProjectCommands(port)

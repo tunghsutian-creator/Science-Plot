@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -28,6 +29,8 @@ class CommandKind(StrEnum):
     PUBLISH = "publish"
     UNDO = "undo"
     REDO = "redo"
+    SEMANTIC_RECORD = "semantic_record"
+    ATTACHMENT_IMPORT = "attachment_import"
 
 
 def _identity(value: str) -> bool:
@@ -209,6 +212,26 @@ class ProjectMutation:
     sources: Sequence[dict[str, Any]] | None = None
     review: dict[str, Any] | None = None
     artifacts: Mapping[str, bytes | Path] = field(default_factory=dict)
+
+    @property
+    def prepared_digest(self) -> str:
+        """Bind already prepared bytes; never read a path or invoke an executor."""
+        if self.sources is not None or any(isinstance(item, Path) for item in (*self.writes.values(), *self.artifacts.values())):
+            raise ValueError("Prepared storage publication requires byte values and no deferred source capture.")
+
+        def entries(values: Mapping[str, bytes | Path | None]) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            for name, value in values.items():
+                if value is None:
+                    result[name] = None
+                elif isinstance(value, bytes):
+                    result[name] = {"sha256": hashlib.sha256(value).hexdigest(), "size": len(value)}
+                else:
+                    raise ValueError("Prepared storage publication cannot resolve external IO.")
+            return result
+
+        return canonical_json_sha256({"writes": entries(self.writes), "artifacts": entries(self.artifacts),
+                                      "result": self.result, "review": self.review}, allow_nan=False)
 
     def validate_for(self, command: ProjectCommand) -> None:
         if set(self.writes) != set(command.write_set):

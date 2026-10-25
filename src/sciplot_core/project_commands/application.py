@@ -1,9 +1,10 @@
 """Admit once, prepare off-line, publish once; unknown outcomes never reexecute."""
 
 from collections.abc import Callable
+import json
 from typing import Any
 
-from .contracts import ProjectCommand, ProjectMutation
+from .contracts import CommandKind, ProjectCommand, ProjectMutation
 from .errors import ProjectCommandError, ProjectCommandUnknown
 from .ports import ProjectStore
 
@@ -63,6 +64,28 @@ class ProjectCommands:
         return self._bound(command, self.store.publish(
             command.key, command.command_digest, writes=candidate.writes,
             result=candidate.result, sources=candidate.sources, artifacts=candidate.artifacts))
+
+    def publish_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
+        """Resume a sealed physical write without admitting any native callback."""
+        candidate.validate_for(command)
+        expected = candidate.prepared_digest
+        if (command.kind not in {CommandKind.SEMANTIC_RECORD, CommandKind.ATTACHMENT_IMPORT}
+                or json.loads(command.request_json).get("prepared_digest") != expected):
+            raise ProjectCommandError("project_prepared_publication_invalid", "The prepared bytes require their exact storage command binding.")
+        self.store.recover()
+        record = self._admit(command)
+        if record.get("phase") == "complete":
+            return {**record, "replayed": True}
+        if record.get("phase") == "reserved":
+            record = self._bound(command, self.store.stage(
+                command.key, command.command_digest, writes=candidate.writes, result=candidate.result,
+                review={"publication": "prepared_storage", "prepared_digest": expected}, artifacts=candidate.artifacts))
+        if record.get("phase") in {"needs_review", "accepted"}:
+            review = record.get("review", {})
+            if review.get("publication") != "prepared_storage" or review.get("prepared_digest") != expected:
+                raise ProjectCommandError("project_prepared_publication_invalid", "An interactive or different candidate cannot be automatically accepted.")
+            return self.decide(command, decision_id=record["decision_id"], accept=True)
+        raise ProjectCommandUnknown()
 
     def preview(self, command: ProjectCommand, prepare: Callable[[], ProjectMutation]) -> dict[str, Any]:
         candidate = self._prepare(command, prepare)
