@@ -21,7 +21,6 @@ from sciplot_core.studio_core.project_export import export_project_document
 from sciplot_core.studio_core.project_query import resolve_project_path
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.project_receipt import project_receipt
-from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.studio_core.studio_prepare import prepare_studio_document
 
 
@@ -68,28 +67,38 @@ def create_project(
     require_new_layout(layout)
     canonical_path(layout.workspace_root.parent)
     layout.workspace_root.parent.mkdir(parents=True, exist_ok=True)
-    with external_project_session(layout.workspace_root):
-        require_new_layout(layout)
-        if "data_mapping" in verified or "source_options" in verified:
-            payload = _prepare_mapped_project(source, verified=verified, layout=layout)
-        else:
-            payload = prepare_studio_document(
-                source, output_root=layout.workspace_root / "projects",
-                delivery_root=layout.delivery_root, rule_id=verified["rule_id"],
-                template=verified["template"],
-            )
-        if source_tree_sha256(source) != verified["preview_identity"]["source_tree_sha256"]:
-            raise ValueError(
-                "Source changed during project preparation. The candidate is preserved; "
-                "no delivery was published. Start a new source-bound plan."
-            )
-        if on_prepared is not None:
-            on_prepared({key: payload[key] for key in ("project_dir", "document", "request")})
-        if not publish:
-            return {"kind": "sciplot_project_prepared_result", "version": 1, "status": "prepared",
-                    **{key: payload[key] for key in ("project_dir", "document", "request")},
-                    "ready_to_use": False, "export_performed": False}
-        return _publish(payload)
+    # Only initial namespace creation needs a separate claim. All recognized
+    # project mutations use the short ProjectStore lease and observed baseline.
+    layout.workspace_root.mkdir(mode=0o700, exist_ok=False)
+    claimed = layout.workspace_root.lstat()
+    if layout.delivery_root.exists():
+        raise ValueError("The requested new delivery was occupied before project creation.")
+    if "data_mapping" in verified or "source_options" in verified:
+        payload = _prepare_mapped_project(source, verified=verified, layout=layout)
+    else:
+        payload = prepare_studio_document(
+            source, output_root=layout.workspace_root / "projects",
+            delivery_root=layout.delivery_root, rule_id=verified["rule_id"],
+            template=verified["template"],
+        )
+    if source_tree_sha256(source) != verified["preview_identity"]["source_tree_sha256"]:
+        raise ValueError(
+            "Source changed during project preparation. The candidate is preserved; "
+            "no delivery was published. Start a new source-bound plan."
+        )
+    if on_prepared is not None:
+        on_prepared({key: payload[key] for key in ("project_dir", "document", "request")})
+    canonical_path(layout.workspace_root)
+    current = layout.workspace_root.lstat()
+    if (current.st_dev, current.st_ino) != (claimed.st_dev, claimed.st_ino):
+        raise ValueError("The new workspace namespace changed identity during preparation.")
+    if not publish:
+        return {"kind": "sciplot_project_prepared_result", "version": 1, "status": "prepared",
+                **{key: payload[key] for key in ("project_dir", "document", "request")},
+                "ready_to_use": False, "export_performed": False}
+    if layout.delivery_root.exists():
+        raise ValueError("The requested new delivery was occupied during private preparation.")
+    return _publish(payload)
 
 
 def _prepare_mapped_project(
@@ -142,9 +151,8 @@ def request_from_verified_plan(source: Path, *, verified: dict[str, Any], projec
 @with_table_reads
 def export_project(project: Path) -> dict[str, Any]:
     root = resolve_project_path(project)
-    with external_project_session(root):
-        payload = prepare_studio_document(root)
-        result = _publish(payload)
+    payload = prepare_studio_document(root)
+    result = _publish(payload)
     return {
         **result, "kind": "sciplot_project_export_result",
         "status": "exported" if result["studio_run"]["ready_to_use"] else "blocked",

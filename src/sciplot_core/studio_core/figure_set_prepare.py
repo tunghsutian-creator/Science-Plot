@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 from sciplot_core.figure_plan import (
     ResolvedFigurePlan,
     editable_figure_plan,
@@ -27,6 +26,7 @@ from sciplot_core.studio_core.figure_requests import (
     _rheology_frequency_figure_queue,
 )
 from sciplot_core.studio_core.figure_source_request import figure_source_request
+from sciplot_core.studio_core.figure_member_prepare import prepare_figure_member
 from sciplot_core.studio_core.figure_task_evidence import (
     single_render_figure_queue_from_plan,
     figure_task_from_queue_item,
@@ -52,14 +52,6 @@ from sciplot_core.studio_core.figure_set_primary_stage import (
 
 from sciplot_core.studio_core.export_execution import (
     _count_veusz_series,
-)
-
-from sciplot_core.studio_core.series_request import (
-    _series_from_request,
-)
-
-from sciplot_core.studio_core.veusz_document import (
-    _write_veusz_document,
 )
 
 from sciplot_core.studio_core.registry_state import (
@@ -262,30 +254,12 @@ def _prepare_studio_figure_set(
                 figure_plan=figure_plan,
                 queue_override=queue_override,
             )
-            staged_document = document_path.with_name(
-                f".sciplot-figure-set-transaction-{uuid4().hex}.vsz"
-            )
-            staged_spec = _veusz_spec_path(staged_document)
             try:
-                series, axis_info, _steps, _source = _series_from_request(
-                    figure_request,
-                    base_dir=request_path.parent,
-                    _terminal_source_binding=terminal_source_binding,
-                    _prepared_source_attestation=(
-                        None
-                        if terminal_source_binding is not None
-                        else prepared_source_attestation
-                    ),
-                )
-                _write_veusz_document(
-                    staged_document,
-                    request=figure_request,
-                    series=series,
-                    axis_info=axis_info,
-                )
+                prepared = prepare_figure_member(project_dir=project_dir, request_path=request_path,
+                    document_path=document_path, figure_request=figure_request,
+                    terminal_source_binding=terminal_source_binding,
+                    prepared_source_attestation=prepared_source_attestation, task=task, figure_id=figure_id)
             except StudioPreparationBlocked as exc:
-                staged_document.unlink(missing_ok=True)
-                staged_spec.unlink(missing_ok=True)
                 entries.append(
                     _figure_registry_entry(
                         figure=figure_context,
@@ -304,34 +278,8 @@ def _prepare_studio_figure_set(
                     )
                 )
                 continue
-            except Exception:
-                staged_document.unlink(missing_ok=True)
-                staged_spec.unlink(missing_ok=True)
-                raise
-            try:
-                document_hash = existing_file_sha256(staged_document)
-                spec_hash = existing_file_sha256(staged_spec)
-                spec_kind = _read_json(staged_spec).get("kind")
-            except Exception:
-                staged_document.unlink(missing_ok=True)
-                staged_spec.unlink(missing_ok=True)
-                raise
-            if (
-                not document_hash
-                or not spec_hash
-                or spec_kind != "sciplot_veusz_plot_spec"
-            ):
-                staged_document.unlink(missing_ok=True)
-                staged_spec.unlink(missing_ok=True)
-                raise RuntimeError(
-                    f"Staged figure generation was incomplete for {figure_id}."
-                )
-            if task is not None:
-                validate_veusz_spec_figure_task(
-                    _read_json(staged_spec),
-                    expected=task,
-                    source=f"staged Studio figure `{figure_id}` Veusz spec",
-                )
+            staged_document, staged_spec = prepared.document, prepared.spec
+            document_hash, spec_hash = prepared.document_hash, prepared.spec_hash
             replacements.extend(
                 [
                     {
@@ -360,7 +308,7 @@ def _prepare_studio_figure_set(
                     figure=figure_context,
                     document_path=document_path,
                     generated_hash=document_hash,
-                    series_count=len(series),
+                    series_count=prepared.series_count,
                     state_document_path=staged_document,
                 )
             )

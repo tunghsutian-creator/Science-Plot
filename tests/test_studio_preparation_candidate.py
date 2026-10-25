@@ -214,6 +214,22 @@ def test_explicit_scientific_audit_scope_still_executes_the_native_audit(tmp_pat
             commands.audit_studio_candidate(candidate, payload, check_presentation=False)
 
 
+def test_source_identity_is_stable_across_versions_and_never_reconnected_by_name():
+    from copy import deepcopy
+
+    snapshot = {"project_id": "1" * 32,
+                "sources": {"7" * 32: {"a" * 64: {"locator": "/original/data.csv"}}}}
+    before = deepcopy(snapshot)
+    assert commands.source_identity_for_locator(snapshot, "/original/data.csv") == "7" * 32
+    snapshot["sources"]["7" * 32]["b" * 64] = {"locator": "/original/data.csv"}
+    assert commands.source_identity_for_locator(snapshot, "/original/data.csv") == "7" * 32
+    assert commands.source_identity_for_locator(snapshot, "/elsewhere/data.csv") != "7" * 32
+    assert before["sources"]["7" * 32] == {"a" * 64: {"locator": "/original/data.csv"}}
+    snapshot["sources"]["8" * 32] = {"c" * 64: {"locator": "/original/data.csv"}}
+    with pytest.raises(ValueError, match="ambiguous"):
+        commands.source_identity_for_locator(snapshot, "/original/data.csv")
+
+
 def _prepared(candidate, **_kwargs):
     root = candidate.project_dir
     (root / "studio/document.vsz").write_bytes(b"complete private native")

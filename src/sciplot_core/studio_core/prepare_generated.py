@@ -22,11 +22,6 @@ from sciplot_core.presentation_identity import (
     project_selected_presentation_to_request,
     require_selected_template,
 )
-from sciplot_core.publication import (
-    build_publication_intent,
-    build_transform_ledger,
-    link_intent_to_transform_ledger,
-)
 from sciplot_core.readiness import load_validated_envelope_registry
 from sciplot_core.readiness.rule_certification import (
     current_certified_rule_contract_snapshot,
@@ -64,9 +59,9 @@ from sciplot_core.studio_core.launchers import (
 )
 from sciplot_core.studio_core.mechanical_plan_context import (
     initial_studio_study_model,
-    normalized_studio_study_model,
     studio_presentation_identity,
 )
+from sciplot_core.studio_core.preparation_lineage import bind_preparation_lineage
 from sciplot_core.studio_core.prepare_generated_transaction import (
     _prepare_generated_figure_set_transaction,
 )
@@ -305,35 +300,9 @@ def generate_studio_document(
     if isinstance(axis_info.get("data_mapping_coverage"), dict):
         request["data_mapping_coverage"] = json_safe(axis_info["data_mapping_coverage"])
 
-    study_model = normalized_studio_study_model(planning_study_model)
-    request["study_model"] = study_model
-    project_selected_presentation_to_request(request, presentation_identity)
-    render_defaults = study_model.get("render_defaults")
-    if terminal_series_order and isinstance(render_defaults, dict):
-        render_defaults["series_order"] = terminal_series_order
-    transform_ledger = build_transform_ledger(
-        study_model,
-        request=request,
-        input_path=source_root,
-        steps=transform_steps,
-        existing=request.get("transform_ledger")
-        if isinstance(request.get("transform_ledger"), dict)
-        else None,
-    )
-    publication_intent = build_publication_intent(
-        study_model,
-        request=request,
-        existing=request.get("publication_intent")
-        if isinstance(request.get("publication_intent"), dict)
-        else None,
-    )
-    publication_intent = link_intent_to_transform_ledger(
-        publication_intent, transform_ledger
-    )
-    study_model["publication_intent_ref"] = "publication_intent.json"
-    for target in (request, primary_render_request):
-        target["publication_intent"] = publication_intent
-        target["transform_ledger"] = transform_ledger
+    bind_preparation_lineage(request, primary_render_request, planning_study_model=planning_study_model,
+        terminal_series_order=terminal_series_order, source_root=source_root,
+        transform_steps=transform_steps, presentation_identity=presentation_identity)
     figure_set = _prepare_generated_figure_set_transaction(
         project_dir=project_dir,
         request_path=request_path,

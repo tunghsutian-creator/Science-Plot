@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import subprocess
 from argparse import Namespace
-from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -117,18 +116,41 @@ def test_existing_output_or_workspace_is_preserved_before_runtime_allocation(tmp
     assert _inventory(tmp_path) == before
 
 
-def test_create_rechecks_output_after_obtaining_its_path_lease(tmp_path, monkeypatch):
+def test_create_rechecks_output_after_claiming_new_workspace(tmp_path, monkeypatch):
     args = _args(tmp_path)
-    @contextmanager
-    def raced_lease(project):
-        args.out.mkdir()
-        (args.out / "keep.txt").write_text("concurrent owner")
-        yield
-    monkeypatch.setattr(service, "external_project_session", raced_lease)
+    layout = resolve_user_output_layout(args.target, requested_delivery_root=args.out)
+    original_mkdir = Path.mkdir
+
+    def raced_claim(path, *arguments, **kwargs):
+        result = original_mkdir(path, *arguments, **kwargs)
+        if path == layout.workspace_root:
+            original_mkdir(args.out)
+            (args.out / "keep.txt").write_text("concurrent owner")
+        return result
+
+    monkeypatch.setattr(Path, "mkdir", raced_claim)
     monkeypatch.setattr(service, "prepare_studio_document", lambda *a, **k: pytest.fail("concurrent output reached Studio"))
-    with pytest.raises(ValueError, match="requires a new"):
+    with pytest.raises(ValueError, match="occupied before project creation"):
         command.dispatch_project_create(args)
     assert (args.out / "keep.txt").read_text() == "concurrent owner"
+
+
+def test_atomic_new_workspace_claim_preserves_another_owner(tmp_path, monkeypatch):
+    args = _args(tmp_path)
+    layout = resolve_user_output_layout(args.target, requested_delivery_root=args.out)
+    original_mkdir = Path.mkdir
+
+    def raced_claim(path, *arguments, **kwargs):
+        if path == layout.workspace_root:
+            original_mkdir(path, *arguments, **kwargs)
+            (path / "keep.txt").write_text("other workspace owner")
+        return original_mkdir(path, *arguments, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", raced_claim)
+    monkeypatch.setattr(service, "prepare_studio_document", lambda *a, **k: pytest.fail("occupied workspace reached Studio"))
+    with pytest.raises(FileExistsError):
+        command.dispatch_project_create(args)
+    assert (layout.workspace_root / "keep.txt").read_text() == "other workspace owner"
 
 
 def test_creation_stdout_is_compact_and_points_to_full_manifest(tmp_path, monkeypatch, capsys):

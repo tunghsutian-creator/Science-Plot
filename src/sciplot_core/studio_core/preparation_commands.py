@@ -20,6 +20,16 @@ from sciplot_core.studio_core.preparation_candidate import (
 from sciplot_core.terminal_source_binding import SealedTerminalSourceBinding
 
 
+def source_identity_for_locator(snapshot: dict[str, Any], locator: str) -> str:
+    """Versions advance one exact source identity; a basename cannot reconnect it."""
+    known = [identity for identity, versions in snapshot["sources"].items()
+             if any(entry.get("locator") == locator for entry in versions.values())]
+    if len(known) > 1:
+        raise ValueError("The native source literal has ambiguous project identities.")
+    return known[0] if known else canonical_json_sha256(
+        {"project_id": snapshot["project_id"], "locator": locator})[:32]
+
+
 def prepare_studio_candidate(candidate: StudioPreparationCandidate, *, request_target: bool = False,
                              request_relative: str = "plot_request.json",
                              delivery_root: Path | None = None, rule_id: str | None = None,
@@ -91,12 +101,7 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
                 os.close(fd)
             if sha(data) != expected:
                 raise ValueError("The private Studio scientific input changed after its native audit.")
-            known = [identity for identity, versions in candidate.snapshot["sources"].items()
-                     if versions.get(expected, {}).get("locator") == literal]
-            if len(known) > 1:
-                raise ValueError("The native source literal has ambiguous project identities.")
-            identity = known[0] if known else canonical_json_sha256(
-                {"project_id": candidate.snapshot["project_id"], "locator": literal})[:32]
+            identity = source_identity_for_locator(candidate.snapshot, literal)
             sources[(identity, expected)] = PreparedSource(identity, literal, expected, data, (), mode)
     return audits, list(sources.values())
 
