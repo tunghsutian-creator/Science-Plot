@@ -1,0 +1,94 @@
+class SimulatedCrash(BaseException):
+    """Bypass normal exception handling as an abruptly terminated process would."""
+
+
+class FakeBackend:
+    def __init__(self, directory: Path):
+        self.directory = directory
+        directory.mkdir(exist_ok=True)
+        self.raw, self.native = directory / "raw.csv", directory / "document.vsz"
+        for path, content in [(self.raw, b"x,y\n1,2\n2,3\n"), (self.native, b"original native state")]:
+            if not path.exists():
+                path.write_bytes(content)
+        self.calls = {"fingerprint": 0, "preview": 0, "apply": 0, "export": 0, "render": 0}
+        self.preview_failures = []
+        self.export_failures = []
+        self.audit = {"status": "passed", "coordinate_check": "passed"}
+        self.crash_after_apply = False
+        self.export_ready = True
+
+    def initial(self):
+        doc = seal_document({"kind": "sciplot_document", "schema_version": 1, "plot_id": "test-plot", "revision": 0,
+            "scientific": {"data_sources": [{"path": str(self.raw), "sha256": file_sha256(self.raw)}],
+                           "transforms": [], "mappings": {"x": "x", "y": "y"}, "guards": {}, "provenance": {}},
+            "presentation": {"objects": {
+                "series:E2": {"kind": "series", "label": "E2", "properties": {"style.line.width": "1pt"},
+                              "capabilities": {"style.line.width": {"type": "physical_size", "risk": "presentation"}}},
+                "title:main": {"kind": "title", "label": "Main title", "properties": {"title.visible": True, "title.text": "Measured data"},
+                               "capabilities": {"title.visible": {"type": "boolean", "risk": "presentation"},
+                                                "title.text": {"type": "string", "risk": "review"}}},
+            }, "layout": {}, "theme": {}, "export_configuration": {"dpi": 300}},
+            "coverage": {"mode": "legacy_shadow", "limitations": ["Fake backend only for transaction tests"]}})
+        return doc, {"fingerprint": {"files": {str(self.raw): file_sha256(self.raw), str(self.native): file_sha256(self.native)}}}
+
+    def import_project(self, project, figure_id=None, plot_id=None):
+        return self.initial()
+
+    def fingerprint(self, binding):
+        self.calls["fingerprint"] += 1
+        return {"files": {str(path): file_sha256(path) if path.exists() else None for path in (self.raw, self.native)}}
+
+    def preview(self, document, binding, new_document, diff, output):
+        self.calls["preview"] += 1
+        if self.preview_failures:
+            raise self.preview_failures.pop(0)
+        output.mkdir(parents=True)
+        image = output / "preview.png"
+        image.write_bytes(b"fake preview pixels")
+        return {"operation_id": digest([binding, new_document]), "scientific_audit": deepcopy(self.audit),
+                "preview": {"path": str(image)}, "_document": new_document, "_expected": binding}
+
+    def apply(self, binding, review):
+        self.calls["apply"] += 1
+        marker = self.directory / "native-commit.json"
+        if marker.exists():
+            prior = read(marker)
+            if prior["operation_id"] == review["operation_id"]:
+                assert file_sha256(self.native) == prior["native_sha256"]
+                return prior
+        assert self.fingerprint(binding) == review["_expected"]["fingerprint"]
+        self.native.write_bytes(digest(review["_document"]["presentation"]).encode())
+        counter = self.directory / "native-writes.txt"
+        counter.write_text(str((int(counter.read_text()) if counter.exists() else 0) + 1))
+        result = {"operation_id": review["operation_id"], "native_sha256": file_sha256(self.native)}
+        write(marker, result)
+        if self.crash_after_apply:
+            self.crash_after_apply = False
+            raise SimulatedCrash()
+        return result
+
+    def refresh_binding(self, binding, apply_result):
+        result = deepcopy(binding)
+        result["fingerprint"]["files"][str(self.native)] = apply_result["native_sha256"]
+        assert self.fingerprint(result) == result["fingerprint"]
+        return result
+
+    def export(self, binding):
+        self.calls["export"] += 1
+        if self.export_failures:
+            raise self.export_failures.pop(0)
+        artifact = self.directory / "figure.pdf"
+        artifact.write_bytes(b"fake native export " + self.native.read_bytes())
+        return {"ready_to_use": self.export_ready, "exports": [{"path": str(artifact)}]}
+
+    def render(self, binding, output):
+        self.calls["render"] += 1
+        output.mkdir(parents=True, exist_ok=True)
+        image = output / "preview.png"
+        image.write_bytes(b"fake preview pixels")
+        return {"preview": {"path": str(image)}}
+
+    @property
+    def native_writes(self):
+        path = self.directory / "native-writes.txt"
+        return int(path.read_text()) if path.exists() else 0
