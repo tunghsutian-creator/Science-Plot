@@ -78,6 +78,59 @@ class SourceAdoption:
                 "before_sha256": self.before_sha256, "observed_sha256": self.observed_sha256}
 
 
+@dataclass(frozen=True)
+class NamespaceMember:
+    relative: str
+    sha256: str
+    size: int
+    mode: int
+
+    def __post_init__(self) -> None:
+        resource_key(self.relative)
+        if (self.relative.startswith("@") or self.relative == ".sciplot_semantic_owner.json"
+                or not _sha(self.sha256) or type(self.size) is not int or self.size < 0
+                or type(self.mode) is not int or not 0 <= self.mode <= 0o777):
+            raise ValueError("An observed namespace member requires a relative file, exact bytes and ordinary mode.")
+
+    def to_payload(self) -> dict[str, Any]:
+        return {"relative": self.relative, "sha256": self.sha256, "size": self.size, "mode": self.mode}
+
+
+@dataclass(frozen=True)
+class NamespaceTransfer:
+    prefix: str
+    history_prefix: str
+    attachment_id: str
+    original_head_sha256: str
+    refusal_sha256: str
+    owner_sha256: str
+    history_owner_sha256: str
+    members: tuple[NamespaceMember, ...]
+
+    def __post_init__(self) -> None:
+        resource_key(self.prefix)
+        resource_key(self.history_prefix)
+        old, history = PurePosixPath(self.prefix), PurePosixPath(self.history_prefix)
+        if (old.is_relative_to(history) or history.is_relative_to(old)
+                or any(path.parts[0] in {".sciplot_store", ".sciplot_resources"} for path in (old, history))
+                or not isinstance(self.attachment_id, str) or re.fullmatch(r"[a-f0-9]{32}", self.attachment_id) is None
+                or not all(_sha(value) for value in (self.original_head_sha256, self.refusal_sha256,
+                    self.owner_sha256, self.history_owner_sha256))
+                or not isinstance(self.members, tuple) or not self.members
+                or any(not isinstance(item, NamespaceMember) for item in self.members)
+                or len({item.relative for item in self.members}) != len(self.members)
+                or not any(item.relative == "head.json" and item.sha256 == self.original_head_sha256
+                           for item in self.members)):
+            raise ValueError("An ownership transfer binds disjoint exact namespaces and their frozen refusal/history bytes.")
+
+    def to_payload(self) -> dict[str, Any]:
+        return {"prefix": self.prefix, "history_prefix": self.history_prefix,
+                "attachment_id": self.attachment_id, "original_head_sha256": self.original_head_sha256,
+                "refusal_sha256": self.refusal_sha256, "owner_sha256": self.owner_sha256,
+                "history_owner_sha256": self.history_owner_sha256,
+                "members": [item.to_payload() for item in sorted(self.members, key=lambda item: item.relative)]}
+
+
 def membership_digest(names: Iterable[str]) -> str:
     return canonical_json_sha256(sorted(set(names)), allow_nan=False)
 

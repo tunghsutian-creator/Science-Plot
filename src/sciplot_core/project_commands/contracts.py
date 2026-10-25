@@ -16,6 +16,7 @@ from .resources import (NativeAdoption as NativeAdoption, ProjectionRead as Proj
                         MembershipRead as MembershipRead, PreparedSource as PreparedSource, _identity, _sha, resource_key)
 from .resources import PreparedFile as PreparedFile
 from .resources import SourceAdoption as SourceAdoption
+from .resources import NamespaceMember as NamespaceMember, NamespaceTransfer as NamespaceTransfer
 
 
 class CommandKind(StrEnum):
@@ -62,6 +63,7 @@ class ProjectCommand:
     native_adoptions: tuple[NativeAdoption, ...] = ()
     read_memberships: tuple[MembershipRead, ...] = ()
     source_adoptions: tuple[SourceAdoption, ...] = ()
+    namespace_transfers: tuple[NamespaceTransfer, ...] = ()
 
     def __post_init__(self) -> None:
         if (not isinstance(self.kind, CommandKind) or not isinstance(self.key, str) or not 1 <= len(self.key) <= 128
@@ -111,6 +113,18 @@ class ProjectCommand:
                 or any(item.resource in self.write_set or reads.get(item.resource) != item.before_sha256
                        for item in self.source_adoptions)):
             raise ValueError("Raw source observations bind prior reads and cannot become output writes.")
+        if (any(not isinstance(item, NamespaceTransfer) for item in self.namespace_transfers)
+                or len(self.namespace_transfers) > 1
+                or self.namespace_transfers and self.kind != CommandKind.ATTACHMENT_IMPORT):
+            raise ValueError("Only one explicit attachment import may transfer an exact old namespace.")
+        for transfer in self.namespace_transfers:
+            guards = {item.prefix: item for item in self.read_memberships}
+            if (reads.get(transfer.prefix + "/head.json") is None
+                    or transfer.prefix not in guards or transfer.history_prefix not in guards
+                    or guards[transfer.history_prefix].members_sha256 != MembershipRead.capture({}, transfer.history_prefix).members_sha256
+                    or not {transfer.prefix + "/head.json", transfer.prefix + "/.sciplot_semantic_owner.json",
+                            transfer.history_prefix + "/.sciplot_semantic_owner.json"}.issubset(self.write_set)):
+                raise ValueError("An ownership transfer must bind the original head, both member sets and its exact shell writes.")
         request = json.loads(self.request_json)
         if not isinstance(request, dict) or "idempotency_key" in request and request["idempotency_key"] != self.key:
             raise ValueError("The original request must agree with its command key.")
@@ -125,7 +139,8 @@ class ProjectCommand:
                projected_writes: Sequence[ProjectionRead] = (),
                native_adoptions: Sequence[NativeAdoption] = (),
                read_memberships: Sequence[MembershipRead] = (),
-               source_adoptions: Sequence[SourceAdoption] = ()) -> ProjectCommand:
+               source_adoptions: Sequence[SourceAdoption] = (),
+               namespace_transfers: Sequence[NamespaceTransfer] = ()) -> ProjectCommand:
         return cls(CommandKind(kind), key, project_id, expected_generation,
                    tuple(sorted(read_set.items())), tuple(sorted(write_set)),
                    json.dumps(request, sort_keys=True, ensure_ascii=False, allow_nan=False),
@@ -134,12 +149,13 @@ class ProjectCommand:
                    tuple(sorted(projected_writes, key=lambda item: (item.resource, item.kind, item.key))),
                    tuple(sorted(native_adoptions, key=lambda item: item.resource)),
                    tuple(sorted(read_memberships, key=lambda item: item.prefix)),
-                   tuple(sorted(source_adoptions, key=lambda item: item.resource)))
+                   tuple(sorted(source_adoptions, key=lambda item: item.resource)),
+                   tuple(sorted(namespace_transfers, key=lambda item: item.prefix)))
 
     @classmethod
     def from_payload(cls, value: Any) -> ProjectCommand:
         keys = {"version", "kind", "key", "project_id", "expected_generation", "expected_revision",
-                "read_set", "write_set", "projected_reads", "projected_writes", "native_adoptions", "read_memberships", "source_adoptions", "request"}
+                "read_set", "write_set", "projected_reads", "projected_writes", "native_adoptions", "read_memberships", "source_adoptions", "namespace_transfers", "request"}
         if (not isinstance(value, dict) or set(value) != keys or type(value.get("version")) is not int
                 or value["version"] != 1 or not isinstance(value["read_set"], dict)
                 or not isinstance(value["write_set"], list) or not isinstance(value["request"], dict)):
@@ -173,12 +189,24 @@ class ProjectCommand:
             raise ValueError("Saved source observations require exact closed fields.")
         observations = [SourceAdoption(item["resource"], item["source_id"], item["before_sha256"],
                                        item["observed_sha256"]) for item in source_items]
+        transfer_items = value["namespace_transfers"]
+        if not isinstance(transfer_items, list) or any(not isinstance(item, dict) or set(item) != {
+                "prefix", "history_prefix", "attachment_id", "original_head_sha256", "refusal_sha256",
+                "owner_sha256", "history_owner_sha256", "members"} for item in transfer_items):
+            raise ValueError("Saved namespace transfers require exact closed fields.")
+        transfers = []
+        for item in transfer_items:
+            members = item["members"]
+            if not isinstance(members, list) or any(not isinstance(member, dict) or set(member) != {
+                    "relative", "sha256", "size", "mode"} for member in members):
+                raise ValueError("Saved observed namespace members require exact closed fields.")
+            transfers.append(NamespaceTransfer(**{**item, "members": tuple(NamespaceMember(**member) for member in members)}))
         return cls.create(value["kind"], value["key"], project_id=value["project_id"],
                           expected_generation=value["expected_generation"], read_set=value["read_set"],
                           write_set=value["write_set"], request=value["request"],
                           expected_revision=value["expected_revision"], projected_reads=selectors("projected_reads"),
                           projected_writes=selectors("projected_writes"), native_adoptions=adoptions,
-                          read_memberships=memberships, source_adoptions=observations)
+                          read_memberships=memberships, source_adoptions=observations, namespace_transfers=transfers)
 
     def to_payload(self) -> dict[str, Any]:
         self.__post_init__()
@@ -190,6 +218,7 @@ class ProjectCommand:
                 "native_adoptions": [item.to_payload() for item in self.native_adoptions],
                 "read_memberships": [item.to_payload() for item in self.read_memberships],
                 "source_adoptions": [item.to_payload() for item in self.source_adoptions],
+                "namespace_transfers": [item.to_payload() for item in self.namespace_transfers],
                 "request": json.loads(self.request_json)}
 
     @property
