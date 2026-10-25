@@ -99,6 +99,9 @@ class ProjectCommands:
 
     def publish_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
         """Publish the admitted prepared bytes with no native callback."""
+        if command.namespace_transfers:
+            raise ProjectCommandError("project_namespace_decision_required",
+                "Stage the exact namespace transfer, validate and fence its owner, then explicitly decide.")
         record = self.stage_prepared(command, candidate)
         if record.get("phase") == "complete":
             return record

@@ -147,6 +147,30 @@ def test_prepared_storage_publication_never_enters_native_execution():
     assert port.calls == ["reserve", "recover", "stage", "decide", "publish_staged"]
 
 
+def test_namespace_storage_cannot_accept_without_the_domain_fence_decision():
+    from sciplot_core.project_commands import NamespaceMember, NamespaceTransfer
+
+    transfer = NamespaceTransfer("old/plot", "old/history", "a" * 32,
+        "1" * 64, "2" * 64, "3" * 64, "4" * 64,
+        (NamespaceMember("head.json", "1" * 64, 10, 0o600),))
+    reads = {"old/plot/head.json": "1" * 64, "old/plot/.sciplot_semantic_owner.json": None,
+             "old/history/.sciplot_semantic_owner.json": None}
+    mutation = ProjectMutation({name: b"frozen" for name in reads}, {})
+    command = ProjectCommand.create("attachment_import", "transfer", project_id="project-a",
+        expected_generation="generation-a", read_set=reads, write_set=list(reads),
+        request={"prepared_digest": mutation.prepared_digest}, namespace_transfers=[transfer],
+        read_memberships=[MembershipRead.capture(reads, "old/plot"), MembershipRead.capture({}, "old/history")])
+    port = MemoryPort()
+    app = ProjectCommands(port)
+    with pytest.raises(ProjectCommandError, match="explicitly decide"):
+        app.publish_prepared(command, mutation)
+    assert port.calls == []
+    assert app.stage_prepared(command, mutation)["phase"] == "needs_review"
+    assert app.resume(command)["phase"] == "needs_review"
+    assert "decide" not in port.calls
+    assert "publish_staged" not in port.calls
+
+
 def test_prepared_source_bytes_and_original_alias_are_bound_without_path_io():
     import hashlib
     source = PreparedSource("a" * 32, "/original/raw.csv", hashlib.sha256(b"raw").hexdigest(), b"raw", ("A",))
