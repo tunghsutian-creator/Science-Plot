@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
+
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -347,7 +349,7 @@ def derive_terminal_render_data_contract(
                 }
             )
     source_artifacts = sorted(
-        {(str(frame.path), frame.sha256) for frame in frames}
+        {literal_source_artifact(frame.path, frame.sha256) for frame in frames}
         if frames
         else {artifact for item in series for artifact in item.source_artifacts}
     )

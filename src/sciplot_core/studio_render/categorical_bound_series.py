@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
+
 import math
 from typing import Any
 
@@ -102,7 +104,7 @@ def bound_categorical_series(frames: list[StudioSourceFrame], *,
         insufficient = [f"{sample} / {condition}" for (sample, condition), values in groups.items() if len(values) < 2]
         if insufficient:
             raise StudioPreparationBlocked("categorical_sample_sd_requires_replicates", "Sample SD requires at least two valid original replicates in every selected group: " + ", ".join(insufficient))
-        artifact = (str(source.path), source.sha256)
+        artifact = literal_source_artifact(source.path, source.sha256)
         if condition_column is not None:
             ordered_records = [(sample, condition, value, artifact) for sample in samples for condition in conditions for value in groups[(sample, condition)]]
             series, _ = grouped_series_from_records(ordered_records, value_label=value_facts[0]["output_header"], allow_single_condition=True)
@@ -154,7 +156,7 @@ def _given_series(records: list[tuple[str, str, int, float, int]], *, source: St
                 DEFAULT_PALETTE[(index - 1) % len(DEFAULT_PALETTE)],
                 presentation_kind=CATEGORICAL_POINT_LINE_KIND,
                 component_labels=tuple(aliases.get(sample, sample) for sample in samples),
-                source_artifacts=((str(source.path), source.sha256),)))
+                source_artifacts=(literal_source_artifact(source.path, source.sha256),)))
     return result
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
+
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -126,7 +128,7 @@ def _series_from_request(
             performance_transform_parameters,
             prepare_performance_comparison,
         )
-        from sciplot_core.performance_veusz import performance_series_records
+        from sciplot_core.performance_veusz.geometry import performance_series_records
         from sciplot_core.performance_comparison.radar import validate_radar_presentation_size
         from sciplot_core.performance_comparison.selection import performance_selection_from_request
 
@@ -146,7 +148,7 @@ def _series_from_request(
             authority_source=source_root,
         )
         records = performance_series_records(payload)
-        artifact = (str(payload["source"]), str(payload["source_sha256"]))
+        artifact = literal_source_artifact(str(payload["source"]), str(payload["source_sha256"]))
         styled = [
             StudioSeries(
                 label=str(item["label"]),
@@ -183,7 +185,7 @@ def _series_from_request(
                 parameters=performance_transform_parameters(payload),
             )
         )
-        axis_info = {
+        axis_info: dict[str, Any] = {
             "x_label": str(payload.get("x_label") or ""),
             "y_label": str(payload.get("y_label") or ""),
             "presentation_kind": "performance_comparison",
@@ -192,11 +194,8 @@ def _series_from_request(
             "semantic_terminal_series_order": [str(item["label"]) for item in records],
         }
         layout = payload["layout"]
-        render_options = (
-            dict(request.get("render_options"))
-            if isinstance(request.get("render_options"), dict)
-            else {}
-        )
+        configured_options = request.get("render_options")
+        render_options = dict(configured_options) if isinstance(configured_options, dict) else {}
         render_options["size"] = "x".join(
             f"{float(value):g}" for value in layout["page_size_mm"]
         )

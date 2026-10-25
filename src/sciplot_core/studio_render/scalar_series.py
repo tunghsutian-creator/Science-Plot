@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
+
+from collections.abc import Sequence
 import math
 from typing import Any
 import pandas as pd
@@ -77,7 +80,7 @@ def _scalar_field_role_columns(
 
 
 def _scalar_field_from_frames(
-    frames: list[StudioSourceFrame | tuple[str, pd.DataFrame]],
+    frames: Sequence[StudioSourceFrame | tuple[str, pd.DataFrame]],
     *,
     render_options: dict[str, Any],
 ) -> tuple[list[StudioSeries], dict[str, Any]]:
@@ -87,15 +90,12 @@ def _scalar_field_from_frames(
             "Scalar-field rendering currently accepts one plot-ready X/Y/Z table per figure.",
         )
     source_frame = frames[0]
+    series_source_artifacts: tuple[tuple[str, str], ...]
     if isinstance(source_frame, StudioSourceFrame):
         frame = source_frame.frame
-        source_artifacts = [
-            {
-                "path": str(source_frame.path),
-                "sha256": source_frame.sha256,
-            }
-        ]
-        series_source_artifacts = ((str(source_frame.path), source_frame.sha256),)
+        artifact = literal_source_artifact(source_frame.path, source_frame.sha256)
+        source_artifacts = [{"path": artifact[0], "sha256": artifact[1]}]
+        series_source_artifacts = (artifact,)
     else:
         _label, frame = source_frame
         source_artifacts = []

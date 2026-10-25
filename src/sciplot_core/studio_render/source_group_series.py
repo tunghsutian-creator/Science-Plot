@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
+
 from typing import Any
 
 import pandas as pd
@@ -39,7 +41,7 @@ def source_group_series(frames: list[StudioSourceFrame]) -> tuple[list[StudioSer
             x_values=tuple(float(categories.index(category) + 1) for _ in values), y_values=values,
             color=DEFAULT_PALETTE[len(series) % len(DEFAULT_PALETTE)], presentation_kind="categorical_replicates",
             category_position=float(categories.index(category) + 1),
-            source_artifacts=((str(frame.path), frame.sha256),))
+            source_artifacts=(literal_source_artifact(frame.path, frame.sha256),))
         series.append(item)
         bindings[item.x_name] = scientific_group_binding({key: value for key, value in binding.items()
                                  if key not in {"path", "sha256", "rows", "display_label"}})

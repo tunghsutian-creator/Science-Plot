@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
+
 import math
 from typing import Any
 import pandas as pd
@@ -9,7 +11,7 @@ from sciplot_core.source_tables.parsing import (
     DECIMAL_ROUND_TRIP_ENCODING_V1, SOURCE_NUMERIC_ENCODING_KEY,
     coerce_frame_numeric_series, coerce_legacy_numeric_series,
 )
-from sciplot_core.policy import (
+from sciplot_core.policy.categorical import (
     CATEGORICAL_STACK_MAX_COMPONENTS,
 )
 
@@ -118,7 +120,7 @@ def _categorical_component_series_from_frames(
                     sample,
                     component,
                     value,
-                    (str(source_frame.path), source_frame.sha256),
+                    literal_source_artifact(source_frame.path, source_frame.sha256),
                 )
             )
     if not detected:

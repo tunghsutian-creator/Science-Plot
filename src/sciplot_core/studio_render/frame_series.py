@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
+
 from typing import Any
 
 from sciplot_core.studio_render.models import (
@@ -186,7 +188,7 @@ def _series_from_frame_records(
                         presentation_kind=presentation_kind,
                         component_labels=component_labels,
                         source_artifacts=(
-                            (str(source_frame.path), source_frame.sha256),
+                            literal_source_artifact(source_frame.path, source_frame.sha256),
                         ),
                     )
                 )

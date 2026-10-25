@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
+
 from pathlib import Path
 from typing import Any
 from sciplot_core.figure_plan import resolved_figure_plan_from_payload
@@ -11,15 +13,14 @@ from sciplot_core.figure_plan.request_values import (
 from sciplot_core.foundation.file_hashing import (
     file_sha256,
 )
-from sciplot_core.policy import (
+from sciplot_core.policy import DEFAULT_PALETTE_COLORS, UNIFIED_MARKER_SIZE_PT
+from sciplot_core.policy.categorical import (
     CATEGORICAL_BOX_FILL_FRACTION,
-    DEFAULT_PALETTE_COLORS,
     IMPACT_POINT_LINE_CONDITION_OFFSET_FRACTION,
     IMPACT_POINT_LINE_MEAN_MARKER_EDGE_COLOR,
     IMPACT_POINT_LINE_MEAN_MARKER_EDGE_WIDTH_PT,
     IMPACT_POINT_LINE_RAW_MARKER_ALPHA,
     IMPACT_POINT_LINE_RAW_MARKER_SCALE,
-    UNIFIED_MARKER_SIZE_PT,
     categorical_fill_color,
     categorical_raw_point_half_spread,
     categorical_slot_width_mm,
@@ -53,7 +54,7 @@ def _impact_point_line_series_from_source(
 ) -> tuple[list[StudioSeries], dict[str, Any], list[dict[str, Any]]]:
     """Build condition mean lines with sample markers and pale raw points."""
 
-    from sciplot_core.semantic import read_impact_condition_payloads
+    from sciplot_core.semantic_sources.impact_sources import read_impact_condition_payloads
 
     workbook = _impact_point_line_source(source)
     available = read_impact_condition_payloads(workbook)
@@ -141,7 +142,7 @@ def _impact_point_line_series_from_source(
         )
     else:
         label_mapping = impact_condition_label_mapping(request)
-    artifact = (str(workbook), file_sha256(workbook))
+    artifact = literal_source_artifact(workbook, file_sha256(workbook))
     raw_point_half_spread = categorical_raw_point_half_spread(
         box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
         replicate_count=max(

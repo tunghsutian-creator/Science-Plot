@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
+
 import re
 from dataclasses import replace
 from typing import Any
@@ -71,7 +73,7 @@ def _categorical_series_from_frames(
                 float(value) for value in numeric_values.tolist()
             )
             grouped_artifacts.setdefault(sample, set()).add(
-                (str(source_frame.path), source_frame.sha256)
+                literal_source_artifact(source_frame.path, source_frame.sha256)
             )
             metric = _categorical_metric_label(column)
             if metric:

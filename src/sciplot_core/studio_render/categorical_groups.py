@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
+
 import math
 from typing import Any
 import pandas as pd
@@ -213,7 +215,7 @@ def _categorical_grouped_series_from_frames(
                     sample,
                     condition,
                     float(numeric_value),
-                    (str(source_frame.path), source_frame.sha256),
+                    literal_source_artifact(source_frame.path, source_frame.sha256),
                 )
             )
     if not detected:
