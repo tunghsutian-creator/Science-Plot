@@ -10,10 +10,13 @@ from typing import Any, ParamSpec, TypeVar, cast
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.project_commands import MembershipRead, NativeAdoption, ProjectCommand, ProjectCommands, ProjectionRead
 from sciplot_core.project_commands.read_projections import projection_digest
 from sciplot_core.project_store import FileProjectStore
+from sciplot_core.project_host_factory import (
+    _admitted_project as _admitted_project, _admitted_request as _admitted_request,
+    _run_output_capability as _run_output_capability, project_store as project_store,
+)
 from sciplot_core.project_store.runtime import project_runtime, resolve_runtime_path
 from sciplot_core.source_coverage.managed_documents import source_records
 from sciplot_core.studio_core.project_query_paths import canonical_path
@@ -52,144 +55,6 @@ def project_read_runtime(function: Callable[_P, _R]) -> Callable[_P, _R]:
             return function(*args, **kwargs)
 
     return invoke
-
-def _admitted_project(project: Path) -> tuple[dict[str, Any], frozenset[str]]:
-    claims: frozenset[str] = frozenset()
-    path = project / "plot_request.json"
-    if not (project / ".sciplot_store/head.json").is_file():
-        value = json.loads(path.read_bytes()) if path.is_file() else {}
-    else:
-        from sciplot_core.project_store import ProjectConflict
-        from sciplot_core.project_store import projection
-
-        # Only immutable admitted request bytes can select a host output root.
-        # A pending head may still have its exact predecessor projection; its
-        # sealed request selects caps, while explicit resume owns all repair.
-        with FileProjectStore(project)._locked(allow_pending=True) as (io, current):
-            claims = frozenset(current.get("resource_roots", {}))
-            entry = current["files"].get("plot_request.json")
-            if entry is None:
-                raise ProjectConflict("The admitted project has no canonical request")
-            admitted = io.get(entry)
-            actual = io.physical("plot_request.json")
-            allowed: set[tuple[bytes, int] | None] = {(admitted, entry["mode"])}
-            if projection.pending(io, current):
-                from sciplot_core.project_store import state, commands
-
-                for key, outcome in current["commands"].items():
-                    record = state.command(io, key)
-                    if (record is not None and record.get("phase") != "complete"
-                            and record.get("install_generation") == current["generation"]
-                            and record.get("install_parent") == current.get("parent")
-                            and outcome.get("generation") == current["generation"]):
-                        commands.public(io, record, projection_pending=True)
-                        parent = state.reachable(io, current, record["install_parent"])
-                        previous = parent["files"].get("plot_request.json")
-                        allowed.add((io.get(previous), previous["mode"]) if previous else None)
-            if actual not in allowed:
-                raise ProjectConflict("The canonical request differs from its admitted generation; external roots were not selected")
-            value = json.loads(admitted)
-    if not isinstance(value, dict):
-        raise ValueError("The canonical project request must be an object")
-    return value, claims
-
-
-def _admitted_request(project: Path) -> dict[str, Any]:
-    return _admitted_project(project)[0]
-
-
-def _run_output_capability(project: Path, request: dict[str, Any], locations: dict[str, Any], *,
-                           create: bool, claims: frozenset[str]) -> None:
-    from sciplot_core.project_store import ProjectRecoveryRequired, ResourceRoot
-
-    value = request.get("output")
-    if not isinstance(value, str) or not value.strip():
-        return
-    output = canonical_path(Path(value) if Path(value).is_absolute() else project / value)
-    key = "run_" + canonical_json_sha256(str(output))[:16]
-    if not create and key not in claims:
-        return  # Unused legacy render outputs do not acquire another authority.
-    if project.is_relative_to(output):
-        raise ValueError("An external run output cannot contain its source project")
-    source_value = request.get("input")
-    if isinstance(source_value, str) and source_value:
-        source = canonical_path(Path(source_value) if Path(source_value).is_absolute() else project / source_value)
-        if output.is_relative_to(source) or source.is_relative_to(output):
-            raise ValueError("An external run output cannot overlap its scientific input")
-    if any(output.is_relative_to(project / name) for name in ("raw", "source")):
-        raise ValueError("A run output cannot overlap preserved scientific source members")
-    if output.is_relative_to(project):
-        return
-    for supplied in locations.values():
-        cap = supplied if isinstance(supplied, ResourceRoot) else ResourceRoot(supplied)
-        root = Path(cap.path)
-        if output.is_relative_to(root):
-            relative = output.relative_to(root).as_posix()
-            if cap.members is None or relative in cap.members or any(name.startswith(relative + "/") for name in cap.members):
-                return
-    if not output.exists():
-        if key in claims:
-            raise ProjectRecoveryRequired("The registered external run root is missing; explicit recovery is required")
-        if not create:
-            return
-        output.mkdir(parents=True, exist_ok=False)
-    if not output.is_dir():
-        raise ValueError("The declared external run output must be a dedicated directory")
-    locations[key] = output
-
-
-def project_store(project: Path, *, create_delivery: bool = False, with_snapshot: bool = False,
-                  create_output: bool = False) -> FileProjectStore:
-    """Select only the host's already-bound delivery root, never a wire mount."""
-    project = canonical_path(project)
-    request, claims = _admitted_project(project)
-    if (project / ".sciplot_store" / "local_locations.json").exists():
-        repository = FileProjectStore(project)
-        if with_snapshot and "snapshot" not in repository.locations:
-            from sciplot_core.project_manifest import intake_snapshot_location, read_intake_project_manifest
-            from sciplot_core.project_store import ResourceRoot
-
-            manifest = read_intake_project_manifest(project, store=repository)
-            if manifest is not None:
-                locations: dict[str, Any] = {key: ResourceRoot(path, repository.location_members[key])
-                                             for key, path in repository.locations.items()}
-                locations["snapshot"] = intake_snapshot_location(project, manifest)
-                return FileProjectStore(project, locations=locations)
-        return repository
-    delivery = canonical_path(requested_delivery_root({"request": request}, run_output=project))
-    if create_delivery:
-        delivery.mkdir(parents=True, exist_ok=True)
-    selected_locations: dict[str, Any] = {"delivery": delivery} if delivery.is_dir() and not delivery.is_relative_to(project) else {}
-    if with_snapshot and ((project / "intake_manifest.json").is_file() or any(project.glob("*.sciplot.json"))):
-        from sciplot_core.project_manifest import intake_snapshot_location, read_intake_project_manifest
-
-        manifest = read_intake_project_manifest(project)
-        if manifest is not None:
-            selected_locations["snapshot"] = intake_snapshot_location(project, manifest)
-    _run_output_capability(project, request, selected_locations, create=create_output, claims=claims)
-    repository = FileProjectStore(project, locations=selected_locations)
-    # Pending publication metadata is read-only and digest-bound. Reconstruct
-    # only the finite ZIP members already declared by admitted host commands;
-    # never infer a new resource root from request strings or repair on lookup.
-    if (project / ".sciplot_store/head.json").is_file() and "snapshot" not in selected_locations:
-        members: set[str] = set()
-        for record in repository.commands():
-            for name in record.get("write_set", record.get("metadata", {}).get("write_set", [])):
-                parts = str(name).split("/")
-                if len(parts) == 2 and parts[0] == "@snapshot" and parts[1].endswith(".zip"):
-                    if parts[1] not in {".zip", "..zip"} and "\\" not in parts[1]:
-                        members.add(parts[1])
-        if not members and "snapshot" in claims:
-            from sciplot_core.project_manifest import intake_snapshot_location
-
-            selected_locations["snapshot"] = intake_snapshot_location(project, {})
-            return FileProjectStore(project, locations=selected_locations)
-        if members:
-            from sciplot_core.project_store import ResourceRoot
-
-            selected_locations["snapshot"] = ResourceRoot(project.parent, tuple(sorted(members)))
-            repository = FileProjectStore(project, locations=selected_locations)
-    return repository
 
 
 def figure_read_state(project: Path, selected: dict[str, Any]) -> dict[str, Any]:

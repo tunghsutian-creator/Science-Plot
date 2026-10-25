@@ -13,42 +13,23 @@ from typing import Any
 
 from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.foundation.path_names import safe_filename
 from sciplot_core.foundation.project_archives import write_project_archive
 from sciplot_core.foundation.private_project_manifest import (
     private_manifest_descriptor,
     private_project_manifest_scope as private_project_manifest_scope,
 )
 from sciplot_core.project_commands.resources import PreparedFile
+from sciplot_core.project_host_factory import project_store
+from sciplot_core.project_manifest_locations import (
+    _CANONICAL_MANIFEST_NAME, _project_manifest_paths as _project_manifest_paths,
+    intake_snapshot_location as intake_snapshot_location,
+)
 from sciplot_core.project_store import FileProjectStore, ProjectConflict, ResourceRoot
-from sciplot_core.project_store.adapters import project_storage_scope, publish_files, store_for_project
-from sciplot_core.project_store.io import directory, install, owned_io, parts, read_file
+from sciplot_core.project_store.adapters import project_storage_scope, publish_files
+from sciplot_core.project_store.io import install, parts, read_file
 
-_CANONICAL_MANIFEST_NAME = "intake_manifest.json"
 _PROJECT_MANIFEST_LOCK = RLock()
 _PRIVATE_SNAPSHOT: ContextVar[tuple[Path, int, int] | None] = ContextVar("intake_private_snapshot", default=None)
-
-
-def _validate_manifest_target(path: Path, *, project_dir: Path) -> Path:
-    if path.is_symlink():
-        raise PermissionError(f"Refusing a symlink-backed SciPlot project manifest: {path}")
-    if path.parent.resolve() != project_dir:
-        raise ValueError("A SciPlot project manifest must stay inside its project.")
-    return path
-
-
-def _project_manifest_paths(project_dir: Path, *, mirror_path: Path | None = None) -> tuple[Path, ...]:
-    project = project_dir.expanduser().resolve()
-    canonical = _validate_manifest_target(project / _CANONICAL_MANIFEST_NAME, project_dir=project)
-    mirrors = [_validate_manifest_target(path, project_dir=project) for path in sorted(project.glob("*.sciplot.json"))]
-    if mirror_path is not None:
-        requested = mirror_path.expanduser().absolute()
-        _validate_manifest_target(requested, project_dir=project)
-        if requested.suffixes[-2:] != [".sciplot", ".json"]:
-            raise ValueError("The SciPlot project-manifest mirror must end in `.sciplot.json`.")
-        mirrors.append(project / requested.name)
-    return tuple(dict.fromkeys((canonical, *sorted(mirrors))))
-
 
 def _read_manifest_path(path: Path) -> dict[str, Any]:
     value = read_json_object(path)
@@ -56,41 +37,10 @@ def _read_manifest_path(path: Path) -> dict[str, Any]:
         raise ValueError(f"Expected a readable JSON object at {path}.")
     return value
 
-
-def intake_snapshot_location(project: Path, payload: dict[str, Any]) -> ResourceRoot:
-    name = safe_filename(f"{payload.get('project_slug') or project.name}.zip")
-    if (project / ".sciplot_store/local_locations.json").is_file():
-        descriptor = os.open(project, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-        try:
-            with directory(descriptor, (".sciplot_resources", "snapshot"), create=True):
-                pass
-        finally:
-            os.close(descriptor)
-        return ResourceRoot(project / ".sciplot_resources/snapshot", (name,))
-    return ResourceRoot(project.parent, (name,))
-
-
 def _manifest_store(project: Path, payload: dict[str, Any] | None = None) -> FileProjectStore:
     if private_manifest_descriptor(project) is not None:
         raise ValueError("A private producer returns candidate bytes; it cannot create a project generation.")
-    if owned_io(project) is not None:
-        return store_for_project(project)
-    if (project / ".sciplot_store/local_locations.json").is_file():
-        current = FileProjectStore(project)
-        if "snapshot" in current.locations:
-            return current
-        if payload is None:
-            snapshot = current.snapshot()
-            payload = json.loads(current.read_bytes(_CANONICAL_MANIFEST_NAME)) if _CANONICAL_MANIFEST_NAME in snapshot["files"] else {}
-        capabilities = {key: ResourceRoot(path, current.location_members[key]) for key, path in current.locations.items()}
-        capabilities["snapshot"] = intake_snapshot_location(project, payload)
-        return FileProjectStore(project, locations=capabilities)
-    if payload is None:
-        for path in _project_manifest_paths(project):
-            if path.is_file():
-                payload = _read_manifest_path(path)
-                break
-    return FileProjectStore(project, locations={"snapshot": intake_snapshot_location(project, payload or {})})
+    return project_store(project, with_snapshot=True, intake_compat=True, snapshot_payload=payload)
 
 
 @contextmanager

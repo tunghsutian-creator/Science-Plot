@@ -13,7 +13,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_commands import NativeAdoption, ProjectCommands, ProjectMutation
 from sciplot_core.project_commands.resources import PreparedFile
-from sciplot_core.project_store import FileProjectStore, ResourceRoot
+from sciplot_core.project_store import FileProjectStore
 from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.studio_core.project_command_scope import command_for_binding, project_store, source_versions, whole_memberships
 from sciplot_core.studio_core.request_paths import _canonical_publish_paths
@@ -25,17 +25,7 @@ from sciplot_core.studio_core.publication_candidates import (
 
 
 def _publication_store(project: Path) -> FileProjectStore:
-    from sciplot_core.project_manifest import intake_snapshot_location, read_intake_project_manifest
-
-    repository = project_store(project, create_delivery=True)
-    payload = read_intake_project_manifest(project, store=repository)
-    if payload is None:
-        return repository
-    if "snapshot" in repository.locations:
-        return repository
-    locations = {key: ResourceRoot(path, repository.location_members[key]) for key, path in repository.locations.items()}
-    locations["snapshot"] = intake_snapshot_location(project, payload)
-    return FileProjectStore(project, locations=locations)
+    return project_store(project, create_delivery=True, with_snapshot=True)
 
 
 def _next_run(files: dict[str, Any]) -> str:

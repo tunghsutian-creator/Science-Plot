@@ -312,6 +312,7 @@ commit_document_edit(project, document, candidate, json.loads(review.read_text()
 
 def test_host_factory_rejects_unadmitted_delivery_root_before_selecting_it(project, tmp_path, monkeypatch):
     from sciplot_core.project_store import ProjectConflict
+    from sciplot_core import project_host_factory as host
     from sciplot_core.studio_core import project_command_scope as scope
     selected = scope.project_store(project)
     selected.snapshot(import_legacy=True)
@@ -321,7 +322,7 @@ def test_host_factory_rejects_unadmitted_delivery_root_before_selecting_it(proje
     request = json.loads((project / "plot_request.json").read_text())
     request["delivery_output"] = str(foreign)
     (project / "plot_request.json").write_text(json.dumps(request))
-    monkeypatch.setattr(scope, "requested_delivery_root", lambda *_a, **_kw: pytest.fail("unadmitted root was selected"))
+    monkeypatch.setattr(host, "requested_delivery_root", lambda *_a, **_kw: pytest.fail("unadmitted root was selected"))
     with pytest.raises(ProjectConflict, match="canonical request differs"):
         scope.project_store(project, create_delivery=True, with_snapshot=True)
     assert (foreign / "preserve.txt").read_bytes() == b"unrelated outside files"
@@ -329,6 +330,7 @@ def test_host_factory_rejects_unadmitted_delivery_root_before_selecting_it(proje
 
 def test_pending_factory_accepts_only_sealed_parent_or_head_request_before_cap_selection(project, tmp_path, monkeypatch):
     from sciplot_core.project_store import ProjectConflict, state
+    from sciplot_core import project_host_factory as host
     from sciplot_core.studio_core import project_command_scope as scope
     store = scope.project_store(project)
     before = store.snapshot(import_legacy=True)
@@ -350,7 +352,7 @@ def test_pending_factory_accepts_only_sealed_parent_or_head_request_before_cap_s
     assert scope._admitted_request(project) == request and path.read_bytes() == parent_bytes
     foreign = tmp_path / "never-selected"
     path.write_text(json.dumps({**request, "delivery_output": str(foreign)}))
-    monkeypatch.setattr(scope, "requested_delivery_root", lambda *_a, **_kw: pytest.fail("foreign pending root was selected"))
+    monkeypatch.setattr(host, "requested_delivery_root", lambda *_a, **_kw: pytest.fail("foreign pending root was selected"))
     with pytest.raises(ProjectConflict, match="canonical request differs"):
         scope.project_store(project, create_delivery=True)
     assert not foreign.exists()

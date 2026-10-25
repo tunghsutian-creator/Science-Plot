@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from sciplot_core.foundation.canonical_paths import canonical_path as canonical_path
 from typing import Any
 
 from sciplot_core.figure_plan import resolved_figure_plan_from_payload
@@ -16,12 +17,6 @@ from sciplot_core.policy import DELIVERY_LAUNCHER
 from sciplot_core.studio_core.delivery_target import _managed_project
 from sciplot_core.studio_core.figure_set_state import _read_studio_figure_set
 
-
-def canonical_path(value: Path) -> Path:
-    path = value.expanduser().absolute()
-    if any(member.is_symlink() for member in (path, *path.parents)):
-        raise ValueError(f"Managed project queries cannot follow a symlink: {path}")
-    return path.resolve()
 
 
 def read_object(path: Path) -> dict[str, Any]:
