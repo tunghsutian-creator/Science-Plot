@@ -159,10 +159,12 @@ def install(fd: int, name: str, data: bytes, *, mode: int = 0o600, exclusive: bo
 
 class StoreIO:
     def __init__(self, root: Path, locations: Mapping[str, Path],
-                 location_members: Mapping[str, tuple[str, ...] | None] | None = None) -> None:
+                 location_members: Mapping[str, tuple[str, ...] | None] | None = None,
+                 namespace_backups: Mapping[str, Path] | None = None) -> None:
         self.root = root
         self.locations = dict(locations)
         self.location_members = {key: (location_members or {}).get(key) for key in locations}
+        self.namespace_backups = dict(namespace_backups or {})
         self.root_fds: dict[str, int] = {}
         self.fd = -1
 
@@ -172,7 +174,8 @@ class StoreIO:
         if active is not None:
             owned, process, thread = active
             if process == os.getpid() and thread == get_ident() and owned.root == self.root and owned.fd >= 0:
-                if owned.locations != self.locations or owned.location_members != self.location_members:
+                if (owned.locations != self.locations or owned.location_members != self.location_members
+                        or owned.namespace_backups != self.namespace_backups):
                     raise ProjectStoreError("An owned project transaction cannot expand its resource roots.")
                 owned.verify_roots()
                 yield owned

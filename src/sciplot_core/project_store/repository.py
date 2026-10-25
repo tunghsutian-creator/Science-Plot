@@ -20,8 +20,12 @@ from .resources import ResourceRoot
 
 
 class FileProjectStore:
-    def __init__(self, project_root: Path, *, locations: Mapping[str, Path | ResourceRoot] | None = None) -> None:
+    def __init__(self, project_root: Path, *, locations: Mapping[str, Path | ResourceRoot] | None = None,
+                 namespace_backups: Mapping[str, Path] | None = None) -> None:
         self.root = Path(project_root).expanduser().resolve(strict=True)
+        self.namespace_backups = {key: Path(path).expanduser().absolute() for key, path in (namespace_backups or {}).items()}
+        if any(path.resolve(strict=True) != path for path in self.namespace_backups.values()):
+            raise ProjectStoreError("A namespace backup capability cannot follow symbolic aliases.")
         if locations is None and (self.root / STORE / "local_locations.json").exists():
             # Cold bundles may register only confined, host-created local views.
             with StoreIO(self.root, {}).locked() as io:
@@ -58,7 +62,7 @@ class FileProjectStore:
     @contextmanager
     def _locked(self, *, import_legacy: bool = False, repair: bool = False,
                 allow_pending: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any]]]:
-        with StoreIO(self.root, self.locations, self.location_members).locked() as io:
+        with StoreIO(self.root, self.locations, self.location_members, self.namespace_backups).locked() as io:
             current = state.head(io)
             if current is None:
                 if not import_legacy:
@@ -92,6 +96,12 @@ class FileProjectStore:
 
         with self._locked(allow_pending=True) as (io, current):
             return capture(io, current, resource, source_id=source_id, before_sha256=before_sha256)
+
+    def capture_namespace(self, prefix: str) -> dict[str, Any]:
+        from .namespace_io import capture
+
+        with self._locked(allow_pending=True) as (io, current):
+            return capture(io, current, prefix)
 
     def reserve(self, command_id: str, command_digest: str, *, expected_generation: str | None,
                 read_set: Mapping[str, str | None], write_set: Sequence[str],
@@ -272,112 +282,14 @@ class FileProjectStore:
 
     def resolve_path(self, original: str | Path, *, expected_sha256: str | None = None,
                      source_id: str | None = None, generation: str | None = None) -> Path:
-        import sciplot_core.project_store.locators as locators
+        from .paths import resolve_path
 
-        literal = str(original)
-        with self._locked() as (io, current):
-            value = state.reachable(io, current, generation) if generation else current
-            private = native_work.resolve(io, value, Path(literal), expected_sha256=expected_sha256, source_id=source_id)
-            if private is not None:
-                return private
-            import sciplot_core.project_store.directories as directories
-            owned = locators.owned_source_view(io, value, Path(literal), expected_sha256=expected_sha256, source_id=source_id)
-            if owned is None:
-                owned = directories.owned_view(io, value, Path(literal), expected_sha256=expected_sha256)
-            if owned is not None:
-                return owned[0]
-            if (generation is not None and generation != current["generation"]
-                    and source_id is not None and expected_sha256 is not None):
-                logical_source = locators.logical_for_literal(value, literal)
-                if logical_source is None:
-                    try:
-                        selected = self.logical_path(Path(literal))
-                        logical_source = selected if selected in value["files"] else None
-                    except ProjectStoreError:
-                        pass
-                origin = locators.original_for_logical(value, logical_source) if logical_source else literal
-                identity, version, _entry = locators.source_entry(io, value, origin,
-                    expected_sha256=expected_sha256, source_id=source_id)
-                return self.resolve_source(identity, version)
-            logical = locators.logical_for_literal(value, literal)
-            if logical is None:
-                try:
-                    candidate = self.logical_path(Path(literal))
-                    logical = candidate if candidate in value["files"] else None
-                except ProjectStoreError:
-                    pass
-            if logical is not None:
-                entry = locators.checked_member(io, value, logical, expected_sha256)
-                if source_id is not None:
-                    locators.source_entry(io, value, locators.original_for_logical(value, logical),
-                        expected_sha256=entry["sha256"], source_id=source_id)
-                components = parts(logical)
-                return (self.locations[components[0][1:]] / Path(*components[1:])
-                        if components[0].startswith("@") else self.root / Path(*components))
-            closed = directories.resolve(io, value, Path(literal), expected_sha256=expected_sha256)
-            if closed is not None:
-                return closed
-            identity, version, entry = locators.source_entry(io, value, literal,
-                expected_sha256=expected_sha256, source_id=source_id)
-            local = io.read("local_sources.json") or {"versions": {}}
-            if local["versions"].get(identity, {}).get(version) == entry["sha256"]:
-                return self.resolve_source(identity, version)
-            from .io import read_file
-            import os
-
-            source = Path(literal)
-            try:
-                parent = os.open(source.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-                try:
-                    data, _mode = read_file(parent, source.name)
-                finally:
-                    os.close(parent)
-            except OSError as exc:
-                raise ProjectConflict("The exact registered original is missing; no same-name reconnection is allowed.") from exc
-            if sha(data) != version:
-                raise ProjectConflict("The exact original source differs from its registered version.")
-            return source
+        return resolve_path(self, original, expected_sha256=expected_sha256, source_id=source_id, generation=generation)
 
     def literal_path(self, actual: Path, *, generation: str | None = None) -> str:
-        import sciplot_core.project_store.locators as locators
+        from .paths import literal_path
 
-        with self._locked() as (io, current):
-            value = state.reachable(io, current, generation) if generation else current
-            private = native_work.literal(io, value, actual)
-            if private is not None:
-                return private
-            import sciplot_core.project_store.directories as directories
-            owned = locators.owned_source_view(io, value, actual)
-            if owned is None:
-                owned = directories.owned_view(io, value, actual)
-            if owned is not None:
-                return owned[1]
-            try:
-                logical = self.logical_path(actual)
-            except ProjectStoreError:
-                logical = None
-            if logical is not None and logical in value["files"]:
-                locators.checked_member(io, value, logical, None)
-                return locators.original_for_logical(value, logical)
-            prefix_literal = directories.literal(io, value, actual)
-            if prefix_literal is not None:
-                return prefix_literal
-            for identity, versions in value["sources"].items():
-                for version, entry in versions.items():
-                    name = Path(entry.get("locator") or entry.get("logical") or "source.bin").name
-                    if actual == self.root / STORE / "sources" / identity / version / name:
-                        from .io import read_file
-                        import os
-
-                        parent = os.open(actual.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-                        try:
-                            observed = read_file(parent, actual.name)[0]
-                        finally:
-                            os.close(parent)
-                        if observed != io.get(entry):
-                            raise ProjectConflict("The resolved source view changed.")
-                        return str(entry["locator"])
-            raise ProjectStoreError("The actual path has no exact preserved locator in this generation.")
+        return literal_path(self, actual, generation=generation)
 
     def export_bundle(self, destination: Path) -> Path:
         from .portable import export_bundle

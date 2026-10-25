@@ -29,14 +29,14 @@ def store_for_project(project: Path, *, locations: Mapping[str, Path | ResourceR
                      for key, value in (locations or {}).items()}
         if locations is not None and capabilities != requested:
             raise ValueError("An active project scope cannot change trusted resource capabilities.")
-        return FileProjectStore(root, locations=capabilities)
+        return FileProjectStore(root, locations=capabilities, namespace_backups=active.namespace_backups)
     return FileProjectStore(root, locations=locations)
 
 
 @contextmanager
 def project_storage_scope(project: Path, *, locations: Mapping[str, Path | ResourceRoot] | None = None) -> Iterator[FileProjectStore]:
     store = store_for_project(project, locations=locations)
-    with StoreIO(store.root, store.locations, store.location_members).locked(blocking=True) as io:
+    with StoreIO(store.root, store.locations, store.location_members, store.namespace_backups).locked(blocking=True) as io:
         current = state.head(io)
         if current is None:
             current = state.import_legacy(io)
