@@ -95,6 +95,10 @@ def resolve_transforms(document: Any, datasets: dict[str, dict[str, Any]], *,
                 fail("transform_cache_corrupt", "Cached transform bytes do not match their execution seal.", "/cache", "content_hash")
             reused.append(node["id"])
         else:
+            if node["kind"] == "external":
+                from .external import authorize_external
+
+                authorize_external(node, values[node["inputs"][0]], external_executors or {})
             if before_execute is not None:
                 before_execute(deepcopy(node), key)
             candidate, actual = execute_node(node, values, external_executors=external_executors)
