@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from uuid import uuid4
 
 import pytest
 
@@ -29,9 +30,9 @@ def managed(root):
     service = PlotService()
     try:
         created = service.create(request, project=project)
-        assert created["ready_to_use"] and created["revision"] == 0
+        assert created["ready_to_use"] and created["revision"] == 0, created
         styled = service.patch(Path(created["plot"]), patch(created, "native-style", "style.line.width", "1.2pt", "series:A"))
-        assert styled["ready_to_use"] and styled["revision"] == 1
+        assert styled["ready_to_use"] and styled["revision"] == 1, styled
         assert styled["scientific_hash"] == created["scientific_hash"]
         snapshot = store.snapshot()
         history = {name: store.read_bytes(name) for name in snapshot["files"] if "/revisions/" in name}
@@ -83,7 +84,7 @@ def legacy(root):
         opened = service.open(project, figure_id="primary")
         assert opened["plot_type"] == "LegacyPlot" and Path(opened["plot"]).parent == project / ".sciplot_semantic"
         styled = service.patch(Path(opened["plot"]), patch(opened, "native-legacy-style", "style.line.width", "1.3pt", "series:A"))
-        assert styled["ready_to_use"] and styled["revision"] == 1
+        assert styled["ready_to_use"] and styled["revision"] == 1, styled
         assert styled["scientific_hash"] == opened["scientific_hash"]
         native = (studio / "document.vsz").read_bytes()
         history = {name: store.read_bytes(name) for name in store.snapshot()["files"] if "/revisions/" in name}
@@ -111,6 +112,7 @@ def legacy(root):
 
 def legacy_pending(root):
     from managed_plot_helpers import patch
+    from sciplot_core.foundation.project_session_lease import external_project_session
     from sciplot_core.plot_engine.service import PlotService
     from sciplot_core.project_lifecycle.repository import FileProjectRepository, transaction_path
     from sciplot_core.project_store.repository import FileProjectStore
@@ -131,7 +133,7 @@ def legacy_pending(root):
     shutil.copy2(rendered["veusz_documents"][0], studio / "document.vsz")
     shutil.copy2(rendered["veusz_specs"][0], studio / "spec.json")
     (project / "plot_request.json").write_text(json.dumps({"input": str(source), "template": "curve"}))
-    repository = FileProjectRepository()
+    repository = FileProjectRepository(lease=external_project_session)
     original = PlotService(repository=repository)
     try:
         opened = original.open(project, figure_id="primary")
@@ -199,7 +201,8 @@ def scenario(kind, root):
 
     def tracked(command, *args, **kwargs):
         process = original(command, *args, **kwargs)
-        if isinstance(command, (tuple, list)) and "sciplot_core.veusz_worker" in command:
+        if isinstance(command, (tuple, list)) and any(isinstance(item, str) and (
+                item == "sciplot_core.veusz_worker" or item.startswith("sciplot_core.veusz_worker.")) for item in command):
             workers.append(process)
         return process
 
@@ -208,6 +211,13 @@ def scenario(kind, root):
     try:
         {"managed": managed, "legacy": legacy, "legacy_pending": legacy_pending}[kind](root)
         completed = True
+    except subprocess.CalledProcessError as exc:
+        def stream(value):
+            return value.decode(errors="replace") if isinstance(value, bytes) else value
+
+        (root / "failed-native-process.json").write_text(json.dumps({"cmd": exc.cmd, "exit": exc.returncode,
+            "stdout": stream(exc.stdout), "stderr": stream(exc.stderr)}))
+        raise
     finally:
         subprocess.Popen = original
         natural = bool(workers) and all(process.poll() is not None for process in workers)
@@ -229,6 +239,16 @@ def scenario(kind, root):
 def test_attached_public_native_cold_lifecycle(tmp_path, kind):
     result = subprocess.run([sys.executable, __file__, kind, str(tmp_path)], env=veusz_worker_environment(),
                             capture_output=True, text=True, timeout=180, check=False)
+    evidence = Path(__file__).resolve().parents[1] / ".tmp_verify/attached-semantic/native-cases" / (uuid4().hex + "-" + kind)
+    evidence.mkdir(parents=True)
+    (evidence / "child.stdout.log").write_text(result.stdout)
+    (evidence / "child.stderr.log").write_text(result.stderr)
+    (evidence / "result.json").write_text(json.dumps({"command": result.args, "exit": result.returncode, "scenario": kind}))
+    for path in tmp_path.rglob("*.json"):
+        if path.name in {"owned-native.json", "failed-native-process.json"} or path.name.startswith("diagnostic-"):
+            target = evidence / path.relative_to(tmp_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads((tmp_path / "owned-native.json").read_text())["checks"]
 
