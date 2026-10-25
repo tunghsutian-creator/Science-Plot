@@ -171,3 +171,15 @@ def test_published_filesystem_index_continues_memory_repository_semantic_target(
     assert repo.values == before and index.read_bytes() == original
     assert str(index) not in repo.values and not (plot / "head.json").exists()
     assert backend.calls == {"preview": 0, "apply": 0, "export": 1}
+
+
+def test_old_rollback_and_reimport_execution_hash_is_not_a_business_digest(tmp_path):
+    backend = FakeBackend(tmp_path / "native")
+    document, _ = backend.initial()
+    for original in ({"rollback_request": {"base_revision": 0, "target_revision": 0, "idempotency_key": "old"}},
+                     {"mode": "reimport", "reimport_request": {"base_revision": 0, "decision_id": "b" * 64, "reimport": True}}):
+        transaction = {"document": document, "phase": "complete", "request_hash": "a" * 64,
+                       "request": {"base_revision": 0, "idempotency_key": "old", "generated_execution": True}, **original}
+        untouched = deepcopy(transaction)
+        assert Receipt.of(transaction).to_payload()["command_digest"] is None
+        assert transaction == untouched and transaction["request_hash"] == "a" * 64

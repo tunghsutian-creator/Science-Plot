@@ -147,8 +147,10 @@ class Receipt:
     @classmethod
     def of(cls, transaction: dict[str, Any]) -> "Receipt":
         command = transaction.get("normalized_command", {})
+        # Historical request_hash may identify a generated inverse/native request,
+        # so it cannot certify the canonical business command digest.
         return cls(RevisionToken.of(transaction["document"]), RecoveryState.of(transaction),
-                   command.get("request_digest") or transaction.get("request_hash"))
+                   command.get("request_digest"))
 
     def to_payload(self) -> dict[str, Any]:
         return {"plot_id": self.revision.plot_id, "revision": self.revision.revision,
