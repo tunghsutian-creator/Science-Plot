@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from functools import partial
 
 from sciplot_core.foundation.source_locations import resolve_source_path
 
@@ -37,21 +38,13 @@ def read_candidate_tables(
             with pd.ExcelFile(resolve_source_path(path)) as workbook:
                 if selected_sheet is not None and selected_sheet not in workbook.sheet_names:
                     raise ValueError(f"Confirmed worksheet {selected_sheet!r} is missing from {path.name}.")
-                tables.extend(
-                    (
-                        f"{path.stem}:{sheet_name}",
-                        _structural_empty_cells_as_missing(
-                            read_table_once(path, ("candidate_sheet", sheet_name), lambda sheet_name=sheet_name: workbook.parse(
-                                sheet_name,
-                                header=None,
-                                keep_default_na=False,
-                            ))
-                        ).dropna(axis=1, how="all"),
-                    )
-                    for sheet_name in (
-                        [selected_sheet] if selected_sheet is not None else workbook.sheet_names
-                    )
-                )
+                def read_sheet(sheet: str | int) -> pd.DataFrame:
+                    return pd.read_excel(workbook, sheet_name=sheet, header=None, keep_default_na=False)
+
+                for sheet_name in ([selected_sheet] if selected_sheet is not None else workbook.sheet_names):
+                    tables.append((f"{path.stem}:{sheet_name}", _structural_empty_cells_as_missing(
+                        read_table_once(path, ("candidate_sheet", sheet_name), partial(read_sheet, sheet_name))
+                    ).dropna(axis=1, how="all")))
         else:
             tables.append(
                 (

@@ -87,7 +87,7 @@ def _cell_text(value: object) -> str:
     if value is None:
         return ""
     try:
-        if pd.isna(value):
+        if pd.isna(cast(Any, value)):
             return ""
     except (TypeError, ValueError):
         pass
@@ -148,7 +148,7 @@ def _read_raw_table(
 ) -> _RawTable:
     read_path = resolve_source_path(path, expected_sha256=reference.sha256)
     digest = file_sha256(read_path)
-    options = ("mapping_cells", reference.sheet, reference.delimiter, reference.decimal,
+    options: tuple[object, ...] = ("mapping_cells", reference.sheet, reference.delimiter, reference.decimal,
                preserve_cells or reference.data_start_row is not None)
     if path.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}:
         options = ("mapping_excel", reference.sheet if reference.sheet is not None else 0)
@@ -289,9 +289,9 @@ def _condition_mask(frame: pd.DataFrame, condition: dict[str, Any], *,
         return series.notna()
     value = condition["value"]
     if operator == "eq":
-        return series == value
+        return cast(pd.Series, series == value)
     if operator == "ne":
-        return series != value
+        return cast(pd.Series, series != value)
     if operator == "in":
         return series.isin(value)
     if operator == "not_in":
