@@ -13,6 +13,7 @@ from sciplot_core.source_tables.parsing import (
 )
 
 from sciplot_core.source_coverage.artifacts import _result_path_list
+from sciplot_core.source_coverage.inventory_paths import source_inventory_contains
 from sciplot_core.source_coverage.document_audit import _audit_exact_document_data
 from sciplot_core.source_coverage.evaluate import evaluate_mapping_source_coverage
 from sciplot_core.source_coverage.file_snapshots import (
@@ -63,10 +64,7 @@ def verify_managed_document_sources(
         source_records = _source_records(spec)
         snapshots = []
         for path, digest in source_records.items():
-            if not any(
-                path == root or root.is_dir() and path.is_relative_to(root)
-                for root in roots
-            ):
+            if not source_inventory_contains(path, roots):
                 raise ValueError(
                     f"Managed Veusz data cite a source outside the delivery data inventory: {path}"
                 )

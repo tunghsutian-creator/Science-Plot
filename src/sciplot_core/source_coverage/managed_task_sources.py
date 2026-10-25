@@ -9,6 +9,7 @@ from typing import Any
 from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 from sciplot_core.data_mapping.source_projection import verified_mapping_source_groups
 from sciplot_core.figure_plan import resolved_figure_plan_from_payload
+from sciplot_core.source_coverage.inventory_paths import source_inventory_contains
 from sciplot_core.source_coverage.file_snapshots import (
     _assert_snapshot_current,
     _stable_file_snapshot,
@@ -41,10 +42,6 @@ def registered_task_snapshot_sources(
     plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
     additions: list[Path] = []
     root = Path(literal_source_path(project_dir))
-    # Membership is scientific/literal identity; directory checks are physical
-    # IO through the selected locator. A closed cold view is not a new source.
-    existing_inventory = [(Path(literal_source_path(source)), resolve_source_path(source).is_dir())
-                          for source in existing_sources]
     for document in documents:
         spec_path = (
             document.with_name("spec.json")
@@ -57,10 +54,7 @@ def registered_task_snapshot_sources(
         extra = [
             path
             for path in records
-            if not any(
-                path == source or is_directory and path.is_relative_to(source)
-                for source, is_directory in existing_inventory
-            )
+            if not source_inventory_contains(path, existing_sources)
         ]
         if not extra:
             continue

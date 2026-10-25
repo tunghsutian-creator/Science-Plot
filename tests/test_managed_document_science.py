@@ -452,3 +452,52 @@ def test_snapshot_accepts_only_ctime_drift_after_fresh_content_check(tmp_path: P
     source.write_bytes(baseline['bytes'])
     with pytest.raises(ValueError, match='changed during'):
         file_snapshots._assert_snapshot_current(baseline, label='test')
+
+
+@pytest.mark.parametrize("change", [None, "foreign_source", "forged_values"])
+def test_offline_delivery_source_membership_uses_literal_identity_and_real_replay(tmp_path, monkeypatch, change):
+    from sciplot_core.foundation.source_locations import resolve_source_path
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.source_coverage import managed_documents
+    from sciplot_core.studio_core import veusz_document
+    from sciplot_core.studio_core.series_request import _series_from_request
+    root = tmp_path / "project"
+    source = root / "source/A.csv"
+    source.parent.mkdir(parents=True)
+    source.write_text("Wavelength,Absorbance\nnm,a.u.\nA,A\n400,0.1\n450,0.2\n500,0.3\n")
+    request = {"input": str(source), "rule_id": "uvvis_spectrum", "template": "curve"}
+    series, axes, _, _ = _series_from_request(request, base_dir=root)
+    document = root / "studio/document.vsz"
+    monkeypatch.setattr(veusz_document, "_save_veusz_document_from_spec", lambda *_a, **_k: None)
+    spec_path = veusz_document._write_veusz_document(document, request=request, series=series, axis_info=axes)
+    document.write_bytes(b"generated native placeholder; native audit is replaced only")
+    spec = json.loads(spec_path.read_text())
+    prepared = Path(spec["series"][0]["source_artifacts"][0]["path"])
+    if change == "foreign_source":
+        foreign = root / "other/A.csv"
+        foreign.parent.mkdir()
+        foreign.write_bytes(prepared.read_bytes())
+        spec["series"][0]["source_artifacts"][0]["path"] = str(foreign)
+    elif change == "forged_values":
+        spec["series"][0]["y_values"][0] = 99.0
+    spec_path.write_text(json.dumps(spec))
+    store = FileProjectStore(root)
+    before = store.snapshot(import_legacy=True)
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "cold")
+    root.rename(tmp_path / "original-offline")
+    def native_only(**kwargs):
+        return {"status": "passed"}, json.loads(resolve_source_path(kwargs["spec_path"]).read_text())
+    monkeypatch.setattr(managed_documents, "_audit_exact_document_data", native_only)
+    with project_runtime(cold):
+        result = {"veusz_documents": [str(document)],
+                  "data_snapshot_sources": [str(resolve_source_path(prepared.parent))]}
+        if change is None:
+            verified = verify_managed_document_sources(result)
+            assert verified["status"] == "passed"
+            assert verified["documents"][0]["prepared_source_derivation"]["status"] == "passed"
+        else:
+            with pytest.raises(ValueError, match="outside the delivery" if change == "foreign_source" else "reproduce"):
+                verify_managed_document_sources(result)
+    assert not source.exists() and cold.read_bytes("source/A.csv").startswith(b"Wavelength,Absorbance")
+    assert cold.snapshot()["generation"] == before["generation"]

@@ -324,3 +324,23 @@ def test_cold_directory_membership_does_not_admit_same_name_unregistered_group(t
     with project_runtime(cold), pytest.raises(ValueError, match="registered FigureTask"):
         registered_task_snapshot_sources(request={}, project_dir=cold.root,
             documents=[document], existing_sources=[resolve_source_path(source.parent)])
+
+
+def test_cold_inventory_does_not_read_an_unrelated_absent_optional_root(tmp_path):
+    from sciplot_core.foundation.source_locations import resolve_source_path
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.source_coverage.inventory_paths import source_inventory_contains
+    root = tmp_path / "project"
+    source = root / "source/A.csv"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"x,y\n1,2\n")
+    store = FileProjectStore(root)
+    store.snapshot(import_legacy=True)
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "cold")
+    root.rename(tmp_path / "original-offline")
+    with project_runtime(cold):
+        roots = [cold.root / "studio/processed-optional", resolve_source_path(source.parent)]
+        assert source_inventory_contains(source, roots)
+        assert not source_inventory_contains(source.with_name("foreign.csv"), [roots[0]])
+    assert not roots[0].exists()
