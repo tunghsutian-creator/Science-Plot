@@ -15,7 +15,7 @@ def native_dispatch(operation: str, target: Path, *, figure_id: str | None = Non
         return None
     from sciplot_core.workflow import native_suite_operations as owner
 
-    resolved = owner.resolve_native_object(target, figure_id)
+    resolved = owner.resolve_native_object(target, figure_id, repair=operation != "describe")
     if resolved is None:
         return None
     if not isinstance(resolved.get("plot"), str):

@@ -5,24 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.workflow.rheology_tts_style_storage import check_snapshot
 
 
 def seal_publication(directory: Path, preview: dict[str, Any], updates: list[tuple[Path, Path]],
                      candidates: dict[str, str], result: dict[str, Any]) -> None:
-    files = {str(target.resolve()): candidates[str(source.resolve())] for source, target in updates}
-    if len(files) != len(updates):
-        raise ValueError("Duplicate publication intent target.")
-    intent = {"kind": "sciplot_rheology_publication_intent", "version": 1,
-              "preview_sha256": canonical_json_sha256(preview), "published_files": files, "result": result}
-    path = directory / "publication_intents" / (uuid4().hex + ".json")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(path, intent)
-    path.with_suffix(".sha256").write_text(canonical_json_sha256(intent), encoding="ascii")
+    raise RuntimeError("Independent publication intents are retired; freeze the candidate in ProjectCommands.")
 
 
 def recover_publication(directory: Path, preview: dict[str, Any]) -> dict[str, Any] | None:
@@ -47,7 +37,5 @@ def recover_publication(directory: Path, preview: dict[str, Any]) -> dict[str, A
             check_snapshot(intent["published_files"], label="exact installed presentation")
         except (ValueError, FileNotFoundError):
             continue
-        applied = {"published_files": intent["published_files"], "result": intent["result"]}
-        atomic_write_json(directory / "applied.json", applied)
         return {**intent["result"], "already_applied": True, "recovered_publication": True}
     return None

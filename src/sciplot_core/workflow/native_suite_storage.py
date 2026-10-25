@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.studio_core.source_update_commit import reject_symlink_path
 
@@ -38,15 +37,21 @@ def read_operation(path: Path) -> dict[str, Any] | None:
     return record
 
 
-def save_operation(path: Path, record: dict[str, Any]) -> None:
-    reject_symlink_path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(path, record)
-
-
 def pending_operation(context: dict[str, Any]) -> dict[str, Any] | None:
     matches = []
+    migrated = set()
+    workspace = Path(context["workspace"])
+    if (workspace / ".sciplot_store/head.json").exists():
+        from sciplot_core.project_store import FileProjectStore
+        for record in FileProjectStore(workspace, locations={"delivery": Path(context["delivery"])}).commands():
+            migrated.add(record.get("review", {}).get("legacy_operation"))
+            metadata = record.get("metadata", {}).get("request", {})
+            if (metadata.get("adapter") == "native_display" and metadata.get("figure_id") == context["figure_id"]
+                    and record["phase"] not in {"complete", "rejected"}):
+                matches.append({"request": metadata["request"], "phase": record["phase"]})
     for path in operation_paths(context):
+        if str(path) in migrated:
+            continue
         record = read_operation(path)
         if (record is not None and record["plot"] == context["plot"]
                 and record["phase"] not in {"complete", "rejected"}):

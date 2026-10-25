@@ -182,19 +182,14 @@ def _dispatch(request: dict[str, Any]) -> dict[str, Any]:
         request_path.write_text(
             json.dumps(request, ensure_ascii=False), encoding="utf-8"
         )
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "sciplot_core.rheology_tts_render",
-                "--worker",
-                str(request_path),
-            ],
-            env=veusz_worker_environment(),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        from sciplot_core.project_store.worker_binding import native_runtime_binding
+        arguments = ["--worker", str(request_path)]
+        with native_runtime_binding(arguments) as binding:
+            command = [sys.executable, "-m", "sciplot_core.rheology_tts_render", *arguments]
+            if binding is not None:
+                command.extend(["--project-runtime", binding["path"], binding["sha256"]])
+            result = subprocess.run(command, env=veusz_worker_environment(), capture_output=True,
+                                    text=True, check=False)
         if result.returncode:
             failure = RuntimeError(f"Native TTS figure operation failed:\n{result.stderr}")
             try:
@@ -339,11 +334,15 @@ def _export(
     return {**result, "native_audit": audit, "native_audit_path": str(audit_path)}
 
 
+def _worker_entry(arguments: list[str]) -> dict[str, Any]:
+    from sciplot_core.project_store.worker_binding import worker_project_runtime
+    if (len(arguments) not in {2, 5} or arguments[0] != "--worker"
+            or len(arguments) == 5 and arguments[2] != "--project-runtime"):
+        raise ValueError("Internal native worker requires its exact host-created request and binding.")
+    reference = {"path": arguments[3], "sha256": arguments[4]} if len(arguments) == 5 else None
+    with worker_project_runtime(reference, arguments[:2]):
+        return _worker_result(json.loads(Path(arguments[1]).read_text(encoding="utf-8")))
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 3 or sys.argv[1] != "--worker":
-        raise SystemExit("Internal native worker; use the public rheology tts command.")
-    print(
-        json.dumps(
-            _worker_result(json.loads(Path(sys.argv[2]).read_text(encoding="utf-8")))
-        )
-    )
+    print(json.dumps(_worker_entry(sys.argv[1:])))

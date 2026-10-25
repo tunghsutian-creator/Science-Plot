@@ -14,7 +14,6 @@ from urllib.parse import quote
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
-from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.studio_core.source_update_commit import file_inventory, reject_symlink_path
 from sciplot_core.workflow.rheology_tts_suite import _check_sources, _compiled_figures, _launcher, _publish
 from sciplot_core.workflow.rheology_tts_tables import write_json, write_plot_tables
@@ -314,19 +313,37 @@ def check_prepared_continuation(request_path: Path, request: dict, spec: dict, c
 
 def create_prepared_suite(request_path: Path, request: dict, spec: dict, compiled: dict,
                           delivery: Path, workspace: Path, *, contract_sha256: str, resume: bool) -> dict:
-    from sciplot_core.workflow.rheology_tts_creation_repair import attach_creation_repair
+    from sciplot_core.workflow.native_suite_creation import create_project
 
-    binding = _creation_binding(request, spec, compiled, delivery, workspace, contract_sha256)
-    reject_symlink_path(workspace)
-    reject_symlink_path(delivery)
-    workspace.parent.mkdir(parents=True, exist_ok=True)
-    with external_project_session(workspace):
-        try:
-            return _create_locked(request_path, request, spec, compiled, delivery, workspace, binding, resume=resume)
-        except Exception as exc:
-            attach_creation_repair(exc, request_path, workspace, check=lambda: check_prepared_continuation(
-                request_path, request, spec, compiled, delivery, workspace, binding))
-            raise
+    request_path = request_path.expanduser().resolve()
+    original = {"adapter": "prepared_native_suite", "request": request,
+                "binding": _creation_binding(request, spec, compiled, delivery, workspace, contract_sha256)}
+    from sciplot_core.workflow.native_suite_runtime import current_store
+    active = current_store()
+    if active is not None:
+        matching = [item for item in active.commands()
+                    if item.get("metadata", {}).get("request", {}).get("adapter") == "prepared_native_suite"
+                    and item["metadata"]["request"].get("request") == request]
+        if len(matching) > 1:
+            raise ValueError("Prepared creation identity is ambiguous; preserve its original commands.")
+        if matching:
+            saved = matching[0]["metadata"]["request"]
+            binding = saved["binding"]
+            if (binding["compiled_sha256"] != canonical_json_sha256(compiled)
+                    or binding["sources"] != spec["source_binding"]["sources"]
+                    or binding["prepared_input"]["sha256"] != spec["source_binding"]["prepared_plan"]["sha256"]
+                    or binding["contract_sha256"] != contract_sha256):
+                raise ValueError("Prepared creation source/spec bindings changed; do not recreate native work.")
+            original = saved
+    def prepare(candidate_workspace: Path, candidate_delivery: Path) -> dict:
+        binding = _creation_binding(request, spec, compiled, candidate_delivery, candidate_workspace, contract_sha256)
+        return _create_locked(request_path, request, spec, compiled, candidate_delivery, candidate_workspace,
+                              binding, resume=False)
+    inputs = [*spec["source_binding"]["sources"],
+              {"path": spec["source_binding"]["prepared_plan"]["path"],
+               "sha256": spec["source_binding"]["prepared_plan"]["sha256"]},
+              {"path": str(request_path), "sha256": file_sha256(request_path)}]
+    return create_project(workspace, delivery, original, inputs, prepare, resume=resume)
 
 
 def _create_locked(request_path: Path, request: dict, spec: dict, compiled: dict, delivery: Path,

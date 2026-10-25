@@ -12,11 +12,17 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.plot_engine.description_scope import require_selector
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.studio_core.source_update_commit import reject_symlink_path
-from sciplot_core.workflow.rheology_tts_suite import _check_sources, _compiled_figures
+from sciplot_core.workflow.rheology_tts_suite import _check_sources, _compiled_figures, _active_receipts
 from sciplot_core.rheology_tts_native_display import native_targets as native_targets
+from sciplot_core.workflow.native_suite_runtime import current_store, delivery_path, native_path, native_runtime, suite_runtime
 
 
-def resolve_native_object(target: Path, figure_id: str | None = None) -> dict[str, Any] | None:
+def resolve_native_object(target: Path, figure_id: str | None = None, *, repair: bool = False) -> dict[str, Any] | None:
+    with suite_runtime(target, repair=repair):
+        return _resolve_native_object(target, figure_id, repair=repair)
+
+
+def _resolve_native_object(target: Path, figure_id: str | None = None, *, repair: bool = False) -> dict[str, Any] | None:
     target = target.expanduser()
     reject_symlink_path(target)
     target = target.resolve()
@@ -31,12 +37,19 @@ def resolve_native_object(target: Path, figure_id: str | None = None) -> dict[st
     manifest = json.loads(path.read_text(encoding="utf-8"))
     if manifest.get("kind") != "sciplot_rheology_tts_suite":
         return None
-    workspace, delivery = Path(manifest["workspace"]), Path(manifest["delivery"])
+    active = current_store()
+    workspace = active.root if active is not None else Path(manifest["workspace"])
+    delivery = delivery_path(manifest)
     for directory in (workspace, delivery):
         reject_symlink_path(directory)
         if directory != directory.resolve():
             raise ValueError("Native suite locations must be canonical absolute paths.")
     hidden, visible = workspace / "suite.json", delivery / "data/delivery_manifest.json"
+    if (workspace / ".sciplot_store/head.json").exists():
+        from sciplot_core.project_store import FileProjectStore
+        store = active or FileProjectStore(workspace, locations={"delivery": delivery})
+        store.recover() if repair else store.snapshot()
+        manifest = json.loads((workspace / "suite.json").read_text(encoding="utf-8"))
     for bound in (hidden, visible):
         reject_symlink_path(bound)
         if json.loads(bound.read_text(encoding="utf-8")) != manifest:
@@ -48,7 +61,7 @@ def resolve_native_object(target: Path, figure_id: str | None = None) -> dict[st
     if len(set(identifiers)) != len(identifiers):
         raise ValueError("Native suite document identities are not unique.")
     if target.suffix.lower() == ".vsz":
-        matches = [item for item in documents if Path(item["path"]) == target]
+        matches = [item for item in documents if native_path(manifest, item) == target]
         if len(matches) != 1 or (figure_id is not None and matches[0]["id"] != figure_id):
             raise EngineError("native_object_unknown_figure", "Choose an exact native figure from this suite.")
     else:
@@ -57,7 +70,7 @@ def resolve_native_object(target: Path, figure_id: str | None = None) -> dict[st
         raise EngineError("native_object_figure_required", "Select one exact existing figure ID.",
                           available_figures=identifiers)
     selected = matches[0]
-    native = Path(selected["path"])
+    native = native_path(manifest, selected)
     if native != delivery / "editable" / f"{selected['id']}.vsz":
         raise ValueError("Native figure lies outside its bound visible editable directory.")
     reject_symlink_path(native)
@@ -67,8 +80,8 @@ def resolve_native_object(target: Path, figure_id: str | None = None) -> dict[st
             "delivery": str(delivery), "manifest": manifest, "document": selected}
 
 
-def require_object(target: Path) -> dict[str, Any]:
-    context = resolve_native_object(target)
+def require_object(target: Path, *, repair: bool = False) -> dict[str, Any]:
+    context = resolve_native_object(target, repair=repair)
     if context is None:
         raise EngineError("native_object_unbound", "This is not a bound native suite figure.")
     return context
@@ -77,9 +90,10 @@ def require_object(target: Path) -> dict[str, Any]:
 def selected_spec(context: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
     manifest, identifier = context["manifest"], context["figure_id"]
     figure = _compiled_figures(manifest, figure_ids=(identifier,))[identifier]
-    receipts = manifest.get("presentation_revision", {}).get("figures") or manifest["native_result"]["figures"]
+    receipts = _active_receipts(manifest)
     receipt = next(item for item in receipts if item["id"] == identifier)
-    path = Path(receipt["spec_path"])
+    from sciplot_core.project_store.runtime import resolve_runtime_path
+    path = resolve_runtime_path(receipt["spec_path"], expected_sha256=receipt["spec_sha256"])
     reject_symlink_path(path)
     return path, figure
 
@@ -98,7 +112,7 @@ def capture_object(context: dict[str, Any]) -> dict[str, Any]:
     sources = manifest["sources"]
     scientific = json.loads(spec_path.read_text(encoding="utf-8"))
     return {**context, "state": state, "figure": figure, "spec_path": str(spec_path),
-            "spec_sha256": spec_sha, **native_identity(context["workspace"], context["figure_id"],
+            "spec_sha256": spec_sha, **native_identity(manifest["workspace"], context["figure_id"],
                 sources, spec_sha, state["document_sha256"]),
             "scientific_hash": canonical_json_sha256(scientific),
             "presentation_hash": state["document_sha256"]}
@@ -121,6 +135,7 @@ def descriptor(prop: str) -> dict[str, Any]:
     return {"risk": "presentation", "value_schema": schema}
 
 
+@native_runtime()
 def describe_native_object(target: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
     description = require_selector(description)
     captured = capture_object(require_object(target))
