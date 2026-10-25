@@ -15,10 +15,14 @@ from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import safe_filename
 from sciplot_core.foundation.project_archives import write_project_archive
+from sciplot_core.foundation.private_project_manifest import (
+    private_manifest_descriptor,
+    private_project_manifest_scope as private_project_manifest_scope,
+)
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore, ProjectConflict, ResourceRoot
 from sciplot_core.project_store.adapters import project_storage_scope, publish_files, store_for_project
-from sciplot_core.project_store.io import directory, owned_io, parts, read_file
+from sciplot_core.project_store.io import directory, install, owned_io, parts, read_file
 
 _CANONICAL_MANIFEST_NAME = "intake_manifest.json"
 _PROJECT_MANIFEST_LOCK = RLock()
@@ -67,6 +71,8 @@ def intake_snapshot_location(project: Path, payload: dict[str, Any]) -> Resource
 
 
 def _manifest_store(project: Path, payload: dict[str, Any] | None = None) -> FileProjectStore:
+    if private_manifest_descriptor(project) is not None:
+        raise ValueError("A private producer returns candidate bytes; it cannot create a project generation.")
     if owned_io(project) is not None:
         return store_for_project(project)
     if (project / ".sciplot_store/local_locations.json").is_file():
@@ -91,6 +97,10 @@ def _manifest_store(project: Path, payload: dict[str, Any] | None = None) -> Fil
 def locked_intake_project_manifest(project_dir: Path) -> Iterator[Path]:
     project = project_dir.expanduser().resolve(strict=True)
     with _PROJECT_MANIFEST_LOCK:
+        if private_manifest_descriptor(project) is not None:
+            yield project
+            private_manifest_descriptor(project)
+            return
         store = _manifest_store(project)
         capabilities = {key: ResourceRoot(path, store.location_members[key]) for key, path in store.locations.items()}
         with project_storage_scope(project, locations=capabilities):
@@ -98,7 +108,19 @@ def locked_intake_project_manifest(project_dir: Path) -> Iterator[Path]:
 
 
 def _read_intake_project_manifest_unlocked(project: Path, *, store: FileProjectStore | None = None) -> dict[str, Any] | None:
+    private = private_manifest_descriptor(project)
     targets = _project_manifest_paths(project)
+    if private is not None:
+        for path in targets:
+            try:
+                data, _mode = read_file(private, path.name, owned=True)
+            except FileNotFoundError:
+                continue
+            value = json.loads(data)
+            if not isinstance(value, dict):
+                raise ValueError("A private candidate manifest must be one object.")
+            return value
+        return None
     if (project / ".sciplot_store/head.json").is_file():
         selected = store or _manifest_store(project)
         if selected.root != project:
@@ -229,6 +251,14 @@ def stage_intake_project_manifest(project: Path, payload: dict[str, Any], *, inc
 
 def _commit_intake_project_manifest_unlocked(project: Path, payload: dict[str, Any], *,
                                              mirror_path: Path | None = None) -> tuple[Path, ...]:
+    private = private_manifest_descriptor(project)
+    if private is not None:
+        private_writes = _stage_manifest_bytes(project, payload, mirror_path=mirror_path)
+        for name, data in private_writes.items():
+            private_manifest_descriptor(project)
+            install(private, name, data, mode=0o600)
+        private_manifest_descriptor(project)
+        return _project_manifest_paths(project, mirror_path=mirror_path)
     store = _manifest_store(project, payload)
     writes = stage_intake_project_manifest(project, payload, include_snapshot=False, store=store, mirror_path=mirror_path)
     publish_files(store, writes, kind="publish", result={"manifest": _CANONICAL_MANIFEST_NAME})
