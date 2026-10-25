@@ -26,6 +26,11 @@ class RepositoryBackendPaths:
             result: dict[str, Any] = self.backend.render(binding, self.repository.runtime_path(output))
             return result
 
+    def export(self, binding: dict[str, Any]) -> dict[str, Any]:
+        with self.repository.binding_scope(binding):
+            result: dict[str, Any] = self.backend.export(binding)
+            return result
+
     def apply(self, binding: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:
         with self.repository.binding_scope(binding):
             if (binding.get("kind") != "sciplot_managed_binding" and review.get("kind") == "sciplot_document_edit_preview"

@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import Any
+from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.native_process import PersistentWorker, run_worker
@@ -14,6 +15,7 @@ from sciplot_core.plot_document import DocumentError
 from sciplot_core.plot_backends.managed_plan import validate_capabilities
 from sciplot_core.studio_core.export_execution import export_studio_document
 from sciplot_core.veusz_runtime import veusz_worker_environment
+from .managed_artifacts import artifact_scope
 
 
 def _domain_failure(stderr: str | bytes | None) -> DocumentError | None:
@@ -88,8 +90,12 @@ class ManagedVeuszCompiler:
     def compile_ir(self, ir: dict[str, Any], output: Path) -> dict[str, Any]:
         output = output.expanduser().resolve()
         ir_path = self._write_ir(ir, output)
-        result = self._run(["compile-plot-ir", str(ir_path), str(output / "document.vsz"),
-                            "--preview", str(output / "preview.png")])
+        preview = output / "preview.png"
+        if preview.exists():
+            preview = output / ("preview-" + uuid4().hex + ".png")
+        arguments = ["compile-plot-ir", str(ir_path), str(output / "document.vsz"), "--preview", str(preview)]
+        with artifact_scope(arguments, inputs={"ir": ir_path}, outputs={"document": output / "document.vsz", "preview": preview}):
+            result = self._run(arguments)
         if result["ir_hash"] != ir["ir_hash"] or result["scientific_hash"] != ir["scientific_hash"]:
             raise ValueError("Managed compiler response does not match its requested IR identity.")
         result["compiler_identity"] = compiler_identity()
@@ -101,7 +107,9 @@ class ManagedVeuszCompiler:
     def inspect_ir(self, ir: dict[str, Any], document: Path) -> dict[str, Any]:
         document = document.expanduser().resolve()
         ir_path = self._write_ir(ir, document.parent)
-        result = self._run(["inspect-plot-ir", str(ir_path), str(document)])
+        arguments = ["inspect-plot-ir", str(ir_path), str(document)]
+        with artifact_scope(arguments, inputs={"ir": ir_path, "document": document}):
+            result = self._run(arguments)
         if result["ir_hash"] != ir["ir_hash"]:
             raise ValueError("Managed inspection response does not match its requested IR identity.")
         return result
@@ -122,7 +130,9 @@ class ManagedVeuszCompiler:
 
     def export_ir(self, ir: dict[str, Any], document: Path, output: Path) -> dict[str, Any]:
         before = self._require_exact(ir, document)
-        with self._scope():
+        output = output.expanduser().resolve()
+        arguments = ["export-document", str(document), "--formats", "pdf,tiff_300", "--out", str(output)]
+        with self._scope(), artifact_scope(arguments, inputs={"document": document}):
             result = export_studio_document(document, formats=["pdf", "tiff_300"], output_dir=output)
         if file_sha256(document) != before["document_sha256"]:
             raise ValueError("Managed native artifact changed during export.")
@@ -134,7 +144,11 @@ class ManagedVeuszCompiler:
 
     def render_ir(self, ir: dict[str, Any], document: Path, output: Path) -> dict[str, Any]:
         before = self._require_exact(ir, document)
-        result = self._run(["preview-document", str(document), "--out", str(output)])
+        output = output.expanduser().resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        arguments = ["preview-document", str(document), "--out", str(output)]
+        with artifact_scope(arguments, inputs={"document": document}, outputs={"out": output}):
+            result = self._run(arguments)
         if (result["document"]["sha256"] != before["document_sha256"]
                 or file_sha256(document) != before["document_sha256"]):
             raise ValueError("Managed native artifact changed between audit and preview.")
