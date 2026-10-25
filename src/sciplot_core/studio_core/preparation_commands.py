@@ -62,8 +62,12 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
             raise ValueError("A private Studio audit cannot select an active or foreign figure.")
         logical_document = document.relative_to(candidate.project_dir).as_posix()
         previous = candidate.snapshot["files"].get(logical_document)
+        previous_spec = candidate.snapshot["files"].get(spec.relative_to(candidate.project_dir).as_posix())
+        current_spec_hash = sha(spec.read_bytes()) if spec.is_file() else None
+        expected_spec_hash = previous_spec["sha256"] if previous_spec is not None else None
         unchanged = (payload.get("preserved_existing_document") is True and previous is not None
-                     and sha(document.read_bytes()) == previous["sha256"])
+                     and sha(document.read_bytes()) == previous["sha256"]
+                     and current_spec_hash == expected_spec_hash)
         if unchanged:
             audits.append({"kind": "sciplot_unchanged_native_preparation", "status": "not_evaluated",
                 "reason": "exact_native_preimage_preserved", "sha256": previous["sha256"]})

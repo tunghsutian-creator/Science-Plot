@@ -432,6 +432,16 @@ def test_existing_request_and_vsz_control_paths_keep_generation_counts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = {"generate": 0, "reuse": 0}
+    audits: list[Path] = []
+    from sciplot_core.studio_core import preparation_commands
+
+    def audit_fake_native(candidate: Any, _payload: dict[str, Any]) -> tuple[list[Any], list[Any]]:
+        # This dispatch-only control has always used fake VSZ bytes and no
+        # spec. Inject its native port at the new complete-candidate boundary.
+        audits.append(candidate.project_dir)
+        return [], []
+
+    monkeypatch.setattr(preparation_commands, "audit_studio_candidate", audit_fake_native)
 
     def generate(
         *,
@@ -483,6 +493,8 @@ def test_existing_request_and_vsz_control_paths_keep_generation_counts(
     standalone.write_text("# standalone\n", encoding="utf-8")
     studio_prepare.prepare_studio_document(standalone)
     assert calls == {"generate": 1, "reuse": 1}
+    assert len(audits) == 2
+    assert all(path not in {existing_project, request_project} for path in audits)
 
 
 def test_source_target_rejects_non_object_prepared_payload(

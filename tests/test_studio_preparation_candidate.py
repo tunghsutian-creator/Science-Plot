@@ -128,6 +128,22 @@ def test_unchanged_legacy_reuse_keeps_audit_unevaluated_without_inventing_scienc
                            "sha256": before["files"]["studio/document.vsz"]["sha256"]}]
 
 
+def test_unchanged_native_with_changed_spec_cannot_skip_the_real_audit(tmp_path, monkeypatch):
+    _root, store, before = fixture_store(tmp_path)
+    from sciplot_core.source_coverage import document_audit
+
+    def required(**_kwargs):
+        raise RuntimeError("real native/spec audit reached")
+
+    monkeypatch.setattr(document_audit, "_audit_exact_document_data", required)
+    with studio_preparation_candidate(store, snapshot=before) as candidate:
+        (candidate.project_dir / "studio/spec.json").write_text('{"different":"scientific declaration"}')
+        payload = {"document": str(candidate.project_dir / "studio/document.vsz"),
+                   "preserved_existing_document": True}
+        with pytest.raises(RuntimeError, match="native/spec audit reached"):
+            commands.audit_studio_candidate(candidate, payload)
+
+
 def _prepared(candidate, **_kwargs):
     root = candidate.project_dir
     (root / "studio/document.vsz").write_bytes(b"complete private native")

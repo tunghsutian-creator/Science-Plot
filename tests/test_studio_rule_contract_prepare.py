@@ -373,8 +373,15 @@ def test_failed_generated_transaction_preserves_prior_request_and_binding(
         lambda: SimpleNamespace(entry=lambda _rule_id: None),
     )
 
+    private_replacements: list[Path] = []
+
     def fail_request_replace(staged: Path, target: Path) -> None:
-        if target == request_path:
+        if target.name == request_path.name:
+            from sciplot_core.studio_core.preparation_candidate import require_preparation_candidate
+
+            require_preparation_candidate(target.parent)
+            assert target != request_path
+            private_replacements.append(target)
             raise OSError("injected request replacement failure")
         _replace_studio_figure_set_path(staged, target)
 
@@ -387,6 +394,8 @@ def test_failed_generated_transaction_preserves_prior_request_and_binding(
             project_name=None,
             figure_set_path_replacer=fail_request_replace,
         )
+
+    assert len(private_replacements) == 1
 
     assert {
         path: path.read_bytes() for path in (request_path, document_path, spec_path)
