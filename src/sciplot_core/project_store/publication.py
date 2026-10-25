@@ -91,7 +91,8 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
         "metadata": record["metadata"], "read_set": record["read_set"],
         "write_set": record["write_set"], "projected_reads": record.get("projected_reads", []),
         "candidate_digest": record.get("decision_id"), "artifacts": frozen.get("artifacts", {}),
-        "namespace_origins": record.get("namespace_origins", {})}
+        "namespace_origins": record.get("namespace_origins", {}),
+        "source_tree_origins": record.get("source_tree_origins", {})}
     value["commands"][record["command_id"]] = outcome
     state.boundary("before_storage")
     state.write_generation(io, value)

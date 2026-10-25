@@ -56,8 +56,10 @@ def reserve(io: StoreIO, current: dict[str, Any], command_id: str, command_diges
     if any(name not in read_set and name not in projected for name in record["write_set"]):
         raise ProjectStoreError("Every full-resource write needs an exact before hash or absence read.")
     from .namespace_transfers import require as require_namespaces
+    from .source_trees import require as require_source_trees
 
     require_namespaces(io, current, record, admit=True)
+    require_source_trees(io, current, record, admit=True)
     preconditions.require_reads(io, current, record)
     state.save_command(io, record)
     return record
@@ -143,8 +145,15 @@ def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | P
         raise ProjectCommandConflict("This command cannot produce another candidate.")
     if set(writes) != set(record["write_set"]):
         raise ProjectStoreError("The candidate must exactly cover the declared write set.")
+    from .source_trees import require as require_source_trees
+
+    current = state.head(io)
+    assert current is not None
+    require_source_trees(io, current, record)
     frozen = {"writes": state.import_writes(io, writes), "artifacts": state.import_writes(io, artifacts or {}),
               "sources": capture_sources(io, sources or review.get("source_versions")), "result": result, "review": review}
+    if record.get("source_tree_origins"):
+        frozen["source_tree_origins"] = record["source_tree_origins"]
     for name in preconditions.native_adoptions(record):
         if isinstance(writes[name], bytes):
             frozen["writes"][name]["mode"] = record["adoption_modes"][name]
@@ -209,6 +218,8 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
             raise ProjectConflict("A derived command receipt differs from its immutable generation outcome.")
         if record.get("namespace_origins", {}) != outcome.get("namespace_origins", {}):
             raise ProjectConflict("A semantic ownership receipt differs from its committed directory proof.")
+        if record.get("source_tree_origins", {}) != outcome.get("source_tree_origins", {}):
+            raise ProjectConflict("A selected source-tree receipt differs from its committed read proof.")
         if own_pending:
             result["committed_generation"] = outcome["generation"]
             projection_pending = True

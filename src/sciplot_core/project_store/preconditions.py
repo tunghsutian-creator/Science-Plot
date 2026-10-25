@@ -46,7 +46,9 @@ def native_adoptions(record: Mapping[str, Any]) -> dict[str, dict[str, str]]:
 
 def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, Any]) -> None:
     from .errors import ProjectRecoveryRequired
+    from .source_trees import require as require_source_trees
 
+    require_source_trees(io, dict(current), dict(record))
     namespaces = require_namespaces(io, dict(current), dict(record))
     require_roots(io, dict(current), dict(record), exemptions=namespaces.root_exemptions)
     adoptions = native_adoptions(record)
