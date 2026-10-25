@@ -45,12 +45,23 @@ def source_indicators(
         source = project / source
     plan = request.get("resolved_figure_plan") or {}
     expected = plan.get("source_sha256")
-    actual = _tree_hash(source) if source is not None else None
+    source_error = None
+    files: dict[str, str] = {}
+    identities: dict[str, str] = {}
+    try:
+        from sciplot_core.studio_core.project_query_sources import current_source_files, current_source_tree, resolve_current_file
+
+        files, identities = current_source_files(project, source, figures) if source is not None else ({}, {})
+        actual = (current_source_tree(source, files, identities, expected=expected) if source is not None and files else
+                  _tree_hash(source) if source is not None else None)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        actual, source_error = None, str(exc)
     input_state = _indicator(
         actual == expected if expected else None,
         path=str(source) if source else None,
         sha256=actual,
         expected_sha256=expected,
+        **({"error": source_error} if source_error else {}),
     )
     mapped_raw: dict[str, str] = {}
     if "categorical_binding" in request:
@@ -83,7 +94,8 @@ def source_indicators(
                 if recorded_mapping != mapping:
                     raise ValueError("The mapped project no longer matches its creation plan.")
             effective_source = Path(effective_request["input"])
-            effective_hash = _tree_hash(effective_source)
+            effective_hash = (_tree_hash(resolve_current_file(effective_source, files, identities))
+                              if files else _tree_hash(effective_source))
             input_state = _indicator(
                 effective_hash == expected if expected else None,
                 path=str(source),
@@ -95,7 +107,7 @@ def source_indicators(
             )
             # The owner above checked the original file against its immutable
             # proposal. Keep its file hash in the ordinary raw-source indicator.
-            raw_digest = existing_file_sha256(resolve_runtime_path(source))
+            raw_digest = existing_file_sha256(resolve_current_file(source, files, identities))
             if raw_digest is not None:
                 mapped_raw[str(source)] = raw_digest
         except (OSError, ValueError, KeyError, TypeError) as exc:

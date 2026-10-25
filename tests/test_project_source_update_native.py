@@ -252,3 +252,93 @@ def test_native_source_update_preserves_sample_styles_and_publishes_same_project
         assert (_files(project), _files(visible), _files(history)) == before_rejection
         if stale == "source":
             old_source.write_bytes(source_bytes)
+
+
+@pytest.mark.comprehensive
+def test_native_source_update_same_origin_versions_and_cold_public_export(tmp_path, monkeypatch):
+    import os
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.studio import export_native_document_artifacts
+    from sciplot_core.studio_core import source_update
+    from sciplot_core.studio_core.project_command_scope import project_store
+    from sciplot_core.studio_core.project_query import inspect_project
+    from sciplot_core.native_process.session import _close_workers
+
+    original, incoming = tmp_path / "initial.csv", tmp_path / "incoming.csv"
+    _source(original)
+    _source(incoming)
+    visible = tmp_path / "visible"
+    first = _cli(original, "--out", visible, "--rule", "uvvis_spectrum", "--export", "pdf,tiff_300")
+    project = Path(first["project_dir"])
+    document = Path(first["document"])
+    raw = _files(project / "raw"), _files(project / "source")
+    original_bytes = original.read_bytes()
+    processes = []
+    popen = subprocess.Popen
+    def owned_popen(*args, **kwargs):
+        process = popen(*args, **kwargs)
+        processes.append(process)
+        return process
+    monkeypatch.setattr(subprocess, "Popen", owned_popen)
+    try:
+        first_review = preview_project_source_update(project, incoming)
+        assert first_review["status"] == "ready", first_review
+        apply_project_source_update(project, first_review)
+        repository = project_store(project, with_snapshot=True)
+        v0 = file_sha256(incoming)
+        before = repository.snapshot()
+        owners = [identity for identity, versions in before["sources"].items()
+                  if versions.get(v0, {}).get("locator") == str(incoming)]
+        assert len(owners) == 1
+        identity = owners[0]
+        _source(incoming, changed=True)
+        v1 = file_sha256(incoming)
+        assert v1 != v0
+        review = preview_project_source_update(project, incoming)
+        assert review["status"] == "ready" and review["source"] == str(incoming), review
+        starts = len(processes)
+        with monkeypatch.context() as frozen:
+            frozen.setattr(source_update, "prepare_candidate", lambda *_a, **_kw: pytest.fail("frozen preview must not reprepare"))
+            assert preview_project_source_update(project, incoming) == review
+            assert len(processes) == starts
+            applied = apply_project_source_update(project, review)
+            assert applied["status"] == "updated" and len(processes) == starts
+        after = repository.snapshot()
+        assert {v0, v1}.issubset(after["sources"][identity])
+        assert repository.resolve_source(identity, v0).read_bytes() != repository.resolve_source(identity, v1).read_bytes()
+        assert (after["sequence"] - before["sequence"]) == 1
+        state = _native(document)
+        assert state["series"]["B"]["y"] == [9, 10, 11]
+        assert state["series"]["A"]["y"] == [8, 9, 10]
+        assert (_files(project / "raw"), _files(project / "source")) == raw
+        assert original.read_bytes() == original_bytes
+        spec_bytes = (project / "studio/spec.json").read_bytes()
+        native_bytes = document.read_bytes()
+        bundle = repository.export_bundle(tmp_path / "portable")
+        cold = FileProjectStore.import_bundle(bundle, tmp_path / "cold")
+        project.rename(tmp_path / "project-offline")
+        incoming.rename(tmp_path / "incoming-offline.csv")
+        visible.rename(tmp_path / "visible-offline")
+        inspected = inspect_project(cold.root, native=True)
+        assert inspected["status"] == "ok" and inspected["source"]["current"] is True
+        exported = export_native_document_artifacts(cold.root / "studio/document.vsz", formats=["pdf", "tiff_300"])
+        assert exported["standalone_export"]["export_ready"] is True, exported
+        assert (cold.root / "studio/spec.json").read_bytes() == spec_bytes
+        assert (cold.root / "studio/document.vsz").read_bytes() == native_bytes
+        assert (_files(cold.root / "raw"), _files(cold.root / "source")) == raw
+        current = project_store(cold.root).snapshot()
+        assert {v0, v1}.issubset(current["sources"][identity])
+        assert not project.exists() and not incoming.exists() and not visible.exists()
+        (tmp_path / "source-versions-evidence.json").write_text(json.dumps({
+            "pid": os.getpid(), "parent_pid": os.getppid(), "project_id": after["project_id"],
+            "source_id": identity, "original_literal": str(incoming), "v0": v0, "v1": v1,
+            "generation": after["generation"], "cold_generation": current["generation"],
+            "native_sha256": file_sha256(cold.root / "studio/document.vsz"),
+            "checks": ["same_original_locator_new_version", "stable_source_id", "sealed_v0_preserved",
+                "frozen_preview_and_apply_no_worker", "original_raw_source_preserved", "cold_public_inspect_export"]}, indent=2))
+    finally:
+        _close_workers()
+        assert all(process.poll() is not None for process in processes)
+        (tmp_path / "source-version-workers.json").write_text(json.dumps([
+            {"pid": process.pid, "returncode": process.returncode} for process in processes], indent=2))
