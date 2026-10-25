@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from sciplot_core.figure_plan.constants import REQUIRED_FIGURE_PLAN_RULE_IDS
+from sciplot_core.figure_plan.artifact_locations import artifact_is_file
 from sciplot_core.figure_plan.execution import figure_plan_gate
 from sciplot_core.figure_plan.payload_types import (
     FigurePlanManifestGatePayload,
@@ -60,7 +60,7 @@ def figure_plan_manifest_gate(
         "result_plan_matches": result.get("resolved_figure_plan") == plan_payload,
         "study_plan_matches": study_run.get("resolved_figure_plan") == plan_payload,
         "outcome_artifacts_exist": all(
-            Path(path).expanduser().is_file()
+            artifact_is_file(path)
             for outcome in plan_payload["outcomes"]
             for path in outcome["artifacts"]
         ),

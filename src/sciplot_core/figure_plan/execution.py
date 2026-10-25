@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.figure_plan.outcome import FigureOutcome
+from sciplot_core.figure_plan.artifact_locations import (
+    artifact_is_file,
+    literal_artifact_path,
+    literal_figure_plan_artifacts,
+)
 from sciplot_core.figure_plan.payload_types import FigurePlanGatePayload
 from sciplot_core.figure_plan.plan import (
     ResolvedFigurePlan,
@@ -160,11 +165,11 @@ def outcomes_for_artifact_map(
     outcomes: list[FigureOutcome] = []
     for task in plan.tasks:
         artifacts = tuple(
-            str(path)
+            literal_artifact_path(path)
             for value in artifacts_by_figure_id.get(task.figure_id, ())
             if isinstance(value, str)
             and value.strip()
-            and (path := Path(value).expanduser()).is_file()
+            and artifact_is_file(path := Path(value).expanduser())
         )
         candidate = FigureOutcome(
             figure_id=task.figure_id,
@@ -237,7 +242,7 @@ def finalize_figure_plan_result(
     outcomes.sort(
         key=lambda outcome: fresh_plan.selected_figure_ids.index(outcome.figure_id)
     )
-    completed = merge_figure_outcomes(fresh_plan, outcomes)
+    completed = literal_figure_plan_artifacts(merge_figure_outcomes(fresh_plan, outcomes))
     result["resolved_figure_plan"] = completed.to_payload()
     result.pop("figure_outcomes", None)
     return completed
@@ -376,7 +381,7 @@ def _existing_result_artifacts(result: dict[str, Any]) -> tuple[str, ...]:
         for value in values
         if isinstance(value, str)
         and value.strip()
-        and (path := Path(value).expanduser()).is_file()
+        and artifact_is_file(path := Path(value).expanduser())
     )
 
 

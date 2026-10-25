@@ -8,6 +8,7 @@ from typing import Any
 from sciplot_core.terminal_request import normalize_terminal_render_request
 
 from sciplot_core.figure_plan.outcome import FigureOutcome
+from sciplot_core.figure_plan.artifact_locations import literal_figure_plan_artifacts
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.figure_plan.task import FigureTask
 
@@ -165,6 +166,7 @@ def _reported_plan_and_outcomes(
             "the selected FigurePlan."
         )
     if completed_plan is not None:
+        completed_plan = literal_figure_plan_artifacts(completed_plan)
         outcomes = completed_plan.outcomes
     elif raw_outcomes is None:
         return None, ()

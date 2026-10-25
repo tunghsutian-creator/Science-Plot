@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.figure_plan.metric_binding import CartesianMetricBinding
+from sciplot_core.figure_plan.artifact_locations import (
+    literal_artifact_path,
+    literal_figure_plan_artifacts,
+)
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.figure_plan.task import FigureTask
 from sciplot_core.policy import canonical_figure_stem
@@ -41,18 +45,19 @@ def attach_run_artifacts_to_study_model(
 ) -> dict[str, Any]:
     updated = normalize_study_model(study_model)
     artifact_groups: dict[str, list[dict[str, Any]]] = {}
-    for figure in figures:
-        artifact_groups.setdefault(_figure_artifact_key(figure), []).append(
+    for figure_path in figures:
+        artifact_groups.setdefault(_figure_artifact_key(figure_path), []).append(
             {
-                "path": figure,
-                "name": Path(figure).name,
-                "format": Path(figure).suffix.lower().lstrip("."),
+                "path": literal_artifact_path(figure_path),
+                "name": Path(figure_path).name,
+                "format": Path(figure_path).suffix.lower().lstrip("."),
             }
         )
     grouped_artifacts = list(artifact_groups.values())
     queue = list(updated.get("figure_queue", []))
     figure_plan = resolved_figure_plan_from_payload(resolved_figure_plan)
     if figure_plan is not None:
+        figure_plan = literal_figure_plan_artifacts(figure_plan)
         if figure_plan.selection_policy == "registered_single_curve":
             queue = [_queue_item_from_task(task) for task in figure_plan.tasks]
         outcome_by_id = {outcome.figure_id: outcome for outcome in figure_plan.outcomes}
@@ -106,12 +111,12 @@ def attach_run_artifacts_to_study_model(
                 figure.pop("resolved_figure_ids", None)
         updated["figure_queue"] = queue
         bound_paths = {
-            str(Path(path).expanduser().resolve())
+            str(Path(literal_artifact_path(path)).expanduser().resolve())
             for outcome in figure_plan.outcomes
             for path in outcome.artifacts
         }
         updated["run"] = {
-            "output": str(output_dir),
+            "output": literal_artifact_path(output_dir),
             "figure_artifacts": [
                 artifact for group in grouped_artifacts for artifact in group
             ],
@@ -170,7 +175,7 @@ def attach_run_artifacts_to_study_model(
         for artifact in group
     ]
     updated["run"] = {
-        "output": str(output_dir),
+        "output": literal_artifact_path(output_dir),
         "figure_artifacts": [
             artifact for group in grouped_artifacts for artifact in group
         ],
@@ -184,6 +189,8 @@ def attach_run_artifacts_to_study_model(
 
 def _queue_item_from_task(task: FigureTask) -> dict[str, Any]:
     binding = task.metric_binding
+    x_metric: str | None
+    y_metric: str | None
     if isinstance(binding, CartesianMetricBinding):
         x_metric = binding.x_metric
         y_metric = binding.y_metric
@@ -210,7 +217,7 @@ def _queue_item_from_task(task: FigureTask) -> dict[str, Any]:
 def _artifact_records(paths: tuple[str, ...]) -> list[dict[str, Any]]:
     return [
         {
-            "path": path,
+            "path": literal_artifact_path(path),
             "name": Path(path).name,
             "format": Path(path).suffix.lower().lstrip("."),
         }
