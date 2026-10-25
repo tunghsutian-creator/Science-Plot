@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from typing import Any
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
 from sciplot_core.performance_comparison import (
     PERFORMANCE_RADAR_TEMPLATE_ID,
     PERFORMANCE_SCATTER_TEMPLATE_ID,
@@ -53,6 +54,9 @@ def performance_series_records(payload: dict[str, Any]) -> list[dict[str, Any]]:
     )
     x_scale = plot_height / plot_width
     records: list[dict[str, Any]] = []
+    source_path, source_sha256 = literal_source_artifact(
+        str(payload["source"]), str(payload["source_sha256"])
+    )
     for index, item in enumerate(payload["series"], start=1):
         if template == PERFORMANCE_SCATTER_TEMPLATE_ID:
             x_values = [float(value) for value in item["x_values"]]
@@ -94,8 +98,8 @@ def performance_series_records(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "expected_mark_channels": expected_channels,
                 "source_artifacts": [
                     {
-                        "path": str(payload["source"]),
-                        "sha256": str(payload["source_sha256"]),
+                        "path": source_path,
+                        "sha256": source_sha256,
                     }
                 ],
             }

@@ -157,3 +157,42 @@ def test_special_performance_and_impact_artifact_producers_keep_original_tuple(t
     assert all(item.source_artifacts == ((str(source), digest),) for item in actual)
     shutil.rmtree(private)
     assert file_sha256(source) == digest and store.snapshot()['generation'] == snapshot['generation']
+
+
+@pytest.mark.parametrize('template', ['scatter', 'polar_curve'])
+def test_performance_terminal_spec_keeps_original_source_after_candidate_cleanup(tmp_path, template):
+    from sciplot_core.performance_comparison import prepare_performance_comparison
+    from sciplot_core.performance_veusz.spec_builder import build_performance_veusz_spec
+
+    project = tmp_path / 'project'
+    project.mkdir()
+    source = project / 'performance.csv'
+    fixture = Path(__file__).parent / 'fixtures/performance_comparison/material_performance_long.csv'
+    source.write_bytes(fixture.read_bytes())
+    digest = file_sha256(source)
+    request = {'input': str(source), 'rule_id': 'performance_comparison', 'template': template}
+    baseline = build_performance_veusz_spec(
+        payload=prepare_performance_comparison(source, template_id=template), request=request,
+    )
+    store = FileProjectStore(project)
+    snapshot = store.snapshot(import_legacy=True)
+    private = tmp_path / 'private'
+    private.mkdir(mode=0o700)
+    actual_source = private / source.name
+    actual_source.write_bytes(source.read_bytes())
+    actual_source.chmod(source.stat().st_mode & 0o777)
+    with project_candidate_runtime(store, private):
+        payload = prepare_performance_comparison(actual_source, template_id=template)
+        assert payload['source'] == str(actual_source)
+        actual = build_performance_veusz_spec(payload=payload, request=request)
+        assert payload['source'] == str(actual_source)  # Preserve the physical IO payload.
+    baseline.pop('created_at')
+    actual.pop('created_at')
+    assert actual == baseline
+    assert actual['performance_comparison']['source'] == str(source)
+    assert actual['performance_comparison']['source_sha256'] == digest
+    assert all(item['source_artifacts'] == [{'path': str(source), 'sha256': digest}] for item in actual['series'])
+    shutil.rmtree(private)
+    assert str(private) not in json.dumps(actual)
+    assert all(file_sha256(Path(item['source_artifacts'][0]['path'])) == digest for item in actual['series'])
+    assert store.snapshot()['generation'] == snapshot['generation']

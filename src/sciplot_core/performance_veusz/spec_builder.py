@@ -19,6 +19,7 @@ from sciplot_core.performance_comparison import (
 )
 from sciplot_core.performance_comparison.radar import validate_radar_presentation_size
 from sciplot_core.policy.layout_policy import FIXED_PUBLICATION_FRAME_POLICY
+from sciplot_core.studio_render.source_artifacts import literal_source_artifact
 
 from sciplot_core.performance_veusz.style import (
     _RADAR_AXIS_LIMIT,
@@ -125,8 +126,13 @@ def build_performance_veusz_spec(
         **_performance_render_options(payload, request),
         "size": "x".join(f"{float(value):g}" for value in layout["page_size_mm"]),
     }
+    source_path, source_sha256 = literal_source_artifact(
+        str(payload["source"]), str(payload["source_sha256"])
+    )
     performance = {
         **json_safe(payload),
+        "source": source_path,
+        "source_sha256": source_sha256,
         "polygons": _performance_polygons(payload),
         "lines": _performance_lines(payload),
         "labels": _performance_labels(payload),
