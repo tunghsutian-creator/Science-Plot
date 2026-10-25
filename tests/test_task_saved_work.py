@@ -183,13 +183,21 @@ def test_tampered_managed_canonical_model_is_not_a_continuable_head(managed, tmp
 
 
 def test_pending_managed_transaction_requires_its_existing_owner(managed):
-    from sciplot_core.plot_engine.storage import reserve
+    from sciplot_core.plot_engine.storage import transaction_path
+
     root, source, _ = managed
-    reserve(root, {"id": "pending-edit", "phase": "applying",
-                   "request": {"idempotency_key": "unfinished"}})
+    # This is an existing minimal historical journal, not a new admission.
+    # New reserve calls require complete command input and its base snapshot.
+    transaction = transaction_path(root, "unfinished")
+    transaction.parent.mkdir(parents=True)
+    transaction.write_text(json.dumps({"id": "pending-edit", "phase": "applying",
+                                       "request": {"idempotency_key": "unfinished"}}))
+    (root / "active.json").write_text(json.dumps({"key": "unfinished"}))
+    before = inventory(root)
     continued = work.continue_saved_work(source, search_roots=[root])
     assert continued["status"] == "blocked" and continued["reason_code"] == "document_conflict"
     assert continued["selected"]["document"]["pending"]["phase"] == "applying"
+    assert inventory(root) == before
 
 
 def test_multiple_same_source_projects_are_not_deduplicated_or_auto_selected(tmp_path):
