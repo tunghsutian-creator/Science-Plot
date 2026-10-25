@@ -1,7 +1,9 @@
 """Attached semantic revisions and journals use the complete project generation."""
 from contextlib import nullcontext
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 
@@ -28,8 +30,12 @@ class SourceAwareManagedBackend(ManagedBackend):
 
 
 def application(repo=None, backend=None):
-    repo = repo or ComposedProjectRepository(lease=lambda _: nullcontext())
-    return ProjectApplication(RepositoryBackendPaths(backend or SourceAwareManagedBackend(), repo), repo,
+    from sciplot_core.project_lifecycle.attachment_preflight import preflight
+
+    backend = backend or SourceAwareManagedBackend()
+    repo = repo or ComposedProjectRepository(lease=lambda _: nullcontext(),
+        attachment_admission=lambda namespace, head, attachment: preflight(backend, COMPATIBILITY_CAPABILITIES, namespace, head, attachment))
+    return ProjectApplication(RepositoryBackendPaths(backend, repo), repo,
         targets=FilesystemProjectTargets(repo), capabilities=COMPATIBILITY_CAPABILITIES)
 
 
@@ -89,3 +95,33 @@ def test_runtime_view_cannot_hide_original_envelope_digest_corruption(tmp_path):
     with pytest.raises(ValueError, match="committed pointer"):
         app.describe(root)
     assert before["plot_id"] == created["plot_id"]
+
+
+def test_concurrent_applications_keep_attachment_and_source_scopes_separate(tmp_path):
+    from sciplot_core.foundation.source_locations import selected_source_resolver
+    from sciplot_core.project_lifecycle.attachment_index import Attachment
+
+    barrier = Barrier(2)
+
+    def create(name):
+        project = tmp_path / name
+        project.mkdir()
+        wire = request_for_source(project)
+        store = FileProjectStore(project)
+        store.snapshot(import_legacy=True)
+        app = application()
+        with project_runtime(store):
+            barrier.wait(timeout=10)
+            result = app.create(wire)
+            assert Path(result["plot"]).is_relative_to(project)
+        assert selected_source_resolver() is None
+        with pytest.raises(RuntimeError, match="invocation scope"):
+            app.repository.select(Attachment(store, {}))
+        return result, store.snapshot()["project_id"]
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(create, ("A", "B")))
+    assert results[0][1] != results[1][1]
+    assert results[0][0]["plot_id"] != results[1][0]["plot_id"]
+    assert results[0][0]["scientific_hash"] != results[1][0]["scientific_hash"]
+    assert selected_source_resolver() is None

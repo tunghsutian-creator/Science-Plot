@@ -80,8 +80,17 @@ def prepared_sources(store: FileProjectStore, sources: Iterable[dict[str, Any]],
             from sciplot_core.foundation.source_locations import selected_source_resolver
 
             resolver = selected_source_resolver()
-            actual = resolver.resolve_path(literal, expected_sha256=version, source_id=next(iter(aliases), None)) if isinstance(resolver, AttachmentSourceResolver) else Path(literal)
-            data, mode = _read_source(actual, version)
+            admitted = [item["captured"] for item in resolver.pending if item["path"] == literal
+                        and item["sha256"] == version and item.get("captured") is not None] if isinstance(resolver, AttachmentSourceResolver) else []
+            if admitted:
+                captured = admitted[0]
+                if captured["source_id"] != identity or captured["locator"] != literal or captured["version"] != version:
+                    raise EngineError("semantic_source_declaration_conflict", "The captured source observation changed identity before journal admission.")
+                data, mode = captured["data"], captured["mode"]
+                aliases.update(captured["aliases"])
+            else:
+                actual = resolver.resolve_path(literal, expected_sha256=version, source_id=next(iter(aliases), None)) if isinstance(resolver, AttachmentSourceResolver) else Path(literal)
+                data, mode = _read_source(actual, version)
         result.append(PreparedSource(identity, literal, version, data, tuple(sorted(aliases)), mode))
     return tuple(result)
 
@@ -117,7 +126,7 @@ class AttachmentSourceResolver(ProjectSourceResolver):
             return actual
         matches = [item for item in self.pending if item["path"] == str(original)]
         if matches:
-            allowed = [item for item in matches if expected_sha256 in {None, item["sha256"]} and source_id in {None, item["source_id"]}]
+            allowed = [item for item in matches if expected_sha256 in {None, item["sha256"]} and source_id in {None, item.get("source_id")}]
             if not allowed and expected_sha256 is not None and expected_sha256 not in {item["sha256"] for item in matches}:
                 return super().resolve_path(original, expected_sha256=expected_sha256, source_id=source_id)
             if not allowed or len({item["sha256"] for item in allowed}) != 1:

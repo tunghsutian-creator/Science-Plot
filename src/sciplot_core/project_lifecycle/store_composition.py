@@ -26,3 +26,25 @@ def existing_store(project: Path) -> FileProjectStore:
 
         return project_store(project)
     return FileProjectStore(project)
+
+
+def tracked_namespace_store(path: Path) -> tuple[FileProjectStore, Path] | None:
+    """Recognize only an exact old-format namespace already tracked by a project."""
+    from sciplot_core.project_store.io import STORE
+    from .legacy_namespace import known_head
+
+    namespace = next((item for item in (path, *path.parents)
+                      if (item.parent.name == ".sciplot_documents" and item.name not in {"managed", "creations"})
+                      or item.parent.name == "managed" and item.parent.parent.name == ".sciplot_documents"), None)
+    if namespace is None:
+        return None
+    for project in namespace.parent.parents:
+        if (project / STORE / "head.json").is_file():
+            store = existing_store(project)
+            return (store, namespace) if known_head(store, namespace) else None
+    return None
+
+
+def project_identity(store: FileProjectStore) -> str:
+    with store._locked(allow_pending=True) as (_io, current):
+        return str(current["project_id"])

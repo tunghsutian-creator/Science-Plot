@@ -1,15 +1,17 @@
 """Atomic old-namespace refusal; original history survives the one directory swap."""
 from contextlib import contextmanager
 import ctypes
+import json
 import os
 from pathlib import Path
 import sys
 import tempfile
 from typing import Any, Iterator
 
-from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
+from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.project_session_lease import external_project_session
 from sciplot_core.foundation.writer_lease import DirectoryWriterLease, exclusive_directory_lease
+from sciplot_core.project_store.io import read_file
 from .attachment_index import OWNER
 from .errors import EngineError
 
@@ -44,8 +46,21 @@ def refusal(marker: dict[str, Any], original_head_sha256: str) -> dict[str, Any]
             "original_head_sha256": original_head_sha256}
 
 
+def control_json(path: Path) -> dict[str, Any] | None:
+    try:
+        descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            data, _mode = read_file(descriptor, path.name)
+        finally:
+            os.close(descriptor)
+        value = json.loads(data)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def is_fenced(root: Path, marker: dict[str, Any], original_head_sha256: str) -> bool:
-    return read_json_object(root / "head.json") == refusal(marker, original_head_sha256)
+    return control_json(root / "head.json") == refusal(marker, original_head_sha256)
 
 
 def prepare_shell(root: Path, marker: dict[str, Any], original_head_sha256: str) -> dict[str, Any]:
@@ -55,6 +70,11 @@ def prepare_shell(root: Path, marker: dict[str, Any], original_head_sha256: str)
     result = {**marker, "history_root": str(backup)}
     atomic_write_json(backup / OWNER, {**result, "role": "redirect"})
     atomic_write_json(backup / "head.json", refusal(result, original_head_sha256))
+    descriptor = os.open(root.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
     return result
 
 
@@ -65,11 +85,14 @@ def fence(root: Path, marker: dict[str, Any], *, original_head_sha256: str,
     if backup.parent != root.parent or backup == root:
         raise EngineError("semantic_attachment_owner_conflict", "The registered history location is not this exact namespace transfer.")
     if is_fenced(root, marker, original_head_sha256):
+        if (control_json(root / OWNER) != {**marker, "role": "redirect"}
+                or control_json(backup / OWNER) != {**marker, "role": "history"}):
+            raise EngineError("semantic_attachment_owner_conflict", "The original alias and history fences differ from their sealed transfer.")
         verify_original(backup)
         return
     expected_shell = {**marker, "role": "redirect"}
     if backup.exists():
-        if (backup.is_symlink() or read_json_object(backup / OWNER) != expected_shell
+        if (backup.is_symlink() or control_json(backup / OWNER) != expected_shell
                 or not is_fenced(backup, marker, original_head_sha256)
                 or {item.name for item in backup.iterdir()} != {OWNER, "head.json"}):
             raise EngineError("semantic_attachment_history_conflict", "The exact history destination is occupied by unrelated state.")

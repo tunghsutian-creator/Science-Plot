@@ -14,11 +14,11 @@ def derived_relative(relative: Path) -> bool:
     if relative.parts and relative.parts[0] == "archive":
         return False
     return bool(relative.parts and (relative.parts[0] in {"ir", "renders"}
-        or relative.as_posix() == "export-cache.json" or "preview-" in "/".join(relative.parts)))
+        or relative.as_posix() in {"export-cache.json", "render-cache.json"} or "preview-" in "/".join(relative.parts)))
 
 
 def _pairs(attachment: Attachment) -> list[tuple[Path, Path]]:
-    pairs = [(attachment.origin, attachment.root)]
+    pairs = [(attachment.origin, attachment.root), (attachment.namespace_origin, attachment.root)]
     project_origin = attachment.entry["project_origin"]
     pairs.append((Path(project_origin), attachment.store.root))
     pairs.extend((Path(origin), attachment.store.locations[key])
@@ -60,9 +60,13 @@ def metadata_view(value: Any, attachment: Attachment, *, storing: bool = False, 
         return deepcopy(value)
     result = {}
     for key, item in value.items():
+        if key in {"_semantic_attachment_id", "_semantic_project_generation"}:
+            continue  # Invocation capabilities are never serialized as history.
         if key in _PROTECTED:
             result[key] = deepcopy(item)
         else:
             new_key = _path(key, attachment, storing=storing) if isinstance(key, str) else key
-            result[new_key] = metadata_view(item, attachment, storing=storing, binding=binding or key in {"binding", "before_binding", "_managed_binding", "_binding"})
+            result[new_key] = metadata_view(item, attachment, storing=storing, binding=key in {"binding", "before_binding", "_managed_binding", "_binding"})
+    if binding and not storing:
+        result["_semantic_attachment_id"] = attachment.entry["id"]
     return result

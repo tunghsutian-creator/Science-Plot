@@ -49,6 +49,10 @@ class FilesystemProjectTargets:
         return DecisionTarget(root, DecisionKind.CREATION if self.repository.exists(root / "creation.json") else DecisionKind.SEMANTIC)
 
     def creation_root(self, source: Path, key: str) -> Path:
+        from .repository_router import ComposedProjectRepository
+
+        if isinstance(self.repository, ComposedProjectRepository) and self.repository.selected_store() is not None:
+            raise EngineError("semantic_project_creation_unsupported", "An attached existing project accepts Managed Template/Binding creation; source tasks create their own separate native project.")
         source = canonical_path(source)
         return transaction_path(source.parent / ".sciplot_documents" / "creations", key).parent
 

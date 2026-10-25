@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.writer_lease import exclusive_directory_lease
 from sciplot_core.foundation.source_locations import source_location_scope
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation, SourceAdoption
@@ -52,11 +53,12 @@ class AttachedProjectRepository(FileProjectRepository):
         return self._cache_path(path) or path
 
     @contextmanager
-    def backend_scope(self) -> Iterator[None]:
-        if self._source.get() is not None:
+    def backend_scope(self, generation: str | None = None) -> Iterator[None]:
+        current = self._source.get()
+        if current is not None and (generation is None or generation == current.generation):
             yield
             return
-        resolver = AttachmentSourceResolver(self.attachment.store, self._new_sources)
+        resolver = AttachmentSourceResolver(self.attachment.store, self._new_sources, generation=generation)
         token = self._source.set(resolver)
         try:
             with source_location_scope(resolver):
@@ -81,6 +83,16 @@ class AttachedProjectRepository(FileProjectRepository):
     def runtime_envelope(self, root: Path, envelope: dict[str, Any]) -> dict[str, Any]:
         self._materialize_history()
         result: dict[str, Any] = metadata_view(envelope, self.attachment)
+        return result
+
+    def load_revision(self, root: Path, revision: int) -> dict[str, Any]:
+        envelope = self._load_revision_envelope(root, revision)
+        result = self.runtime_envelope(root, envelope)
+        if self.has_head(root) and self._head_envelope(root)["document"]["revision"] != revision:
+            from .attachment_versions import introduced_generation
+
+            logical = self.attachment.logical(root / "revisions" / f"{revision:08d}.json")
+            result["binding"]["_semantic_project_generation"] = introduced_generation(self.attachment.store, logical)
         return result
 
     def _materialize_history(self) -> None:
@@ -164,7 +176,9 @@ class AttachedProjectRepository(FileProjectRepository):
             batch.reads[logical] = before
             observations[logical] = SourceAdoption(logical, source.source_id, before, item["sha256"])
         mutation = ProjectMutation(writes, {"attachment_id": identity, "resources": sorted(writes)}, prepared_sources=captured)
-        key = "semantic:" + identity + ":" + mutation.prepared_digest[:32]
+        publication = canonical_json_sha256({"prepared": mutation.prepared_digest,
+            "generation": batch.snapshot["generation"], "reads": batch.reads}, allow_nan=False)
+        key = "semantic:" + identity + ":" + publication[:32]
         command = ProjectCommand.create("semantic_record", key, project_id=batch.snapshot["project_id"],
             expected_generation=batch.snapshot["generation"], read_set=batch.reads,
             write_set=sorted(writes), request={"prepared_digest": mutation.prepared_digest, "attachment_id": identity},

@@ -116,3 +116,70 @@ def test_managed_cold_bundle_rebuilds_after_originals_and_disposable_artifacts_d
         loaded = newapp.repository.load_head(Path(cold["plot"]))
     assert all(Path(name).is_relative_to(moved.root) for name in loaded["binding"]["scientific_content_files"])
     assert not old.exists() and not sources.exists()
+
+
+def test_attaching_an_already_tracked_old_namespace_retires_its_current_writer_and_derivatives(tmp_path):
+    project = tmp_path / "already-tracked-project"
+    project.mkdir()
+    created = standalone().create(request_for_source(project))
+    old = Path(created["plot"])
+    before_bytes = bytes_in(old)
+    store = FileProjectStore(project)
+    snapshot = store.snapshot(import_legacy=True)
+    old_prefix = old.relative_to(project).as_posix()
+    assert old_prefix + "/head.json" in snapshot["files"]
+    app = application()
+    # The explicit old-format path is already in this project's generation;
+    # no ambient runtime scope may let it fall back to the standalone writer.
+    opened = app.open(old)
+    current = store.snapshot()
+    assert current["projection_status"] == "current", current["outside_changes"]
+    assert opened["plot_id"] == created["plot_id"]
+    old_members = {name for name in current["files"] if name.startswith(old_prefix + "/")}
+    assert old_members == {old_prefix + "/head.json", old_prefix + "/" + OWNER}
+    assert json.loads(store.read_bytes(old_prefix + "/head.json"))["kind"] == "sciplot_attached_semantic_redirect"
+    entry = next(iter(json.loads(store.read_bytes(INDEX))["attachments"].values()))
+    assert {key: data for key, data in bytes_in(Path(entry["history_root"])).items() if key != OWNER} == before_bytes
+
+
+def test_tracked_old_namespace_can_attach_after_project_moved_without_rewriting_its_seal(tmp_path):
+    project = tmp_path / "original-project"
+    project.mkdir()
+    created = standalone().create(request_for_source(project))
+    old = Path(created["plot"])
+    revision = (old / "revisions/00000000.json").read_bytes()
+    store = FileProjectStore(project)
+    identity = store.snapshot(import_legacy=True)["project_id"]
+    bundle = store.export_bundle(tmp_path / "bundle")
+    project.rename(tmp_path / "offline")
+    moved = FileProjectStore.import_bundle(bundle, tmp_path / "moved")
+    app = application()
+    with project_runtime(moved):
+        opened = app.open(old)
+        exported = app.export(Path(opened["plot"]))
+    assert opened["plot_id"] == created["plot_id"] and exported["scientific_hash"] == created["scientific_hash"]
+    entry = next(iter(json.loads(moved.read_bytes(INDEX))["attachments"].values()))
+    assert entry["origin_root"] == str(old) and entry["transfer_root"] != str(old)
+    assert app.open(Path(entry["transfer_root"]))["plot"] == opened["plot"]
+    assert moved.read_bytes(entry["namespace"] + "/revisions/00000000.json") == revision
+    assert moved.snapshot()["project_id"] == identity and moved.snapshot()["projection_status"] == "current"
+    assert not old.exists()
+
+
+def test_other_project_cannot_adopt_an_already_tracked_legacy_namespace(tmp_path):
+    project = tmp_path / "original-project"
+    project.mkdir()
+    created = standalone().create(request_for_source(project))
+    old = Path(created["plot"])
+    original = FileProjectStore(project)
+    before = original.snapshot(import_legacy=True)
+    foreign_root = tmp_path / "foreign-project"
+    foreign_root.mkdir()
+    foreign = FileProjectStore(foreign_root)
+    foreign_before = foreign.snapshot(import_legacy=True)
+    with project_runtime(foreign), pytest.raises(EngineError) as error:
+        application().open(old)
+    assert error.value.reason_code == "semantic_attachment_project_conflict"
+    assert not (old / OWNER).exists()
+    assert original.snapshot()["generation"] == before["generation"]
+    assert foreign.snapshot()["generation"] == foreign_before["generation"]

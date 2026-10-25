@@ -6,14 +6,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.project_store.io import STORE
 from sciplot_core.project_store.repository import FileProjectStore
-from sciplot_core.project_store.runtime import ProjectSourceResolver
+from sciplot_core.project_store.runtime import selected_project_store
 from .attached_repository import AttachedProjectRepository
 from .attachment_index import Attachment, owned_marker, read_index
 from .errors import EngineError
 from .repository import FileProjectRepository
+from .store_composition import existing_store, project_identity, tracked_namespace_store
 
 
 @dataclass
@@ -27,6 +27,15 @@ _ACTIVE: ContextVar[_Invocation | None] = ContextVar("sciplot_semantic_attachmen
 
 
 class ComposedProjectRepository(FileProjectRepository):
+    def __init__(self, *, lease: Any = None, attachment_admission: Any = None) -> None:
+        super().__init__(lease=lease)
+        self._attachment_admission = attachment_admission
+
+    def validate_attachment(self, namespace: Any, envelope: dict[str, Any], attachment: Attachment) -> Any:
+        if self._attachment_admission is None:
+            raise EngineError("semantic_attachment_admission_required", "Composition must provide the original native currentness validator before ownership transfer.")
+        return self._attachment_admission(namespace, envelope, attachment)
+
     @contextmanager
     def invocation_scope(self) -> Iterator[None]:
         existing = _ACTIVE.get()
@@ -56,19 +65,27 @@ class ComposedProjectRepository(FileProjectRepository):
     def binding_scope(self, binding: dict[str, Any]) -> Iterator[None]:
         root = binding.get("root")
         selected = self._discover(Path(root)) if root else None
+        identity = binding.get("_semantic_attachment_id")
+        active = _ACTIVE.get()
+        if selected is None and identity is not None and active is not None and active.owner is self:
+            exact = [repo for repo in active.repositories.values() if repo.attachment.entry["id"] == identity]
+            selected = exact[0] if len(exact) == 1 else None
+        if identity is not None and (selected is None or selected.attachment.entry["id"] != identity):
+            raise EngineError("semantic_attachment_owner_conflict", "The runtime binding does not name its selected semantic attachment.")
         if selected is None:
-            active = _ACTIVE.get()
             matches = [repo for repo in active.repositories.values() if binding.get("project") == str(repo.attachment.store.root)] if active and active.owner is self else []
-            selected = matches[0] if len(matches) == 1 else None
+            leased = [repo for repo in matches if repo._source.get() is not None]
+            selected = matches[0] if len(matches) == 1 else leased[0] if len(leased) == 1 else None
+            if matches and selected is None:
+                raise EngineError("semantic_attachment_ambiguous", "The native binding requires its exact selected semantic attachment.")
         if selected is None:
             yield
         else:
-            with selected.backend_scope():
+            with selected.backend_scope(binding.get("_semantic_project_generation")):
                 yield
 
     def selected_store(self) -> FileProjectStore | None:
-        selected = selected_source_resolver()
-        return selected.store if isinstance(selected, ProjectSourceResolver) else None
+        return selected_project_store()
 
     @contextmanager
     def scientific_request_scope(self, root: Path, request: dict[str, Any]) -> Iterator[None]:
@@ -101,17 +118,20 @@ class ComposedProjectRepository(FileProjectRepository):
             if parent.name == ".sciplot_semantic":
                 project = parent.parent
                 if (project / STORE / "head.json").is_file():
-                    candidates.append(FileProjectStore(project))
+                    candidates.append(existing_store(project))
                 break
+        tracked = tracked_namespace_store(path)
+        if tracked is not None:
+            candidates.append(tracked[0])
         marker = owned_marker(path)
         if marker is not None:
             owner = marker[1]
-            if explicit is None or explicit.snapshot()["project_id"] != owner["project_id"]:
+            if explicit is None or project_identity(explicit) != owner["project_id"]:
                 project = Path(owner["project"])
                 if not (project / STORE / "head.json").is_file() and not candidates:
                     raise EngineError("semantic_attachment_project_moved", "Open the moved project explicitly; the old namespace remains read-only history.")
                 if (project / STORE / "head.json").is_file():
-                    candidates.append(FileProjectStore(project))
+                    candidates.append(existing_store(project))
         for store in candidates:
             index = read_index(store)
             for entry in index["attachments"].values():
@@ -119,7 +139,7 @@ class ComposedProjectRepository(FileProjectRepository):
                 if attachment.contains(path):
                     if marker is not None:
                         owner = marker[1]
-                        accepted_origins = {entry["origin_root"], str(Path(entry["project_origin"]) / entry["namespace"])}
+                        accepted_origins = {entry["origin_root"], str(attachment.namespace_origin), entry.get("transfer_root")}
                         if (index["project_id"] != owner["project_id"] or owner["attachment_id"] != entry["id"]
                                 or owner["origin_root"] not in accepted_origins):
                             raise EngineError("semantic_attachment_owner_conflict", "The semantic ownership fence does not identify this exact project attachment.")
@@ -127,6 +147,13 @@ class ComposedProjectRepository(FileProjectRepository):
         if marker is not None:
             raise EngineError("semantic_attachment_import_pending", "The namespace transfer is fenced but its complete generation is not yet published.",
                               action="open_attached_project")
+        if tracked is not None:
+            from .attachment_import import attach_existing
+
+            store, namespace = tracked
+            if explicit is not None and project_identity(explicit) != project_identity(store):
+                raise EngineError("semantic_attachment_project_conflict", "The explicit semantic path belongs to another project generation.")
+            return self.select(attach_existing(store, namespace, figure_id=None, validate=self.validate_attachment))
         return None
 
     def runtime_path(self, path: Path) -> Path:

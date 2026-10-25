@@ -43,15 +43,25 @@ def declarations(repository: Any, request: dict[str, Any]) -> tuple[dict[str, An
             if not Path(literal).is_absolute():
                 raise EngineError("semantic_source_declaration_invalid", "An admitted source requires its exact absolute original locator.")
             logical = logical_for_literal(snapshot, literal)
-            actual = repository.attachment.store.projection_path(logical) if logical else Path(literal)
+            captured = None
+            if logical is not None:
+                before = snapshot["files"][logical]["sha256"]
+                identities = [identity for identity, versions in snapshot["sources"].items()
+                              if versions.get(before, {}).get("locator") == literal]
+                if len(identities) != 1:
+                    raise EngineError("semantic_source_declaration_invalid", "A tracked source observation requires its one registered original identity.")
+                captured = repository.attachment.store.capture_source_observation(logical, source_id=identities[0], before_sha256=before)
+                actual = Path(captured["path"])
+            else:
+                actual = Path(literal)
             version = source.get("sha256")
             if version is None:
                 # The existing facts-only append asks to inspect this one exact
                 # original file; its observed SHA never expands the read scope.
-                version = hashlib.sha256(capture_source(actual)[0]).hexdigest()
+                version = captured["version"] if captured is not None else hashlib.sha256(capture_source(actual)[0]).hexdigest()
             _read_source(actual, version)
             result.append({"path": literal, "sha256": version, "source_id": source["source_id"],
-                           "actual": str(actual), "logical": logical})
+                           "actual": str(actual), "logical": logical, "captured": captured})
     return tuple(result)
 
 

@@ -20,7 +20,12 @@ def components(backend: Any, repository: ProjectRepository | None, capabilities:
     if repository is None:
         from sciplot_core.studio_core.project_session import external_project_session
 
-        repository = ComposedProjectRepository(lease=external_project_session)
+        from .attachment_preflight import preflight
+
+        original_backend = backend
+        profile = COMPATIBILITY_CAPABILITIES if capabilities is None else capabilities
+        repository = ComposedProjectRepository(lease=external_project_session,
+            attachment_admission=lambda namespace, head, attachment: preflight(original_backend, profile, namespace, head, attachment))
         from .backend_paths import RepositoryBackendPaths
 
         backend = RepositoryBackendPaths(backend, repository)

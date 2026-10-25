@@ -11,6 +11,8 @@ from .repository import FileProjectRepository, digest, document_root
 from .repository_router import ComposedProjectRepository
 from .targets import ImportTarget, ManagedCreationLocation, OpenTarget, StoredTarget
 from .errors import EngineError
+from .legacy_namespace import known_head
+from .store_composition import existing_store, tracked_namespace_store
 
 
 def _store(repository: ComposedProjectRepository, target: Path | None = None) -> FileProjectStore | None:
@@ -18,8 +20,21 @@ def _store(repository: ComposedProjectRepository, target: Path | None = None) ->
     if selected is not None:
         return selected
     if target is not None and (target / STORE / "head.json").is_file():
-        return FileProjectStore(target)
+        return existing_store(target)
+    tracked = tracked_namespace_store(target) if target is not None else None
+    if tracked is not None:
+        return tracked[0]
     return None
+
+
+def _stored(repository: ComposedProjectRepository, attachment: Attachment) -> OpenTarget:
+    selected = repository.select(attachment)
+    if selected.has_head(attachment.root):
+        return StoredTarget(attachment.root)
+    if attachment.entry.get("managed_output") is None:
+        return ImportTarget(attachment.root, attachment.store.root, attachment.entry["figure_id"], attachment.entry["plot_id"])
+    raise EngineError("semantic_creation_pending", "Continue the original Managed creation request before opening its first committed revision.",
+                      action="plot.create", evidence=str(attachment.root / "managed-creation.json"))
 
 
 def resolve_attached_open(repository: ComposedProjectRepository, target: Path, figure_id: str | None,
@@ -31,7 +46,7 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
         if store is None:
             project = Path(owner["project"])
             if (project / STORE / "head.json").is_file():
-                store = FileProjectStore(project)
+                store = existing_store(project)
         try:
             selected = repository._discover(target)
         except (EngineError, ProjectRecoveryRequired) as exc:
@@ -40,9 +55,9 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
             if (store is None or marker[0] != Path(owner["origin_root"])
                     or figure_id not in {None, owner.get("figure_id")}):
                 raise EngineError("semantic_attachment_owner_conflict", "The pending transfer requires its exact original namespace and figure.") from exc
-            selected = repository.select(attach_existing(store, marker[0], figure_id=owner["figure_id"]))
+            selected = repository.select(attach_existing(store, marker[0], figure_id=owner["figure_id"], validate=repository.validate_attachment))
         if selected is not None:
-            return StoredTarget(selected.attachment.root)
+            return _stored(repository, selected.attachment)
     if store is None:
         return None
     try:
@@ -55,22 +70,20 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
     for entry in index["attachments"].values():
         attachment = Attachment(store, entry)
         if attachment.relative(target) is not None:
-            return StoredTarget(repository.select(attachment).attachment.root)
+            return _stored(repository, attachment)
     matches = [item for item in index["attachments"].values()
                if figure_id is not None and figure_id in {item["figure_id"], item["plot_id"]}]
     if figure_id is None and target == store.root and len(index["attachments"]) == 1:
         matches = list(index["attachments"].values())
     if len(matches) == 1:
-        selected = repository.select(Attachment(store, matches[0]))
-        return StoredTarget(selected.attachment.root)
+        return _stored(repository, Attachment(store, matches[0]))
     if len(matches) > 1 or target == store.root and figure_id is None and len(index["attachments"]) > 1:
         raise EngineError("semantic_attachment_ambiguous", "Choose one exact attached figure or plot ID.",
                           figures=[item["figure_id"] for item in index["attachments"].values()])
-    if FileProjectRepository.has_head(repository, target) and target != store.root:
+    if (FileProjectRepository.has_head(repository, target) or known_head(store, target)) and target != store.root:
         # The human/host supplied this one exact old namespace; never enumerate
         # its source parent's other .sciplot_documents records.
-        raw = FileProjectRepository._head_envelope(repository, target)
-        attachment = attach_existing(store, target, figure_id=figure_id or raw["document"]["plot_id"])
+        attachment = attach_existing(store, target, figure_id=figure_id, validate=repository.validate_attachment)
         repository.select(attachment)
         return StoredTarget(attachment.root)
     resolve = resolve_figure
@@ -85,8 +98,8 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
     original = Path(store.snapshot()["locators"][""])
     old = document_root(original, selected_id)
     local = FileProjectRepository()
-    if local.has_head(old):
-        attachment = attach_existing(store, old, figure_id=selected_id)
+    if local.has_head(old) or known_head(store, old):
+        attachment = attach_existing(store, old, figure_id=selected_id, validate=repository.validate_attachment)
         repository.select(attachment)
         return StoredTarget(attachment.root)
     snapshot = store.snapshot()

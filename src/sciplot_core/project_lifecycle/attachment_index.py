@@ -1,5 +1,6 @@
 """Explicit generation-owned semantic attachment identities and old-location fences."""
 from dataclasses import dataclass
+from functools import cached_property
 import json
 from pathlib import Path
 from typing import Any
@@ -61,10 +62,23 @@ class Attachment:
         return self.store.root / STORE / "semantic-derived" / str(self.entry["id"])
 
     @property
+    def namespace_origin(self) -> Path:
+        return Path(self.entry.get("namespace_origin", str(Path(self.entry["project_origin"]) / self.entry["namespace"])))
+
+    @cached_property
+    def legacy_projection(self) -> Path | None:
+        prefix = self.entry.get("legacy_prefix")
+        if prefix is None:
+            return None
+        return Path(self.store.capture_namespace(prefix)["path"])
+
+    @property
     def output(self) -> Path | None:
         value = self.entry.get("managed_output")
         if value is None:
             return None
+        if self.entry.get("output_owner") == "derived":
+            return self.cache / "output"
         original, project = Path(value), Path(self.entry["project_origin"])
         return self.store.root / original.relative_to(project) if original.is_relative_to(project) else self.cache / "output"
 
@@ -75,9 +89,16 @@ class Attachment:
         return self.relative(path) is not None or any(path == root or path.is_relative_to(root) for root in roots)
 
     def relative(self, path: Path) -> Path | None:
-        for root in (self.root, self.origin):
+        roots = [self.root, self.origin, self.namespace_origin]
+        if self.entry.get("transfer_root") is not None:
+            roots.append(Path(self.entry["transfer_root"]))
+        for root in roots:
             if path == root or path.is_relative_to(root):
                 return path.relative_to(root)
+        if self.legacy_projection is not None:
+            known = self.legacy_projection
+            if path == known or path.is_relative_to(known):
+                return path.relative_to(known)
         return None
 
     def logical(self, path: Path) -> str:
@@ -103,7 +124,7 @@ def owned_marker(path: Path) -> tuple[Path, dict[str, Any]] | None:
                     or not Path(value.get("origin_root", "")).is_absolute() or not isinstance(value.get("project_id"), str)
                     or not isinstance(value.get("attachment_id"), str) or not Path(value.get("project", "")).is_absolute()):
                 raise EngineError("semantic_attachment_owner_invalid", "The old semantic namespace ownership fence is invalid.")
-            if value.get("role") == "history" and value.get("history_root") == str(candidate):
+            if value.get("role") == "history" and (value.get("history_root") == str(candidate) or value["origin_root"] != str(candidate)):
                 raise EngineError("semantic_attachment_history_read_only", "The registered original history is a read-only backup; open its attached project.")
             return candidate, value
     return None
