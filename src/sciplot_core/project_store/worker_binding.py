@@ -67,9 +67,19 @@ def _read_binding(reference: dict[str, str], argv: list[str]) -> dict[str, Any]:
             or value["argv_sha256"] != digest(argv) or value["parent_pid"] != os.getppid()):
         raise ProjectConflict("The native project locator belongs to a different command or host process.")
     project = value["project"]
-    if (not isinstance(project, dict) or set(project) != {"kind", "version", "root", "project_id",
-            "generation", "generation_sha256", "locations"} or project["kind"] != "sciplot_project_runtime"
-            or project["version"] != 1 or not isinstance(project["locations"], dict)):
+    if not isinstance(project, dict):
+        raise ProjectStoreError("Unsupported closed native project locator.")
+    fields = {"kind", "version", "root", "project_id", "generation", "generation_sha256", "locations"}
+    if project.get("kind") == "sciplot_project_candidate_runtime":
+        fields.add("candidate")
+        candidate = project.get("candidate")
+        if (not isinstance(candidate, dict) or set(candidate) != {"root", "device", "inode"}
+                or not isinstance(candidate["root"], str) or not Path(candidate["root"]).is_absolute()
+                or any(type(candidate[key]) is not int or candidate[key] < 0 for key in ("device", "inode"))):
+            raise ProjectStoreError("Invalid closed private candidate locator.")
+    elif project.get("kind") != "sciplot_project_runtime":
+        raise ProjectStoreError("Unsupported closed native project locator.")
+    if set(project) != fields or project["version"] != 1 or not isinstance(project["locations"], dict):
         raise ProjectStoreError("Unsupported closed native project locator.")
     return project
 
@@ -92,7 +102,16 @@ def worker_project_runtime(reference: dict[str, str] | None, argv: list[str]) ->
         locations[key] = ResourceRoot(Path(item["path"]), tuple(item["members"]) if item["members"] is not None else None)
     if not isinstance(value["root"], str) or not Path(value["root"]).is_absolute():
         raise ProjectStoreError("A native project locator needs its explicit physical root.")
-    resolver = ProjectSourceResolver(FileProjectStore(Path(value["root"]), locations=locations), value["generation"])
+    store = FileProjectStore(Path(value["root"]), locations=locations)
+    resolver: ProjectSourceResolver
+    if value["kind"] == "sciplot_project_candidate_runtime":
+        from .candidate_runtime import ProjectCandidateResolver
+
+        candidate = value["candidate"]
+        resolver = ProjectCandidateResolver(store, Path(candidate["root"]), value["generation"],
+            bound_identity={key: candidate[key] for key in ("device", "inode")})
+    else:
+        resolver = ProjectSourceResolver(store, value["generation"])
     if (resolver.snapshot["project_id"] != value["project_id"]
             or digest(resolver.snapshot) != value["generation_sha256"]):
         raise ProjectConflict("The native locator differs from the selected project generation.")
