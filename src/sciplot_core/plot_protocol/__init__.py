@@ -1,4 +1,4 @@
-"""Local semantic plot transports; all scientific work belongs to PlotService."""
+"""Local semantic transports; application and repository own lifecycle state."""
 
 from sciplot_core.plot_protocol.client import call
 

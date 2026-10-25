@@ -130,6 +130,12 @@ EXTERNAL_AI_OWNERS = (
                 "src/sciplot_core/veusz_worker/operations.py",
                 "src/sciplot_gui/studio_assistant/proposal_application.py",
                 "src/sciplot_gui/studio_assistant/selection.py",
+                "src/sciplot_gui/studio_assistant/native_batch.py",
+                "src/sciplot_gui/studio_assistant/native_batch_window.py",
+                "src/sciplot_gui/studio_assistant/bridge.py",
+                "src/sciplot_gui/studio_assistant/context_history.py",
+                "src/sciplot_gui/studio_project/export_helpers.py",
+                "src/sciplot_gui/studio_project/series_revision.py",
             }
         ),
         owned_test_paths=frozenset(
@@ -140,6 +146,8 @@ EXTERNAL_AI_OWNERS = (
                 "tests/test_native_document_edit.py",
                 "tests/test_native_font_evidence.py",
                 "tests/test_assistant_contract.py",
+                "tests/test_gui_native_batch_isolation.py",
+                "tests/test_gui_native_batch_isolation_native.py",
             }
         ),
         pytest_targets=(
@@ -150,6 +158,8 @@ EXTERNAL_AI_OWNERS = (
             "tests/test_native_font_evidence.py",
             "tests/test_project_query.py",
             "tests/test_assistant_contract.py",
+            "tests/test_gui_native_batch_isolation.py",
+            "tests/test_gui_native_batch_isolation_native.py",
             *ARCHITECTURE_CORE_TARGETS,
         ),
         mypy_required=True,

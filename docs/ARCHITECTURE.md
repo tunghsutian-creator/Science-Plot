@@ -30,12 +30,13 @@ raw files + hashes
 - versioned policy and request contracts define constraints;
 - QA reports only checks it actually performs.
 
-State authority and renderer choice are separate. `PlotService` installs the
-Veusz backend router; `ManagedVeuszCompiler` still compiles PlotIR into
+State authority and renderer choice are separate. The composition facade installs
+the Veusz backend router; `ManagedVeuszCompiler` compiles PlotIR into
 `document.vsz`, and native inspection, canvas editing and PDF/TIFF export use
 Veusz Documents. A Managed VSZ is rebuildable, whereas a Legacy VSZ remains the
-complete visual authority. Neither is an unused file format. Removing VSZ would require a separately approved rendering, editing,
-scientific-QA and existing-project migration contract.
+complete visual authority. Veusz is the long-term native rendering adapter, not
+the semantic application or storage authority. Its replacement would require
+rendering, editing, scientific-QA and existing-project migration evidence.
 
 Frequency response completion belongs to `semantic_sources/rheology_frequency_metrics.py`:
 instrument, confirmed-column and three-header workbook routes share the original
@@ -402,8 +403,11 @@ audit and one visual review. Stable IDs follow unique existing native bindings;
 source/specification or structural identity changes are not guessed. Acceptance
 appends a revision and exports without rewriting the manually saved VSZ.
 
-`plot_engine/` owns immutable revision snapshots, atomic head pointers, durable
-idempotency journals, independent commit/export statuses and compact receipts.
+`project_lifecycle/` owns the semantic figure-aggregate application and repository
+contracts. ProjectApplication owns lifecycle transitions; ProjectRepository is
+the sole writer of immutable revision snapshots, atomic head pointers and durable
+idempotency journals. Independent commit/export statuses and compact receipts
+project that same store; compatibility modules under `plot_engine/` delegate.
 Its sibling `.sciplot_documents/` storage is outside the native project inventory.
 Each new patch validates its entire batch and base revision before reserving work.
 Safe presentation changes with passed native scientific audit commit automatically;
@@ -413,7 +417,7 @@ leave the revision committed; retries never reapply it. Only known transient
 preview/export failures get one durable extra attempt. Undo appends a revision.
 This is recoverable logical execution, not a claim of atomic multi-file filesystem
 replacement across power loss. Full candidate/native evidence stays local.
-`plot_engine/recovery` projects that existing frozen receipt into descriptions
+The lifecycle recovery owner projects that existing frozen receipt into descriptions
 and validates a compact plot ID/base revision/idempotency key before replaying
 the original saved patch. CLI, RPC and MCP delegate to this owner. Recovery
 cannot accept a preview, invent a missing request, rebind changed inputs or
@@ -1315,9 +1319,12 @@ a cross-session identity.
 
 ### Adapter ownership during module convergence
 
-Scientific document validation and seals remain in `plot_document`/`plot_ir`;
-`PlotService` owns semantic transactions, revisions, currentness, preview/export
-and rollback. Provider-neutral capability admission owns AI command scope. GUI
+Scientific document validation and seals remain in `plot_document`/`plot_ir`.
+`ProjectApplication` owns semantic transactions, currentness, preview/export and
+rollback; its injected repository owns revision/head/journal persistence. The
+`PlotService` compatibility facade constructs concrete ports and routes separate
+native-project aggregates; it contains no competing semantic state machine.
+Provider-neutral capability admission owns AI command scope. GUI
 changeset/native selection/Undo remains a separate identity domain. Adapters may
 resolve intent into those contracts but cannot mint a competing state authority.
 
@@ -1328,7 +1335,7 @@ standalone cleanup errors surface through the redacted provider boundary.
 
 `plot_engine/edit_entry.py` admits and leases style/common edit checkpoint paths.
 A checkpoint retains the original literal request, not transaction stages. Replay
-uses that binding before fresh target discovery; the PlotService journal remains
+uses that binding before fresh target discovery; the lifecycle repository journal remains
 execution authority. Source, export and revision directories cannot become user
 edit entries. Necessary old checkpoint formats remain readable.
 
@@ -1338,6 +1345,15 @@ values and explicit declarations remain distinct. Axis heuristics consume semant
 axis fields, never paths or hashes. Presentation defaults preserve explicit label
 layout and axis-mode choices; scientific metric labels and scale constraints keep
 their existing owners. Exact-current native reopen/export does not infer defaults.
+
+The [core migration contract](DESIGN_PROJECT_LIFECYCLE.md) defines the complete
+semantic caller scope, authority/revision/command identities, failure isolation
+and old-writer retirement. Desktop setting batches compensate failures against
+the full live draft and quarantine unverifiable state before native output.
+Panel saves use one directory-inode lease and descriptor-bound staging; process
+death releases exclusion without deleting an unproven historical lock. These
+bounded changes do not establish whole-project transaction convergence or solve
+the separate global scientific-executor version and portability findings.
 
 ## Ownership table
 

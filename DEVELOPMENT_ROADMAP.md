@@ -421,16 +421,37 @@ The next parallel batch replaces three demonstrated adapter ownership defects:
 response/connection/cancellation cleanup in the existing AI transport; shared
 style/common-edit entry admission and literal checkpoint replay before new target
 discovery; and one explicit render-option projection for domain defaults and
-series provenance. Existing scientific documents, PlotService transactions and
-Veusz execution remain the owning kernel: strict scientific seals, mappings,
-revision/currentness, native audit and rollback already converge there. Replace
-superseded adapter code rather than adding another journal, command bus or
+series provenance. These changes retain existing scientific and native behavior,
+but do not establish PlotService as a suitable long-term application kernel.
+The project-level review found divided transaction ownership, unsafe desktop
+batch failures, stale panel locks and globally coupled execution identities.
+Replace superseded code rather than adding another journal, command bus or
 scientific schema. Each worker uses affected regressions; the integrated frozen
 batch receives one complete acceptance. No worker's subset certifies the batch.
 Keep mechanical scientific labels, native GUI changesets and semantic revisions
 in their existing identity domains. Broader template/TTS interaction and real
 ordinary plotting still need bounded workflow evidence; this batch adds no new
 scientific template, native/semantic identity bridge or paid AI measurement.
+
+The next core batch follows [the core migration contract](docs/DESIGN_PROJECT_LIFECYCLE.md).
+Its finite scope is all semantic figure-aggregate lifecycle callers, all desktop
+Assistant setting batches and all panel-layout saves. ProjectApplication replaces
+the semantic orchestration; ProjectRepository alone writes its existing revision,
+head and journal store. Old entry points delegate and contain no second writer.
+Desktop failure compensation must verify the complete pre-command draft or
+quarantine it before save/export. Panel saves use a kernel-held directory lease,
+descriptor-bound staging and publication, and an explicit fence against old
+writers. Actual process-death and native failure controls accompany the migration.
+Per-worker checks are development evidence; integrated acceptance remains pending
+until one frozen batch passes its complete local and remote gates.
+
+This is not a claim that every architecture finding is resolved. Operator-specific
+immutable scientific versions, portable whole-project generations, NativeSuite
+and GUI project-use-case convergence, host execution authorization and measured
+runtime costs remain separately bounded work. They must replace the relevant
+old authority when migrated, without a permanent parallel state store. Veusz is
+the long-term native rendering adapter; no evidence justifies reimplementing its
+scientific rendering and existing-file capabilities in this core batch.
 
 Keep one normal local entry and recoverable Git checkpoints. Preserve physical
 projects, raw inputs, existing figures, independent backups and unmerged work.

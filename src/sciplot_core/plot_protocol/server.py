@@ -137,7 +137,7 @@ def _serve(listener: socket.socket, owner: dict[str, Any], service: Service | No
                     connection.sendall(payload)
                 except (OSError, ValueError):
                     # A caller losing its connection never cancels or replays work.
-                    # PlotService owns the durable outcome and idempotency record.
+                    # The application/repository owns durable outcomes and keys.
                     pass
             last_request = time.monotonic()
     finally:

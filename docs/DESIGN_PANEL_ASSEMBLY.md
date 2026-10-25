@@ -9,10 +9,20 @@ incomplete access capture remain separate open issues.
 ## Owners and authority
 
 `panel_assembly/model.py` and `history.py` own a closed versioned layout document,
-local operations, undo/redo and atomic save with concurrent-write refusal.
+local operations and undo/redo. All save callers delegate to `storage.py` for
+revision checks and publication under one kernel-held directory-inode lease.
 They call the existing `plot_layout` physical solver. Spans and empty cells are
 an explicit additive capability; existing figure contracts retain their defaults.
 The layout stores source references/bindings, never another copy of plot science.
+
+The lease closes on success, exception or process death. Stage creation, actual
+JSON writes, publication and cleanup use held directory descriptors; exchanging
+the parent pathname refuses publication and cannot write staged layout bytes to
+the replacement directory. Layouts in one directory intentionally serialize.
+A persistent versioned `.assembly-lock` fence excludes old O_EXCL writers; it
+does not own the lease and is not deleted on PID/age guesses. Unknown historical
+markers remain refused with explicit Save As available. This replaces the old
+stale-lock lifecycle, while retaining previous-file and revision-conflict guards.
 
 `panel_assembly/sources.py`, `native.py` and `export.py` own current source
 capture, native physical reflow and mixed vector/raster delivery. Legacy panels

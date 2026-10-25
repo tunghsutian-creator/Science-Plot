@@ -5,6 +5,7 @@ from sciplot_core.verification.owner_model import ChangedOwner
 ASSEMBLY_TESTS = (
     "tests/test_panel_assembly_model.py",
     "tests/test_panel_assembly_storage.py",
+    "tests/test_panel_assembly_writer_lease.py",
     "tests/test_panel_assembly_export.py",
     "tests/test_panel_assembly_sources.py",
     "tests/test_panel_assembly_preview.py",

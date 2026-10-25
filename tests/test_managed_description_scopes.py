@@ -18,6 +18,9 @@ from sciplot_core.plot_protocol import rpc
 
 
 def _service(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, figure: bool = True) -> tuple[PlotService, Path, dict]:
+    # Own the physical generated fixture namespace, including macOS /var aliases.
+    # Production project locators keep their strict no-symlink admission.
+    tmp_path = tmp_path.resolve()
     request = request_for_figure(tmp_path) if figure else request_for_source(tmp_path)
     document = create_managed_document(request["template_definition"], request["data_binding"], plot_id="scoped-test")
     root = tmp_path / "saved-plot"
@@ -34,7 +37,6 @@ def _service(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, figure: bool = 
                ]}}
     head = {"document": document, "binding": binding}
     monkeypatch.setattr(service_module, "load_head", lambda _: head)
-    monkeypatch.setattr(service_module, "canonical_path", lambda path: path)
     monkeypatch.setattr(service_module, "external_project_session", lambda _: nullcontext())
     monkeypatch.setattr(service_module, "changed_inputs", lambda _backend, _binding: [])
     monkeypatch.setattr(service_module, "active", lambda _: None)

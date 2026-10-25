@@ -5,6 +5,9 @@ from sciplot_core.verification.ordinary_plotting_owners import APPEND_IDENTITY_L
 from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
 PLOT_TEST_PATHS = (
+    "tests/test_project_lifecycle.py",
+    "tests/test_project_lifecycle_contracts.py",
+    "tests/test_project_lifecycle_native.py",
     "tests/test_family_style_overrides.py",
     "tests/test_rendering_profiles_helpers.py",
     "tests/test_rendering_profile_baselines.py",
@@ -107,7 +110,7 @@ PLOT_TEST_PATHS = (
 PLOT_OWNER = ChangedOwner(
     owner_id="semantic_plot_engine",
     path_prefixes=("src/sciplot_core/native_process/", "src/sciplot_core/plot_document/", "src/sciplot_core/plot_backends/",
-                   "src/sciplot_core/plot_engine/", "src/sciplot_core/plot_protocol/",
+                   "src/sciplot_core/plot_engine/", "src/sciplot_core/project_lifecycle/", "src/sciplot_core/plot_protocol/",
                    "src/sciplot_core/plot_ir/", "src/sciplot_core/plot_transforms/",
                    "src/sciplot_core/plot_grammar/", "src/sciplot_core/plot_layout/", "src/sciplot_core/rendering_contract/",
                    "tests/fixtures/rendering_profiles/"),
