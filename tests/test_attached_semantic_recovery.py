@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 from test_attached_semantic_history import bytes_in, old_managed
+from test_attached_semantic_history import standalone
+from managed_plot_helpers import request_for_source
 from test_attached_semantic_repository import application
 from sciplot_core.project_lifecycle import attachment_transfer
 from sciplot_core.project_lifecycle.attachment_index import OWNER
@@ -19,10 +21,24 @@ class TransferCrash(BaseException):
 
 @pytest.mark.parametrize("boundary", ["before_fence", "after_fence", "after_publication", "before_head", "after_head", "before_projection"])
 def test_frozen_transfer_restarts_without_recapturing_or_executing_science(tmp_path, monkeypatch, boundary):
-    _sources, old, created = old_managed(tmp_path)
-    original = bytes_in(old)
+    _restart(tmp_path, monkeypatch, boundary, tracked=False)
+
+
+@pytest.mark.parametrize("boundary", ["before_fence", "after_fence", "after_publication", "before_head", "after_head", "before_projection"])
+def test_tracked_transfer_restarts_with_its_exact_original_backup_capability(tmp_path, monkeypatch, boundary):
+    _restart(tmp_path, monkeypatch, boundary, tracked=True)
+
+
+def _restart(tmp_path, monkeypatch, boundary, *, tracked):
     project = tmp_path / "project"
-    project.mkdir()
+    if tracked:
+        project.mkdir()
+        created = standalone().create(request_for_source(project))
+        old = Path(created["plot"])
+    else:
+        _sources, old, created = old_managed(tmp_path)
+    original = bytes_in(old)
+    project.mkdir(exist_ok=True)
     store = FileProjectStore(project)
     store.snapshot(import_legacy=True)
 
@@ -37,6 +53,7 @@ def test_frozen_transfer_restarts_without_recapturing_or_executing_science(tmp_p
             application().open(old)
     records = [item for item in store.commands() if item["metadata"]["kind"] == "attachment_import"]
     assert len(records) == 1 and records[0]["phase"] in {"needs_review", "accepted", "complete"}
+    assert bool(records[0]["metadata"].get("namespace_transfers")) == tracked
     if boundary == "before_fence":
         assert bytes_in(old) == original
         assert records[0]["phase"] == "needs_review"
