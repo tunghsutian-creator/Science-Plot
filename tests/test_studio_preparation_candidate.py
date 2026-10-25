@@ -198,6 +198,22 @@ def test_unchanged_native_with_changed_spec_cannot_skip_the_real_audit(tmp_path,
             commands.audit_studio_candidate(candidate, payload)
 
 
+def test_explicit_scientific_audit_scope_still_executes_the_native_audit(tmp_path, monkeypatch):
+    _root, store, before = fixture_store(tmp_path)
+    from sciplot_core.source_coverage import document_audit
+
+    def scientific(**kwargs):
+        assert kwargs["check_presentation"] is False
+        raise RuntimeError("exact scientific audit reached")
+
+    monkeypatch.setattr(document_audit, "_audit_exact_document_data", scientific)
+    with studio_preparation_candidate(store, snapshot=before) as candidate:
+        payload = {"document": str(candidate.project_dir / "studio/document.vsz"),
+                   "preserved_existing_document": True}
+        with pytest.raises(RuntimeError, match="exact scientific audit reached"):
+            commands.audit_studio_candidate(candidate, payload, check_presentation=False)
+
+
 def _prepared(candidate, **_kwargs):
     root = candidate.project_dir
     (root / "studio/document.vsz").write_bytes(b"complete private native")

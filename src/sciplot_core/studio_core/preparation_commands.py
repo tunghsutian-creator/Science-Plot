@@ -44,12 +44,17 @@ def prepare_studio_candidate(candidate: StudioPreparationCandidate, *, request_t
         terminal_source_prepared=_terminal_source_prepared, new_creation=_new_creation)
 
 
-def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[str, Any]) -> tuple[list[dict[str, Any]], list[PreparedSource]]:
+def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[str, Any], *,
+                           check_presentation: bool | None = None) -> tuple[list[dict[str, Any]], list[PreparedSource]]:
     """Audit real saved native bytes and freeze their exact scientific inputs."""
     from sciplot_core.source_coverage.document_audit import _audit_exact_document_data
     from sciplot_core.source_coverage.managed_documents import source_records
 
     require_preparation_candidate(candidate.project_dir)
+    if check_presentation is not None and type(check_presentation) is not bool:
+        raise ValueError("A native audit must select its presentation scope explicitly.")
+    presentation = (payload.get("preserved_existing_document") is not True
+                    if check_presentation is None else check_presentation)
     registry = payload.get("figure_set")
     figures = registry.get("figures", []) if isinstance(registry, dict) else [
         {"status": "ready", "document": payload["document"], "spec": str(candidate.project_dir / "studio/spec.json")}]
@@ -65,7 +70,7 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
         previous_spec = candidate.snapshot["files"].get(spec.relative_to(candidate.project_dir).as_posix())
         current_spec_hash = sha(spec.read_bytes()) if spec.is_file() else None
         expected_spec_hash = previous_spec["sha256"] if previous_spec is not None else None
-        unchanged = (payload.get("preserved_existing_document") is True and previous is not None
+        unchanged = (check_presentation is None and payload.get("preserved_existing_document") is True and previous is not None
                      and sha(document.read_bytes()) == previous["sha256"]
                      and current_spec_hash == expected_spec_hash)
         if unchanged:
@@ -74,7 +79,7 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
             continue  # Metadata-only reuse neither executes nor certifies new science.
         else:
             audit, spec_payload = _audit_exact_document_data(document_path=document, spec_path=spec,
-                check_presentation=payload.get("preserved_existing_document") is not True)
+                check_presentation=presentation)
             audits.append(audit)
         for source, expected in source_records(spec_payload).items():
             literal = str(source)
