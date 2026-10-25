@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import shutil
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -332,10 +331,9 @@ def test_publish_rejects_request_spec_template_mismatch_before_run_allocation(
         output_dir.mkdir(parents=True)
         return output_dir
 
-    monkeypatch.setattr(inventory_module, "_next_studio_run_dir", allocate)
 
     with pytest.raises(RuntimeError, match="presentation_identity_mismatch"):
-        inventory_module.prepare_studio_export_inventory(
+        _prepare_inventory(
             project_dir=project_dir,
             request_path=request_path,
             document_path=document_path,
@@ -386,14 +384,9 @@ def test_publish_rejects_plan_template_mismatch_before_run_allocation(
         lambda **_kwargs: None,
     )
     allocations: list[Path] = []
-    monkeypatch.setattr(
-        inventory_module,
-        "_next_studio_run_dir",
-        lambda current_project: allocations.append(current_project),
-    )
 
     with pytest.raises(RuntimeError, match="stale_resolved_figure_plan"):
-        inventory_module.prepare_studio_export_inventory(
+        _prepare_inventory(
             project_dir=project_dir,
             request_path=request_path,
             document_path=document_path,
@@ -539,19 +532,16 @@ def test_publish_result_manifest_payload_and_registry_share_template(
         finalize_contracts,
     )
     registered: list[dict[str, Any]] = []
-    monkeypatch.setattr(
-        finalize_module,
-        "_register_studio_run",
-        lambda _project, _manifest, *, studio_run: registered.append(studio_run),
-    )
 
-    payload = finalize_module.finalize_studio_run(
+    payload = _finalize_run(
         inventory=inventory,
         evidence=evidence,
         manifest=manifest,
         copied_exports=[],
         figures=[],
     )
+    from sciplot_core.studio_core.registry_writes import studio_run_registration
+    registered = [studio_run_registration({}, manifest, studio_run=payload)["studio"]["last_export_run"]]
 
     for projection in (result, manifest, payload, registered[0]):
         assert projection["template"] == ALTERNATE_TEMPLATE
@@ -606,14 +596,9 @@ def test_finalize_rejects_split_presentation_before_any_write(
         "_write_json_atomic",
         lambda *_args, **_kwargs: effects.append("write"),
     )
-    monkeypatch.setattr(
-        finalize_module,
-        "_register_studio_run",
-        lambda *_args, **_kwargs: effects.append("register"),
-    )
 
     with pytest.raises(RuntimeError, match="presentation_identity_mismatch"):
-        finalize_module.finalize_studio_run(
+        _finalize_run(
             inventory=inventory,
             evidence=evidence,
             manifest=manifest,
@@ -633,35 +618,12 @@ def test_project_registry_records_selected_presentation(
     identity = _identity(ALTERNATE_TEMPLATE)
     project_manifest: dict[str, Any] = {"studio": {}}
 
-    @contextmanager
-    def edit_manifest(
-        _project_dir: Path,
-        *,
-        snapshot_writer: object,
-    ):
-        assert snapshot_writer is not None
-        yield project_manifest
-
-    monkeypatch.setattr(
-        registry_writes,
-        "edit_intake_project_manifest_with_snapshot",
-        edit_manifest,
-    )
-    registry_writes._register_studio_run(
-        tmp_path,
-        {
-            "created_at": "2026-07-30T00:00:00Z",
-            "output": str(tmp_path / "runs" / "studio_001"),
-            "template": ALTERNATE_TEMPLATE,
-            "presentation_identity": identity,
-        },
-        studio_run={
-            "exports": [],
-            "template": ALTERNATE_TEMPLATE,
-            "presentation_identity": identity,
-        },
-    )
-
+    before = json.loads(json.dumps(project_manifest))
+    project_manifest = registry_writes.studio_run_registration(project_manifest,
+        {"created_at": "2026-07-30T00:00:00Z", "output": str(tmp_path / "runs/studio_001"),
+         "template": ALTERNATE_TEMPLATE, "presentation_identity": identity},
+        studio_run={"exports": [], "template": ALTERNATE_TEMPLATE, "presentation_identity": identity})
+    assert before == {"studio": {}}
     assert project_manifest["last_run"]["template"] == ALTERNATE_TEMPLATE
     assert project_manifest["last_run"]["presentation_identity"] == identity
     assert project_manifest["studio"]["presentation_identity"] == identity
@@ -721,3 +683,18 @@ def test_explicit_alternate_survives_real_studio_publication(
         project_manifest["studio"]["last_export_run"],
     ):
         assert projection["template"] == ALTERNATE_TEMPLATE
+
+
+def _prepare_inventory(**kwargs):
+    output = kwargs["project_dir"].parent / "private-publication"
+    result = inventory_module.prepare_studio_export_inventory(**kwargs, output_dir=output / "run",
+        secondary_output_dir=output / "secondary")
+    result.output_dir.mkdir(parents=True, exist_ok=True)
+    return result
+
+
+def _finalize_run(**kwargs):
+    from sciplot_core.studio_core.publish_finalize import finalize_studio_run
+    output = kwargs["inventory"].output_dir.parent
+    return finalize_studio_run(**kwargs, delivery_dir=output / "private-delivery",
+                              delivery_root=output / "visible-delivery")

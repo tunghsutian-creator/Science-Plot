@@ -553,7 +553,6 @@ def _stub_required_publish_ports(
         allocations.append(project_dir)
         return project_dir / "runs" / "studio_001"
 
-    monkeypatch.setattr(inventory_module, "_next_studio_run_dir", allocate)
     return secondary_exports, allocations
 
 
@@ -619,17 +618,12 @@ def test_selected_supported_plan_requires_matching_task_registry_before_run_allo
         "_collect_figure_documents",
         lambda **_kwargs: collection_calls.append(True),
     )
-    monkeypatch.setattr(
-        inventory_module,
-        "_next_studio_run_dir",
-        lambda project: allocation_calls.append(project),
-    )
 
     with pytest.raises(
         RuntimeError,
         match="matching task-aware v2 Studio figure-set registry",
     ):
-        inventory_module.prepare_studio_export_inventory(
+        _prepare_inventory(
             project_dir=project_dir,
             request_path=request_path,
             document_path=document_path,
@@ -727,7 +721,7 @@ def test_required_plan_publish_reads_one_strict_figure_set_snapshot(
 
     monkeypatch.setattr(figure_set_state_module, "_read_json", count_registry_read)
 
-    inventory = inventory_module.prepare_studio_export_inventory(
+    inventory = _prepare_inventory(
         project_dir=project.project_dir,
         request_path=project.request_path,
         document_path=project.document_path,
@@ -743,7 +737,8 @@ def test_required_plan_publish_reads_one_strict_figure_set_snapshot(
     assert [call["figure_id"] for call in secondary_exports] == [
         project.plan.tasks[1].figure_id
     ]
-    assert allocations == [project.project_dir]
+    assert allocations == []
+    assert not (project.project_dir / "runs").exists()
 
 
 @pytest.mark.parametrize("missing_member", ["document", "spec"])
@@ -765,7 +760,7 @@ def test_required_plan_publish_rejects_missing_secondary_artifact_before_ports(
     )
 
     with pytest.raises(RuntimeError):
-        inventory_module.prepare_studio_export_inventory(
+        _prepare_inventory(
             project_dir=project.project_dir,
             request_path=project.request_path,
             document_path=project.document_path,
@@ -800,7 +795,7 @@ def test_required_plan_publish_rejects_external_secondary_symlink_before_ports(
     )
 
     with pytest.raises(RuntimeError):
-        inventory_module.prepare_studio_export_inventory(
+        _prepare_inventory(
             project_dir=project.project_dir,
             request_path=project.request_path,
             document_path=project.document_path,
@@ -833,7 +828,7 @@ def test_required_plan_publish_rejects_split_generated_hash_before_ports(
     )
 
     with pytest.raises(RuntimeError):
-        inventory_module.prepare_studio_export_inventory(
+        _prepare_inventory(
             project_dir=project.project_dir,
             request_path=project.request_path,
             document_path=project.document_path,
@@ -874,7 +869,7 @@ def test_required_plan_publish_uses_snapshot_primary_generated_hash_authority(
         legacy_generated_hash,
     )
 
-    inventory = inventory_module.prepare_studio_export_inventory(
+    inventory = _prepare_inventory(
         project_dir=project.project_dir,
         request_path=project.request_path,
         document_path=project.document_path,
@@ -888,7 +883,8 @@ def test_required_plan_publish_uses_snapshot_primary_generated_hash_authority(
     assert inventory.document_state["authority"] == "veusz_manual"
     assert inventory.document_state["manual_edit_detected"] is True
     assert len(secondary_exports) == 1
-    assert allocations == [project.project_dir]
+    assert allocations == []
+    assert not (project.project_dir / "runs").exists()
 
 
 def test_required_plan_publish_rejects_missing_primary_current_hash_before_ports(
@@ -910,7 +906,7 @@ def test_required_plan_publish_rejects_missing_primary_current_hash_before_ports
     )
 
     with pytest.raises(RuntimeError):
-        inventory_module.prepare_studio_export_inventory(
+        _prepare_inventory(
             project_dir=project.project_dir,
             request_path=project.request_path,
             document_path=project.document_path,
@@ -948,7 +944,7 @@ def test_required_plan_primary_drift_after_presentation_blocks_before_ports(
     )
 
     with pytest.raises(RuntimeError, match="document changed before the project run"):
-        inventory_module.prepare_studio_export_inventory(
+        _prepare_inventory(
             project_dir=project.project_dir,
             request_path=project.request_path,
             document_path=project.document_path,
@@ -987,7 +983,7 @@ def test_required_plan_primary_drift_during_secondary_port_blocks_before_allocat
     )
 
     with pytest.raises(RuntimeError):
-        inventory_module.prepare_studio_export_inventory(
+        _prepare_inventory(
             project_dir=project.project_dir,
             request_path=project.request_path,
             document_path=project.document_path,
@@ -1006,7 +1002,7 @@ def test_run_snapshot_writes_validated_inventory_registry_after_source_tamper(
 ) -> None:
     project = _write_required_publish_project(tmp_path)
     _stub_required_publish_ports(monkeypatch, project)
-    inventory = inventory_module.prepare_studio_export_inventory(
+    inventory = _prepare_inventory(
         project_dir=project.project_dir,
         request_path=project.request_path,
         document_path=project.document_path,
@@ -1041,7 +1037,7 @@ def test_run_snapshot_rejects_post_inventory_spec_drift_and_cleans_destination(
 ) -> None:
     project = _write_required_publish_project(tmp_path)
     _stub_required_publish_ports(monkeypatch, project)
-    inventory = inventory_module.prepare_studio_export_inventory(
+    inventory = _prepare_inventory(
         project_dir=project.project_dir,
         request_path=project.request_path,
         document_path=project.document_path,
@@ -1174,7 +1170,7 @@ def test_publish_inventory_revalidates_a_currently_downgraded_rule_once(
 
     monkeypatch.setattr(readiness_module, "get_rule", lookup)
 
-    inventory = inventory_module.prepare_studio_export_inventory(
+    inventory = _prepare_inventory(
         project_dir=project_dir,
         request_path=request_path,
         document_path=document_path,
@@ -1186,7 +1182,8 @@ def test_publish_inventory_revalidates_a_currently_downgraded_rule_once(
     assert inventory.rule_readiness.current_rule is pending_rule
     assert inventory.rule_readiness.persisted_pending_rule_review is False
     assert inventory.pending_rule_review is True
-    assert inventory.output_dir == project_dir / "runs" / "studio_001"
+    assert inventory.output_dir == project_dir.parent / "private-publication" / "run"
+    assert not (project_dir / "runs").exists()
     assert inventory.output_dir.is_dir()
     assert len(collected) == 1
 
@@ -1221,11 +1218,6 @@ def test_publish_inventory_revalidates_a_currently_downgraded_rule_once(
         finalize_contracts,
     )
     registered: list[dict[str, Any]] = []
-    monkeypatch.setattr(
-        finalize_module,
-        "_register_studio_run",
-        lambda _project, _manifest, *, studio_run: registered.append(studio_run),
-    )
     canonical_rule_readiness = inventory.rule_readiness.to_payload()
     presentation_identity = inventory.presentation_identity.to_payload()
     manifest = {
@@ -1252,13 +1244,15 @@ def test_publish_inventory_revalidates_a_currently_downgraded_rule_once(
         "publication_rule_blocked": True,
         "autonomous_rule_ready": False,
     }
-    payload = finalize_module.finalize_studio_run(
+    payload = _finalize_run(
         inventory=inventory,
         evidence=SimpleNamespace(qa={"status": "passed"}),
         manifest=manifest,
         copied_exports=[],
         figures=[],
     )
+    from sciplot_core.studio_core.registry_writes import studio_run_registration
+    registered = [studio_run_registration({}, manifest, studio_run=payload)["studio"]["last_export_run"]]
 
     assert payload["state"] == "needs_rule_repair"
     assert payload["ready_to_use"] is False
@@ -1322,7 +1316,7 @@ def test_invalid_rule_state_fails_before_collecting_figures_or_allocating_a_run(
     )
 
     with pytest.raises(ValueError, match=message):
-        inventory_module.prepare_studio_export_inventory(
+        _prepare_inventory(
             project_dir=project_dir,
             request_path=request_path,
             document_path=document_path,
@@ -1364,7 +1358,7 @@ def test_ready_and_blank_rule_inventory_controls_remain_publishable(
 
     monkeypatch.setattr(readiness_module, "get_rule", lookup)
 
-    inventory = inventory_module.prepare_studio_export_inventory(
+    inventory = _prepare_inventory(
         project_dir=project_dir,
         request_path=request_path,
         document_path=document_path,
@@ -1377,3 +1371,18 @@ def test_ready_and_blank_rule_inventory_controls_remain_publishable(
         [UNPLANNED_RULE_ID] if str(request_payload.get("rule_id") or "").strip() else []
     )
     assert inventory.output_dir.is_dir()
+
+
+def _prepare_inventory(**kwargs):
+    output = kwargs["project_dir"].parent / "private-publication"
+    result = inventory_module.prepare_studio_export_inventory(**kwargs, output_dir=output / "run",
+        secondary_output_dir=output / "secondary")
+    result.output_dir.mkdir(parents=True, exist_ok=True)
+    return result
+
+
+def _finalize_run(**kwargs):
+    from sciplot_core.studio_core.publish_finalize import finalize_studio_run
+    output = kwargs["inventory"].output_dir.parent
+    return finalize_studio_run(**kwargs, delivery_dir=output / "private-delivery",
+                              delivery_root=output / "visible-delivery")

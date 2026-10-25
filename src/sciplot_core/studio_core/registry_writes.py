@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,7 @@ def studio_run_registration(
     *,
     studio_run: dict[str, Any],
 ) -> dict[str, Any]:
+    payload = deepcopy(payload)
     figure_set_export_scope_payload = manifest.get("figure_set_export_scope")
     figure_set_export_scope = (
         figure_set_export_scope_payload

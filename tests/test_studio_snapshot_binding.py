@@ -326,19 +326,16 @@ def test_finalize_returns_snapshot_bound_exports_from_durable_result(
         finalize_contracts,
     )
     registered: list[dict[str, object]] = []
-    monkeypatch.setattr(
-        finalize_module,
-        "_register_studio_run",
-        lambda _project, _manifest, *, studio_run: registered.append(studio_run),
-    )
 
-    payload = finalize_module.finalize_studio_run(
+    payload = _finalize_run(
         inventory=inventory,
         evidence=SimpleNamespace(qa={"status": "passed"}),
         manifest=manifest,
         copied_exports=[live_export],
         figures=[str(tmp_path / "figure.pdf")],
     )
+    from sciplot_core.studio_core.registry_writes import studio_run_registration
+    registered = [studio_run_registration({}, manifest, studio_run=payload)["studio"]["last_export_run"]]
 
     assert payload["exports"] == [durable_export]
     assert payload["state"] == "ready"
@@ -452,19 +449,16 @@ def test_finalize_blocks_rule_prerequisites_after_all_artifact_gates_pass(
         finalize_contracts,
     )
     registered: list[dict[str, object]] = []
-    monkeypatch.setattr(
-        finalize_module,
-        "_register_studio_run",
-        lambda _project, _manifest, *, studio_run: registered.append(studio_run),
-    )
 
-    payload = finalize_module.finalize_studio_run(
+    payload = _finalize_run(
         inventory=inventory,
         evidence=SimpleNamespace(qa={"status": "passed"}),
         manifest=manifest,
         copied_exports=[],
         figures=[],
     )
+    from sciplot_core.studio_core.registry_writes import studio_run_registration
+    registered = [studio_run_registration({}, manifest, studio_run=payload)["studio"]["last_export_run"]]
 
     assert manifest["state"] == "needs_rule_repair"
     assert manifest["ready_to_use"] is False
@@ -569,14 +563,9 @@ def test_finalize_rejects_split_rule_readiness_before_any_write_or_registration(
         "_write_json_atomic",
         lambda *_args, **_kwargs: effects.append("json"),
     )
-    monkeypatch.setattr(
-        finalize_module,
-        "_register_studio_run",
-        lambda *_args, **_kwargs: effects.append("register"),
-    )
 
     with pytest.raises(RuntimeError, match="does not match"):
-        finalize_module.finalize_studio_run(
+        _finalize_run(
             inventory=inventory,
             evidence=SimpleNamespace(qa={"status": "passed"}),
             manifest=manifest,
@@ -585,3 +574,18 @@ def test_finalize_rejects_split_rule_readiness_before_any_write_or_registration(
         )
 
     assert effects == []
+
+
+def _prepare_inventory(**kwargs):
+    output = kwargs["project_dir"].parent / "private-publication"
+    result = inventory_module.prepare_studio_export_inventory(**kwargs, output_dir=output / "run",
+        secondary_output_dir=output / "secondary")
+    result.output_dir.mkdir(parents=True, exist_ok=True)
+    return result
+
+
+def _finalize_run(**kwargs):
+    from sciplot_core.studio_core.publish_finalize import finalize_studio_run
+    output = kwargs["inventory"].output_dir.parent
+    return finalize_studio_run(**kwargs, delivery_dir=output / "private-delivery",
+                              delivery_root=output / "visible-delivery")
