@@ -22,6 +22,7 @@ class CommandKind(StrEnum):
     NATIVE_PATCH = "native_patch"
     NATIVE_CREATE = "native_create"
     NATIVE_EXPORT = "native_export"
+    NATIVE_IMPORT = "native_import"
     EXPORT = "export"
     SAVE = "save"
     PUBLISH = "publish"
@@ -65,6 +66,24 @@ class ProjectionRead:
 
 
 @dataclass(frozen=True)
+class NativeAdoption:
+    resource: str
+    before_sha256: str
+    observed_sha256: str
+    audit_sha256: str
+
+    def __post_init__(self) -> None:
+        resource_key(self.resource)
+        if (PurePosixPath(self.resource).suffix.lower() != ".vsz"
+                or not all(_sha(value) for value in (self.before_sha256, self.observed_sha256, self.audit_sha256))):
+            raise ValueError("Native adoption binds an exact saved VSZ, previous bytes and domain audit receipt.")
+
+    def to_payload(self) -> dict[str, str]:
+        return {"resource": self.resource, "before_sha256": self.before_sha256,
+                "observed_sha256": self.observed_sha256, "audit_sha256": self.audit_sha256}
+
+
+@dataclass(frozen=True)
 class ProjectCommand:
     kind: CommandKind
     key: str
@@ -76,6 +95,7 @@ class ProjectCommand:
     expected_revision: str | int | None = None
     projected_reads: tuple[ProjectionRead, ...] = ()
     projected_writes: tuple[ProjectionRead, ...] = ()
+    native_adoptions: tuple[NativeAdoption, ...] = ()
 
     def __post_init__(self) -> None:
         if (not isinstance(self.kind, CommandKind) or not isinstance(self.key, str) or not 1 <= len(self.key) <= 128
@@ -106,6 +126,14 @@ class ProjectCommand:
                 or len(set(self.projected_writes)) != len(self.projected_writes)
                 or not projected_targets.issubset(self.write_set)):
             raise ValueError("Projected writes require unique, identical selected read guards and a declared write.")
+        if (any(not isinstance(item, NativeAdoption) for item in self.native_adoptions)
+                or bool(self.native_adoptions) != (self.kind == CommandKind.NATIVE_IMPORT)):
+            raise ValueError("Only explicit native import may admit domain-audited saved VSZ bytes.")
+        adopted = [item.resource for item in self.native_adoptions]
+        if len(set(adopted)) != len(adopted) or not set(adopted).issubset(self.write_set):
+            raise ValueError("Every native adoption must name one unique declared write.")
+        if any(reads.get(item.resource) != item.before_sha256 for item in self.native_adoptions):
+            raise ValueError("Native import must still bind its exact prior stored revision.")
         request = json.loads(self.request_json)
         if not isinstance(request, dict) or "idempotency_key" in request and request["idempotency_key"] != self.key:
             raise ValueError("The original request must agree with its command key.")
@@ -117,18 +145,20 @@ class ProjectCommand:
                write_set: Sequence[str], request: dict[str, Any],
                expected_revision: str | int | None = None,
                projected_reads: Sequence[ProjectionRead] = (),
-               projected_writes: Sequence[ProjectionRead] = ()) -> ProjectCommand:
+               projected_writes: Sequence[ProjectionRead] = (),
+               native_adoptions: Sequence[NativeAdoption] = ()) -> ProjectCommand:
         return cls(CommandKind(kind), key, project_id, expected_generation,
                    tuple(sorted(read_set.items())), tuple(sorted(write_set)),
                    json.dumps(request, sort_keys=True, ensure_ascii=False, allow_nan=False),
                    expected_revision,
                    tuple(sorted(projected_reads, key=lambda item: (item.resource, item.kind, item.key))),
-                   tuple(sorted(projected_writes, key=lambda item: (item.resource, item.kind, item.key))))
+                   tuple(sorted(projected_writes, key=lambda item: (item.resource, item.kind, item.key))),
+                   tuple(sorted(native_adoptions, key=lambda item: item.resource)))
 
     @classmethod
     def from_payload(cls, value: Any) -> ProjectCommand:
         keys = {"version", "kind", "key", "project_id", "expected_generation", "expected_revision",
-                "read_set", "write_set", "projected_reads", "projected_writes", "request"}
+                "read_set", "write_set", "projected_reads", "projected_writes", "native_adoptions", "request"}
         if (not isinstance(value, dict) or set(value) != keys or type(value.get("version")) is not int
                 or value["version"] != 1 or not isinstance(value["read_set"], dict)
                 or not isinstance(value["write_set"], list) or not isinstance(value["request"], dict)):
@@ -145,11 +175,17 @@ class ProjectCommand:
                 result.append(ProjectionRead(item["resource"], item["kind"], item["key"], item["sha256"]))
             return result
 
+        adoption_items = value["native_adoptions"]
+        if not isinstance(adoption_items, list) or any(not isinstance(item, dict) or set(item) != {
+                "resource", "before_sha256", "observed_sha256", "audit_sha256"} for item in adoption_items):
+            raise ValueError("Saved native adoptions require exact closed fields.")
+        adoptions = [NativeAdoption(item["resource"], item["before_sha256"], item["observed_sha256"],
+                                    item["audit_sha256"]) for item in adoption_items]
         return cls.create(value["kind"], value["key"], project_id=value["project_id"],
                           expected_generation=value["expected_generation"], read_set=value["read_set"],
                           write_set=value["write_set"], request=value["request"],
                           expected_revision=value["expected_revision"], projected_reads=selectors("projected_reads"),
-                          projected_writes=selectors("projected_writes"))
+                          projected_writes=selectors("projected_writes"), native_adoptions=adoptions)
 
     def to_payload(self) -> dict[str, Any]:
         self.__post_init__()
@@ -158,6 +194,7 @@ class ProjectCommand:
                 "read_set": dict(self.read_set), "write_set": list(self.write_set),
                 "projected_reads": [item.to_payload() for item in self.projected_reads],
                 "projected_writes": [item.to_payload() for item in self.projected_writes],
+                "native_adoptions": [item.to_payload() for item in self.native_adoptions],
                 "request": json.loads(self.request_json)}
 
     @property

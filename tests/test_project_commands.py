@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from sciplot_core.project_commands import (
-    CommandKind, ProjectCommand, ProjectCommands, ProjectMutation,
+    CommandKind, NativeAdoption, ProjectCommand, ProjectCommands, ProjectMutation,
     ProjectCommandError, ProjectCommandUnknown, ProjectionRead,
 )
 
@@ -265,6 +265,22 @@ def test_projected_write_must_bind_its_exact_selected_read_and_declared_resource
         command(read_set={}, write_set=[selector.resource], projected_writes=[selector])
     with pytest.raises(ValueError, match="previous bytes"):
         command(read_set={}, write_set=[selector.resource])
+
+
+def test_saved_native_adoption_is_a_distinct_audited_command_not_a_force_write():
+    adopted = NativeAdoption("studio/A.vsz", "a" * 64, "b" * 64, "c" * 64)
+    admitted = ProjectCommand.create("native_import", "adopt-a", project_id="project-a",
+                                    expected_generation="generation-a", read_set={adopted.resource: "a" * 64},
+                                    write_set=[adopted.resource], request={}, native_adoptions=[adopted])
+    assert ProjectCommand.from_payload(admitted.to_payload()).command_digest == admitted.command_digest
+    with pytest.raises(ValueError, match="Only explicit native import"):
+        command(native_adoptions=[adopted])
+    with pytest.raises(ValueError, match="saved VSZ"):
+        NativeAdoption("raw.csv", "a" * 64, "b" * 64, "c" * 64)
+    with pytest.raises(ValueError, match="prior stored revision"):
+        ProjectCommand.create("native_import", "bad", project_id="project-a", expected_generation="generation-a",
+                              read_set={adopted.resource: "d" * 64}, write_set=[adopted.resource],
+                              request={}, native_adoptions=[adopted])
 
 
 @pytest.mark.parametrize("path", ["/absolute", "../outside", "a/../b", "a//b", "a\\b", "@missing"],
