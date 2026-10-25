@@ -1,4 +1,4 @@
-"""Resolve template identity and robust scalar summaries used by plot contracts."""
+"""Resolve template identity, declared options, semantic axes and scalar summaries."""
 
 from __future__ import annotations
 
@@ -20,34 +20,44 @@ def _request_template(request: dict[str, Any]) -> str:
     return validate_veusz_template_id("curve")
 
 
+def _explicit_render_options(request: dict[str, Any]) -> dict[str, Any]:
+    """Project declared option values; old requests conservatively own all values."""
+    options = (
+        request.get("render_options")
+        if isinstance(request.get("render_options"), dict)
+        else {}
+    )
+    explicit_keys = request.get("explicit_render_option_keys")
+    if not isinstance(explicit_keys, list | tuple | set):
+        return options
+    return {str(key): options[str(key)] for key in explicit_keys if str(key) in options}
+
+
+def _axis_semantic_text(axis_info: dict[str, Any]) -> str:
+    """Keep source paths, hashes and sample metadata out of axis defaults."""
+    return " ".join(
+        str(axis_info.get(key) or "")
+        for key in (
+            "x_label", "y_label", "x_metric", "y_metric", "x_unit", "y_unit",
+            "semantic_family", "rule_id",
+        )
+    ).casefold()
+
+
 def _looks_like_wavenumber_axis(axis_info: dict[str, Any]) -> bool:
-    text = " ".join(str(value) for value in axis_info.values()).casefold()
+    text = _axis_semantic_text(axis_info)
     return "wavenumber" in text or (
         "cm" in text and ("-1" in text or "−1" in text or "^{-1}" in text)
     )
 
 
 def _looks_like_torque_axis(axis_info: dict[str, Any]) -> bool:
-    text = " ".join(str(value) for value in axis_info.values()).casefold()
+    text = _axis_semantic_text(axis_info)
     return "torque" in text or "转矩" in text or "screw" in text
 
 
 def _looks_like_frequency_axis(axis_info: dict[str, Any]) -> bool:
-    # Inspect semantic axis fields only. Runtime paths and hashes are also
-    # carried in axis_info; scanning them made a random directory containing
-    # the substring "hz" incorrectly force an unrelated heatmap onto a log x
-    # axis.
-    text = " ".join(
-        str(axis_info.get(key) or "")
-        for key in (
-            "x_label",
-            "y_label",
-            "x_metric",
-            "y_metric",
-            "semantic_family",
-            "rule_id",
-        )
-    ).casefold()
+    text = _axis_semantic_text(axis_info)
     return (
         "frequency" in text
         or "angular" in text
@@ -58,7 +68,7 @@ def _looks_like_frequency_axis(axis_info: dict[str, Any]) -> bool:
 
 
 def _looks_like_tensile_axis(axis_info: dict[str, Any]) -> bool:
-    text = " ".join(str(value) for value in axis_info.values()).casefold()
+    text = _axis_semantic_text(axis_info)
     return (
         ("strain" in text and "stress" in text) or "tensile" in text or "拉伸" in text
     )

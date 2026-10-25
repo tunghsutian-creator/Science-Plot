@@ -34,6 +34,7 @@ from sciplot_core.studio_render.metric_columns import (
     _preferred_metric_pair,
 )
 from sciplot_core.studio_render.template_resolution import (
+    _explicit_render_options as _explicit_render_options,
     _request_template,
     _looks_like_wavenumber_axis,
     _looks_like_torque_axis,
@@ -52,17 +53,19 @@ def _apply_domain_render_defaults(
     axis_info: dict[str, Any],
 ) -> dict[str, Any]:
     updated = dict(render_options)
-    explicit_options = (
+    # Recorded effective values survive replay; only declared values veto a
+    # newly resolved domain presentation default.
+    recorded_options = (
         request.get("render_options")
         if isinstance(request.get("render_options"), dict)
         else {}
     )
-    explicit_contract = _explicit_render_options(request)
+    declared_options = _explicit_render_options(request)
     template_id = _request_template(request)
     category_positions = axis_info.get("category_positions")
     if template_id == "point_line":
         for key, value in POINT_LINE_RENDER_OPTIONS.items():
-            if key not in explicit_options:
+            if key not in recorded_options:
                 updated[key] = list(value) if isinstance(value, list) else value
         if axis_info.get("presentation_kind") in {"impact_point_line_raw_overlay", "categorical_point_line"}:
             category_positions = [
@@ -82,7 +85,7 @@ def _apply_domain_render_defaults(
                 "summary_statistic": "arithmetic_mean",
             }
             for key, value in overlay_defaults.items():
-                if key not in explicit_contract:
+                if key not in declared_options:
                     updated[key] = value
     if (
         template_id in CATEGORICAL_TEMPLATE_IDS
@@ -94,7 +97,7 @@ def _apply_domain_render_defaults(
             axis_info.get("presentation_kind") == "categorical_grouped_replicates"
         )
         for key, value in CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS.items():
-            if key not in explicit_options:
+            if key not in recorded_options:
                 updated[key] = list(value) if isinstance(value, list) else value
         if not component_stack:
             updated["summary_statistic"] = normalize_categorical_summary(
@@ -106,16 +109,16 @@ def _apply_domain_render_defaults(
         updated.setdefault("x_label_override", "Sample")
         if component_stack:
             updated["_categorical_component_legend"] = True
-            if "legend_position" not in explicit_options:
+            if "legend_position" not in recorded_options:
                 updated["legend_position"] = "upper_right"
         elif grouped_bar:
             updated["_categorical_grouped_legend"] = True
-            if "legend_position" not in explicit_options:
+            if "legend_position" not in recorded_options:
                 updated["legend_position"] = "upper_right"
         else:
             updated.setdefault("legend_position", "none")
         updated.setdefault("series_label_mode", "none")
-        if "size" not in explicit_contract:
+        if "size" not in declared_options:
             # Choose the narrowest house frame that can carry the observed
             # category count. Four ordinary sample labels fit the canonical
             # 60 mm frame; broader frames are reserved for genuinely denser
@@ -141,7 +144,7 @@ def _apply_domain_render_defaults(
             category_count=len(category_positions),
             figure_width_mm=float(figure_width_mm),
         )
-        if "raw_point_jitter_fraction" in explicit_contract:
+        if "raw_point_jitter_fraction" in declared_options:
             updated["raw_point_jitter_fraction"] = normalize_raw_point_jitter_fraction(
                 updated.get(
                     "raw_point_jitter_fraction",
@@ -166,7 +169,7 @@ def _apply_domain_render_defaults(
             )
             if thickness_labels:
                 updated["x_label_override"] = "Sample / thickness (mm)"
-            if "y_label_override" not in explicit_options:
+            if "y_label_override" not in recorded_options:
                 updated["y_label_override"] = "Impact strength (kJ m⁻²)"
     if template_id in STACKED_TEMPLATE_IDS and _looks_like_wavenumber_axis(axis_info):
         detected_y_label = str(axis_info.get("y_label") or "").strip()
@@ -183,21 +186,21 @@ def _apply_domain_render_defaults(
         }
         for key, value in domain_defaults.items():
             if (
-                key not in explicit_options
+                key not in recorded_options
                 or key == "size"
-                and key not in explicit_contract
+                and key not in declared_options
             ):
                 updated[key] = value
         if series_count == 1:
-            if "series_label_offset_fraction" not in explicit_contract:
+            if "series_label_offset_fraction" not in declared_options:
                 updated["series_label_offset_fraction"] = 0.0
-            if "series_label_vertical_align" not in explicit_contract:
+            if "series_label_vertical_align" not in declared_options:
                 updated["series_label_vertical_align"] = "top"
-        if detected_y_label and "y_label_override" not in explicit_contract:
+        if detected_y_label and "y_label_override" not in declared_options:
             updated["y_label_override"] = detected_y_label
-        if legend_position in {"", "auto", "none", "hide", "hidden", "off"}:
+        if "legend_position" not in declared_options and legend_position in {"", "auto", "none", "hide", "hidden", "off"}:
             updated["legend_position"] = "none"
-        if label_mode in {"", "auto", "legend", "inline", "edge"}:
+        if "series_label_mode" not in declared_options and label_mode in {"", "auto", "legend", "inline", "edge"}:
             updated["series_label_mode"] = "inline"
     if (
         _looks_like_torque_axis(axis_info)
@@ -210,7 +213,7 @@ def _apply_domain_render_defaults(
         if y_label in {"", "screw torque", "torque"}:
             updated["y_label_override"] = "Screw torque (N·m)"
         updated.setdefault("stack_spacing_scale", 0.05)
-        if str(updated.get("series_label_mode") or "").casefold() in {
+        if "series_label_mode" not in declared_options and str(updated.get("series_label_mode") or "").casefold() in {
             "",
             "auto",
             "inline",
@@ -242,28 +245,27 @@ def _apply_domain_render_defaults(
             updated.setdefault("yscale", "log")
             updated.setdefault("x_tick_format", DEFAULT_LOG_TICK_FORMAT)
             updated.setdefault("y_tick_format", DEFAULT_LOG_TICK_FORMAT)
-            if "y_label_override" not in explicit_options and metric_label is not None:
+            if "y_label_override" not in recorded_options and metric_label is not None:
                 updated["y_label_override"] = metric_label
     rule_id = str(request.get("rule_id") or "").strip()
     if rule_id == "rheology_temperature_sweep":
         metric_pair = _preferred_metric_pair(request)
-        if metric_pair is not None and "y_label_override" not in explicit_contract:
+        if metric_pair is not None and "y_label_override" not in declared_options:
             metric_label = rheology_metric_axis_label(metric_pair[1])
             if metric_label is not None:
                 # A secondary temperature task inherits primary style defaults,
                 # but its own metric determines the scientific axis label.
                 updated["y_label_override"] = metric_label
     if rule_id in {"rheology_strain_sweep", "rheology_stress_sweep"}:
-        explicit_contract = _explicit_render_options(request)
         metric_pair = _preferred_metric_pair(request)
         y_metric = metric_pair[1] if metric_pair is not None else "storage_modulus"
         metric_label = rheology_metric_axis_label(y_metric)
-        if metric_label is not None and "y_label_override" not in explicit_contract:
+        if metric_label is not None and "y_label_override" not in declared_options:
             updated["y_label_override"] = metric_label
-        if "yscale" not in explicit_contract:
+        if "yscale" not in declared_options:
             updated["yscale"] = "linear" if y_metric == "loss_factor" else "log"
         if y_metric == "loss_factor":
-            if "y_tick_format" not in explicit_contract:
+            if "y_tick_format" not in declared_options:
                 updated.pop("y_tick_format", None)
         else:
             updated.setdefault("y_tick_format", DEFAULT_LOG_TICK_FORMAT)
@@ -295,7 +297,8 @@ def _apply_domain_render_defaults(
         )
         updated["x_label_override"] = x_label
         updated["y_label_override"] = y_label
-        updated["axis_mode"] = "auto"
+        if "axis_mode" not in declared_options:
+            updated["axis_mode"] = "auto"
     if str(request.get("rule_id") or "").strip() == "rheology_stress_relaxation":
         updated.setdefault("x_label_override", "Time (s)")
         updated.setdefault(
@@ -314,15 +317,3 @@ def _apply_domain_render_defaults(
         }:
             updated["y_label_override"] = detected_y_label
     return updated
-
-
-def _explicit_render_options(request: dict[str, Any]) -> dict[str, Any]:
-    options = (
-        request.get("render_options")
-        if isinstance(request.get("render_options"), dict)
-        else {}
-    )
-    explicit_keys = request.get("explicit_render_option_keys")
-    if not isinstance(explicit_keys, list | tuple | set):
-        return options
-    return {str(key): options[str(key)] for key in explicit_keys if str(key) in options}

@@ -9,7 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from sciplot_core.studio_render.domain_defaults import _explicit_render_options
+from sciplot_core.studio_render.template_resolution import _explicit_render_options
 
 
 def freeze_new_spectral_axis_display(

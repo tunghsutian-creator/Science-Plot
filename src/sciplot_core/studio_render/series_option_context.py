@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from sciplot_core.studio_render.template_resolution import _request_template
+from sciplot_core.studio_render.template_resolution import _explicit_render_options, _request_template
 from sciplot_core.studio_render.value_parsing import _string_list
 from sciplot_core.studio_render.models import StudioPreparationBlocked
 
@@ -70,8 +70,7 @@ def request_option_authority(
     request_options = raw_options if isinstance(raw_options, dict) else {}
     explicit_payload = request.get("explicit_render_option_keys")
     if isinstance(explicit_payload, list | tuple | set):
-        explicit_keys = {str(value) for value in explicit_payload}
-        if option_name in explicit_keys:
+        if option_name in _explicit_render_options(request):
             return "explicit_render_option", True
         return "inherited_render_option", False
     if option_name in request_options:
