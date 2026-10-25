@@ -22,7 +22,10 @@ def store_for_project(project: Path, *, locations: Mapping[str, Path | ResourceR
     active = owned_io(root)
     if active is not None:
         capabilities = {key: ResourceRoot(path, active.location_members[key]) for key, path in active.locations.items()}
-        if locations is not None and capabilities != dict(locations):
+        requested = {key: ResourceRoot(value.path.expanduser().resolve(strict=True), value.members)
+                     if isinstance(value, ResourceRoot) else ResourceRoot(value.expanduser().resolve(strict=True))
+                     for key, value in (locations or {}).items()}
+        if locations is not None and capabilities != requested:
             raise ValueError("An active project scope cannot change trusted resource capabilities.")
         return FileProjectStore(root, locations=capabilities)
     return FileProjectStore(root, locations=locations)

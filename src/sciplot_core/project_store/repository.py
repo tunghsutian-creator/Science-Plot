@@ -236,6 +236,12 @@ class FileProjectStore:
         literal = str(original)
         with self._locked() as (io, current):
             value = state.reachable(io, current, generation) if generation else current
+            import sciplot_core.project_store.directories as directories
+            owned = locators.owned_source_view(io, value, Path(literal), expected_sha256=expected_sha256, source_id=source_id)
+            if owned is None:
+                owned = directories.owned_view(io, value, Path(literal), expected_sha256=expected_sha256)
+            if owned is not None:
+                return owned[0]
             logical = locators.logical_for_literal(value, literal)
             if logical is None:
                 try:
@@ -248,6 +254,9 @@ class FileProjectStore:
                 components = parts(logical)
                 return (self.locations[components[0][1:]] / Path(*components[1:])
                         if components[0].startswith("@") else self.root / Path(*components))
+            closed = directories.resolve(io, value, Path(literal), expected_sha256=expected_sha256)
+            if closed is not None:
+                return closed
             identity, version, entry = locators.source_entry(io, value, literal,
                 expected_sha256=expected_sha256, source_id=source_id)
             local = io.read("local_sources.json") or {"versions": {}}
@@ -274,6 +283,12 @@ class FileProjectStore:
 
         with self._locked() as (io, current):
             value = state.reachable(io, current, generation) if generation else current
+            import sciplot_core.project_store.directories as directories
+            owned = locators.owned_source_view(io, value, actual)
+            if owned is None:
+                owned = directories.owned_view(io, value, actual)
+            if owned is not None:
+                return owned[1]
             try:
                 logical = self.logical_path(actual)
             except ProjectStoreError:

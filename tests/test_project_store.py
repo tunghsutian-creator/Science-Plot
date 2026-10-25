@@ -292,3 +292,29 @@ def test_cold_mutation_reuses_only_registered_source_version_without_changing_pr
         "studio/spec.json": b"spec"}, result={}, sources=[source])
     assert cold.snapshot()["sources"][source["source_id"]][source["version"]] == preserved
     assert cold.resolve_path(source["path"], expected_sha256=source["version"], source_id=source["source_id"]).read_bytes() == b"source outside project"
+
+
+def test_registered_directory_is_closed_and_generated_source_views_are_idempotent(tmp_path):
+    from sciplot_core.foundation.source_tree import source_tree_sha256
+
+    store, snapshot = fixture_store(tmp_path)
+    original = store.root / "raw"
+    tree_sha = source_tree_sha256(original)
+    actual = store.resolve_path(original, expected_sha256=tree_sha)
+    assert actual.is_dir() and actual != original
+    assert sorted(path.relative_to(actual).as_posix() for path in actual.rglob("*") if path.is_file()) == ["same.csv"]
+    assert source_tree_sha256(actual) == tree_sha
+    assert store.resolve_path(actual, expected_sha256=tree_sha) == actual
+    assert store.literal_path(actual) == str(original)
+    assert store.resolve_path(actual / "same.csv") == actual / "same.csv"
+    assert store.literal_path(actual / "same.csv") == str(original / "same.csv")
+    identity = next(iter(snapshot["sources"]))
+    version = next(iter(snapshot["sources"][identity]))
+    view = store.resolve_source(identity, version)
+    assert store.resolve_path(view, expected_sha256=version, source_id=identity) == view
+    assert store.literal_path(view) == str(original / "same.csv")
+    with pytest.raises(ProjectConflict):
+        store.resolve_path(view, expected_sha256="0" * 64)
+    (original / "unknown.csv").write_bytes(b"unregistered raw input")
+    with pytest.raises(ProjectConflict, match="unregistered"):
+        store.resolve_path(original)

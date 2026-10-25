@@ -62,3 +62,30 @@ def checked_member(io: StoreIO, value: dict[str, Any], logical: str, expected: s
     if physical is None or sha(physical[0]) != entry["sha256"]:
         raise ProjectConflict("The current resource view differs from the registered generation.")
     return dict(entry)
+
+
+def owned_source_view(io: StoreIO, value: dict[str, Any], actual: Path, *,
+                      expected_sha256: str | None = None, source_id: str | None = None) -> tuple[Path, str] | None:
+    import os
+
+    base = io.root / ".sciplot_store/sources"
+    if not actual.is_relative_to(base):
+        return None
+    components = actual.relative_to(base).parts
+    if len(components) != 3:
+        raise ProjectConflict("An immutable source view must identify one exact source version.")
+    identity, version, name = components
+    entry = value["sources"].get(identity, {}).get(version)
+    if (entry is None or source_id is not None and source_id != identity
+            or expected_sha256 is not None and expected_sha256 != version
+            or name != Path(entry.get("locator") or entry.get("logical") or "source.bin").name):
+        raise ProjectConflict("The immutable source view does not match the selected source identity/version.")
+    parent = os.open(actual.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        from .io import read_file
+        data = read_file(parent, actual.name)[0]
+    finally:
+        os.close(parent)
+    if data != io.get(entry):
+        raise ProjectConflict("An immutable source view was changed outside the store.")
+    return actual, str(entry["locator"])
