@@ -130,11 +130,12 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
                               _terminal_source_binding: SealedTerminalSourceBinding | None = None,
                               _terminal_source_prepared: bool = False, _new_creation: bool = False) -> dict[str, Any]:
     """The sole active-project writer for every public preparation caller."""
-    from sciplot_core.project_manifest import _manifest_store, read_intake_project_manifest, stage_intake_project_manifest
+    from sciplot_core.project_manifest import read_intake_project_manifest, stage_intake_project_manifest
+    from sciplot_core.project_host_factory import project_store
 
     root = project.expanduser().resolve(strict=True)
     selected = selected_project_store()
-    store = selected if selected is not None and selected.root == root else _manifest_store(root)
+    store = selected if selected is not None and selected.root == root else project_store(root, with_snapshot=True)
     before = store.snapshot(import_legacy=True)
     with studio_preparation_candidate(store, snapshot=before) as candidate:
         payload = prepare_studio_candidate(candidate, request_target=request_target, request_relative=request_relative, delivery_root=delivery_root,
