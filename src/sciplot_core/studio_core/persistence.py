@@ -57,6 +57,7 @@ def _validate_staged_veusz_document(
     *,
     mode: str,
     source_document: Any,
+    logical_target: Path | None = None,
 ) -> bool:
     """Validate staged bytes and report whether secure Veusz reopen succeeded.
 
@@ -81,12 +82,15 @@ def _validate_staged_veusz_document(
 
     reopened = veusz_document.Document()
     try:
-        reopened.load(
-            str(staged_path),
-            mode=mode,
-            callbackunsafe=lambda: False,
-            callbackimporterror=lambda _filename, _error: False,
-        )
+        if mode == "vsz" and logical_target is not None:
+            from veusz.document.loader import executeScript
+
+            reopened.filename = str(logical_target)
+            executeScript(reopened, str(logical_target), source, callbackunsafe=lambda: False,
+                          callbackimporterror=lambda _filename, _error: False)
+        else:
+            reopened.load(str(staged_path), mode=mode, callbackunsafe=lambda: False,
+                          callbackimporterror=lambda _filename, _error: False)
     except Exception as exc:
         # A document which the owner explicitly opened in Veusz secure mode
         # may legitimately serialize commands that a fresh validation
@@ -142,6 +146,7 @@ def stage_veusz_document(
     staged_fd, staged_name = tempfile.mkstemp(
         prefix=f".{resolved_target.stem}.sciplot-save-",
         suffix=resolved_target.suffix,
+        dir=parent if not getattr(document, "_sciplot_project_read_set", None) else None,
     )
     os.close(staged_fd)
     staged_path = Path(staged_name)
@@ -169,11 +174,8 @@ def stage_veusz_document(
             if staged_validator is not None
             else _validate_staged_veusz_document
         )
-        reopen_validated = validate_staged_document(
-            staged_path,
-            mode=mode,
-            source_document=document,
-        )
+        validator_options = {"logical_target": resolved_target} if staged_validator is None else {}
+        reopen_validated = validate_staged_document(staged_path, mode=mode, source_document=document, **validator_options)
         os.chmod(staged_path, existing_mode)
         staged_size = staged_path.stat().st_size
         staged_sha256 = file_sha256(staged_path)

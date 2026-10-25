@@ -4,14 +4,16 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.project_store import ProjectConflict
+from sciplot_core.project_store import FileProjectStore, ProjectConflict
 from sciplot_core.project_store.adapters import publish_files, store_for_project
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.studio_core.context import _project_context_for_document
 
 
-def project_save_binding(project: Path, target: Path) -> dict[str, Any]:
-    store = store_for_project(project)
+def project_save_binding(project: Path, target: Path, *, store: FileProjectStore | None = None) -> dict[str, Any]:
+    store = store or store_for_project(project)
+    if store.root != project.expanduser().resolve(strict=True):
+        raise ProjectConflict("The selected store belongs to a different native project.")
     snapshot = store.snapshot(import_legacy=True)
     name = store.logical_path(target)
     return {"project_id": snapshot["project_id"], "generation": snapshot["generation"],
@@ -51,9 +53,15 @@ def publish_native_save(document: Any, target: Path, staged: Path, *, result: di
     if root is None:
         return None
     binding = getattr(document, "_sciplot_project_read_set", None)
+    if binding is None and bound_root is None and not (root / ".sciplot_store/head.json").exists():
+        return None
     if not isinstance(binding, dict):
         raise ProjectConflict("Saving an existing project requires the exact baseline captured before editing.")
-    store = store_for_project(root)
+    store = getattr(document, "_sciplot_project_store", None)
+    if store is None:
+        store = store_for_project(root)
+    if not isinstance(store, FileProjectStore) or store.root != root:
+        raise ProjectConflict("The selected native store does not belong to this project.")
     logical = store.logical_path(target)
     outcome = publish_files(store, {logical: staged}, kind="save", baseline=binding, result=result)
     document._sciplot_project_read_set = {**binding, "generation": outcome["generation"],
