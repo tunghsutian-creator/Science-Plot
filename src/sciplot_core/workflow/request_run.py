@@ -95,6 +95,8 @@ def _run_request_in_managed_output(
     classifier: Callable[..., dict[str, Any]] = classify_source,
     new_creation: bool = False,
     previous_request: dict[str, Any] | None = None,
+    staged_delivery: tuple[Path, Path] | None = None,
+    update_project: bool = True,
 ) -> dict[str, Any]:
     """Resolve inputs, enforce semantic gates, then render and publish."""
 
@@ -256,6 +258,8 @@ def _run_request_in_managed_output(
         layout_policy=layout_policy,
         output_dir=output_dir,
         rendered=rendered,
+        _staged_delivery=staged_delivery,
+        _update_project=update_project,
     )
 
 

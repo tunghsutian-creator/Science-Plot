@@ -19,7 +19,7 @@ from sciplot_core.publication import (
     write_publication_artifacts,
 )
 from sciplot_core.publish_state import build_publish_state
-from sciplot_core.qa import run_qa
+from sciplot_core.qa.run import run_qa
 from sciplot_core.study_model import (
     attach_run_artifacts_to_study_model,
     build_output_package_contract,
@@ -59,6 +59,8 @@ def publish_request_result(
     layout_policy: Any,
     output_dir: Path,
     rendered: RequestRenderResult,
+    _staged_delivery: tuple[Path, Path] | None = None,
+    _update_project: bool = True,
 ) -> dict[str, Any]:
     """Attach lineage and quality evidence, then persist a complete manifest."""
 
@@ -110,9 +112,8 @@ def publish_request_result(
             if isinstance(value, str)
         ],
     )
-    publication_qa = (
-        qa.get("publication") if isinstance(qa.get("publication"), dict) else {}
-    )
+    publication_qa_value = qa.get("publication")
+    publication_qa = publication_qa_value if isinstance(publication_qa_value, dict) else {}
     publication_artifacts = write_publication_artifacts(
         output_dir,
         publication_intent=publication_intent,
@@ -133,7 +134,7 @@ def publish_request_result(
         analysis_metrics=analysis_metrics,
         qa=qa,
         resolved_figure_plan=(
-            completed_figure_plan.to_payload()
+            dict(completed_figure_plan.to_payload())
             if completed_figure_plan is not None
             else None
         ),
@@ -172,6 +173,8 @@ def publish_request_result(
         output_dir=output_dir,
         qa=qa,
         completed_figure_plan=completed_figure_plan,
+        staged_delivery=_staged_delivery,
+        update_project=_update_project,
     )
     return manifest
 
@@ -251,6 +254,8 @@ def _finalize_request_manifest(
     output_dir: Path,
     qa: dict[str, Any],
     completed_figure_plan: ResolvedFigurePlan | None,
+    staged_delivery: tuple[Path, Path] | None = None,
+    update_project: bool = True,
 ) -> None:
     manifest["layout_quality"] = _layout_quality_from_result(manifest["result"])
     manifest["revision_brief"] = _write_revision_brief(output_dir, manifest=manifest)
@@ -260,10 +265,16 @@ def _finalize_request_manifest(
         output_dir,
         manifest=manifest,
     )
-    manifest["delivery_package"] = build_delivery_package(
-        output_dir,
-        manifest=manifest,
-    )
+    if staged_delivery is None:
+        manifest["delivery_package"] = build_delivery_package(output_dir, manifest=manifest)
+    else:
+        from sciplot_core.delivery.package_builder import _build_staged_delivery
+
+        private, destination = staged_delivery
+        if private.absolute() == destination.absolute() or private.is_relative_to(destination):
+            raise ValueError("A project delivery must be prepared outside its active destination.")
+        manifest["delivery_package"] = _build_staged_delivery(
+            output_dir, manifest=manifest, delivery_dir=private, final_root=destination)
     manifest["one_step"] = build_one_step_project(
         input_path=input_path,
         request_path=request_path,
@@ -288,7 +299,8 @@ def _finalize_request_manifest(
     )
     _write_one_step_status(output_dir, manifest["one_step"])
     _write_manifest(output_dir, manifest)
-    _update_intake_project_after_run(request_path, manifest)
+    if update_project:
+        _update_intake_project_after_run(request_path, manifest)
 
 
 def _write_manifest(output_dir: Path, manifest: dict[str, Any]) -> None:
