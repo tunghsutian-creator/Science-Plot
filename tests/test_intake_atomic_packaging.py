@@ -7,7 +7,6 @@ import sys
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
 from pathlib import Path
 from threading import Event
 
@@ -21,8 +20,22 @@ from sciplot_core.intake import session
 from sciplot_core.intake.project import project_builder
 from sciplot_core.materials_rules import get_rule
 from sciplot_core import project_manifest
+from sciplot_core.project_store.adapters import publish_files
 from sciplot_core.studio_core import registry_writes
 from sciplot_core.workflow import project_state
+
+
+@pytest.fixture(autouse=True)
+def _registry_unit_ports_are_process_free(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if "studio_run" in request.node.name:
+        def unexpected_process(*_args: object, **_kwargs: object) -> None:
+            pytest.fail("Registry/ZIP unit ports must not start a native worker.")
+
+        monkeypatch.setattr(subprocess, "run", unexpected_process)
+        monkeypatch.setattr(subprocess, "Popen", unexpected_process)
 
 
 def _group(content: bytes) -> list[IntakeGroupInput]:
@@ -43,6 +56,29 @@ def _build_project(output_root: Path, content: bytes) -> dict[str, object]:
         output_root=output_root,
         studio_preparer=lambda _project_dir: {},
     )
+
+
+def _publish_run_projection(
+    project_dir: Path,
+    manifest: dict[str, object],
+    *,
+    studio_run: dict[str, object],
+) -> dict[str, object] | None:
+    """Exercise the current pure projection and real generation IO ports together."""
+    existing = project_manifest.read_intake_project_manifest(project_dir)
+    if existing is None:
+        return None
+    updated = registry_writes.studio_run_registration(existing, manifest, studio_run=studio_run)
+    store = project_manifest._manifest_store(project_dir, updated)
+    before = store.snapshot(import_legacy=True)
+    writes = project_manifest.stage_intake_project_manifest(project_dir, updated, store=store)
+    assert store.snapshot()["generation"] == before["generation"]
+    receipt = publish_files(store, writes, kind="publish", baseline={
+        "project_id": before["project_id"], "generation": before["generation"],
+        "files": {name: before["files"].get(name, {}).get("sha256") for name in writes},
+    })
+    assert store.snapshot()["sequence"] == before["sequence"] + 1
+    return receipt
 
 
 def test_initial_project_plan_matches_in_canonical_mirror_and_zip(
@@ -326,6 +362,11 @@ def test_studio_run_projection_set_and_pop_reaches_canonical_mirror_and_zip(
 ) -> None:
     project_dir = tmp_path / "project"
     project_dir.mkdir()
+    (project_dir / "source.csv").write_bytes(b"x,y\n1,2\n")
+    native = project_dir / "studio/document.vsz"
+    native.parent.mkdir()
+    native.write_bytes(b"exact saved native bytes")
+    source_bytes, native_bytes = (project_dir / "source.csv").read_bytes(), native.read_bytes()
     mirror_path = project_dir / "project.sciplot.json"
     project_manifest.commit_intake_project_manifest(
         project_dir,
@@ -370,7 +411,7 @@ def test_studio_run_projection_set_and_pop_reaches_canonical_mirror_and_zip(
         "figure_outcomes": outcomes,
     }
 
-    registry_writes._register_studio_run(
+    _publish_run_projection(
         project_dir,
         run_manifest,
         studio_run=studio_run,
@@ -383,6 +424,10 @@ def test_studio_run_projection_set_and_pop_reaches_canonical_mirror_and_zip(
         mirror = json.loads(mirror_path.read_text(encoding="utf-8"))
         with zipfile.ZipFile(tmp_path / "project.zip") as archive:
             archived = json.loads(archive.read("project/intake_manifest.json"))
+            assert archive.read("project/source.csv") == source_bytes
+            assert archive.read("project/studio/document.vsz") == native_bytes
+        assert (project_dir / "source.csv").read_bytes() == source_bytes
+        assert native.read_bytes() == native_bytes
         return canonical, mirror, archived
 
     for payload in persisted_payloads():
@@ -404,7 +449,7 @@ def test_studio_run_projection_set_and_pop_reaches_canonical_mirror_and_zip(
         "output": legacy_manifest["output"],
         "exports": [],
     }
-    registry_writes._register_studio_run(
+    _publish_run_projection(
         project_dir,
         legacy_manifest,
         studio_run=legacy_run,
@@ -424,6 +469,11 @@ def test_studio_run_registration_propagates_zip_refresh_failure(
 ) -> None:
     project_dir = tmp_path / "project"
     project_dir.mkdir()
+    (project_dir / "source.csv").write_bytes(b"x,y\n1,2\n")
+    native = project_dir / "studio/document.vsz"
+    native.parent.mkdir()
+    native.write_bytes(b"exact saved native bytes")
+    source_bytes, native_bytes = (project_dir / "source.csv").read_bytes(), native.read_bytes()
     project_manifest.commit_intake_project_manifest(
         project_dir,
         {
@@ -438,16 +488,18 @@ def test_studio_run_registration_propagates_zip_refresh_failure(
     prior_manifest = (project_dir / "intake_manifest.json").read_bytes()
     prior_mirror = (project_dir / "project.sciplot.json").read_bytes()
     prior_zip = zip_path.read_bytes()
+    store = project_manifest._manifest_store(project_dir)
+    before = store.snapshot()
     monkeypatch.setattr(
-        packaging,
-        "_refresh_intake_project_zip_unlocked",
-        lambda _project, _manifest: (_ for _ in ()).throw(
+        project_manifest,
+        "write_project_archive",
+        lambda _project, _zip: (_ for _ in ()).throw(
             OSError("synthetic ZIP failure")
         ),
     )
 
     with pytest.raises(OSError, match="synthetic ZIP failure"):
-        registry_writes._register_studio_run(
+        _publish_run_projection(
             project_dir,
             {
                 "created_at": "2026-07-30T00:00:00+00:00",
@@ -464,6 +516,9 @@ def test_studio_run_registration_propagates_zip_refresh_failure(
     assert (project_dir / "intake_manifest.json").read_bytes() == prior_manifest
     assert (project_dir / "project.sciplot.json").read_bytes() == prior_mirror
     assert zip_path.read_bytes() == prior_zip
+    assert (project_dir / "source.csv").read_bytes() == source_bytes
+    assert native.read_bytes() == native_bytes
+    assert store.snapshot()["generation"] == before["generation"]
 
 
 def test_studio_run_reads_existing_studio_mapping_once(
@@ -480,30 +535,16 @@ def test_studio_run_reads_existing_studio_mapping_once(
                     raise AssertionError("Studio manifest payload was read twice.")
             return super().get(key, default)
 
-    payload = SingleReadManifest({"studio": {}})
-
-    @contextmanager
-    def edit_manifest(
-        _project_dir: Path,
-        *,
-        snapshot_writer: object,
-    ):
-        assert callable(snapshot_writer)
-        yield payload
-
-    monkeypatch.setattr(
-        registry_writes,
-        "edit_intake_project_manifest_with_snapshot",
-        edit_manifest,
-    )
-
-    registry_writes._register_studio_run(
-        tmp_path,
+    original = SingleReadManifest({"studio": {}})
+    payload = registry_writes.studio_run_registration(
+        original,
         {"created_at": "2026-08-20T00:00:00Z"},
         studio_run={"exports": [{"path": "figure.pdf"}]},
     )
 
     assert payload.studio_reads == 1
+    assert original.studio_reads == 0
+    assert original["studio"] == {}
     assert payload["studio"] == {
         "exports": [{"path": "figure.pdf"}],
         "last_export_run": {"exports": [{"path": "figure.pdf"}]},
@@ -516,25 +557,9 @@ def test_studio_run_replaces_malformed_studio_registry_payload(
     monkeypatch: pytest.MonkeyPatch,
     malformed_studio: object,
 ) -> None:
-    payload: dict[str, object] = {"studio": malformed_studio}
-
-    @contextmanager
-    def edit_manifest(
-        _project_dir: Path,
-        *,
-        snapshot_writer: object,
-    ):
-        assert callable(snapshot_writer)
-        yield payload
-
-    monkeypatch.setattr(
-        registry_writes,
-        "edit_intake_project_manifest_with_snapshot",
-        edit_manifest,
-    )
-
-    registry_writes._register_studio_run(
-        tmp_path,
+    original: dict[str, object] = {"studio": malformed_studio}
+    payload = registry_writes.studio_run_registration(
+        original,
         {"created_at": "2026-08-20T00:00:00Z"},
         studio_run={"exports": []},
     )
@@ -543,51 +568,55 @@ def test_studio_run_replaces_malformed_studio_registry_payload(
         "exports": [],
         "last_export_run": {"exports": []},
     }
+    assert original == {"studio": malformed_studio}
 
 
 def test_studio_run_adapts_snapshot_path_result_to_none(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    payload: dict[str, object] = {"studio": {}}
+    initial: dict[str, object] = {"studio": {}}
+    project_manifest.commit_intake_project_manifest(tmp_path, initial)
+    manifest = {"created_at": "2026-08-20T00:00:00Z"}
+    payload = registry_writes.studio_run_registration(initial, manifest, studio_run={"exports": []})
     snapshot_calls: list[tuple[Path, dict[str, object]]] = []
     callback_results: list[object] = []
+    write_archive = project_manifest.write_project_archive
+    prior_manifest = (tmp_path / "intake_manifest.json").read_bytes()
 
     def refresh_snapshot(
-        project_dir: Path,
-        manifest: dict[str, object],
+        candidate: Path,
+        archive: Path,
     ) -> Path:
-        snapshot_calls.append((project_dir, manifest))
-        return project_dir.with_suffix(".zip")
+        assert candidate != tmp_path and candidate.name == tmp_path.name
+        assert (tmp_path / "intake_manifest.json").read_bytes() == prior_manifest
+        snapshot_calls.append((candidate, json.loads((candidate / "intake_manifest.json").read_bytes())))
+        write_archive(candidate, archive)
+        return archive
 
-    @contextmanager
-    def edit_manifest(
-        project_dir: Path,
-        *,
-        snapshot_writer: object,
-    ):
-        assert callable(snapshot_writer)
-        yield payload
-        callback_results.append(snapshot_writer(project_dir, payload))
+    def write_snapshot(candidate: Path, archive: Path) -> None:
+        # The current archive adapter consumes the builder's optional Path result.
+        callback_results.append(packaging._write_zip(candidate, archive))
 
     monkeypatch.setattr(
         packaging,
-        "_refresh_intake_project_zip_unlocked",
+        "_write_zip_snapshot_unlocked",
         refresh_snapshot,
     )
     monkeypatch.setattr(
-        registry_writes,
-        "edit_intake_project_manifest_with_snapshot",
-        edit_manifest,
+        project_manifest,
+        "write_project_archive",
+        write_snapshot,
     )
 
-    registry_writes._register_studio_run(
+    _publish_run_projection(
         tmp_path,
-        {"created_at": "2026-08-20T00:00:00Z"},
+        manifest,
         studio_run={"exports": []},
     )
 
-    assert snapshot_calls == [(tmp_path, payload)]
+    candidate = snapshot_calls[0][0]
+    assert snapshot_calls == [(candidate, payload)]
     assert callback_results == [None]
 
 
@@ -605,12 +634,12 @@ def test_standalone_studio_run_without_intake_manifest_skips_registry_and_zip(
         raise AssertionError("A standalone Studio run must not create an Intake ZIP.")
 
     monkeypatch.setattr(
-        packaging,
-        "_refresh_intake_project_zip_unlocked",
+        project_manifest,
+        "write_project_archive",
         fail_if_called,
     )
 
-    registry_writes._register_studio_run(
+    _publish_run_projection(
         project_dir,
         {
             "created_at": "2026-07-30T00:00:00+00:00",
