@@ -12,19 +12,33 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 
-def run_worker(command: list[str], *, cold_runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
-               **kwargs: Any) -> subprocess.CompletedProcess[str]:
+def _cold_command(command: list[str], binding: dict[str, str] | None) -> list[str]:
+    if binding is None:
+        return command
+    if command[:3] != [sys.executable, "-m", "sciplot_core.veusz_worker"]:
+        raise ValueError("Only the existing native worker entry point accepts project runtime binding.")
+    return command[:3] + ["--project-runtime", binding["path"], binding["sha256"], "--"] + command[3:]
+
+
+def run_cold_worker(command: list[str], *, cold_runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+                    **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    """Retain deliberately cold native commands without losing the selected IO scope."""
     from sciplot_core.project_store.worker_binding import native_runtime_binding
 
     with native_runtime_binding(command[3:]) as binding:
-        if binding is not None and command[:3] != [sys.executable, "-m", "sciplot_core.veusz_worker"]:
-            raise ValueError("Only the existing native worker entry point accepts project runtime binding.")
-        worker = active_worker()
-        if worker is None:
-            runner = subprocess.run if cold_runner is None else cold_runner
-            actual = (command[:3] + ["--project-runtime", binding["path"], binding["sha256"], "--"] + command[3:]
-                      if binding is not None else command)
-            return runner(actual, **kwargs)
+        runner = subprocess.run if cold_runner is None else cold_runner
+        return runner(_cold_command(command, binding), **kwargs)
+
+
+def run_worker(command: list[str], *, cold_runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+               **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    worker = active_worker()
+    if worker is None:
+        return run_cold_worker(command, cold_runner=cold_runner, **kwargs)
+    from sciplot_core.project_store.worker_binding import native_runtime_binding
+
+    with native_runtime_binding(command[3:]) as binding:
+        _cold_command(command, binding)  # Validate selected-scope entry without changing the pooled argv.
         return worker.run(command, timeout=kwargs.get("timeout", 120), check=kwargs.get("check", False),
                           **({"project_runtime": binding} if binding is not None else {}))
 
@@ -41,5 +55,5 @@ def warm_native_method(method: Callable[_P, _T]) -> Callable[_P, _T]:
     return wrapped
 
 
-__all__ = ["NativeRuntimeChanged", "NativeWorkerDisconnected", "PersistentWorker", "active_worker", "run_worker",
+__all__ = ["NativeRuntimeChanged", "NativeWorkerDisconnected", "PersistentWorker", "active_worker", "run_worker", "run_cold_worker",
            "verified_runtime_identity", "warm_native_method"]

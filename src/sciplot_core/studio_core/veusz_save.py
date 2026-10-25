@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.native_process import run_cold_worker
 
 from sciplot_core.studio_core.runtime import (
     _ensure_veusz_on_path,
@@ -46,7 +47,7 @@ def _save_veusz_document_from_spec(
                 json.dumps(json_safe(spec), indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
-        subprocess.run(
+        run_cold_worker(
             [
                 sys.executable,
                 "-m",
@@ -55,6 +56,7 @@ def _save_veusz_document_from_spec(
                 str(path),
                 str(resolved_spec),
             ],
+            cold_runner=subprocess.run,
             text=True,
             capture_output=True,
             check=True,

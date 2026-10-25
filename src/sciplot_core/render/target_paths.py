@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from sciplot_core.native_process import run_cold_worker
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -79,7 +80,7 @@ def _render_studio_exports(
     if _terminal_source_prepared:
         environment[TERMINAL_SOURCE_PREPARED_ENV] = "1"
     try:
-        result = subprocess.run(command, text=True, capture_output=True, check=True, env=environment)
+        result = run_cold_worker(command, cold_runner=subprocess.run, text=True, capture_output=True, check=True, env=environment)
     except subprocess.CalledProcessError as exc:
         try:
             failure = json.loads(exc.stderr or "")

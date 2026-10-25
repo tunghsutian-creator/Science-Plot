@@ -181,3 +181,28 @@ def test_offline_categorical_original_cells_namespace_and_disclosure_are_exact(t
         result = _verify_prepared_data(spec, [snapshot])
     assert result["status"] == "passed" and result["replicate_disclosure_verification"]["status"] == "passed"
     assert spec == before and spec["source_request"]["categorical_binding"]["source_namespace"] == str(source)
+
+
+@pytest.mark.parametrize("operation", ["save-spec", "transfer-styles", "export", "migrate-unit-labels"])
+def test_cold_only_commands_receive_locator_without_expanding_pooled_commands(tmp_path, operation):
+    from sciplot_core.native_process import run_cold_worker
+    from sciplot_core.native_process.protocol import ALLOWED_COMMANDS
+    from sciplot_core.project_store.io import digest
+
+    original, _, _, store = moved_project(tmp_path)
+    command = [sys.executable, "-m", "sciplot_core.veusz_worker", operation, str(original)]
+    captured = []
+    def cold(actual, **kwargs):
+        assert actual[:4] == [*command[:3], "--project-runtime"] and actual[6] == "--"
+        value = json.loads(Path(actual[4]).read_text())
+        assert value["argv_sha256"] == digest(command[3:])
+        captured.append(kwargs)
+        return subprocess.CompletedProcess(actual, 0, "{}", "")
+    worker = PersistentWorker()
+    try:
+        with worker.activate(), project_runtime(store):
+            result = run_cold_worker(command, cold_runner=cold, text=True, check=True)
+        assert result.returncode == 0 and worker.starts == 0 and captured == [{"text": True, "check": True}]
+        assert operation not in ALLOWED_COMMANDS
+    finally:
+        worker.close()
