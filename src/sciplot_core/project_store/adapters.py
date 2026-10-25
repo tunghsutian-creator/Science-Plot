@@ -40,6 +40,9 @@ def project_storage_scope(project: Path, *, locations: Mapping[str, Path | Resou
         current = state.head(io)
         if current is None:
             current = state.import_legacy(io)
+        from .namespace_transfers import augment_controls
+
+        augment_controls(io, current, store.location_members)
         projection.recover(io, current)
         yield store
 

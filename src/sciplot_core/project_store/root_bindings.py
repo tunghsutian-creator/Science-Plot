@@ -13,32 +13,48 @@ def identities(io: StoreIO) -> dict[str, dict[str, int]]:
             for key, fd in io.root_fds.items()}
 
 
-def expected(io: StoreIO, current: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
+def expected(io: StoreIO, current: dict[str, Any], values: dict[str, Any], *, command_id: str | None = None) -> dict[str, Any]:
     local = io.read("local_resource_roots.json")
     result = dict(values)
     if local is not None:
         if local.get("project_id") != current["project_id"]:
             raise ProjectConflict("The local root bindings belong to another stable project.")
-        for key in values:
-            if key in local["roots"]:
-                result[key] = local["roots"][key]
+        applies = (command_id in local.get("commands", []) if command_id is not None
+                   else current["generation"] == local.get("generation", current["generation"]))
+        if applies:
+            for key in values:
+                if key in local["roots"]:
+                    result[key] = local["roots"][key]
     return result
 
 
 def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any] | None = None,
             *, exemptions: Iterable[str] = ()) -> None:
     actual = identities(io)
-    values = dict(current.get("resource_roots", {}))
-    if record is not None:
-        values.update(record.get("resource_roots", {}))
-    for key, original in expected(io, current, values).items():
-        if key in exemptions:
-            continue
-        if key not in actual or actual[key] != original:
-            raise ProjectRecoveryRequired("A declared resource root changed ownership identity; explicit recovery is required.")
+    checks = [expected(io, current, current.get("resource_roots", {}))]
+    if record is not None and record["command_id"] not in current["commands"]:
+        checks.append(expected(io, current, record.get("resource_roots", {}), command_id=record["command_id"]))
+    for values in checks:
+        for key, original in values.items():
+            if key in exemptions:
+                continue
+            if key not in actual or actual[key] != original:
+                raise ProjectRecoveryRequired("A declared resource root changed ownership identity; explicit recovery is required.")
     io.verify_roots()
 
 
-def rebind_local(io: StoreIO, current: dict[str, Any]) -> None:
-    if io.read("local_resource_roots.json") is not None:
-        io.write("local_resource_roots.json", {"project_id": current["project_id"], "roots": identities(io)})
+def scope_local_import(io: StoreIO, current: dict[str, Any]) -> None:
+    local = io.read("local_resource_roots.json")
+    if local is not None and "generation" not in local:
+        from .io import directory
+
+        names = []
+        try:
+            with directory(io.fd, ("commands",)) as parent:
+                for name in os.listdir(parent):
+                    record = io.read("commands/" + name) if name.endswith(".json") else None
+                    if record is not None:
+                        names.append(record["command_id"])
+        except FileNotFoundError:
+            pass
+        io.write("local_resource_roots.json", {**local, "generation": current["generation"], "commands": names})

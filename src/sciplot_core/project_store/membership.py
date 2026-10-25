@@ -50,7 +50,8 @@ def physical_names(io: StoreIO, prefix: str) -> set[str]:
     return {prefix + "/" + name if prefix else name for name in names}
 
 
-def require_memberships(io: StoreIO, baseline: dict[str, Any], current: dict[str, Any], record: dict[str, Any]) -> None:
+def require_memberships(io: StoreIO, baseline: dict[str, Any], current: dict[str, Any], record: dict[str, Any],
+                        *, observed: dict[str, set[str]] | None = None) -> None:
     values = record.get("metadata", {}).get("read_memberships", [])
     seen = set()
     for supplied in values:
@@ -58,7 +59,14 @@ def require_memberships(io: StoreIO, baseline: dict[str, Any], current: dict[str
         if guard.prefix in seen:
             raise ProjectConflict("A command cannot bind one membership namespace twice.")
         seen.add(guard.prefix)
+        expected_physical = {name for name in baseline["files"]
+            if (name == guard.prefix or name.startswith(guard.prefix + "/")) if guard.prefix} if guard.prefix else {
+                name for name in baseline["files"] if not name.startswith("@")}
+        for prefix, names in (observed or {}).items():
+            if prefix == guard.prefix or prefix.startswith(guard.prefix + "/") or not guard.prefix and not prefix.startswith("@"):
+                expected_physical = {name for name in expected_physical if not name.startswith(prefix + "/")}
+                expected_physical.update(names)
         if (MembershipRead.capture(baseline["files"], guard.prefix) != guard
                 or MembershipRead.capture(current["files"], guard.prefix) != guard
-                or membership_digest(physical_names(io, guard.prefix)) != guard.members_sha256):
+                or membership_digest(physical_names(io, guard.prefix)) != membership_digest(expected_physical)):
             raise ProjectConflict("A declared whole-set membership changed inside or outside the generation.")

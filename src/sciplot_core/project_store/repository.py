@@ -15,7 +15,7 @@ import sciplot_core.project_store.publication as publication
 import sciplot_core.project_store.state as state
 import sciplot_core.project_store.native_work as native_work
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
-from .io import STORE, StoreIO, directory, install, parts, read_file, sha
+from .io import STORE, StoreIO, directory, install, owned_io, parts, read_file, sha
 from .resources import ResourceRoot
 
 
@@ -62,12 +62,20 @@ class FileProjectStore:
     @contextmanager
     def _locked(self, *, import_legacy: bool = False, repair: bool = False,
                 allow_pending: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any]]]:
+        from .namespace_transfers import augment_controls
+
+        active = owned_io(self.root)
+        if active is not None and active.locations == self.locations:
+            active_head = state.head(active)
+            if active_head is not None:
+                augment_controls(active, active_head, self.location_members)
         with StoreIO(self.root, self.locations, self.location_members, self.namespace_backups).locked() as io:
             current = state.head(io)
             if current is None:
                 if not import_legacy:
                     raise ProjectRecoveryRequired("Explicit legacy import is required before project mutation.")
                 current = state.import_legacy(io)
+            augment_controls(io, current, self.location_members)
             if repair:
                 projection.recover(io, current)
             elif not allow_pending and projection.pending(io, current):
@@ -83,7 +91,8 @@ class FileProjectStore:
             metadata_drift: dict[str, str] = {}
             for name, entry in current["files"].items():
                 try:
-                    physical = io.physical(name, owned=name not in current.get("input_resources", []))
+                    physical = io.physical(name, owned=name not in current.get("input_resources", [])
+                        and name not in current.get("history_resources", []))
                 except ProjectConflict as exc:
                     drift[name] = None
                     metadata_drift[name] = str(exc)

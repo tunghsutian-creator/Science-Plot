@@ -13,7 +13,8 @@ import sciplot_core.project_store.preconditions as preconditions
 from .errors import ProjectCommandConflict, ProjectConflict
 from .io import StoreIO, digest
 from .source_observations import adopt, local_versions
-from .root_bindings import identities, rebind_local
+from .root_bindings import identities
+from .namespace_transfers import require as require_namespaces, values as namespace_values
 
 
 def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
@@ -27,6 +28,7 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     if record["phase"] not in {"reserved", "applying", "accepted"}:
         raise ProjectCommandConflict("The command cannot publish without its frozen accepted decision.")
     preconditions.require_reads(io, current, record)
+    namespaces = require_namespaces(io, current, record)
     writes = dict(frozen["writes"])
     if set(writes) != set(record["write_set"]):
         raise ProjectConflict("Publication does not cover the exact reserved write set.")
@@ -50,6 +52,9 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     value.update(parent=current["generation"], parent_sha256=digest(current), generation=uuid4().hex,
                  sequence=current["sequence"] + 1, origin="command")
     value["resource_roots"] = identities(io)
+    value["history_resources"] = sorted(set(current.get("history_resources", [])) | namespaces.history)
+    value["retired_namespace_prefixes"] = sorted(set(current.get("retired_namespace_prefixes", []))
+        | {item.prefix for item in namespace_values(record)})
     for key, path in io.locations.items():
         value["locators"].setdefault(key, str(path))
     for name, entry in writes.items():
@@ -82,20 +87,20 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
         "phase": "complete", "result": frozen["result"], "review": record.get("review", {}),
         "metadata": record["metadata"], "read_set": record["read_set"],
         "write_set": record["write_set"], "projected_reads": record.get("projected_reads", []),
-        "candidate_digest": record.get("decision_id"), "artifacts": frozen.get("artifacts", {})}
+        "candidate_digest": record.get("decision_id"), "artifacts": frozen.get("artifacts", {}),
+        "namespace_origins": record.get("namespace_origins", {})}
     value["commands"][record["command_id"]] = outcome
     state.boundary("before_storage")
     state.write_generation(io, value)
     state.boundary("after_generation")
     record.update(install_parent=current["generation"], install_generation=value["generation"],
-                  install_files=sorted(writes), pending_result=frozen["result"])
+                  install_files=sorted(set(writes) - namespaces.installed), pending_result=frozen["result"])
     state.save_command(io, record)
     state.boundary("before_head")
     io.verify_roots()
     preconditions.require_reads(io, current, record)
     commands.verify_sources(io, frozen.get("sources", {}), record)
     local_versions(io, record)
-    rebind_local(io, current)
     if io.read("local_locations.json") is not None:
         expected_root = io.root / ".sciplot_resources"
         if any(path != expected_root / key for key, path in io.locations.items()):

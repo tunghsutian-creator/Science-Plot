@@ -13,7 +13,7 @@ from sciplot_core.foundation.json_values import json_safe
 
 from .errors import ProjectCommandConflict, ProjectConflict, ProjectStoreError
 from .io import StoreIO, digest, directory, install, parts, read_file, sha
-from .root_bindings import identities
+from .root_bindings import identities, scope_local_import
 import sciplot_core.project_store.state as state
 import sciplot_core.project_store.preconditions as preconditions
 
@@ -24,6 +24,7 @@ def reserve(io: StoreIO, current: dict[str, Any], command_id: str, command_diges
     existing = state.command(io, command_id, command_digest)
     if existing is not None:
         return existing
+    scope_local_import(io, current)
     if not isinstance(command_digest, str) or not command_digest:
         raise ProjectStoreError("A frozen business command digest is required.")
     record = {"kind": "sciplot_project_command", "version": 1, "project_id": current["project_id"],
@@ -54,6 +55,9 @@ def reserve(io: StoreIO, current: dict[str, Any], command_id: str, command_diges
         io.split(name)
     if any(name not in read_set and name not in projected for name in record["write_set"]):
         raise ProjectStoreError("Every full-resource write needs an exact before hash or absence read.")
+    from .namespace_transfers import require as require_namespaces
+
+    require_namespaces(io, current, record, admit=True)
     preconditions.require_reads(io, current, record)
     state.save_command(io, record)
     return record
@@ -143,6 +147,11 @@ def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | P
             frozen["writes"][name]["mode"] = record["adoption_modes"][name]
     frozen = json.loads(json.dumps(json_safe(frozen), allow_nan=False))
     seal(io, record, frozen)
+    from .namespace_transfers import require as require_namespaces
+
+    current = state.head(io)
+    assert current is not None
+    require_namespaces(io, current, record)
     record.update(phase="needs_review", result=frozen["result"], review=frozen["review"])
     state.save_command(io, record)
     return record
@@ -185,6 +194,8 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
                 or not own_pending and record.get("generation") != outcome["generation"]
                 or record.get("decision_id") != outcome.get("candidate_digest")):
             raise ProjectConflict("A derived command receipt differs from its immutable generation outcome.")
+        if record.get("namespace_origins", {}) != outcome.get("namespace_origins", {}):
+            raise ProjectConflict("A semantic ownership receipt differs from its committed directory proof.")
         if own_pending:
             result["committed_generation"] = outcome["generation"]
             projection_pending = True

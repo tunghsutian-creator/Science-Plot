@@ -47,6 +47,11 @@ def export_bundle(store: BundleStore, destination: Path) -> Path:
     if target.exists() or target.is_symlink():
         raise FileExistsError("A portable bundle destination must be new.")
     with store._locked() as (io, current):
+        from .namespace_transfers import reject_pending_bundle
+        from .root_bindings import require
+
+        reject_pending_bundle(io, current)
+        require(io, current)
         members = _members(io.fd)
         target.mkdir(mode=0o700)
         descriptor = os.open(target, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -117,7 +122,8 @@ def import_bundle(bundle: Path, destination: Path, *,
             raise ProjectConflict("The portable head differs from its complete bundle binding.")
         from .root_bindings import identities
 
-        io.write("local_resource_roots.json", {"project_id": current["project_id"], "roots": identities(io)})
+        io.write("local_resource_roots.json", {"project_id": current["project_id"], "generation": current["generation"],
+                  "commands": [], "roots": identities(io)})
         io.write("local_locations.json", {"ids": ids, "members": store.location_members})
         source_versions = {source_id: {version: entry["sha256"]
             for version, entry in versions.items()} for source_id, versions in current["sources"].items()}
@@ -144,6 +150,11 @@ def import_bundle(bundle: Path, destination: Path, *,
                     for version, entry in versions.items():
                         io.get(entry)
                         source_versions.setdefault(source_id, {})[version] = entry["sha256"]
+        imported_roots = io.read("local_resource_roots.json")
+        assert imported_roots is not None
+        imported_roots["commands"] = [record["command_id"] for name in command_names
+            if (record := io.read("commands/" + name)) is not None]
+        io.write("local_resource_roots.json", imported_roots)
         io.write("local_sources.json", {"versions": source_versions})
         io.write("relocation.json", {"generation": current["generation"], "files": sorted(current["files"]), "complete": False})
         projection.relocate(io, current)
