@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.foundation.source_locations import resolve_source_path, selected_source_resolver
+from sciplot_core.project_store.candidate_runtime import ProjectCandidateResolver
 from sciplot_core.project_commands import MembershipRead, PreparedFile, PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation
 from sciplot_core.project_commands.resources import resource_key
 from sciplot_core.project_store.io import read_file, sha
@@ -52,6 +53,22 @@ def prepare_studio_candidate(candidate: StudioPreparationCandidate, *, request_t
         figure_set_path_replacer=figure_set_path_replacer,
         terminal_source_binding=_terminal_source_binding,
         terminal_source_prepared=_terminal_source_prepared, new_creation=_new_creation)
+
+
+def _produced_resource(candidate: StudioPreparationCandidate, actual: Path, version: str, mode: int) -> str | None:
+    selected = selected_source_resolver()
+    if (not isinstance(selected, ProjectCandidateResolver)
+            or not (actual.is_relative_to(candidate.project_dir) or actual.is_relative_to(candidate.resources))):
+        return None
+    logical = selected._relative(actual)
+    if logical is None or logical == ".":
+        return None
+    before = candidate.snapshot["files"].get(logical)
+    if before is not None and before["sha256"] == version and before["mode"] == mode:
+        return None
+    if logical in candidate.snapshot.get("input_resources", []) or logical.split("/", 1)[0] in {"raw", "source"}:
+        raise ValueError("An original scientific input cannot be declared as a produced output.")
+    return logical
 
 
 def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[str, Any], *,
@@ -102,7 +119,8 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
             if sha(data) != expected:
                 raise ValueError("The private Studio scientific input changed after its native audit.")
             identity = source_identity_for_locator(candidate.snapshot, literal)
-            sources[(identity, expected)] = PreparedSource(identity, literal, expected, data, (), mode)
+            sources[(identity, expected)] = PreparedSource(identity, literal, expected, data, (), mode,
+                produced_resource=_produced_resource(candidate, actual, expected, mode))
     return audits, list(sources.values())
 
 
