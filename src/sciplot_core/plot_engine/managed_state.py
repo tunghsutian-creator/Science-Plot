@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.plot_document import validate_document
 from sciplot_core.plot_document.errors import DocumentError
 from sciplot_core.plot_transforms import builtin_files, require_builtin
@@ -45,10 +46,22 @@ def input_files(document: dict[str, Any]) -> dict[str, str]:
 
 
 def require_inputs(document: dict[str, Any]) -> None:
-    changed = [path for path, sha in input_files(document).items() if existing_file_sha256(Path(path)) != sha]
+    changed = [path for path, sha in input_files(document).items()
+               if existing_file_sha256(source_input_path(document, path, sha)) != sha]
     if changed:
         raise EngineError("managed_inputs_changed", "Only explicitly bound current scientific inputs may be compiled.",
                           action="refresh_scientific_binding", changed=changed)
+
+
+def source_input_path(document: dict[str, Any], path: str, sha256: str) -> Path:
+    """Resolve source IO only; implementation and executor pins stay host paths."""
+    matching = [source for source in document["scientific"]["data_sources"] if source["path"] == path]
+    if not matching:
+        return Path(path)
+    locations = {resolve_source_path(path, expected_sha256=sha256, source_id=source["source_id"]) for source in matching}
+    if len(locations) != 1:
+        raise EngineError("managed_source_locator_conflict", "One sealed original file cannot resolve to conflicting physical versions.")
+    return next(iter(locations))
 
 
 def resolved_ir(root: Path, document: dict[str, Any]) -> dict[str, Any]:

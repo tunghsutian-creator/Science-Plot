@@ -1,12 +1,12 @@
 """Load explicit managed table bindings through the existing original-table owner."""
 
-from pathlib import Path
 from typing import Any
 import math
 
 from sciplot_core.data_mapping.original_tables import read_original_table, source_table_snapshot
 from sciplot_core.data_mapping.table_choice import select_table
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.plot_transforms import ordered_nodes
 
@@ -34,7 +34,7 @@ def _selected_original_columns(document: dict[str, Any], source_id: str) -> set[
 
 @with_table_reads
 def _selected_source(source: dict[str, Any], rule_id: str) -> dict[str, Any]:
-    path = Path(source["path"])
+    path = resolve_source_path(source["path"], expected_sha256=source["sha256"], source_id=source["source_id"])
     if not path.is_absolute() or not path.is_file() or file_sha256(path) != source["sha256"]:
         raise EngineError("managed_source_changed", "Use the exact original source bytes or explicitly refresh their scientific binding.")
     if "table_selection" not in source:
@@ -70,7 +70,7 @@ def load_sources(document: dict[str, Any], rule_id: str, *,
     datasets: dict[str, dict[str, Any]] = {}
     samples: dict[str, dict[str, set[str]]] = {}
     for source in document["scientific"]["data_sources"]:
-        path = Path(source["path"])
+        path = resolve_source_path(source["path"], expected_sha256=source["sha256"], source_id=source["source_id"])
         selected = _selected_source(source, rule_id)
         if column_facts is not None:
             column_facts[source["source_id"]] = _column_facts(selected)
@@ -105,7 +105,7 @@ def load_sources(document: dict[str, Any], rule_id: str, *,
             for problem in column["metadata_conflicts"]:
                 field = problem["field"]
                 original = column["raw_metadata"]["header" if field == "quantity" else field]
-                issues.append({"source_id": source["source_id"], "source": str(path), "sheet": selection["sheet"],
+                issues.append({"source_id": source["source_id"], "source": source["path"], "sheet": selection["sheet"],
                                "column_index": column["index"], "field": field,
                                "expected": problem.get("original", original),
                                "actual": problem.get("declared", problem.get("values", problem)),
@@ -117,7 +117,7 @@ def load_sources(document: dict[str, Any], rule_id: str, *,
                     continue
                 index = coordinate.get("column_index")
                 column = next((item for item in selected["columns"] if item["index"] == index), None)
-                context = {"source_id": source["source_id"], "source": str(path), "sheet": selection["sheet"],
+                context = {"source_id": source["source_id"], "source": source["path"], "sheet": selection["sheet"],
                            "mapping_id": mapping_id, "coordinate": axis, "column_index": index}
                 if column is None:
                     issues.append({**context, "field": "column_index", "expected": [item["index"] for item in selected["columns"]],
@@ -133,7 +133,7 @@ def load_sources(document: dict[str, Any], rule_id: str, *,
                 "managed_metadata_conflict", "Bindings must preserve exact original column quantities and units.",
                 action="plot.describe", description={"scope": "edit", "target": "source:" + source["source_id"], "property": "source.sha256"},
                 target="source:" + source["source_id"],
-                property="source.sha256", source_id=source["source_id"], source=str(path), issues=issues,
+                property="source.sha256", source_id=source["source_id"], source=source["path"], issues=issues,
                 allowed_changes=["source.sha256"],
             )
             error.repair["message"] = "Inspect the current source reconfirmation contract. A conversion requires an existing explicit scientific transform; incompatible column remapping requires a new explicit binding, and display labels do not rename raw quantities."

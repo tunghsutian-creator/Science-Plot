@@ -10,7 +10,7 @@ from sciplot_core.plot_backends.managed import ManagedVeuszCompiler, compiler_id
 
 from .errors import EngineError
 from .builtin_history import fingerprint_for_read
-from .managed_state import make_binding, read_canonical, require_inputs, resolved_ir
+from .managed_state import make_binding, read_canonical, require_inputs, resolved_ir, source_input_path
 from .storage import read, write
 from sciplot_core.project_lifecycle.context import exists
 
@@ -37,7 +37,9 @@ class ManagedBackend:
         return value
 
     def fingerprint(self, binding: dict[str, Any]) -> dict[str, Any]:
-        files = {name: existing_file_sha256(Path(name)) for name in fingerprint_for_read(binding)["files"]}
+        canonical = read_canonical(binding) if "canonical_document" in binding else None
+        files = {name: existing_file_sha256(source_input_path(canonical, name, sha) if canonical is not None else Path(name))
+                 for name, sha in fingerprint_for_read(binding)["files"].items()}
         native = Path(binding["document"])
         expected = binding["ir_hash"]
         if native.exists():
