@@ -10,6 +10,7 @@ from sciplot_core.delivery import build_delivery_package
 from sciplot_core.figure_plan import ResolvedFigurePlan, resolved_figure_plan_from_payload
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.one_step import build_one_step_project
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import layout_policy_payload
@@ -217,7 +218,7 @@ def _build_request_manifest(
         "route": rendered.route,
         "semantic": json_safe(semantic),
         "final_recipe": rendered.final_recipe,
-        "input": str(input_path),
+        "input": literal_source_path(input_path),
         "raw_archive": json_safe(raw_archive),
         "output": str(output_dir),
         "figures": figures,

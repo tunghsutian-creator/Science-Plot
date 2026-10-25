@@ -7,6 +7,8 @@ import shutil
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from contextlib import AbstractContextManager
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 from sciplot_core.foundation.path_names import (
     unique_path,
 )
@@ -117,9 +119,9 @@ def _bind_result_data_snapshots(
                     ) from exc
                 if not path.is_file():
                     raise FileNotFoundError(f"Mapped plotted table not found: {path}")
-    result["data_snapshot_sources"] = [str(path) for path in snapshot_paths]
+    result["data_snapshot_sources"] = [literal_source_path(path) for path in snapshot_paths]
     if len(snapshot_paths) == 1:
-        result["data_snapshot_source"] = str(snapshot_paths[0])
+        result["data_snapshot_source"] = literal_source_path(snapshot_paths[0])
     else:
         result.pop("data_snapshot_source", None)
     if mapping_application is not None:
@@ -174,7 +176,7 @@ def _extend_runtime_transform_steps(
         )
 
 
-def _managed_output_transaction(output_dir: Path):
+def _managed_output_transaction(output_dir: Path) -> AbstractContextManager[None]:
     return managed_output_transaction(
         output_dir,
         managed_names=(*_MANAGED_OUTPUT_DIRECTORIES, *_MANAGED_OUTPUT_FILES),
@@ -193,6 +195,8 @@ def _request_options(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def _archive_raw_input(input_path: Path, output_dir: Path) -> dict[str, Any]:
+    literal = literal_source_path(input_path)
+    input_path = resolve_source_path(input_path)
     raw_dir = output_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
     destination = unique_path(raw_dir, input_path.name)
@@ -204,7 +208,7 @@ def _archive_raw_input(input_path: Path, output_dir: Path) -> dict[str, Any]:
         kind = "file"
     return {
         "kind": kind,
-        "source": str(input_path),
+        "source": literal,
         "path": str(destination),
     }
 
