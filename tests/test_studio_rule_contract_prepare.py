@@ -17,12 +17,7 @@ from sciplot_core.studio_core.figure_set_state import (
     _replace_studio_figure_set_path,
 )
 from sciplot_core.studio_core import prepare_existing
-from sciplot_core.studio_core.prepare_existing import (
-    reuse_existing_studio_document,
-)
-from sciplot_core.studio_core.prepare_generated import (
-    generate_studio_document,
-)
+from sciplot_core.studio_core.preparation_commands import prepare_studio_generation
 from sciplot_core.studio_core.request_overrides import (
     _apply_studio_request_overrides,
 )
@@ -73,9 +68,8 @@ def _generate_rule_bearing_project(
             "template": "scatter",
         },
     )
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepared = prepare_studio_generation(
+        project_dir, request_target=True,
         rule_id=None,
         template=None,
         project_name=None,
@@ -147,9 +141,8 @@ def test_generated_ruleless_request_removes_stale_contract_binding(
         },
     )
 
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepared = prepare_studio_generation(
+        project_dir, request_target=True,
         rule_id=None,
         template=None,
         project_name=None,
@@ -171,11 +164,7 @@ def test_reusing_existing_document_preserves_contract_binding_exactly(
     )
     before = request_path.read_bytes()
 
-    prepared = reuse_existing_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
-        document_path=document_path,
-    )
+    prepared = prepare_studio_generation(project_dir)
 
     request = json.loads(request_path.read_text(encoding="utf-8"))
     assert request_path.read_bytes() == before
@@ -193,11 +182,7 @@ def test_reusing_legacy_rule_bearing_document_does_not_mint_binding(
     )
     before = request_path.read_bytes()
 
-    prepared = reuse_existing_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
-        document_path=document_path,
-    )
+    prepared = prepare_studio_generation(project_dir)
 
     request = json.loads(request_path.read_text(encoding="utf-8"))
     assert request_path.read_bytes() == before
@@ -275,11 +260,7 @@ def test_reusing_existing_document_reads_study_model_once_for_figure_plan(
     )
 
     with pytest.raises(StopAfterResolution):
-        reuse_existing_studio_document(
-            project_dir=project_dir,
-            request_path=request_path,
-            document_path=document_path,
-        )
+        prepare_studio_generation(project_dir)
 
     assert observed_study_models == [expected_study_model]
     # One read synchronizes the presentation identity; the figure-plan
@@ -386,9 +367,8 @@ def test_failed_generated_transaction_preserves_prior_request_and_binding(
         _replace_studio_figure_set_path(staged, target)
 
     with pytest.raises(OSError, match="injected request replacement failure"):
-        generate_studio_document(
-            project_dir=project_dir,
-            request_path=request_path,
+        prepare_studio_generation(
+            project_dir, request_target=True,
             rule_id=None,
             template=None,
             project_name=None,

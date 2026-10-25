@@ -14,7 +14,7 @@ from sciplot_core.intake import session as intake_session
 from sciplot_core.intake import project as intake_project
 from sciplot_core.intake.project import project_builder
 from sciplot_core.materials_rules import get_rule
-from sciplot_core.studio_core import prepare_generated, studio_prepare
+from sciplot_core.studio_core import prepare_generated, studio_prepare, studio_prepare_core
 from sciplot_core.studio_core.rule_contract_binding import (
     STUDIO_RULE_CONTRACT_BINDING_KEY,
 )
@@ -29,6 +29,15 @@ FIXTURE = (
 RULE_ID = "performance_comparison"
 TEMPLATE = "polar_curve"
 PROJECT_NAME = "Explicit Project"
+
+
+def _stub_generation(monkeypatch: pytest.MonkeyPatch, generate: Any) -> None:
+    from sciplot_core.studio_core import preparation_commands
+
+    monkeypatch.setattr(studio_prepare_core, "generate_studio_document", generate)
+    # These unit controls intentionally write fake native bytes. The real
+    # generation, audit and complete-head lifecycle have separate native cases.
+    monkeypatch.setattr(preparation_commands, "audit_studio_candidate", lambda *_args: ([], []))
 
 
 def _raw_source(tmp_path: Path, source_kind: str) -> Path:
@@ -88,7 +97,7 @@ def test_raw_source_canonicalizes_once_before_studio_generation(
             request_path=request_path,
         )
 
-    monkeypatch.setattr(studio_prepare, "generate_studio_document", generate)
+    _stub_generation(monkeypatch, generate)
 
     prepared = studio_prepare.prepare_studio_document(
         source,
@@ -107,7 +116,8 @@ def test_raw_source_canonicalizes_once_before_studio_generation(
     assert request["study_model"]["experiment"]["template"] == TEMPLATE
     assert request[REQUEST_DELIVERY_ROOT_KEY] == str(delivery_root.resolve())
     project_dir = Path(prepared["project_dir"])
-    assert generation["project_dir"] == project_dir
+    assert generation["project_dir"] != project_dir
+    assert not generation["project_dir"].exists()
     assert project_dir.name == "Explicit_Project"
     manifest = read_intake_project_manifest(project_dir)
     assert manifest is not None
@@ -165,7 +175,7 @@ def _run_failure_after_noncanonical_prepare(
             return payload
         raise injected_error
 
-    monkeypatch.setattr(studio_prepare, "generate_studio_document", generate)
+    _stub_generation(monkeypatch, generate)
 
     try:
         studio_prepare.prepare_studio_document(
@@ -236,7 +246,7 @@ def test_pending_review_marker_reaches_the_only_raw_source_generation(
             request_path=request_path,
         )
 
-    monkeypatch.setattr(studio_prepare, "generate_studio_document", generate)
+    _stub_generation(monkeypatch, generate)
 
     prepared = studio_prepare.prepare_studio_document(
         source,
@@ -275,7 +285,7 @@ def test_pending_raw_source_rule_requires_an_explicit_template_before_build(
         generate_calls += 1
         raise AssertionError("Pending input must be rejected before generation.")
 
-    monkeypatch.setattr(studio_prepare, "generate_studio_document", generate)
+    _stub_generation(monkeypatch, generate)
 
     with pytest.raises(
         ValueError,
@@ -305,7 +315,7 @@ def test_invalid_raw_source_template_is_rejected_before_generation(
         generate_calls += 1
         raise AssertionError("Invalid input must not reach Studio generation.")
 
-    monkeypatch.setattr(studio_prepare, "generate_studio_document", generate)
+    _stub_generation(monkeypatch, generate)
 
     with pytest.raises(ValueError, match="is not supported by material rule"):
         studio_prepare.prepare_studio_document(
@@ -348,7 +358,7 @@ def test_post_generation_projection_failure_cannot_return_captured_ready_payload
         )
 
     monkeypatch.setattr(project_builder, "get_publication_profile", profile)
-    monkeypatch.setattr(studio_prepare, "generate_studio_document", generate)
+    _stub_generation(monkeypatch, generate)
 
     with pytest.raises(RuntimeError, match="injected manifest projection failure"):
         studio_prepare.prepare_studio_document(
@@ -441,7 +451,6 @@ def test_existing_request_and_vsz_control_paths_keep_generation_counts(
         audits.append(candidate.project_dir)
         return [], []
 
-    monkeypatch.setattr(preparation_commands, "audit_studio_candidate", audit_fake_native)
 
     def generate(
         *,
@@ -469,8 +478,9 @@ def test_existing_request_and_vsz_control_paths_keep_generation_counts(
             "document": str(document_path),
         }
 
-    monkeypatch.setattr(studio_prepare, "generate_studio_document", generate)
-    monkeypatch.setattr(studio_prepare, "reuse_existing_studio_document", reuse)
+    _stub_generation(monkeypatch, generate)
+    monkeypatch.setattr(studio_prepare_core, "reuse_existing_studio_document", reuse)
+    monkeypatch.setattr(preparation_commands, "audit_studio_candidate", audit_fake_native)
 
     existing_project = tmp_path / "existing_project"
     existing_project.mkdir()
@@ -583,7 +593,7 @@ def test_raw_source_reads_finalized_project_studio_once(
         "create_intake_project_from_session",
         create_project,
     )
-    monkeypatch.setattr(studio_prepare, "generate_studio_document", generate)
+    _stub_generation(monkeypatch, generate)
 
     prepared = studio_prepare.prepare_studio_document(
         source,

@@ -30,18 +30,18 @@ def prepare_studio_candidate(candidate: StudioPreparationCandidate, *, request_t
                              _terminal_source_prepared: bool = False, _new_creation: bool = False) -> dict[str, Any]:
     """Compose with an already held candidate; never import or publish a head."""
     require_preparation_candidate(candidate.project_dir)
-    from sciplot_core.studio_core.studio_prepare import prepare_studio_document
+    from sciplot_core.studio_core.studio_prepare_core import prepare_private_studio_project
 
     resource_key(request_relative)
     if request_relative.startswith("@"):
         raise ValueError("A Studio request must be a member of this candidate project.")
     candidate.request_members.add(request_relative)
-    target = candidate.project_dir / request_relative if request_target else candidate.project_dir
-    return prepare_studio_document(target, delivery_root=delivery_root, rule_id=rule_id,
+    return prepare_private_studio_project(candidate, request_target=request_target, request_relative=request_relative,
+        delivery_root=delivery_root, rule_id=rule_id,
         template=template, project_name=project_name, regenerate_generated=regenerate_generated,
         figure_set_path_replacer=figure_set_path_replacer,
-        _terminal_source_binding=_terminal_source_binding,
-        _terminal_source_prepared=_terminal_source_prepared, _new_creation=_new_creation)
+        terminal_source_binding=_terminal_source_binding,
+        terminal_source_prepared=_terminal_source_prepared, new_creation=_new_creation)
 
 
 def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[str, Any]) -> tuple[list[dict[str, Any]], list[PreparedSource]]:

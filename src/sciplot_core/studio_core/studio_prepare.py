@@ -9,7 +9,6 @@ from types import TracebackType
 from typing import Any
 
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
 from sciplot_core.terminal_source_binding import (
     SealedTerminalSourceBinding,
     TerminalSourceBindingError,
@@ -19,16 +18,6 @@ from sciplot_core.studio_core.context import (
     _normalize_optional_string,
 )
 from sciplot_core.studio_core.delivery_target import resolve_delivery_target
-from sciplot_core.studio_core.export_execution import (
-    _project_studio_document,
-)
-from sciplot_core.studio_core.json_files import _read_json
-from sciplot_core.studio_core.prepare_existing import (
-    reuse_existing_studio_document,
-)
-from sciplot_core.studio_core.prepare_generated import (
-    generate_studio_document,
-)
 from sciplot_core.studio_core.request_overrides import (
     _existing_document_payload,
 )
@@ -82,59 +71,16 @@ def prepare_studio_document(
 
     request_path = target_info["request"]
     project_dir = target_info["project_dir"]
-    from sciplot_core.studio_core.preparation_candidate import active_preparation_candidate
+    from sciplot_core.studio_core.preparation_commands import prepare_studio_generation
 
-    if active_preparation_candidate(project_dir) is None:
-        from sciplot_core.studio_core.preparation_commands import prepare_studio_generation
-
-        return prepare_studio_generation(project_dir, request_target=target_info["mode"] == "request",
-            request_relative=request_path.relative_to(project_dir).as_posix(),
-            delivery_root=delivery_root, rule_id=rule_id, template=template, project_name=project_name,
-            regenerate_generated=regenerate_generated, figure_set_path_replacer=figure_set_path_replacer,
-            _terminal_source_binding=_terminal_source_binding,
-            _terminal_source_prepared=_terminal_source_prepared, _new_creation=_new_creation)
-    if delivery_root is not None:
-        request = _read_json(request_path)
-        request[REQUEST_DELIVERY_ROOT_KEY] = str(delivery_root.expanduser().resolve())
-        request_path.write_text(
-            json.dumps(json_safe(request), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-    existing_document = _project_studio_document(project_dir)
-    if existing_document is not None:
-        from sciplot_core.foundation.source_locations import resolve_source_path
-
-        existing_document = resolve_source_path(existing_document)
-    if (
-        target_info.get("mode") == "project"
-        and existing_document is not None
-        and rule_id is None
-        and template is None
-        and project_name is None
-        and not regenerate_generated
-    ):
-        return reuse_existing_studio_document(
-            project_dir=project_dir,
-            request_path=request_path,
-            document_path=existing_document,
-        )
-    binding_option: dict[str, Any] = (
-        {"_terminal_source_binding": _terminal_source_binding}
-        if _terminal_source_binding is not None
-        else {}
-    )
-    if _new_creation:
-        binding_option["_new_creation"] = True
-    return generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
-        rule_id=rule_id,
-        template=template,
-        project_name=project_name,
+    return prepare_studio_generation(project_dir, request_target=target_info["mode"] == "request",
+        request_relative=request_path.relative_to(project_dir).as_posix(),
+        delivery_root=delivery_root, rule_id=rule_id, template=template, project_name=project_name,
+        regenerate_generated=regenerate_generated,
         figure_set_path_replacer=figure_set_path_replacer,
+        _terminal_source_binding=_terminal_source_binding,
         _terminal_source_prepared=_terminal_source_prepared,
-        **binding_option,
-    )
+        _new_creation=_new_creation)
 
 
 def _resolve_studio_target(
@@ -221,10 +167,12 @@ def _qt_first_project_from_source(
 
     def prepare_once(project_dir: Path) -> dict[str, Any]:
         nonlocal prepared, preparation_error, preparation_traceback
+        from sciplot_core.studio_core.preparation_commands import prepare_studio_generation
+
         try:
-            payload = generate_studio_document(
-                project_dir=project_dir,
-                request_path=project_dir / "plot_request.json",
+            payload = prepare_studio_generation(
+                project_dir,
+                request_target=True,
                 rule_id=None,
                 template=None,
                 project_name=None,

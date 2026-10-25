@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from collections.abc import Callable
+from copy import deepcopy
 from typing import Any
 
 from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
@@ -96,6 +97,20 @@ def _prepare_mapped_project(
 ) -> dict[str, Any]:
     """Enter the existing canonical-request Studio route with confirmed lineage."""
 
+    project = layout.workspace_root / "projects" / source.stem
+    request = request_from_verified_plan(source, verified=verified, project_dir=project, delivery_root=layout.delivery_root)
+    project.mkdir(parents=True, exist_ok=False)
+    request_path = project / "plot_request.json"
+    atomic_write_json(request_path, request)
+    if verified["rule_id"] == "rheology_stress_relaxation":
+        return prepare_studio_document(request_path, rule_id=verified["rule_id"], template=verified["template"])
+    return prepare_studio_document(request_path, _new_creation=True)
+
+
+def request_from_verified_plan(source: Path, *, verified: dict[str, Any], project_dir: Path,
+                               delivery_root: Path) -> dict[str, Any]:
+    """Recover confirmed scientific choices without allocating or writing a project."""
+
     current = None
     if "data_mapping" in verified:
         mapping = verified["data_mapping"]
@@ -106,17 +121,14 @@ def _prepare_mapped_project(
             raise ValueError("The confirmed mapping changed after the expected plan.")
     else:
         request = {"input": str(source), "rule_id": verified["rule_id"], "template": verified["template"]}
-    request.update(verified.get("source_options", {}))
+    request.update(deepcopy(verified.get("source_options", {})))
     if request.get("summary_statistic") == "raw_only":
         request["render_options"] = {**request.get("render_options", {}), "summary_statistic": "raw_only"}
-    project = layout.workspace_root / "projects" / source.stem
-    project.mkdir(parents=True, exist_ok=False)
-    request["output"] = str(project / "runs" / "run_001")
-    request[REQUEST_DELIVERY_ROOT_KEY] = str(layout.delivery_root)
-    request["resolved_figure_plan"] = verified["resolved_figure_plan"]
+    request["output"] = str(project_dir / "runs" / "run_001")
+    request[REQUEST_DELIVERY_ROOT_KEY] = str(delivery_root)
+    request["resolved_figure_plan"] = deepcopy(verified["resolved_figure_plan"])
     if current is not None:
         request["data_mapping_plan_binding"] = current
-    request_path = project / "plot_request.json"
     if verified["rule_id"] == "rheology_stress_relaxation":
         # The canonical-request route must reuse the rule-default owner just as
         # raw-source intake does. A top-level scientific choice alone is not a
@@ -124,10 +136,7 @@ def _prepare_mapped_project(
         scale = request.get("xscale", "log")
         request["render_options"] = {"xscale": scale,
             **({"x_tick_format": "Auto"} if scale == "linear" else {})}
-    atomic_write_json(request_path, request)
-    if verified["rule_id"] == "rheology_stress_relaxation":
-        return prepare_studio_document(request_path, rule_id=verified["rule_id"], template=verified["template"])
-    return prepare_studio_document(request_path, _new_creation=True)
+    return request
 
 
 @with_table_reads

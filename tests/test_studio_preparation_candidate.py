@@ -105,10 +105,64 @@ def test_publication_artifact_and_ledger_keep_original_literals_under_private_io
         assert artifact_record(derived, artifact_id="derived", role="output")["path"] == str(root / "studio/derived.csv")
 
 
+def test_verified_source_request_is_constructed_without_allocating_or_mutating(tmp_path):
+    from copy import deepcopy
+    from sciplot_core.studio_core.project_creation import request_from_verified_plan
+
+    source = tmp_path / "confirmed.csv"
+    source.write_bytes(b"x,y\n1,2\n")
+    project = tmp_path / "not_allocated"
+    verified = {"rule_id": "uvvis_spectrum", "template": "curve",
+                "source_options": {"render_options": {"line_width": 1.5}},
+                "resolved_figure_plan": {"outcomes": []}}
+    original = deepcopy(verified)
+    request = request_from_verified_plan(source, verified=verified, project_dir=project,
+                                         delivery_root=tmp_path / "delivery")
+    assert not project.exists()
+    assert request["input"] == str(source)
+    assert request["output"] == str(project / "runs/run_001")
+    request["render_options"]["line_width"] = 2
+    request["resolved_figure_plan"]["outcomes"].append({"example": "only result"})
+    assert verified == original
+
+
+def test_explicit_new_source_outside_finite_snapshot_cap_is_not_its_parent_member(tmp_path):
+    root, _store, _before = fixture_store(tmp_path)
+    from sciplot_core.foundation.source_locations import resolve_source_path
+    from sciplot_core.project_manifest import _manifest_store
+
+    incoming = tmp_path / "incoming.csv"
+    incoming.write_bytes(b"x,y\n1,3\n")
+    store = _manifest_store(root)
+    assert store.location_members["snapshot"] == ("project.zip",)
+    with studio_preparation_candidate(store) as _candidate:
+        assert resolve_source_path(incoming) == incoming
+
+
 def test_active_figure_install_requires_the_explicit_private_context(tmp_path):
     root, _store, _before = fixture_store(tmp_path)
     with pytest.raises(ProjectConflict, match="host-owned private"):
         install_prepared_figure_set(project_dir=root, replacements=[], manual_archive_requests=[], registry=None)
+
+
+def test_private_install_refuses_aliased_parent_before_touching_active_bytes(tmp_path):
+    import shutil
+    from sciplot_core.project_store.io import sha
+
+    root, store, before = fixture_store(tmp_path)
+    old_native = (root / "studio/document.vsz").read_bytes()
+    with studio_preparation_candidate(store, snapshot=before) as candidate:
+        staged = candidate.project_dir / "new.vsz"
+        staged.write_bytes(b"complete private replacement")
+        shutil.rmtree(candidate.project_dir / "studio")
+        (candidate.project_dir / "studio").symlink_to(root / "studio", target_is_directory=True)
+        with pytest.raises(OSError):
+            install_prepared_figure_set(project_dir=candidate.project_dir,
+                replacements=[{"staged": staged, "target": candidate.project_dir / "studio/document.vsz",
+                               "expected_hash": sha(staged.read_bytes()), "kind": "document"}],
+                manual_archive_requests=[], registry=None)
+        assert (root / "studio/document.vsz").read_bytes() == old_native
+    assert store.snapshot()["generation"] == before["generation"]
 
 
 def test_unchanged_legacy_reuse_keeps_audit_unevaluated_without_inventing_science(tmp_path, monkeypatch):
