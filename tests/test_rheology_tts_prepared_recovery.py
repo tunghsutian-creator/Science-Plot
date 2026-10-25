@@ -64,6 +64,11 @@ def native_stub(monkeypatch):
 
     monkeypatch.setattr(rheology_tts_render, "render_tts_figures", render)
     monkeypatch.setattr(rheology_tts_render_creation, "verify_native_creation", verify)
+    def saved(compiled, out):
+        result = verify(compiled, out)
+        return {"figures": [{"id": item["id"], "document_sha256": item["document_sha256"],
+                              "spec_sha256": item["spec_sha256"]} for item in result["figures"]]}
+    monkeypatch.setattr(rheology_tts_render_creation, "check_saved_native_creation", saved)
     monkeypatch.setattr(rheology_tts_render_creation, "check_native_continuation",
                         lambda compiled, out, **_: verify(compiled, out) if state["result"] is not None else None)
     return state

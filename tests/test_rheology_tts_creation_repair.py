@@ -7,6 +7,7 @@ import pytest
 
 from sciplot_core import rheology_tts_render, rheology_tts_render_creation as native
 from sciplot_core.cli.value_io import _cli_runtime_error_payload
+from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.rheology_tts_spec import compile_tts_spec
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.workflow import rheology_tts_creation as creation
@@ -33,9 +34,14 @@ def prepared_case(tmp_path, monkeypatch, native_scenario):
     case.production_render = rheology_tts_render.render_tts_figures
 
     def render(spec, out, *, resume=False):
+        case.out = out  # the actual admitted private renderer root
         return native.render_native_creation(compile_tts_spec(spec), out, resume=resume, export_figure=case.export)
 
     monkeypatch.setattr(rheology_tts_render, "render_tts_figures", render)
+    def complete(compiled, out):
+        case.out = out
+        return native.render_native_creation(compiled, out, resume=True, export_only=True, export_figure=case.export)
+    monkeypatch.setattr(rheology_tts_render, "complete_tts_creation_exports", complete)
     case.run = lambda **kwargs: plot_prepared_suite(case.request, **kwargs)
     return case
 
@@ -71,13 +77,25 @@ def _assert_failure(case, action):
     assert repair["action"] == action
     assert repair["request"] == str(case.request)
     assert repair["workspace"] == str(case.workspace)
-    assert repair["checkpoint"] == str(case.workspace / creation.CHECKPOINT)
-    assert _snapshot(case.root) == case.before
+    assert repair["repository"] == str(case.workspace / ".sciplot_store")
+    assert "checkpoint" not in repair  # one command owner, no invented v1 checkpoint
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.io import digest
+    store = FileProjectStore(case.workspace, locations={"delivery": case.delivery})
+    parent = next(record for record in store.commands() if record["metadata"]["kind"] == "native_create")
+    allowed = str((case.workspace / ".sciplot_store/commands" / (digest(parent["command_id"]) + ".json")).relative_to(case.root))
+    after = _snapshot(case.root)
+    assert set(after) == set(case.before)
+    assert all(after[name] == value for name, value in case.before.items() if name != allowed)
+    if after[allowed] != case.before[allowed]:
+        assert parent["phase"] == "unknown"
+        assert parent["native_failures"][-1]["original_error"] == type(case.error).__name__ + ": " + str(case.error)
     assert (case.saves, case.exports) == case.calls
     if action == "resume_prepared_creation":
         assert repair["command"] == ["rheology", "plot", "--request", str(case.request), "--resume", "--json"]
     else:
         assert "command" not in repair
+    case.after_failure = _snapshot(case.root)
     return repair
 
 
@@ -94,11 +112,17 @@ def test_first_failure_recommends_only_guarded_resume_and_preserves_exception(pr
     elif stage == "manifest":
         _inject(monkeypatch, case, creation, "write_json",
                 predicate=lambda path, _: path.name == "delivery_manifest.json")
-    elif stage in {"publication_ready", "renamed"}:
-        _inject(monkeypatch, case, creation, "_install_delivery", after=stage == "renamed")
+    elif stage == "publication_ready":
+        from sciplot_core.project_commands import ProjectCommands
+        _inject(monkeypatch, case, ProjectCommands, "decide", predicate=lambda self, command, **_: command.kind.value == "create")
+    elif stage == "renamed":
+        from sciplot_core.project_store import FileProjectStore
+        _inject(monkeypatch, case, FileProjectStore, "publish_staged", after=True,
+                predicate=lambda self, key, *_args, **_kwargs: key.endswith(":publish"))
     else:
-        _inject(monkeypatch, case, creation, "atomic_write_json",
-                predicate=lambda path, value: path.name == creation.CHECKPOINT and value["phase"] == "completed")
+        from sciplot_core.project_commands import ProjectCommands
+        _inject(monkeypatch, case, ProjectCommands, "decide", after=True,
+                predicate=lambda self, command, **_: command.kind.value == "create")
     _assert_failure(case, "resume_prepared_creation")
     assert case.run(resume=True)["status"] == "ready"
     assert case.saves == ["Custom"]
@@ -118,7 +142,7 @@ def test_uncertain_save_first_failure_and_plain_retry_both_require_inspection(pr
         case.run()
     assert caught.value.repair["action"] == "inspect_creation_evidence"
     assert "--resume" not in str(caught.value)
-    assert _snapshot(case.root) == case.before
+    assert _snapshot(case.root) == case.after_failure
 
 
 @pytest.mark.parametrize("drift", ["source", "prepared", "request", "ledger", "contract", "native", "spec",
@@ -152,6 +176,7 @@ def test_first_failure_never_recommends_resume_after_drift(prepared_case, monkey
             case.source.unlink()
             case.source.symlink_to(copy)
         else:
+            case.delivery.rename(case.root / "original-empty-delivery")
             case.delivery.mkdir()
 
     _inject(monkeypatch, case, case, "export", mutate=mutate)
@@ -165,6 +190,7 @@ def test_publication_conflicts_are_inspect_on_first_failure_and_plain_retry(prep
 
     def mutate():
         if conflict in {"empty", "populated"}:
+            case.delivery.rename(case.root / "original-empty-delivery")
             case.delivery.mkdir()
             if conflict == "populated":
                 (case.delivery / "user.vsz").write_text("preserve user document")
@@ -173,12 +199,14 @@ def test_publication_conflicts_are_inspect_on_first_failure_and_plain_retry(prep
         else:
             (case.workspace / "suite.json").write_text('{"unrelated": true}')
 
-    _inject(monkeypatch, case, creation, "_install_delivery", after=conflict == "edited_installed", mutate=mutate)
+    from sciplot_core.project_commands import ProjectCommands
+    _inject(monkeypatch, case, ProjectCommands, "decide", after=conflict == "edited_installed", mutate=mutate,
+            predicate=lambda self, command, **_: command.kind.value == "create")
     _assert_failure(case, "inspect_creation_evidence")
     with pytest.raises(creation.PreparedCreationBlocked) as caught:
         case.run()
     assert caught.value.repair["action"] == "inspect_creation_evidence"
-    assert _snapshot(case.root) == case.before
+    assert _snapshot(case.root) == case.after_failure
 
 
 def test_source_failure_before_creation_has_locations_without_allocating_workspace(prepared_case):
@@ -210,7 +238,8 @@ def test_projection_failure_cannot_replace_original_error(prepared_case, monkeyp
     _inject(monkeypatch, case, rheology_tts_render, "render_tts_figures")
     def inaccessible(*_args, **_kwargs):
         raise PermissionError("cannot inspect checkpoint")
-    monkeypatch.setattr(creation, "check_prepared_continuation", inaccessible)
+    from sciplot_core.workflow import native_suite_creation_inspection
+    monkeypatch.setattr(native_suite_creation_inspection, "inspect_creation_continuation", inaccessible)
     repair = _assert_failure(case, "inspect_creation_evidence")
     assert repair["blocked_by"] == "cannot inspect checkpoint"
 
@@ -223,15 +252,24 @@ def test_projection_does_not_acquire_lease_or_invoke_any_write_owner(prepared_ca
     def forbid(*args, **kwargs):
         attempts.append((args, kwargs))
         raise AssertionError("Error guidance attempted an operation instead of reading its evidence")
-    def block_writes():
-        for owner, names in ((creation, ("external_project_session", "atomic_write_json", "write_json",
-                                         "_install_delivery", "_build_publication", "_finish")),
-                             (native, ("external_project_session", "atomic_write_json", "_stage_exports")),
-                             (rheology_tts_native, ("save_native_figure",))):
-            for name in names:
-                monkeypatch.setattr(owner, name, forbid)
-    _inject(monkeypatch, case, creation, "write_plot_tables" if phase == "native_complete" else "_install_delivery",
-            mutate=block_writes)
+    from sciplot_core.workflow import rheology_tts_creation_repair as repair_owner
+    from sciplot_core.project_commands import ProjectCommands
+    from sciplot_core.project_store import FileProjectStore
+    original_attach = repair_owner.attach_creation_repair
+    def read_only_projection(*args, **kwargs):
+        with monkeypatch.context() as guarded:
+            for owner, names in ((ProjectCommands, ("execute", "preview", "decide", "resume", "publish_prepared")),
+                                 (FileProjectStore, ("reserve", "mark_applying", "publish", "publish_staged", "stage", "recover")),
+                                 (native, ("external_project_session", "atomic_write_json", "_stage_exports")),
+                                 (rheology_tts_native, ("save_native_figure",))):
+                for name in names:
+                    guarded.setattr(owner, name, forbid)
+            return original_attach(*args, **kwargs)
+    monkeypatch.setattr(repair_owner, "attach_creation_repair", read_only_projection)
+    if phase == "native_complete":
+        _inject(monkeypatch, case, creation, "write_plot_tables")
+    else:
+        _inject(monkeypatch, case, ProjectCommands, "decide", predicate=lambda self, command, **_: command.kind.value == "create")
     _assert_failure(case, "resume_prepared_creation")
     assert attempts == []
 
@@ -279,6 +317,7 @@ def test_direct_and_child_native_busy_both_require_inspection(prepared_case, mon
 
     case = prepared_case
     def render_with_busy_native(spec, out, *, resume=False):
+        case.out = out
         with external_project_session(out):
             if worker:
                 return case.production_render(spec, out, resume=resume)
@@ -300,3 +339,27 @@ def test_direct_and_child_native_busy_both_require_inspection(prepared_case, mon
     else:
         assert caught.value.reason_code == "project_busy"
     assert not case.out.exists() and not case.saves and not case.exports
+
+
+@pytest.mark.parametrize("boundary", ["needs_review", "accepted", "after_head"])
+def test_sealed_renderer_fact_failure_resumes_storage_without_native_reexecution(prepared_case, monkeypatch, boundary):
+    from sciplot_core.project_commands import ProjectCommands
+    from sciplot_core.project_store import FileProjectStore, state
+    case = prepared_case
+    if boundary == "needs_review":
+        _inject(monkeypatch, case, ProjectCommands, "stage_prepared", after=True,
+                predicate=lambda self, command, *_a, **_k:
+                command.to_payload()["request"].get("adapter") == "native_suite_renderer_fact")
+    else:
+        name = "before_storage" if boundary == "accepted" else "after_head"
+        _inject(monkeypatch, case, state, "boundary", predicate=lambda value: value == name and case.saves == ["Custom"])
+    _assert_failure(case, "resume_prepared_creation")
+    before = {path: (file_sha256(path), path.stat().st_mtime_ns) for path in case.out.glob("*.vsz")}
+    exports = case.exports[:]
+    assert case.run(resume=True)["status"] == "ready"
+    assert case.saves == ["Custom"] and case.exports == exports
+    assert all((file_sha256(path), path.stat().st_mtime_ns) == value for path, value in before.items())
+    store = FileProjectStore(case.workspace, locations={"delivery": case.delivery})
+    parent = next(record for record in store.commands() if record["metadata"]["kind"] == "native_create")
+    assert parent["phase"] == "unknown"  # original execution outcome is preserved
+    assert store.query(parent["command_id"] + ":native-fact")["phase"] == "complete"

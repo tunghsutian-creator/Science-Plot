@@ -119,10 +119,16 @@ def create_project(workspace: Path, delivery: Path, request: dict[str, Any], sou
             try:
                 result = dict(prepare(candidate_workspace, candidate_delivery))
             except Exception as exc:
-                store.append_native_failure(command.key, command.command_digest,
-                    original_error=(type(exc).__name__ + ": " + str(exc))[:16384],
-                    renderer_dispatch_entered=observation.dispatch_entered,
-                    owned_invocation_closed=observation.owned_invocation_closed)
+                try:
+                    store.append_native_failure(command.key, command.command_digest,
+                        original_error=(type(exc).__name__ + ": " + str(exc))[:16384],
+                        renderer_dispatch_entered=observation.dispatch_entered,
+                        owned_invocation_closed=observation.owned_invocation_closed)
+                except Exception as recording_error:
+                    try:
+                        exc.add_note("Native failure record could not be persisted: " + str(recording_error))
+                    except Exception:
+                        pass
                 raise
         return collect(result, candidate_workspace, candidate_delivery)
 
@@ -204,6 +210,17 @@ def create_project(workspace: Path, delivery: Path, request: dict[str, Any], sou
         failures = prior.get("native_failures", [])
         closed = bool(failures and failures[-1]["owned_invocation_closed"])
         if fact is not None:
+            from sciplot_core.project_commands import ProjectCommand
+            fact_command = ProjectCommand.from_payload(fact["metadata"])
+            fact_request = fact_command.to_payload()["request"]
+            if (fact_request.get("adapter") != "native_suite_renderer_fact"
+                    or fact_request.get("original_command") != command.command_digest
+                    or fact.get("review", {}).get("publication") != "prepared_storage"):
+                raise ValueError("The saved native fact is not this command's exact prepared evidence.")
+            if fact["phase"] == "needs_review":
+                fact = app.decide(fact_command, decision_id=fact["decision_id"], accept=True)
+            else:
+                fact = app.resume(fact_command)
             _verify_native_fact(fact, original_workspace / "initial_render")
         elif not closed:
             raise ProjectCommandUnknown()
