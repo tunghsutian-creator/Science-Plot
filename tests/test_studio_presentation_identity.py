@@ -94,6 +94,7 @@ def _performance_project(
     return project_dir, request_path, Path(prepared["document"])
 
 
+@pytest.mark.comprehensive
 def test_explicit_performance_template_beats_matching_recognition_default(
     tmp_path: Path,
 ) -> None:
@@ -122,6 +123,7 @@ def test_explicit_performance_template_beats_matching_recognition_default(
     assert semantic["presentation_identity"] == _identity(ALTERNATE_TEMPLATE)
 
 
+@pytest.mark.comprehensive
 def test_rule_default_is_used_when_performance_template_is_omitted(
     tmp_path: Path,
 ) -> None:
