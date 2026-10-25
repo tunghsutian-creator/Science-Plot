@@ -37,3 +37,11 @@ def project_candidate_runtime(store: FileProjectStore, candidate_root: Path, *,
     resolver = ProjectCandidateResolver(store, candidate_root, generation)
     with source_location_scope(resolver):
         yield resolver
+
+
+def resolve_runtime_output_path(original: str | Path) -> Path:
+    """Only command-declared output positions may create private candidate files."""
+    from .candidate_runtime import ProjectCandidateResolver
+
+    selected = selected_source_resolver()
+    return selected.output_path(original) if isinstance(selected, ProjectCandidateResolver) else Path(original)

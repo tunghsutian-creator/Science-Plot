@@ -136,6 +136,22 @@ class ProjectCandidateResolver(ProjectSourceResolver):
                     raise ProjectConflict("The candidate member differs from its exact requested bytes.")
         return self.candidate_root if relative == "." else self.candidate_root / relative
 
+    def output_path(self, original: str | Path) -> Path:
+        """An admitted renderer output may create only private ordinary members."""
+        relative = self._relative(Path(original).expanduser().absolute())
+        if relative is None or relative == "." or relative in self._input_members:
+            raise ProjectConflict("A candidate renderer output cannot overwrite science or escape its private primary root.")
+        components = parts(relative)
+        with self._root() as fd, directory(fd, components[:-1], create=True) as parent:
+            try:
+                info = os.stat(components[-1], dir_fd=parent, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                    raise ProjectConflict("A candidate output must be an ordinary unaliased private file.")
+        return self.candidate_root / relative
+
     def literal_path(self, actual: Path) -> str:
         relative = self._relative(actual.expanduser().absolute())
         if relative is None:

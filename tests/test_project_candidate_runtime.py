@@ -223,3 +223,55 @@ def test_managed_candidate_raw_reader_keeps_scientific_hash_uuid_and_cells(tmp_p
         validate_document(document)
         assert str(private) not in json.dumps(document)
     assert selected_source_resolver() is None
+
+
+@pytest.mark.parametrize("operation", ["save-spec", "compile-plot-ir"])
+def test_candidate_worker_distinguishes_new_document_outputs_from_scientific_inputs(tmp_path, monkeypatch, operation):
+    from sciplot_core.veusz_worker import cli
+    from sciplot_core.veusz_worker import managed
+    store, _snapshot, private = fixture_candidate(tmp_path)
+    spec = private / "studio/new-spec.json"
+    spec.write_text('{"generated":true}')
+    output = store.root / "studio/new-stage/new.vsz"
+    calls = []
+    def render(*args):
+        if operation == "save-spec":
+            document, input_path = args
+        else:
+            input_path, document, _preview = args
+        calls.append((input_path, document))
+        assert input_path == spec and document == private / "studio/new-stage/new.vsz"
+        assert document.parent.is_dir()
+        document.write_bytes(b"private native output")
+        return {"saved": str(document)}
+    monkeypatch.setattr(cli, "save_spec", render)
+    monkeypatch.setattr(managed, "compile_plot_ir", render)
+    args = ([operation, str(output), str(spec)] if operation == "save-spec" else
+            [operation, str(spec), str(output), "--preview", str(private / "preview.png")])
+    with project_candidate_runtime(store, private):
+        assert cli._execute(args) == 0
+        assert resolve_source_path(output).read_bytes() == b"private native output"
+    assert len(calls) == 1 and not output.exists() and selected_source_resolver() is None
+
+
+@pytest.mark.parametrize("bad", ["missing-input", "source-output", "outside-output", "aliased-parent"])
+def test_candidate_output_role_cannot_weaken_input_identity_or_private_root(tmp_path, monkeypatch, bad):
+    from sciplot_core.veusz_worker import cli
+    store, _snapshot, private = fixture_candidate(tmp_path)
+    spec = private / "studio/spec.json"
+    spec.write_bytes(b"spec")
+    output = store.root / "studio/new.vsz"
+    monkeypatch.setattr(cli, "save_spec", lambda *_a: pytest.fail("Refused input/output reached native execution"))
+    if bad == "missing-input":
+        spec = private / "studio/missing.json"
+    elif bad == "source-output":
+        output = store.root / "raw/source.csv"
+    elif bad == "outside-output":
+        output = tmp_path / "outside/document.vsz"
+    else:
+        (private / "studio/linked").symlink_to(store.root / "studio", target_is_directory=True)
+        output = store.root / "studio/linked/new.vsz"
+    with pytest.raises((ProjectConflict, ProjectStoreError, OSError)), project_candidate_runtime(store, private):
+        cli._execute(["save-spec", str(output), str(spec)])
+    assert not (store.root / "studio/new.vsz").exists()
+    assert store.read_bytes("raw/source.csv") == b"x,y\n1,2\n"

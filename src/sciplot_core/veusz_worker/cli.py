@@ -124,7 +124,12 @@ def _execute(argv: list[str] | None = None) -> int:
                  "current_spec", "changes", "operations", "audit_spec"):
         value = getattr(args, name, None)
         if value is not None:
-            setattr(args, name, resolve_source_path(value))
+            if name == "document" and args.command in {"save-spec", "compile-plot-ir"}:
+                from sciplot_core.project_store.runtime import resolve_runtime_output_path
+
+                setattr(args, name, resolve_runtime_output_path(value))
+            else:
+                setattr(args, name, resolve_source_path(value))
     if hasattr(args, "documents"):
         args.documents = [resolve_source_path(path) for path in args.documents]
     if args.command == "font-families":
