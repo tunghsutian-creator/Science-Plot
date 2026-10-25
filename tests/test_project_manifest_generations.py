@@ -72,3 +72,19 @@ def test_pure_run_registration_preserves_inputs_and_all_scientific_metadata(tmp_
     assert result["transform_ledger"] == run["transform_ledger"]
     result["study_model"]["source_id"] = "private result change"
     assert run == before_run
+
+
+def test_manifest_read_preserves_explicit_host_caps_and_needs_no_unrelated_projection(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "intake_manifest.json").write_text('{"project_slug":"project"}')
+    delivery = tmp_path / "delivery"
+    delivery.mkdir()
+    selected = FileProjectStore(root, locations={"delivery": delivery})
+    selected.snapshot(import_legacy=True)
+    publish_files(selected, {"@delivery/result.pdf": b"exact delivery"}, kind="publish")
+    from sciplot_core.project_manifest import read_intake_project_manifest
+    assert read_intake_project_manifest(root, store=selected) == {"project_slug": "project"}
+    assert read_intake_project_manifest(root) == {"project_slug": "project"}
+    assert selected.locations == {"delivery": delivery}
+    assert (delivery / "result.pdf").read_bytes() == b"exact delivery"

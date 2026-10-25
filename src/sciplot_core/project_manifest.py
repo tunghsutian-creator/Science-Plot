@@ -97,17 +97,24 @@ def locked_intake_project_manifest(project_dir: Path) -> Iterator[Path]:
             yield project
 
 
-def _read_intake_project_manifest_unlocked(project: Path) -> dict[str, Any] | None:
+def _read_intake_project_manifest_unlocked(project: Path, *, store: FileProjectStore | None = None) -> dict[str, Any] | None:
     targets = _project_manifest_paths(project)
     if (project / ".sciplot_store/head.json").is_file():
-        store = _manifest_store(project)
-        snapshot = store.snapshot()
-        for path in targets:
-            if path.name in snapshot["files"]:
-                value = json.loads(store.read_bytes(path.name))
-                if not isinstance(value, dict):
-                    raise ValueError("The project manifest generation is invalid.")
-                return value
+        selected = store or _manifest_store(project)
+        if selected.root != project:
+            raise ValueError("The selected manifest store belongs to another project.")
+        with selected._locked() as (io, current):
+            for path in targets:
+                if path.name in current["files"]:
+                    entry = current["files"][path.name]
+                    data = io.get(entry)
+                    physical = io.physical(path.name)
+                    if physical is None or physical != (data, entry["mode"]):
+                        raise ProjectConflict("The visible project manifest differs from its committed generation.")
+                    value = json.loads(data)
+                    if not isinstance(value, dict):
+                        raise ValueError("The project manifest generation is invalid.")
+                    return value
         return None
     for path in targets:
         if path.is_file():
@@ -115,8 +122,8 @@ def _read_intake_project_manifest_unlocked(project: Path) -> dict[str, Any] | No
     return None
 
 
-def read_intake_project_manifest(project_dir: Path) -> dict[str, Any] | None:
-    return _read_intake_project_manifest_unlocked(project_dir.expanduser().resolve())
+def read_intake_project_manifest(project_dir: Path, *, store: FileProjectStore | None = None) -> dict[str, Any] | None:
+    return _read_intake_project_manifest_unlocked(project_dir.expanduser().resolve(), store=store)
 
 
 def _is_private_snapshot_root(project: Path) -> bool:
