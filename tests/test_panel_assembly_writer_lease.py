@@ -17,6 +17,9 @@ from sciplot_core.panel_assembly.model import (
 from sciplot_core.panel_assembly import AssemblyError, storage
 
 
+pytestmark = pytest.mark.comprehensive
+
+
 _WRITER = r"""
 from pathlib import Path
 import os
