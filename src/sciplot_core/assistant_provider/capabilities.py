@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
+from copy import deepcopy
 from typing import Any
 from sciplot_core.json_contract import (
     reject_unknown_keys,
@@ -11,6 +13,7 @@ from sciplot_core.json_contract import (
     require_json_object,
 )
 from sciplot_core.assistant_operations import (
+    VeuszSettingOperationBatch,
     _validate_json_value,
 )
 
@@ -32,6 +35,56 @@ from sciplot_core.assistant_provider.text_validation import (
 from sciplot_core.assistant_provider.context_documents import (
     _text_list,
 )
+
+
+def bind_setting_targets(
+    capabilities: dict[str, Any], targets: Iterable[tuple[str, str]],
+) -> tuple[dict[str, Any], ...]:
+    """Bind an entire proposal to the request's catalog before filtering no-ops.
+
+    This is admission against an already validated request, not a native-value
+    validator or permission grant. The apply adapter still checks live state.
+    """
+    allowed = {(item["target_id"], item["setting_path"]): item
+               for item in capabilities["allowed_operations"]}
+    result = []
+    seen: set[str] = set()
+    for target_id, setting_path in targets:
+        capability = allowed.get((target_id, setting_path))
+        if capability is None:
+            raise ValueError("Proposal is outside the advertised setting catalog.")
+        if setting_path in seen:
+            raise ValueError("Proposal contains the same setting more than once.")
+        seen.add(setting_path)
+        result.append(deepcopy(capability))
+    return tuple(result)
+
+
+def bind_setting_batch(
+    batch: VeuszSettingOperationBatch, *, base_revision: int,
+    capabilities: dict[str, Any],
+) -> tuple[dict[str, Any], ...]:
+    """Admit typed commands from any provider without Qt, I/O or mutation."""
+    if batch.base_revision != base_revision:
+        raise ValueError("Assistant VeuszSettingOperationBatch base_revision does not match request.")
+    bound = bind_setting_targets(capabilities, (
+        (operation.target_id, operation.arguments["setting_path"])
+        for operation in batch.operations
+    ))
+    for operation, capability in zip(batch.operations, bound, strict=True):
+        if "expected_value" not in operation.arguments:
+            raise ValueError("Proposal is missing expected_value.")
+        if not _same_setting_value(operation.arguments["expected_value"], capability["current_value"]):
+            raise ValueError("Proposal expected_value does not match the advertised current value.")
+    return bound
+
+
+def _same_setting_value(expected: Any, current: Any) -> bool:
+    if isinstance(expected, list) and isinstance(current, list):
+        return len(expected) == len(current) and all(
+            _same_setting_value(a, b) for a, b in zip(expected, current, strict=True)
+        )
+    return isinstance(expected, bool) == isinstance(current, bool) and expected == current
 
 
 def _validate_capability_value(value: object, *, label: str) -> Any:

@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-24. External AI is the task interface. Current behavior belongs
+Status: 2026-10-25. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -346,11 +346,14 @@ Full pytest and ready-rule acceptance remain release/merge gates; a frozen full
 already contains both tiers. Do not substitute public subsets for authorized
 private/full release acceptance or repeat full for every small cleanup.
 
-Keep the current compatibility candidate frozen while its original CI continues,
-including the persistent a.u./XRD display default and historical DataMapping cold
-replay. Verification speed now proceeds in a separate worktree, with independent
-source-specific acceptance; main and exact-commit CI gates remain unchanged.
-Plotting and AI module work stays behind speed acceptance. Use actual
+The compatibility fixes, persistent a.u./XRD display default, historical DataMapping
+cold replay and first local speed slice shipped on main 42569c1 with complete
+local and exact-commit CI acceptance. Subsequent work uses independent snapshots;
+main and exact-commit CI gates remain unchanged.
+The later complete-profile CI parallel experiment remains isolated: its local
+contract checks passed, but remote runner communication failed and no complete
+parallel wall-time benefit was established. It does not block independent module
+development from stable main; its workflow is not carried into that work. Use actual
 monotonic stage costs to choose a small dependency-selection, deduplication or
 operation-local preparation change; bind reuse to exact version, environment
 and input identities. Long stages must expose actual progress or an explicit
@@ -371,6 +374,14 @@ missing candidates or alias layout. Keep these prototypes out of the delivery.
 Use the existing unrecorded changed-owner entry for daily feedback and request
 recorded identities when reuse or capture is needed. Measure these evidence modes
 as separate contracts, and retain every assertion and complete release scope.
+The explicit `verify --quick` daily entry uses that same owner plan and rejects
+accidental record/reuse/audit options. It reports command costs and deferred gates
+without claiming merge readiness. A real small typed-intent edit ran all 32 selected
+bodies and four checks in 11.00 seconds; the equivalent old unrecorded path took
+10.09 seconds. This usability change adds no algorithmic speed claim. Exact-node
+manifest updates still select the broad verification owner; evaluate a smaller
+declarative-metadata owner only with a proven complete dependency contract, rather
+than silently dropping those checks in this slice.
 
 The next finite preparation slice keeps successful raw native inspector text in
 one operation-local runtime memo. Fresh content/source/tool/environment/OS and
@@ -391,8 +402,17 @@ changed-owner plan against that exact completed full, preserving standalone
 lint/types/whitespace, native capture and readiness gates instead of repeating
 the changed pytest subset. Do not add another full just to obtain a profile.
 
-Only after speed acceptance, resume complete real ordinary plotting, TTS and
-panel-assembly tasks and the plotting/AI-communication/edit module-boundary review.
+Resume complete real ordinary plotting, TTS and panel-assembly tasks and the
+plotting/AI-communication/edit module-boundary review from stable main. The first
+bounded implementation centralizes assistant proposal admission in the existing
+capability owner, removing provider/GUI duplicates without a new command bus,
+renderer or durable state. Each provider's response must belong to its request's
+catalog before native work; live selection/revision/value checks and the external
+worker's narrower science-safe scope remain separate. Validate draft/no-op,
+custom-provider, stale/live native, cancellation, Undo and save/reopen/export paths.
+Use changed-owner fast checks for development, then the unchanged complete
+merge/release requirements on the frozen batch. Remote CI for an isolated
+experiment does not hold all subsequent development hostage.
 Check the single template entry, explicit overrides and TTS interaction. Derive
 any restructuring from actual dependencies and workflow failures; splitting
 files alone is not a product or architecture improvement.

@@ -38,7 +38,7 @@ feedback cost, never scientific assertions or acceptance requirements.
 Run the smallest relevant tests while iterating, then:
 
 ```bash
-skill/scripts/sciplot verify --changed --json
+skill/scripts/sciplot verify --quick
 ```
 
 Use `--base BASE_COMMIT` for committed changes, including after a clean commit;
@@ -48,7 +48,19 @@ paths. Renames/deletions retain both owner endpoints. Tests execute the current
 worktree, not a different staged-index image. A clean default comparison reports
 `NO_TESTS`, zero executed checks and exit 2; a plan is not a test pass.
 
-Use this unrecorded mode for routine feedback. `--record DIRECTORY` runs the same
+`--quick` uses the same owner selection and assertions as unrecorded `--changed`.
+It rejects record/reuse/output/audit options, prints the selected owners, actual
+pytest summary, per-command elapsed times and the later required gates, and
+explicitly labels the result as development feedback rather than merge acceptance.
+`--json` retains the structured plan/results. The target count describes selectors,
+never executed test bodies. Unknown owners fail before checks; shared public or
+scientific contracts retain their broader mapped regressions. No cache or test
+sharding is introduced. One actual typed-intent documentation edit selected the
+same 32 successful bodies and four checks in both modes: quick 11.00 seconds,
+unrecorded changed 10.09 seconds. This is an explicit daily entry and protection
+against accidental evidence collection, not an algorithmic speedup claim.
+
+Use this unrecorded mode for routine feedback. `--changed --record DIRECTORY` runs the same
 owner-selected assertions and also collects exact input/runtime identities and
 original completion evidence. Request that extra work when a reusable record or
 capture is needed; do not add it to every edit. A fast-check pass is selected
@@ -103,6 +115,19 @@ an unconditional raising guard followed by a platform-only body can become an
 unreachable-code error on the other target. Retain the runtime platform/ABI
 rejections and `warn_unreachable`; target selection never changes the host OS.
 Do not weaken checks or remove coverage to pass a gate.
+
+Selected-object assistant edits bind through the existing pure capability owner.
+Provider drafts resolve all advertised target/path pairs before no-op filtering;
+typed responses and GUI preparation share the same revision/expected-value
+admission. Keep model-specific JSON coercion in its provider, and current native
+values, selection, Undo, local history and save/export in their existing owners.
+The GUI's pending capability map is only a display projection, not edit authority.
+Version-2 contexts remain readable for non-proposal responses; a missing catalog
+cannot authorize edits. Invalid custom-provider proposals now fail at the runner's
+response boundary before reaching a ready GUI proposal. Cancellation retains its
+existing ordering; valid late replies become cancelled and carry no proposal.
+Do not apply the GUI's broader Inspector catalog to the external worker's narrower
+scientific-safe edit route.
 
 Historical native goldens bind the actual Python binary, Qt and font identities.
 An upgraded Homebrew `opt` link can drift an existing venv. Restore the matching

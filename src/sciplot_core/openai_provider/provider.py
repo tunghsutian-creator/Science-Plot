@@ -15,6 +15,7 @@ from sciplot_core.assistant_provider import (
     AssistantRequest,
     AssistantResponse,
 )
+from sciplot_core.assistant_provider.capabilities import bind_setting_targets
 
 from sciplot_core.openai_provider.contracts import (
     OPENAI_PROVIDER_ID,
@@ -147,7 +148,7 @@ class OpenAIResponsesProvider:
         warnings: tuple[str, ...] = (),
         batch: VeuszSettingOperationBatch | None = None,
     ) -> AssistantResponse:
-        return AssistantResponse(
+        response = AssistantResponse(
             request_id=request.request_id,
             transaction_id=request.transaction_id,
             provider_id=request.provider_id,
@@ -160,6 +161,8 @@ class OpenAIResponsesProvider:
             proposal=(batch.to_dict() if batch is not None else None),
             warnings=warnings,
         )
+        response.validate_for_request(request)
+        return response
 
     def _typed_model_response(
         self,
@@ -174,22 +177,12 @@ class OpenAIResponsesProvider:
                 warnings=envelope["warnings"],
             )
         capabilities = request.context["editing_capabilities"]
-        allowed = {
-            (item["target_id"], item["setting_path"]): item
-            for item in capabilities["allowed_operations"]
-        }
+        bound = bind_setting_targets(capabilities, (
+            (draft["target_id"], draft["setting_path"])
+            for draft in envelope["operations"]
+        ))
         operations: list[VeuszSettingOperation] = []
-        seen_paths: set[str] = set()
-        for draft in envelope["operations"]:
-            key = (draft["target_id"], draft["setting_path"])
-            capability = allowed.get(key)
-            if capability is None:
-                raise ValueError(
-                    "Model proposed a target or setting outside the advertised catalog."
-                )
-            if draft["setting_path"] in seen_paths:
-                raise ValueError("Model proposed the same setting more than once.")
-            seen_paths.add(draft["setting_path"])
+        for draft, capability in zip(envelope["operations"], bound, strict=True):
             try:
                 raw_value = _json_loads_strict(draft["value_json"])
             except (json.JSONDecodeError, ValueError) as exc:

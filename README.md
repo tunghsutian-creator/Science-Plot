@@ -550,6 +550,12 @@ The assistant needs access to your local files. See the
 - [Architecture](docs/ARCHITECTURE.md) · [Development roadmap](DEVELOPMENT_ROADMAP.md)
 - [Report a bug or request a feature](https://github.com/tunghsutian-creator/Science-Plot/issues)
 
+For small code changes, run `skill/scripts/sciplot verify --quick` for the complete
+related focused checks and static gates. Add `--base main` to include committed
+branch changes or `--plan-only` to inspect selection. This is development feedback;
+the [development guide](skill/references/development.md) keeps full merge/release
+acceptance separate.
+
 If SciPlot helps with your research, **star the repository** to help other
 researchers discover it.
 

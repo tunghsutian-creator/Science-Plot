@@ -14,6 +14,7 @@ from sciplot_core.json_contract import (
 from sciplot_core.assistant_operations import (
     VeuszSettingOperationBatch,
 )
+from sciplot_core.assistant_provider.capabilities import bind_setting_batch
 
 from sciplot_core.assistant_provider.contracts import (
     ASSISTANT_RESPONSE_KIND,
@@ -134,11 +135,10 @@ class AssistantResponse:
             )
         if self.proposal_kind == "veusz_setting_operation_batch":
             batch = VeuszSettingOperationBatch.from_dict(dict(self.proposal or {}))
-            if batch.base_revision != request.base_revision:
-                raise ValueError(
-                    "Assistant VeuszSettingOperationBatch base_revision does not "
-                    "match request."
-                )
+            bind_setting_batch(
+                batch, base_revision=request.base_revision,
+                capabilities=request.context.get("editing_capabilities", {"allowed_operations": []}),
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {

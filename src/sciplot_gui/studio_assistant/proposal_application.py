@@ -9,6 +9,7 @@ from sciplot_core.assistant_operations import VeuszSettingOperationBatch
 from sciplot_core.assistant_provider import (
     AssistantRequest,
 )
+from sciplot_core.assistant_provider.capabilities import bind_setting_batch
 
 
 class ProposalApplicationMixin:
@@ -18,28 +19,18 @@ class ProposalApplicationMixin:
         *,
         request: AssistantRequest,
     ) -> tuple[list[Any], list[dict[str, Any]]]:
-        if batch.base_revision != request.base_revision:
-            raise ValueError("proposal revision does not match the request")
+        capabilities = bind_setting_batch(
+            batch, base_revision=request.base_revision,
+            capabilities=request.context.get("editing_capabilities", {"allowed_operations": []}),
+        )
         if int(self.document.changeset) != request.base_revision:
             raise ValueError("the Veusz document has changed")
         from veusz.document.operations import OperationSettingSet
 
         native: list[Any] = []
         prepared: list[dict[str, Any]] = []
-        seen_paths: set[str] = set()
-        for operation in batch.operations:
-            if operation.operation_type != "set_setting":
-                raise ValueError(f"unsupported operation {operation.operation_type!r}")
+        for operation, capability in zip(batch.operations, capabilities, strict=True):
             setting_path = str(operation.arguments["setting_path"])
-            key = (operation.target_id, setting_path)
-            capability = self._pending_capabilities.get(key)
-            if capability is None:
-                raise ValueError("proposal is outside the advertised setting catalog")
-            if setting_path in seen_paths:
-                raise ValueError("proposal contains the same setting twice")
-            seen_paths.add(setting_path)
-            if "expected_value" not in operation.arguments:
-                raise ValueError("proposal is missing expected_value")
             current, normalized = validate_native_setting(
                 self.document, capability,
                 expected_value=operation.arguments["expected_value"],
