@@ -13,10 +13,17 @@ class BackendRouter:
         self.managed = ManagedBackend()
 
     def close(self) -> None:
-        self.managed.close()
-        close = getattr(self.legacy, "close", None)
-        if close:
-            close()
+        failure = None
+        for backend in (self.managed, self.legacy):
+            close = getattr(backend, "close", None)
+            if close:
+                try:
+                    close()
+                except BaseException as exc:
+                    if failure is None:
+                        failure = exc
+        if failure is not None:
+            raise failure
 
     def _owner(self, binding: dict[str, Any]) -> PlotBackend | ManagedBackend:
         return self.managed if binding.get("kind") == "sciplot_managed_binding" else self.legacy

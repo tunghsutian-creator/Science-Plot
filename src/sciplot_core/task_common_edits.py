@@ -15,13 +15,13 @@ from uuid import uuid4
 from sciplot_core.doctor import doctor_payload
 from sciplot_core.plot_document.patch import validate_patch
 from sciplot_core.plot_document.schema import closed
+from sciplot_core.plot_engine.edit_entry import admit_edit_entry, bind_edit_entry, close_edit_owner, edit_entry_session, read_edit_entry
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.service import PlotService
-from sciplot_core.plot_engine.storage import active, digest, load_head, read, write
+from sciplot_core.plot_engine.storage import active, digest, load_head
 from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
 from sciplot_core.policy.contract_loader import load_plot_contract
 from sciplot_core.studio_core.project_query_paths import canonical_path
-from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.style_values import normalize_physical_size
 from sciplot_core.task_series_edits import compile_series_edits
 
@@ -293,6 +293,13 @@ def _edit_receipt(result: dict[str, Any], entry: Path, normalized: dict[str, Any
                             "base_revision": request["base_revision"]}}
 
 
+def _bound_edit(saved: dict[str, Any], normalized: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
+    if saved["intent"] != normalized:
+        raise _invalid("This task directory identifies another common-edit intent. Continue the original or use a new key.",
+                       code="document_idempotency_conflict")
+    return canonical_path(Path(saved["plot"])), saved["request"]
+
+
 def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None = None,
               task_dir: Path | None = None, service: PlotService | None = None, **options: Any) -> dict[str, Any]:
     """One discoverable entry; the existing engine owns all mutation and recovery."""
@@ -305,13 +312,13 @@ def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None 
     try:
         # Replay reads the original bound request before today's revision/currentness
         # discovery, preserving uncertain-apply and export-pending continuation.
-        if entry is not None and (entry / "semantic-edit.json").exists():
-            with external_project_session(entry):
-                saved = read(entry / "semantic-edit.json")
-                if saved["intent"] != normalized:
-                    raise _invalid("This task directory identifies another common-edit intent. Continue the original or use a new key.",
-                                   code="document_idempotency_conflict")
-                return _edit_receipt(owner.patch(Path(saved["plot"]), saved["request"]), entry, normalized, saved["request"])
+        if entry is not None and read_edit_entry(entry, "semantic-edit.json") is not None:
+            with edit_entry_session(entry):
+                saved = read_edit_entry(entry, "semantic-edit.json")
+                if saved is None:
+                    raise EngineError("document_state_missing", "The original common-edit binding disappeared.")
+                root, request = _bound_edit(saved, normalized)
+                return _edit_receipt(owner.patch(root, request), entry, normalized, request)
         if "font_family" in selected:
             _installed_font(selected["font_family"])
         runtime = doctor_payload()
@@ -360,27 +367,12 @@ def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None 
         if document["plot_id"] != description["plot_id"] or document["revision"] != description["revision"]:
             raise EngineError("document_revision_conflict", "The document changed while binding the edit.", action="plot.describe")
         entry = entry or root / "compatibility" / ("edit-" + uuid4().hex)
-        protected = [Path(item["path"]) for item in document["scientific"]["data_sources"]]
-        protected.extend(Path(head["binding"][field]) for field in ("project", "output", "document") if field in head["binding"])
-        protected.append(root)
-        for path in protected:
-            if path == root and entry.is_relative_to(root / "compatibility"):
-                continue
-            if entry == path or entry.is_relative_to(path) or path.is_relative_to(entry):
-                raise _invalid("The edit entry must be separate from source, project, exports and revision storage.", code="task_path_overlap")
-        if entry.exists() and any(entry.iterdir()) and not (entry / "semantic-edit.json").is_file():
-            raise _invalid("Use an empty edit entry or its existing semantic-edit.json binding.", code="document_idempotency_conflict")
+        admit_edit_entry(entry, root, head)
         request = compile_common_edit(document, selected, "edit:" + digest(str(entry)))
-        entry.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        with external_project_session(entry):
-            if (entry / "semantic-edit.json").exists():
-                saved = read(entry / "semantic-edit.json")
-                if saved["intent"] != normalized:
-                    raise _invalid("The common-edit entry changed concurrently.", code="document_idempotency_conflict")
-                root, request = Path(saved["plot"]), saved["request"]
-            else:
-                write(entry / "semantic-edit.json", {"intent": normalized, "plot": str(root), "request": request})
+        with edit_entry_session(entry):
+            saved = bind_edit_entry(entry, "semantic-edit.json", {"intent": normalized, "plot": str(root), "request": request})
+            root, request = _bound_edit(saved, normalized)
             return _edit_receipt({**owner.patch(root, request), "doctor": doctor}, entry, normalized, request)
     finally:
         if service is None:
-            owner.close()
+            close_edit_owner(owner)
