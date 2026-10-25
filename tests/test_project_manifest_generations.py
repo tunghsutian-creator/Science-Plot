@@ -88,3 +88,27 @@ def test_manifest_read_preserves_explicit_host_caps_and_needs_no_unrelated_proje
     assert read_intake_project_manifest(root) == {"project_slug": "project"}
     assert selected.locations == {"delivery": delivery}
     assert (delivery / "result.pdf").read_bytes() == b"exact delivery"
+
+
+def test_zip_and_project_seal_same_candidate_bytes_and_executable_mode(tmp_path):
+    from sciplot_core.project_commands.resources import PreparedFile
+
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "intake_manifest.json").write_text('{"project_slug":"project"}')
+    store = _manifest_store(root, {"project_slug": "project"})
+    store.snapshot(import_legacy=True)
+    candidate = tmp_path / "candidate.command"
+    candidate.write_bytes(b"#!/bin/sh\nexit 0\n")
+    candidate.chmod(0o755)
+    captured = candidate.read_bytes()
+    staged = stage_intake_project_manifest(root, {"project_slug": "project"}, store=store,
+        project_writes={"launch.command": candidate})
+    assert staged["launch.command"] == PreparedFile(captured, 0o755)
+    candidate.write_bytes(b"changed after archive staging")
+    publish_files(store, {"launch.command": candidate, **staged}, kind="publish")
+    assert (root / "launch.command").read_bytes() == captured
+    assert (root / "launch.command").stat().st_mode & 0o777 == 0o755
+    with ZipFile(BytesIO(staged["@snapshot/project.zip"])) as archive:
+        assert archive.read("project/launch.command") == captured
+        assert archive.getinfo("project/launch.command").external_attr >> 16 & 0o777 == 0o755

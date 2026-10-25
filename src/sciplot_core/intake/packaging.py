@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.foundation.path_names import safe_filename
 from sciplot_core._paths import resolved_path_is_within
 from sciplot_core.assisted_cleanup import (
@@ -74,7 +75,7 @@ def converge_intake_project_launchers(
         assert isinstance(primary, dict) and isinstance(supporting, dict)
         ready = primary.get("safe") is True and all(item.get("safe") is True for item in supporting.values())
         contract.update(ready=ready, status="ready" if ready else "blocked")
-        writes: dict[str, bytes | None] = {}
+        writes: dict[str, bytes | PreparedFile | None] = {}
         if LEGACY_WEB_WORKBENCH_LAUNCHER in snapshot["files"]:
             writes[LEGACY_WEB_WORKBENCH_LAUNCHER] = None
         manifest = read_intake_project_manifest(project) if update_manifests else None
