@@ -6,6 +6,7 @@ import subprocess
 
 import pytest
 
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_lifecycle.execution import _attempt, _failure
 from sciplot_core.project_lifecycle.receipts import receipt
 from sciplot_core.project_lifecycle.recovery import project_recovery
@@ -13,10 +14,11 @@ from sciplot_core.project_lifecycle.recovery import project_recovery
 
 def transaction():
     doc = {"plot_id": "diagnostic-plot", "revision": 0, "plot_type": "ManagedPlot",
-           "scientific_hash": "science", "presentation_hash": "presentation"}
-    return {"id": "tx", "request": {"idempotency_key": "create", "base_revision": 0},
+           "scientific_hash": "a" * 64, "presentation_hash": "b" * 64}
+    return {"id": "tx", "request": {"idempotency_key": "create", "base_revision": 0, "action": "export"},
             "document": doc, "before": doc, "binding": {}, "phase": "export_pending",
-            "diff": [], "risk": "presentation"}
+            "diff": [], "risk": "presentation",
+            "request_hash": canonical_json_sha256({"idempotency_key": "create", "base_revision": 0, "action": "export"}, allow_nan=False)}
 
 
 def record(root, tx, exc):

@@ -1,6 +1,7 @@
 """Observe managed native drift without adopting it or publishing a new revision."""
 
 from pathlib import Path
+from sciplot_core.project_lifecycle.context import exists
 from typing import Any, Protocol
 
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -26,7 +27,7 @@ def inspect_managed_mutation(root: Path, binding: dict[str, Any], compiler: Nati
         raise EngineError("managed_ir_conflict", "The canonical document does not reproduce this artifact's bound IR.")
     native = Path(binding["document"])
     marker = native.parent / "build.json"
-    if not marker.is_file():
+    if not exists(marker):
         raise EngineError("managed_external_mutation_untracked", "An existing managed native file lacks its original build receipt.",
                           action="inspect_external_mutation")
     build = read(marker)

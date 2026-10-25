@@ -49,4 +49,3 @@ class CommandDispatch:
                 raise EngineError("document_command_invalid", "The canonical business request does not match the original command.")
         with command_scope(command):
             return {"patch": target.patch, "intent": target.intent, "rollback": target.rollback}[command.kind](root, command.original_request)
-

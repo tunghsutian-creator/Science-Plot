@@ -10,14 +10,10 @@ from .contracts import Receipt
 def receipt(root: Path, transaction: dict[str, Any], *, replay: bool = False) -> dict[str, Any]:
     doc = transaction["document"]
     phase = transaction["phase"]
-    status = {"complete": "complete", "needs_review": "needs_review", "rejected": "rejected"}.get(phase, "pending")
+    outcome = Receipt.of(transaction)
     result: dict[str, Any] = {
-        "kind": "sciplot_plot_result", "version": 1, "status": status,
-        "plot": str(root), "plot_id": doc["plot_id"], "revision": doc["revision"],
-        "plot_type": doc.get("plot_type", "LegacyPlot"),
-        "scientific_hash": doc["scientific_hash"], "presentation_hash": doc["presentation_hash"],
-        "commit_status": "committed" if phase in {"committed", "exporting", "export_pending", "complete"} else "pending",
-        "export_status": "complete" if phase == "complete" else "pending",
+        "kind": "sciplot_plot_result", "version": 1, **outcome.to_payload(),
+        "plot": str(root),
         "ready_to_use": False,
         "replayed": replay, "changed": bool(transaction["diff"]),
         "effective_risk": transaction["risk"],
@@ -25,8 +21,6 @@ def receipt(root: Path, transaction: dict[str, Any], *, replay: bool = False) ->
         "presentation_hash_changed": doc["presentation_hash"] != transaction["before"]["presentation_hash"],
         "evidence": str(root / "transactions" / transaction["id"] / "transaction.json"),
     }
-    outcome = Receipt.of(transaction)
-    result["commit_status"] = "committed" if outcome.recovery.committed else "pending"
     diff = transaction["diff"]
     if doc.get("plot_type") == "ManagedPlot":
         result["ir_hash"] = transaction["binding"].get("ir_hash")
@@ -69,7 +63,6 @@ def receipt(root: Path, transaction: dict[str, Any], *, replay: bool = False) ->
                                else {"action": "retry_same_request"})
         if transaction.get("error"):
             result["error"] = transaction["error"]
-            result["status"] = "blocked"
             result["next_step"] = {"action": transaction["error"].get("action", "inspect_diagnostic"), "plot": str(root)}
             if result["next_step"]["action"] == "retry_same_request":
                 if phase in {"committed", "exporting", "export_pending"}:

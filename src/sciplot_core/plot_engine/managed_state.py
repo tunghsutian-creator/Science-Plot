@@ -12,6 +12,7 @@ from .content_store import referenced_files, resolve_document_content
 from .errors import EngineError
 from .managed_source_groups import add_input
 from .storage import digest, read, write
+from sciplot_core.project_lifecycle.context import exists
 
 
 def is_managed(document: dict[str, Any]) -> bool:
@@ -72,9 +73,9 @@ def make_binding(root: Path, document: dict[str, Any], *, output: Path) -> dict[
     model_path = root / "models" / (digest(document) + ".json")
     ir_path = root / "ir" / (ir["ir_hash"] + ".json")
     for path, value in ((model_path, document), (ir_path, ir)):
-        if path.exists() and read(path) != value:
+        if exists(path) and read(path) != value:
             raise EngineError("managed_state_corrupt", "An immutable managed state file changed.")
-        if not path.exists():
+        if not exists(path):
             write(path, value)
     native = output / "artifacts" / ir["ir_hash"] / "document.vsz"
     files = input_files(document)

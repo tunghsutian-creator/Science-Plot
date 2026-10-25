@@ -14,7 +14,8 @@ from .paths import canonical_path
 from .ports import ProjectRepository as ProjectRepository
 
 from sciplot_core.project_lifecycle.errors import EngineError
-from sciplot_core.plot_engine.content_store import referenced_files, verify_document_content
+from .content_references import referenced_files, verify_document_content
+from . import file_content
 
 
 from .contracts import AuthorityMode
@@ -44,13 +45,27 @@ class FileProjectRepository:
     compatibility reads/writes keep their historical caller-held lease contract.
     """
     def __init__(self, *, lease: Callable[[Path], AbstractContextManager[Any]] | None = None,
-                 snapshot_validator: Callable[[Path, dict[str, Any]], None] = validate_snapshot) -> None:
+                 snapshot_validator: Callable[[Path, dict[str, Any]], None] | None = None) -> None:
         self._lease, self._validate_snapshot = lease, snapshot_validator
 
     def lease(self, root: Path) -> AbstractContextManager[Any]:
         if self._lease is None:
             raise RuntimeError("Application writes require an explicitly composed repository lease.")
         return self._lease(root)
+
+    def content_snapshot(self, path: Path) -> dict[str, Any]:
+        return file_content.read_snapshot(path)
+
+    def publish_content(self, path: Path, payload: bytes, verify_existing: Callable[[], None]) -> None:
+        file_content.publish(path, payload, verify_existing)
+
+    def json_members(self, directory: Path, pattern: str) -> list[Path]:
+        canonical_path(directory)
+        return sorted(directory.glob(pattern))
+
+    def create_namespace(self, root: Path) -> None:
+        canonical_path(root)
+        root.mkdir()
 
     def prepare_namespace(self, root: Path) -> None:
         canonical_path(root)
@@ -76,7 +91,7 @@ class FileProjectRepository:
             raise EngineError("document_state_invalid", "The revision number is invalid.")
         envelope = self.read(root / "revisions" / f"{revision:08d}.json")
         validate_document(envelope["document"])
-        verify_document_content(root, envelope["document"])
+        verify_document_content(root, envelope["document"], read_snapshot=self.content_snapshot)
         if envelope["document"]["revision"] != revision:
             raise EngineError("document_state_invalid", "Document revision and snapshot disagree.")
         return envelope
@@ -112,7 +127,7 @@ class FileProjectRepository:
         if digest(envelope) != head.get("sha256"):
             raise EngineError("document_state_invalid", "The revision does not match its committed pointer.")
         validate_document(envelope["document"])
-        verify_document_content(root, envelope["document"])
+        verify_document_content(root, envelope["document"], read_snapshot=self.content_snapshot)
         if envelope["binding"].get("scientific_content_files", {}) != referenced_files(root, envelope["document"]):
             raise EngineError("document_content_binding_invalid", "Scientific content references and currentness guards disagree.")
         if envelope["document"]["revision"] != revision:
@@ -121,10 +136,13 @@ class FileProjectRepository:
 
 
     def commit(self, root: Path, document: dict[str, Any], binding: dict[str, Any], transaction: str) -> None:
-        verify_document_content(root, document)
+        verify_document_content(root, document, read_snapshot=self.content_snapshot)
         if binding.get("scientific_content_files", {}) != referenced_files(root, document):
             raise EngineError("document_content_binding_invalid", "Scientific content references lack their currentness guards.")
-        self._validate_snapshot(root, document)
+        if self._validate_snapshot is None:
+            validate_snapshot(root, document, read_snapshot=self.content_snapshot)
+        else:
+            self._validate_snapshot(root, document)
         envelope = {"document": validate_document(document), "binding": binding,
                     "transaction": transaction}
         revision = document["revision"]

@@ -9,6 +9,7 @@ import pytest
 
 from sciplot_core.plot_document import apply_patch, seal_document
 from sciplot_core.plot_engine import content_store
+from sciplot_core.project_lifecycle import file_content
 from sciplot_core.plot_engine.content_store import intern_document, resolve_document_content, verify_document_content
 from sciplot_core.plot_engine.errors import EngineError
 
@@ -112,7 +113,7 @@ def test_malformed_reference_is_rejected_before_any_file_lookup(tmp_path, field,
     compact = intern_document(tmp_path, document())
     reference = compact["scientific"]["provenance"]["imported_specification"]
     reference[field] = value
-    monkeypatch.setattr(content_store, "_stable_file_snapshot", lambda *_args, **_kwargs: pytest.fail("Unsafe reference reached filesystem"))
+    monkeypatch.setattr(file_content, "_stable_file_snapshot", lambda *_args, **_kwargs: pytest.fail("Unsafe reference reached filesystem"))
     with pytest.raises(EngineError) as error:
         verify_document_content(tmp_path, compact)
     assert error.value.reason_code == "document_content_reference_invalid"
@@ -127,11 +128,11 @@ def test_currentness_guard_never_parses_or_reserializes_large_json(tmp_path, mon
 
 def test_process_interruption_after_blob_publish_preserves_recoverable_complete_bytes(tmp_path, monkeypatch):
     original = document()
-    sync = content_store._fsync_directory
-    monkeypatch.setattr(content_store, "_fsync_directory", lambda _: (_ for _ in ()).throw(KeyboardInterrupt()))
+    sync = file_content._fsync_directory
+    monkeypatch.setattr(file_content, "_fsync_directory", lambda _: (_ for _ in ()).throw(KeyboardInterrupt()))
     with pytest.raises(KeyboardInterrupt):
         intern_document(tmp_path, original)
-    monkeypatch.setattr(content_store, "_fsync_directory", sync)
+    monkeypatch.setattr(file_content, "_fsync_directory", sync)
     recovered = intern_document(tmp_path, original)
     assert resolve_document_content(tmp_path, recovered) == original
     assert not list((tmp_path / "content").glob(".content-*.tmp"))
@@ -139,13 +140,13 @@ def test_process_interruption_after_blob_publish_preserves_recoverable_complete_
 
 def test_content_publication_never_replaces_a_concurrent_different_blob(tmp_path, monkeypatch):
     original = document()
-    link = content_store.os.link
+    link = file_content.os.link
 
     def conflicting_link(source, target):
         Path(target).write_bytes(b"concurrent corrupt bytes")
         return link(source, target)
 
-    monkeypatch.setattr(content_store.os, "link", conflicting_link)
+    monkeypatch.setattr(file_content.os, "link", conflicting_link)
     with pytest.raises(EngineError) as error:
         intern_document(tmp_path, original)
     assert error.value.reason_code == "document_content_corrupt"

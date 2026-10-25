@@ -5,7 +5,7 @@ execution, revisions, recovery and rollback; a replay must not recompile them.
 """
 
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
@@ -13,7 +13,8 @@ from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.project_session import external_project_session
 
 from .errors import EngineError
-from .storage import read, write
+from sciplot_core.project_lifecycle.repository import FileProjectRepository
+from sciplot_core.project_lifecycle.context import repository_scope
 
 EditEntryName = Literal["semantic-style.json", "semantic-edit.json"]
 _BINDINGS = ("semantic-style.json", "semantic-edit.json", "task.json")
@@ -27,8 +28,11 @@ class _OwnedEditService(Protocol):
 def edit_service_owner(owner: _OwnedEditService, *, owned: bool = True) -> Iterator[None]:
     """Close with this invocation's outcome, never a caller's handled failure."""
     failed = False
+    selected = getattr(owner, "repository", None)
+    scope = repository_scope(selected, capabilities=getattr(owner, "capabilities", None)) if selected is not None else nullcontext()
     try:
-        yield
+        with scope:
+            yield
     except BaseException:
         failed = True
         raise
@@ -59,7 +63,7 @@ def read_edit_entry(entry: Path, name: EditEntryName) -> dict[str, Any] | None:
                           "Use the original command for this occupied edit entry.")
     if not (entry / name).is_file():
         return None
-    saved = read(entry / name)
+    saved = FileProjectRepository().read(entry / name)
     intent = saved.get("intent")
     plot = intent.get("plot") if name == "semantic-style.json" and isinstance(intent, dict) else saved.get("plot")
     if (not isinstance(intent, dict) or not isinstance(saved.get("request"), dict)
@@ -105,5 +109,5 @@ def bind_edit_entry(entry: Path, name: EditEntryName, payload: dict[str, Any]) -
     if entry.exists() and (not entry.is_dir() or any(entry.iterdir())):
         raise EngineError("document_idempotency_conflict",
                           "The edit entry became occupied before its request was bound.")
-    write(entry / name, payload)
+    FileProjectRepository().write(entry / name, payload)
     return payload

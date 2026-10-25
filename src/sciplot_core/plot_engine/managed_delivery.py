@@ -18,7 +18,7 @@ from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.storage import digest, load_head, read, write
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 from sciplot_core.studio_core.project_query_paths import canonical_path
-from sciplot_core.studio_core.project_session import external_project_session
+from sciplot_core.project_lifecycle.context import external_project_session, exists, prepare_namespace, create_namespace
 from sciplot_core.studio_core.source_update_commit import file_inventory
 
 class DeliveryService(Protocol):
@@ -53,7 +53,7 @@ def _seal(service: DeliveryService, root: Path, state: dict[str, Any], selection
     head = _selection(service, selection, root, out)
     cache = Path(selection["plot"]) / "export-cache.json"
     native = Path(head["binding"]["document"])
-    if not cache.is_file():
+    if not exists(cache):
         raise EngineError("managed_delivery_cache_missing", "Delivery consumes a sealed current publication. Finish the original plot export explicitly; delivery will not rebuild or overwrite it.")
     record = read(cache)
     exported = record.get("export", {})
@@ -162,20 +162,20 @@ def deliver(service: DeliveryService, value: Any) -> dict[str, Any]:
     out = Path(request["out"])
     root = canonical_path(out.parent / ".sciplot_deliveries" / digest(str(out)))
     # All keys for one destination share the same record and exclusion lease.
-    root.parent.mkdir(parents=True, exist_ok=True)
+    prepare_namespace(root)
     with external_project_session(root):
-        if (root / "delivery.json").exists():
+        if exists(root / "delivery.json"):
             state = read(root / "delivery.json")
             if (state.get("request") != request or state.get("state_sha256") != digest(
                     {key: value for key, value in state.items() if key != "state_sha256"})):
                 raise EngineError("managed_delivery_request_conflict", "Destination already belongs to a different or changed delivery request.")
         else:
-            if out.exists() or root.exists():
+            if out.exists() or exists(root):
                 raise EngineError("managed_delivery_output_exists", "Delivery and checkpoint targets must be new; existing files were preserved.")
             # Validate the closed selection/locations before reserving output.
             for selection in request["items"]:
                 _selection(service, selection, root, out)
-            root.mkdir()
+            create_namespace(root)
             state = {"kind": "sciplot_managed_delivery_state", "version": 1, "request": request, "status": "running",
                      "items": [{"status": "pending", "stem": f"{index:03d}_" + (re.sub(r"[^A-Za-z0-9_-]+", "_", item["label"]).strip("_")[:64] or "Figure")}
                                for index, item in enumerate(request["items"], 1)]}

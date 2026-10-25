@@ -11,6 +11,7 @@ from sciplot_core.plot_backends.managed import ManagedVeuszCompiler, compiler_id
 from .errors import EngineError
 from .managed_state import make_binding, read_canonical, require_inputs, resolved_ir
 from .storage import read, write
+from sciplot_core.project_lifecycle.context import exists
 
 
 class ManagedBackend:
@@ -23,14 +24,14 @@ class ManagedBackend:
     def _owned_intent(self, binding: dict[str, Any]) -> dict[str, Any] | None:
         native = Path(binding["document"])
         path, marker = native.parent / "compile-intent.json", native.parent / "build.json"
-        if not path.exists():
+        if not exists(path):
             return None
         value = read(path)
         expected = {"ir_hash": binding["ir_hash"], "canonical_sha256": binding["canonical_sha256"],
                     "compiler_identity": compiler_identity()}
         if any(value.get(key) != item for key, item in expected.items()) or not value.get("compile_id"):
             return None
-        if marker.exists() and read(marker).get("compile_id") == value["compile_id"]:
+        if exists(marker) and read(marker).get("compile_id") == value["compile_id"]:
             return None
         return value
 
@@ -40,7 +41,7 @@ class ManagedBackend:
         expected = binding["ir_hash"]
         if native.exists():
             marker = native.parent / "build.json"
-            if not marker.exists():
+            if not exists(marker):
                 expected = binding["ir_hash"] if self._owned_intent(binding) else "untracked_native_artifact"
             else:
                 record = read(marker)
@@ -57,7 +58,7 @@ class ManagedBackend:
         if ir["ir_hash"] != binding["ir_hash"]:
             raise EngineError("managed_ir_conflict", "Canonical state does not reproduce the bound PlotIR identity.")
         ir_path = Path(binding["ir_path"])
-        if not ir_path.exists():
+        if not exists(ir_path):
             write(ir_path, ir)
         native = Path(binding["document"])
         marker = native.parent / "build.json"
@@ -67,7 +68,7 @@ class ManagedBackend:
             if self.fingerprint(binding) != binding["fingerprint"]:
                 raise EngineError("managed_external_mutation", "An existing managed artifact changed outside its document.",
                                   action="inspect_external_mutation")
-            record = read(marker) if marker.exists() else None
+            record = read(marker) if exists(marker) else None
             # A known previous compiler product can be discarded on compiler
             # version change, after its own byte seal excludes manual edits.
             rebuild = bool(record and record.get("compiler_identity") != compiler_identity()

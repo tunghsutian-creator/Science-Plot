@@ -19,6 +19,9 @@ def semantic(tmp_path, monkeypatch):
     calls = {"close": 0, "patch": []}
 
     class Owner:
+        repository = service.repository
+        capabilities = service.capabilities
+
         def patch(self, plot, request):
             calls["patch"].append((plot, deepcopy(request)))
             return service.patch(plot, request)

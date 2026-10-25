@@ -11,12 +11,13 @@ from sciplot_core.studio_core.source_update_commit import file_inventory
 from .backend import PlotBackend
 from .errors import EngineError
 from .storage import digest
+from sciplot_core.project_lifecycle.context import content_sha256
 
 
 def changed_inputs(backend: PlotBackend, binding: dict[str, Any]) -> list[str]:
     expected = {**binding["fingerprint"], "scientific_content": binding.get("scientific_content_files", {})}
     actual = {**backend.fingerprint(binding), "scientific_content": {
-        path: existing_file_sha256(Path(path)) for path in binding.get("scientific_content_files", {})}}
+        path: content_sha256(Path(path)) for path in binding.get("scientific_content_files", {})}}
     changed: list[str] = []
     for group in set(expected) | set(actual):
         before, after = expected.get(group, {}), actual.get(group, {})

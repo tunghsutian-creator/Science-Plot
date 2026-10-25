@@ -33,13 +33,23 @@ def _bound_style(saved: dict[str, Any], caller: dict[str, Any],
     return canonical_path(Path(saved["intent"]["plot"])), saved["request"]
 
 
-def _execute_style(root: Path, request: dict[str, Any]) -> dict[str, Any]:
-    owner = PlotService()
-    with edit_service_owner(owner):
-        return owner.patch(root, request)
+def _saved_style(target: Path, entry: Path | None, caller: dict[str, Any]) -> tuple[Path, dict[str, Any]] | None:
+    saved = read_edit_entry(entry, "semantic-style.json") if entry is not None else None
+    if saved is not None and ("entry_intent" in saved or saved["intent"]["plot"] == str(target)):
+        assert entry is not None
+        with edit_entry_session(entry):
+            current = read_edit_entry(entry, "semantic-style.json")
+            if current is None:
+                raise EngineError("document_state_missing", "The original style binding disappeared.")
+            return _bound_style(current, caller)
+    return None
 
 
-def migrated_style(target: Path, *, samples: list[str] | None, all_samples: bool,
+def _execute_style(owner: PlotService, root: Path, request: dict[str, Any]) -> dict[str, Any]:
+    return owner.patch(root, request)
+
+
+def _migrated_style(owner: PlotService, target: Path, *, samples: list[str] | None, all_samples: bool,
                    style: dict[str, str], figure_id: str | None, task_dir: Path | None) -> dict[str, Any] | None:
     """Unimported projects keep the legacy lifecycle. Never silently import an old task."""
     target = canonical_path(target)
@@ -48,18 +58,10 @@ def migrated_style(target: Path, *, samples: list[str] | None, all_samples: bool
         return None
     caller = _style_binding(target, samples, all_samples, style, figure_id)
     saved = read_edit_entry(entry, "semantic-style.json") if entry is not None else None
-    # An uncertain/successful reply belongs to its original request even when
-    # today's launcher/registry no longer resolves. Old entries without caller
-    # identity can bypass discovery only for their explicit original root.
-    if saved is not None and ("entry_intent" in saved or saved["intent"]["plot"] == str(target)):
-        assert entry is not None
-        with edit_entry_session(entry):
-            current = read_edit_entry(entry, "semantic-style.json")
-            if current is None:
-                raise EngineError("document_state_missing", "The original style binding disappeared.")
-            root, request = _bound_style(current, caller)
-            return _execute_style(root, request)
-    if (target / "head.json").is_file():
+    frozen = _saved_style(target, entry, caller)
+    if frozen is not None:
+        return _execute_style(owner, *frozen)
+    if owner.repository.has_head(target):
         root = target
     else:
         try:
@@ -70,7 +72,7 @@ def migrated_style(target: Path, *, samples: list[str] | None, all_samples: bool
                                   "Continue this style entry with its original plot root or original resolving entrypoint.") from exc
             return None
         root = document_root(Path(selected["project"]), selected["figure_id"])
-        if saved is None and not (root / "head.json").exists():
+        if saved is None and not owner.repository.has_head(root):
             return None
     entry = entry or root / "compatibility" / uuid4().hex
     if saved is not None:
@@ -79,7 +81,7 @@ def migrated_style(target: Path, *, samples: list[str] | None, all_samples: bool
             if current is None:
                 raise EngineError("document_state_missing", "The original style binding disappeared.")
             root, request = _bound_style(current, caller, root)
-            return _execute_style(root, request)
+            return _execute_style(owner, root, request)
     head = load_head(root)
     admit_edit_entry(entry, root, head)
     with edit_entry_session(entry):
@@ -94,4 +96,22 @@ def migrated_style(target: Path, *, samples: list[str] | None, all_samples: bool
             intent = {"plot": str(root), **{key: caller[key] for key in ("samples", "all_samples", "style")}}
             saved = bind_edit_entry(entry, "semantic-style.json", {"intent": intent, "entry_intent": caller, "request": request})
             root, request = _bound_style(saved, caller, root)
-        return _execute_style(root, request)
+        return _execute_style(owner, root, request)
+
+
+def migrated_style(target: Path, *, samples: list[str] | None, all_samples: bool,
+                   style: dict[str, str], figure_id: str | None, task_dir: Path | None) -> dict[str, Any] | None:
+    target = canonical_path(target)
+    entry = canonical_path(task_dir) if task_dir is not None else None
+    if entry is not None and edit_entry_owner(entry) == "task.json":
+        return None
+    caller = _style_binding(target, samples, all_samples, style, figure_id)
+    # Literal checkpoint admission precedes constructing an execution owner.
+    # Its independent filesystem authority never reads semantic head/journal.
+    frozen = _saved_style(target, entry, caller)
+    owner = PlotService()
+    with edit_service_owner(owner):
+        if frozen is not None:
+            return _execute_style(owner, *frozen)
+        return _migrated_style(owner, target, samples=samples, all_samples=all_samples,
+                               style=style, figure_id=figure_id, task_dir=task_dir)

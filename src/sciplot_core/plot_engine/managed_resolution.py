@@ -12,6 +12,7 @@ from .errors import EngineError
 from .managed_sources import load_sources
 from .managed_state import require_inputs, scientific_binding
 from .storage import digest, persist, read, write
+from sciplot_core.project_lifecycle.context import exists, json_members
 
 
 def resolve_science(root: Path, document: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -21,7 +22,7 @@ def resolve_science(root: Path, document: dict[str, Any]) -> tuple[dict[str, Any
     registry = {name: ExternalExecutor.from_dict(value) for name, value in marker.get("executors", {}).items()}
     cache = {}
     cache_root = root / "transform-cache"
-    for path in cache_root.glob("*.result.json"):
+    for path in json_members(cache_root, "*.result.json"):
         record = read(path)
         if record["sha256"] != digest(record["dataset"]):
             raise EngineError("managed_transform_cache_corrupt", "Persisted scientific output no longer matches its content identity.")
@@ -31,7 +32,7 @@ def resolve_science(root: Path, document: dict[str, Any]) -> tuple[dict[str, Any
         # An external process may have finished before its response was durably
         # adopted. No implicit second invocation is safe in that uncertain window.
         path = cache_root / (key + ".started.json")
-        if node["kind"] == "external" and path.exists():
+        if node["kind"] == "external" and exists(path):
             raise EngineError("external_transform_outcome_unknown", "A prior fixed executor invocation has no durable result; inspect it before a new scientific request.",
                               action="inspect_external_executor", evidence=str(path))
         write(path, {"key": key, "node": node, "status": "started"})
@@ -39,7 +40,7 @@ def resolve_science(root: Path, document: dict[str, Any]) -> tuple[dict[str, Any
     def on_result(key: str, dataset: dict[str, Any]) -> None:
         path = cache_root / (key + ".result.json")
         record = {"key": key, "dataset": dataset, "sha256": digest(dataset), "status": "complete"}
-        if path.exists() and read(path) != record:
+        if exists(path) and read(path) != record:
             raise EngineError("managed_transform_nondeterministic", "A deterministic executor returned different output for the same sealed request.")
         write(path, record)
 

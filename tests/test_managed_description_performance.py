@@ -161,17 +161,18 @@ def test_source_contract_reads_only_its_frozen_binding_not_unrelated_cas_or_raw_
     files = {path: path.read_bytes() for path in (root / "head.json", Path(source["path"]),
                                                   *sorted((root / "content").iterdir()))}
     reads = []
-    verified_bytes = content_store._verified_bytes
+    from sciplot_core.project_lifecycle import content_references
+    verified_bytes = content_references._verified_bytes
 
-    def binding_only(plot_root, reference):
+    def binding_only(plot_root, reference, *, read_snapshot):
         assert stored_binding and reference == binding_reference
         reads.append(reference["sha256"])
-        return verified_bytes(plot_root, reference)
+        return verified_bytes(plot_root, reference, read_snapshot=read_snapshot)
 
     def forbidden(*_args, **_kwargs):
         raise AssertionError("Description loaded raw tables or expanded unrelated scientific payloads")
 
-    monkeypatch.setattr(content_store, "_verified_bytes", binding_only)
+    monkeypatch.setattr(content_references, "_verified_bytes", binding_only)
     monkeypatch.setattr(content_store, "resolve_document_content", forbidden)
     monkeypatch.setattr(managed_sources, "load_sources", forbidden)
     # These generated documents have no append rule: summary and ordinary edit

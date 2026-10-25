@@ -1,6 +1,7 @@
 """Finite supersession of an unchanged Managed export rejected by publication QA."""
 
 from pathlib import Path
+from .context import exists
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -36,7 +37,7 @@ def _require_current(backend: PlotBackend, binding: dict[str, Any]) -> None:
     native = Path(binding["document"])
     if native.exists():
         marker = native.parent / "build.json"
-        record = read(marker) if marker.is_file() else {}
+        record = read(marker) if exists(marker) else {}
         if record.get("ir_hash") != binding["ir_hash"] or record.get("document_sha256") != file_sha256(native):
             raise EngineError("managed_external_mutation", "The failed publication has an unsealed native artifact; inspect it before repairing layout.",
                               action="inspect_external_mutation")

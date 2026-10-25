@@ -7,4 +7,3 @@ COMPATIBILITY_CAPABILITIES: dict[str, Any] = {
     "marks": ["line", "point", "bar", "errorbar", "band", "rule", "text"],
     "scale_transforms": ["linear", "log"], "multi_view": True, "multiple_scales": True,
 }
-

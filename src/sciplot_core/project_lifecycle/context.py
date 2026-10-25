@@ -4,7 +4,7 @@ Every application invocation installs its repository. Nested scientific/render
 helpers cannot fall back to another writer; token reset also covers exceptions.
 The stateless default serves historical standalone storage callers only.
 """
-from collections.abc import Iterator
+from collections.abc import Iterator, Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
@@ -140,3 +140,28 @@ def has_head(root: Path) -> bool:
 
 def require_empty_output(output: Path) -> None:
     repository().require_empty_output(output)
+
+
+def content_snapshot(path: Path) -> dict[str, Any]:
+    return repository().content_snapshot(path)
+
+
+def publish_content(path: Path, payload: bytes, verify_existing: Callable[[], Any]) -> None:
+    repository().publish_content(path, payload, verify_existing)
+
+
+def content_sha256(path: Path) -> str | None:
+    try:
+        snapshot = content_snapshot(path)
+        value: str = snapshot["sha256"]
+        return value
+    except (OSError, ValueError):
+        return None
+
+
+def json_members(directory: Path, pattern: str) -> list[Path]:
+    return repository().json_members(directory, pattern)
+
+
+def create_namespace(root: Path) -> None:
+    repository().create_namespace(root)

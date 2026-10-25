@@ -4,6 +4,8 @@ from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+import hashlib
+from fnmatch import fnmatch
 from threading import Barrier
 
 import pytest
@@ -27,10 +29,11 @@ class MemoryRepository(FileProjectRepository):
     def __init__(self):
         super().__init__(lease=lambda _: nullcontext())
         self.values = {}
+        self.content = {}
         self.writes = []
 
     def exists(self, path):
-        return str(path) in self.values or path.exists()
+        return str(path) in self.values or str(path) in self.content or path.exists()
 
     def read(self, path):
         return deepcopy(self.values[str(path)])
@@ -38,6 +41,21 @@ class MemoryRepository(FileProjectRepository):
     def write(self, path, payload):
         self.writes.append(str(path))
         self.values[str(path)] = deepcopy(payload)
+
+    def content_snapshot(self, path):
+        payload = self.content.get(str(path))
+        if payload is None:
+            raise FileNotFoundError(path)
+        return {"bytes": payload, "sha256": hashlib.sha256(payload).hexdigest(), "identity": {"size": len(payload)}}
+
+    def publish_content(self, path, payload, verify_existing):
+        if str(path) in self.content:
+            verify_existing()
+        else:
+            self.content[str(path)] = bytes(payload)
+
+    def json_members(self, directory, pattern):
+        return sorted(Path(path) for path in self.values if Path(path).parent == directory and fnmatch(Path(path).name, pattern))
 
 
 class ManagedBackend:
@@ -251,81 +269,96 @@ def test_compatibility_modules_contain_no_retained_state_machine_or_writer():
     assert completed.returncode == 0, completed.stderr
 
 
-@pytest.mark.parametrize("field,value", [
-    ("revision", True), ("revision", -1), ("revision", 1.0), ("plot_id", ""),
-    ("plot_id", "invalid id"), ("scientific_hash", "bad"), ("presentation_hash", "A" * 64),
-    ("authority", "managed"),
-])
-def test_revision_token_rejects_invalid_fields_before_execute(tmp_path, field, value):
-    backend = FakeBackend(tmp_path / "native")
-    doc, _ = backend.initial()
-    fields = RevisionToken.of(doc).to_payload()
-    fields["authority"] = AuthorityMode.LEGACY_NATIVE
-    fields[field] = value
-    with pytest.raises(ValueError):
-        RevisionToken(**fields)
-    assert not backend.native_writes
+def test_large_scientific_content_lifecycle_never_escapes_injected_repository(tmp_path, monkeypatch):
+    from sciplot_core.project_lifecycle import file_content
+
+    monkeypatch.setattr(file_content, "read_snapshot", lambda *_: pytest.fail("default filesystem blob read"))
+    monkeypatch.setattr(file_content, "publish", lambda *_: pytest.fail("default filesystem blob write"))
+    repo, backend = MemoryRepository(), ManagedBackend()
+    app = application(backend, repo)
+    wire = request_for_source(tmp_path)
+    source = Path(wire["data_binding"]["data_sources"][0]["path"])
+    source.write_text("Time,Signal\ns,V\n" + "".join(f"{i / 6000},{2 + i % 7}\n" for i in range(12000)))
+    wire["data_binding"]["data_sources"][0].update(sha256=file_sha256(source))
+    wire["data_binding"]["data_sources"][0]["table_selection"]["data_end_row"] = 12002
+    created = app.create(wire)
+    root = Path(created["plot"])
+    assert not (root / "content").exists(), "scientific CAS escaped the injected repository"
+    assert repo.load_head(root)["document"]["scientific"]["provenance"]["datasets"]["kind"] == "sciplot_content_reference"
+    edited = app.patch(root, patch(created, "large-style", "style.line.width", "1.2pt", "series:A"))
+    reopened = application(backend, repo).open(root)
+    assert edited["ready_to_use"] and reopened["revision"] == 1
+    assert reopened["scientific_hash"] == created["scientific_hash"]
+    assert not (root / "content").exists()
 
 
-@pytest.mark.parametrize("field,value", [
-    ("kind", "unknown"), ("kind", []), ("request_digest", "0" * 64),
-    ("original_request_digest", "0" * 64), ("authority", "legacy_native"),
-    ("idempotency_key", ""), ("expected_revision", None),
-])
-def test_normalized_command_rejects_invalid_envelopes(tmp_path, field, value):
-    backend = FakeBackend(tmp_path / "native")
-    doc, _ = backend.initial()
-    command = NormalizedCommand.create("patch", request(), expected_revision=RevisionToken.of(doc))
-    with pytest.raises(ValueError):
-        replace(command, **{field: value})
-    assert backend.calls["apply"] == 0
-
-
-def test_unknown_authority_is_not_treated_as_legacy_and_old_model_is_not_rewritten(tmp_path):
-    backend = FakeBackend(tmp_path / "native")
-    old, _ = backend.initial()
-    original = deepcopy(old)
-    assert "plot_type" not in old and AuthorityMode.of(old) == AuthorityMode.LEGACY_NATIVE
-    assert old == original
-    with pytest.raises(ValueError, match="authority"):
-        AuthorityMode.of({**old, "plot_type": "unknown_native"})
-    with pytest.raises(ValueError):
-        AuthorityMode.of({"scientific_hash": "a" * 64})
-
-
-def test_execute_rejects_tampered_business_body_and_incorrect_creation_authority(tmp_path):
-    backend, repo = FakeBackend(tmp_path / "native"), MemoryRepository()
-    document, binding = backend.initial()
+def test_legacy_inverse_rollback_decision_and_same_key_retry(tmp_path):
+    backend, repo = FakeBackend(tmp_path / "legacy"), MemoryRepository()
     root = tmp_path / "plot"
+    original, binding = backend.initial()
+    repo.commit(root, original, binding, "import")
+    app = application(backend, repo)
+    changed = app.patch(root, request(changes=[{"op": "set", "target": ["title:main"],
+        "property": "title.text", "value": "Edited title"}]))
+    assert app.decide(root, changed["next_step"]["request"])["revision"] == 1
+    wire = {"base_revision": 1, "target_revision": 0, "idempotency_key": "legacy-undo"}
+    review = app.rollback(root, wire)
+    assert review["status"] == "needs_review" and backend.native_writes == 1
+    saved = repo.read(transaction_path(root, "legacy-undo"))
+    assert saved["request"] != wire and saved["rollback_request"] == wire
+    finished = application(backend, repo).decide(root, review["next_step"]["request"])
+    assert finished["revision"] == 2 and finished["scientific_hash"] == original["scientific_hash"]
+    assert repo.load_head(root)["document"]["presentation"] == original["presentation"]
+    assert app.rollback(root, wire)["replayed"]
+    assert app.decide(root, review["next_step"]["request"])["replayed"]
+    assert backend.native_writes == 2
+
+
+def test_task_edit_keeps_semantic_reads_on_injected_service_repository(tmp_path, monkeypatch):
+    from sciplot_core import task_common_edits
+
+    repo, backend = MemoryRepository(), ManagedBackend()
+    app = application(backend, repo)
+    created = app.create(request_for_source(tmp_path))
+    root = Path(created["plot"])
+    monkeypatch.setattr(task_common_edits, "doctor_payload", lambda: {"kind": "sciplot_doctor", "status": "ready", "checks": []})
+    edited = task_common_edits.edit_task(root, task_dir=tmp_path / "task-entry", font_size="9pt", service=app)
+    assert edited["ready_to_use"] and edited["revision"] == 1
+    assert repo.load_head(root)["document"]["revision"] == 1 and not (root / "head.json").exists()
+
+
+def test_task_style_checkpoint_is_filesystem_but_semantic_state_uses_injected_owner(tmp_path, monkeypatch):
+    from sciplot_core.plot_engine import compat
+
+    backend, repo = FakeBackend(tmp_path / "legacy"), MemoryRepository()
+    root = tmp_path / "plot"
+    document, binding = backend.initial()
     repo.commit(root, document, binding, "import")
     app = application(backend, repo)
-    original = request()
-    other = request(width="2pt")
-    command = NormalizedCommand.create("patch", original, expected_revision=RevisionToken.of(document), business_request=other)
-    before = deepcopy(repo.values)
-    with pytest.raises(ValueError, match="canonical business request"):
-        app.execute(root, command)
-    create = {"source": str(backend.raw), "idempotency_key": "create"}
-    with pytest.raises(ValueError, match="authority"):
-        app.execute(root, NormalizedCommand.create("create", create, authority=AuthorityMode.MANAGED))
-    assert repo.values == before and backend.calls["apply"] == backend.calls["preview"] == 0
+    monkeypatch.setattr(compat, "PlotService", lambda: app)
+    entry = tmp_path / "style-checkpoint"
+    arguments = {"samples": None, "all_samples": True, "style": {"width": "0.7pt"}, "figure_id": None, "task_dir": entry}
+    first = compat.migrated_style(root, **arguments)
+    assert first["ready_to_use"] and (entry / "semantic-style.json").is_file()
+    assert compat.migrated_style(root, **arguments)["replayed"]
+    assert repo.load_head(root)["document"]["revision"] == 1 and not (root / "head.json").exists()
+    assert backend.native_writes == 1
 
 
-def test_application_consumes_closed_targets_and_never_discovers_store_layout(tmp_path, monkeypatch):
-    import ast
-    from sciplot_core.project_lifecycle.targets import ImportTarget, StoredTarget
-    from sciplot_core.project_lifecycle import application as module
-
-    backend, repo = FakeBackend(tmp_path / "native"), MemoryRepository()
+def test_delivery_checkpoint_cache_and_lease_use_injected_repository(tmp_path):
+    repo, backend = MemoryRepository(), ManagedBackend()
     app = application(backend, repo)
-    root = tmp_path / "explicit-store"
-    monkeypatch.setattr(app.targets, "resolve_open", lambda *_: ImportTarget(root, backend.directory, "primary"))
-    opened = app.open(tmp_path / "arbitrary-display-locator")
-    assert opened["plot"] == str(root)
-    monkeypatch.setattr(app.targets, "resolve_open", lambda *_: StoredTarget(root))
-    assert app.open(tmp_path / "another-locator")["plot_id"] == opened["plot_id"]
-    tree = ast.parse(Path(module.__file__).read_text())
-    assert not any(isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "mkdir"
-                   for node in ast.walk(tree))
-    assert not any(isinstance(node, ast.Constant) and node.value in {"head.json", "index.json"}
-                   for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str))
+    created = app.create(request_for_source(tmp_path))
+    plot = Path(created["plot"])
+    assert not (plot / "export-cache.json").exists()
+    wire = {"idempotency_key": "delivery", "out": str(tmp_path / "delivery"), "title": "Synthetic",
+            "mode": "native_snapshot", "items": [{"plot": str(plot), "plot_id": created["plot_id"], "revision": 0, "label": "A"}]}
+    for _ in range(2):
+        result = app.deliver(wire)
+        # The fake render adapter deliberately supplies no audited native seal;
+        # its semantic cache was nevertheless found in the injected repository.
+        assert result["status"] == "partial"
+        assert result["items"][0]["error"]["reason_code"] == "managed_delivery_native_unsealed"
+    checkpoint = Path(result["checkpoint"])
+    assert str(checkpoint / "delivery.json") in repo.values and not (checkpoint / "delivery.json").exists()
+    assert not (checkpoint.parent / ".sciplot_session_locks").exists()

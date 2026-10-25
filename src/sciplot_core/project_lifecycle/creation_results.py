@@ -52,5 +52,3 @@ def _stale_result(root: Path, task: dict[str, Any], gaps: list[str], *, plot: di
                         "message": "Creation completed, but current source, native or delivery evidence is missing or changed.",
                         "evidence_gaps": gaps},
             "next_step": {"action": "resolve_current_evidence", "evidence_gaps": gaps}}
-
-

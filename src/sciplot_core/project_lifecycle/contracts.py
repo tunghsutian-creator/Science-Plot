@@ -120,6 +120,7 @@ class RecoveryState:
     committed: bool
     export_complete: bool
     outcome: str
+    blocked: bool = False
 
     @classmethod
     def of(cls, transaction: dict[str, Any]) -> "RecoveryState":
@@ -128,7 +129,13 @@ class RecoveryState:
         outcome = ("complete" if phase == "complete" else "rejected" if phase == "rejected"
                    else "native_outcome_requires_owner_validation" if phase == "applying"
                    else "export_only" if committed else "pending")
-        return cls(phase, committed, phase == "complete", outcome)
+        return cls(phase, committed, phase == "complete", outcome,
+                   bool(transaction.get("error")) and phase not in {"complete", "needs_review", "rejected"})
+
+    def to_payload(self) -> dict[str, Any]:
+        status = {"complete": "complete", "needs_review": "needs_review", "rejected": "rejected"}.get(self.phase, "pending")
+        return {"status": "blocked" if self.blocked else status, "commit_status": "committed" if self.committed else "pending",
+                "export_status": "complete" if self.export_complete else "pending"}
 
 
 @dataclass(frozen=True)
@@ -144,5 +151,7 @@ class Receipt:
                    command.get("request_digest") or transaction.get("request_hash"))
 
     def to_payload(self) -> dict[str, Any]:
-        return {"revision_token": self.revision.to_payload(), "recovery_state": asdict(self.recovery),
-                "command_digest": self.command_digest}
+        return {"plot_id": self.revision.plot_id, "revision": self.revision.revision,
+                "plot_type": "ManagedPlot" if self.revision.authority == AuthorityMode.MANAGED else "LegacyPlot",
+                "scientific_hash": self.revision.scientific_hash, "presentation_hash": self.revision.presentation_hash,
+                **self.recovery.to_payload(), "command_digest": self.command_digest}
