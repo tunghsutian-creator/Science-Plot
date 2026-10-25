@@ -6,6 +6,7 @@ from typing import Any
 
 from sciplot_core.project_lifecycle.errors import EngineError
 from sciplot_core.project_lifecycle.paths import canonical_path
+from sciplot_core.project_lifecycle.store_composition import existing_store
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.project_store.io import STORE
 from sciplot_core.project_store.runtime import project_runtime, selected_project_store
@@ -42,7 +43,7 @@ def selected_project_creation(project: Path | None, request: dict[str, Any]) -> 
     root = canonical_path(project)
     if not root.is_dir() or not (root / STORE / "head.json").is_file():
         raise EngineError("semantic_project_unregistered", "The selected root has no existing project generation; initialize it explicitly first.")
-    store = existing if existing is not None and existing.root == root else FileProjectStore(root)
+    store = existing if existing is not None and existing.root == root else existing_store(root)
     store.snapshot()  # Validates identity and refuses a pending projection; no import or repair.
     _owned_output(request, store)
     with project_runtime(store):

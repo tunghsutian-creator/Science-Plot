@@ -244,3 +244,47 @@ def test_public_create_restores_scope_and_reuses_one_attached_revision_after_exp
     assert resumed["plot_id"] == interrupted["plot_id"] and resumed["scientific_hash"] == interrupted["scientific_hash"]
     assert len(json.loads(store.read_bytes(INDEX))["attachments"]) == 1
     assert selected_project_store() is None and backend.calls["apply"] == 0
+
+
+def test_public_create_reuses_admitted_warm_native_delivery_and_finite_snapshot_caps(tmp_path):
+    from sciplot_core.project_store.adapters import publish_files
+    from sciplot_core.project_lifecycle.store_composition import existing_store
+    project = tmp_path / "project"
+    project.mkdir()
+    delivery = tmp_path / "figures"
+    delivery.mkdir()
+    (delivery / "existing.pdf").write_bytes(b"existing public native export")
+    (project / "plot_request.json").write_text(json.dumps({"delivery_output": str(delivery)}))
+    archive = tmp_path / "project.zip"
+    archive.write_bytes(b"existing snapshot")
+    store = FileProjectStore(project, locations={"delivery": delivery,
+        "snapshot": ResourceRoot(tmp_path, (archive.name,))})
+    store.snapshot(import_legacy=True)
+    publish_files(store, {"@snapshot/project.zip": archive.read_bytes()}, kind="publish")
+    before = (delivery / "existing.pdf").read_bytes(), archive.read_bytes()
+    request = wire_request(tmp_path)
+    created = PlotService(SourceAwareManagedBackend()).create(request, project=project)
+    assert created["ready_to_use"] and Path(created["plot"]).is_relative_to(project / ".sciplot_semantic")
+    restored = existing_store(project)
+    assert restored.locations == {"delivery": delivery, "snapshot": tmp_path}
+    assert restored.location_members["snapshot"] == ("project.zip",)
+    assert (delivery / "existing.pdf").read_bytes() == before[0] and archive.read_bytes() == before[1]
+    assert restored.snapshot()["outside_changes"] == {} and selected_project_store() is None
+
+
+def test_public_create_rejects_modified_native_capability_request_before_host_factory(tmp_path, monkeypatch):
+    from sciplot_core.studio_core import project_command_scope
+    project = tmp_path / "project"
+    project.mkdir()
+    request_path = project / "plot_request.json"
+    request_path.write_text(json.dumps({"delivery_output": str(tmp_path / "original-delivery")}))
+    store = FileProjectStore(project)
+    before = store.snapshot(import_legacy=True)
+    request_path.write_text(json.dumps({"delivery_output": str(tmp_path / "victim-delivery")}))
+    monkeypatch.setattr(project_command_scope, "project_store", lambda *_a, **_kw: pytest.fail("Changed native request minted a capability"))
+    with pytest.raises(EngineError) as error:
+        PlotService(SourceAwareManagedBackend()).create(wire_request(tmp_path), project=project)
+    assert error.value.reason_code == "semantic_project_changed"
+    assert not (tmp_path / "victim-delivery").exists()
+    assert store.snapshot()["generation"] == before["generation"]
+    assert selected_project_store() is None
