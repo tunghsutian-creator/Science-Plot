@@ -25,6 +25,12 @@ class PlotService(ProjectApplication):
         super().__init__(backend, repository, capabilities=capabilities,
                          targets=targets if targets is not None else FilesystemProjectTargets(repository, resolve_figure=resolve_figure))
 
+    def create(self, request: dict[str, Any], *, project: Path | None = None) -> dict[str, Any]:
+        from .selected_project import selected_project_creation
+
+        with selected_project_creation(project, request):
+            return super().create(request)
+
     def open(self, target: Path, figure_id: str | None = None, *,
              description: dict[str, Any] | None = None) -> dict[str, Any]:
         description = require_selector(description)

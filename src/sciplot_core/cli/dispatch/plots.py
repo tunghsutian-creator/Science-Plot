@@ -43,6 +43,8 @@ def dispatch_plot(args: Any) -> int | None:
     if action in {"create", "patch", "resume", "intent", "rollback", "decide", "deliver"}:
         params["request"] = _request(args.request)
         if action == "create":
+            if args.project is not None:
+                params["project"] = str(args.project.expanduser().absolute())
             for field in ("source", "profile", "out"):
                 value = params["request"].get(field)
                 if isinstance(value, str) and value.strip():

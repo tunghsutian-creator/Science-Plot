@@ -22,7 +22,7 @@ class Service(Protocol):
     def render(self, plot: Path) -> dict[str, Any]: ...
     def export(self, plot: Path) -> dict[str, Any]: ...
     def rollback(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
-    def create(self, request: dict[str, Any]) -> dict[str, Any]: ...
+    def create(self, request: dict[str, Any], *, project: Path | None = None) -> dict[str, Any]: ...
     def deliver(self, request: dict[str, Any]) -> dict[str, Any]: ...
     def decide(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
 
@@ -86,7 +86,7 @@ def validate_call(value: Any) -> tuple[str | int, str, dict[str, Any]]:
 def validate_params(method: str, params: dict[str, Any]) -> None:
     fields: dict[str, tuple[set[str], set[str]]] = {
         "project.open": ({"target"}, {"target", "figure_id", "description"}),
-        "plot.create": ({"request"}, {"request"}),
+        "plot.create": ({"request"}, {"request", "project"}),
         "plot.deliver": ({"request"}, {"request"}),
         "plot.describe": ({"plot"}, {"plot", "description"}),
         "plot.render": ({"plot"}, {"plot"}),
@@ -106,10 +106,10 @@ def validate_params(method: str, params: dict[str, Any]) -> None:
         issues.append({"path": "/params", "constraint": "required", "missing": sorted(required - params.keys())})
     if params.keys() - allowed:
         issues.append({"path": "/params", "constraint": "additionalProperties", "allowed": sorted(allowed)})
-    for key in ("target", "plot", "figure_id"):
+    for key in ("target", "plot", "figure_id", "project"):
         if key in params and (not isinstance(params[key], str) or not params[key].strip()):
             issues.append({"path": f"/params/{key}", "constraint": "nonempty_string"})
-        elif key in {"target", "plot"} and key in params and not Path(params[key]).is_absolute():
+        elif key in {"target", "plot", "project"} and key in params and not Path(params[key]).is_absolute():
             issues.append({"path": f"/params/{key}", "constraint": "absolute_path"})
     if "request" in params and not isinstance(params["request"], dict):
         issues.append({"path": "/params/request", "constraint": "object"})
@@ -127,7 +127,8 @@ def invoke(service: Service, method: str, params: dict[str, Any]) -> dict[str, A
             return service.open(target, figure_id=params.get("figure_id"), description=params["description"])
         return service.open(target, figure_id=params.get("figure_id"))
     if method == "plot.create":
-        return service.create(params["request"])
+        return (service.create(params["request"], project=Path(params["project"]))
+                if "project" in params else service.create(params["request"]))
     if method == "plot.deliver":
         return service.deliver(params["request"])
     plot = Path(params["plot"]).expanduser().resolve()

@@ -20,6 +20,8 @@ def register_plot_commands(subparsers: Any) -> None:
             action.add_argument("--property", help="Property name for --scope edit.")
         if name in {"create", "patch", "resume", "intent", "rollback", "decide", "deliver"}:
             action.add_argument("--request", type=Path, required=True)
+        if name == "create":
+            action.add_argument("--project", type=Path, help="Explicit existing project for Managed Template/Binding creation; outside the scientific request.")
         action.add_argument("--json", action="store_true")
         action.add_argument("--socket", type=Path, help="Private local engine socket; defaults to this checkout's engine.")
         action.add_argument("--timeout", type=float, default=600.0)
