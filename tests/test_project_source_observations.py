@@ -89,3 +89,37 @@ def test_explicit_native_prepared_mode_mismatch_cannot_adopt_unobserved_permissi
         ProjectCommands(store).execute(command, lambda: ProjectMutation({"manual.vsz": PreparedFile(b"manual", 0o700)}, {}))
     assert native.read_bytes() == b"manual"
     assert native.stat().st_mode & 0o777 == 0o644
+
+
+def test_readonly_capture_and_cold_refresh_keep_exact_original_binding(tmp_path):
+    store, before, raw, identity, _command, _mutation = fixture_observation(tmp_path)
+    store.export_bundle(tmp_path / "bundle")
+    cold = FileProjectStore.import_bundle(tmp_path / "bundle", tmp_path / "cold")
+    store.root.rename(tmp_path / "original-offline")
+    current = cold.snapshot()
+    selected = cold.root / "source.csv"
+    selected.write_bytes(b"cold newly observed bytes")
+    prior = before["files"]["source.csv"]["sha256"]
+    observed = cold.capture_source_observation("source.csv", source_id=identity, before_sha256=prior)
+    assert observed["locator"] == str(raw)
+    assert observed["data"] == selected.read_bytes()
+    assert observed["path"] == str(selected)
+    assert cold.snapshot()["generation"] == current["generation"]
+    source = PreparedSource(identity, observed["locator"], observed["version"], observed["data"],
+        tuple(observed["aliases"]), observed["mode"])
+    mutation = ProjectMutation({"semantic/state.json": b"cold state"}, {}, prepared_sources=(source,))
+    command = ProjectCommand.create("semantic_record", "cold observe", project_id=current["project_id"],
+        expected_generation=current["generation"], read_set={"source.csv": prior, "semantic/state.json": None},
+        write_set=["semantic/state.json"], request={"prepared_digest": mutation.prepared_digest},
+        source_adoptions=[SourceAdoption("source.csv", identity, prior, observed["version"])])
+    original = selected.stat()
+    ProjectCommands(cold).publish_prepared(command, mutation)
+    assert selected.stat().st_mtime_ns == original.st_mtime_ns
+    assert selected.read_bytes() == observed["data"]
+    assert cold.snapshot()["outside_changes"] == {}
+    from sciplot_core.project_store import commands
+    from sciplot_core.project_store.io import StoreIO
+    with StoreIO(cold.root, {}).locked() as io:
+        frozen = commands.capture_sources(io, [{"source_id": identity, "path": str(raw), "version": observed["version"]}])
+        commands.verify_sources(io, frozen)
+    assert cold.resolve_path(str(raw), source_id=identity, expected_sha256=observed["version"]) == selected

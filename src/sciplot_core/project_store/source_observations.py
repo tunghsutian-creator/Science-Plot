@@ -3,10 +3,11 @@
 from collections.abc import Mapping
 from typing import Any
 
-from sciplot_core.project_commands.resources import SourceAdoption
+from pathlib import Path
+from sciplot_core.project_commands.resources import PreparedSource, SourceAdoption
 
 from .errors import ProjectConflict, ProjectStoreError
-from .io import StoreIO
+from .io import StoreIO, parts, sha
 from .locators import original_for_logical
 
 
@@ -32,6 +33,33 @@ def require_bindings(baseline: Mapping[str, Any], record: Mapping[str, Any]) -> 
         if (entry is None or entry.get("locator") != original_for_logical(dict(baseline), name)
                 or entry.get("logical", name) != name):
             raise ProjectConflict("The observed input does not match its registered resource/source identity.")
+
+
+def capture(io: StoreIO, current: dict[str, Any], resource: str, *, source_id: str,
+            before_sha256: str) -> dict[str, Any]:
+    SourceAdoption(resource, source_id, before_sha256, before_sha256)
+    before = current["files"].get(resource)
+    source = current["sources"].get(source_id, {}).get(before_sha256)
+    origin = original_for_logical(current, resource)
+    if before is None or before["sha256"] != before_sha256 or source is None or source.get("locator") != origin:
+        raise ProjectConflict("The changed input must still bind its exact registered old resource/source identity.")
+    physical = io.physical(resource, owned=False)
+    if physical is None:
+        raise ProjectConflict("The registered input is missing; it cannot reconnect to another file.")
+    data, mode = physical
+    value = PreparedSource(source_id, origin, sha(data), data, tuple(source.get("aliases", ())), mode).to_storage_payload()
+    components = parts(resource)
+    actual = (io.locations[components[0][1:]] / Path(*components[1:])
+              if components[0].startswith("@") else io.root / Path(*components))
+    return {**value, "path": str(actual)}
+
+
+def local_versions(io: StoreIO, record: dict[str, Any]) -> None:
+    local = io.read("local_sources.json")
+    if local is not None:
+        for value in observations(record).values():
+            local["versions"].setdefault(value.source_id, {})[value.observed_sha256] = value.observed_sha256
+        io.write("local_sources.json", local)
 
 
 def adopt(io: StoreIO, current: dict[str, Any], value: dict[str, Any], record: dict[str, Any],

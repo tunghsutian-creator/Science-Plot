@@ -87,6 +87,12 @@ class FileProjectStore:
             return {**current, "projection_status": "conflict" if drift else "current",
                     "outside_changes": drift, "outside_metadata": metadata_drift}
 
+    def capture_source_observation(self, resource: str, *, source_id: str, before_sha256: str) -> dict[str, Any]:
+        from .source_observations import capture
+
+        with self._locked(allow_pending=True) as (io, current):
+            return capture(io, current, resource, source_id=source_id, before_sha256=before_sha256)
+
     def reserve(self, command_id: str, command_digest: str, *, expected_generation: str | None,
                 read_set: Mapping[str, str | None], write_set: Sequence[str],
                 metadata: dict[str, Any] | None = None,

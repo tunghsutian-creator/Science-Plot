@@ -229,10 +229,16 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
     return result
 
 
-def verify_sources(io: StoreIO, sources: Mapping[str, Any]) -> None:
+def verify_sources(io: StoreIO, sources: Mapping[str, Any], record: dict[str, Any] | None = None) -> None:
+    from .source_observations import observations
+
+    selected = observations(record) if record is not None else {}
     local = io.read("local_sources.json") or {"versions": {}}
     for source_id, versions in sources.items():
         for version, entry in versions.items():
+            if any(value.source_id == source_id and value.observed_sha256 == version for value in selected.values()):
+                io.get(entry)  # The exact confined original resource was rechecked immediately before this call.
+                continue
             imported = local["versions"].get(source_id, {}).get(version)
             if imported == entry["sha256"]:
                 io.get(entry)
