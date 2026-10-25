@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import http.client
 import json
-import socket
-import threading
 from typing import Any, Callable
 from sciplot_core.assistant_provider import (
     AssistantCancellationToken,
@@ -36,6 +34,7 @@ from sciplot_core.openai_provider.transport_helpers import (
     _error_message,
     _response_content,
     _connection,
+    _StreamTransport,
 )
 
 
@@ -71,80 +70,51 @@ class _ResponsesSSEClient:
             port,
             self.config.timeout_seconds,
         )
-        socket_holder: list[Any | None] = [None]
-        monitor_stop = threading.Event()
-
-        def close_on_cancel() -> None:
-            while not monitor_stop.wait(0.05):
-                if not cancellation.cancelled:
-                    continue
-                active_socket = socket_holder[0]
-                if active_socket is not None:
-                    try:
-                        active_socket.shutdown(socket.SHUT_RDWR)
-                    except Exception:
-                        pass
-                    try:
-                        active_socket.close()
-                    except Exception:
-                        pass
-                else:
-                    try:
-                        connection.close()
-                    except Exception:
-                        pass
-                return
-
-        monitor = threading.Thread(
-            target=close_on_cancel,
-            name="sciplot-openai-cancel-monitor",
-            daemon=True,
-        )
-        monitor.start()
         try:
-            cancellation.raise_if_cancelled()
-            connection.connect()
-            socket_holder[0] = connection.sock
-            cancellation.raise_if_cancelled()
-            connection.request(
-                "POST",
-                path,
-                body=encoded,
-                headers={
-                    "Authorization": f"Bearer {self.config.api_key}",
-                    "Content-Type": "application/json",
-                    "Accept": "text/event-stream",
-                    "User-Agent": "SciPlot/0.1 OpenAIResponsesProvider",
-                },
-            )
-            response = connection.getresponse()
-            cancellation.raise_if_cancelled()
-            if response.status != 200:
-                raw = response.read(_MAX_HTTP_ERROR_BYTES + 1)
-                body: object = None
-                if len(raw) <= _MAX_HTTP_ERROR_BYTES:
-                    try:
-                        body = json.loads(raw.decode("utf-8"))
-                    except (UnicodeDecodeError, json.JSONDecodeError):
-                        body = None
-                raise OpenAIProviderError(
-                    _error_message(
-                        body,
-                        status=response.status,
-                        secret=self.config.api_key,
+            with _StreamTransport(connection, cancellation, secret=self.config.api_key) as transport:
+                cancellation.raise_if_cancelled()
+                connection.connect()
+                transport.connected()
+                cancellation.raise_if_cancelled()
+                connection.request(
+                    "POST",
+                    path,
+                    body=encoded,
+                    headers={
+                        "Authorization": f"Bearer {self.config.api_key}",
+                        "Content-Type": "application/json",
+                        "Accept": "text/event-stream",
+                        "User-Agent": "SciPlot/0.1 OpenAIResponsesProvider",
+                    },
+                )
+                response = transport.response = connection.getresponse()
+                cancellation.raise_if_cancelled()
+                if response.status != 200:
+                    raw = response.read(_MAX_HTTP_ERROR_BYTES + 1)
+                    body: object = None
+                    if len(raw) <= _MAX_HTTP_ERROR_BYTES:
+                        try:
+                            body = json.loads(raw.decode("utf-8"))
+                        except (UnicodeDecodeError, json.JSONDecodeError):
+                            body = None
+                    raise OpenAIProviderError(
+                        _error_message(
+                            body,
+                            status=response.status,
+                            secret=self.config.api_key,
+                        )
                     )
+                content_type = str(response.getheader("Content-Type") or "")
+                if "text/event-stream" not in content_type.casefold():
+                    raise OpenAIProviderError(
+                        "OpenAI Responses API did not return an SSE stream."
+                    )
+                on_headers()
+                return self._read_events(
+                    response,
+                    cancellation=cancellation,
+                    on_text=on_text,
                 )
-            content_type = str(response.getheader("Content-Type") or "")
-            if "text/event-stream" not in content_type.casefold():
-                raise OpenAIProviderError(
-                    "OpenAI Responses API did not return an SSE stream."
-                )
-            on_headers()
-            return self._read_events(
-                response,
-                cancellation=cancellation,
-                on_text=on_text,
-            )
         except AssistantCancelled:
             raise
         except OpenAIProviderError:
@@ -153,17 +123,11 @@ class _ResponsesSSEClient:
             if cancellation.cancelled:
                 raise AssistantCancelled(
                     "Assistant request cancelled by the user."
-                ) from exc
+                ) from None
             safe = _redact(exc, secrets=(self.config.api_key,))
             raise OpenAIProviderError(
                 f"OpenAI Responses request failed: {type(exc).__name__}: {safe}"
-            ) from exc
-        finally:
-            monitor_stop.set()
-            try:
-                connection.close()
-            finally:
-                monitor.join(timeout=0.2)
+            ) from None
 
     def _read_events(
         self,
@@ -315,7 +279,7 @@ class _ResponsesSSEClient:
                     if isinstance(error, dict)
                     else value.get("message")
                 )
-                safe = _redact(message or "unknown provider error", secrets=())
+                safe = _redact(message or "unknown provider error", secrets=(self.config.api_key,))
                 raise OpenAIProviderError(f"OpenAI response failed: {safe}")
 
         while True:
