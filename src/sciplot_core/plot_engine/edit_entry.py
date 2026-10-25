@@ -7,7 +7,6 @@ execution, revisions, recovery and rollback; a replay must not recompile them.
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-import sys
 from typing import Any, Literal, Protocol
 
 from sciplot_core.studio_core.project_query_paths import canonical_path
@@ -24,14 +23,22 @@ class _OwnedEditService(Protocol):
     def close(self) -> None: ...
 
 
-def close_edit_owner(owner: _OwnedEditService) -> None:
-    """Close once without replacing a primary execution/cancellation failure."""
-    primary = sys.exception()
+@contextmanager
+def edit_service_owner(owner: _OwnedEditService, *, owned: bool = True) -> Iterator[None]:
+    """Close with this invocation's outcome, never a caller's handled failure."""
+    failed = False
     try:
-        owner.close()
+        yield
     except BaseException:
-        if primary is None:
-            raise
+        failed = True
+        raise
+    finally:
+        if owned:
+            try:
+                owner.close()
+            except BaseException:
+                if not failed:
+                    raise
 
 
 def edit_entry_owner(entry: Path) -> str | None:

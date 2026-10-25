@@ -236,6 +236,16 @@ def test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure(
     assert failed.value is expected and calls == ["close"]
 
 
+@pytest.mark.parametrize("command", ["style", "common"])
+def test_edit_cleanup_does_not_borrow_callers_handled_failure(tmp_path, monkeypatch, command):
+    try:
+        raise LookupError("the caller is already recovering an unrelated failure")
+    except LookupError:
+        test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure(
+            tmp_path, monkeypatch, command, None,
+        )
+
+
 @pytest.mark.parametrize("managed_fails,legacy_fails", [(True, False), (False, True), (True, True), (False, False)])
 def test_backend_router_closes_both_owners_and_retains_first_failure(monkeypatch, managed_fails, legacy_fails):
     from sciplot_core.plot_engine import backend_router

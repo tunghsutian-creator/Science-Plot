@@ -413,16 +413,24 @@ custom-provider, stale/live native, cancellation, Undo and save/reopen/export pa
 Use changed-owner fast checks for development, then the unchanged complete
 merge/release requirements on the frozen batch. Remote CI for an isolated
 experiment does not hold all subsequent development hostage.
-The following bounded slice binds width/color edits through the existing pure
-series selector and semantic transaction, including FigureSpec v2 mark styles.
-Retain independent development feedback for this slice; acceptance of the
-previous assistant snapshot does not certify it. Complete its integrated
-native/replay/rollback and eventual frozen merge gates before including it in
-main. Compatibility entry-path protection and recovery ordering need a separate
-bounded review; this slice does not claim their entire lifecycle is converged.
-Check the single template entry, explicit overrides and TTS interaction. Derive
-any restructuring from actual dependencies and workflow failures; splitting
-files alone is not a product or architecture improvement.
+The width/color series-selector slice shipped on main7731882 after its own local
+6673-body full, complete capture/access closure and exact-commit CI. The main push
+has separate CI; the local/source results do not assert its terminal status.
+
+The next parallel batch replaces three demonstrated adapter ownership defects:
+response/connection/cancellation cleanup in the existing AI transport; shared
+style/common-edit entry admission and literal checkpoint replay before new target
+discovery; and one explicit render-option projection for domain defaults and
+series provenance. Existing scientific documents, PlotService transactions and
+Veusz execution remain the owning kernel: strict scientific seals, mappings,
+revision/currentness, native audit and rollback already converge there. Replace
+superseded adapter code rather than adding another journal, command bus or
+scientific schema. Each worker uses affected regressions; the integrated frozen
+batch receives one complete acceptance. No worker's subset certifies the batch.
+Keep mechanical scientific labels, native GUI changesets and semantic revisions
+in their existing identity domains. Broader template/TTS interaction and real
+ordinary plotting still need bounded workflow evidence; this batch adds no new
+scientific template, native/semantic identity bridge or paid AI measurement.
 
 Keep one normal local entry and recoverable Git checkpoints. Preserve physical
 projects, raw inputs, existing figures, independent backups and unmerged work.

@@ -1313,6 +1313,32 @@ do not load Qt. Objects are addressed by figure ID, native object path and the
 saved document SHA-256. A live GUI changeset is neither a persisted version nor
 a cross-session identity.
 
+### Adapter ownership during module convergence
+
+Scientific document validation and seals remain in `plot_document`/`plot_ir`;
+`PlotService` owns semantic transactions, revisions, currentness, preview/export
+and rollback. Provider-neutral capability admission owns AI command scope. GUI
+changeset/native selection/Undo remains a separate identity domain. Adapters may
+resolve intent into those contracts but cannot mint a competing state authority.
+
+`openai_provider/transport_helpers.py` owns one request's response, connection and
+cancellation monitor. SSE parsing stays in `sse_client.py`; I/O interruption does
+not race response disposal. Secondary cleanup errors preserve an existing failure;
+standalone cleanup errors surface through the redacted provider boundary.
+
+`plot_engine/edit_entry.py` admits and leases style/common edit checkpoint paths.
+A checkpoint retains the original literal request, not transaction stages. Replay
+uses that binding before fresh target discovery; the PlotService journal remains
+execution authority. Source, export and revision directories cannot become user
+edit entries. Necessary old checkpoint formats remain readable.
+
+`studio_render/template_resolution.py` projects declared option values once.
+Domain defaults and series-encoding provenance consume it; recorded effective
+values and explicit declarations remain distinct. Axis heuristics consume semantic
+axis fields, never paths or hashes. Presentation defaults preserve explicit label
+layout and axis-mode choices; scientific metric labels and scale constraints keep
+their existing owners. Exact-current native reopen/export does not infer defaults.
+
 ## Ownership table
 
 | Concern | Owner | Boundary |

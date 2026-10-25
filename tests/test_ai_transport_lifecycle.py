@@ -308,9 +308,10 @@ def test_monitor_start_failure_closes_connection_and_is_redacted(monkeypatch):
     def fail(_thread):
         raise RuntimeError("monitor start " + _KEY)
 
-    monkeypatch.setattr(threading.Thread, "start", fail)
-    with pytest.raises(OpenAIProviderError, match="request failed: RuntimeError") as exc:
-        _stream(connection)
+    with monkeypatch.context() as scope:
+        scope.setattr(threading.Thread, "start", fail)
+        with pytest.raises(OpenAIProviderError, match="request failed: RuntimeError") as exc:
+            _stream(connection)
     assert _KEY not in str(exc.value) and "[REDACTED]" in str(exc.value)
     assert connection.close_calls == 1
 

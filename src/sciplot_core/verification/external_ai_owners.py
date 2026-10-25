@@ -8,10 +8,11 @@ EXTERNAL_AI_OWNERS = (
         owner_id="openai_assistant_provider",
         path_prefixes=("src/sciplot_core/openai_provider/", "src/sciplot_core/assistant_provider/"),
         exact_paths=frozenset({"src/sciplot_core/openai_provider_probe.py"}),
-        owned_test_paths=frozenset({"tests/test_compatibility_facades.py"}),
+        owned_test_paths=frozenset({"tests/test_compatibility_facades.py", "tests/test_ai_transport_lifecycle.py"}),
         pytest_targets=(
             "tests/test_compatibility_facades.py",
             "tests/test_assistant_contract.py",
+            "tests/test_ai_transport_lifecycle.py",
             "tests/test_automation_baseline.py::test_external_model_call_guard_counts_and_blocks_the_production_adapter",
             *ARCHITECTURE_CORE_TARGETS,
         ),

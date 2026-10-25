@@ -8,7 +8,7 @@ from sciplot_core.studio_core.project_query import resolve_project_figure
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_series_edits import compile_series_style
 
-from .edit_entry import admit_edit_entry, bind_edit_entry, close_edit_owner, edit_entry_owner, edit_entry_session, read_edit_entry
+from .edit_entry import admit_edit_entry, bind_edit_entry, edit_entry_owner, edit_entry_session, edit_service_owner, read_edit_entry
 from .errors import EngineError
 from .service import PlotService
 from .storage import digest, document_root, load_head
@@ -35,10 +35,8 @@ def _bound_style(saved: dict[str, Any], caller: dict[str, Any],
 
 def _execute_style(root: Path, request: dict[str, Any]) -> dict[str, Any]:
     owner = PlotService()
-    try:
+    with edit_service_owner(owner):
         return owner.patch(root, request)
-    finally:
-        close_edit_owner(owner)
 
 
 def migrated_style(target: Path, *, samples: list[str] | None, all_samples: bool,

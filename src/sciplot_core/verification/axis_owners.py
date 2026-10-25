@@ -23,6 +23,8 @@ GENERIC_AXIS_OWNERS = (
                 "src/sciplot_core/studio_render/axis_extent.py",
                 "src/sciplot_core/studio_render/axis_limits.py",
                 "src/sciplot_core/studio_render/domain_defaults.py",
+                "src/sciplot_core/studio_render/template_resolution.py",
+                "src/sciplot_core/studio_render/series_option_context.py",
                 "src/sciplot_core/studio_render/spectral_axis_display.py",
                 "src/sciplot_core/studio_render/metric_columns.py",
                 "src/sciplot_core/studio_render/table_io.py",
@@ -37,6 +39,7 @@ GENERIC_AXIS_OWNERS = (
         owned_test_paths=frozenset(
             {
                 "tests/test_generic_axis_policy.py",
+                "tests/test_template_override_contract.py",
                 "tests/test_compatibility_facades.py",
                 "tests/test_legacy_core_migration.py",
                 "tests/test_source_numeric_encodings.py",
@@ -67,6 +70,7 @@ GENERIC_AXIS_OWNERS = (
             "tests/test_task_ordinary_raw_points_native.py",
             "tests/test_plan_preview.py",
             "tests/test_generic_axis_policy.py",
+            "tests/test_template_override_contract.py",
             "tests/test_marker_axis_extent.py",
             "tests/test_mechanical_rendering_profile_native.py",
             "tests/test_registered_single_curve_figure_plan.py",

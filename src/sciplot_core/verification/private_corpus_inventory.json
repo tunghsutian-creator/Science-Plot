@@ -7,11 +7,37 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 6673,
-    "nodeids_sha256": "818b63cfce8cf156b445bd5e304a2f4869c0bc7381e74a63e515d0a88c6fc8b5",
-    "test_sources_sha256": "61b2716c1201fb77774b8a79f4a1056fcff130e1b4d9d12735705054ce8f8b07",
-    "test_source_count": 465,
+    "nodeid_count": 6755,
+    "nodeids_sha256": "ad4b47dec79371c0f6bafd89001cb3ad9709ad40265f5b5a9c394a521da7b498",
+    "test_sources_sha256": "7001a5cde9fc3fd71fe84465c4aef06767c6443a5d796f8a3a94bb48ae48bc0f",
+    "test_source_count": 468,
     "candidate_nodeids": [
+      "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
+      "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
+      "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[refusal]",
+      "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[text]",
+      "tests/test_ai_transport_lifecycle.py::test_cancel_from_final_text_callback_cannot_return_a_late_result",
+      "tests/test_ai_transport_lifecycle.py::test_cancellation_during_response_disposal_cannot_return_a_result",
+      "tests/test_ai_transport_lifecycle.py::test_cancellation_interrupts_only_its_active_socket_and_joins_monitor[connect]",
+      "tests/test_ai_transport_lifecycle.py::test_cancellation_interrupts_only_its_active_socket_and_joins_monitor[error_body]",
+      "tests/test_ai_transport_lifecycle.py::test_cancellation_interrupts_only_its_active_socket_and_joins_monitor[headers]",
+      "tests/test_ai_transport_lifecycle.py::test_cancellation_interrupts_only_its_active_socket_and_joins_monitor[read]",
+      "tests/test_ai_transport_lifecycle.py::test_cleanup_does_not_replace_original_protocol_or_cancellation_failure[False]",
+      "tests/test_ai_transport_lifecycle.py::test_cleanup_does_not_replace_original_protocol_or_cancellation_failure[True]",
+      "tests/test_ai_transport_lifecycle.py::test_cleanup_failure_is_redacted_and_other_resource_still_closes[both]",
+      "tests/test_ai_transport_lifecycle.py::test_cleanup_failure_is_redacted_and_other_resource_still_closes[connection]",
+      "tests/test_ai_transport_lifecycle.py::test_cleanup_failure_is_redacted_and_other_resource_still_closes[response]",
+      "tests/test_ai_transport_lifecycle.py::test_detached_http_response_retains_its_connected_socket_for_cancellation",
+      "tests/test_ai_transport_lifecycle.py::test_formatted_transport_traceback_cannot_expose_the_configured_credential[False]",
+      "tests/test_ai_transport_lifecycle.py::test_formatted_transport_traceback_cannot_expose_the_configured_credential[True]",
+      "tests/test_ai_transport_lifecycle.py::test_monitor_start_failure_closes_connection_and_is_redacted",
+      "tests/test_ai_transport_lifecycle.py::test_non_cancelled_io_failure_remains_a_redacted_provider_error",
+      "tests/test_ai_transport_lifecycle.py::test_protocol_failures_keep_their_reason_and_close_all_resources[invalid-utf8]",
+      "tests/test_ai_transport_lifecycle.py::test_protocol_failures_keep_their_reason_and_close_all_resources[missing-terminal]",
+      "tests/test_ai_transport_lifecycle.py::test_protocol_failures_keep_their_reason_and_close_all_resources[nonobject-json]",
+      "tests/test_ai_transport_lifecycle.py::test_protocol_failures_keep_their_reason_and_close_all_resources[nontext-delta]",
+      "tests/test_ai_transport_lifecycle.py::test_stream_failure_redacts_configured_credential",
+      "tests/test_ai_transport_lifecycle.py::test_success_explicitly_closes_response_and_connection_once",
       "tests/test_assistant_contract.py::test_any_provider_response_is_bound_to_the_same_catalog[another-provider]",
       "tests/test_assistant_contract.py::test_any_provider_response_is_bound_to_the_same_catalog[openai]",
       "tests/test_assistant_contract.py::test_expected_values_preserve_boolean_identity_and_numeric_equivalence[0-False-False]",
@@ -1388,6 +1414,40 @@
       "tests/test_segmented_transforms.py::test_explicit_unicode_unit_spelling_is_identity_without_weakening_source_guard",
       "tests/test_segmented_transforms.py::test_unit_spelling_preserves_registered_prefix_and_frequency_factors[mPa\\xb7s-Pa\\xb7s-0.001]",
       "tests/test_segmented_transforms.py::test_unit_spelling_preserves_registered_prefix_and_frequency_factors[rad/s-Hz-0.15915494309189535]",
+      "tests/test_semantic_edit_recovery_contract.py::test_backend_router_closes_both_owners_and_retains_first_failure[False-False]",
+      "tests/test_semantic_edit_recovery_contract.py::test_backend_router_closes_both_owners_and_retains_first_failure[False-True]",
+      "tests/test_semantic_edit_recovery_contract.py::test_backend_router_closes_both_owners_and_retains_first_failure[True-False]",
+      "tests/test_semantic_edit_recovery_contract.py::test_backend_router_closes_both_owners_and_retains_first_failure[True-True]",
+      "tests/test_semantic_edit_recovery_contract.py::test_common_and_style_entries_cannot_claim_each_others_checkpoint",
+      "tests/test_semantic_edit_recovery_contract.py::test_concurrent_binding_wins_before_compile_without_reinterpreting_completed_revision",
+      "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_does_not_borrow_callers_handled_failure[common]",
+      "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_does_not_borrow_callers_handled_failure[style]",
+      "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[None-common]",
+      "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[None-style]",
+      "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[failure1-common]",
+      "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[failure1-style]",
+      "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[failure2-common]",
+      "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[failure2-style]",
+      "tests/test_semantic_edit_recovery_contract.py::test_legacy_task_route_remains_its_own_authority_but_mixed_bindings_reject",
+      "tests/test_semantic_edit_recovery_contract.py::test_malformed_checkpoint_retains_its_owner_and_cannot_be_rebound[common]",
+      "tests/test_semantic_edit_recovery_contract.py::test_malformed_checkpoint_retains_its_owner_and_cannot_be_rebound[style]",
+      "tests/test_semantic_edit_recovery_contract.py::test_new_style_checkpoint_retains_original_caller_and_rejects_rebinding[figure_id]",
+      "tests/test_semantic_edit_recovery_contract.py::test_new_style_checkpoint_retains_original_caller_and_rejects_rebinding[samples]",
+      "tests/test_semantic_edit_recovery_contract.py::test_new_style_checkpoint_retains_original_caller_and_rejects_rebinding[style]",
+      "tests/test_semantic_edit_recovery_contract.py::test_new_style_checkpoint_retains_original_caller_and_rejects_rebinding[target]",
+      "tests/test_semantic_edit_recovery_contract.py::test_old_style_record_replays_literal_request_without_inventing_new_intent",
+      "tests/test_semantic_edit_recovery_contract.py::test_relocated_checkpoint_keeps_original_key_and_does_not_repeat_apply",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_does_not_allocate_inside_another_occupied_entry[notes.txt]",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_does_not_allocate_inside_another_occupied_entry[semantic-edit.json]",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_entry_admission_precedes_persistence_and_native_work[ancestor]",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_entry_admission_precedes_persistence_and_native_work[native]",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_entry_admission_precedes_persistence_and_native_work[revision]",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_entry_admission_precedes_persistence_and_native_work[root]",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_entry_admission_precedes_persistence_and_native_work[source]",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_owner_is_closed_when_execution_loses_reply",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_replay_does_not_bypass_original_engine_currentness[native]",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_replay_does_not_bypass_original_engine_currentness[source]",
+      "tests/test_semantic_edit_recovery_contract.py::test_style_replay_uses_original_binding_before_resolving_entrypoint",
       "tests/test_semantic_source_regions.py::test_all_missing_selected_pair_retains_source_slots_but_cannot_claim_visible_measurements",
       "tests/test_semantic_source_regions.py::test_append_keeps_independent_confirmed_ranges_and_missing_slots",
       "tests/test_semantic_source_regions.py::test_confirmed_source_cells_match_raw_and_resolved_ir_rows_masks_and_finite_bits[7]",
@@ -1894,6 +1954,28 @@
       "tests/test_temperature_workflow_repair.py::test_temperature_raw_drift_after_prepare_fails_before_renderer[added]",
       "tests/test_temperature_workflow_repair.py::test_temperature_raw_drift_after_prepare_fails_before_renderer[modified]",
       "tests/test_temperature_workflow_repair.py::test_temperature_task_sources_consume_preparation_attestation_without_rediscovery",
+      "tests/test_template_override_contract.py::test_create_regenerate_and_cold_request_replay_preserve_declared_presentation[ftir_spectrum-stacked_curve-axis0-legend]",
+      "tests/test_template_override_contract.py::test_create_regenerate_and_cold_request_replay_preserve_declared_presentation[torque_curve-curve-axis1-inline]",
+      "tests/test_template_override_contract.py::test_declared_ftir_legend_and_ticks_reach_native_and_cold_export",
+      "tests/test_template_override_contract.py::test_declared_options_preserve_false_none_and_legacy_fallback[None]",
+      "tests/test_template_override_contract.py::test_declared_options_preserve_false_none_and_legacy_fallback[marker1]",
+      "tests/test_template_override_contract.py::test_declared_options_preserve_false_none_and_legacy_fallback[marker2]",
+      "tests/test_template_override_contract.py::test_declared_options_preserve_false_none_and_legacy_fallback[marker3]",
+      "tests/test_template_override_contract.py::test_mechanical_declared_layout_keeps_scientific_labels_scale_and_coordinates[linear]",
+      "tests/test_template_override_contract.py::test_mechanical_declared_layout_keeps_scientific_labels_scale_and_coordinates[log]",
+      "tests/test_template_override_contract.py::test_missing_option_cannot_acquire_explicit_authority_from_marker_alone",
+      "tests/test_template_override_contract.py::test_option_presence_preserves_zero_empty_and_malformed_legacy_marker[legacy]",
+      "tests/test_template_override_contract.py::test_option_presence_preserves_zero_empty_and_malformed_legacy_marker[marker0]",
+      "tests/test_template_override_contract.py::test_option_presence_preserves_zero_empty_and_malformed_legacy_marker[marker1]",
+      "tests/test_template_override_contract.py::test_option_presence_preserves_zero_empty_and_malformed_legacy_marker[marker2]",
+      "tests/test_template_override_contract.py::test_presentation_defaults_do_not_replace_declared_label_mode[False-ftir_spectrum-stacked_curve-axis0-legend-inline]",
+      "tests/test_template_override_contract.py::test_presentation_defaults_do_not_replace_declared_label_mode[False-torque_curve-curve-axis1-inline-legend]",
+      "tests/test_template_override_contract.py::test_presentation_defaults_do_not_replace_declared_label_mode[True-ftir_spectrum-stacked_curve-axis0-legend-inline]",
+      "tests/test_template_override_contract.py::test_presentation_defaults_do_not_replace_declared_label_mode[True-torque_curve-curve-axis1-inline-legend]",
+      "tests/test_template_override_contract.py::test_template_semantics_ignore_nonaxis_metadata[_looks_like_frequency_axis-semantic3]",
+      "tests/test_template_override_contract.py::test_template_semantics_ignore_nonaxis_metadata[_looks_like_tensile_axis-semantic2]",
+      "tests/test_template_override_contract.py::test_template_semantics_ignore_nonaxis_metadata[_looks_like_torque_axis-semantic1]",
+      "tests/test_template_override_contract.py::test_template_semantics_ignore_nonaxis_metadata[_looks_like_wavenumber_axis-semantic0]",
       "tests/test_tensile_workbook_directory.py::test_real_curated_tensile_source_reaches_metric_gate_without_changing_data",
       "tests/test_tga_scientific_transform.py::test_real_single_tga_metrics_keep_legacy_names_and_measured_values",
       "tests/test_tga_scientific_transform.py::test_real_tga_transform_binds_source_columns_units_sample_and_points",
@@ -2025,6 +2107,110 @@
       "tests/test_zero_sd_bar_outline.py::test_public_zero_sd_grouped_bar_preserves_replicates_and_passes_create_and_cold_export[mean_sample_sd_n]"
     ],
     "synthetic_candidates": [
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[refusal]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[text]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cancel_from_final_text_callback_cannot_return_a_late_result",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cancellation_during_response_disposal_cannot_return_a_result",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cancellation_interrupts_only_its_active_socket_and_joins_monitor[connect]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cancellation_interrupts_only_its_active_socket_and_joins_monitor[error_body]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cancellation_interrupts_only_its_active_socket_and_joins_monitor[headers]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cancellation_interrupts_only_its_active_socket_and_joins_monitor[read]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cleanup_does_not_replace_original_protocol_or_cancellation_failure[False]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cleanup_does_not_replace_original_protocol_or_cancellation_failure[True]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cleanup_failure_is_redacted_and_other_resource_still_closes[both]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cleanup_failure_is_redacted_and_other_resource_still_closes[connection]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_cleanup_failure_is_redacted_and_other_resource_still_closes[response]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_detached_http_response_retains_its_connected_socket_for_cancellation",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_formatted_transport_traceback_cannot_expose_the_configured_credential[False]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_formatted_transport_traceback_cannot_expose_the_configured_credential[True]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_monitor_start_failure_closes_connection_and_is_redacted",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_non_cancelled_io_failure_remains_a_redacted_provider_error",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_protocol_failures_keep_their_reason_and_close_all_resources[invalid-utf8]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_protocol_failures_keep_their_reason_and_close_all_resources[missing-terminal]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_protocol_failures_keep_their_reason_and_close_all_resources[nonobject-json]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_protocol_failures_keep_their_reason_and_close_all_resources[nontext-delta]",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_stream_failure_redacts_configured_credential",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
+      {
+        "nodeid": "tests/test_ai_transport_lifecycle.py::test_success_explicitly_closes_response_and_connection_once",
+        "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."
+      },
       {
         "nodeid": "tests/test_assistant_contract.py::test_any_provider_response_is_bound_to_the_same_catalog[another-provider]",
         "reason": "Generated assistant requests and typed operation batches use fixed public string/number/boolean values. The existing provider probe supplies only an in-memory context; provider translation never calls transport. Qt worker controls emit local signals without native document mutation, and the invalid GUI batch is rejected before native validation. No source file, golden, private input, network model call or user service is used; original private cases remain unchanged."
@@ -6986,6 +7172,142 @@
         "reason": "dataset/node helpers construct literal in-memory coordinates; the exact parametrized registered prefix/frequency factor is applied without scientific fixture reads."
       },
       {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_backend_router_closes_both_owners_and_retains_first_failure[False-False]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_backend_router_closes_both_owners_and_retains_first_failure[False-True]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_backend_router_closes_both_owners_and_retains_first_failure[True-False]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_backend_router_closes_both_owners_and_retains_first_failure[True-True]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_common_and_style_entries_cannot_claim_each_others_checkpoint",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_concurrent_binding_wins_before_compile_without_reinterpreting_completed_revision",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_does_not_borrow_callers_handled_failure[common]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_does_not_borrow_callers_handled_failure[style]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[None-common]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[None-style]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[failure1-common]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[failure1-style]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[failure2-common]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure[failure2-style]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_legacy_task_route_remains_its_own_authority_but_mixed_bindings_reject",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_malformed_checkpoint_retains_its_owner_and_cannot_be_rebound[common]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_malformed_checkpoint_retains_its_owner_and_cannot_be_rebound[style]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_new_style_checkpoint_retains_original_caller_and_rejects_rebinding[figure_id]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_new_style_checkpoint_retains_original_caller_and_rejects_rebinding[samples]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_new_style_checkpoint_retains_original_caller_and_rejects_rebinding[style]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_new_style_checkpoint_retains_original_caller_and_rejects_rebinding[target]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_old_style_record_replays_literal_request_without_inventing_new_intent",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_relocated_checkpoint_keeps_original_key_and_does_not_repeat_apply",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_does_not_allocate_inside_another_occupied_entry[notes.txt]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_does_not_allocate_inside_another_occupied_entry[semantic-edit.json]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_entry_admission_precedes_persistence_and_native_work[ancestor]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_entry_admission_precedes_persistence_and_native_work[native]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_entry_admission_precedes_persistence_and_native_work[revision]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_entry_admission_precedes_persistence_and_native_work[root]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_entry_admission_precedes_persistence_and_native_work[source]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_owner_is_closed_when_execution_loses_reply",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_replay_does_not_bypass_original_engine_currentness[native]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_replay_does_not_bypass_original_engine_currentness[source]",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
+        "nodeid": "tests/test_semantic_edit_recovery_contract.py::test_style_replay_uses_original_binding_before_resolving_entrypoint",
+        "reason": "Temporary generated semantic documents and fake backend/source/native sentinels exercise actual PlotService replay, entry admission and resource ownership. No private corpus, user service or historical golden is used."
+      },
+      {
         "nodeid": "tests/test_semantic_source_regions.py::test_all_missing_selected_pair_retains_source_slots_but_cannot_claim_visible_measurements",
         "reason": "confirmed_pairs() writes decimal literals and nullable source rows to tmp_path; expected rows/masks/float.hex are derived from that generated CSV. Plan, instrument-view metadata and append controls are literal in-memory structures."
       },
@@ -8910,6 +9232,94 @@
         "reason": "original() writes CSV from literal header/row arguments; instrument() creates deterministic UTF16 stage data. Workbook selection controls generate their sheets. Task effect controls monkeypatch execute_managed; there is no imported private fixture or native call."
       },
       {
+        "nodeid": "tests/test_template_override_contract.py::test_create_regenerate_and_cold_request_replay_preserve_declared_presentation[ftir_spectrum-stacked_curve-axis0-legend]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_create_regenerate_and_cold_request_replay_preserve_declared_presentation[torque_curve-curve-axis1-inline]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_declared_ftir_legend_and_ticks_reach_native_and_cold_export",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_declared_options_preserve_false_none_and_legacy_fallback[None]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_declared_options_preserve_false_none_and_legacy_fallback[marker1]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_declared_options_preserve_false_none_and_legacy_fallback[marker2]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_declared_options_preserve_false_none_and_legacy_fallback[marker3]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_mechanical_declared_layout_keeps_scientific_labels_scale_and_coordinates[linear]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_mechanical_declared_layout_keeps_scientific_labels_scale_and_coordinates[log]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_missing_option_cannot_acquire_explicit_authority_from_marker_alone",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_option_presence_preserves_zero_empty_and_malformed_legacy_marker[legacy]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_option_presence_preserves_zero_empty_and_malformed_legacy_marker[marker0]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_option_presence_preserves_zero_empty_and_malformed_legacy_marker[marker1]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_option_presence_preserves_zero_empty_and_malformed_legacy_marker[marker2]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_presentation_defaults_do_not_replace_declared_label_mode[False-ftir_spectrum-stacked_curve-axis0-legend-inline]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_presentation_defaults_do_not_replace_declared_label_mode[False-torque_curve-curve-axis1-inline-legend]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_presentation_defaults_do_not_replace_declared_label_mode[True-ftir_spectrum-stacked_curve-axis0-legend-inline]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_presentation_defaults_do_not_replace_declared_label_mode[True-torque_curve-curve-axis1-inline-legend]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_template_semantics_ignore_nonaxis_metadata[_looks_like_frequency_axis-semantic3]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_template_semantics_ignore_nonaxis_metadata[_looks_like_tensile_axis-semantic2]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_template_semantics_ignore_nonaxis_metadata[_looks_like_torque_axis-semantic1]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
+        "nodeid": "tests/test_template_override_contract.py::test_template_semantics_ignore_nonaxis_metadata[_looks_like_wavenumber_axis-semantic0]",
+        "reason": "Generated request/axis values and a temporary synthetic CSV exercise explicit-option provenance and actual native VSZ/PDF cold reopen/export with exact datasets. Uses the pinned native runtime only; no private corpus, historical golden, paid model or user service."
+      },
+      {
         "nodeid": "tests/test_unit_relations.py::test_celsius_conversion_requires_a_confirmed_temperature_binding[context0]",
         "reason": "In-memory exact unit endpoints/context and unchanged registered executor, literal values, compound refusals and explicit temperature evidence; no data-file or private corpus read."
       },
@@ -9410,7 +9820,7 @@
         "reason": "The body writes all eight literal zero_sd.csv replicate rows under tmp_path, hashes that file and writes its own request JSON. The local _cli uses the canonical wrapper with actual subprocess wait and reads only its own stdout/stderr JSON. All document/spec/native lines/raw arrays/audit/cold-export/delivery CSV inputs are newly generated from this source. loaded_native_document disables unsafe commands/import callbacks; run_document_worker receives only generated document/spec paths. native-evidence.json and CLI run records are outputs, never fixture inputs. No retained private experiment/native golden is opened."
       }
     ],
-    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion. 2026-10-16: reviewed all 106 newly collected generated round-2 nodes, including the explicit paper capture-retry rename, and changed test/helper bytes. Exact module-specific dispositions are recorded per added node. All retained lifecycle tiers, 165 private dependencies and 111 original failure responsibilities remain unchanged; no access-completeness promotion. 2026-10-16: reviewed 27 additional generated publication-completion and canonical-rule rejection cases after the final delivery fix; all earlier dispositions, lifecycle tiers and private responsibilities remain unchanged. 2026-10-16: synchronized the final group raw-source guard before collection; all 2177 tracked file bytes matched the integration snapshot. Reviewed three new generated focused group continuation cases and strengthened existing native-case source-drift assertions, with no new native node or old tier change. Earlier private and synthetic dispositions remain unchanged. 2026-10-16: direct collection in the actual integration root after the existing generated MCP stdio discovery case was corrected to require all 43 unique tools and the closed resume schema. No node, lifecycle tier, input classification, private responsibility or earlier synthetic disposition changed. 2026-10-18: independent post-push contracts/lifecycle review and root inspection of generated secondary-selector, table-question, native continuation/decision and Managed same-stage audit controls; exact new node dispositions retained. All old nodes, tiers, private responsibilities and incomplete access-capture status remain unchanged. 2026-10-19: independent delta review from b53d8ec to exact 5df8378 source snapshot: all 44 newly collected public nodes, the noncandidate category-rotation rename, all changed bodies in 17 test modules, and their called helpers, injected fixtures, collection hooks and native capture child were inspected. Generated-input reasons are recorded per exact new node. All 639 previous candidate dispositions, 165 private cases/dependencies, 111 original private responsibilities and lifecycle tiers are preserved. This is static review only; inventory completeness remains false and no fresh access-audit completion is asserted. 2026-10-20: independent final static binding to clean fa49202e8ade63ccd70c3557271076d0fdc638fd in a new worktree. One fresh genuinely unfiltered python -m pytest --collect-only collected and retained all 5739 nodes (5337 focused, 402 comprehensive) with zero test bodies and unchanged before/after bytes for all 404 test/helper Python files. All 390 added public parameters relative to the previous 5349-node static inventory have explicit retained or incremental source/helper reviews (61 early source/display/raw/config parameters, 325 subsequent parameters and four warning-envelope controls); actual collected parameter values and current reviewed body hashes are bound independently. All old candidate/reason rows, 165 private case dependencies, 111 original failure responsibilities and old tiers remain intact. This is collection/source metadata only: inventory_complete remains false and no fresh access-capture completeness or scientific acceptance is asserted. 2026-10-20: reviewed only the seven-file final-gate cleanup at clean 5349fd706929248c81006cb986fa3279d42fbc9f against 54f63eae3a710a2a8db438ef55aa58429c47b417. Four test/helper source files change only fixed-length zip strictness, an unused import, equivalent native-coordinate variable handling/intentional adjacent-pair zip, and three already-forwarded default None kwargs in the existing recorder test. Two product files lose EOF blank lines; the legend facade explicitly reexports the identical unchanged leaf function. Fresh unfiltered collection in another new worktree again retained all 5739 nodes, original tiers and parameter values with zero bodies; all 404 test/helper bytes match before/after and bind the new source aggregate. The previous 390 reviews, all candidate/reason rows, 165 private dependencies, 111 responsibilities and exact manifest bytes remain unchanged. Earlier epoch evidence is retained; inventory completeness remains false and access capture remains unknown/BLOCKED. The 2026-10-20 integration delta was independently read with its indirect helpers and fixtures: 224 generated/public nodes in fourteen new modules and three existing strict-owner path parameters. The real unfiltered collector exited 0 with 5966 nodes (5559 focused, 407 comprehensive) and zero test bodies; its enclosing helper exited 1 on a missing allowlist entry before metadata writes. Metadata was subsequently bound without repeating collection. Original 5739 identities and tiers, 165 private cases/dependencies, and 111 responsibilities were preserved. 2026-10-21: reviewed the exact generated source-scope/unit-context/contract delta and its existing helpers, fixtures and static parameter values. One actual full collection retained 6024 unique nodes (5617 focused/407 comprehensive), zero bodies. Two retired node names are explicitly replaced by three header parameters and one independent mixed-format control; 60 additions have exact source-based reasons. All 165 private cases/dependencies, 111 original responsibilities and retained lifecycle tiers are unchanged. Only collection/source metadata is rebound; inventory_complete remains false and access/scientific completeness is not asserted. 2026-10-21 phase2: independent literal/helper source review covers33 changed test files,35 helper files and the unchanged strict-configuration parameter owner. One actual unfiltered collection retained6299 unique nodes (5892 focused/407 comprehensive), zero bodies. 276 added public nodes have exact source-based reasons; one old XY serialization node becomes two explicit Boolean parameters. All private cases, dependencies, responsibilities, baseline membership and retained tiers are unchanged. Only exact collection/source metadata is rebound; inventory_complete remains false and this is neither access-completeness nor scientific acceptance. 2026-10-21 phase2 final gate repair: independent literal/helper source review now covers39 changed test files,45 helpers and the unchanged strict configuration parameter family. After real integrated failures justified control and actionable-hint corrections, a second original unfiltered collection retained6308 unique nodes (5901 focused/407 comprehensive), zero bodies. Eleven added public controls have exact source reasons; two retired unparameterized controls become explicit Boolean/tail-row variants. The first6299 collection remains historical. All private cases/dependencies/responsibilities/baseline and retained lifecycle tiers remain exact. Only collection/source metadata is rebound; inventory_complete remains false and no access or scientific acceptance is asserted. 2026-10-21 frozen main candidate: one actual unfiltered collection completed with 6445 nodes, zero bodies and unchanged before/after source. Independent exact source dispositions cover all137 added public/focused nodes, nine file families, two helpers, eight location-only socket fixture migrations and seven strict path parameters; retained nodes/tiers are unchanged. Review file SHA256 f7a250f99a433d38ebdd383b65da122b3e66062d4b448d7ef493cbb297a5fa2c. This binds source/collection metadata only; final native/full/access acceptance remains BLOCKED and inventory_complete remains false. 2026-10-21 collector02: one actual unfiltered collection completed with 6451 nodes, zero bodies and unchanged before/after source. Independent exact source dispositions cover six added pure public/focused nodes in two test files for stable native-image handshake and held-process cleanup; all old 6445 nodes, tiers and reasons are unchanged. Review file SHA256 868f3165f6e551887f83e3dd257a7af4263c8f6cb64e64574a0ee20c25da6f63. This binds source/collection metadata only; final full/access acceptance remains BLOCKED and inventory_complete remains false. 2026-10-21 collector03 retains all6451 actual nodes and tiers after the finite startup-owner fix and seven explicit strict additions. Original195 residual members and assertions are unchanged; independent patch review70719eece081703920f4879dece088314db40ebf5b7350cfb50a9f722f9bf8e2. This update binds only the changed test source digest; all candidates/reasons/cases/dependencies and inventory_complete=false are preserved. Full/access acceptance remains pending. 2026-10-21 collector04: one actual unfiltered collection completed with 6474 nodes, zero bodies and unchanged before/after source. Independent exact source dispositions cover 23 added pure public/focused nodes for effective launch/reuse environment, routing refusal and teardown cleanup. All old 6451 nodes, tiers and reasons are unchanged; six modified existing test sources retain their parameters and original assertions. Review file SHA256 9eaaa5264a6ddef5d2faa57de1d74f460c5d0f06cd7d7a915e9d5859c4bf85f0. Original full02 remains FAIL (6051 passed, 50 failed, 701 errors), original capture remains BLOCKED; current repairs have no full/access acceptance yet. Static inventory_complete remains false. 2026-10-23 collector03: one actual unfiltered collection completed with 6475 nodes, zero test bodies and exact before/after source. Independent source and exact node disposition adds one pure public/focused terminal-child original nonblocking wait counterproof (10 branches); all old 6474 node IDs, tiers and reasons remain unchanged. Old9 named test/helper definitions and26 assertions in the modified test are AST-identical. Review file SHA256 46887c12ba22c107d45dc796090c511798b72931d5f6907c382544b3c3db4044. The prior141-node diagnostic remains test PASS/capture BLOCKED for30 missing child exit records; metadata rebinding is no current full/access/scientific acceptance. Static inventory_complete remains false. 2026-10-23 collection05: actual unfiltered collection retains exactly 6475 node IDs and tiers, zero bodies and unchanged before/after source. Existing public/comprehensive uname unknown-exit control now forwards original platform kwargs and uses its own POSIX builtin wait outside the observer port; all five modes and three original assertions remain, with four exact boundary/root/exit-ledger assertions added. Prior static prediction that terminal harvesting alone would make the old control COMPLETE was incorrect: old fixture discarded encoding=utf8 and failed input admission. Original 4-pass/1-fail control result is retained; corrected five controls actually passed. No node, tier, case, dependency, reason, manifest or production change. Independent erratum/source review file SHA256 cb8ce92d384c9fea63a8ca8a877c3c1a0045c3af43a4a8be10908c9575d3fb06. This digest update asserts no full/private/access acceptance; inventory_complete remains false. 2026-10-23 collection06: actual unfiltered collection retained6490 nodes, zero bodies and exact before/after source. Fifteen independently reviewed generated public/focused process-port signature/holder and finite socket-review traversal controls are added; old6475 node IDs, tiers and reasons remain unchanged. Additional composition-fixture source review is pinned separately. Private165 cases/dependencies,111 responsibilities and inventory_complete=false are preserved. Review file SHA256 14d6be6c4b71efe94d412bb5a7285dde34a7724dfbe1917e049993f72dbe5674. Historical failed/interrupted epochs stay unchanged; scientific/access acceptance is NOT_ASSERTED. 2026-10-23 collection07: actual unfiltered collection retained6493 nodes, zero bodies and exact before/after source. Three independently reviewed generated public/focused ledger traversal, per-call source identity and phase/metadata/socket order counterproofs are added. All old6490 node IDs and lifecycle tiers, all old reasons, private165 cases/dependencies,111 responsibilities and inventory_complete=false remain exact. Review file SHA256 16a4b88271fc1ba27f30b28d6da77b494f9e4524fb365c939f7f25a4e0fd07e9. Historical failed/interrupted epochs stay unchanged; scientific/access acceptance is NOT_ASSERTED. 2026-10-23 collection08: actual unfiltered6493-node collection, zero bodies and stable exact source. Only source hashes are rebound after the reviewed future normalization-summary producer correction and extensions to four existing generated tests; no node, tier, reason, private case or responsibility changes. All6493 nodes/6086focused/407comprehensive,1665 prior reasons,private165/cases,111 responsibilities and inventory_complete=false remain exact. New generated/imported scientific provenance hashes may honestly change; old ledgers/documents/hashes/goldens remain unchanged. Review file SHA256 e7c311042e08861e88ee4c1a50f4e74d74bd836432e0adf65981cd448fb816f9; scientific/access acceptance is NOT_ASSERTED. 2026-10-23 collection10: actual unfiltered6512-node collection, zero bodies and stable exact source; 19 exact generated/public dispositions add13focused and6comprehensive nodes for the registered qualitative XRD display and strict owner. All old6493 nodes, tiers,1665 reasons,private165 cases and111 responsibilities remain exact. Actual native04 executed only the named one lifecycle node, not all six or the final full. Finite review SHA256 9a2953a00d69b73954948f7958704baa156904bdcadc1ea85f3fd36699a5c1b1; no overall scientific/access acceptance is asserted and inventory_complete remains false. 2026-10-23 collection11: actual unfiltered6512-node collection, zero bodies and stable exact source. Only test-source hashes are rebound after two minimal existing test-contract corrections: the reviewed strict display-leaf addition preserves the195 residual and every old assertion; the Intake export fake explicitly accepts/asserts the actual new-creation keyword and preserves its original single prepare/export/publish and bytes/hash/path assertions. No production, node, tier, reason or private mapping changes. All6512 nodes/6099focused/413comprehensive,1684 reasons including the19 AU public dispositions,private165 cases and111 responsibilities remain exact. Original changed06 remains FAIL with2failed/5739passed; Ruff/mypy496/diff passed. Its subsequent exact two-node run passed, without relabeling that failed run. Review SHA256 41fb18ca05a260e3001d4a62705bdbef0c33165a9d59a199e8fe97f34ac22c97; overall scientific/access acceptance is NOT_ASSERTED and inventory_complete remains false. 2026-10-23 capture collection01: original unfiltered6523-node collection, zero bodies and stable clean8ab5ecd source. Exactly11 generated public/focused nodes add7 source/runtime boundary controls and4 endpoint/actual-exit controls. All old6512 nodes and tiers,1684 old reasons,private165 cases,111 responsibilities and original baseline-failure digest remain exact. Final unified test-source digest is bound; no test/native/full result or access completeness is asserted. Original a48e full04 pytest6512PASS/captureBLOCKED81 remains historical and unchanged. Finite review SHA256 31ff4969526016e1bd2e6b67527e345d751ed27b742e2c8f0a56d861f0fa615c; inventory_complete remains false. 2026-10-23 live collection01: original unfiltered6538-node collection, zero bodies and stable clean325489c source. Exactly15 public nodes add14 focused generated source/runtime registration counterexamples and1 comprehensive real public-directory metadata prefix. All old6523 nodes and tiers,1695 old reasons,private165 cases,111 responsibilities and original baseline-failure digest remain exact. Final unified test-source digest is bound; no test/native/full result or access completeness is asserted. Original 4d full01 pytest6523PASS/captureBLOCKED34 remains historical and unchanged. Finite review SHA256 fab7588e125daa7b65ead3295269ff90ec2c04eb27d41600072de0700bf2dbf4; inventory_complete remains false. 2026-10-24 wrapper/geometry diagnostic integration: actual unfiltered6553-node collection with zero bodies; one generated public/focused foreign-source rejection control added. Six existing wrapper dispositions now describe the owned-source selected-interpreter probe, retaining public private-namespace rejection. Geometry diagnostics retain every existing hash and strengthen same-runtime frozen-reference/order/type/float-bit assertions. Original private165 cases, tiers, baseline identity and111 responsibilities are unchanged; no full/access/scientific acceptance is asserted. 2026-10-24 numeric integration: actual unfiltered6561-node collection, zero bodies; eight exact generated public/focused numeric-mode controls added. Current v2, stored v1 and unversioned signature-bound reconstruction remain distinct; CSV/TSV lexemes, integer boundaries and complete source evidence were independently reviewed. The geometry test retains original hashes and adds one exact independently observed math-response profile plus same-host frozen-reference/order/type/float-bit checks. All private165 cases, old tiers,111 responsibilities and baseline identities remain unchanged; completeness and scientific acceptance are not asserted. 2026-10-24 finite selection closure: existing categorical and generic-axis owners now bind the previously unowned component implementation and numeric contract test, preserving all existing targets and unknown-path rejection. One existing generated owner test gains selection assertions; node membership/count remains the actual 6561 collection. Three existing numeric reasons are individually scoped to their bodies; private cases and completeness remain unchanged. 2026-10-24 integrated mapping/CI static review: actual unfiltered6599-node collection with465 current Python test/helper sources, zero bodies,38 added generated dispositions (37focused/1comprehensive), one newly explicit existing public radar disposition and updated generated-wide capture description. All original6561 nodes/tiers, private165 cases/dependencies,111 responsibilities and baseline-failure identities remain exact. Existing immutable baseline bytes were materialized unchanged; no current full/native/Linux/access acceptance is asserted. 2026-10-24 progress unit static review: actual unfiltered6607-node collection with465 test/helper sources and zero bodies; eight additional generated focused controls. Outer-plugin isolation was independently reviewed against retained actual24-node selected/executed completion. All original6599 nodes/tiers, private165 dependencies, responsibilities and baseline-failure identity remain unchanged. No full/access/science acceptance is asserted. 2026-10-24 static-inspection preparation review: actual unfiltered6615-node collection,465 test/helper sources and zero bodies; eight generated focused controls added to the existing native boundary test file. Local fake component prerequisites never impersonate a native environment or replace actual host guards. All prior6607 nodes/tiers, private165 dependencies, responsibilities and baseline-failure identity remain unchanged. No full/access/science claim. 2026-10-25 assistant proposal admission: actual unfiltered6634-node zero-body collection with465 test/helper sources;19 generated focused controls added in test_assistant_contract. All original6615 nodes retain their order and tiers;165 private cases/dependencies,111 responsibilities and original failure identities unchanged. No full/native/access acceptance asserted. 2026-10-25 integrated quick entry: actual zero-body6657-node collection with465 test/helper sources,23 additional generated focused controls. All prior6634 IDs/order/tiers,165 private cases and111 responsibilities unchanged; no release/access/scientific acceptance asserted. 2026-10-25 series style boundary: actual unfiltered6673-node zero-body collection with465 test/helper sources;16 synthetic contracts added (15focused/1comprehensive). All original6657 node order/tiers,165 private cases/dependencies,111 responsibilities and original failure identities retained. No full/capture/scientific acceptance claimed.",
+    "review_method": "All collected nodes and all test/helper bytes; AST call/reference graph through helpers, private root constants and pytest fixture-argument injection, followed by exact per-parameter source/production-argument review. Newly introduced evidence/CLI fixture roots, raw-environment isolation, and mocked discovery/runner seams inspected. Source resolver aliases and optional doctor presence checks inspected. No fixture-dependent node is inferred from a sibling. 2026-10-16: independently reviewed all 64 new generated plotting/runtime/delivery cases and changed test/helper bytes; exact generated-source reasons are retained per node. Private membership and access-completeness status are unchanged. 2026-10-16: independent review of 43 new generated current-native-layout cases binds exact key/graph identity, native marker geometry and load drift; all previous private dispositions and incomplete access-capture status remain unchanged. 2026-10-16: independent review of five generated cold-framework startup cases and one exact generated UVvis overlap rejection; the valid rollback fixture retains all original scientific assertions. No private membership or access-completeness promotion. 2026-10-16: reviewed all 106 newly collected generated round-2 nodes, including the explicit paper capture-retry rename, and changed test/helper bytes. Exact module-specific dispositions are recorded per added node. All retained lifecycle tiers, 165 private dependencies and 111 original failure responsibilities remain unchanged; no access-completeness promotion. 2026-10-16: reviewed 27 additional generated publication-completion and canonical-rule rejection cases after the final delivery fix; all earlier dispositions, lifecycle tiers and private responsibilities remain unchanged. 2026-10-16: synchronized the final group raw-source guard before collection; all 2177 tracked file bytes matched the integration snapshot. Reviewed three new generated focused group continuation cases and strengthened existing native-case source-drift assertions, with no new native node or old tier change. Earlier private and synthetic dispositions remain unchanged. 2026-10-16: direct collection in the actual integration root after the existing generated MCP stdio discovery case was corrected to require all 43 unique tools and the closed resume schema. No node, lifecycle tier, input classification, private responsibility or earlier synthetic disposition changed. 2026-10-18: independent post-push contracts/lifecycle review and root inspection of generated secondary-selector, table-question, native continuation/decision and Managed same-stage audit controls; exact new node dispositions retained. All old nodes, tiers, private responsibilities and incomplete access-capture status remain unchanged. 2026-10-19: independent delta review from b53d8ec to exact 5df8378 source snapshot: all 44 newly collected public nodes, the noncandidate category-rotation rename, all changed bodies in 17 test modules, and their called helpers, injected fixtures, collection hooks and native capture child were inspected. Generated-input reasons are recorded per exact new node. All 639 previous candidate dispositions, 165 private cases/dependencies, 111 original private responsibilities and lifecycle tiers are preserved. This is static review only; inventory completeness remains false and no fresh access-audit completion is asserted. 2026-10-20: independent final static binding to clean fa49202e8ade63ccd70c3557271076d0fdc638fd in a new worktree. One fresh genuinely unfiltered python -m pytest --collect-only collected and retained all 5739 nodes (5337 focused, 402 comprehensive) with zero test bodies and unchanged before/after bytes for all 404 test/helper Python files. All 390 added public parameters relative to the previous 5349-node static inventory have explicit retained or incremental source/helper reviews (61 early source/display/raw/config parameters, 325 subsequent parameters and four warning-envelope controls); actual collected parameter values and current reviewed body hashes are bound independently. All old candidate/reason rows, 165 private case dependencies, 111 original failure responsibilities and old tiers remain intact. This is collection/source metadata only: inventory_complete remains false and no fresh access-capture completeness or scientific acceptance is asserted. 2026-10-20: reviewed only the seven-file final-gate cleanup at clean 5349fd706929248c81006cb986fa3279d42fbc9f against 54f63eae3a710a2a8db438ef55aa58429c47b417. Four test/helper source files change only fixed-length zip strictness, an unused import, equivalent native-coordinate variable handling/intentional adjacent-pair zip, and three already-forwarded default None kwargs in the existing recorder test. Two product files lose EOF blank lines; the legend facade explicitly reexports the identical unchanged leaf function. Fresh unfiltered collection in another new worktree again retained all 5739 nodes, original tiers and parameter values with zero bodies; all 404 test/helper bytes match before/after and bind the new source aggregate. The previous 390 reviews, all candidate/reason rows, 165 private dependencies, 111 responsibilities and exact manifest bytes remain unchanged. Earlier epoch evidence is retained; inventory completeness remains false and access capture remains unknown/BLOCKED. The 2026-10-20 integration delta was independently read with its indirect helpers and fixtures: 224 generated/public nodes in fourteen new modules and three existing strict-owner path parameters. The real unfiltered collector exited 0 with 5966 nodes (5559 focused, 407 comprehensive) and zero test bodies; its enclosing helper exited 1 on a missing allowlist entry before metadata writes. Metadata was subsequently bound without repeating collection. Original 5739 identities and tiers, 165 private cases/dependencies, and 111 responsibilities were preserved. 2026-10-21: reviewed the exact generated source-scope/unit-context/contract delta and its existing helpers, fixtures and static parameter values. One actual full collection retained 6024 unique nodes (5617 focused/407 comprehensive), zero bodies. Two retired node names are explicitly replaced by three header parameters and one independent mixed-format control; 60 additions have exact source-based reasons. All 165 private cases/dependencies, 111 original responsibilities and retained lifecycle tiers are unchanged. Only collection/source metadata is rebound; inventory_complete remains false and access/scientific completeness is not asserted. 2026-10-21 phase2: independent literal/helper source review covers33 changed test files,35 helper files and the unchanged strict-configuration parameter owner. One actual unfiltered collection retained6299 unique nodes (5892 focused/407 comprehensive), zero bodies. 276 added public nodes have exact source-based reasons; one old XY serialization node becomes two explicit Boolean parameters. All private cases, dependencies, responsibilities, baseline membership and retained tiers are unchanged. Only exact collection/source metadata is rebound; inventory_complete remains false and this is neither access-completeness nor scientific acceptance. 2026-10-21 phase2 final gate repair: independent literal/helper source review now covers39 changed test files,45 helpers and the unchanged strict configuration parameter family. After real integrated failures justified control and actionable-hint corrections, a second original unfiltered collection retained6308 unique nodes (5901 focused/407 comprehensive), zero bodies. Eleven added public controls have exact source reasons; two retired unparameterized controls become explicit Boolean/tail-row variants. The first6299 collection remains historical. All private cases/dependencies/responsibilities/baseline and retained lifecycle tiers remain exact. Only collection/source metadata is rebound; inventory_complete remains false and no access or scientific acceptance is asserted. 2026-10-21 frozen main candidate: one actual unfiltered collection completed with 6445 nodes, zero bodies and unchanged before/after source. Independent exact source dispositions cover all137 added public/focused nodes, nine file families, two helpers, eight location-only socket fixture migrations and seven strict path parameters; retained nodes/tiers are unchanged. Review file SHA256 f7a250f99a433d38ebdd383b65da122b3e66062d4b448d7ef493cbb297a5fa2c. This binds source/collection metadata only; final native/full/access acceptance remains BLOCKED and inventory_complete remains false. 2026-10-21 collector02: one actual unfiltered collection completed with 6451 nodes, zero bodies and unchanged before/after source. Independent exact source dispositions cover six added pure public/focused nodes in two test files for stable native-image handshake and held-process cleanup; all old 6445 nodes, tiers and reasons are unchanged. Review file SHA256 868f3165f6e551887f83e3dd257a7af4263c8f6cb64e64574a0ee20c25da6f63. This binds source/collection metadata only; final full/access acceptance remains BLOCKED and inventory_complete remains false. 2026-10-21 collector03 retains all6451 actual nodes and tiers after the finite startup-owner fix and seven explicit strict additions. Original195 residual members and assertions are unchanged; independent patch review70719eece081703920f4879dece088314db40ebf5b7350cfb50a9f722f9bf8e2. This update binds only the changed test source digest; all candidates/reasons/cases/dependencies and inventory_complete=false are preserved. Full/access acceptance remains pending. 2026-10-21 collector04: one actual unfiltered collection completed with 6474 nodes, zero bodies and unchanged before/after source. Independent exact source dispositions cover 23 added pure public/focused nodes for effective launch/reuse environment, routing refusal and teardown cleanup. All old 6451 nodes, tiers and reasons are unchanged; six modified existing test sources retain their parameters and original assertions. Review file SHA256 9eaaa5264a6ddef5d2faa57de1d74f460c5d0f06cd7d7a915e9d5859c4bf85f0. Original full02 remains FAIL (6051 passed, 50 failed, 701 errors), original capture remains BLOCKED; current repairs have no full/access acceptance yet. Static inventory_complete remains false. 2026-10-23 collector03: one actual unfiltered collection completed with 6475 nodes, zero test bodies and exact before/after source. Independent source and exact node disposition adds one pure public/focused terminal-child original nonblocking wait counterproof (10 branches); all old 6474 node IDs, tiers and reasons remain unchanged. Old9 named test/helper definitions and26 assertions in the modified test are AST-identical. Review file SHA256 46887c12ba22c107d45dc796090c511798b72931d5f6907c382544b3c3db4044. The prior141-node diagnostic remains test PASS/capture BLOCKED for30 missing child exit records; metadata rebinding is no current full/access/scientific acceptance. Static inventory_complete remains false. 2026-10-23 collection05: actual unfiltered collection retains exactly 6475 node IDs and tiers, zero bodies and unchanged before/after source. Existing public/comprehensive uname unknown-exit control now forwards original platform kwargs and uses its own POSIX builtin wait outside the observer port; all five modes and three original assertions remain, with four exact boundary/root/exit-ledger assertions added. Prior static prediction that terminal harvesting alone would make the old control COMPLETE was incorrect: old fixture discarded encoding=utf8 and failed input admission. Original 4-pass/1-fail control result is retained; corrected five controls actually passed. No node, tier, case, dependency, reason, manifest or production change. Independent erratum/source review file SHA256 cb8ce92d384c9fea63a8ca8a877c3c1a0045c3af43a4a8be10908c9575d3fb06. This digest update asserts no full/private/access acceptance; inventory_complete remains false. 2026-10-23 collection06: actual unfiltered collection retained6490 nodes, zero bodies and exact before/after source. Fifteen independently reviewed generated public/focused process-port signature/holder and finite socket-review traversal controls are added; old6475 node IDs, tiers and reasons remain unchanged. Additional composition-fixture source review is pinned separately. Private165 cases/dependencies,111 responsibilities and inventory_complete=false are preserved. Review file SHA256 14d6be6c4b71efe94d412bb5a7285dde34a7724dfbe1917e049993f72dbe5674. Historical failed/interrupted epochs stay unchanged; scientific/access acceptance is NOT_ASSERTED. 2026-10-23 collection07: actual unfiltered collection retained6493 nodes, zero bodies and exact before/after source. Three independently reviewed generated public/focused ledger traversal, per-call source identity and phase/metadata/socket order counterproofs are added. All old6490 node IDs and lifecycle tiers, all old reasons, private165 cases/dependencies,111 responsibilities and inventory_complete=false remain exact. Review file SHA256 16a4b88271fc1ba27f30b28d6da77b494f9e4524fb365c939f7f25a4e0fd07e9. Historical failed/interrupted epochs stay unchanged; scientific/access acceptance is NOT_ASSERTED. 2026-10-23 collection08: actual unfiltered6493-node collection, zero bodies and stable exact source. Only source hashes are rebound after the reviewed future normalization-summary producer correction and extensions to four existing generated tests; no node, tier, reason, private case or responsibility changes. All6493 nodes/6086focused/407comprehensive,1665 prior reasons,private165/cases,111 responsibilities and inventory_complete=false remain exact. New generated/imported scientific provenance hashes may honestly change; old ledgers/documents/hashes/goldens remain unchanged. Review file SHA256 e7c311042e08861e88ee4c1a50f4e74d74bd836432e0adf65981cd448fb816f9; scientific/access acceptance is NOT_ASSERTED. 2026-10-23 collection10: actual unfiltered6512-node collection, zero bodies and stable exact source; 19 exact generated/public dispositions add13focused and6comprehensive nodes for the registered qualitative XRD display and strict owner. All old6493 nodes, tiers,1665 reasons,private165 cases and111 responsibilities remain exact. Actual native04 executed only the named one lifecycle node, not all six or the final full. Finite review SHA256 9a2953a00d69b73954948f7958704baa156904bdcadc1ea85f3fd36699a5c1b1; no overall scientific/access acceptance is asserted and inventory_complete remains false. 2026-10-23 collection11: actual unfiltered6512-node collection, zero bodies and stable exact source. Only test-source hashes are rebound after two minimal existing test-contract corrections: the reviewed strict display-leaf addition preserves the195 residual and every old assertion; the Intake export fake explicitly accepts/asserts the actual new-creation keyword and preserves its original single prepare/export/publish and bytes/hash/path assertions. No production, node, tier, reason or private mapping changes. All6512 nodes/6099focused/413comprehensive,1684 reasons including the19 AU public dispositions,private165 cases and111 responsibilities remain exact. Original changed06 remains FAIL with2failed/5739passed; Ruff/mypy496/diff passed. Its subsequent exact two-node run passed, without relabeling that failed run. Review SHA256 41fb18ca05a260e3001d4a62705bdbef0c33165a9d59a199e8fe97f34ac22c97; overall scientific/access acceptance is NOT_ASSERTED and inventory_complete remains false. 2026-10-23 capture collection01: original unfiltered6523-node collection, zero bodies and stable clean8ab5ecd source. Exactly11 generated public/focused nodes add7 source/runtime boundary controls and4 endpoint/actual-exit controls. All old6512 nodes and tiers,1684 old reasons,private165 cases,111 responsibilities and original baseline-failure digest remain exact. Final unified test-source digest is bound; no test/native/full result or access completeness is asserted. Original a48e full04 pytest6512PASS/captureBLOCKED81 remains historical and unchanged. Finite review SHA256 31ff4969526016e1bd2e6b67527e345d751ed27b742e2c8f0a56d861f0fa615c; inventory_complete remains false. 2026-10-23 live collection01: original unfiltered6538-node collection, zero bodies and stable clean325489c source. Exactly15 public nodes add14 focused generated source/runtime registration counterexamples and1 comprehensive real public-directory metadata prefix. All old6523 nodes and tiers,1695 old reasons,private165 cases,111 responsibilities and original baseline-failure digest remain exact. Final unified test-source digest is bound; no test/native/full result or access completeness is asserted. Original 4d full01 pytest6523PASS/captureBLOCKED34 remains historical and unchanged. Finite review SHA256 fab7588e125daa7b65ead3295269ff90ec2c04eb27d41600072de0700bf2dbf4; inventory_complete remains false. 2026-10-24 wrapper/geometry diagnostic integration: actual unfiltered6553-node collection with zero bodies; one generated public/focused foreign-source rejection control added. Six existing wrapper dispositions now describe the owned-source selected-interpreter probe, retaining public private-namespace rejection. Geometry diagnostics retain every existing hash and strengthen same-runtime frozen-reference/order/type/float-bit assertions. Original private165 cases, tiers, baseline identity and111 responsibilities are unchanged; no full/access/scientific acceptance is asserted. 2026-10-24 numeric integration: actual unfiltered6561-node collection, zero bodies; eight exact generated public/focused numeric-mode controls added. Current v2, stored v1 and unversioned signature-bound reconstruction remain distinct; CSV/TSV lexemes, integer boundaries and complete source evidence were independently reviewed. The geometry test retains original hashes and adds one exact independently observed math-response profile plus same-host frozen-reference/order/type/float-bit checks. All private165 cases, old tiers,111 responsibilities and baseline identities remain unchanged; completeness and scientific acceptance are not asserted. 2026-10-24 finite selection closure: existing categorical and generic-axis owners now bind the previously unowned component implementation and numeric contract test, preserving all existing targets and unknown-path rejection. One existing generated owner test gains selection assertions; node membership/count remains the actual 6561 collection. Three existing numeric reasons are individually scoped to their bodies; private cases and completeness remain unchanged. 2026-10-24 integrated mapping/CI static review: actual unfiltered6599-node collection with465 current Python test/helper sources, zero bodies,38 added generated dispositions (37focused/1comprehensive), one newly explicit existing public radar disposition and updated generated-wide capture description. All original6561 nodes/tiers, private165 cases/dependencies,111 responsibilities and baseline-failure identities remain exact. Existing immutable baseline bytes were materialized unchanged; no current full/native/Linux/access acceptance is asserted. 2026-10-24 progress unit static review: actual unfiltered6607-node collection with465 test/helper sources and zero bodies; eight additional generated focused controls. Outer-plugin isolation was independently reviewed against retained actual24-node selected/executed completion. All original6599 nodes/tiers, private165 dependencies, responsibilities and baseline-failure identity remain unchanged. No full/access/science acceptance is asserted. 2026-10-24 static-inspection preparation review: actual unfiltered6615-node collection,465 test/helper sources and zero bodies; eight generated focused controls added to the existing native boundary test file. Local fake component prerequisites never impersonate a native environment or replace actual host guards. All prior6607 nodes/tiers, private165 dependencies, responsibilities and baseline-failure identity remain unchanged. No full/access/science claim. 2026-10-25 assistant proposal admission: actual unfiltered6634-node zero-body collection with465 test/helper sources;19 generated focused controls added in test_assistant_contract. All original6615 nodes retain their order and tiers;165 private cases/dependencies,111 responsibilities and original failure identities unchanged. No full/native/access acceptance asserted. 2026-10-25 integrated quick entry: actual zero-body6657-node collection with465 test/helper sources,23 additional generated focused controls. All prior6634 IDs/order/tiers,165 private cases and111 responsibilities unchanged; no release/access/scientific acceptance asserted. 2026-10-25 series style boundary: actual unfiltered6673-node zero-body collection with465 test/helper sources;16 synthetic contracts added (15focused/1comprehensive). All original6657 node order/tiers,165 private cases/dependencies,111 responsibilities and original failure identities retained. No full/capture/scientific acceptance claimed. 2026-10-25 integrated module batch: actual unfiltered6755-node zero-body collection with468 test/helper sources;82 generated public contracts added (81focused/1comprehensive). All original6673 node order/tiers,165private cases/dependencies,111responsibilities, baseline-failure identity and prior synthetic reasons retained. No full/capture/scientific acceptance claimed.",
     "scope": [
       "real_world",
       "polymer_corpus",

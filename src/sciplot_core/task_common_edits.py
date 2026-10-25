@@ -15,7 +15,7 @@ from uuid import uuid4
 from sciplot_core.doctor import doctor_payload
 from sciplot_core.plot_document.patch import validate_patch
 from sciplot_core.plot_document.schema import closed
-from sciplot_core.plot_engine.edit_entry import admit_edit_entry, bind_edit_entry, close_edit_owner, edit_entry_session, read_edit_entry
+from sciplot_core.plot_engine.edit_entry import admit_edit_entry, bind_edit_entry, edit_entry_session, edit_service_owner, read_edit_entry
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_engine.storage import active, digest, load_head
@@ -309,7 +309,7 @@ def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None 
                   "target": str(target), "figure_id": figure_id, "edits": selected}
     entry = canonical_path(task_dir) if task_dir is not None else None
     owner = service or PlotService()
-    try:
+    with edit_service_owner(owner, owned=service is None):
         # Replay reads the original bound request before today's revision/currentness
         # discovery, preserving uncertain-apply and export-pending continuation.
         if entry is not None and read_edit_entry(entry, "semantic-edit.json") is not None:
@@ -373,6 +373,3 @@ def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None 
             saved = bind_edit_entry(entry, "semantic-edit.json", {"intent": normalized, "plot": str(root), "request": request})
             root, request = _bound_edit(saved, normalized)
             return _edit_receipt({**owner.patch(root, request), "doctor": doctor}, entry, normalized, request)
-    finally:
-        if service is None:
-            close_edit_owner(owner)
