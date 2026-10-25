@@ -82,6 +82,17 @@ def prepare_studio_document(
 
     request_path = target_info["request"]
     project_dir = target_info["project_dir"]
+    from sciplot_core.studio_core.preparation_candidate import active_preparation_candidate
+
+    if active_preparation_candidate(project_dir) is None:
+        from sciplot_core.studio_core.preparation_commands import prepare_studio_generation
+
+        return prepare_studio_generation(project_dir, request_target=target_info["mode"] == "request",
+            request_relative=request_path.relative_to(project_dir).as_posix(),
+            delivery_root=delivery_root, rule_id=rule_id, template=template, project_name=project_name,
+            regenerate_generated=regenerate_generated, figure_set_path_replacer=figure_set_path_replacer,
+            _terminal_source_binding=_terminal_source_binding,
+            _terminal_source_prepared=_terminal_source_prepared, _new_creation=_new_creation)
     if delivery_root is not None:
         request = _read_json(request_path)
         request[REQUEST_DELIVERY_ROOT_KEY] = str(delivery_root.expanduser().resolve())
@@ -90,6 +101,10 @@ def prepare_studio_document(
             encoding="utf-8",
         )
     existing_document = _project_studio_document(project_dir)
+    if existing_document is not None:
+        from sciplot_core.foundation.source_locations import resolve_source_path
+
+        existing_document = resolve_source_path(existing_document)
     if (
         target_info.get("mode") == "project"
         and existing_document is not None

@@ -39,8 +39,9 @@ from sciplot_core.studio_core.figure_set_state import (
     _figure_registry_entry,
 )
 
-from sciplot_core.studio_core.figure_set_storage import (
-    _commit_studio_figure_set_transaction,
+from sciplot_core.studio_core.preparation_candidate import (
+    install_prepared_figure_set as _commit_studio_figure_set_transaction,
+    require_preparation_candidate,
 )
 from sciplot_core.studio_core.figure_set_registry import (
     build_studio_figure_set_registry,
@@ -86,6 +87,7 @@ def _prepare_studio_figure_set(
     prepared_source_attestation: PreparationSourceAttestation | None = None,
     path_replacer: Callable[[Path, Path], None] | None = None,
 ) -> dict[str, Any] | None:
+    require_preparation_candidate(project_dir)
     queue = (
         list(queue_override)
         if queue_override is not None

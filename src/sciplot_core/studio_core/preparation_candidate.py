@@ -1,0 +1,284 @@
+"""One private Studio project image; only its host may publish captured bytes."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import deepcopy
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+import json
+import os
+from pathlib import Path
+import stat
+from tempfile import TemporaryDirectory
+from typing import Any
+from uuid import uuid4
+
+from sciplot_core.project_commands import PreparedFile
+from sciplot_core.project_commands.resources import resource_key
+from sciplot_core.project_store import FileProjectStore, ProjectConflict
+from sciplot_core.project_store.io import directory, read_file, sha
+
+_ACTIVE: ContextVar[StudioPreparationCandidate | None] = ContextVar("studio_preparation_candidate", default=None)
+
+
+def _files(root: Path) -> dict[str, PreparedFile]:
+    """Capture ordinary members through directory descriptors, never aliases."""
+    def visit(fd: int, prefix: str) -> dict[str, PreparedFile]:
+        result = {}
+        for name in sorted(os.listdir(fd)):
+            info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+            logical = prefix + name
+            if stat.S_ISDIR(info.st_mode):
+                with directory(fd, (name,)) as child:
+                    result.update(visit(child, logical + "/"))
+            elif stat.S_ISREG(info.st_mode):
+                data, mode = read_file(fd, name, owned=True)
+                result[logical] = PreparedFile(data, mode)
+            else:
+                raise ProjectConflict("A private Studio candidate contains an aliased or special member.")
+        return result
+
+    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        return visit(fd, "")
+    finally:
+        os.close(fd)
+
+
+@dataclass
+class StudioPreparationCandidate:
+    store: FileProjectStore
+    snapshot: dict[str, Any]
+    project_dir: Path
+    resources: Path
+    request_members: set[str] = field(default_factory=lambda: {"plot_request.json"})
+
+    @property
+    def logical_root(self) -> Path:
+        return self.store.root
+
+    def resource_path(self, logical: str) -> Path:
+        """Select a private output for one already granted logical resource."""
+        resource_key(logical)
+        parts = logical.split("/")
+        if not parts[0].startswith("@"):
+            return self.project_dir.joinpath(*parts)
+        key = parts[0][1:]
+        if key not in self.store.locations:
+            raise ProjectConflict("The host did not grant this candidate resource root.")
+        relative = "/".join(parts[1:])
+        members = self.store.location_members[key]
+        if members is not None and relative not in members:
+            raise ProjectConflict("The private output is outside its finite resource capability.")
+        root = self.resources / key
+        root.mkdir(mode=0o700, exist_ok=True)
+        return root.joinpath(*parts[1:])
+
+    def logical_path(self, physical: str) -> str:
+        path = Path(physical)
+        if path.is_absolute() and path.is_relative_to(self.project_dir):
+            return str(self.logical_root / path.relative_to(self.project_dir))
+        for key in self.store.locations:
+            root = self.resources / key
+            if path.is_absolute() and path.is_relative_to(root):
+                return str(self.store.locations[key] / path.relative_to(root))
+        return physical
+
+    def project_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Project only the closed host artifact fields, never scientific JSON."""
+        result = deepcopy(payload)
+
+        def paths(value: dict[str, Any], keys: tuple[str, ...]) -> None:
+            for key in keys:
+                if isinstance(value.get(key), str):
+                    value[key] = self.logical_path(value[key])
+
+        def plan(value: Any) -> None:
+            if isinstance(value, dict):
+                for outcome in value.get("outcomes", []):
+                    if isinstance(outcome, dict) and isinstance(outcome.get("artifacts"), list):
+                        outcome["artifacts"] = [self.logical_path(item) if isinstance(item, str) else item
+                                                for item in outcome["artifacts"]]
+
+        def figures(value: Any) -> None:
+            if not isinstance(value, dict):
+                return
+            paths(value, ("primary_document", "generated_from", "registry_path"))
+            for figure in value.get("figures", []):
+                if isinstance(figure, dict):
+                    paths(figure, ("document", "spec"))
+            plan(value.get("resolved_figure_plan"))
+
+        paths(result, ("project_dir", "request", "document", "launcher", "veusz_launcher", "export_edited_launcher"))
+        plan(result.get("resolved_figure_plan"))
+        figures(result.get("figure_set"))
+        studio = result.get("studio")
+        if isinstance(studio, dict):
+            paths(studio, ("document", "spec", "launcher", "veusz_launcher", "export_edited_launcher",
+                           "generated_from", "figure_set_registry"))
+            figures(studio.get("figure_set"))
+            plan(studio.get("resolved_figure_plan"))
+        contract = result.get("launcher_contract")
+        if isinstance(contract, dict):
+            primary = contract.get("primary")
+            if isinstance(primary, dict):
+                paths(primary, ("path",))
+            supporting = contract.get("supporting")
+            if isinstance(supporting, dict):
+                for item in supporting.values():
+                    if isinstance(item, dict):
+                        paths(item, ("path",))
+        return result
+
+    def capture(self) -> dict[str, PreparedFile | None]:
+        current = _files(self.project_dir)
+        if any(name.startswith(".sciplot_store/") for name in current):
+            raise ProjectConflict("A private producer cannot create another project authority.")
+        writes: dict[str, PreparedFile | None] = {}
+        original = {name: value for name, value in self.snapshot["files"].items() if not name.startswith("@")}
+        for name in original.keys() | current.keys():
+            before, after = original.get(name), current.get(name)
+            before_identity = (before["sha256"], before["mode"]) if before else None
+            after_identity = (sha(after.data), after.mode) if after else None
+            if before_identity == after_identity:
+                continue
+            if name.split("/", 1)[0] in {"raw", "source"} or name in self.snapshot.get("input_resources", []):
+                raise ProjectConflict("Studio preparation cannot replace original scientific inputs.")
+            writes[name] = after
+        for key in self.store.locations:
+            root = self.resources / key
+            if root.exists():
+                for relative, prepared in _files(root).items():
+                    logical = "@" + key + "/" + relative
+                    self.resource_path(logical)
+                    writes[logical] = prepared
+        return writes
+
+    def finalize(self) -> None:
+        """Serialize only owned host projections into their final logical paths."""
+        paths = [*(self.project_dir / name for name in sorted(self.request_members)), self.project_dir / "studio/figure_set.json",
+                 self.project_dir / "intake_manifest.json", *self.project_dir.glob("*.sciplot.json")]
+        for path in paths:
+            if not path.is_file():
+                continue
+            original = json.loads(path.read_text(encoding="utf-8"))
+            if path.name == "figure_set.json":
+                projected = self.project_payload({"figure_set": original})["figure_set"]
+            else:
+                projected = self.project_payload(original)
+            if projected != original:
+                path.write_text(json.dumps(projected, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def active_preparation_candidate(project: Path) -> StudioPreparationCandidate | None:
+    selected = _ACTIVE.get()
+    return selected if selected is not None and project.expanduser().resolve() == selected.project_dir else None
+
+
+def require_preparation_candidate(project: Path) -> StudioPreparationCandidate:
+    selected = active_preparation_candidate(project)
+    if selected is None:
+        raise ProjectConflict("A Studio producer requires its host-owned private project candidate.")
+    return selected
+
+
+def install_prepared_figure_set(*, project_dir: Path, replacements: list[dict[str, Any]],
+                               manual_archive_requests: list[dict[str, Any]], registry: dict[str, Any] | None,
+                               path_replacer: Any = None) -> None:
+    """Install into a disposable image; failure never restores active files."""
+    candidate = require_preparation_candidate(project_dir)
+    from sciplot_core.studio_core.figure_set_storage import _validate_staged_figure_set_task_evidence
+    from sciplot_core.studio_core.registry_state import _studio_figure_set_path
+
+    if registry is not None:
+        _validate_staged_figure_set_task_evidence(project_dir=project_dir, replacements=replacements, registry=registry)
+    pending = {}
+    for item in replacements:
+        source, target = Path(item["staged"]), Path(item["target"])
+        if (not source.is_relative_to(project_dir) or not target.is_relative_to(project_dir)
+                or target == source or target.is_symlink()):
+            raise ProjectConflict("A private figure-set install cannot address active or foreign members.")
+        fd = os.open(source.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            data, mode = read_file(fd, source.name, owned=True)
+        finally:
+            os.close(fd)
+        if sha(data) != item["expected_hash"] or target in pending:
+            raise ProjectConflict("A prepared figure is duplicate or differs from its exact candidate.")
+        pending[target] = (source, PreparedFile(data, mode))
+    for request in manual_archive_requests:
+        document, spec = Path(request["document"]), Path(request["spec"])
+        if document not in pending or not document.is_file():
+            continue
+        data = document.read_bytes()
+        if sha(data) == request.get("generated_hash"):
+            continue
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + "_" + uuid4().hex[:8]
+        history = document.parent / "history"
+        history.mkdir(exist_ok=True)
+        (history / f"{document.stem}_{stamp}{document.suffix}").write_bytes(data)
+        if spec in pending and spec.is_file():
+            (history / f"{document.stem}_{stamp}.spec.json").write_bytes(spec.read_bytes())
+    replace = path_replacer or os.replace
+    for target, (source, captured) in pending.items():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        replace(source, target)
+        if target.read_bytes() != captured.data:
+            raise ProjectConflict("The private figure-set installer changed candidate bytes.")
+    if registry is not None:
+        _studio_figure_set_path(candidate.project_dir).write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def register_prepared_studio_block(project: Path, block: dict[str, Any]) -> None:
+    """Update the candidate's mirrors without publishing a nested head or ZIP."""
+    require_preparation_candidate(project)
+    from sciplot_core.figure_plan import sync_figure_plan_projection
+    from sciplot_core.launchers import LEGACY_WEB_WORKBENCH_LAUNCHER, inspect_project_launcher_contract
+    from sciplot_core.intake.packaging import _apply_launcher_contract_to_manifest
+
+    legacy = project / LEGACY_WEB_WORKBENCH_LAUNCHER
+    legacy.unlink(missing_ok=True)
+    paths = [project / "intake_manifest.json", *sorted(project.glob("*.sciplot.json"))]
+    current = next((path for path in paths if path.is_file()), None)
+    if current is None:
+        return
+    payload = json.loads(current.read_text(encoding="utf-8"))
+    payload["studio"] = block
+    sync_figure_plan_projection(payload, block)
+    _apply_launcher_contract_to_manifest(payload, contract=inspect_project_launcher_contract(project))
+    data = json.dumps(payload, ensure_ascii=False, indent=2)
+    for path in paths:
+        path.write_text(data, encoding="utf-8")
+
+
+@contextmanager
+def studio_preparation_candidate(store: FileProjectStore, *, snapshot: dict[str, Any] | None = None) -> Iterator[StudioPreparationCandidate]:
+    from sciplot_core.project_store.runtime import project_candidate_runtime
+    from sciplot_core.project_manifest import private_project_manifest_scope
+
+    before = snapshot or store.snapshot(import_legacy=True)
+    if before["project_id"] != store.snapshot()["project_id"] or before.get("outside_changes"):
+        raise ProjectConflict("A private preparation requires one exact reconciled project generation.")
+    with TemporaryDirectory(prefix="sciplot-studio-candidate-") as temporary:
+        parent = Path(temporary).resolve(strict=True)
+        parent.chmod(0o700)
+        root, resources = parent / "project", parent / "resources"
+        root.mkdir(mode=0o700)
+        resources.mkdir(mode=0o700)
+        for name, entry in before["files"].items():
+            if name.startswith("@"):
+                continue
+            target = root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(store.read_bytes(name, generation=before["generation"]))
+            target.chmod(entry["mode"])
+        candidate = StudioPreparationCandidate(store, before, root, resources)
+        token = _ACTIVE.set(candidate)
+        try:
+            with project_candidate_runtime(store, root, generation=before["generation"]), private_project_manifest_scope(root):
+                yield candidate
+        finally:
+            _ACTIVE.reset(token)

@@ -106,6 +106,17 @@ def generate_studio_document(
     _new_creation: bool = False,
 ) -> dict[str, Any]:
     """Build a generated VSZ plus the publication and figure-set contracts."""
+    from sciplot_core.studio_core.preparation_candidate import active_preparation_candidate
+
+    if active_preparation_candidate(project_dir) is None:
+        from sciplot_core.studio_core.preparation_commands import prepare_studio_generation
+
+        return prepare_studio_generation(project_dir, request_target=True,
+            request_relative=request_path.expanduser().resolve().relative_to(project_dir.expanduser().resolve()).as_posix(), rule_id=rule_id,
+            template=template, project_name=project_name, regenerate_generated=True,
+            figure_set_path_replacer=figure_set_path_replacer,
+            _terminal_source_binding=_terminal_source_binding,
+            _terminal_source_prepared=_terminal_source_prepared, _new_creation=_new_creation)
 
     _apply_studio_request_overrides(
         project_dir,
@@ -349,7 +360,9 @@ def generate_studio_document(
     )
     spec_path = _veusz_spec_path(document_path)
     launcher = _write_studio_launcher(project_dir)
-    veusz_launcher = _write_veusz_launcher(project_dir, document_path)
+    from sciplot_core.studio_core.preparation_candidate import require_preparation_candidate
+
+    veusz_launcher = _write_veusz_launcher(project_dir, Path(require_preparation_candidate(project_dir).logical_path(str(document_path))))
     export_edited_launcher = _write_export_edited_launcher(project_dir)
     generated_hash = existing_file_sha256(document_path)
     studio_block = _studio_block(

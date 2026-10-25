@@ -7,23 +7,12 @@ from typing import Any
 
 from sciplot_core.figure_plan import sync_figure_plan_projection
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.project_manifest import (
-    edit_intake_project_manifest,
-)
 
 
 def _register_studio_block(project_dir: Path, studio_block: dict[str, Any]) -> None:
-    with edit_intake_project_manifest(project_dir) as payload:
-        if payload is not None:
-            payload["studio"] = studio_block
-            sync_figure_plan_projection(payload, studio_block)
-    # Existing or moved projects can carry a retired Web launcher and stale
-    # absolute launcher paths in both manifests.  Converge only after the
-    # current portable launchers and Studio block are written so normal
-    # `studio PROJECT` is itself the repair path.
-    from sciplot_core.intake.packaging import converge_intake_project_launchers
+    from sciplot_core.studio_core.preparation_candidate import register_prepared_studio_block
 
-    converge_intake_project_launchers(project_dir)
+    register_prepared_studio_block(project_dir, studio_block)
 
 
 def studio_run_registration(

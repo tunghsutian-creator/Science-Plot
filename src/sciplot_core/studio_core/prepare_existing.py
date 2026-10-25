@@ -36,8 +36,9 @@ from sciplot_core.studio_core.figure_set_state import (
     _figure_set_primary_generated_hash,
     _read_studio_figure_set,
 )
-from sciplot_core.studio_core.figure_set_storage import (
-    _commit_studio_figure_set_transaction,
+from sciplot_core.studio_core.preparation_candidate import (
+    install_prepared_figure_set as _commit_studio_figure_set_transaction,
+    active_preparation_candidate,
 )
 from sciplot_core.studio_core.figure_task_evidence import (
     generic_figure_queue_from_plan,
@@ -70,6 +71,11 @@ def reuse_existing_studio_document(
     document_path: Path,
 ) -> dict[str, Any]:
     """Refresh Studio metadata while preserving the exact-current VSZ."""
+    if active_preparation_candidate(project_dir) is None:
+        from sciplot_core.studio_core.preparation_commands import prepare_studio_generation
+
+        return prepare_studio_generation(project_dir,
+            request_relative=request_path.expanduser().resolve().relative_to(project_dir.expanduser().resolve()).as_posix())
 
     request = _read_json(request_path)
     request_changed = _converge_studio_request_review_notes(request)
@@ -204,7 +210,9 @@ def reuse_existing_studio_document(
         if staged_request is not None:
             staged_request.unlink(missing_ok=True)
     launcher = _write_studio_launcher(project_dir)
-    veusz_launcher = _write_veusz_launcher(project_dir, document_path)
+    from sciplot_core.studio_core.preparation_candidate import require_preparation_candidate
+
+    veusz_launcher = _write_veusz_launcher(project_dir, Path(require_preparation_candidate(project_dir).logical_path(str(document_path))))
     export_edited_launcher = _write_export_edited_launcher(project_dir)
     registered_generated_hash = (
         _figure_set_primary_generated_hash(figure_set)

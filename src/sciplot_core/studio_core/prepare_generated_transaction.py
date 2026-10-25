@@ -48,6 +48,9 @@ def _prepare_generated_figure_set_transaction(
     figure_set_path_replacer: Callable[[Path, Path], None] | None,
 ) -> dict[str, Any] | None:
     """Stage and validate the primary document inside one figure-set transaction."""
+    from sciplot_core.studio_core.preparation_candidate import require_preparation_candidate
+
+    require_preparation_candidate(project_dir)
 
     transaction_id = uuid4().hex
     staged_stem = f".sciplot-studio-prepare-{transaction_id}"
