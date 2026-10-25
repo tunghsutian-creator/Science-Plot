@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import os
+import os as os
 import subprocess
 import sys
-import zipfile
+import zipfile as zipfile
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
-from uuid import uuid4
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import safe_filename
 from sciplot_core._paths import resolved_path_is_within
@@ -29,69 +28,74 @@ from sciplot_core.launchers import (
 
 from .path_security import _resolve_path_within_root
 from sciplot_core.project_manifest import (
-    edit_intake_project_manifest,
     locked_intake_project_manifest,
 )
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
 def _write_zip(project_dir: Path, zip_path: Path) -> None:
-    with locked_intake_project_manifest(project_dir) as project_root:
-        _write_zip_snapshot_unlocked(project_root, zip_path)
+    _write_zip_snapshot_unlocked(project_dir.expanduser().resolve(strict=True), zip_path)
 
 
 def _write_zip_snapshot_unlocked(project_root: Path, zip_path: Path) -> None:
-    zip_path = Path(zip_path).expanduser()
-    if zip_path.is_symlink():
-        raise PermissionError("Refusing to replace a symlink-backed SciPlot ZIP.")
+    from sciplot_core.foundation.project_archives import write_project_archive
+    from sciplot_core.project_manifest import _is_private_snapshot_root, _stage_snapshot
+    from sciplot_core.project_store import ResourceRoot
+    from sciplot_core.project_store.adapters import project_storage_scope, publish_files
 
-    archive_files: list[Path] = []
-    for path in sorted(project_root.rglob("*")):
-        if path.is_symlink():
-            raise PermissionError(
-                f"Refusing to archive symlink-backed project entry: {path}"
-            )
-        if path.is_file():
-            archive_files.append(
-                _resolve_path_within_root(
-                    path,
-                    root=project_root,
-                    require_regular_file=True,
-                )
-            )
+    if _is_private_snapshot_root(project_root):
+        write_project_archive(project_root, zip_path)
+        return
+    recognized = any((project_root / name).exists() for name in
+                     ("intake_manifest.json", "plot_request.json", "suite.json", ".sciplot_store/head.json"))
+    recognized = recognized or bool(list(project_root.glob("*.sciplot.json")))
+    if not recognized:
+        # An ordinary folder archive has no project state to publish. Keep its
+        # closed single-output serializer independent of the project repository.
+        from contextlib import ExitStack
+        from tempfile import TemporaryDirectory
+        import time
+        from sciplot_core.foundation.writer_lease import WriterLeaseBusy, exclusive_directory_lease
+        from sciplot_core.project_manifest import _PROJECT_MANIFEST_LOCK
+        from sciplot_core.project_store.io import install, read_file
 
-    staged_zip = zip_path.parent / (f".{zip_path.name}.sciplot-tmp-{uuid4().hex}")
-    try:
-        with staged_zip.open("xb") as stream:
-            with zipfile.ZipFile(
-                stream,
-                "w",
-                compression=zipfile.ZIP_DEFLATED,
-            ) as archive:
-                for path in archive_files:
-                    archive.write(path, path.relative_to(project_root.parent))
-            stream.flush()
-            os.fsync(stream.fileno())
-        with zipfile.ZipFile(staged_zip, "r") as archive:
-            corrupt_member = archive.testzip()
-            if corrupt_member is not None:
-                raise OSError(
-                    f"SciPlot ZIP verification failed for member {corrupt_member!r}."
-                )
-        if zip_path.is_symlink():
+        destination = zip_path.expanduser().absolute()
+        if destination.is_symlink():
             raise PermissionError("Refusing to replace a symlink-backed SciPlot ZIP.")
-        os.replace(staged_zip, zip_path)
-    except BaseException:
-        staged_zip.unlink(missing_ok=True)
-        raise
-
-
-def _remove_legacy_project_launcher(project_dir: Path) -> bool:
-    legacy_launcher = project_dir / LEGACY_WEB_WORKBENCH_LAUNCHER
-    if not (legacy_launcher.is_file() or legacy_launcher.is_symlink()):
-        return False
-    legacy_launcher.unlink()
-    return True
+        with _PROJECT_MANIFEST_LOCK, ExitStack() as guards:
+            while True:
+                try:
+                    lease = guards.enter_context(exclusive_directory_lease(project_root))
+                    break
+                except WriterLeaseBusy:
+                    time.sleep(0.01)
+            parent = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                with TemporaryDirectory(prefix="sciplot-folder-archive-") as folder:
+                    staged = Path(folder) / destination.name
+                    write_project_archive(project_root, staged)
+                    lease.verify()
+                    observed, opened = destination.parent.lstat(), os.fstat(parent)
+                    if (observed.st_dev, observed.st_ino) != (opened.st_dev, opened.st_ino):
+                        raise RuntimeError("The archive destination directory changed identity.")
+                    if destination.is_symlink():
+                        raise PermissionError("Refusing to replace a symlink-backed SciPlot ZIP.")
+                    install(parent, destination.name, staged.read_bytes())
+                    read_file(parent, destination.name)
+            finally:
+                os.close(parent)
+        return
+    target = zip_path.expanduser().absolute()
+    if target.is_symlink():
+        raise PermissionError("Refusing to replace a symlink-backed SciPlot ZIP.")
+    with project_storage_scope(project_root, locations={"snapshot": ResourceRoot(target.parent, (target.name,))}) as store:
+        snapshot = store.snapshot()
+        manifest_entry = snapshot["files"].get("intake_manifest.json")
+        payload = json.loads(store.read_bytes("intake_manifest.json")) if manifest_entry else {}
+        # The declared target is selected by the host, not discovered from its parent.
+        payload = {**payload, "project_slug": target.stem}
+        data = _stage_snapshot(store, payload, {})
+        publish_files(store, {"@snapshot/" + target.name: data}, kind="publish", result={"zip": str(target)})
 
 
 def _apply_launcher_contract_to_manifest(
@@ -99,9 +103,8 @@ def _apply_launcher_contract_to_manifest(
     *,
     contract: dict[str, object],
 ) -> None:
-    primary = (
-        contract.get("primary") if isinstance(contract.get("primary"), dict) else {}
-    )
+    supplied = contract.get("primary")
+    primary = supplied if isinstance(supplied, dict) else {}
     primary_path = primary.get("path")
     if contract.get("ready") is True and isinstance(primary_path, str):
         manifest["launcher"] = primary_path
@@ -118,16 +121,31 @@ def converge_intake_project_launchers(
     """Retire the ambiguous Web launcher and register the Veusz-first entry."""
 
     project = Path(project_dir).expanduser().resolve()
-    _remove_legacy_project_launcher(project)
-    contract = inspect_project_launcher_contract(project)
-    if not update_manifests:
-        return contract
-    with edit_intake_project_manifest(project) as manifest:
+    from sciplot_core.project_manifest import read_intake_project_manifest, stage_intake_project_manifest
+    from sciplot_core.project_store.adapters import project_storage_scope, publish_files
+
+    with locked_intake_project_manifest(project), project_storage_scope(project) as store:
+        snapshot = store.snapshot()
+        contract = inspect_project_launcher_contract(project)
+        legacy = contract["legacy_web_workbench_launcher"]
+        assert isinstance(legacy, dict)
+        legacy["present"] = False
+        primary, supporting = contract["primary"], contract["supporting"]
+        assert isinstance(primary, dict) and isinstance(supporting, dict)
+        ready = primary.get("safe") is True and all(item.get("safe") is True for item in supporting.values())
+        contract.update(ready=ready, status="ready" if ready else "blocked")
+        writes: dict[str, bytes | None] = {}
+        if LEGACY_WEB_WORKBENCH_LAUNCHER in snapshot["files"]:
+            writes[LEGACY_WEB_WORKBENCH_LAUNCHER] = None
+        manifest = read_intake_project_manifest(project) if update_manifests else None
         if manifest is not None:
             _apply_launcher_contract_to_manifest(
                 manifest,
                 contract=contract,
             )
+            writes.update(stage_intake_project_manifest(project, manifest, include_snapshot=False, store=store))
+        if writes:
+            publish_files(store, writes, kind="publish", result={"launcher_contract": contract})
     return contract
 
 
@@ -354,7 +372,12 @@ def _studio_prepare_env() -> dict[str, str]:
 
 
 def _prepare_studio_project_package(project_dir: Path) -> None:
-    _remove_legacy_project_launcher(project_dir)
+    legacy = project_dir / LEGACY_WEB_WORKBENCH_LAUNCHER
+    if legacy.exists() or legacy.is_symlink():
+        from sciplot_core.project_store.adapters import project_storage_scope, publish_files
+
+        with project_storage_scope(project_dir) as store:
+            publish_files(store, {LEGACY_WEB_WORKBENCH_LAUNCHER: None}, kind="publish")
     try:
         subprocess.run(
             [

@@ -90,6 +90,11 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     io.verify_roots()
     preconditions.require_reads(io, current, record)
     commands.verify_sources(io, frozen.get("sources", {}))
+    if io.read("local_locations.json") is not None:
+        expected_root = io.root / ".sciplot_resources"
+        if any(path != expected_root / key for key, path in io.locations.items()):
+            raise ProjectConflict("A cold project resource must retain its confined host-selected local root.")
+        io.write("local_locations.json", {"ids": sorted(io.locations), "members": io.location_members})
     state.publish_head(io, value)
     state.boundary("after_head")
     projection.project(io, record, value)
