@@ -194,6 +194,7 @@ class PreparedSource:
     data: bytes
     aliases: tuple[str, ...] = ()
     mode: int = 0o600
+    produced_resource: str | None = None
 
     def __post_init__(self) -> None:
         if (not isinstance(self.source_id, str) or re.fullmatch(r"[a-f0-9]{32}", self.source_id) is None
@@ -205,11 +206,16 @@ class PreparedSource:
                 or any(not isinstance(alias, str) or not 1 <= len(alias) <= 128 for alias in self.aliases)
                 or len(set(self.aliases)) != len(self.aliases)):
             raise ValueError("A prepared source requires exact captured bytes, immutable version and explicit logical aliases.")
+        if self.produced_resource is not None:
+            resource_key(self.produced_resource)
 
     def descriptor(self) -> dict[str, Any]:
         self.__post_init__()
-        return {"source_id": self.source_id, "locator": self.locator, "version": self.version,
-                "size": len(self.data), "aliases": list(self.aliases), "mode": self.mode}
+        result: dict[str, Any] = {"source_id": self.source_id, "locator": self.locator, "version": self.version,
+                                 "size": len(self.data), "aliases": list(self.aliases), "mode": self.mode}
+        if self.produced_resource is not None:
+            result["produced_resource"] = self.produced_resource
+        return result
 
     def to_storage_payload(self) -> dict[str, Any]:
         value = self.descriptor()

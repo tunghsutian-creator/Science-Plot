@@ -186,6 +186,20 @@ def test_prepared_source_bytes_and_original_alias_are_bound_without_path_io():
         PreparedSource("a" * 32, "/original/raw.csv", "b" * 64, b"different", ("A",))
 
 
+def test_produced_source_binds_an_exact_logical_output_without_changing_default_sources():
+    from dataclasses import replace
+    import hashlib
+
+    original = PreparedSource("a" * 32, "/original/derived.csv", hashlib.sha256(b"derived").hexdigest(), b"derived")
+    assert "produced_resource" not in original.descriptor()
+    produced = replace(original, produced_resource="generated/derived.csv")
+    assert produced.to_storage_payload() == {**original.to_storage_payload(), "produced_resource": "generated/derived.csv"}
+    assert ProjectMutation({}, {}, prepared_sources=(produced,)).prepared_digest != ProjectMutation(
+        {}, {}, prepared_sources=(original,)).prepared_digest
+    with pytest.raises(ValueError, match="canonical relative"):
+        replace(original, produced_resource="../raw.csv")
+
+
 def test_captured_launcher_permissions_are_part_of_prepared_publication_identity():
     launcher = PreparedFile(b"#!/bin/sh\n", 0o755)
     executable = ProjectMutation({"head.json": launcher}, {})
