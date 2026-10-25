@@ -60,6 +60,24 @@ class NativeAdoption:
                 "observed_sha256": self.observed_sha256, "audit_sha256": self.audit_sha256}
 
 
+@dataclass(frozen=True)
+class SourceAdoption:
+    resource: str
+    source_id: str
+    before_sha256: str
+    observed_sha256: str
+
+    def __post_init__(self) -> None:
+        resource_key(self.resource)
+        if (not isinstance(self.source_id, str) or re.fullmatch(r"[a-f0-9]{32}", self.source_id) is None
+                or not _sha(self.before_sha256) or not _sha(self.observed_sha256)):
+            raise ValueError("A source observation requires its exact registered identity and old/new versions.")
+
+    def to_payload(self) -> dict[str, str]:
+        return {"resource": self.resource, "source_id": self.source_id,
+                "before_sha256": self.before_sha256, "observed_sha256": self.observed_sha256}
+
+
 def membership_digest(names: Iterable[str]) -> str:
     return canonical_json_sha256(sorted(set(names)), allow_nan=False)
 

@@ -9,6 +9,7 @@ import pytest
 from sciplot_core.project_commands import (
     CommandKind, MembershipRead, NativeAdoption, PreparedFile, PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation,
     ProjectCommandError, ProjectCommandUnknown, ProjectionRead,
+    SourceAdoption,
 )
 
 
@@ -170,6 +171,22 @@ def test_captured_launcher_permissions_are_part_of_prepared_publication_identity
     assert saved["writes"]["head.json"].mode == 0o755
     with pytest.raises(ValueError, match="ordinary permission bits"):
         PreparedFile(b"code", 0o4755)
+
+
+def test_raw_refresh_is_an_input_observation_and_never_a_writeback():
+    import hashlib
+    fresh = PreparedSource("a" * 32, "/original/raw.csv", hashlib.sha256(b"new-raw").hexdigest(), b"new-raw", ("A",))
+    observed = SourceAdoption("raw.csv", fresh.source_id, "b" * 64, fresh.version)
+    request = ProjectCommand.create("source_update", "refresh-a", project_id="project-a",
+        expected_generation="generation-a", read_set={"raw.csv": observed.before_sha256, "A.vsz": "c" * 64},
+        write_set=["A.vsz"], request={}, source_adoptions=[observed])
+    ProjectMutation({"A.vsz": b"derived"}, {}, prepared_sources=(fresh,)).validate_for(request)
+    assert ProjectCommand.from_payload(request.to_payload()).source_adoptions == (observed,)
+    with pytest.raises(ValueError, match="declared source version"):
+        ProjectMutation({"A.vsz": b"derived"}, {}).validate_for(request)
+    with pytest.raises(ValueError, match="cannot become output writes"):
+        ProjectCommand.create("source_update", "bad", project_id="project-a", expected_generation="generation-a",
+            read_set={"raw.csv": observed.before_sha256}, write_set=["raw.csv"], request={}, source_adoptions=[observed])
 
 
 def test_membership_witness_binds_additions_without_confusing_member_content_hashes():

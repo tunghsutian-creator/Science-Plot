@@ -15,6 +15,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from .resources import (NativeAdoption as NativeAdoption, ProjectionRead as ProjectionRead,
                         MembershipRead as MembershipRead, PreparedSource as PreparedSource, _identity, _sha, resource_key)
 from .resources import PreparedFile as PreparedFile
+from .resources import SourceAdoption as SourceAdoption
 
 
 class CommandKind(StrEnum):
@@ -60,6 +61,7 @@ class ProjectCommand:
     projected_writes: tuple[ProjectionRead, ...] = ()
     native_adoptions: tuple[NativeAdoption, ...] = ()
     read_memberships: tuple[MembershipRead, ...] = ()
+    source_adoptions: tuple[SourceAdoption, ...] = ()
 
     def __post_init__(self) -> None:
         if (not isinstance(self.kind, CommandKind) or not isinstance(self.key, str) or not 1 <= len(self.key) <= 128
@@ -101,6 +103,14 @@ class ProjectCommand:
         if (any(not isinstance(item, MembershipRead) for item in self.read_memberships)
                 or len({item.prefix for item in self.read_memberships}) != len(self.read_memberships)):
             raise ValueError("Membership witnesses must be typed and unique per namespace.")
+        if (any(not isinstance(item, SourceAdoption) for item in self.source_adoptions)
+                or self.source_adoptions and self.kind not in {CommandKind.SOURCE_UPDATE, CommandKind.SEMANTIC_RECORD}):
+            raise ValueError("Only an admitted scientific source update can register changed raw observations.")
+        observed = [item.resource for item in self.source_adoptions]
+        if (len(set(observed)) != len(observed)
+                or any(item.resource in self.write_set or reads.get(item.resource) != item.before_sha256
+                       for item in self.source_adoptions)):
+            raise ValueError("Raw source observations bind prior reads and cannot become output writes.")
         request = json.loads(self.request_json)
         if not isinstance(request, dict) or "idempotency_key" in request and request["idempotency_key"] != self.key:
             raise ValueError("The original request must agree with its command key.")
@@ -114,7 +124,8 @@ class ProjectCommand:
                projected_reads: Sequence[ProjectionRead] = (),
                projected_writes: Sequence[ProjectionRead] = (),
                native_adoptions: Sequence[NativeAdoption] = (),
-               read_memberships: Sequence[MembershipRead] = ()) -> ProjectCommand:
+               read_memberships: Sequence[MembershipRead] = (),
+               source_adoptions: Sequence[SourceAdoption] = ()) -> ProjectCommand:
         return cls(CommandKind(kind), key, project_id, expected_generation,
                    tuple(sorted(read_set.items())), tuple(sorted(write_set)),
                    json.dumps(request, sort_keys=True, ensure_ascii=False, allow_nan=False),
@@ -122,12 +133,13 @@ class ProjectCommand:
                    tuple(sorted(projected_reads, key=lambda item: (item.resource, item.kind, item.key))),
                    tuple(sorted(projected_writes, key=lambda item: (item.resource, item.kind, item.key))),
                    tuple(sorted(native_adoptions, key=lambda item: item.resource)),
-                   tuple(sorted(read_memberships, key=lambda item: item.prefix)))
+                   tuple(sorted(read_memberships, key=lambda item: item.prefix)),
+                   tuple(sorted(source_adoptions, key=lambda item: item.resource)))
 
     @classmethod
     def from_payload(cls, value: Any) -> ProjectCommand:
         keys = {"version", "kind", "key", "project_id", "expected_generation", "expected_revision",
-                "read_set", "write_set", "projected_reads", "projected_writes", "native_adoptions", "read_memberships", "request"}
+                "read_set", "write_set", "projected_reads", "projected_writes", "native_adoptions", "read_memberships", "source_adoptions", "request"}
         if (not isinstance(value, dict) or set(value) != keys or type(value.get("version")) is not int
                 or value["version"] != 1 or not isinstance(value["read_set"], dict)
                 or not isinstance(value["write_set"], list) or not isinstance(value["request"], dict)):
@@ -155,12 +167,18 @@ class ProjectCommand:
                 "prefix", "members_sha256"} for item in membership_items):
             raise ValueError("Saved membership witnesses require exact closed fields.")
         memberships = [MembershipRead(item["prefix"], item["members_sha256"]) for item in membership_items]
+        source_items = value["source_adoptions"]
+        if not isinstance(source_items, list) or any(not isinstance(item, dict) or set(item) != {
+                "resource", "source_id", "before_sha256", "observed_sha256"} for item in source_items):
+            raise ValueError("Saved source observations require exact closed fields.")
+        observations = [SourceAdoption(item["resource"], item["source_id"], item["before_sha256"],
+                                       item["observed_sha256"]) for item in source_items]
         return cls.create(value["kind"], value["key"], project_id=value["project_id"],
                           expected_generation=value["expected_generation"], read_set=value["read_set"],
                           write_set=value["write_set"], request=value["request"],
                           expected_revision=value["expected_revision"], projected_reads=selectors("projected_reads"),
                           projected_writes=selectors("projected_writes"), native_adoptions=adoptions,
-                          read_memberships=memberships)
+                          read_memberships=memberships, source_adoptions=observations)
 
     def to_payload(self) -> dict[str, Any]:
         self.__post_init__()
@@ -171,6 +189,7 @@ class ProjectCommand:
                 "projected_writes": [item.to_payload() for item in self.projected_writes],
                 "native_adoptions": [item.to_payload() for item in self.native_adoptions],
                 "read_memberships": [item.to_payload() for item in self.read_memberships],
+                "source_adoptions": [item.to_payload() for item in self.source_adoptions],
                 "request": json.loads(self.request_json)}
 
     @property
@@ -236,3 +255,9 @@ class ProjectMutation:
             if not isinstance(source, PreparedSource):
                 raise ValueError("Prepared sources must be explicit captured values.")
             source.__post_init__()
+        declarations = [*self.sources] if self.sources is not None else []
+        declarations.extend(source.to_storage_payload() for source in self.prepared_sources)
+        for observed in command.source_adoptions:
+            if not any(item.get("source_id") == observed.source_id and item.get("version") == observed.observed_sha256
+                       for item in declarations):
+                raise ValueError("A new raw observation must have its exact declared source version.")
