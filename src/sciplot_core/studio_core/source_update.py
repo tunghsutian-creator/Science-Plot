@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_core.project_command_scope import project_command_runtime
+
 import json
 import tempfile
 from contextlib import contextmanager
@@ -150,6 +152,7 @@ def _prepared_update(
         yield candidate, review
 
 
+@project_command_runtime
 def preview_project_source_update(
     project_dir: Path, source: Path, *, worksheet: str | None = None,
     on_candidate: Callable[[Path, dict[str, Any]], None] | None = None,
@@ -165,7 +168,12 @@ def preview_project_source_update(
                 if payload_hash(project_inventory(project)) != preview["project_sha256"]:
                     raise ValueError("The project changed while rendering its source-update preview.")
                 _check_external_state(project, Path(preview["source"]), preview)
-            return preview
+            if preview.get("status") != "ready":
+                return preview
+            from sciplot_core.studio_core.source_update_commands import stage_source_update
+
+            return stage_source_update(Path(preview["project"]), candidate, preview,
+                relocate_companion=relocate_annotation_evidence if preview.get("annotation_review") else None)
     except (ValueError, OSError, RuntimeError) as exc:
         return {
             "kind": "sciplot_project_source_update",
@@ -181,6 +189,10 @@ def apply_project_source_update(
     project_dir: Path, preview: dict[str, Any]
 ) -> dict[str, Any]:
     """Recompute the reviewed candidate, reject stale choices, then adopt it."""
+    if preview.get("version") == 2:
+        from sciplot_core.studio_core.source_update_commands import decide_source_update
+
+        return decide_source_update(project_dir.expanduser().resolve(), preview)
     if (
         preview.get("status") != "ready"
         or preview.get("kind") != "sciplot_project_source_update"
@@ -214,7 +226,7 @@ def apply_project_source_update(
             project,
             candidate,
             expected=expected,
-            validate=lambda: verify_project_science(project),
+            validate=lambda: verify_project_science(candidate),
             precommit=lambda: _check_external_state(
                 project, Path(preview["source"]), current
             ),

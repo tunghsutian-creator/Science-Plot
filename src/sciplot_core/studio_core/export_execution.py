@@ -83,6 +83,13 @@ def export_studio_document(
     normalized_formats = list(normalize_export_formats(formats, default=()))
     if not normalized_formats:
         raise ValueError("At least one export format is required.")
+    if output_dir is None:
+        from sciplot_core.studio_core.context import _project_context_for_document
+
+        if _project_context_for_document(document_path) is not None:
+            from sciplot_core.studio_core.native_export_commands import export_saved_native
+
+            return export_saved_native(document_path, formats=normalized_formats, audit_spec_path=audit_spec_path)
     resolved_output_dir = (
         output_dir.expanduser().resolve() if output_dir is not None else None
     )

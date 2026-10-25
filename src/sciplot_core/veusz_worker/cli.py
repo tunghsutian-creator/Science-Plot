@@ -97,12 +97,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Normalize visible unit labels in an existing Veusz document.",
     )
     migrate_unit_labels_parser.add_argument("document", type=Path)
-    transfer_parser = subparsers.add_parser(
-        "transfer-styles",
-        help="Copy compatible native styles between source revisions.",
-    )
-    for name in ("previous", "current", "previous_spec", "current_spec"):
-        transfer_parser.add_argument(name, type=Path)
+    for command in ("transfer-styles", "preview-transfer-styles"):
+        transfer_parser = subparsers.add_parser(command, help="Copy compatible native styles between source revisions.")
+        for name in ("previous", "current", "previous_spec", "current_spec"):
+            transfer_parser.add_argument(name, type=Path)
+        if command == "preview-transfer-styles":
+            transfer_parser.add_argument("--output-document", required=True, type=Path)
+            transfer_parser.add_argument("--output-spec", required=True, type=Path)
     managed_compile = subparsers.add_parser("compile-plot-ir")
     managed_compile.add_argument("ir", type=Path)
     managed_compile.add_argument("document", type=Path)
@@ -179,12 +180,12 @@ def _execute(argv: list[str] | None = None) -> int:
         )
     elif args.command == "migrate-unit-labels":
         payload = migrate_unit_labels(args.document)
-    elif args.command == "transfer-styles":
+    elif args.command in {"transfer-styles", "preview-transfer-styles"}:
         from sciplot_core.veusz_worker.style_transfer import transfer_document_styles
 
-        payload = transfer_document_styles(
-            args.previous, args.current, args.previous_spec, args.current_spec
-        )
+        output = ({"output_document": args.output_document, "output_spec": args.output_spec}
+                  if args.command == "preview-transfer-styles" else {})
+        payload = transfer_document_styles(args.previous, args.current, args.previous_spec, args.current_spec, **output)
     else:
         payload = save_spec(args.document, args.spec)
     if (args.command == "edit-document" and args.audit_spec is not None) or (

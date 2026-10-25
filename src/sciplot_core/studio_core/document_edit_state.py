@@ -6,6 +6,7 @@ import hashlib
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,9 @@ from sciplot_core.studio_core.source_update_commit import (
 )
 from sciplot_core.veusz_runtime import veusz_worker_environment
 from sciplot_core.native_process import run_worker
+from sciplot_core.studio_core.project_command_scope import project_read_runtime
+from sciplot_core.project_store.runtime import project_runtime, resolve_runtime_path
+from sciplot_core.foundation.source_locations import selected_source_resolver
 
 
 def value_digest(value: object) -> str:
@@ -29,7 +33,15 @@ def value_digest(value: object) -> str:
     ).hexdigest()
 
 
-def edit_state(project: Path) -> dict[str, Any]:
+@project_read_runtime
+def edit_state(project: Path, selected: dict[str, Any] | None = None) -> dict[str, Any]:
+    if selected is not None:
+        from sciplot_core.studio_core.project_command_scope import figure_read_state
+
+        request = json.loads((project / "plot_request.json").read_text())
+        return {**figure_read_state(project, selected),
+                "delivery": str(canonical_path(requested_delivery_root({"request": request}, run_output=project))),
+                "delivery_files": None}
     inventory = project_inventory(project)
     request = json.loads((project / "plot_request.json").read_text())
     delivery = canonical_path(
@@ -76,6 +88,18 @@ def new_preview_directory(project: Path, target: Path) -> Path:
 
 
 def run_document_worker(*arguments: object) -> dict[str, Any]:
+    if selected_source_resolver() is None and len(arguments) >= 2:
+        from sciplot_core.studio_core.context import resolve_studio_project_context
+        from sciplot_core.studio_core.project_command_scope import project_store
+
+        context = resolve_studio_project_context(Path(str(arguments[1])))
+        if context is not None and (context["project_dir"] / ".sciplot_store").exists():
+            with project_runtime(project_store(context["project_dir"])):
+                return _run_document_worker(*arguments)
+    return _run_document_worker(*arguments)
+
+
+def _run_document_worker(*arguments: object) -> dict[str, Any]:
     completed = run_worker(
         [sys.executable, "-m", "sciplot_core.veusz_worker", *map(str, arguments)],
         capture_output=True,
@@ -102,11 +126,14 @@ def audit_edited_document(
     document: Path, spec: Path, *, native_audit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     specification = spec.read_bytes()
+    native_bytes = document.read_bytes()
+    native_digest = hashlib.sha256(native_bytes).hexdigest()
     records = source_records(json.loads(specification))
 
     def verify_sources() -> None:
         if spec.read_bytes() != specification or any(
-            not path.is_file() or file_sha256(path) != digest
+            not resolve_runtime_path(path, expected_sha256=digest).is_file()
+            or file_sha256(resolve_runtime_path(path, expected_sha256=digest)) != digest
             for path, digest in records.items()
         ):
             raise ValueError(
@@ -114,9 +141,17 @@ def audit_edited_document(
             )
 
     verify_sources()
-    audit = _audit_candidate(document, spec, native_audit=native_audit)
+    with tempfile.TemporaryDirectory(prefix="sciplot-observed-native-audit-") as temporary:
+        candidate = Path(temporary) / "observed.vsz"
+        candidate.write_bytes(native_bytes)
+        rebound = ({**native_audit, "document": {**native_audit["document"], "path": str(candidate)}}
+                   if native_audit is not None else None)
+        audit = _audit_candidate(candidate, spec, native_audit=rebound)
     verify_sources()
-    return audit
+    if file_sha256(document) != native_digest:
+        raise ValueError("The observed native document changed during its exact scientific audit")
+    return {**audit, "document_sha256": native_digest,
+            "spec_sha256": hashlib.sha256(specification).hexdigest()}
 
 
 def preview_identity(preview: dict[str, Any]) -> str:

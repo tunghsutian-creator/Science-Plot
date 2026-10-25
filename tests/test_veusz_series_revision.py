@@ -400,8 +400,15 @@ def test_failed_series_commit_reverts_only_its_automatic_live_apply(
             "sha256": existing_file_sha256(staged),
         }
 
-    def fail_transaction(**_kwargs: object) -> None:
-        raise OSError("injected transaction failure")
+    from sciplot_core.project_store import state as store_state
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    project_store(project).snapshot(import_legacy=True)
+    original_boundary = store_state.boundary
+    def fail_transaction(name: str) -> None:
+        if name == "before_head":
+            raise OSError("injected transaction failure")
+        original_boundary(name)
 
     monkeypatch.setattr(persistence, "_read_studio_figure_set", lambda _path: registry)
     monkeypatch.setattr(
@@ -416,9 +423,7 @@ def test_failed_series_commit_reverts_only_its_automatic_live_apply(
     monkeypatch.setattr(persistence, "revert_veusz_series_revision", revert)
     monkeypatch.setattr(persistence, "stage_veusz_document", stage)
     monkeypatch.setattr(persistence, "audit_spec_data", lambda *_args: None)
-    monkeypatch.setattr(
-        persistence, "_commit_studio_figure_set_transaction", fail_transaction
-    )
+    monkeypatch.setattr(store_state, "boundary", fail_transaction)
 
     with pytest.raises(OSError, match="injected transaction failure"):
         persistence.commit_project_series_revision(

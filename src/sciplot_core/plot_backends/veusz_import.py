@@ -18,6 +18,9 @@ from sciplot_core.source_coverage.managed_documents import source_records as _so
 from sciplot_core.studio_core.annotation_operations import require_edit_source_current
 from sciplot_core.studio_core.document_edit_state import audit_edited_document
 from sciplot_core.studio_core.document_edit_policy import ordinary_curve_paths
+from sciplot_core.studio_core.project_command_scope import figure_binding, project_command_runtime
+from sciplot_core.project_commands import ProjectionRead
+from sciplot_core.project_commands.read_projections import projection_digest
 from sciplot_core.studio_core.project_query import inspect_project
 
 
@@ -121,6 +124,7 @@ def _presentation(selected: dict[str, Any], spec: dict[str, Any]) -> tuple[dict[
     return objects, targets
 
 
+@project_command_runtime
 def import_project(project: Path, figure_id: str | None, plot_id: str | None) -> tuple[dict[str, Any], dict[str, Any]]:
     query = inspect_project(project, figure_id=figure_id, native=True, include_annotations=True)
     require_edit_source_current(query)
@@ -143,11 +147,10 @@ def import_project(project: Path, figure_id: str | None, plot_id: str | None) ->
     files.update({str(document_path): selected["document_sha256"],
                   str(spec_path): selected["spec_sha256"],
                   str(root / "plot_request.json"): query["request_sha256"]})
-    for figure in query.get("figures", []):
-        for field in ("document", "spec"):
-            files[figure[field]] = figure[field + "_sha256"]
     registry = root / "studio" / "figure_set.json"
-    files[str(registry)] = file_sha256(registry) if registry.is_file() else None
+    projected_reads = ([ProjectionRead("studio/figure_set.json", "studio_figure_v1", selected["figure_id"],
+        projection_digest(registry.read_bytes(), kind="studio_figure_v1", key=selected["figure_id"])).to_payload()]
+        if registry.is_file() else [])
     input_source = (query.get("source") or {}).get("input") or {}
     source_trees = {input_source["path"]: input_source["sha256"]} if input_source.get("path") else {}
     objects, targets = _presentation(selected, spec)
@@ -155,7 +158,8 @@ def import_project(project: Path, figure_id: str | None, plot_id: str | None) ->
     binding: dict[str, Any] = {
         "kind": "sciplot_veusz_binding", "version": 1, "project": str(root),
         "figure_id": selected["figure_id"], "document": str(document_path), "spec": str(spec_path),
-        "files": files, "source_trees": source_trees, "targets": targets,
+        "files": files, "source_trees": source_trees, "targets": targets, "projected_reads": projected_reads,
+        "project_read_set": figure_binding(root, selected),
         "source_status_at_import": query["source"], "native_audit_at_import": audit,
         "font_configuration": {
             "kind": "native_requested_font_families",
@@ -165,7 +169,9 @@ def import_project(project: Path, figure_id: str | None, plot_id: str | None) ->
             "resolved_font_files_evaluated": False,
         },
     }
-    binding["fingerprint"] = {"files": deepcopy(files), "source_trees": deepcopy(source_trees)}
+    binding["fingerprint"] = {"files": deepcopy(files), "source_trees": deepcopy(source_trees),
+        "projections": {read["resource"] + ":" + read["kind"] + ":" + read["key"]: read["sha256"]
+                        for read in projected_reads}}
     require_current(binding)
     document = {
         "kind": "sciplot_document", "schema_version": 1, "plot_id": plot_id or uuid4().hex,

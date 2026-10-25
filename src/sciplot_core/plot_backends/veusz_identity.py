@@ -1,18 +1,35 @@
 """Saved native and scientific byte identities, without a renderer process."""
 
 from pathlib import Path
+from contextlib import nullcontext
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.plot_document import DocumentError
+from sciplot_core.project_store.errors import ProjectStoreError
+from sciplot_core.project_store.runtime import project_runtime, resolve_runtime_path
+from sciplot_core.project_commands.read_projections import projection_digest
 
 
 def fingerprint(binding: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "files": {path: existing_file_sha256(Path(path)) for path in binding["files"]},
-        "source_trees": {path: source_tree_sha256(Path(path)) for path in binding["source_trees"]},
-    }
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    project = Path(binding["project"])
+    context = project_runtime(project_store(project)) if (project / ".sciplot_store").exists() else nullcontext()
+    with context:
+        files = {}
+        for path, expected in binding["files"].items():
+            try:
+                files[path] = existing_file_sha256(resolve_runtime_path(path, expected_sha256=expected))
+            except ProjectStoreError:
+                files[path] = None
+        projections = {read["resource"] + ":" + read["kind"] + ":" + read["key"]:
+            projection_digest((project / read["resource"]).read_bytes(), kind=read["kind"], key=read["key"])
+            for read in binding.get("projected_reads", [])}
+        return {"files": files,
+            "source_trees": {path: source_tree_sha256(Path(path)) for path in binding["source_trees"]},
+            "projections": projections}
 
 
 def changed_error(message: str, paths: list[str]) -> DocumentError:

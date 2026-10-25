@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.automation_states import RULE_REPAIR_STATE
-from sciplot_core.delivery import build_delivery_package
+from sciplot_core.delivery.package_builder import _build_staged_delivery
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.presentation_identity import (
@@ -27,7 +27,6 @@ from sciplot_core.studio_core.figure_set_state import (
 from sciplot_core.studio_core.json_files import _write_json_atomic
 from sciplot_core.studio_core.publish_evidence import StudioPublicationEvidence
 from sciplot_core.studio_core.publish_inventory import StudioExportInventory
-from sciplot_core.studio_core.registry_writes import _register_studio_run
 from sciplot_core.studio_core.review_artifacts import (
     _write_studio_review_html,
     _write_studio_revision_brief,
@@ -41,6 +40,8 @@ def finalize_studio_run(
     manifest: dict[str, Any],
     copied_exports: list[dict[str, Any]],
     figures: list[str],
+    delivery_dir: Path,
+    delivery_root: Path,
 ) -> dict[str, Any]:
     """Write review artifacts, delivery contracts, publish state, and registry."""
 
@@ -114,6 +115,8 @@ def finalize_studio_run(
         inventory=inventory,
         manifest=manifest,
         copied_exports=copied_exports,
+        delivery_dir=delivery_dir,
+        delivery_root=delivery_root,
     )
     prerequisite_state = (
         RULE_REPAIR_STATE if inventory.publication_rule_blocked else None
@@ -187,11 +190,6 @@ def finalize_studio_run(
         )
     if isinstance(manifest.get("resolved_figure_plan"), dict):
         payload["resolved_figure_plan"] = json_safe(manifest["resolved_figure_plan"])
-    _register_studio_run(
-        inventory.project_dir,
-        manifest,
-        studio_run=payload,
-    )
     return payload
 
 
@@ -292,6 +290,8 @@ def _finalize_delivery_contracts(
     inventory: StudioExportInventory,
     manifest: dict[str, Any],
     copied_exports: list[dict[str, Any]],
+    delivery_dir: Path,
+    delivery_root: Path,
 ) -> None:
     failure_stage = "package_delivery_finalization"
     try:
@@ -303,9 +303,11 @@ def _finalize_delivery_contracts(
             inventory.figure_set_export_scope,
             package_contract=manifest["package_contract"],
         )
-        manifest["delivery_package"] = build_delivery_package(
+        manifest["delivery_package"] = _build_staged_delivery(
             inventory.output_dir,
             manifest=manifest,
+            delivery_dir=delivery_dir,
+            final_root=delivery_root,
         )
         _attach_complete_figure_set_delivery(
             inventory.figure_set_export_scope,

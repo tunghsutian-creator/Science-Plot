@@ -9,19 +9,7 @@ from sciplot_core.figure_plan import sync_figure_plan_projection
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.project_manifest import (
     edit_intake_project_manifest,
-    edit_intake_project_manifest_with_snapshot,
 )
-
-
-def _refresh_intake_project_snapshot(
-    project_dir: Path,
-    manifest: dict[str, Any],
-) -> None:
-    from sciplot_core.intake.packaging import (
-        _refresh_intake_project_zip_unlocked,
-    )
-
-    _refresh_intake_project_zip_unlocked(project_dir, manifest)
 
 
 def _register_studio_block(project_dir: Path, studio_block: dict[str, Any]) -> None:
@@ -38,12 +26,12 @@ def _register_studio_block(project_dir: Path, studio_block: dict[str, Any]) -> N
     converge_intake_project_launchers(project_dir)
 
 
-def _register_studio_run(
-    project_dir: Path,
+def studio_run_registration(
+    payload: dict[str, Any],
     manifest: dict[str, Any],
     *,
     studio_run: dict[str, Any],
-) -> None:
+) -> dict[str, Any]:
     figure_set_export_scope_payload = manifest.get("figure_set_export_scope")
     figure_set_export_scope = (
         figure_set_export_scope_payload
@@ -74,30 +62,24 @@ def _register_studio_run(
     if figure_set_export_scope is not None:
         last_run["figure_set_export_scope"] = json_safe(figure_set_export_scope)
     sync_figure_plan_projection(last_run, manifest)
-    with edit_intake_project_manifest_with_snapshot(
-        project_dir,
-        snapshot_writer=_refresh_intake_project_snapshot,
-    ) as payload:
-        if payload is not None:
-            payload["last_run"] = last_run
-            payload["package_contract"] = manifest.get("package_contract", {})
-            payload["delivery_package"] = manifest.get("delivery_package", {})
-            payload["layout_quality"] = manifest.get("layout_quality", {})
-            if figure_set_export_scope is not None:
-                payload["figure_set_export_scope"] = json_safe(figure_set_export_scope)
-            else:
-                payload.pop("figure_set_export_scope", None)
-            sync_figure_plan_projection(payload, manifest)
-            studio_payload = payload.get("studio")
-            studio = studio_payload if isinstance(studio_payload, dict) else {}
-            exports_payload = studio_run.get("exports")
-            exports = exports_payload if isinstance(exports_payload, list) else []
-            studio["exports"] = json_safe(exports)
-            presentation_identity = studio_run.get("presentation_identity")
-            if isinstance(presentation_identity, dict):
-                studio["presentation_identity"] = json_safe(presentation_identity)
-            studio["last_export_run"] = json_safe(studio_run)
-            payload["studio"] = studio
-            payload["study_model"] = manifest.get(
-                "study_model", payload.get("study_model", {})
-            )
+    payload["last_run"] = last_run
+    payload["package_contract"] = manifest.get("package_contract", {})
+    payload["delivery_package"] = manifest.get("delivery_package", {})
+    payload["layout_quality"] = manifest.get("layout_quality", {})
+    if figure_set_export_scope is not None:
+        payload["figure_set_export_scope"] = json_safe(figure_set_export_scope)
+    else:
+        payload.pop("figure_set_export_scope", None)
+    sync_figure_plan_projection(payload, manifest)
+    studio_payload = payload.get("studio")
+    studio = studio_payload if isinstance(studio_payload, dict) else {}
+    exports_payload = studio_run.get("exports")
+    exports = exports_payload if isinstance(exports_payload, list) else []
+    studio["exports"] = json_safe(exports)
+    presentation_identity = studio_run.get("presentation_identity")
+    if isinstance(presentation_identity, dict):
+        studio["presentation_identity"] = json_safe(presentation_identity)
+    studio["last_export_run"] = json_safe(studio_run)
+    payload["studio"] = studio
+    payload["study_model"] = manifest.get("study_model", payload.get("study_model", {}))
+    return payload

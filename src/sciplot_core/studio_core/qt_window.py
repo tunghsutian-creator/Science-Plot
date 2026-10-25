@@ -255,7 +255,7 @@ def _ensure_veusz_mainwindow_compat(main_window_type: type[Any]) -> None:
                 handler()
 
     def open_file_in_window(window: Any, filename: str) -> Any:
-        with window_document_session(window, Path(filename)):
+        with window_document_session(window, Path(filename), loading=True):
             result = original_open_file_in_window(window, filename)
         loaded_filename = str(getattr(window, "filename", "") or "").strip()
         if loaded_filename:

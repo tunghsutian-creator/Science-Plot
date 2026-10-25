@@ -2,7 +2,6 @@
 
 from copy import deepcopy
 import json
-from pathlib import Path
 
 import pytest
 
@@ -69,20 +68,59 @@ def test_failed_pair_validation_or_install_preserves_both_files(tmp_path, monkey
 
     monkeypatch.setattr(storage, "audit_spec_data", audit)
     if failure == "second_install":
-        commit = storage._commit_studio_figure_set_transaction
-
-        def replace(source: Path, destination: Path):
-            if destination == spec_path:
+        from sciplot_core.project_store import state
+        boundary = state.boundary
+        def fail(name):
+            if name == "before_head" and audits:
                 raise ValueError("literal second installation rejection")
-            source.replace(destination)
-
-        def commit_with_failure(**kwargs):
-            return commit(**kwargs, path_replacer=replace)
-
-        monkeypatch.setattr(storage, "_commit_studio_figure_set_transaction", commit_with_failure)
+            boundary(name)
+        monkeypatch.setattr(state, "boundary", fail)
     with pytest.raises(ValueError, match="literal"):
         storage.save_transferred_style_pair(object(), target, spec_path, {"version": 2},
                                             input_hashes={str(path): file_sha256(path) for path in original})
     assert audits == [(b"new-native", {"version": 2}, True)]
     assert all(path.read_bytes() == data for path, data in original.items())
-    assert sorted(path.name for path in tmp_path.iterdir()) == ["document.spec.json", "document.vsz"]
+    assert sorted(path.name for path in tmp_path.iterdir() if not path.name.startswith(".sciplot-pair-") and path.name != ".sciplot_session_locks") == ["document.spec.json", "document.vsz"]
+    roots = list(tmp_path.glob(".sciplot-pair-*"))
+    assert len(roots) == 1
+    from sciplot_core.project_store import FileProjectStore, ResourceRoot
+    store = FileProjectStore(roots[0], locations={"pair": ResourceRoot(tmp_path, (target.name, spec_path.name))})
+    assert set(store.snapshot()["files"]) == {"@pair/document.vsz", "@pair/document.spec.json"}
+
+
+def test_private_style_candidates_create_no_store_and_preserve_input_bytes(tmp_path, monkeypatch):
+    target, spec = tmp_path / "old.vsz", tmp_path / "old.spec.json"
+    target.write_bytes(b"old-native")
+    spec.write_text('{"version":1}')
+    output = tmp_path / "private"
+    output.mkdir()
+    monkeypatch.setattr(storage, "stage_veusz_document", _stager)
+    monkeypatch.setattr(storage, "audit_spec_data", lambda *_a, **_kw: {"status": "passed"})
+    result = storage.stage_transferred_style_pair(object(), target, spec, {"version": 2},
+        output_document=output / "candidate.vsz", output_spec=output / "candidate.spec.json",
+        input_hashes={str(target): file_sha256(target), str(spec): file_sha256(spec)})
+    assert result["reopen_validated"]
+    assert target.read_bytes() == b"old-native" and json.loads(spec.read_text()) == {"version": 1}
+    assert (output / "candidate.vsz").read_bytes() == b"new-native"
+    assert json.loads((output / "candidate.spec.json").read_text()) == {"version": 2}
+    assert not list(tmp_path.rglob(".sciplot_store")) and not list(tmp_path.rglob(".sciplot-pair-*"))
+
+
+def test_private_style_worker_skip_still_freezes_pair_without_project_writes(tmp_path, capsys):
+    from sciplot_core.veusz_worker import cli
+    previous, current = tmp_path / "before.vsz", tmp_path / "current.vsz"
+    old_spec, new_spec = tmp_path / "before.json", tmp_path / "current.json"
+    previous.write_bytes(b"before unchanged")
+    current.write_bytes(b"current unchanged")
+    old_spec.write_text('{"template":"old"}')
+    new_spec.write_text('{"template":"new"}')
+    output = tmp_path / "private"
+    args = ["preview-transfer-styles", str(previous), str(current), str(old_spec), str(new_spec),
+            "--output-document", str(output / "candidate.vsz"), "--output-spec", str(output / "candidate.json")]
+    assert cli.main(args) == 0
+    assert json.loads(capsys.readouterr().out)["transfer_status"] == "skipped"
+    assert current.read_bytes() == (output / "candidate.vsz").read_bytes() == b"current unchanged"
+    assert new_spec.read_bytes() == (output / "candidate.json").read_bytes()
+    assert not list(tmp_path.rglob(".sciplot_store"))
+    with pytest.raises(ValueError, match="fresh exclusive"):
+        cli.main(args)

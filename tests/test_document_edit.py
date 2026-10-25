@@ -54,6 +54,7 @@ def test_sample_mapping_drift_is_rejected_before_candidate_or_audit(edit_case, t
 
 
 def test_commit_preserves_source_and_archives_then_reconciles_lost_response(edit_case):
+    from sciplot_core.project_store import FileProjectStore
     project, document, candidate, review = edit_case
     source = (project / "source/data.csv").read_bytes()
     before = document.read_bytes()
@@ -62,12 +63,10 @@ def test_commit_preserves_source_and_archives_then_reconciles_lost_response(edit
     assert document.read_bytes() == candidate.read_bytes()
     assert Path(result["archive"]).read_bytes() == before
     assert (project / "source/data.csv").read_bytes() == source
-    outcome = history_directory(project, review["operation_id"]) / "outcome.json"
-    record = json.loads(outcome.read_text())
-    record["status"] = "pending"  # Process ended after replace, before success journal.
-    outcome.write_text(json.dumps(record))
+    record = FileProjectStore(project).query(review["operation_id"])
+    assert record["phase"] == "complete"
+    assert not history_directory(project, review["operation_id"]).exists()
     assert commit.prior_edit_result(project, review)["status"] == "already_applied"
-    assert json.loads(outcome.read_text())["status"] == "applied"
     document.write_bytes(b"later valid native edit")
     with pytest.raises(ValueError, match="since changed"):
         commit.prior_edit_result(project, review)
@@ -98,26 +97,22 @@ def test_applied_native_edit_chain_requires_contiguous_archives_and_reviewed_sou
     before = {str(path): (path.read_bytes(), path.stat().st_mtime_ns) for path in tmp_path.rglob("*") if path.is_file()}
     assert commit.applied_native_edit_chain(project, **arguments) == [first["operation_id"], second["operation_id"]]
     assert {str(path): (path.read_bytes(), path.stat().st_mtime_ns) for path in tmp_path.rglob("*") if path.is_file()} == before
-    root = history_directory(project, first["operation_id"])
-    outcome = root / "outcome.json"
-    original = outcome.read_bytes()
-    record = json.loads(original)
-    record["status"] = "pending"
-    outcome.write_text(json.dumps(record))
-    assert commit.applied_native_edit_chain(project, **arguments) is None  # Cannot skip the intermediate revision.
-    outcome.write_bytes(original)
-    archive = root / "after.vsz"
+    from sciplot_core.project_store import FileProjectStore
+    receipt = FileProjectStore(project).query(first["operation_id"])
+    archive = Path(receipt["artifact_paths"]["after.vsz"])
     saved = archive.read_bytes()
+    archive.chmod(0o600)
     archive.write_bytes(b"tampered archived native")
-    with pytest.raises(ValueError, match="archives changed"):
+    with pytest.raises(ValueError, match="sealed|immutable|archive"):
         commit.applied_native_edit_chain(project, **arguments)
     archive.write_bytes(saved)
-    preview_path = root / "preview.json"
+    preview_path = Path(receipt["artifact_paths"]["preview.json"])
     saved_preview = preview_path.read_bytes()
+    preview_path.chmod(0o600)
     preview = json.loads(saved_preview)
     preview["changes"] = [{"unreviewed": True}]
     preview_path.write_text(json.dumps(preview))
-    with pytest.raises(ValueError, match="reviewed identity"):
+    with pytest.raises(ValueError, match="sealed|immutable|reviewed"):
         commit.applied_native_edit_chain(project, **arguments)
     preview_path.write_bytes(saved_preview)
     source_path = str(project / "source/data.csv")
@@ -130,48 +125,52 @@ def test_applied_native_edit_chain_requires_contiguous_archives_and_reviewed_sou
     assert commit.applied_native_edit_chain(project, **arguments) == [first["operation_id"], second["operation_id"]]
 
 
-def test_failed_success_journal_restores_original_bytes_and_mode(
-    edit_case, monkeypatch
-):
+def test_failed_success_journal_restores_original_bytes_and_mode(edit_case, monkeypatch):
+    from sciplot_core.project_store import state
     project, document, candidate, review = edit_case
     document.chmod(0o640)
     before = document.read_bytes()
-    write = commit.atomic_write_json
+    from sciplot_core.studio_core.project_command_scope import project_store
 
-    def fail_once(path, payload):
-        if path.name == "outcome.json" and payload.get("status") == "applied":
-            raise OSError("journal disk fault")
-        write(path, payload)
-
-    monkeypatch.setattr(commit, "atomic_write_json", fail_once)
-    with pytest.raises(OSError, match="journal disk fault"):
+    project_store(project).snapshot(import_legacy=True)
+    boundary = state.boundary
+    def fail(name):
+        if name == "before_head":
+            raise OSError("head publication disk fault")
+        boundary(name)
+    monkeypatch.setattr(state, "boundary", fail)
+    with pytest.raises(OSError, match="head publication disk fault"):
         commit.commit_document_edit(project, document, candidate, review)
     assert document.read_bytes() == before
     assert document.stat().st_mode & 0o777 == 0o640
-    assert (
-        commit.read_edit_operation(project, review["operation_id"])["status"]
-        == "rolled_back"
-    )
+    assert commit.read_edit_operation(project, review["operation_id"])["status"] == "pending"
+    monkeypatch.setattr(state, "boundary", boundary)
+    assert commit.prior_edit_result(project, review)["status"] == "already_applied"
+    assert document.read_bytes() == candidate.read_bytes()
+    assert document.stat().st_mode & 0o777 == 0o640
     assert not list(document.parent.glob(".external-edit-*"))
 
 
 def test_install_failure_keeps_canonical_and_retry_succeeds(edit_case, monkeypatch):
+    from sciplot_core.project_store import state
     project, document, candidate, review = edit_case
-    replace = commit._replace_current_document
-
-    def fail(*_):
-        raise OSError("replace fault")
-
-    monkeypatch.setattr(commit, "_replace_current_document", fail)
-    with pytest.raises(OSError, match="replace fault"):
+    boundary = state.boundary
+    def fail(name):
+        if name == "before_projection":
+            raise OSError("projection fault")
+        boundary(name)
+    monkeypatch.setattr(state, "boundary", fail)
+    with pytest.raises(OSError, match="projection fault"):
         commit.commit_document_edit(project, document, candidate, review)
-    assert edit_state(project) == review["base_state"]
-    assert commit.prior_edit_result(project, review) is None
-    monkeypatch.setattr(commit, "_replace_current_document", replace)
-    assert (
-        commit.commit_document_edit(project, document, candidate, review)["status"]
-        == "applied"
-    )
+    from sciplot_core.project_store import ProjectRecoveryRequired
+    with pytest.raises(ProjectRecoveryRequired):
+        edit_state(project)
+    assert document.read_bytes() == b"old native file"
+    monkeypatch.setattr(state, "boundary", boundary)
+    result = commit.prior_edit_result(project, review)
+    assert result["status"] == "already_applied"
+    assert document.read_bytes() == candidate.read_bytes()
+    assert Path(result["archive"]).read_bytes() == b"old native file"
 
 
 def test_source_revision_change_cannot_be_overwritten(edit_case):
@@ -205,8 +204,10 @@ def test_operation_query_rejects_traversal_and_preview_refuses_source(
 def test_changed_recovery_archive_cannot_report_already_applied(edit_case):
     project, document, candidate, review = edit_case
     result = commit.commit_document_edit(project, document, candidate, review)
-    Path(result["archive"]).write_bytes(b"wrong baseline")
-    with pytest.raises(ValueError, match="archive changed"):
+    archive = Path(result["archive"])
+    archive.chmod(0o600)  # Simulate corruption beyond the sealed view's permissions.
+    archive.write_bytes(b"wrong baseline")
+    with pytest.raises(ValueError, match="sealed|immutable|archive"):
         commit.prior_edit_result(project, review)
     assert file_sha256(document) == file_sha256(candidate)
 
@@ -260,11 +261,12 @@ def test_process_exit_after_replace_reconciles_durable_pending_outcome(edit_case
 import json, os, sys
 from pathlib import Path
 from sciplot_core.studio_core import document_edit_commit as edit
+from sciplot_core.project_store import state
 project, document, candidate, review = map(Path, sys.argv[1:])
-def stop_after_replace(staged, target):
-    os.replace(staged, target)
-    os._exit(86)
-edit._replace_current_document = stop_after_replace
+def stop_after_projection(name):
+    if name == "after_projection":
+        os._exit(86)
+state.boundary = stop_after_projection
 edit.commit_document_edit(project, document, candidate, json.loads(review.read_text()))
 """
     result = subprocess.run(
@@ -281,40 +283,25 @@ edit.commit_document_edit(project, document, candidate, json.loads(review.read_t
         timeout=20,
     )
     assert result.returncode == 86, result.stderr
-    outcome = commit.read_edit_operation(project, review["operation_id"])
-    assert outcome["status"] == "pending" and outcome["result_is_current"] is True
     assert commit.prior_edit_result(project, review)["status"] == "already_applied"
     assert document.read_bytes() == candidate.read_bytes()
 
 
-def test_preview_detects_save_between_expected_hash_and_inventory(
-    edit_case, tmp_path, monkeypatch
-):
+def test_preview_detects_save_between_expected_hash_and_inventory(edit_case, tmp_path, monkeypatch):
+    from sciplot_core.studio_core import document_edit_commands as commands
     project, document, _, _ = edit_case
+    (project / "studio/spec.json").write_text(json.dumps({"series": [{"source_artifacts": [
+        {"path": str(project / "source/data.csv"), "sha256": file_sha256(project / "source/data.csv")}
+    ]}]}))
     expected = file_sha256(document)
-    monkeypatch.setattr(edits, "resolve_project_path", lambda _: project)
-    monkeypatch.setattr(
-        edits,
-        "resolve_project_figure",
-        lambda *a: {
-            "document": str(document),
-            "spec": str(document.with_suffix(".json")),
-            "figure_id": "primary",
-        },
-    )
-
-    def changed_inventory(_):
+    original = commands.figure_binding
+    def changed_inventory(*args, **kwargs):
         document.write_bytes(b"saved by native writer after SHA check")
-        return edit_state(project)
-
-    monkeypatch.setattr(edits, "edit_state", changed_inventory)
-    with pytest.raises(ValueError, match="changed while capturing"):
-        edits.preview_document_edit(
-            project,
-            [],
-            output_dir=tmp_path / "preview",
-            expected_document_sha256=expected,
-        )
+        return original(*args, **kwargs)
+    monkeypatch.setattr(commands, "figure_binding", changed_inventory)
+    with pytest.raises(ValueError, match="changed while capturing|unregistered outside"):
+        edits.preview_document_edit(project, [], output_dir=tmp_path / "preview",
+                                    expected_document_sha256=expected)
     assert not (tmp_path / "preview").exists()
 
 
@@ -413,3 +400,29 @@ def test_edit_acceptance_never_ignores_linked_finder_name(
     assert document.read_bytes() == b"old native file"
     assert target.read_bytes() == b"outside content"
     assert not history_directory(project, review["operation_id"]).exists()
+
+
+def test_pending_middle_native_generation_is_never_skipped_as_a_contiguous_chain(edit_case, monkeypatch):
+    from sciplot_core.project_store import ProjectRecoveryRequired, state
+    project, document, candidate, _ = edit_case
+    spec = document.with_name("spec.json")
+    spec.write_text('{"series":[]}')
+    baseline = {str(project / name): digest for name, digest in edit_state(project)["project_files"].items()}
+    review = {"base_state": edit_state(project), "figure_id": "f", "changes": ["first"]}
+    review["operation_id"] = preview_identity(review)
+    commit.commit_document_edit(project, document, candidate, review)
+    candidate.write_bytes(b"second frozen native revision")
+    pending = {"base_state": edit_state(project), "figure_id": "f", "changes": ["second"]}
+    pending["operation_id"] = preview_identity(pending)
+    boundary = state.boundary
+    def fail(name):
+        if name == "before_projection":
+            raise OSError("pending middle generation")
+        boundary(name)
+    monkeypatch.setattr(state, "boundary", fail)
+    with pytest.raises(OSError, match="pending middle"):
+        commit.commit_document_edit(project, document, candidate, pending)
+    monkeypatch.setattr(state, "boundary", boundary)
+    with pytest.raises(ProjectRecoveryRequired, match="recover.*contiguous"):
+        commit.applied_native_edit_chain(project, figure_id="f", document=document, spec=spec, baseline_files=baseline)
+    assert document.read_bytes() == b"new native file"

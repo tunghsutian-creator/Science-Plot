@@ -5,13 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.studio_core.export_execution import export_studio_document
-from sciplot_core.studio_core.publish_run import publish_studio_export_run
 from sciplot_core.studio_core.request_paths import _canonical_publish_paths
-from sciplot_core.studio_core.registry_state import _veusz_spec_path
 
 
 @dataclass(frozen=True)
@@ -44,8 +41,7 @@ def export_project_document(
     formats: list[str],
     request_path: Path | None = None,
     document_path: Path | None = None,
-    export_document: Callable[..., dict[str, Any]] | None = None,
-    publish_export: Callable[..., dict[str, Any]] | None = None,
+    expected_binding: dict[str, Any] | None = None,
 ) -> ProjectExportResult:
     """Publish the saved current document once, without regenerating its data."""
 
@@ -54,26 +50,15 @@ def export_project_document(
         request_path=request_path or project_dir / "plot_request.json",
         document_path=document_path or project_dir / "studio" / "document.vsz",
     )
-    exporter = export_document or export_studio_document
-    publisher = publish_export or publish_studio_export_run
-    export_options = {"audit_spec_path": _veusz_spec_path(document)} if export_document is None else {}
-    if export_document is None:
-        from sciplot_core.studio_core.categorical_display_preflight import require_categorical_display_current
+    from sciplot_core.studio_core.project_publication_commands import publish_project_exports
 
-        require_categorical_display_current(document, export_options["audit_spec_path"])
-    exported = exporter(document, formats=formats, **export_options)
-    document_hash = str(exported["document_sha256"])
-    run = publisher(
-        project_dir=project,
-        request_path=request,
-        document_path=document,
-        exports=exported["exports"],
-        export_document_sha256=document_hash,
-        **({"primary_native_audit": exported["document_audit"]}
-           if "document_audit" in exported else {}),
-    )
+    run = publish_project_exports(project_dir=project, request_path=request,
+                                  document_path=document, formats=formats, expected_binding=expected_binding)
+    exported = {"kind": "sciplot_studio_export", "document": str(document),
+                "document_sha256": run["document_sha256"],
+                "exports": run["exports"]}
     return ProjectExportResult(
-        document_sha256=document_hash,
+        document_sha256=exported["document_sha256"],
         ready_to_use=run.get("ready_to_use") is True,
         _export_json=json.dumps(json_safe(exported), ensure_ascii=False),
         _run_json=json.dumps(json_safe(run), ensure_ascii=False),

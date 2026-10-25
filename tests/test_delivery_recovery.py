@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import fcntl
-import os
 import shutil
 from copy import deepcopy
 from pathlib import Path
@@ -138,10 +136,10 @@ def recoverable(tmp_path: Path, monkeypatch):
 def test_recovery_archives_original_and_preserves_visible_bytes(recoverable):
     project, document, candidate = recoverable
     original, visible = document.read_bytes(), candidate.read_bytes()
-    before = {str(p): p.read_bytes() for p in project.rglob("*") if p.is_file()}
+    before = {str(p): p.read_bytes() for p in project.rglob("*") if p.is_file() and ".sciplot_store" not in p.relative_to(project).parts}
     preview = recovery.preview_delivery_recovery(project)
     assert preview["status"] == "ready", preview
-    assert before == {str(p): p.read_bytes() for p in project.rglob("*") if p.is_file()}
+    assert before == {str(p): p.read_bytes() for p in project.rglob("*") if p.is_file() and ".sciplot_store" not in p.relative_to(project).parts}
     result = recovery.apply_delivery_recovery(project, json.loads(json.dumps(preview)))
     assert result["status"] == "recovered"
     assert Path(result["archive"]).read_bytes() == original
@@ -149,42 +147,25 @@ def test_recovery_archives_original_and_preserves_visible_bytes(recoverable):
     assert result["export_required"] is True
 
 
-def test_recovery_holds_project_lock_during_audit_and_replacement(
-    recoverable, monkeypatch
-):
+def test_recovery_holds_project_lock_during_audit_and_replacement(recoverable, monkeypatch):
+    from sciplot_core.foundation.project_session_lease import ProjectSessionBusy, ProjectSessionLease
+    from sciplot_core.project_store import state
     project, _, _ = recoverable
     preview = recovery.preview_delivery_recovery(project)
-    audit, replace = recovery._audit_candidate, recovery._replace_document
+    boundary = state.boundary
     stages = []
-
-    def assert_locked(stage):
-        descriptor = os.open(project, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            with pytest.raises(BlockingIOError):
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        finally:
-            os.close(descriptor)
-        stages.append(stage)
-
-    def checked_audit(*args):
-        assert_locked("audit")
-        return audit(*args)
-
-    def checked_replace(*args):
-        assert_locked("replace")
-        return replace(*args)
-
-    monkeypatch.setattr(recovery, "_audit_candidate", checked_audit)
-    monkeypatch.setattr(recovery, "_replace_document", checked_replace)
+    def checked(name):
+        if name == "before_projection":
+            with pytest.raises(ProjectSessionBusy):
+                ProjectSessionLease(project, native=True)
+            stages.append(name)
+        boundary(name)
+    monkeypatch.setattr(state, "boundary", checked)
+    monkeypatch.setattr(recovery, "_audit_candidate", lambda *_args: pytest.fail("frozen recovery must not rerun native audit"))
     assert recovery.apply_delivery_recovery(project, preview)["status"] == "recovered"
-    assert stages == ["audit", "replace"]
-    # Completion releases the real OS lock, including for another descriptor.
-    descriptor = os.open(project, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        fcntl.flock(descriptor, fcntl.LOCK_UN)
-    finally:
-        os.close(descriptor)
+    assert stages == ["before_projection"]
+    with ProjectSessionLease(project, native=True):
+        pass
 
 
 @pytest.mark.parametrize(
@@ -253,29 +234,30 @@ def test_recovery_only_accepts_bound_primary_and_unchanged_sources(recoverable):
     assert not (project / ".recovery").exists()
 
 
-@pytest.mark.parametrize("after_replace", [False, True, "target_missing"])
-def test_recovery_replacement_failure_preserves_both_versions(
-    recoverable, monkeypatch, after_replace
-):
+@pytest.mark.parametrize("after_replace", ["before_head", "before_projection", "after_projection"])
+def test_recovery_replacement_failure_preserves_both_versions(recoverable, monkeypatch, after_replace):
+    from sciplot_core.project_store import state
+    from sciplot_core.studio_core.project_command_scope import project_store
     project, document, candidate = recoverable
     preview = recovery.preview_delivery_recovery(project)
     before = document.read_bytes(), candidate.read_bytes()
-
-    def fail(staged, target):
-        if after_replace == "target_missing":
-            target.unlink()
-        elif after_replace:
-            staged.replace(target)
-        raise OSError("injected replacement failure")
-
-    monkeypatch.setattr(recovery, "_replace_document", fail)
+    boundary = state.boundary
+    def fail(name):
+        if name == after_replace:
+            raise OSError("injected replacement failure")
+        boundary(name)
+    monkeypatch.setattr(state, "boundary", fail)
     with pytest.raises(OSError, match="injected replacement failure"):
         recovery.apply_delivery_recovery(project, preview)
-    assert (document.read_bytes(), candidate.read_bytes()) == before
+    assert candidate.read_bytes() == before[1]
+    if after_replace != "after_projection":
+        assert document.read_bytes() == before[0]
     assert not list(document.parent.glob(".document.delivery-*"))
-    assert (
-        next((project / ".recovery").glob("*/document.vsz")).read_bytes() == before[0]
-    )
+    monkeypatch.setattr(state, "boundary", boundary)
+    project_store(project).recover()
+    result = recovery.apply_delivery_recovery(project, preview)
+    assert document.read_bytes() == candidate.read_bytes() == before[1]
+    assert Path(result["archive"]).read_bytes() == before[0]
 
 
 def test_recovery_rejects_an_unbound_or_multiple_document_delivery(recoverable):

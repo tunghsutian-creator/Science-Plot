@@ -35,9 +35,6 @@ from sciplot_core.studio_core.standalone_receipt import (
     publish_standalone_export_receipt,
 )
 
-from sciplot_core.studio_core.publish_run import (
-    publish_studio_export_run,
-)
 from sciplot_core.studio_core.project_export import export_project_document
 
 
@@ -144,8 +141,6 @@ def run_studio_command(
                 request_path=Path(payload["request"]),
                 document_path=document_path,
                 formats=requested_formats,
-                export_document=export_studio_document,
-                publish_export=publish_studio_export_run,
             )
             studio_run = published.run_payload
             payload["exports"] = published.exports
@@ -157,14 +152,26 @@ def run_studio_command(
                 payload["figure_set_export_scope"] = json_safe(figure_set_export_scope)
             payload["scope"] = str(studio_run.get("scope") or "project_delivery")
         else:
-            export_payload = export_studio_document(
-                document_path,
-                formats=requested_formats,
-                output_dir=export_dir,
-            )
+            from sciplot_core.studio_core.context import resolve_studio_project_context
+
+            if resolve_studio_project_context(document_path) is not None:
+                if output_root is not None:
+                    from sciplot_core.studio_core.external_native_export import export_external_native
+
+                    export_payload = export_external_native(document_path, formats=requested_formats,
+                                                              output_root=output_root)
+                else:
+                    from sciplot_core.studio_core.native_export_commands import export_saved_native
+                    from sciplot_core.studio_core.registry_state import _veusz_spec_path
+
+                    export_payload = export_saved_native(document_path, formats=requested_formats,
+                        audit_spec_path=_veusz_spec_path(document_path), standalone_receipt=True)
+            else:
+                export_payload = export_studio_document(
+                    document_path, formats=requested_formats, output_dir=export_dir)
             payload["exports"] = export_payload["exports"]
         if not payload.get("project_dir") and standalone_export:
-            receipt = publish_standalone_export_receipt(
+            receipt = export_payload.get("standalone_export") or publish_standalone_export_receipt(
                 document_path=document_path,
                 requested_formats=requested_formats,
                 exports=payload["exports"],

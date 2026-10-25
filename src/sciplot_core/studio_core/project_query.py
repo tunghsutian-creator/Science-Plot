@@ -23,6 +23,7 @@ from sciplot_core.studio_core.project_query_paths import (
 )
 from sciplot_core.veusz_runtime import veusz_worker_environment
 from sciplot_core.native_process import run_worker
+from sciplot_core.studio_core.project_command_scope import project_read_runtime
 
 
 def resolve_project_figure(
@@ -65,6 +66,7 @@ def _inspect_document(document: Path) -> dict[str, Any]:
 
 
 @with_table_reads
+@project_read_runtime
 def inspect_project(
     project: Path,
     *,

@@ -1,21 +1,16 @@
-"""Install reviewed source, document, and metadata together with rollback."""
+"""Source-installation planning and shared generation publication; no direct writer."""
 
 from __future__ import annotations
 
 import json
-import os
-import shutil
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
-from uuid import uuid4
+from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.foundation.json_io import atomic_write_json
-from sciplot_core.project_manifest import locked_intake_project_manifest
-from sciplot_core.studio_core.launchers import _write_veusz_launcher
-from sciplot_core.studio_core.source_update_recovery import installation_identity, restore_interrupted_update
-
+from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+from sciplot_core.studio_core.project_command_scope import command_for_binding, project_store, query_for_apply, whole_memberships
 
 def reject_symlink_path(path: Path) -> None:
     for part in (path, *path.parents):
@@ -45,7 +40,7 @@ def project_inventory(project: Path) -> dict[str, str]:
     reject_symlink_path(project)
     result = {}
     for path in sorted(project.iterdir()):
-        if path.name in {"runs", "delivery"}:
+        if path.name in {"runs", "delivery", ".sciplot_store", ".sciplot_resources"}:
             continue
         if path.is_dir() and not any(path.iterdir()):
             continue
@@ -77,169 +72,68 @@ def _outcome_path(project: Path, review: dict[str, Any]) -> Path:
     return path
 
 
-def prior_source_update_result(
-    project: Path, review: dict[str, Any], *, validate: Callable[[], object],
-) -> Path | None:
-    """Recover byte-proven completion or restore a proven interrupted baseline.
-
-    A hard interruption during the multi-part installation is deliberately not
-    interpreted as success. New sealed intents can restore verified original
-    parts before retry; unknown bytes and legacy mixed states remain blocked.
-    """
+def prior_source_update_result(project: Path, review: dict[str, Any], *, validate: Callable[[], object]) -> Path | None:
+    """Query the shared receipt, or import proven legacy evidence without writing it."""
+    app = ProjectCommands(project_store(project))
+    key = canonical_json_sha256(review, allow_nan=False)
+    record = query_for_apply(app, key)
+    if record is not None:
+        record = app.resume(ProjectCommand.from_payload(record["metadata"]))
+        if record["phase"] == "reserved":
+            return None
+        validate()
+        return Path(record["artifact_root"]) / "before"
     path = _outcome_path(project, review)
     if not path.exists():
         return None
-    with locked_intake_project_manifest(project):
-        record = json.loads(path.read_text(encoding="utf-8"))
-        if (
-            not isinstance(record, dict) or record.get("review") != review
-            or record.get("project") != str(project)
-            or record.get("status") not in {"pending", "applied", "rolled_back", "recovering"}
-        ):
-            raise ValueError("The source-update recovery record changed; preserve its evidence.")
-        archive = Path(record["archive"])
-        expected_parent = project.parent / ".source_update_history" / project.name
-        if archive.parent != expected_parent or len(archive.name) != 32:
-            raise ValueError("The source-update archive has an invalid recorded location.")
-        reject_symlink_path(archive)
-        if record.get("version") == 2 and record.get("installation_sha256") != installation_identity(record):
-            raise ValueError("The source-update recovery record changed; preserve its evidence.")
-        current = project_inventory(project)
-        if current == record["result_files"] and record["status"] != "rolled_back":
-            if not archive.is_dir() or project_inventory(archive) != record["archived_files"]:
-                raise ValueError("The source-update archive changed; preserve its evidence.")
-            validate()
-            if project_inventory(project) != current:
-                raise ValueError("The project changed during source-update recovery.")
-            record["status"] = "applied"
-            atomic_write_json(path, record)
-            return archive
-        if (
-            current == record["base_files"] and record["status"] in {"pending", "rolled_back"}
-            and (not archive.exists() or not any(archive.iterdir()))
-        ):
-            return None
-        if restore_interrupted_update(project, record, path, inventory=project_inventory, check_path=reject_symlink_path):
-            return None
-        raise ValueError(
-            "The source update is interrupted or its result has changed. "
-            f"Preserve the project and archive for recovery: {archive}"
-        )
+    record = json.loads(path.read_text())
+    if record.get("review") != review or record.get("project") != str(project):
+        raise ValueError("The historical source-update evidence changed")
+    archive = Path(record["archive"])
+    if archive.parent != project.parent / ".source_update_history" / project.name:
+        raise ValueError("The historical source-update archive is not bound to this project")
+    current = project_inventory(project)
+    if current == record["result_files"] and record.get("status") != "rolled_back":
+        if project_inventory(archive) != record["archived_files"]:
+            raise ValueError("The historical source-update archive changed")
+        validate()
+        return archive
+    if current == record["base_files"]:
+        return None
+    from sciplot_core.studio_core.source_update_recovery import restore_legacy_generation
+
+    restore_legacy_generation(project, record, review)
+    return None
 
 
-def install_source_update(
-    project: Path,
-    candidate: Path,
-    *,
-    expected: dict[str, str],
-    validate: Callable[[], object],
-    precommit: Callable[[], None] | None = None,
-    review: dict[str, Any] | None = None,
-    relocate_companion: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
-) -> Path:
-    """Keep old runtime history; atomically replace each reviewed active part."""
+def install_source_update(project: Path, candidate: Path, *, expected: dict[str, str],
+                          validate: Callable[[], object], precommit: Callable[[], None] | None = None,
+                          review: dict[str, Any] | None = None,
+                          relocate_companion: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None) -> Path:
+    """Compatibility admission for old reviewed calls; one new generation writer."""
     reject_symlink_path(project)
     file_inventory(candidate)
-    archive = project.parent / ".source_update_history" / project.name / uuid4().hex
-    reject_symlink_path(archive)
-    staged_paths = [
-        p for p in candidate.iterdir() if p.name not in {"runs", "delivery"}
-    ]
-    names = sorted(p.name for p in staged_paths)
-    if not {"plot_request.json", "studio", "source", "raw"}.issubset(names):
-        raise ValueError(
-            "Prepared source update is missing required active project parts."
-        )
-    for path in [*candidate.glob("*.json"), *(candidate / "studio").rglob("*.json")]:
-        value = json.loads(path.read_text(encoding="utf-8"))
-        relocated = relocate_metadata(value, candidate, project)
-        if isinstance(value, dict) and value.get("native_annotations"):
-            if relocate_companion is None:
-                raise ValueError("Annotated source installation requires reviewed provenance relocation.")
-            relocated = relocate_companion(value, relocated)
-        path.write_text(
-            json.dumps(
-                relocated,
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-    if (candidate / "Open_in_Veusz.command").exists():
-        _write_veusz_launcher(candidate, project / "studio" / "document.vsz")
-    with locked_intake_project_manifest(project):
-        if project_inventory(project) != expected:
-            raise ValueError(
-                "The project changed after preview; inspect it again before updating."
-            )
-        if precommit is not None:
-            precommit()
-        outcome_path = _outcome_path(project, review) if review is not None else None
-        record: dict[str, Any] | None = None
-        if outcome_path is not None:
-            replaced_names = set(names)
-            archived_files = {
-                key: digest for key, digest in expected.items()
-                if key.split("/", 1)[0] in replaced_names
-            }
-            record = {
-                "kind": "sciplot_source_update_outcome", "version": 2,
-                "status": "pending", "project": str(project), "review": review,
-                "archive": str(archive), "base_files": expected,
-                "archived_files": archived_files,
-                "result_files": {
-                    **{key: digest for key, digest in expected.items() if key not in archived_files},
-                    **project_inventory(candidate),
-                },
-                "replacement_names": names,
-            }
-            record["installation_sha256"] = installation_identity(record)
-            atomic_write_json(outcome_path, record)
-        archive.mkdir(parents=True)
-        moved: list[str] = []
-        installed: list[str] = []
-        try:
-            for name in names:
-                original = project / name
-                if original.exists():
-                    os.replace(original, archive / name)
-                    moved.append(name)
-                os.replace(candidate / name, original)
-                installed.append(name)
-            validate()
-        except BaseException as exc:
-            errors = []
-            for name in reversed(installed):
-                try:
-                    os.replace(project / name, candidate / name)
-                except OSError as error:
-                    errors.append(str(error))
-            for name in reversed(moved):
-                try:
-                    os.replace(archive / name, project / name)
-                except OSError as error:
-                    errors.append(str(error))
-            if errors:
-                raise RuntimeError(
-                    f"Source update rollback needs recovery from {archive}: {errors}"
-                ) from exc
-            shutil.rmtree(archive)
-            if outcome_path is not None and record is not None:
-                record["status"] = "rolled_back"
-                atomic_write_json(outcome_path, record)
-            raise
-        if outcome_path is not None and record is not None:
-            # This write is outside the rollback block. A lost receipt after a
-            # validated install is recoverable from the already durable intent.
-            record["status"] = "applied"
-            atomic_write_json(outcome_path, record)
-    return archive
+    if project_inventory(project) != expected:
+        raise ValueError("The project changed after preview; inspect again before updating")
+    if precommit is not None:
+        precommit()
+    # Domain validation runs against the complete isolated candidate before any
+    # active path is replaced. New v2 previews freeze this same result at preview.
+    validate()
+    from sciplot_core.studio_core.source_update_commands import source_mutation
 
-
-__all__ = [
-    "file_inventory",
-    "project_inventory",
-    "relocate_metadata",
-    "install_source_update",
-    "prior_source_update_result",
-]
+    repository = project_store(project, with_snapshot=True)
+    snapshot = repository.snapshot(import_legacy=True)
+    binding = {"project_id": snapshot["project_id"], "generation": snapshot["generation"],
+               "files": {name: value["sha256"] for name, value in snapshot["files"].items()},
+               "read_memberships": whole_memberships(repository, snapshot)}
+    evidence = review or {"kind": "source_update_compatibility", "base_files": expected,
+                          "candidate_files": project_inventory(candidate)}
+    writes, artifacts = source_mutation(project, candidate, evidence,
+                                        relocate_companion=relocate_companion, expected=expected, store=repository)
+    key = canonical_json_sha256(evidence, allow_nan=False)
+    command = command_for_binding(repository, binding, kind="source_update", key=key,
+                                   writes=list(writes), request={"review_sha256": key})
+    completed = ProjectCommands(repository).execute(command,
+        lambda: ProjectMutation(writes, {"status": "updated", "review_sha256": key}, artifacts=artifacts))
+    return Path(completed["artifact_root"]) / "before"

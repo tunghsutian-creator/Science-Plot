@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+from tempfile import TemporaryDirectory
 import subprocess
 import sys
 from pathlib import Path
@@ -212,23 +214,33 @@ def transfer_project_styles(previous: Path, candidate: Path) -> list[dict[str, A
             )
             continue
         old_document, old_spec = before[identity]
-        completed = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "sciplot_core.veusz_worker",
-                "transfer-styles",
-                str(old_document),
-                str(document),
-                str(old_spec),
-                str(spec),
-            ],
-            env=veusz_worker_environment(),
-            text=True,
-            capture_output=True,
-            timeout=120,
-            check=False,
-        )
+        from sciplot_core.native_process import run_cold_worker
+
+        with TemporaryDirectory(prefix="sciplot-style-transfer-") as folder:
+            private_document, private_spec = Path(folder) / "document.vsz", Path(folder) / "spec.json"
+            completed = run_cold_worker(
+                [
+                    sys.executable,
+                    "-m",
+                    "sciplot_core.veusz_worker",
+                    "preview-transfer-styles",
+                    str(old_document),
+                    str(document),
+                    str(old_spec),
+                    str(spec),
+                    "--output-document", str(private_document),
+                    "--output-spec", str(private_spec),
+                ],
+                env=veusz_worker_environment(),
+                cold_runner=subprocess.run,
+                text=True,
+                capture_output=True,
+                timeout=120,
+                check=False,
+            )
+            if not completed.returncode:
+                shutil.copy2(private_document, document)
+                shutil.copy2(private_spec, spec)
         if completed.returncode:
             detail = completed.stderr.strip().splitlines()
             raise ValueError(

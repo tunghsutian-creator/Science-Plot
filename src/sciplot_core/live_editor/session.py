@@ -86,7 +86,8 @@ def _export_authority(project: Path, state: dict[str, Any]) -> dict[str, Any]:
             files[relative] = value
         else:
             files[relative] = digest
-    return {"project_files": files, "delivery": state["delivery"]}
+    return {"project_files": files, "delivery": state["delivery"],
+            **{key: copy.deepcopy(state[key]) for key in ("projected_reads", "source_files") if key in state}}
 
 
 class LiveSession:
@@ -127,7 +128,7 @@ class LiveSession:
         document, spec = Path(selected["document"]), Path(selected["spec"])
         if figure_id is None and (document != self.document or spec != self.spec):
             raise ValueError("图形身份发生变化，请重新打开编辑器。")
-        before = edit_state(self.project)
+        before = edit_state(self.project, selected)
         audit_edited_document(document, spec)
         folder = self.output / uuid4().hex
         folder.mkdir(mode=0o700)
@@ -138,7 +139,7 @@ class LiveSession:
             native = worker.request("state")["state"]
             labels = {path: item["sample"] for item in sample_style_targets(json.loads(spec.read_text()))
                       for path in item["object_paths"]}
-            if edit_state(self.project) != before:
+            if edit_state(self.project, selected) != before:
                 raise ValueError("打开编辑器期间项目发生变化，请重新打开。")
         except BaseException:
             worker.close()
@@ -170,7 +171,7 @@ class LiveSession:
         self._check_worker()
         if self.session_error:
             raise ValueError(self.session_error)
-        if self.stale or edit_state(self.project) != self.baseline:
+        if self.stale or edit_state(self.project, self.figure) != self.baseline:
             self.stale = True
             raise ValueError("项目、保存图或交付已在其他地方变化；请重新加载后编辑，当前草稿尚未保存。")
         inspection = inspect_project(self.project)
@@ -232,7 +233,7 @@ class LiveSession:
         # made after the existing apply owner's project lock has been released.
         expected = copy.deepcopy(self.baseline)
         expected["project_files"][str(self.document.relative_to(self.project))] = result["result_sha256"]
-        if edit_state(self.project) != expected:
+        if edit_state(self.project, self.figure) != expected:
             self.stale = True
             self.last_result = {**result, "message": "保存已执行，但项目或交付随后变化；请重新加载核查。"}
             raise ValueError(self.last_result["message"])
@@ -252,7 +253,7 @@ class LiveSession:
         if file_sha256(self.document) != self.saved_hash:
             self.stale = True
             raise ValueError("导出过程中保存图已变化，请核查当前状态。")
-        after = edit_state(self.project)
+        after = edit_state(self.project, self.figure)
         try:
             if _export_authority(self.project, after) != protected:
                 raise ValueError("导出期间源规格、请求或项目元数据发生变化；请重新加载核查。")

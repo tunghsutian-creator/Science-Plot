@@ -54,7 +54,7 @@ def _snapshot_native_audit(
     return verified
 
 
-def publish_studio_export_run(
+def prepare_studio_export_run(
     *,
     project_dir: Path,
     request_path: Path,
@@ -62,6 +62,10 @@ def publish_studio_export_run(
     exports: list[dict[str, Any]],
     export_document_sha256: str,
     primary_native_audit: dict[str, Any] | None = None,
+    output_dir: Path,
+    secondary_output_dir: Path,
+    delivery_dir: Path,
+    delivery_root: Path,
 ) -> dict[str, Any]:
     """Validate, archive, assess, package, and register one Studio run."""
 
@@ -71,6 +75,8 @@ def publish_studio_export_run(
         document_path=document_path,
         exports=exports,
         export_document_sha256=export_document_sha256,
+        output_dir=output_dir,
+        secondary_output_dir=secondary_output_dir,
     )
     copied_exports, figures = copy_studio_run_exports(
         exports=inventory.exports,
@@ -151,4 +157,18 @@ def publish_studio_export_run(
         manifest=manifest,
         copied_exports=copied_exports,
         figures=figures,
+        delivery_dir=delivery_dir,
+        delivery_root=delivery_root,
     )
+
+
+def publish_studio_export_run(
+    *, project_dir: Path, request_path: Path, document_path: Path,
+    exports: list[dict[str, Any]], export_document_sha256: str,
+    primary_native_audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    from sciplot_core.studio_core.project_publication_commands import publish_project_exports
+
+    return publish_project_exports(project_dir=project_dir, request_path=request_path,
+        document_path=document_path, exports=exports,
+        export_document_sha256=export_document_sha256, primary_native_audit=primary_native_audit)

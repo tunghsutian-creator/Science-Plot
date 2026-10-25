@@ -17,7 +17,6 @@ from sciplot_gui.studio_project.services import (
     _studio_figure_set_export_scope,
     export_studio_document,
     publish_standalone_export_receipt,
-    publish_studio_export_run,
 )
 
 
@@ -35,8 +34,7 @@ class ExportHelpersMixin:
             request_path=self.request_path,
             document_path=self.document_path,
             formats=["pdf", "tiff_300"],
-            export_document=export_studio_document,
-            publish_export=publish_studio_export_run,
+            expected_binding=getattr(self.document, "_sciplot_project_read_set", None),
         )
         export_payload = published.export_payload
         exports = published.exports
@@ -71,15 +69,18 @@ class ExportHelpersMixin:
         return result
 
     def _standalone_export(self) -> dict[str, Any]:
-        if (
-            self.project_dir is not None
-            and self._figure_set_export_scope() == "standalone"
-        ):
-            artifact_root = (
-                self.document_path.parent / "exports" / self.document_path.stem
-            )
-        else:
-            artifact_root = self.document_path.parent / "exports"
+        if self.project_dir is not None:
+            from sciplot_core.studio_core.native_export_commands import export_saved_native
+            from sciplot_core.studio_core.registry_state import _veusz_spec_path
+
+            export_payload = export_saved_native(self.document_path, formats=["pdf", "tiff_300"],
+                audit_spec_path=_veusz_spec_path(self.document_path), standalone_receipt=True)
+            receipt = export_payload["standalone_export"]
+            return {"kind": "sciplot_studio_menu_export", "version": 1,
+                "scope": "standalone_exact_current_export", "status": receipt["status"], "state": receipt["state"],
+                "ready_to_use": receipt["export_ready"], "export_payload": json_safe(export_payload),
+                "exports": json_safe(export_payload["exports"]), "standalone_export": json_safe(receipt)}
+        artifact_root = self.document_path.parent / "exports"
         export_payload = export_studio_document(
             self.document_path,
             formats=["pdf", "tiff_300"],

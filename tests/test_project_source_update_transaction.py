@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,7 @@ def _bytes(root: Path) -> dict[str, bytes]:
     return {
         str(path.relative_to(root)): path.read_bytes()
         for path in root.rglob("*")
-        if path.is_file()
+        if path.is_file() and ".sciplot_store" not in path.relative_to(root).parts
     }
 
 
@@ -83,15 +82,10 @@ def test_source_transaction_relocates_only_metadata_and_retains_old_evidence(rev
 
     def validate():
         validation.append(True)
-        assert json.loads((project / "studio/spec.json").read_text()) == {
-            "source": str(project / "source/data.json"),
-            "document": str(project / "studio/document.vsz"),
-        }
-        assert json.loads((project / "plot_request.json").read_text())["input"] == str(
-            project / "source"
-        )
-        assert _bytes(project / "raw") == raw
-        assert _bytes(project / "source") == source
+        assert _bytes(project) == previous
+        assert (candidate / "studio/document.vsz").read_bytes() == b"new VSZ"
+        assert _bytes(candidate / "raw") == raw
+        assert _bytes(candidate / "source") == source
 
     archive = transaction.install_source_update(
         project,
@@ -100,6 +94,10 @@ def test_source_transaction_relocates_only_metadata_and_retains_old_evidence(rev
         validate=validate,
     )
     assert validation == [True]
+    assert json.loads((project / "studio/spec.json").read_text()) == {
+        "source": str(project / "source/data.json"), "document": str(project / "studio/document.vsz")}
+    assert json.loads((project / "plot_request.json").read_text())["input"] == str(project / "source")
+    assert _bytes(project / "raw") == raw and _bytes(project / "source") == source
     assert _bytes(archive) == {
         key: value
         for key, value in previous.items()
@@ -115,9 +113,13 @@ def test_source_transaction_relocates_only_metadata_and_retains_old_evidence(rev
 def test_source_transaction_post_audit_failure_restores_whole_project(revisions):
     project, candidate = revisions
     before = _bytes(project)
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    project_store(project).snapshot(import_legacy=True)
 
     def failed_audit():
-        assert (project / "studio/document.vsz").read_bytes() == b"new VSZ"
+        assert (project / "studio/document.vsz").read_bytes() == b"old VSZ"
+        assert (candidate / "studio/document.vsz").read_bytes() == b"new VSZ"
         raise ValueError("injected scientific audit failure")
 
     with pytest.raises(ValueError, match="injected scientific audit failure"):
@@ -131,36 +133,34 @@ def test_source_transaction_post_audit_failure_restores_whole_project(revisions)
     assert (candidate / "studio/document.vsz").read_bytes() == b"new VSZ"
 
 
-@pytest.mark.parametrize("phase", ["archive", "install"])
-def test_source_transaction_partial_replace_failure_rolls_back(
-    revisions, monkeypatch, phase
-):
+@pytest.mark.parametrize("phase", ["before_head", "before_projection"])
+def test_source_transaction_partial_replace_failure_rolls_back(revisions, monkeypatch, phase):
+    from sciplot_core.project_store import state
+    from sciplot_core.studio_core.project_command_scope import project_store
     project, candidate = revisions
     before = _bytes(project)
-    replace = os.replace
+    project_store(project).snapshot(import_legacy=True)
+    boundary = state.boundary
     injected = []
-
-    def fail_one(source, destination):
-        source = Path(source)
-        match = source == (project if phase == "archive" else candidate) / "source"
-        if match and not injected:
+    def fail_one(name):
+        if name == phase:
             injected.append(True)
-            raise OSError("injected partial replacement failure")
-        return replace(source, destination)
-
-    monkeypatch.setattr(transaction.os, "replace", fail_one)
-    with pytest.raises(OSError, match="injected partial replacement failure"):
-        transaction.install_source_update(
-            project,
-            candidate,
-            expected=transaction.project_inventory(project),
-            validate=lambda: None,
-        )
+            raise OSError("injected partial publication failure")
+        boundary(name)
+    monkeypatch.setattr(state, "boundary", fail_one)
+    with pytest.raises(OSError, match="injected partial publication failure"):
+        transaction.install_source_update(project, candidate,
+            expected=transaction.project_inventory(project), validate=lambda: None)
     assert injected == [True]
     assert _bytes(project) == before
     assert (candidate / "raw/instrument.json").is_file()
     assert (candidate / "source/data.json").is_file()
     assert (candidate / "studio/document.vsz").read_bytes() == b"new VSZ"
+    monkeypatch.setattr(state, "boundary", boundary)
+    if phase == "before_projection":
+        project_store(project).recover()
+        assert (project / "studio/document.vsz").read_bytes() == b"new VSZ"
+        assert (project / "runs/studio_001/manifest.json").read_bytes() == b"old immutable run"
 
 
 def test_source_transaction_stale_inventory_refuses_any_install(revisions):

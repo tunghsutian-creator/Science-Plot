@@ -1,5 +1,4 @@
 from copy import deepcopy
-from contextlib import contextmanager
 import json
 from pathlib import Path
 
@@ -18,11 +17,14 @@ def imported(tmp_path, monkeypatch):
     project.mkdir()
     source = tmp_path / "source.csv"
     source.write_text("x,y\n1,2\n")
-    native = project / "document.vsz"
+    (project / "studio").mkdir()
+    native = project / "studio/document.vsz"
     native.write_bytes(b"native current with custom styles and opaque content")
-    specification = project / "spec.json"
+    specification = project / "studio/spec.json"
     spec = {"series": [{"name": "series_1", "label": "E2", "line_width_pt": 1.2,
-                        "x_values": [1], "y_values": [2]}], "unrecognized_evidence": {"keep": True}}
+                        "x_values": [1], "y_values": [2],
+                        "source_artifacts": [{"path": str(source), "sha256": file_sha256(source)}]}],
+            "unrecognized_evidence": {"keep": True}}
     specification.write_text(json.dumps(spec))
     request = project / "plot_request.json"
     request.write_text(json.dumps({"input": str(source)}))
@@ -170,13 +172,55 @@ def test_native_label_name_alone_does_not_infer_a_title(imported):
 def test_export_rechecks_native_binding_after_acquiring_project_lease(imported, monkeypatch):
     _, binding, _, _ = imported
 
-    @contextmanager
-    def intervening_commit(project):
-        Path(binding["document"]).write_text("a direct client committed before lease acquisition")
-        yield
+    def intervening_commit(**kwargs):
+        assert kwargs["expected_binding"] == binding["project_read_set"]
+        Path(binding["document"]).write_text("a direct client committed before command admission")
+        veusz.require_current(binding)
+        pytest.fail("stale binding exported")
 
-    monkeypatch.setattr(veusz, "external_project_session", intervening_commit)
-    monkeypatch.setattr(veusz, "export_project_document", lambda **kw: pytest.fail("stale binding exported"))
+    monkeypatch.setattr(veusz, "export_project_document", intervening_commit)
     with pytest.raises(DocumentError) as failure:
         VeuszBackend().export(binding)
     assert failure.value.repair["action"] == "resolve_input_conflict"
+
+
+def test_native_backend_selected_binding_survives_b_export_but_rejects_a_remap(imported, monkeypatch):
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation, ProjectionRead
+    from sciplot_core.project_commands.read_projections import projection_digest
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    _, old_binding, query, _ = imported
+    project = Path(old_binding["project"])
+    store = project_store(project)
+    before = store.snapshot()
+    registry = {"kind": "sciplot_studio_figure_set", "version": 1, "primary_figure_id": "f", "figures": [
+        {"figure_id": "f", "status": "ready", "document": old_binding["document"], "spec": old_binding["spec"]},
+        {"figure_id": "peer", "status": "ready", "document": str(project / "studio/figures/peer.vsz"),
+         "spec": str(project / "studio/figures/peer.spec.json")} ]}
+    writes = {"studio/figure_set.json": json.dumps(registry).encode(), "studio/figures/peer.vsz": b"peer native",
+              "studio/figures/peer.spec.json": b'{}'}
+    command = ProjectCommand.create("figure_set", "create-peer", project_id=before["project_id"],
+        expected_generation=before["generation"], read_set={name: None for name in writes}, write_set=list(writes), request={})
+    ProjectCommands(store).execute(command, lambda: ProjectMutation(writes, {}))
+    monkeypatch.setattr(veusz_import, "inspect_project", lambda *a, **k: deepcopy(query))
+    _, binding = VeuszBackend().import_project(project, plot_id="selected-a")
+    assert str(project / "studio/figures/peer.vsz") not in binding["files"]
+    current = store.snapshot()
+    selected = ProjectionRead("studio/figure_set.json", "studio_figure_v1", "peer",
+        projection_digest(store.read_bytes("studio/figure_set.json"), kind="studio_figure_v1", key="peer"))
+    registry["figures"][1]["document_state"] = {"exports": ["new peer PDF"]}
+    command = ProjectCommand.create("native_export", "export-peer", project_id=current["project_id"],
+        expected_generation=current["generation"], read_set={"studio/exports/peer.pdf": None},
+        write_set=["studio/figure_set.json", "studio/exports/peer.pdf"], request={},
+        projected_reads=[selected], projected_writes=[selected])
+    ProjectCommands(store).execute(command, lambda: ProjectMutation({"studio/figure_set.json": json.dumps(registry).encode(),
+                                                                   "studio/exports/peer.pdf": b"new peer PDF"}, {}))
+    assert VeuszBackend().fingerprint(binding) == binding["fingerprint"]
+    current = store.snapshot()
+    registry["figures"][0]["document"] = str(project / "studio/renamed.vsz")
+    command = ProjectCommand.create("figure_set", "remap-a", project_id=current["project_id"],
+        expected_generation=current["generation"], read_set={"studio/figure_set.json": current["files"]["studio/figure_set.json"]["sha256"]},
+        write_set=["studio/figure_set.json"], request={})
+    ProjectCommands(store).execute(command, lambda: ProjectMutation({"studio/figure_set.json": json.dumps(registry).encode()}, {}))
+    with pytest.raises(DocumentError, match="changed"):
+        veusz.require_current(binding)

@@ -44,7 +44,6 @@ from sciplot_core.studio_core.registry_state import (
 )
 from sciplot_core.studio_core.request_paths import (
     _canonical_publish_paths,
-    _next_studio_run_dir,
     _resolve_request_input,
 )
 from sciplot_core.studio_core.rule_readiness import (
@@ -92,6 +91,8 @@ def prepare_studio_export_inventory(
     document_path: Path,
     exports: list[dict[str, Any]],
     export_document_sha256: str,
+    output_dir: Path,
+    secondary_output_dir: Path,
 ) -> StudioExportInventory:
     """Validate project authority and export every registered secondary figure."""
 
@@ -209,6 +210,7 @@ def prepare_studio_export_inventory(
         figure_set_export_scope=scope,
         figure_set=figure_set,
         figure_set_loaded=True,
+        secondary_output_dir=secondary_output_dir,
     )
     if (
         document_path.is_symlink()
@@ -240,7 +242,6 @@ def prepare_studio_export_inventory(
         )
         for item in figure_documents
     }
-    output_dir = _next_studio_run_dir(project_dir)
     return StudioExportInventory(
         project_dir=project_dir,
         request_path=request_path,
@@ -272,6 +273,7 @@ def _collect_figure_documents(
     figure_set_export_scope: dict[str, Any] | None,
     figure_set: dict[str, Any] | None = None,
     figure_set_loaded: bool = False,
+    secondary_output_dir: Path,
 ) -> list[dict[str, Any]]:
     primary_id = (
         str(figure_set_export_scope.get("primary_figure_id") or "primary")
@@ -318,6 +320,7 @@ def _collect_figure_documents(
                 figure_id=str(figure_id),
                 registry_entry=by_id.get(str(figure_id)),
                 requested_formats=requested_formats,
+                output_dir=secondary_output_dir,
             )
         )
     return documents
@@ -329,6 +332,7 @@ def _export_secondary_figure(
     figure_id: str,
     registry_entry: dict[str, Any] | None,
     requested_formats: list[str],
+    output_dir: Path,
 ) -> dict[str, Any]:
     if not isinstance(registry_entry, dict) or registry_entry.get("status") != "ready":
         raise RuntimeError(
@@ -344,7 +348,7 @@ def _export_secondary_figure(
     payload = export_studio_document(
         document,
         formats=requested_formats,
-        output_dir=project_dir / "studio" / "exports" / "figure_set",
+        output_dir=output_dir,
     )
     secondary_exports = [
         {

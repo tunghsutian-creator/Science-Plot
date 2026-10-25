@@ -10,6 +10,7 @@ from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_re
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
+from sciplot_core.project_store.runtime import resolve_runtime_path, literal_runtime_path
 from sciplot_core.source_coverage.managed_documents import source_records
 from sciplot_core.studio_core.project_query_paths import (
     bound_delivery_project,
@@ -27,6 +28,7 @@ def _indicator(current: bool | None, **fields: Any) -> dict[str, Any]:
 
 
 def _tree_hash(path: Path) -> str | None:
+    path = resolve_runtime_path(path)
     canonical_path(path)
     if path.is_dir():
         for member in path.rglob("*"):
@@ -115,7 +117,7 @@ def source_indicators(
                 for record in unit.get("source_artifacts", []):
                     canonical_path(Path(record["path"]))
             for path, digest in source_records(spec).items():
-                canonical_path(path)
+                canonical_path(resolve_runtime_path(path, expected_sha256=digest))
                 if str(path) in prepared and prepared[str(path)] != digest:
                     raise ValueError("Prepared figures disagree about a source hash.")
                 prepared[str(path)] = digest
@@ -124,7 +126,7 @@ def source_indicators(
     mismatches = [
         path
         for path, digest in prepared.items()
-        if existing_file_sha256(Path(path)) != digest
+        if existing_file_sha256(resolve_runtime_path(path, expected_sha256=digest)) != digest
     ]
     prepared_state = _indicator(
         None if prepared_error or not prepared else not mismatches,
@@ -139,12 +141,12 @@ def source_indicators(
             record = replicate.get("source_file") or {}
             value, raw_digest = record.get("raw_path"), record.get("sha256")
             if isinstance(value, str) and isinstance(raw_digest, str):
-                path = canonical_path(Path(value))
-                raw[str(path)] = raw_digest
+                canonical_path(resolve_runtime_path(value, expected_sha256=raw_digest))
+                raw[value] = raw_digest
     raw_mismatches = [
         path
         for path, digest in raw.items()
-        if existing_file_sha256(Path(path)) != digest
+        if existing_file_sha256(resolve_runtime_path(path, expected_sha256=digest)) != digest
     ]
     raw_state = _indicator(
         not raw_mismatches if raw else None,
@@ -195,10 +197,11 @@ def _documents_match(
     for figure in figures:
         document = canonical_path(run / Path(figure["document"]).relative_to(project))
         spec = canonical_path(run / Path(figure["spec"]).relative_to(project))
-        expected_paths.add(str(document))
+        literal = literal_runtime_path(document)
+        expected_paths.add(literal)
         if (
             figure["document_sha256"] is None
-            or recorded.get(str(document)) != figure["document_sha256"]
+            or recorded.get(literal) != figure["document_sha256"]
             or existing_file_sha256(document) != figure["document_sha256"]
             or existing_file_sha256(spec) != figure["spec_sha256"]
         ):
@@ -224,7 +227,7 @@ def _exports_match(
     for item in exports:
         if not isinstance(item, dict) or not item.get("path") or not item.get("sha256"):
             return False
-        path = canonical_path(Path(item["path"]))
+        path = canonical_path(resolve_runtime_path(item["path"], expected_sha256=item["sha256"]))
         fmt, digest = item.get("format"), item["sha256"]
         if not isinstance(fmt, str):
             return False
@@ -233,7 +236,7 @@ def _exports_match(
         seen.add(str(path))
         if existing_file_sha256(path) != digest:
             return False
-        if fmt in {"pdf", "tiff_300"} and qa_hashes.get(str(path)) != digest:
+        if fmt in {"pdf", "tiff_300"} and qa_hashes.get(item["path"]) != digest:
             return False
         document_formats.setdefault(str(item.get("document")), set()).add(fmt)
     for figure in figures:

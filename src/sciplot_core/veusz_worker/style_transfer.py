@@ -225,7 +225,8 @@ def _style_plan(
 
 
 def transfer_document_styles(
-    previous: Path, current: Path, previous_spec: Path, current_spec: Path
+    previous: Path, current: Path, previous_spec: Path, current_spec: Path, *,
+    output_document: Path | None = None, output_spec: Path | None = None,
 ) -> dict[str, Any]:
     """Copy safe presentation only; validate science before atomic replacement."""
 
@@ -245,6 +246,18 @@ def transfer_document_styles(
         str(path): file_sha256(path)
         for path in (previous, current, previous_spec, current_spec)
     }
+    if (output_document is None) != (output_spec is None):
+        raise ValueError("A private style preview requires both output paths")
+    if output_document is not None and output_spec is not None:
+        output_document, output_spec = output_document.absolute(), output_spec.absolute()
+        if output_document.parent != output_spec.parent or output_document == output_spec:
+            raise ValueError("A private style preview requires two distinct sibling outputs")
+        if any(path.exists() or path.is_symlink() for path in (output_document, output_spec)):
+            raise ValueError("Private style outputs must be fresh exclusive files")
+        for parent in (output_document.parent, *output_document.parent.parents):
+            if (parent / ".sciplot_store").exists() or (parent / "plot_request.json").exists():
+                raise ValueError("Style preview outputs must remain outside active native projects")
+        output_document.parent.mkdir(parents=True, exist_ok=True)
     reason = _compatibility_reason(old_spec, new_spec)
     payload: dict[str, Any] = {
         "kind": "sciplot_document_style_transfer",
@@ -263,6 +276,8 @@ def transfer_document_styles(
             skipped=[{"reason": reason}],
             document_sha256=hashes[str(current)],
         )
+        if output_document is not None and output_spec is not None:
+            _copy_private_pair(current, current_spec, output_document, output_spec, hashes)
         return payload
 
     from PyQt6 import QtWidgets
@@ -335,7 +350,16 @@ def transfer_document_styles(
             raise ValueError(
                 "Style-transfer input changed while its native documents were loaded."
             )
-        if applied:
+        if output_document is not None and output_spec is not None:
+            if applied:
+                from sciplot_core.studio_core.style_transfer_storage import stage_transferred_style_pair
+
+                payload["save"] = stage_transferred_style_pair(docs[1], current, current_spec,
+                    project_transferred_styles(new_spec, applied), output_document=output_document,
+                    output_spec=output_spec, input_hashes=hashes)
+            else:
+                _copy_private_pair(current, current_spec, output_document, output_spec, hashes)
+        elif applied:
             payload["save"] = save_transferred_style_pair(
                 docs[1], current, current_spec, project_transferred_styles(new_spec, applied),
                 input_hashes=hashes,
@@ -345,12 +369,25 @@ def transfer_document_styles(
             skipped=skipped,
             applied_count=len(applied),
             transfer_status="applied" if applied else "unchanged",
-            document_sha256=file_sha256(current),
+            document_sha256=file_sha256(output_document or current),
         )
         return payload
     finally:
         if existing is None:
             app.quit()
+
+
+def _copy_private_pair(current: Path, current_spec: Path, output_document: Path,
+                       output_spec: Path, hashes: dict[str, str]) -> None:
+    data = current.read_bytes(), current_spec.read_bytes()
+    if any(file_sha256(Path(path)) != digest for path, digest in hashes.items()):
+        raise ValueError("Style-transfer input changed before its private preview")
+    with output_document.open("xb") as stream:
+        stream.write(data[0])
+    with output_spec.open("xb") as stream:
+        stream.write(data[1])
+    output_document.chmod(current.stat().st_mode & 0o777)
+    output_spec.chmod(current_spec.stat().st_mode & 0o777)
 
 
 __all__ = ["transfer_document_styles"]

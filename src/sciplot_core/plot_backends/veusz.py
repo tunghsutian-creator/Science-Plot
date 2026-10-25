@@ -15,7 +15,6 @@ from sciplot_core.studio_core.document_edit import (
     apply_document_edit, preview_document_edit, preview_project_document,
 )
 from sciplot_core.studio_core.project_export import export_project_document
-from sciplot_core.studio_core.project_session import external_project_session
 
 
 class VeuszBackend:
@@ -84,18 +83,23 @@ class VeuszBackend:
                 raise changed_error("Native output changed after apply; preserve the transaction evidence.", [path])
             result["files"][path] = digest
         result["fingerprint"] = {"files": deepcopy(result["files"]),
-                                 "source_trees": deepcopy(result["source_trees"])}
+            "source_trees": deepcopy(result["source_trees"]),
+            "projections": deepcopy(binding["fingerprint"].get("projections", {}))}
         require_current(result)
+        from sciplot_core.studio_core.project_command_scope import figure_binding, project_store
+        from sciplot_core.project_store.runtime import project_runtime
+
+        with project_runtime(project_store(Path(result["project"]))):
+            result["project_read_set"] = figure_binding(Path(result["project"]), {
+                "figure_id": result["figure_id"], "document": result["document"], "spec": result["spec"]})
         return result
 
     @warm_native_method
     def export(self, binding: dict[str, Any]) -> dict[str, Any]:
         require_current(binding)
         project = Path(binding["project"])
-        with external_project_session(project):
-            require_current(binding)
-            exported = export_project_document(project_dir=project, document_path=Path(binding["document"]),
-                                               formats=["pdf", "tiff_300"])
+        exported = export_project_document(project_dir=project, document_path=Path(binding["document"]),
+                                           formats=["pdf", "tiff_300"], expected_binding=binding.get("project_read_set"))
         require_current(binding)
         return {"status": "exported" if exported.ready_to_use else "blocked",
                 "ready_to_use": exported.ready_to_use, "exports": exported.exports,

@@ -9,14 +9,14 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
-from sciplot_core.project_manifest import locked_intake_project_manifest
 from sciplot_core.studio_core.document_edit_commit import (
     commit_document_edit,
     prior_edit_result,
 )
 from sciplot_core.studio_core.document_edit_policy import validate_edit_science_policy
+from sciplot_core.studio_core.project_command_scope import figure_read_state, project_read_runtime
 from sciplot_core.studio_core.document_edit_state import (
-    audit_edited_document,
+    audit_edited_document as audit_edited_document,
     check_artifact,
     edit_state,
     new_preview_directory,
@@ -27,16 +27,16 @@ from sciplot_core.studio_core.project_query import (
     resolve_project_figure,
     resolve_project_path,
 )
-from sciplot_core.studio_core.project_session import external_project_session
 
 
+@project_read_runtime
 def preview_project_document(
     project: Path, *, output_dir: Path, figure_id: str | None = None
 ) -> dict[str, Any]:
     project = resolve_project_path(project)
     selected = resolve_project_figure(project, figure_id)
     document = Path(selected["document"])
-    state = edit_state(project)
+    state = figure_read_state(project, selected)
     output = new_preview_directory(project, output_dir)
     rendered = run_document_worker(
         "preview-document", document, "--out", output / "current.png"
@@ -45,7 +45,7 @@ def preview_project_document(
         "path": str(document),
         "sha256": state["project_files"][str(document.relative_to(project))],
     }
-    if edit_state(project) != state or rendered["document"] != identity:
+    if figure_read_state(project, selected) != state or rendered["document"] != identity:
         raise ValueError(
             "The project changed while creating its preview; inspect again."
         )
@@ -120,59 +120,18 @@ def preview_document_edit(
     operations: list[dict[str, Any]] | None = None,
     expected_spec_sha256: str | None = None,
 ) -> dict[str, Any]:
-    project = resolve_project_path(project)
-    selected = resolve_project_figure(project, figure_id)
-    document, spec = Path(selected["document"]), Path(selected["spec"])
-    if file_sha256(document) != expected_document_sha256:
-        raise ValueError(
-            "The document revision is stale. Inspect its current objects first."
-        )
-    state = edit_state(project)
-    if expected_spec_sha256 is not None and state["project_files"].get(
-        str(spec.relative_to(project))
-    ) != expected_spec_sha256:
-        raise ValueError("The sample mapping changed during style resolution; inspect again.")
-    if (
-        state["project_files"].get(str(document.relative_to(project)))
-        != expected_document_sha256
-    ):
-        raise ValueError(
-            "The document revision changed while capturing the edit baseline."
-        )
-    output = new_preview_directory(project, output_dir)
-    audit_edited_document(document, spec)
-    if operations is not None and changes:
-        raise ValueError("Use either native changes or semantic operations in one preview.")
-    candidate = _candidate(document, spec, changes, output, operations=operations,
-                           figure_id=selected["figure_id"])
-    if edit_state(project) != state:
-        raise ValueError("Project or delivery changed during the edit preview.")
-    review = {
-        "kind": "sciplot_document_edit_preview",
-        "version": 1,
-        "status": "ready",
-        "project": str(project),
-        "figure_id": selected["figure_id"],
-        "document": str(document),
-        "document_sha256": expected_document_sha256,
-        "base_state": state,
-        "changes": changes,
-        "actual_changes": candidate["changes"],
-        "candidate": candidate["candidate"],
-        "preview": candidate["preview"],
-        "scientific_audit": candidate["scientific_audit"],
-        "ready_to_use": False,
-    }
-    if operations is not None:
-        review.update(version=2, operations=operations, spec=str(spec),
-                      candidate_spec=candidate["candidate_spec"])
-    review["operation_id"] = preview_identity(review)
-    path = output / "edit-preview.json"
-    atomic_write_json(path, review)
-    return {**review, "review_path": str(path)}
+    from sciplot_core.studio_core.document_edit_commands import preview_native_edit
+
+    return preview_native_edit(project, changes, output_dir=output_dir, figure_id=figure_id,
+        expected_document_sha256=expected_document_sha256, operations=operations,
+        expected_spec_sha256=expected_spec_sha256)
 
 
 def apply_document_edit(project: Path, preview: dict[str, Any]) -> dict[str, Any]:
+    if preview.get("version") == 3:
+        from sciplot_core.studio_core.document_edit_commands import apply_native_edit
+
+        return apply_native_edit(project, preview)
     project = resolve_project_path(project)
     # review_path is a convenience reference in CLI output, never signed state.
     review = {k: v for k, v in preview.items() if k != "review_path"}
@@ -186,54 +145,53 @@ def apply_document_edit(project: Path, preview: dict[str, Any]) -> dict[str, Any
         raise ValueError(
             "A complete unchanged edit preview for this project is required."
         )
-    with external_project_session(project), locked_intake_project_manifest(project):
-        prior = prior_edit_result(project, review)
-        if prior is not None:
-            return prior
-        selected = resolve_project_figure(project, review["figure_id"])
-        document, spec = Path(selected["document"]), Path(selected["spec"])
+    prior = prior_edit_result(project, review)
+    if prior is not None:
+        return prior
+    selected = resolve_project_figure(project, review["figure_id"])
+    document, spec = Path(selected["document"]), Path(selected["spec"])
+    if (
+        file_sha256(document) != review["document_sha256"]
+        or review["base_state"]["project_files"].get(
+            str(document.relative_to(project))
+        )
+        != review["document_sha256"]
+    ):
+        raise ValueError(
+            "The edit baseline does not match its expected document revision."
+        )
+    if (
+        str(document) != review["document"]
+        or edit_state(project) != review["base_state"]
+    ):
+        raise ValueError(
+            "The project revision is stale. Inspect and preview current state."
+        )
+    check_artifact(review["candidate"])
+    check_artifact(review["preview"])
+    if review["version"] == 2:
+        if review.get("spec") != str(spec) or review.get("changes") != [] or not isinstance(review.get("operations"), list):
+            raise ValueError("The annotation preview must name its current specification.")
+        check_artifact(review["candidate_spec"])
+    # Re-run the allowed native operations. Caller-controlled candidate bytes
+    # are never installed, even if their hashes and science audit look valid.
+    with tempfile.TemporaryDirectory(
+        prefix=".sciplot-edit-", dir=project.parent
+    ) as directory:
+        candidate = _candidate(document, spec, review["changes"], Path(directory),
+                               operations=review.get("operations") if review["version"] == 2 else None,
+                               figure_id=review["figure_id"])
         if (
-            file_sha256(document) != review["document_sha256"]
-            or review["base_state"]["project_files"].get(
-                str(document.relative_to(project))
-            )
-            != review["document_sha256"]
+            candidate["changes"] != review["actual_changes"]
+            or candidate["preview"]["sha256"] != review["preview"]["sha256"]
         ):
             raise ValueError(
-                "The edit baseline does not match its expected document revision."
+                "The native edit no longer matches its reviewed preview."
             )
-        if (
-            str(document) != review["document"]
-            or edit_state(project) != review["base_state"]
-        ):
-            raise ValueError(
-                "The project revision is stale. Inspect and preview current state."
-            )
-        check_artifact(review["candidate"])
-        check_artifact(review["preview"])
-        if review["version"] == 2:
-            if review.get("spec") != str(spec) or review.get("changes") != [] or not isinstance(review.get("operations"), list):
-                raise ValueError("The annotation preview must name its current specification.")
-            check_artifact(review["candidate_spec"])
-        # Re-run the allowed native operations. Caller-controlled candidate bytes
-        # are never installed, even if their hashes and science audit look valid.
-        with tempfile.TemporaryDirectory(
-            prefix=".sciplot-edit-", dir=project.parent
-        ) as directory:
-            candidate = _candidate(document, spec, review["changes"], Path(directory),
-                                   operations=review.get("operations") if review["version"] == 2 else None,
-                                   figure_id=review["figure_id"])
-            if (
-                candidate["changes"] != review["actual_changes"]
-                or candidate["preview"]["sha256"] != review["preview"]["sha256"]
-            ):
-                raise ValueError(
-                    "The native edit no longer matches its reviewed preview."
-                )
-            if review["version"] == 2 and candidate["candidate_spec"]["sha256"] != review["candidate_spec"]["sha256"]:
-                raise ValueError("The annotation specification no longer matches its preview.")
-            return commit_document_edit(
-                project, document, Path(candidate["candidate"]["path"]), review,
-                spec=spec if review["version"] == 2 else None,
-                candidate_spec=Path(candidate["candidate_spec"]["path"]) if review["version"] == 2 else None,
-            )
+        if review["version"] == 2 and candidate["candidate_spec"]["sha256"] != review["candidate_spec"]["sha256"]:
+            raise ValueError("The annotation specification no longer matches its preview.")
+        return commit_document_edit(
+            project, document, Path(candidate["candidate"]["path"]), review,
+            spec=spec if review["version"] == 2 else None,
+            candidate_spec=Path(candidate["candidate_spec"]["path"]) if review["version"] == 2 else None,
+        )
