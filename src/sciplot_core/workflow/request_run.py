@@ -63,11 +63,19 @@ def run_request(
     _classifier: Callable[..., dict[str, Any]] = classify_source,
     _new_creation: bool = False,
     _previous_request: dict[str, Any] | None = None,
+    _incoming_request: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Execute a request transactionally under its declared output path."""
 
     request_path = request_path.expanduser().resolve()
-    source_request = _load_request(request_path)
+    source_request = _load_request(request_path) if _incoming_request is None else deepcopy(_incoming_request)
+    from sciplot_core.workflow.project_requests import recognized_project, run_project_request
+
+    if recognized_project(request_path):
+        return run_project_request(request_path, source_request, execute=_run_request_in_managed_output,
+            classifier=_classifier, new_creation=_new_creation, previous_request=_previous_request)
+    if _incoming_request is not None:
+        raise ValueError("An incoming project intent requires the exact registered project request.")
     base_dir = request_path.parent
     output_dir = _resolve_request_path(
         source_request.get("output"),

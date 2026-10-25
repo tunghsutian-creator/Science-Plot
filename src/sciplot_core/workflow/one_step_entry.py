@@ -41,11 +41,17 @@ def run_one_step(
     ):
         raise ValueError("Autoplot rule_id must be one non-empty canonical identifier.")
     project_dir = _one_step_project_dir(input_path, output_root, project_name)
-    project_dir.mkdir(parents=True, exist_ok=True)
-    run_dir = _next_run_dir(project_dir)
     request_path = project_dir / "plot_request.json"
+    from sciplot_core.workflow.project_requests import next_project_run, recognized_project
+
+    registered = project_dir.is_dir() and recognized_project(request_path)
+    if registered:
+        run_dir = next_project_run(project_dir)
+    else:
+        project_dir.mkdir(parents=True, exist_ok=True)
+        run_dir = _next_run_dir(project_dir)
     previous = previous_workflow_request(request_path)
-    request = {
+    request: dict[str, Any] = {
         "recipe": "auto",
         "input": str(input_path),
         "output": str(run_dir),
@@ -60,13 +66,15 @@ def run_one_step(
         request["explicit_template_selection"] = True
     if delivery_root is not None:
         request["delivery_output"] = str(delivery_root.expanduser().resolve())
-    request_path.write_text(
-        json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    if not registered:
+        request_path.write_text(
+            json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
     try:
         manifest = _request_runner(
             request_path,
             _new_creation=True,
+            **({"_incoming_request": request} if registered else {}),
             **({"_previous_request": previous} if previous is not None else {}),
         )
     except ValueError as exc:

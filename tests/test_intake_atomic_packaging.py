@@ -1192,6 +1192,7 @@ def test_failed_studio_preparation_does_not_refresh_project_zip(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from sciplot_core.studio_core import preparation_commands
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     request_path = project_dir / "project.sciplot.json"
@@ -1204,14 +1205,17 @@ def test_failed_studio_preparation_does_not_refresh_project_zip(
     zip_path.write_bytes(b"last complete archive")
     refresh_calls: list[Path] = []
 
-    def fail_prepare(_project_dir: Path) -> None:
+    prepare_calls = []
+    def fail_prepare(candidate, **_kwargs) -> None:
+        assert candidate.project_dir != project_dir
+        prepare_calls.append(candidate.project_dir)
         raise RuntimeError("synthetic Studio preparation failure")
 
     def record_refresh(path: str | Path) -> Path:
         refresh_calls.append(Path(path))
         return zip_path
 
-    monkeypatch.setattr(packaging, "_prepare_studio_project_package", fail_prepare)
+    monkeypatch.setattr(preparation_commands, "prepare_studio_candidate", fail_prepare)
     monkeypatch.setattr(packaging, "refresh_intake_project_zip", record_refresh)
 
     with pytest.raises(
@@ -1228,6 +1232,7 @@ def test_failed_studio_preparation_does_not_refresh_project_zip(
         )
 
     assert refresh_calls == []
+    assert len(prepare_calls) == 1
     assert zip_path.read_bytes() == b"last complete archive"
     assert (project_dir / "intake_manifest.json").read_text(
         encoding="utf-8"
@@ -1239,6 +1244,8 @@ def test_run_state_is_committed_after_studio_preparation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from sciplot_core.studio_core import preparation_commands
+    from sciplot_core.workflow import project_requests
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     request_path = project_dir / "plot_request.json"
@@ -1251,19 +1258,24 @@ def test_run_state_is_committed_after_studio_preparation(
     )
     events: list[str] = []
 
-    def prepare(path: Path) -> None:
+    def prepare(candidate, **_kwargs):
+        path = candidate.project_dir
+        assert path != project_dir
         events.append("prepare")
         payload = project_manifest.read_intake_project_manifest(path)
         assert payload is not None
         payload["studio"] = {"status": "prepared"}
         project_manifest.commit_intake_project_manifest(path, payload)
+        return {"project_dir": str(path)}
 
-    def refresh(path: str | Path) -> Path:
+    original_stage = project_requests.stage_intake_project_manifest
+    def refresh(path, payload, **kwargs):
         events.append("refresh")
-        return Path(path).parent / "project.zip"
+        return original_stage(path, payload, **kwargs)
 
-    monkeypatch.setattr(packaging, "_prepare_studio_project_package", prepare)
-    monkeypatch.setattr(packaging, "refresh_intake_project_zip", refresh)
+    monkeypatch.setattr(preparation_commands, "prepare_studio_candidate", prepare)
+    monkeypatch.setattr(preparation_commands, "audit_studio_candidate", lambda candidate, payload: ([], []))
+    monkeypatch.setattr(project_requests, "stage_intake_project_manifest", refresh)
 
     project_state._update_intake_project_after_run(
         request_path,
