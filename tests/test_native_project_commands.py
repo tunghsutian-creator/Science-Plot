@@ -147,6 +147,70 @@ def test_whole_source_preview_rejects_new_members_without_overwriting_either_rev
     assert late.read_bytes() == late_bytes
 
 
+def _source_candidate(project, tmp_path, source):
+    from sciplot_core.studio_core.source_update_files import file_inventory, project_inventory
+    from sciplot_core.studio_core.source_update_review import payload_hash
+
+    (project / "raw").mkdir()
+    (project / "raw/instrument.csv").write_bytes((project / "source/data.csv").read_bytes())
+    candidate = tmp_path / "prepared-source"
+    shutil.copytree(project, candidate)
+    (candidate / "source/data.csv").write_bytes(b"fresh derived table")
+    return candidate, {"kind": "sciplot_project_source_update", "version": 1, "status": "ready",
+        "source": str(source), "source_files": file_inventory(source),
+        "project_sha256": payload_hash(project_inventory(project)), "delivery_sha256": payload_hash(None),
+        "changes": [], "styles": []}
+
+
+@pytest.mark.parametrize("registered", [True, False])
+def test_source_preparation_cannot_adopt_a_run_created_during_private_render(project, tmp_path, registered):
+    from sciplot_core.studio_core.source_update_commands import stage_source_update
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    source = tmp_path / "incoming.csv"
+    source.write_bytes(b"new raw version")
+    candidate, review = _source_candidate(project, tmp_path, source)
+    store = project_store(project, with_snapshot=True)
+    captured = store.snapshot(import_legacy=True)
+    member = "runs/unrelated-during-render/manifest.json"
+    if registered:
+        command = ProjectCommand.create("export", "during-source-render", project_id=captured["project_id"],
+            expected_generation=captured["generation"], read_set={member: None}, write_set=[member], request={"run": "B"})
+        ProjectCommands(store).execute(command, lambda: ProjectMutation({member: b"new legitimate run"}, {}))
+    else:
+        (project / member).parent.mkdir(parents=True)
+        (project / member).write_bytes(b"external run member")
+    native = (project / "studio/document.vsz").read_bytes()
+    late = (project / member).read_bytes()
+    with pytest.raises(ValueError, match="member|namespace"):
+        stage_source_update(project, candidate, review, before_snapshot=captured)
+    assert (project / "studio/document.vsz").read_bytes() == native
+    assert (project / member).read_bytes() == late
+
+
+def test_source_update_rejects_an_incoming_directory_member_added_at_before_head(project, tmp_path, monkeypatch):
+    from sciplot_core.project_store import state
+    from sciplot_core.studio_core.source_update_commands import stage_source_update, decide_source_update
+
+    source = tmp_path / "incoming-directory"
+    source.mkdir()
+    (source / "chosen.csv").write_bytes(b"explicitly selected original raw table")
+    candidate, review = _source_candidate(project, tmp_path, source)
+    supplied = stage_source_update(project, candidate, review)
+    native = (project / "studio/document.vsz").read_bytes()
+    boundary = state.boundary
+    def append_member(name):
+        if name == "before_head":
+            (source / "late.csv").write_bytes(b"not in the confirmed directory")
+        boundary(name)
+    monkeypatch.setattr(state, "boundary", append_member)
+    with pytest.raises(ValueError, match="member|source|directory"):
+        decide_source_update(project, supplied)
+    assert (project / "studio/document.vsz").read_bytes() == native
+    assert (source / "chosen.csv").read_bytes() == b"explicitly selected original raw table"
+    assert (source / "late.csv").read_bytes() == b"not in the confirmed directory"
+
+
 def test_actual_native_edit_accepts_independent_other_export_and_replays_without_render(edit):
     project, document, review, calls = edit
     before = document.read_bytes()

@@ -42,102 +42,115 @@ def test_source_update_recovery_verifies_current_project_and_old_archive(revisio
     audits = []
     assert transaction.prior_source_update_result(project, review, validate=lambda: audits.append(True)) == archive
     assert audits == [True]
+    (archive / "source/data.csv").chmod(0o600)
     (archive / "source/data.csv").write_text("changed archive")
-    with pytest.raises(ValueError, match="archive changed"):
+    with pytest.raises(ValueError, match="archive changed|sealed candidate view.*bytes"):
         transaction.prior_source_update_result(project, review, validate=lambda: None)
 
 
 @pytest.mark.parametrize("boundary", range(10))
-def test_hard_interruption_restores_exact_baseline_at_every_replace_boundary(revisions, boundary):
-    """Construct the on-disk state after each atomic rename, without exception rollback."""
-    import os
+def test_hard_interruption_restores_exact_baseline_at_every_replace_boundary(revisions, monkeypatch, boundary):
+    """A head commit replaces rename rollback; every partial view needs explicit recovery."""
+    from sciplot_core.project_store import state, ProjectRecoveryRequired
+    from sciplot_core.studio_core.project_command_scope import project_store
 
     project, candidate, _, review = revisions
     baseline = transaction.project_inventory(project)
-    archive = _install(project, candidate, review)
-    path = transaction._outcome_path(project, review)
-    record = json.loads(path.read_text())
-    names = record["replacement_names"]
-    # Reconstruct the exact crash boundary from the successfully staged bytes.
-    for index, name in enumerate(names):
-        if index * 2 + 2 > boundary:
-            os.replace(project / name, candidate / name)
-        if index * 2 + 1 > boundary:
-            os.replace(archive / name, project / name)
-    record["status"] = "pending"
-    path.write_text(json.dumps(record))
-    assert transaction.prior_source_update_result(project, review, validate=lambda: None) is None
-    assert transaction.project_inventory(project) == baseline
-    assert transaction.prior_source_update_result(project, review, validate=lambda: None) is None
+    replacement = transaction.project_inventory(candidate)
+    store = project_store(project, with_snapshot=True)
+    store.snapshot(import_legacy=True)
+    names = ["before_storage", "after_generation", "before_head", "after_head"]
+    selected = names[boundary] if boundary < 4 else ("before_projection" if boundary % 2 == 0 else "after_projection")
+    occurrence = 1 if boundary < 4 else (boundary - 4) // 2 + 1
+    original, count = state.boundary, 0
+    def interrupt(name):
+        nonlocal count
+        if name == selected:
+            count += 1
+            if count == occurrence:
+                raise OSError("controlled publication interruption")
+        original(name)
+    monkeypatch.setattr(state, "boundary", interrupt)
+    with pytest.raises(OSError, match="controlled publication interruption"):
+        _install(project, candidate, review)
+    if boundary < 3:
+        assert transaction.project_inventory(project) == baseline
+    else:
+        with pytest.raises(ProjectRecoveryRequired):
+            store.snapshot()
+    record = store.commands()[0]
+    sealed = {name: Path(path).read_bytes() for name, path in record["staged_paths"].items()}
+    monkeypatch.setattr(state, "boundary", original)
+    archive = transaction.prior_source_update_result(project, review, validate=lambda: None)
+    assert archive is not None and (archive / "studio/document.vsz").read_text() == "old"
+    for name in ("raw/data.csv", "source/data.csv", "studio/document.vsz"):
+        assert file_sha256(project / name) == replacement[name]
+    assert {name: Path(path).read_bytes() for name, path in store.commands()[0]["staged_paths"].items()} == sealed
+    assert store.snapshot()["sequence"] == 1
+    assert not transaction._outcome_path(project, review).exists()
 
 
 @pytest.mark.parametrize("after_final_restore", [False, True])
 def test_recovery_can_resume_its_own_interruption_and_preserves_candidate(revisions, monkeypatch, after_final_restore):
-    import os
-    from sciplot_core.studio_core import source_update_recovery as recovery
+    from sciplot_core.project_store import state, ProjectRecoveryRequired
+    from sciplot_core.studio_core.project_command_scope import project_store
 
     project, candidate, _, review = revisions
-    baseline = transaction.project_inventory(project)
-    archive = _install(project, candidate, review)
-    path = transaction._outcome_path(project, review)
-    record = json.loads(path.read_text())
-    # Crash before the last part was installed.
-    name = record["replacement_names"][-1]
-    os.replace(project / name, candidate / name)
-    record["status"] = "pending"
-    path.write_text(json.dumps(record))
-    replace = os.replace
-    count = 0
-
-    def interrupt(a, b):
-        nonlocal count
-        if not after_final_restore and ".interrupted" in str(b):
-            count += 1
-            if count == 2:
-                raise OSError("second interruption")
-        result = replace(a, b)
-        if after_final_restore and a == archive / record["replacement_names"][0]:
+    store = project_store(project, with_snapshot=True)
+    store.snapshot(import_legacy=True)
+    original = state.boundary
+    def first(name):
+        if name == "after_head":
+            raise OSError("first interruption")
+        original(name)
+    monkeypatch.setattr(state, "boundary", first)
+    with pytest.raises(OSError, match="first interruption"):
+        _install(project, candidate, review)
+    record = store.commands()[0]
+    sealed = {name: Path(path).read_bytes() for name, path in record["staged_paths"].items()}
+    def second(name):
+        if name == ("after_projection" if after_final_restore else "before_projection"):
             raise OSError("second interruption")
-        return result
-
-    monkeypatch.setattr(recovery.os, "replace", interrupt)
+        original(name)
+    monkeypatch.setattr(state, "boundary", second)
     with pytest.raises(OSError, match="second interruption"):
-        transaction.prior_source_update_result(project, review, validate=lambda: None)
-    monkeypatch.setattr(recovery.os, "replace", replace)
-    assert transaction.prior_source_update_result(project, review, validate=lambda: None) is None
-    assert transaction.project_inventory(project) == baseline
-    saved = archive.with_name(archive.name + ".interrupted")
-    assert saved.exists() and transaction.project_inventory(saved)
-    assert archive.with_name(archive.name + ".rollback.json").is_file()
+        transaction.prior_source_update_result(project, review, validate=lambda: pytest.fail("pending views must not pass audit"))
+    with pytest.raises(ProjectRecoveryRequired):
+        store.snapshot()
+    assert {name: Path(path).read_bytes() for name, path in store.commands()[0]["staged_paths"].items()} == sealed
+    monkeypatch.setattr(state, "boundary", original)
+    archive = transaction.prior_source_update_result(project, review, validate=lambda: None)
+    assert archive is not None and (archive / "source/data.csv").read_text() == "old"
+    assert (project / "source/data.csv").read_text() == "new"
+    assert store.snapshot()["sequence"] == 1 and len(store.commands()) == 1
 
 
 def test_lost_source_update_success_receipt_recovers_without_reinstall(revisions, monkeypatch):
+    from sciplot_core.project_store import state
+    from sciplot_core.studio_core.project_command_scope import project_store
+
     project, candidate, _, review = revisions
-    write = transaction.atomic_write_json
-
-    def lose_success(path, record):
-        if record.get("status") == "applied":
+    original = state.boundary
+    def lose_success(name):
+        if name == "before_reply":
             raise OSError("lost success receipt")
-        return write(path, record)
-
-    monkeypatch.setattr(transaction, "atomic_write_json", lose_success)
+        original(name)
+    monkeypatch.setattr(state, "boundary", lose_success)
     with pytest.raises(OSError, match="lost success receipt"):
         _install(project, candidate, review)
     assert (project / "studio/document.vsz").read_text() == "new"
-    monkeypatch.setattr(transaction, "atomic_write_json", write)
+    store = project_store(project, with_snapshot=True)
+    before = store.snapshot()
+    monkeypatch.setattr(state, "boundary", lambda *_: pytest.fail("complete receipt must not reinstall"))
     archive = transaction.prior_source_update_result(project, review, validate=lambda: None)
     assert archive is not None and (archive / "studio/document.vsz").read_text() == "old"
-    record = json.loads(transaction._outcome_path(project, review).read_text())
-    assert record["status"] == "applied"
+    assert store.snapshot()["generation"] == before["generation"]
+    assert store.commands()[0]["phase"] == "complete"
 
 
 def test_interrupted_source_update_with_mixed_parts_never_guesses_success(revisions):
     project, candidate, _, review = revisions
     archive = _install(project, candidate, review)
-    path = transaction._outcome_path(project, review)
-    record = json.loads(path.read_text())
-    record["status"] = "pending"
-    path.write_text(json.dumps(record))
     (project / "studio/document.vsz").write_bytes((archive / "studio/document.vsz").read_bytes())
     before = transaction.project_inventory(project)
     with pytest.raises(ValueError, match="interrupted or its result has changed"):
@@ -162,21 +175,27 @@ def test_source_update_rollback_is_retryable_and_keeps_original_bytes(revisions)
 
 
 def test_pending_intent_without_any_install_can_retry(revisions, monkeypatch):
+    from sciplot_core.project_store import state
+    from sciplot_core.studio_core.project_command_scope import project_store
+
     project, candidate, _, review = revisions
-    mkdir = Path.mkdir
-
-    def fail_archive(path, *args, **kwargs):
-        if ".source_update_history" in path.parts:
-            raise OSError("stopped before archive")
-        return mkdir(path, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "mkdir", fail_archive)
+    baseline = transaction.project_inventory(project)
+    original = state.boundary
+    def stop(name):
+        if name == "before_storage":
+            raise OSError("stopped before archive publication")
+        original(name)
+    monkeypatch.setattr(state, "boundary", stop)
     with pytest.raises(OSError, match="stopped before archive"):
         _install(project, candidate, review)
-    monkeypatch.setattr(Path, "mkdir", mkdir)
-    assert transaction.prior_source_update_result(project, review, validate=lambda: None) is None
-    archive = _install(project, candidate, review)
+    assert transaction.project_inventory(project) == baseline
+    store = project_store(project, with_snapshot=True)
+    assert store.snapshot()["sequence"] == 0 and store.commands()[0]["phase"] == "accepted"
+    monkeypatch.setattr(state, "boundary", original)
+    archive = transaction.prior_source_update_result(project, review, validate=lambda: None)
+    assert archive is not None and (archive / "raw/data.csv").read_text() == "old"
     assert transaction.prior_source_update_result(project, review, validate=lambda: None) == archive
+    assert store.snapshot()["sequence"] == 1 and len(store.commands()) == 1
 
 
 @pytest.mark.parametrize("changed", ["source", "delivery"])
@@ -201,6 +220,45 @@ def test_completed_source_update_recovery_still_checks_external_inputs(revisions
     with pytest.raises(ValueError, match="selected source or visible delivery changed"):
         source_update.apply_project_source_update(project, review)
     assert transaction.project_inventory(project) == before
+
+
+@pytest.mark.parametrize("outside", [False, True])
+def test_legacy_pending_source_evidence_is_read_only_and_recovers_only_exact_known_bytes(revisions, outside):
+    import shutil
+    from sciplot_core.studio_core.source_update_recovery import installation_identity
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    project, candidate, _source, review = revisions
+    baseline = transaction.project_inventory(project)
+    archive = project.parent / ".source_update_history" / project.name / "old-reviewed-operation"
+    shutil.copytree(project, archive)
+    replacement = transaction.project_inventory(candidate)
+    (project / "source/data.csv").write_bytes((candidate / "source/data.csv").read_bytes())
+    record = {"version": 2, "status": "pending", "project": str(project), "review": review,
+        "archive": str(archive), "base_files": baseline, "archived_files": baseline,
+        "result_files": replacement, "replacement_names": ["plot_request.json", "intake_manifest.json", "raw", "source", "studio"]}
+    record["installation_sha256"] = installation_identity(record)
+    path = transaction._outcome_path(project, review)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(record))
+    evidence = path.read_bytes()
+    if outside:
+        (project / "studio/document.vsz").write_bytes(b"unknown manual native bytes")
+        current = transaction.project_inventory(project)
+        with pytest.raises(ValueError, match="Unknown native/source bytes"):
+            transaction.prior_source_update_result(project, review, validate=lambda: pytest.fail("unknown legacy state must not pass audit"))
+        assert transaction.project_inventory(project) == current
+        assert not (project / ".sciplot_store/head.json").exists()
+    else:
+        assert transaction.prior_source_update_result(project, review, validate=lambda: pytest.fail("a baseline restore is not completed source adoption")) is None
+        assert transaction.project_inventory(project) == baseline
+        store = project_store(project)
+        generation = store.snapshot()["generation"]
+        assert transaction.prior_source_update_result(project, review, validate=lambda: None) is None
+        assert store.snapshot()["generation"] == generation
+        assert len(store.commands()) == 1
+    assert path.read_bytes() == evidence
+    assert transaction.project_inventory(archive) == baseline
 
 
 @pytest.fixture

@@ -5,7 +5,6 @@ from __future__ import annotations
 from sciplot_core.studio_core.project_command_scope import project_command_runtime
 
 import json
-import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -16,7 +15,6 @@ from sciplot_core.delivery.package_transaction import _protect_editable_document
 from sciplot_core.source_coverage.document_audit import _audit_exact_document_data
 from sciplot_core.studio_core.source_update_commit import (
     file_inventory,
-    install_source_update,
     project_inventory,
     prior_source_update_result,
     reject_symlink_path,
@@ -28,12 +26,13 @@ from sciplot_core.studio_core.source_update_review import (
 )
 from sciplot_core.studio_core.source_update_staging import (
     prepare_candidate,
-    transfer_project_styles,
     verify_project_science,
 )
 from sciplot_core.studio_core.source_update_annotations import transfer_annotations
+from sciplot_core.studio_core.source_update_styles import capture_project_styles, transfer_project_styles
 from sciplot_core.studio_core.annotation_contracts import annotation_records
 from sciplot_core.studio_core.annotation_rebinding import relocate_annotation_evidence
+from sciplot_core.project_commands import PreparedSource
 
 from sciplot_core.studio_core.source_update_state import (
     _delivery_inventory as _delivery_inventory, _check_external_state as _check_external_state,
@@ -59,11 +58,34 @@ def _selected_worksheet(request: dict[str, Any], worksheet: str | None) -> str |
 
 
 @contextmanager
-def _prepared_update(
+def _prepared_update(project_dir: Path, source_path: Path, worksheet: str | None,
+                     mapping_request: dict[str, Any] | None = None,
+                     annotation_decisions: list[dict[str, Any]] | None = None) -> Iterator[tuple[Path, dict[str, Any], tuple[PreparedSource, ...], dict[str, Any]]]:
+    from sciplot_core.studio_core.project_command_scope import project_store, adopt_saved_native
+    from sciplot_core.studio_core.project_query_paths import project_snapshot
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.studio_core.source_update_sources import baseline_scope
+
+    project = project_dir.expanduser().resolve()
+    repository = project_store(project, with_snapshot=True)
+    snapshot = repository.snapshot(import_legacy=True)
+    figures = project_figures(project)
+    for _document, spec in figures.values():
+        annotation_records(json.loads(spec.read_text()))
+    with project_runtime(repository), baseline_scope(repository, snapshot, specs=[spec for _doc, spec in figures.values()]):
+        for selected in project_snapshot(project)[2]:
+            if selected["status"] == "ready":
+                adopt_saved_native(project, selected)
+    with project_runtime(repository), _prepared_update_current(project, source_path, worksheet, mapping_request, annotation_decisions) as prepared:
+        yield prepared
+
+
+@contextmanager
+def _prepared_update_current(
     project_dir: Path, source_path: Path, worksheet: str | None,
     mapping_request: dict[str, Any] | None = None,
     annotation_decisions: list[dict[str, Any]] | None = None,
-) -> Iterator[tuple[Path, dict[str, Any]]]:
+) -> Iterator[tuple[Path, dict[str, Any], tuple[PreparedSource, ...], dict[str, Any]]]:
     reject_symlink_path(project_dir.expanduser())
     reject_symlink_path(source_path.expanduser())
     project, source = (
@@ -76,29 +98,50 @@ def _prepared_update(
         raise ValueError(
             "Select a source file or a dedicated data directory, not the project or its parent."
         )
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    repository = project_store(project, with_snapshot=True)
+    before_snapshot = repository.snapshot()
     original_state = project_inventory(project)
     source_state = file_inventory(source)
     request = json.loads((project / "plot_request.json").read_text())
     selected_sheet = _selected_worksheet(request, worksheet)
-    for document, spec in project_figures(project).values():
-        annotation_records(json.loads(spec.read_text()))
-        _audit_exact_document_data(
-            document_path=document, spec_path=spec, check_presentation=False
-        )
     delivery = requested_delivery_root({"request": request}, run_output=project)
     delivery_state = _delivery_inventory(delivery)
-    with tempfile.TemporaryDirectory(
-        prefix=".sciplot-source-update-", dir=project.parent
-    ) as temporary:
-        candidate, confirmations = prepare_candidate(
-            project, source, Path(temporary), worksheet=selected_sheet,
-            **({"mapping_request": mapping_request} if mapping_request else {}),
-        )
+    from sciplot_core.foundation.json_hashing import canonical_json_sha256
+    from sciplot_core.studio_core.source_update_commands import prior_source_preview, _public_review
+    from sciplot_core.studio_core.source_update_replay import frozen_source_candidate
+    from sciplot_core.studio_core.source_update_sources import baseline_scope, incoming_scope
+
+    tree = ({"kind": "file", "content_sha256": next(iter(source_state.values()))} if source.is_file() else
+            {"kind": "directory", "files": [{"path": name, "content_sha256": digest} for name, digest in sorted(source_state.items())]})
+    intent = {"source": str(source), "source_kind": "file" if source.is_file() else "directory",
+              "source_files": source_state, "source_tree_sha256": canonical_json_sha256(tree, allow_nan=False),
+              "worksheet": selected_sheet, "mapping_request": mapping_request,
+              "annotation_decisions": annotation_decisions or [], "project_sha256": payload_hash(original_state),
+              "delivery_sha256": payload_hash(delivery_state)}
+    existing = prior_source_preview(repository, before_snapshot, intent)
+    if existing is not None:
+        with incoming_scope(repository, before_snapshot, source, source_state), frozen_source_candidate(repository, before_snapshot, existing) as candidate:
+            yield candidate, _public_review(project, existing), (), before_snapshot
+        return
+
+    figures = project_figures(project)
+    with baseline_scope(repository, before_snapshot, specs=[spec for _doc, spec in figures.values()]):
+        for document, spec in figures.values():
+            annotation_records(json.loads(spec.read_text()))
+            _audit_exact_document_data(
+                document_path=document, spec_path=spec, check_presentation=False
+            )
+        old_styles = capture_project_styles(project)
+    with incoming_scope(repository, before_snapshot, source, source_state), prepare_candidate(project, source, project.parent, worksheet=selected_sheet, snapshot=before_snapshot,
+            **({"mapping_request": mapping_request} if mapping_request else {})) as (private, confirmations):
+        candidate = private.project_dir
         if delivery and delivery.is_dir():
             # An unmerged visible edit must be recovered first; update cannot
             # make that edit disappear as a side effect of replacing the source.
             _protect_editable_documents(delivery, candidate)
-        styles = transfer_project_styles(project, candidate)
+        styles = transfer_project_styles(candidate, old_styles)
         annotations = transfer_annotations(project, candidate, annotation_decisions or [])
         if (
             project_inventory(project) != original_state
@@ -108,16 +151,27 @@ def _prepared_update(
             raise ValueError(
                 "Project, selected source, or visible delivery changed during preview; inspect again."
             )
+        from sciplot_core.studio_core.preparation_commands import audit_studio_candidate
+        payload: dict[str, Any] = {"document": str(candidate / "studio/document.vsz")}
+        from sciplot_core.studio_core.project_query_paths import project_snapshot
+
+        _, _, candidate_figures = project_snapshot(candidate)
+        payload["figure_set"] = {"figures": candidate_figures}
+        _audits, prepared_sources = audit_studio_candidate(private, payload, check_presentation=False)
+        private.finalize()
+        private.capture()  # Reject any private nested authority or changed original raw/source member.
         review = {
             "kind": "sciplot_project_source_update",
             "version": 1,
             "status": "ready",
             "project": str(project),
             "source": str(source),
+            "source_kind": "directory" if source.is_dir() else "file",
             "worksheet": selected_sheet,
             "project_sha256": payload_hash(original_state),
             "source_files": source_state,
             "source_tree_sha256": source_tree_sha256(source),
+            "annotation_decisions": annotation_decisions or [],
             "delivery_sha256": payload_hash(delivery_state),
             "changes": compare_figures(project, candidate),
             "styles": styles,
@@ -140,7 +194,7 @@ def _prepared_update(
             review["annotation_decisions"] = annotation_decisions or []
             if any(item["requires_choice"] for item in annotations):
                 review["status"] = "needs_annotation_choices"
-        yield candidate, review
+        yield candidate, review, tuple(prepared_sources), before_snapshot
 
 
 @project_command_runtime
@@ -152,7 +206,7 @@ def preview_project_source_update(
 ) -> dict[str, Any]:
     """Build and audit an isolated candidate without changing the active project."""
     try:
-        with _prepared_update(project_dir, source, worksheet, mapping_request, annotation_decisions) as (candidate, preview):
+        with _prepared_update(project_dir, source, worksheet, mapping_request, annotation_decisions) as (candidate, preview, prepared_sources, before_snapshot):
             if on_candidate is not None:
                 on_candidate(candidate, preview)
                 project = Path(preview["project"])
@@ -161,10 +215,13 @@ def preview_project_source_update(
                 _check_external_state(project, Path(preview["source"]), preview)
             if preview.get("status") != "ready":
                 return preview
+            if preview.get("version") == 2:
+                return preview
             from sciplot_core.studio_core.source_update_commands import stage_source_update
 
             return stage_source_update(Path(preview["project"]), candidate, preview,
-                relocate_companion=relocate_annotation_evidence if preview.get("annotation_review") else None)
+                relocate_companion=relocate_annotation_evidence if preview.get("annotation_review") else None,
+                prepared_sources=prepared_sources, logical_paths_bound=True, before_snapshot=before_snapshot)
     except (ValueError, OSError, RuntimeError) as exc:
         return {
             "kind": "sciplot_project_source_update",
@@ -179,7 +236,7 @@ def preview_project_source_update(
 def apply_project_source_update(
     project_dir: Path, preview: dict[str, Any]
 ) -> dict[str, Any]:
-    """Recompute the reviewed candidate, reject stale choices, then adopt it."""
+    """Adopt the exact reviewed frozen candidate, rejecting stale choices."""
     if preview.get("version") == 2:
         from sciplot_core.studio_core.source_update_commands import decide_source_update
 
@@ -202,31 +259,7 @@ def apply_project_source_update(
     prior = prior_source_update_result(project, preview, validate=validate_recovered)
     if prior is not None:
         return _applied_result(project, preview, prior, status="already_applied")
-    with _prepared_update(
-        project, Path(preview["source"]), preview.get("worksheet"), preview.get("mapping_request"), preview.get("annotation_decisions")
-    ) as (candidate, current):
-        if current != preview:
-            raise ValueError(
-                "The source-update preview is stale or changed; preview and confirm the current differences again."
-            )
-        expected = project_inventory(project)
-        (candidate / "source_update.json").write_text(
-            json.dumps(current, ensure_ascii=False, indent=2)
-        )
-        archive = install_source_update(
-            project,
-            candidate,
-            expected=expected,
-            validate=lambda: verify_project_science(candidate),
-            precommit=lambda: _check_external_state(
-                project, Path(preview["source"]), current
-            ),
-            review=current,
-            **({"relocate_companion": relocate_annotation_evidence} if current.get("annotation_review") else {}),
-        )
-    return _applied_result(project, preview, archive, status="updated")
-
-
+    raise ValueError("This legacy source preview has no frozen candidate; create and confirm a fresh source preview")
 
 
 __all__ = ["preview_project_source_update", "apply_project_source_update"]

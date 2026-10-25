@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+from sciplot_core.project_commands import PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation, SourceTreeRead
 from sciplot_core.studio_core.project_command_scope import command_for_binding, project_store, query_for_apply, whole_memberships
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore
@@ -17,12 +18,12 @@ from sciplot_core.studio_core.source_update_files import project_inventory, relo
 def source_mutation(project: Path, candidate: Path, review: dict[str, Any], *,
                     relocate_companion: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
                     expected: dict[str, str] | None = None,
-                    store: FileProjectStore | None = None) -> tuple[dict[str, bytes | Path | PreparedFile | None], dict[str, bytes | Path]]:
+                    store: FileProjectStore | None = None, logical_paths_bound: bool = False) -> tuple[dict[str, bytes | Path | PreparedFile | None], dict[str, bytes | Path]]:
     names = sorted(path.name for path in candidate.iterdir()
                    if path.name not in {"runs", "delivery", ".sciplot_store", ".sciplot_resources"})
     if not {"plot_request.json", "studio", "source", "raw"}.issubset(names):
         raise ValueError("Prepared source update is missing required active project parts")
-    for path in [*candidate.glob("*.json"), *(candidate / "studio").rglob("*.json")]:
+    for path in ([] if logical_paths_bound else [*candidate.glob("*.json"), *(candidate / "studio").rglob("*.json")]):
         value = json.loads(path.read_text())
         relocated = relocate_metadata(value, candidate, project)
         if isinstance(value, dict) and value.get("native_annotations"):
@@ -59,10 +60,35 @@ def _public_review(project: Path, record: dict[str, Any]) -> dict[str, Any]:
             "command_key": record["command_id"], "decision_id": record["decision_id"]}
 
 
+def source_review_binding(repository: FileProjectStore, snapshot: dict[str, Any], review: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], str]:
+    binding = {"project_id": snapshot["project_id"], "generation": snapshot["generation"],
+               "files": {name: value["sha256"] for name, value in snapshot["files"].items()},
+               "read_memberships": whole_memberships(repository, snapshot)}
+    intent = {name: review.get(name) for name in ("source", "source_kind", "source_tree_sha256", "source_files", "worksheet",
+        "mapping_request", "annotation_decisions", "project_sha256", "delivery_sha256")}
+    intent["read_witness"] = canonical_json_sha256({"files": snapshot["files"], "memberships": binding["read_memberships"]})
+    key = canonical_json_sha256({"kind": "source_update", "project_id": binding["project_id"], "intent": intent})
+    return binding, intent, key
+
+
+def prior_source_preview(repository: FileProjectStore, snapshot: dict[str, Any], review: dict[str, Any]) -> dict[str, Any] | None:
+    from sciplot_core.project_commands import ProjectCommandUnknown
+
+    _binding, _intent, key = source_review_binding(repository, snapshot, review)
+    record = ProjectCommands(repository).query(key)
+    if record is None:
+        return None
+    if record["phase"] not in {"needs_review", "accepted", "complete"}:
+        raise ProjectCommandUnknown()
+    return record
+
+
 def stage_source_update(project: Path, candidate: Path, review: dict[str, Any], *,
-                        relocate_companion: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None) -> dict[str, Any]:
+                        relocate_companion: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
+                        prepared_sources: tuple[PreparedSource, ...] = (), logical_paths_bound: bool = False,
+                        before_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     repository = project_store(project, with_snapshot=True)
-    snapshot = repository.snapshot(import_legacy=True)
+    snapshot = before_snapshot if before_snapshot is not None else repository.snapshot(import_legacy=True)
     before = project_inventory(project)
     if canonical_json_sha256(before) != review["project_sha256"]:
         # Historical payload_hash uses the same canonical JSON, without whitespace.
@@ -72,22 +98,28 @@ def stage_source_update(project: Path, candidate: Path, review: dict[str, Any], 
             raise ValueError("Project changed while its source candidate was prepared")
     (candidate / "source_update.json").write_text(json.dumps(review, ensure_ascii=False, indent=2))
     writes, artifacts = source_mutation(project, candidate, review, relocate_companion=relocate_companion, expected=before,
-                                       store=repository)
-    reads = {name: value["sha256"] for name, value in snapshot["files"].items()}
-    binding = {"project_id": snapshot["project_id"], "generation": snapshot["generation"], "files": reads,
-               "read_memberships": whole_memberships(repository, snapshot)}
-    intent = {name: review.get(name) for name in ("source_tree_sha256", "source_files", "worksheet",
-        "mapping_request", "annotation_decisions", "project_sha256", "delivery_sha256")}
-    key = canonical_json_sha256({"kind": "source_update", "project_id": binding["project_id"], "intent": intent})
+                                       store=repository, logical_paths_bound=logical_paths_bound)
+    binding, intent, key = source_review_binding(repository, snapshot, review)
     command = command_for_binding(repository, binding, kind="source_update", key=key,
                                    writes=list(writes), request=intent)
     source = Path(review["source"])
-    sources = [{"source_id": canonical_json_sha256({"project_id": binding["project_id"], "source": str(source), "member": name})[:32],
-                "path": str(source / name if source.is_dir() else source), "version": digest}
-               for name, digest in review["source_files"].items()]
+    tree = ({"kind": "directory", "files": [{"path": name, "content_sha256": digest}
+             for name, digest in sorted(review["source_files"].items())]} if source.is_dir() else
+            {"kind": "file", "content_sha256": next(iter(review["source_files"].values()))})
+    tree_sha = canonical_json_sha256(tree, allow_nan=False)
+    if review.get("source_tree_sha256", tree_sha) != tree_sha:
+        raise ValueError("The confirmed source-tree hash differs from its exact file inventory")
+    command = replace(command, source_trees=(SourceTreeRead(str(source), tree_sha),))
+    sources = []
+    for name, digest in review["source_files"].items():
+        literal = str(source / name if source.is_dir() else source)
+        from sciplot_core.studio_core.preparation_commands import source_identity_for_locator
+
+        identity = source_identity_for_locator(snapshot, literal)
+        sources.append({"source_id": identity, "path": literal, "locator": literal, "version": digest})
     record = ProjectCommands(repository).preview(command, lambda: ProjectMutation(writes,
         {"status": "updated", "project": str(project), "review": review}, sources=sources,
-        review=review, artifacts=artifacts))
+        review=review, artifacts=artifacts, prepared_sources=prepared_sources))
     return _public_review(project, record)
 
 

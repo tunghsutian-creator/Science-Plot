@@ -28,11 +28,18 @@ def prior_source_update_result(project: Path, review: dict[str, Any], *, validat
     """Query the shared receipt, or import proven legacy evidence without writing it."""
     app = ProjectCommands(project_store(project))
     key = canonical_json_sha256(review, allow_nan=False)
-    record = query_for_apply(app, key)
+    record = query_for_apply(app, key) if (project / ".sciplot_store/head.json").is_file() else None
     if record is not None:
         record = app.resume(ProjectCommand.from_payload(record["metadata"]))
         if record["phase"] == "reserved":
             return None
+        snapshot = app.store.snapshot()
+        for name, expected in record["draft"]["writes"].items():
+            actual = snapshot["files"].get(name)
+            if (name in snapshot.get("outside_changes", {}) or
+                    ((actual["sha256"], actual["mode"]) if actual else None) !=
+                    ((expected["sha256"], expected["mode"]) if expected else None)):
+                raise ValueError("The source update was interrupted or its result has changed; preserve the native and archive bytes")
         validate()
         return Path(record["artifact_root"]) / "before"
     path = _outcome_path(project, review)

@@ -1,14 +1,12 @@
-"""Prepare a fresh source revision through the ordinary Intake/Studio owners."""
+"""Prepare a fresh source request inside the existing project's private image."""
 
 from __future__ import annotations
 
 import json
-import shutil
-from tempfile import TemporaryDirectory
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any
+from collections.abc import Iterator
+from contextlib import contextmanager, AbstractContextManager
 
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -18,9 +16,8 @@ from sciplot_core.source_coverage.managed_documents import (
     verify_managed_document_sources,
 )
 from sciplot_core.source_coverage.managed_task_sources import registered_task_snapshot_sources
-from sciplot_core.studio_core.prepare_generated import generate_studio_document
+from sciplot_core.studio_core.preparation_candidate import StudioPreparationCandidate
 from sciplot_core.studio_core.source_update_review import project_figures
-from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
 def verify_project_science(project: Path) -> dict[str, Any]:
@@ -79,188 +76,65 @@ def _worksheet_confirmation(
 
 
 def prepare_candidate(
-    project: Path,
-    source: Path,
-    temporary: Path,
-    *,
-    worksheet: str | None,
+    project: Path, source: Path, temporary: Path, *, worksheet: str | None,
     mapping_request: dict[str, Any] | None = None,
-) -> tuple[Path, list[dict[str, Any]]]:
-    # Intake's public package composes the Studio facade; load it only after
-    # the facade is initialized, as the existing Studio intake route does.
-    from sciplot_core.intake.project import create_intake_project_from_session
-    from sciplot_core.intake.session import prepare_intake_session
-
+    snapshot: dict[str, Any] | None = None,
+) -> AbstractContextManager[tuple[StudioPreparationCandidate, list[dict[str, Any]]]]:
+    """Validate a fresh scientific request before allocating its private image."""
     previous = json.loads((project / "plot_request.json").read_text())
     rule_id = str(previous.get("rule_id") or "")
+    delivery = requested_delivery_root({"request": previous}, run_output=project)
+    confirmations = _worksheet_confirmation(source, worksheet, rule_id)
     if mapping_request is not None:
         from sciplot_core.plan_preview import build_plan_preview
-        from sciplot_core.studio_core.project_creation import _prepare_mapped_project
-        from sciplot_core.output_contract import UserOutputLayout
+        from sciplot_core.data_mapping.plan_binding import verify_replicate_source_expansion
+        from sciplot_core.studio_core.project_creation import request_from_verified_plan
 
         if mapping_request.get("rule_id") != rule_id or mapping_request.get("template") != previous.get("template"):
             raise ValueError("Fresh mapping must preserve the project's confirmed experiment and template.")
         plan = dict(build_plan_preview(source, request=mapping_request))
         if plan["status"] != "planned":
             raise ValueError(f"Fresh source mapping cannot prepare this project: {plan.get('blocker')}")
-        from sciplot_core.data_mapping.plan_binding import verify_replicate_source_expansion
-
         try:
             verify_replicate_source_expansion(previous, source, mapping_request, plan)
         except ValueError as exc:
             raise ValueError(f"Fresh source mapping cannot prepare this project: {exc}") from exc
-        result = _prepare_mapped_project(source, verified=plan, layout=UserOutputLayout(
-            delivery_root=requested_delivery_root({"request": previous}, run_output=project),
-            workspace_root=temporary,
-        ))
-        candidate = Path(result["project_dir"])
-        from sciplot_core.intake.models import IncomingFile, IntakeGroupInput
-        from sciplot_core.intake.project.source_materialization import materialize_intake_groups
-        from sciplot_core.foundation.json_io import atomic_write_json
-
-        # The source revision installer archives raw/source as one active set.
-        # These are byte copies of the original workbook, never mapped raw data.
-        _, _, snapshots = materialize_intake_groups(project_dir=candidate, groups=[
-            IntakeGroupInput(sample=source.stem, files=(IncomingFile(source.name, source.read_bytes()),))])
-        atomic_write_json(candidate / "source_snapshot.json", {"original_source": str(source), "files": snapshots})
-        verify_project_science(candidate)
-        return candidate, []
-    if (
-        not rule_id
-        or previous.get("data_mapping")
-        or previous.get("data_mapping_application")
-        or "data_mapping_execution" in previous
-        or "data_mapping_proposal_id" in previous
-        or "data_mapping_plan_binding" in previous
-    ):
-        raise ValueError(
-            "This source needs a fresh explicit data mapping before it can replace the project source."
-        )
-    session = prepare_intake_session(
-        source, output_root=temporary, requested_rule_id=rule_id
-    )
-    manifest_path = project / "intake_manifest.json"
-    manifest = json.loads(manifest_path.read_text()) if manifest_path.is_file() else {}
-    session["project_name"] = manifest.get("project_name") or project.name
-    session["exports"] = previous.get("exports", ["pdf", "tiff_300"])
-    session["replicate_mode"] = previous.get("replicate_mode") or session.get(
-        "replicate_mode"
-    )
-    # Scientific labels, axis ranges, source selections, and transformations are
-    # derived anew. Compatible native styling is transferred after preparation.
-    presentation_options = {"size", "style_preset", "visual_theme_id", "palette_preset"}
-    session["render_options"] = {
-        **session.get("render_options", {}),
-        **{
-            k: v
-            for k, v in previous.get("render_options", {}).items()
-            if k in presentation_options
-        },
-    }
-    confirmations = _worksheet_confirmation(source, worksheet, rule_id)
-    session["column_confirmations"] = confirmations
-    failure: list[Exception] = []
-
-    def prepare_once(directory: Path) -> dict[str, Any]:
-        try:
-            return generate_studio_document(
-                project_dir=directory,
-                request_path=directory / "plot_request.json",
-                rule_id=None,
-                template=None,
-                project_name=None,
-            )
-        except Exception as exc:
-            failure.append(exc)
-            raise
-
-    result = create_intake_project_from_session(
-        session,
-        studio_preparer=prepare_once,
-        template=previous.get("template"),
-        delivery_root=requested_delivery_root(
-            {"request": previous}, run_output=project
-        ),
-    )
-    if failure:
-        raise failure[0]
-    candidate = Path(result["project_dir"]).resolve()
-    if result.get("studio", {}).get("status") != "ready":
-        raise ValueError(
-            "The replacement source cannot produce a complete current figure set."
-        )
-    # Preserve the existing project identity and mirror names, not stale runs or
-    # source facts. All current scientific facts come from the newly built project.
-    new_manifest = json.loads((candidate / "intake_manifest.json").read_text())
-    new_manifest["project_slug"] = manifest.get("project_slug") or project.name
-    for mirror in candidate.glob("*.sciplot.json"):
-        mirror.unlink()
-    for target in [
-        candidate / "intake_manifest.json",
-        *[candidate / p.name for p in project.glob("*.sciplot.json")],
-    ]:
-        target.write_text(json.dumps(new_manifest, ensure_ascii=False, indent=2))
-    verify_project_science(candidate)
-    return candidate, confirmations
+        request = request_from_verified_plan(source, verified=plan, project_dir=project, delivery_root=delivery)
+    else:
+        if (not rule_id or previous.get("data_mapping") or previous.get("data_mapping_application")
+                or any(key in previous for key in ("data_mapping_execution", "data_mapping_proposal_id", "data_mapping_plan_binding"))):
+            raise ValueError("This source needs a fresh explicit data mapping before it can replace the project source.")
+        # Scientific labels, ranges, units, plans and transformations are derived
+        # afresh from the confirmed incoming source. Existing raw/source members
+        # remain historical original bytes in the same project generation.
+        request = {"recipe": "auto", "input": str(source), "output": previous.get("output", str(project / "runs/run_001")),
+                   "rule_id": rule_id, "template": previous["template"],
+                   "explicit_template_selection": True, "exports": previous.get("exports", ["pdf", "tiff_300"]),
+                   "replicate_mode": previous.get("replicate_mode", "raw"), "delivery_output": str(delivery)}
+        options = {key: value for key, value in previous.get("render_options", {}).items()
+                   if key in {"size", "style_preset", "visual_theme_id", "palette_preset"}}
+        if options:
+            request["render_options"] = options
+    if confirmations:
+        request["column_confirmations"] = confirmations
+    return _build_source_candidate(project, request, confirmations, snapshot=snapshot)
 
 
-def transfer_project_styles(previous: Path, candidate: Path) -> list[dict[str, Any]]:
-    before, after = project_figures(previous), project_figures(candidate)
-    changes = []
-    for identity, (document, spec) in after.items():
-        if identity not in before:
-            changes.append(
-                {"figure_id": identity, "status": "new_figure", "applied": []}
-            )
-            continue
-        old_document, old_spec = before[identity]
-        from sciplot_core.native_process import run_cold_worker
+@contextmanager
+def _build_source_candidate(project: Path, request: dict[str, Any], confirmations: list[dict[str, Any]], *,
+                            snapshot: dict[str, Any] | None = None) -> Iterator[tuple[StudioPreparationCandidate, list[dict[str, Any]]]]:
+    from sciplot_core.studio_core.project_command_scope import project_store
+    from sciplot_core.studio_core.preparation_candidate import studio_preparation_candidate
+    from sciplot_core.studio_core.preparation_commands import prepare_studio_candidate
 
-        with TemporaryDirectory(prefix="sciplot-style-transfer-") as folder:
-            private_document, private_spec = Path(folder) / "document.vsz", Path(folder) / "spec.json"
-            completed = run_cold_worker(
-                [
-                    sys.executable,
-                    "-m",
-                    "sciplot_core.veusz_worker",
-                    "preview-transfer-styles",
-                    str(old_document),
-                    str(document),
-                    str(old_spec),
-                    str(spec),
-                    "--output-document", str(private_document),
-                    "--output-spec", str(private_spec),
-                ],
-                env=veusz_worker_environment(),
-                cold_runner=subprocess.run,
-                text=True,
-                capture_output=True,
-                timeout=120,
-                check=False,
-            )
-            if not completed.returncode:
-                shutil.copy2(private_document, document)
-                shutil.copy2(private_spec, spec)
-        if completed.returncode:
-            detail = completed.stderr.strip().splitlines()
-            raise ValueError(
-                "Could not preserve compatible styles: "
-                + (detail[-1] if detail else "worker failed")
-            )
-        payload = json.loads(completed.stdout)
-        # Paths/hashes of freshly generated VSZs are temporary implementation
-        # details, not choices the operator must approve on every regeneration.
-        changes.append(
-            {
-                "figure_id": identity,
-                "status": payload["status"],
-                "applied": payload.get("applied", []),
-                "skipped": payload.get("skipped", []),
-                "reasons": payload.get("reasons", []),
-            }
-        )
-    verify_project_science(candidate)
-    return changes
+    repository = project_store(project, with_snapshot=True)
+    with studio_preparation_candidate(repository, snapshot=snapshot) as candidate:
+        candidate.write_request(request)
+        payload = prepare_studio_candidate(candidate, request_target=True, regenerate_generated=True)
+        if payload.get("document") is None:
+            raise ValueError("The replacement source cannot produce a complete current figure set")
+        yield candidate, confirmations
 
 
-__all__ = ["prepare_candidate", "transfer_project_styles", "verify_project_science"]
+
+__all__ = ["prepare_candidate", "verify_project_science"]

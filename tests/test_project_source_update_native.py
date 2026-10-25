@@ -20,7 +20,7 @@ def _files(root: Path) -> dict[str, bytes]:
     return {
         str(path.relative_to(root)): path.read_bytes()
         for path in root.rglob("*")
-        if path.is_file()
+        if path.is_file() and not {".sciplot_store", ".sciplot_resources"}.intersection(path.relative_to(root).parts)
     }
 
 

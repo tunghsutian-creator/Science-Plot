@@ -125,7 +125,7 @@ def test_external_native_edit_preview_apply_export_and_cold_resume(tmp_path, mon
     forged["operation_id"] = preview_identity(forged)
     with pytest.raises(
         ValueError,
-        match="outside the advertised safe setting catalog",
+        match="complete unchanged stored",
     ):
         apply_document_edit(project, forged)
     assert edit_state(project) == before
@@ -161,7 +161,7 @@ def test_external_native_edit_preview_apply_export_and_cold_resume(tmp_path, mon
         assert main(["project", "edit-apply", str(project), "--preview", review["review_path"], "--json"]) == 0
     elapsed = perf_counter() - started
     applied = json.loads(output.getvalue())
-    assert native_commands == ["edit-document"]
+    assert native_commands == []  # Accept publishes the exact frozen audited candidate.
     (tmp_path / "apply_measurement.json").write_text(json.dumps({
         "worker_starts": len(native_commands), "commands": native_commands, "elapsed_seconds": elapsed,
     }))
