@@ -192,7 +192,7 @@ class ProjectCommand:
         transfer_items = value["namespace_transfers"]
         if not isinstance(transfer_items, list) or any(not isinstance(item, dict) or set(item) != {
                 "prefix", "history_prefix", "attachment_id", "original_head_sha256", "refusal_sha256",
-                "owner_sha256", "history_owner_sha256", "members"} for item in transfer_items):
+                "owner_sha256", "history_owner_sha256", "members", "physical_backup_prefix"} for item in transfer_items):
             raise ValueError("Saved namespace transfers require exact closed fields.")
         transfers = []
         for item in transfer_items:

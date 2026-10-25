@@ -106,11 +106,18 @@ class NamespaceTransfer:
     owner_sha256: str
     history_owner_sha256: str
     members: tuple[NamespaceMember, ...]
+    physical_backup_prefix: str | None = None
 
     def __post_init__(self) -> None:
         resource_key(self.prefix)
         resource_key(self.history_prefix)
         old, history = PurePosixPath(self.prefix), PurePosixPath(self.history_prefix)
+        if self.physical_backup_prefix is not None:
+            resource_key(self.physical_backup_prefix)
+            physical = PurePosixPath(self.physical_backup_prefix)
+            if (physical.is_relative_to(old) or old.is_relative_to(physical)
+                    or physical.parts[0] in {".sciplot_store", ".sciplot_resources"}):
+                raise ValueError("The observed physical backup must be a disjoint exact host resource.")
         if (old.is_relative_to(history) or history.is_relative_to(old)
                 or any(path.parts[0] in {".sciplot_store", ".sciplot_resources"} for path in (old, history))
                 or not isinstance(self.attachment_id, str) or re.fullmatch(r"[a-f0-9]{32}", self.attachment_id) is None
@@ -128,7 +135,8 @@ class NamespaceTransfer:
                 "attachment_id": self.attachment_id, "original_head_sha256": self.original_head_sha256,
                 "refusal_sha256": self.refusal_sha256, "owner_sha256": self.owner_sha256,
                 "history_owner_sha256": self.history_owner_sha256,
-                "members": [item.to_payload() for item in sorted(self.members, key=lambda item: item.relative)]}
+                "members": [item.to_payload() for item in sorted(self.members, key=lambda item: item.relative)],
+                "physical_backup_prefix": self.physical_backup_prefix}
 
 
 def membership_digest(names: Iterable[str]) -> str:

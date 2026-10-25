@@ -72,3 +72,11 @@ def test_observed_legacy_namespace_may_be_newer_than_its_original_project_snapsh
     payload["namespace_transfers"][0]["members"][0]["force"] = True
     with pytest.raises(ValueError, match="exact closed fields"):
         ProjectCommand.from_payload(payload)
+
+
+def test_inside_project_physical_backup_has_explicit_identity_and_cannot_alias_old_namespace():
+    value = command(namespace_transfers=[replace(transfer(), physical_backup_prefix="old/physical-backup")])
+    assert ProjectCommand.from_payload(value.to_payload()) == value
+    assert value.namespace_transfers[0].physical_backup_prefix == "old/physical-backup"
+    with pytest.raises(ValueError, match="disjoint"):
+        replace(transfer(), physical_backup_prefix="old/plot/history")
