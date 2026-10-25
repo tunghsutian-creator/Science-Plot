@@ -24,7 +24,8 @@ class Observer:
         self.frames.append(value)
 
 
-@pytest.mark.parametrize("peer_errno,error_class", [(errno.ENOTCONN, "OSError"), (errno.EACCES, "PermissionError")])
+@pytest.mark.parametrize("peer_errno,error_class", [(errno.ENOTCONN, "OSError"), (errno.EACCES, "PermissionError")],
+                         ids=["disconnected", "permission-denied"])
 def test_successful_connect_is_not_changed_by_peer_observation_failure(monkeypatch, peer_errno, error_class):
     from pathlib import Path
     import socket
