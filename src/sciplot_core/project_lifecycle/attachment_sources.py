@@ -88,13 +88,16 @@ def prepared_sources(store: FileProjectStore, sources: Iterable[dict[str, Any]],
 
 class AttachmentSourceResolver(ProjectSourceResolver):
     """A lease-local capability, advanced only after durable source publication."""
-    def __init__(self, store: FileProjectStore, pending: Iterable[dict[str, Any]] = ()) -> None:
-        super().__init__(store)
+    def __init__(self, store: FileProjectStore, pending: Iterable[dict[str, Any]] = (), *, generation: str | None = None) -> None:
+        super().__init__(store, generation)
+        self._bound_generation = generation
         self.pending = tuple(dict(source) for source in pending)
+        self._verified: dict[str, tuple[str, str, str | None]] = {}
 
     def refresh(self) -> None:
-        ProjectSourceResolver.__init__(self, self.store)
-        self.pending = ()
+        ProjectSourceResolver.__init__(self, self.store, self._bound_generation)
+        # Admission is an invocation capability. The first registration changes
+        # storage, not the identity of this same finite ongoing source read.
 
     @contextmanager
     def declaration_scope(self, sources: Iterable[dict[str, Any]]) -> Iterator[None]:
@@ -107,6 +110,11 @@ class AttachmentSourceResolver(ProjectSourceResolver):
 
     def resolve_path(self, original: str | Path, *, expected_sha256: str | None = None,
                      source_id: str | None = None) -> Path:
+        if expected_sha256 is None and source_id is None and str(original) in self._verified:
+            literal, version, identity = self._verified[str(original)]
+            actual = super().resolve_path(literal, expected_sha256=version, source_id=identity)
+            _read_source(actual, version)
+            return actual
         matches = [item for item in self.pending if item["path"] == str(original)]
         if matches:
             allowed = [item for item in matches if expected_sha256 in {None, item["sha256"]} and source_id in {None, item["source_id"]}]
@@ -117,4 +125,7 @@ class AttachmentSourceResolver(ProjectSourceResolver):
             actual = Path(allowed[0].get("actual", str(original)))
             _read_source(actual, allowed[0]["sha256"])
             return actual
-        return super().resolve_path(original, expected_sha256=expected_sha256, source_id=source_id)
+        actual = super().resolve_path(original, expected_sha256=expected_sha256, source_id=source_id)
+        if expected_sha256 is not None:
+            self._verified[str(actual)] = (str(original), expected_sha256, source_id)
+        return actual
