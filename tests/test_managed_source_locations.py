@@ -34,7 +34,8 @@ class SelectedSource:
 
     def resolve_path(self, original, *, expected_sha256=None, source_id=None):
         expected = (self.source["path"], self.source["sha256"], self.source["source_id"])
-        reentry = (str(original), expected_sha256, source_id) == (str(self.actual), None, None)
+        reentry = (str(original) == str(self.actual) and expected_sha256 in {None, self.source["sha256"]}
+                   and source_id is None)
         verified = expected in self.calls
         self.calls.append((str(original), expected_sha256, source_id))
         assert self.calls[-1] == expected or reentry and verified  # Exact same-reader IO; code paths cannot become source mappings.
@@ -43,6 +44,21 @@ class SelectedSource:
     def literal_path(self, actual):
         assert actual == self.actual
         return self.source["path"]
+
+
+def test_selected_source_double_requires_initial_identity_and_rejects_other_versions(tmp_path):
+    document, actual = relocated_document(tmp_path)
+    source = document["scientific"]["data_sources"][0]
+    locator = SelectedSource(source, actual)
+    with pytest.raises(AssertionError):
+        locator.resolve_path(actual)
+    assert locator.resolve_path(source["path"], expected_sha256=source["sha256"], source_id=source["source_id"]) == actual
+    assert locator.resolve_path(actual) == actual
+    assert locator.resolve_path(actual, expected_sha256=source["sha256"]) == actual
+    for path, sha, identity in ((actual, "f" * 64, None), (actual, source["sha256"], "foreign"),
+                                (tmp_path / "executor.py", source["sha256"], None)):
+        with pytest.raises(AssertionError):
+            locator.resolve_path(path, expected_sha256=sha, source_id=identity)
 
 
 def test_managed_cold_source_io_and_currentness_keep_original_literal_and_seal(tmp_path):
