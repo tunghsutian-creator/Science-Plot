@@ -22,7 +22,6 @@ from sciplot_core.studio_core.source_update import (
     preview_project_source_update,
     apply_project_source_update,
 )
-from sciplot_core.studio_core.project_session import external_project_session
 
 
 def revision_project(target: Path) -> Path:
@@ -87,13 +86,12 @@ def dispatch_project_revision(args: Any) -> int | None:
         if not isinstance(preview, dict):
             raise ValueError("The reviewed preview must be a JSON object.")
         kind = preview.get("kind")
-        with external_project_session(project):
-            if kind == "sciplot_delivery_recovery_preview":
-                payload = apply_delivery_recovery(project, preview)
-            elif kind == "sciplot_project_source_update":
-                payload = apply_project_source_update(project, preview)
-            else:
-                raise ValueError("The file is not a supported project revision preview.")
+        if kind == "sciplot_delivery_recovery_preview":
+            payload = apply_delivery_recovery(project, preview)
+        elif kind == "sciplot_project_source_update":
+            payload = apply_project_source_update(project, preview)
+        else:
+            raise ValueError("The file is not a supported project revision preview.")
     else:
         payload = (
             preview_project_source_update(

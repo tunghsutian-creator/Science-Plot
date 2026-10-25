@@ -244,3 +244,90 @@ commit_document_edit(project, document, candidate, json.loads(review.read_text()
     assert Path(recovered["archive"]).read_bytes() == original
     assert (project / "source/data.csv").read_bytes() == source
     assert not (project.parent / ".document_edit_history").exists()
+
+
+def test_host_factory_rejects_unadmitted_delivery_root_before_selecting_it(project, tmp_path, monkeypatch):
+    from sciplot_core.project_store import ProjectConflict
+    from sciplot_core.studio_core import project_command_scope as scope
+    selected = scope.project_store(project)
+    selected.snapshot(import_legacy=True)
+    foreign = tmp_path / "foreign-root"
+    foreign.mkdir()
+    (foreign / "preserve.txt").write_bytes(b"unrelated outside files")
+    request = json.loads((project / "plot_request.json").read_text())
+    request["delivery_output"] = str(foreign)
+    (project / "plot_request.json").write_text(json.dumps(request))
+    monkeypatch.setattr(scope, "requested_delivery_root", lambda *_a, **_kw: pytest.fail("unadmitted root was selected"))
+    with pytest.raises(ProjectConflict, match="canonical request differs"):
+        scope.project_store(project, create_delivery=True, with_snapshot=True)
+    assert (foreign / "preserve.txt").read_bytes() == b"unrelated outside files"
+
+
+def test_pending_factory_accepts_only_sealed_parent_or_head_request_before_cap_selection(project, tmp_path, monkeypatch):
+    from sciplot_core.project_store import ProjectConflict, state
+    from sciplot_core.studio_core import project_command_scope as scope
+    store = scope.project_store(project)
+    before = store.snapshot(import_legacy=True)
+    path = project / "plot_request.json"
+    parent_bytes = path.read_bytes()
+    request = {**json.loads(parent_bytes), "review_notes": ["sealed new head request"]}
+    command = ProjectCommand.create("source_update", "pending-canonical-request", project_id=before["project_id"],
+        expected_generation=before["generation"], read_set={"plot_request.json": file_sha256(path)},
+        write_set=["plot_request.json"], request={"source_revision": "generated request guard"})
+    boundary = state.boundary
+    def stop(name):
+        if name == "before_projection":
+            raise OSError("generated pending request")
+        boundary(name)
+    monkeypatch.setattr(state, "boundary", stop)
+    with pytest.raises(OSError, match="generated pending request"):
+        ProjectCommands(store).execute(command, lambda: ProjectMutation({"plot_request.json": json.dumps(request).encode()}, {}))
+    monkeypatch.setattr(state, "boundary", boundary)
+    assert scope._admitted_request(project) == request and path.read_bytes() == parent_bytes
+    foreign = tmp_path / "never-selected"
+    path.write_text(json.dumps({**request, "delivery_output": str(foreign)}))
+    monkeypatch.setattr(scope, "requested_delivery_root", lambda *_a, **_kw: pytest.fail("foreign pending root was selected"))
+    with pytest.raises(ProjectConflict, match="canonical request differs"):
+        scope.project_store(project, create_delivery=True)
+    assert not foreign.exists()
+    path.write_bytes(parent_bytes)
+    store.recover()
+    assert json.loads(path.read_bytes()) == request
+
+
+def test_external_canonical_run_output_has_stable_host_cap_and_cold_mapping(project, tmp_path):
+    from sciplot_core.studio_core.project_command_scope import project_store
+    output = tmp_path / "dedicated-run"
+    request_path = project / "plot_request.json"
+    request_path.write_text(json.dumps({**json.loads(request_path.read_text()), "output": str(output)}))
+    selected = project_store(project, create_output=True)
+    key = next(key for key, root in selected.locations.items() if root == output)
+    assert key.startswith("run_")
+    before = selected.snapshot(import_legacy=True)
+    resource = selected.logical_path(output / "manifest.json")
+    command = ProjectCommand.create("export", "external-canonical-run", project_id=before["project_id"],
+        expected_generation=before["generation"], read_set={resource: None}, write_set=[resource], request={"run": "external"})
+    ProjectCommands(selected).execute(command, lambda: ProjectMutation({resource: b'{"complete":true}'}, {}))
+    assert project_store(project).logical_path(output / "manifest.json") == resource
+    cold = FileProjectStore.import_bundle(selected.export_bundle(tmp_path / "run-bundle"), tmp_path / "run-cold")
+    project.rename(tmp_path / "project-offline")
+    output.rename(tmp_path / "external-run-offline")
+    reopened = project_store(cold.root, create_output=True)
+    assert not output.exists() and reopened.locations[key] == cold.root / ".sciplot_resources" / key
+    assert reopened.read_bytes(resource) == b'{"complete":true}'
+
+
+def test_external_run_root_cannot_overlap_raw_input_or_project_parent(project, tmp_path):
+    from sciplot_core.studio_core.project_command_scope import project_store
+    path = project / "plot_request.json"
+    original = json.loads(path.read_text())
+    for output in (project.parent, project / "source"):
+        path.write_text(json.dumps({**original, "output": str(output)}))
+        with pytest.raises(ValueError, match="contain its source project|overlap"):
+            project_store(project, create_output=True)
+    external = tmp_path / "raw-directory"
+    external.mkdir()
+    path.write_text(json.dumps({**original, "input": str(external), "output": str(external / "must-not-create")}))
+    with pytest.raises(ValueError, match="overlap"):
+        project_store(project, create_output=True)
+    assert not (external / "must-not-create").exists()

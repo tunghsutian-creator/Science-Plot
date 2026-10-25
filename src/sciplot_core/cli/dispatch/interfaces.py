@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import sys
-from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -119,42 +118,20 @@ def dispatch_interfaces(
                     )
                     studio_delivery_root = layout.delivery_root
                     studio_output_root = layout.workspace_root / "projects"
-        from sciplot_core.studio_core.project_session import external_project_session
-        from sciplot_core.studio_core.context import resolve_studio_project_context
-
-        existing_project = None
-        if studio_target is not None:
-            if (
-                studio_target.is_dir()
-                and (studio_target / "plot_request.json").is_file()
-            ):
-                existing_project = studio_target
-            elif studio_target.name == "plot_request.json":
-                existing_project = studio_target.parent
-            elif studio_target.suffix == ".vsz":
-                context = resolve_studio_project_context(studio_target)
-                existing_project = context["project_dir"] if context else None
-        session = (
-            external_project_session(existing_project)
-            if (args.json or args.export or args.prepare_only)
-            and existing_project is not None
-            else nullcontext()
+        return run_studio_command(
+            target=studio_target,
+            output_root=studio_output_root,
+            delivery_root=studio_delivery_root,
+            rule_id=args.rule,
+            template=args.template,
+            project_name=args.name,
+            new=args.new,
+            export=args.export,
+            json_output=args.json,
+            prepare_only=args.prepare_only,
+            qt_smoke=args.qt_smoke,
+            original_argv=original_argv,
         )
-        with session:
-            return run_studio_command(
-                target=studio_target,
-                output_root=studio_output_root,
-                delivery_root=studio_delivery_root,
-                rule_id=args.rule,
-                template=args.template,
-                project_name=args.name,
-                new=args.new,
-                export=args.export,
-                json_output=args.json,
-                prepare_only=args.prepare_only,
-                qt_smoke=args.qt_smoke,
-                original_argv=original_argv,
-            )
 
     if args.command == "publication":
         from sciplot_core.publication import (
