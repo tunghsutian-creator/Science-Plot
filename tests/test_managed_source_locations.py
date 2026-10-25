@@ -34,8 +34,10 @@ class SelectedSource:
 
     def resolve_path(self, original, *, expected_sha256=None, source_id=None):
         expected = (self.source["path"], self.source["sha256"], self.source["source_id"])
+        reentry = (str(original), expected_sha256, source_id) == (str(self.actual), None, None)
+        verified = expected in self.calls
         self.calls.append((str(original), expected_sha256, source_id))
-        assert self.calls[-1] == expected  # Code/executor paths cannot become source mappings.
+        assert self.calls[-1] == expected or reentry and verified  # Exact same-reader IO; code paths cannot become source mappings.
         return self.actual
 
     def literal_path(self, actual):
