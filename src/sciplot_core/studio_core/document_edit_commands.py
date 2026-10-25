@@ -171,7 +171,8 @@ def apply_native_edit(project: Path, supplied: dict[str, Any]) -> dict[str, Any]
     result = _operation_result(project, completed)
     if not result["result_is_current"]:
         raise ValueError("The saved native edit has since changed; preserve its evidence")
-    return {**result, "status": "already_applied" if record["phase"] == "complete" else "applied"}
+    return {**result, "document_sha256": result["result_sha256"],
+            "status": "already_applied" if record["phase"] == "complete" else "applied"}
 
 
 def verify_document_edit_receipt(project: Path, supplied: dict[str, Any]) -> dict[str, Any] | None:
