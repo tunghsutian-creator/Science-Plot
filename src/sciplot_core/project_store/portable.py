@@ -106,8 +106,24 @@ def import_bundle(bundle: Path, destination: Path) -> FileProjectStore:
         if current is None or (current["project_id"], current["generation"]) != (header["project_id"], header["generation"]):
             raise ProjectConflict("The portable head differs from its complete bundle binding.")
         io.write("local_locations.json", {"ids": ids, "members": store.location_members})
-        io.write("local_sources.json", {"versions": {source_id: {version: entry["sha256"]
-            for version, entry in versions.items()} for source_id, versions in current["sources"].items()}})
+        source_versions = {source_id: {version: entry["sha256"]
+            for version, entry in versions.items()} for source_id, versions in current["sources"].items()}
+        from . import commands
+
+        try:
+            with directory(io.fd, ("commands",)) as command_fd:
+                command_names = sorted(name for name in os.listdir(command_fd) if name.endswith(".json"))
+        except FileNotFoundError:
+            command_names = []
+        for name in command_names:
+            record = io.read("commands/" + name)
+            if record and record.get("draft") is not None:
+                commands.public(io, record)
+                for source_id, versions in record["draft"].get("sources", {}).items():
+                    for version, entry in versions.items():
+                        io.get(entry)
+                        source_versions.setdefault(source_id, {})[version] = entry["sha256"]
+        io.write("local_sources.json", {"versions": source_versions})
         io.write("relocation.json", {"generation": current["generation"], "files": sorted(current["files"]), "complete": False})
         projection.relocate(io, current)
     return store

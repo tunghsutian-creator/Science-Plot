@@ -84,7 +84,13 @@ def test_actual_sigkill_recovers_old_complete_new_or_explicit_unknown(tmp_path, 
     assert snapshot["projection_status"] == "current"
     if expected == b"old":
         assert snapshot["generation"] == before["generation"]
-        assert recovery["phase"] == "unknown" and recovered.query("owned-fault")["phase"] == "unknown"
+        if fault == "before_native":
+            assert recovery["phase"] == "unknown" and recovered.query("owned-fault")["phase"] == "unknown"
+        else:
+            assert recovered.query("owned-fault")["phase"] == "accepted"
+            receipt = recovered.publish_staged("owned-fault", "digest")
+            assert receipt["phase"] == "complete"
+            assert (store.root / "document.vsz").read_bytes() == (delivery / "native.vsz").read_bytes() == b"new"
     else:
         assert snapshot["generation"] != before["generation"]
         receipt = recovered.query("owned-fault")

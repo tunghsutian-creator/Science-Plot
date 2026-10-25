@@ -165,6 +165,7 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False) -
             raise ProjectConflict("The sealed command candidate changed.")
         for key, field in (("writes", "staged_paths"), ("artifacts", "artifact_paths")):
             paths = {}
+            all_views = bool(draft[key])
             for logical, entry in draft[key].items():
                 if entry is None:
                     continue
@@ -185,8 +186,12 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False) -
                     if create_views:
                         raise
                 sealed = Path(*components) if view_exists else Path("objects", entry["sha256"][:2], entry["sha256"])
+                all_views = all_views and view_exists
                 paths[logical] = str(io.root / ".sciplot_store" / sealed)
             result[field] = paths
+            result["artifact_root" if key == "artifacts" else "staged_root"] = (
+                str(io.root / ".sciplot_store" / "drafts" / digest(record["command_id"]) / expected / key)
+                if all_views else None)
     return result
 
 

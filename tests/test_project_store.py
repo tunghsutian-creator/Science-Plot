@@ -244,3 +244,28 @@ def test_audited_native_import_adopts_only_exact_observed_native_bytes(tmp_path,
         ProjectCommands(store).execute(next_command, lambda: ProjectMutation({name: observed}, {}))
     assert (store.root / name).read_bytes() == b"third outside bytes"
     assert store.snapshot()["generation"] == next_before["generation"]
+
+
+def test_shared_runtime_locators_preserve_literals_after_move_and_later_commits(tmp_path):
+    store, before = fixture_store(tmp_path)
+    literal = str(store.root / "raw/same.csv")
+    expected = before["files"]["raw/same.csv"]["sha256"]
+    bundle = store.export_bundle(tmp_path / "bundle")
+    store.root.rename(tmp_path / "original-unavailable")
+    cold = FileProjectStore.import_bundle(bundle, tmp_path / "new-root")
+    actual = cold.resolve_path(literal, expected_sha256=expected)
+    assert actual == cold.root / "raw/same.csv"
+    assert actual.read_bytes() == b"x,y\n1,2\n"
+    assert cold.literal_path(actual) == literal
+    snapshot = cold.snapshot()
+    reserve(cold, snapshot)
+    cold.publish("edit", "edit-digest", writes={"studio/document.vsz": b"moved native change",
+        "studio/spec.json": b'{"science":1}'}, result={})
+    assert cold.resolve_path(literal, expected_sha256=expected) == actual
+    assert cold.literal_path(actual) == literal
+    same_name = tmp_path / "same.csv"
+    same_name.write_bytes(b"x,y\n1,2\n")
+    with pytest.raises(ProjectConflict):
+        cold.resolve_path(same_name, expected_sha256=expected)
+    with pytest.raises(ProjectStoreError):
+        cold.literal_path(same_name)

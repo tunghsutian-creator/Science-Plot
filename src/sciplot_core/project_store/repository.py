@@ -109,11 +109,12 @@ class FileProjectStore:
                 raise ProjectStoreError("Reserve this command before publication.")
             if record["phase"] == "complete":
                 return commands.public(io, record)
-            frozen = {"writes": state.import_writes(io, writes), "result": result,
-                      "sources": commands.capture_sources(io, sources), "review": {},
-                      "artifacts": state.import_writes(io, artifacts or {})}
-            commands.seal(io, record, frozen)
-            return commands.public(io, publication.publish(io, current, record, frozen=frozen), create_views=True)
+            if record["phase"] not in {"reserved", "applying"}:
+                raise ProjectStoreError("Resume an accepted command or decide its exact reviewed candidate explicitly.")
+            commands.stage(io, record, writes=writes, result=result, review={"execution": "immediate"},
+                           artifacts=artifacts, sources=sources)
+            commands.decide(io, record, record["decision_id"], True)
+            return commands.public(io, publication.publish(io, current, record, frozen=record["draft"]), create_views=True)
 
     def publish_staged(self, command_id: str, command_digest: str) -> dict[str, Any]:
         with self._locked(repair=True) as (io, current):
@@ -157,6 +158,8 @@ class FileProjectStore:
                             record = io.read("commands/" + name)
                             if record and record["phase"] == "applying":
                                 unknown.append(record["command_id"])
+                            if record and record.get("draft") is not None:
+                                commands.public(io, record, create_views=True)
             except FileNotFoundError:
                 pass
             return {"phase": "unknown" if unknown else "complete", "project_id": current["project_id"],
@@ -222,6 +225,75 @@ class FileProjectStore:
         if entry is None or entry.get("locator") != original:
             raise ProjectConflict("A locator must match its saved source ID and exact version; names never reconnect.")
         return self.resolve_source(source_id, version)
+
+    def resolve_path(self, original: str | Path, *, expected_sha256: str | None = None,
+                     source_id: str | None = None, generation: str | None = None) -> Path:
+        from . import locators
+
+        literal = str(original)
+        with self._locked() as (io, current):
+            value = state.reachable(io, current, generation) if generation else current
+            logical = locators.logical_for_literal(value, literal)
+            if logical is None:
+                try:
+                    candidate = self.logical_path(Path(literal))
+                    logical = candidate if candidate in value["files"] else None
+                except ProjectStoreError:
+                    pass
+            if logical is not None:
+                locators.checked_member(io, value, logical, expected_sha256)
+                components = parts(logical)
+                return (self.locations[components[0][1:]] / Path(*components[1:])
+                        if components[0].startswith("@") else self.root / Path(*components))
+            identity, version, entry = locators.source_entry(io, value, literal,
+                expected_sha256=expected_sha256, source_id=source_id)
+            local = io.read("local_sources.json") or {"versions": {}}
+            if local["versions"].get(identity, {}).get(version) == entry["sha256"]:
+                return self.resolve_source(identity, version)
+            from .io import read_file
+            import os
+
+            source = Path(literal)
+            try:
+                parent = os.open(source.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                try:
+                    data, _mode = read_file(parent, source.name)
+                finally:
+                    os.close(parent)
+            except OSError as exc:
+                raise ProjectConflict("The exact registered original is missing; no same-name reconnection is allowed.") from exc
+            if sha(data) != version:
+                raise ProjectConflict("The exact original source differs from its registered version.")
+            return source
+
+    def literal_path(self, actual: Path, *, generation: str | None = None) -> str:
+        from . import locators
+
+        with self._locked() as (io, current):
+            value = state.reachable(io, current, generation) if generation else current
+            try:
+                logical = self.logical_path(actual)
+            except ProjectStoreError:
+                logical = None
+            if logical is not None and logical in value["files"]:
+                locators.checked_member(io, value, logical, None)
+                return locators.original_for_logical(value, logical)
+            for identity, versions in value["sources"].items():
+                for version, entry in versions.items():
+                    name = Path(entry.get("locator") or entry.get("logical") or "source.bin").name
+                    if actual == self.root / STORE / "sources" / identity / version / name:
+                        from .io import read_file
+                        import os
+
+                        parent = os.open(actual.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                        try:
+                            observed = read_file(parent, actual.name)[0]
+                        finally:
+                            os.close(parent)
+                        if observed != io.get(entry):
+                            raise ProjectConflict("The resolved source view changed.")
+                        return str(entry["locator"])
+            raise ProjectStoreError("The actual path has no exact preserved locator in this generation.")
 
     def export_bundle(self, destination: Path) -> Path:
         from .portable import export_bundle

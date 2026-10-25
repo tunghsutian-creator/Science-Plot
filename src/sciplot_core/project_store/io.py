@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 import hashlib
 import json
@@ -12,17 +12,53 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 from threading import get_ident
+import time
 from typing import Any
 from uuid import uuid4
 
 from sciplot_core.foundation.json_io import write_json_object
-from sciplot_core.foundation.writer_lease import exclusive_directory_lease
-from sciplot_core.foundation.project_session_lease import external_project_session
+from sciplot_core.foundation.writer_lease import DirectoryWriterLease, WriterLeaseBusy, exclusive_directory_lease
+from sciplot_core.foundation.project_session_lease import ProjectSessionBusy, external_project_session
 
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
 
 STORE = ".sciplot_store"
 _ACTIVE: ContextVar[tuple[StoreIO, int, int] | None] = ContextVar("project_store_owned_io", default=None)
+
+
+def owned_io(root: Path) -> StoreIO | None:
+    active = _ACTIVE.get()
+    if active is None:
+        return None
+    io, process, thread = active
+    if process != os.getpid() or thread != get_ident() or io.root != root or io.fd < 0:
+        return None
+    io.verify_roots()
+    return io
+
+
+@contextmanager
+def _leases(root: Path, *, blocking: bool) -> Iterator[DirectoryWriterLease]:
+    while True:
+        stack = ExitStack()
+        try:
+            stack.enter_context(external_project_session(root))
+            lease = stack.enter_context(exclusive_directory_lease(root))
+            break
+        except (ProjectSessionBusy, WriterLeaseBusy):
+            stack.close()
+            if not blocking:
+                raise
+            # Legacy manifest edit scopes retain their documented blocking
+            # read-modify-write admission. No native work has been admitted.
+            time.sleep(0.01)
+        except BaseException:
+            stack.close()
+            raise
+    try:
+        yield lease
+    finally:
+        stack.close()
 
 
 def digest(value: Any) -> str:
@@ -109,7 +145,7 @@ class StoreIO:
         self.fd = -1
 
     @contextmanager
-    def locked(self) -> Iterator[StoreIO]:
+    def locked(self, *, blocking: bool = False) -> Iterator[StoreIO]:
         active = _ACTIVE.get()
         if active is not None:
             owned, process, thread = active
@@ -121,7 +157,7 @@ class StoreIO:
                 return
             if process != os.getpid() or thread != get_ident():
                 _ACTIVE.set(None)
-        with external_project_session(self.root), exclusive_directory_lease(self.root) as lease:
+        with _leases(self.root, blocking=blocking) as lease:
             try:
                 self.root_fds[""] = os.dup(lease.fd)
                 for key, path in self.locations.items():

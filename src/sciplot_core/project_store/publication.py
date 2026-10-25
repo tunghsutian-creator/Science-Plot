@@ -43,7 +43,8 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     value = deepcopy(current)
     value.update(parent=current["generation"], parent_sha256=digest(current), generation=uuid4().hex,
                  sequence=current["sequence"] + 1, origin="command")
-    value["locators"].update({key: str(path) for key, path in io.locations.items()})
+    for key, path in io.locations.items():
+        value["locators"].setdefault(key, str(path))
     for name, entry in writes.items():
         if entry is None:
             value["files"].pop(name, None)
