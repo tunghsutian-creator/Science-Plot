@@ -17,7 +17,8 @@ class ProjectStore(Protocol):
 
     def publish(self, command_id: str, command_digest: str, *,
                 writes: Mapping[str, bytes | Path | None], result: dict[str, Any],
-                sources: Sequence[dict[str, Any]] | None = None) -> dict[str, Any]: ...
+                sources: Sequence[dict[str, Any]] | None = None,
+                artifacts: Mapping[str, bytes | Path] | None = None) -> dict[str, Any]: ...
 
     def stage(self, command_id: str, command_digest: str, *,
               writes: Mapping[str, bytes | Path | None], result: dict[str, Any], review: dict[str, Any],

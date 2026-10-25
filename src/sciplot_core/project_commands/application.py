@@ -62,7 +62,7 @@ class ProjectCommands:
             return candidate
         return self._bound(command, self.store.publish(
             command.key, command.command_digest, writes=candidate.writes,
-            result=candidate.result, sources=candidate.sources))
+            result=candidate.result, sources=candidate.sources, artifacts=candidate.artifacts))
 
     def preview(self, command: ProjectCommand, prepare: Callable[[], ProjectMutation]) -> dict[str, Any]:
         candidate = self._prepare(command, prepare)
