@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+
+from sciplot_core.foundation.source_locations import resolve_source_path
 from typing import Any
 
 from sciplot_core.data_mapping.original_tables import read_original_table, source_table_snapshot
@@ -74,6 +76,6 @@ def read_categorical_frame(source: Path, binding: dict[str, Any], *,
         frame.attrs["sciplot_legacy_numeric_parser"] = True
     frame.attrs["sciplot_legacy_fused_digits"] = legacy_fused_digits
     frame.attrs[SOURCE_NUMERIC_ENCODING_KEY] = source_numeric_encoding
-    if file_sha256(source) != binding["source_sha256"]:
+    if file_sha256(resolve_source_path(source, expected_sha256=binding["source_sha256"])) != binding["source_sha256"]:
         raise StudioPreparationBlocked("source_changed_during_read", "The categorical source changed during its original-table read.")
     return StudioSourceFrame(source.stem, source.resolve(), binding["source_sha256"], frame)

@@ -123,3 +123,61 @@ persistent.serve()
         assert json.loads(clear.stdout) == {"scope": None} and worker.starts == 1
     finally:
         worker.close()
+
+
+def test_offline_replicate_audit_rederives_original_cells_without_resealing(tmp_path):
+    from copy import deepcopy
+    from sciplot_core.source_coverage.managed_documents import _verify_prepared_data
+    from test_replicate_disclosure_audit import _source, _spec
+
+    original = tmp_path / "original"
+    original.mkdir()
+    source = _source(original)
+    spec = _spec(source)
+    (original / "spec.json").write_text(json.dumps(spec))
+    store = FileProjectStore(original)
+    store.snapshot(import_legacy=True)
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "moved")
+    original.rename(tmp_path / "original-offline")
+    before = deepcopy(spec)
+    with project_runtime(cold):
+        snapshot = stable_file_snapshot(source, label="offline replicate original")
+        result = _verify_prepared_data(spec, [snapshot])
+    assert result["status"] == "passed" and result["replicate_disclosure_verification"]["status"] == "passed"
+    assert spec == before and json.loads(cold.read_bytes("spec.json")) == before
+
+
+@pytest.mark.parametrize("format", ["csv", "xlsx"])
+def test_offline_categorical_original_cells_namespace_and_disclosure_are_exact(tmp_path, monkeypatch, format):
+    from copy import deepcopy
+    import pandas as pd
+    from sciplot_core.categorical_plan import build_categorical_preview
+    from sciplot_core.source_coverage.managed_documents import _verify_prepared_data
+    from test_categorical_source_identity import written
+
+    original = tmp_path / "original"
+    original.mkdir()
+    source = original / ("literal." + format)
+    rows = [["Sample", "Condition", "Strength (MPa)"], ["A || exact", "wet", 1],
+            ["A || exact", "wet", 2], ["B/exact", "wet", 3], ["B/exact", "wet", 4]]
+    if format == "csv":
+        source.write_text("\n".join(",".join(map(str, row)) for row in rows) + "\n")
+    else:
+        pd.DataFrame(rows).to_excel(source, header=False, index=False, sheet_name="Original")
+    binding = {"source_sha256": file_sha256(source), "mode": "mean_sample_sd_n", "sample_column": 0,
+               "condition_column": 1, "value_columns": [{"column_index": 2}],
+               "table_selection": {"sheet": None if format == "csv" else "Original", "header_rows": [0],
+                                   "data_start_row": 1, "data_end_row": len(rows)}}
+    plan = build_categorical_preview(source, request={"categorical_binding": binding})
+    request = {"input": str(source), "template": plan["template"], **plan["source_options"]}
+    spec = written(request, original, monkeypatch, "drawing")
+    before = deepcopy(spec)
+    store = FileProjectStore(original)
+    store.snapshot(import_legacy=True)
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "moved")
+    original.rename(tmp_path / "original-offline")
+    with project_runtime(cold):
+        snapshot = stable_file_snapshot(source, label="offline categorical original")
+        result = _verify_prepared_data(spec, [snapshot])
+    assert result["status"] == "passed" and result["replicate_disclosure_verification"]["status"] == "passed"
+    assert spec == before and spec["source_request"]["categorical_binding"]["source_namespace"] == str(source)

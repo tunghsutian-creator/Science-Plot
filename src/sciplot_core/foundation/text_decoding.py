@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sciplot_core.foundation.source_locations import resolve_source_path
+
 
 # High-byte density at or above this fraction is treated as a multibyte CJK
 # encoding rather than Western single-byte text with occasional symbols.
@@ -67,7 +69,7 @@ def smart_decode(payload: bytes) -> tuple[str, str]:
 def decode_text_file(path: str | Path) -> str:
     """Read and deterministically decode one text file."""
 
-    return smart_decode(Path(path).read_bytes())[0]
+    return smart_decode(resolve_source_path(path).read_bytes())[0]
 
 
 def is_clean_utf8(payload: bytes) -> bool:

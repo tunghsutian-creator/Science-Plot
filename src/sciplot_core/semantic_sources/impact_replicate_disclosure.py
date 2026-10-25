@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+
+from sciplot_core.foundation.source_locations import resolve_source_path
 from typing import Any
 
 import pandas as pd
@@ -18,7 +20,7 @@ from sciplot_core.semantic_sources.table_scanning import _float
 
 def wide_replicate_evidence(source: Path) -> dict[str, Any]:
     """Keep source cell identities; existing scientific owner still validates units."""
-    if not source.is_file():
+    if not resolve_source_path(source).is_file():
         raise ValueError("Delivered valid n currently requires one original wide replicate file.")
     _read_impact_source(source)
     workbook = source.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}

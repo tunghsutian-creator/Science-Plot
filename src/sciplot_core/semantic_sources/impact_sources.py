@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 from sciplot_core.foundation.text_values import (
     clean_text as _clean_text,
     token as _token,
@@ -296,10 +298,11 @@ def _read_impact_compact_table(source: Path) -> ImpactReplicatePayload:
 
 
 def _read_impact_source(source: Path) -> ImpactReplicatePayload:
-    if source.is_dir():
+    actual = resolve_source_path(source)
+    if actual.is_dir():
         sources = [
-            path
-            for path in sorted(source.rglob("*"))
+            Path(literal_source_path(path))
+            for path in sorted(actual.rglob("*"))
             if path.is_file() and path.suffix.lower() in {".xlsx", ".xls", ".csv"}
         ]
     else:

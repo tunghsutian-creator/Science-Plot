@@ -22,6 +22,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from sciplot_core.foundation.source_locations import resolve_source_path
+
 from sciplot_core.foundation.text_decoding import (
     decode_text_file,
     is_clean_utf8,
@@ -44,10 +46,11 @@ def normalized_source(input_path: str | Path) -> Iterator[Path]:
     common UTF-8/ASCII path has zero overhead and unchanged behavior.
     """
     path = Path(input_path)
-    if path.suffix.lower() not in TEXT_TABLE_SUFFIXES or not path.is_file():
+    actual = resolve_source_path(path)
+    if path.suffix.lower() not in TEXT_TABLE_SUFFIXES or not actual.is_file():
         yield path
         return
-    payload = path.read_bytes()
+    payload = actual.read_bytes()
     if is_clean_utf8(payload):
         yield path
         return

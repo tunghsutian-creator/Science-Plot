@@ -12,6 +12,7 @@ from typing import Any, Callable, Iterator, ParamSpec, TypeVar
 import pandas as pd
 
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_locations import resolve_source_path
 
 
 @dataclass
@@ -55,7 +56,8 @@ def read_table_once(
     if session is None and expected_sha256 is None:
         return loader()
     # Re-read actual bytes even on hits. Mtime/size are not scientific identity.
-    digest = file_sha256(path)
+    actual = resolve_source_path(path, expected_sha256=expected_sha256)
+    digest = file_sha256(actual)
     if expected_sha256 is not None and digest != expected_sha256:
         raise ValueError("Original table changed while reading.")
     # Opt in only for parsers whose result depends on bytes/format/options,
@@ -66,7 +68,7 @@ def read_table_once(
     if cached is not None:
         return cached.copy(deep=True)
     result = loader()
-    if file_sha256(path) != digest:
+    if file_sha256(actual) != digest:
         raise ValueError("Original table changed while reading.")
     if session is None:
         return result

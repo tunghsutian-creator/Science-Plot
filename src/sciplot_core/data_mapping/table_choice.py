@@ -23,6 +23,7 @@ from sciplot_core.data_mapping.original_tables import (
     source_table_snapshot as source_table_snapshot,
 )
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.mapping_contract import DataColumnMapping, DataMappingProposal, DataSourceReference
 from sciplot_core.mapping_contract.source_identity import source_view_id
 from sciplot_core.materials_rules import get_rule
@@ -136,7 +137,7 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
     confirmations = metadata_confirmations if metadata_confirmations is not None else []
     resolve_column_metadata(columns, confirmations, source_sha256=snapshot["file_sha256"],
                             sheet=selection["sheet"], frame=frame, rule=rule, source=source)
-    if file_sha256(source) != snapshot["file_sha256"]:
+    if file_sha256(resolve_source_path(source, expected_sha256=snapshot["file_sha256"])) != snapshot["file_sha256"]:
         raise ValueError("Table-choice source changed while reading.")
     return {"kind": "sciplot_table_columns", "version": 1, "source": str(source),
             "file_sha256": snapshot["file_sha256"], "rule_id": snapshot["rule_id"],
@@ -275,7 +276,7 @@ def replicate_proposal_contents(snapshot: dict[str, Any], replicates: list[dict[
                        "condition": None} if structured_identity else {})))
         mappings.append(DataColumnMapping(source_id, column["index"], "Impact strength", "value",
                                           expected_header=f"column_{column['index']}"))
-    if file_sha256(source) != snapshot["file_sha256"]:
+    if file_sha256(resolve_source_path(source, expected_sha256=snapshot["file_sha256"])) != snapshot["file_sha256"]:
         raise ValueError("Original replicate source changed while binding its columns.")
     contents: dict[str, Any] = {"sources": tuple(references), "columns": tuple(mappings),
                                "sample_labels": labels, "unit_overrides": {"Impact strength": "kJ/m2"}}

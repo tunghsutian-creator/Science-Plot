@@ -16,9 +16,9 @@ def run_worker(command: list[str], *, cold_runner: Callable[..., subprocess.Comp
                **kwargs: Any) -> subprocess.CompletedProcess[str]:
     from sciplot_core.project_store.worker_binding import native_runtime_binding
 
-    if command[:3] != [sys.executable, "-m", "sciplot_core.veusz_worker"]:
-        raise ValueError("Only the existing native worker entry point accepts project runtime binding.")
     with native_runtime_binding(command[3:]) as binding:
+        if binding is not None and command[:3] != [sys.executable, "-m", "sciplot_core.veusz_worker"]:
+            raise ValueError("Only the existing native worker entry point accepts project runtime binding.")
         worker = active_worker()
         if worker is None:
             runner = subprocess.run if cold_runner is None else cold_runner
@@ -26,7 +26,7 @@ def run_worker(command: list[str], *, cold_runner: Callable[..., subprocess.Comp
                       if binding is not None else command)
             return runner(actual, **kwargs)
         return worker.run(command, timeout=kwargs.get("timeout", 120), check=kwargs.get("check", False),
-                          project_runtime=binding)
+                          **({"project_runtime": binding} if binding is not None else {}))
 
 
 def warm_native_method(method: Callable[_P, _T]) -> Callable[_P, _T]:

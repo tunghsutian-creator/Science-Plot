@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sciplot_core.foundation.source_locations import resolve_source_path
+
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 
@@ -13,7 +15,7 @@ def source_tree_sha256(source: Path | None) -> str | None:
 
     if source is None:
         return None
-    resolved = source.expanduser().resolve()
+    resolved = resolve_source_path(source).expanduser().resolve()
     if resolved.is_file():
         payload: dict[str, object] = {
             "kind": "file",

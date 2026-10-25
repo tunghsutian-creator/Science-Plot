@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from io import StringIO
 import csv
 from pathlib import Path
+
+from sciplot_core.foundation.source_locations import resolve_source_path
 from typing import Any, Literal, cast
 import pandas as pd
 from sciplot_core.foundation.text_files import decode_text
@@ -144,13 +146,14 @@ def _read_original_cells(
 def _read_raw_table(
     reference: DataSourceReference, path: Path, *, preserve_cells: bool = False,
 ) -> _RawTable:
-    digest = file_sha256(path)
+    read_path = resolve_source_path(path, expected_sha256=reference.sha256)
+    digest = file_sha256(read_path)
     options = ("mapping_cells", reference.sheet, reference.delimiter, reference.decimal,
                preserve_cells or reference.data_start_row is not None)
     if path.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}:
         options = ("mapping_excel", reference.sheet if reference.sheet is not None else 0)
-    raw = read_table_once(path, options,
-        lambda: _read_original_cells(reference, path, preserve_cells=preserve_cells),
+    raw = read_table_once(read_path, options,
+        lambda: _read_original_cells(reference, read_path, preserve_cells=preserve_cells),
         expected_sha256=digest, content_only=True)
     if raw.empty:
         raise ValueError(f"Data mapping source is empty: {reference.relative_path}")
@@ -184,7 +187,7 @@ def _read_raw_table(
         frame = raw.iloc[reference.data_start_row:end].reset_index(drop=True)
     if not preserve_cells:
         selected = frame
-        frame = read_table_once(path,
+        frame = read_table_once(read_path,
             ("mapping_missing", *options, header_row, reference.data_start_row, reference.data_end_row),
             lambda: selected.map(_normalize_missing), expected_sha256=digest, content_only=True)
     return _RawTable(

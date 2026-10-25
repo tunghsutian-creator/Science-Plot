@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sciplot_core.foundation.source_locations import resolve_source_path
+
 import pandas as pd
 
 from sciplot_core.ingest import normalized_source
@@ -32,7 +34,7 @@ def read_candidate_tables(
     tables: list[tuple[str, pd.DataFrame]] = []
     for path in table_source_files(source):
         if is_workbook_source(path):
-            with pd.ExcelFile(path) as workbook:
+            with pd.ExcelFile(resolve_source_path(path)) as workbook:
                 if selected_sheet is not None and selected_sheet not in workbook.sheet_names:
                     raise ValueError(f"Confirmed worksheet {selected_sheet!r} is missing from {path.name}.")
                 tables.extend(
