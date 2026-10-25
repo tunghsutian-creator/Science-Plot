@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 import hashlib
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
+
+from .resources import (NativeAdoption as NativeAdoption, ProjectionRead as ProjectionRead,
+                        MembershipRead as MembershipRead, PreparedSource as PreparedSource, _identity, _sha, resource_key)
 
 
 class CommandKind(StrEnum):
@@ -33,57 +35,14 @@ class CommandKind(StrEnum):
     ATTACHMENT_IMPORT = "attachment_import"
 
 
-def _identity(value: str) -> bool:
-    return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", value) is not None
 
 
-def _sha(value: str) -> bool:
-    return isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value) is not None
 
 
-def resource_key(value: str) -> str:
-    if (not isinstance(value, str) or not value or "\\" in value or "\x00" in value
-            or PurePosixPath(value).is_absolute() or any(part in {"", ".", ".."} for part in value.split("/"))
-            or str(PurePosixPath(value)) != value):
-        raise ValueError("A resource must be a canonical relative logical path in a host-selected root.")
-    if value.startswith("@") and ("/" not in value or not _identity(value.split("/", 1)[0][1:])):
-        raise ValueError("An external resource requires an explicit host-selected root ID.")
-    return value
 
 
-@dataclass(frozen=True)
-class ProjectionRead:
-    resource: str
-    kind: str
-    key: str
-    sha256: str
-
-    def __post_init__(self) -> None:
-        resource_key(self.resource)
-        if (self.kind not in {"studio_figure_v1", "native_suite_figure_v1"}
-                or not _identity(self.key) or not _sha(self.sha256)):
-            raise ValueError("A projected read requires a supported fixed selector and an exact digest.")
-
-    def to_payload(self) -> dict[str, str]:
-        return {"resource": self.resource, "kind": self.kind, "key": self.key, "sha256": self.sha256}
 
 
-@dataclass(frozen=True)
-class NativeAdoption:
-    resource: str
-    before_sha256: str
-    observed_sha256: str
-    audit_sha256: str
-
-    def __post_init__(self) -> None:
-        resource_key(self.resource)
-        if (PurePosixPath(self.resource).suffix.lower() != ".vsz"
-                or not all(_sha(value) for value in (self.before_sha256, self.observed_sha256, self.audit_sha256))):
-            raise ValueError("Native adoption binds an exact saved VSZ, previous bytes and domain audit receipt.")
-
-    def to_payload(self) -> dict[str, str]:
-        return {"resource": self.resource, "before_sha256": self.before_sha256,
-                "observed_sha256": self.observed_sha256, "audit_sha256": self.audit_sha256}
 
 
 @dataclass(frozen=True)
@@ -99,6 +58,7 @@ class ProjectCommand:
     projected_reads: tuple[ProjectionRead, ...] = ()
     projected_writes: tuple[ProjectionRead, ...] = ()
     native_adoptions: tuple[NativeAdoption, ...] = ()
+    read_memberships: tuple[MembershipRead, ...] = ()
 
     def __post_init__(self) -> None:
         if (not isinstance(self.kind, CommandKind) or not isinstance(self.key, str) or not 1 <= len(self.key) <= 128
@@ -137,6 +97,9 @@ class ProjectCommand:
             raise ValueError("Every native adoption must name one unique declared write.")
         if any(reads.get(item.resource) != item.before_sha256 for item in self.native_adoptions):
             raise ValueError("Native import must still bind its exact prior stored revision.")
+        if (any(not isinstance(item, MembershipRead) for item in self.read_memberships)
+                or len({item.prefix for item in self.read_memberships}) != len(self.read_memberships)):
+            raise ValueError("Membership witnesses must be typed and unique per namespace.")
         request = json.loads(self.request_json)
         if not isinstance(request, dict) or "idempotency_key" in request and request["idempotency_key"] != self.key:
             raise ValueError("The original request must agree with its command key.")
@@ -149,19 +112,21 @@ class ProjectCommand:
                expected_revision: str | int | None = None,
                projected_reads: Sequence[ProjectionRead] = (),
                projected_writes: Sequence[ProjectionRead] = (),
-               native_adoptions: Sequence[NativeAdoption] = ()) -> ProjectCommand:
+               native_adoptions: Sequence[NativeAdoption] = (),
+               read_memberships: Sequence[MembershipRead] = ()) -> ProjectCommand:
         return cls(CommandKind(kind), key, project_id, expected_generation,
                    tuple(sorted(read_set.items())), tuple(sorted(write_set)),
                    json.dumps(request, sort_keys=True, ensure_ascii=False, allow_nan=False),
                    expected_revision,
                    tuple(sorted(projected_reads, key=lambda item: (item.resource, item.kind, item.key))),
                    tuple(sorted(projected_writes, key=lambda item: (item.resource, item.kind, item.key))),
-                   tuple(sorted(native_adoptions, key=lambda item: item.resource)))
+                   tuple(sorted(native_adoptions, key=lambda item: item.resource)),
+                   tuple(sorted(read_memberships, key=lambda item: item.prefix)))
 
     @classmethod
     def from_payload(cls, value: Any) -> ProjectCommand:
         keys = {"version", "kind", "key", "project_id", "expected_generation", "expected_revision",
-                "read_set", "write_set", "projected_reads", "projected_writes", "native_adoptions", "request"}
+                "read_set", "write_set", "projected_reads", "projected_writes", "native_adoptions", "read_memberships", "request"}
         if (not isinstance(value, dict) or set(value) != keys or type(value.get("version")) is not int
                 or value["version"] != 1 or not isinstance(value["read_set"], dict)
                 or not isinstance(value["write_set"], list) or not isinstance(value["request"], dict)):
@@ -184,11 +149,17 @@ class ProjectCommand:
             raise ValueError("Saved native adoptions require exact closed fields.")
         adoptions = [NativeAdoption(item["resource"], item["before_sha256"], item["observed_sha256"],
                                     item["audit_sha256"]) for item in adoption_items]
+        membership_items = value["read_memberships"]
+        if not isinstance(membership_items, list) or any(not isinstance(item, dict) or set(item) != {
+                "prefix", "members_sha256"} for item in membership_items):
+            raise ValueError("Saved membership witnesses require exact closed fields.")
+        memberships = [MembershipRead(item["prefix"], item["members_sha256"]) for item in membership_items]
         return cls.create(value["kind"], value["key"], project_id=value["project_id"],
                           expected_generation=value["expected_generation"], read_set=value["read_set"],
                           write_set=value["write_set"], request=value["request"],
                           expected_revision=value["expected_revision"], projected_reads=selectors("projected_reads"),
-                          projected_writes=selectors("projected_writes"), native_adoptions=adoptions)
+                          projected_writes=selectors("projected_writes"), native_adoptions=adoptions,
+                          read_memberships=memberships)
 
     def to_payload(self) -> dict[str, Any]:
         self.__post_init__()
@@ -198,6 +169,7 @@ class ProjectCommand:
                 "projected_reads": [item.to_payload() for item in self.projected_reads],
                 "projected_writes": [item.to_payload() for item in self.projected_writes],
                 "native_adoptions": [item.to_payload() for item in self.native_adoptions],
+                "read_memberships": [item.to_payload() for item in self.read_memberships],
                 "request": json.loads(self.request_json)}
 
     @property
@@ -212,6 +184,7 @@ class ProjectMutation:
     sources: Sequence[dict[str, Any]] | None = None
     review: dict[str, Any] | None = None
     artifacts: Mapping[str, bytes | Path] = field(default_factory=dict)
+    prepared_sources: tuple[PreparedSource, ...] = ()
 
     @property
     def prepared_digest(self) -> str:
@@ -231,7 +204,8 @@ class ProjectMutation:
             return result
 
         return canonical_json_sha256({"writes": entries(self.writes), "artifacts": entries(self.artifacts),
-                                      "result": self.result, "review": self.review}, allow_nan=False)
+                                      "result": self.result, "review": self.review,
+                                      "sources": [source.descriptor() for source in self.prepared_sources]}, allow_nan=False)
 
     def validate_for(self, command: ProjectCommand) -> None:
         if set(self.writes) != set(command.write_set):
@@ -251,3 +225,7 @@ class ProjectMutation:
             canonical_json_sha256(self.review, allow_nan=False)
         if self.sources is not None:
             canonical_json_sha256(list(self.sources), allow_nan=False)
+        for source in self.prepared_sources:
+            if not isinstance(source, PreparedSource):
+                raise ValueError("Prepared sources must be explicit captured values.")
+            source.__post_init__()

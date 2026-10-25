@@ -22,7 +22,8 @@ class ProjectStore(Protocol):
 
     def stage(self, command_id: str, command_digest: str, *,
               writes: Mapping[str, bytes | Path | None], result: dict[str, Any], review: dict[str, Any],
-              artifacts: Mapping[str, bytes | Path] | None = None) -> dict[str, Any]: ...
+              artifacts: Mapping[str, bytes | Path] | None = None,
+              sources: Sequence[dict[str, Any]] | None = None) -> dict[str, Any]: ...
 
     def decide(self, command_id: str, command_digest: str, *, decision_id: str, accept: bool) -> dict[str, Any]: ...
 

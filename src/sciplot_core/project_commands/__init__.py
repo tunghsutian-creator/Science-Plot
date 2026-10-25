@@ -3,6 +3,7 @@
 from .application import ProjectCommands
 from .contracts import CommandKind, NativeAdoption, ProjectCommand, ProjectMutation, ProjectionRead
 from .errors import ProjectCommandError, ProjectCommandUnknown
+from .resources import MembershipRead, PreparedSource
 
 __all__ = ["CommandKind", "NativeAdoption", "ProjectCommand", "ProjectCommands", "ProjectMutation",
-           "ProjectionRead", "ProjectCommandError", "ProjectCommandUnknown"]
+           "ProjectionRead", "MembershipRead", "PreparedSource", "ProjectCommandError", "ProjectCommandUnknown"]

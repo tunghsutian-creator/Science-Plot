@@ -13,6 +13,11 @@ class ProjectCommands:
     def __init__(self, store: ProjectStore) -> None:
         self.store = store
 
+    @staticmethod
+    def _sources(candidate: ProjectMutation) -> list[dict[str, Any]] | None:
+        values = [*(candidate.sources or ()), *(source.to_storage_payload() for source in candidate.prepared_sources)]
+        return values or None
+
     def _bound(self, command: ProjectCommand, record: dict[str, Any]) -> dict[str, Any]:
         if record.get("command_digest") != command.command_digest:
             raise ProjectCommandError("project_command_key_conflict", "This key belongs to a different immutable command.")
@@ -63,7 +68,7 @@ class ProjectCommands:
             return candidate
         return self._bound(command, self.store.publish(
             command.key, command.command_digest, writes=candidate.writes,
-            result=candidate.result, sources=candidate.sources, artifacts=candidate.artifacts))
+            result=candidate.result, sources=self._sources(candidate), artifacts=candidate.artifacts))
 
     def publish_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
         """Resume a sealed physical write without admitting any native callback."""
@@ -72,14 +77,19 @@ class ProjectCommands:
         if (command.kind not in {CommandKind.SEMANTIC_RECORD, CommandKind.ATTACHMENT_IMPORT}
                 or json.loads(command.request_json).get("prepared_digest") != expected):
             raise ProjectCommandError("project_prepared_publication_invalid", "The prepared bytes require their exact storage command binding.")
-        self.store.recover()
         record = self._admit(command)
+        self.store.recover()
+        current = self.store.query(command.key)
+        if current is not None:
+            record = self._bound(command, current)
         if record.get("phase") == "complete":
             return {**record, "replayed": True}
         if record.get("phase") == "reserved":
             record = self._bound(command, self.store.stage(
                 command.key, command.command_digest, writes=candidate.writes, result=candidate.result,
-                review={"publication": "prepared_storage", "prepared_digest": expected}, artifacts=candidate.artifacts))
+                review={"publication": "prepared_storage", "prepared_digest": expected,
+                        "candidate_review": candidate.review}, artifacts=candidate.artifacts,
+                sources=self._sources(candidate)))
         if record.get("phase") in {"needs_review", "accepted"}:
             review = record.get("review", {})
             if review.get("publication") != "prepared_storage" or review.get("prepared_digest") != expected:
@@ -91,15 +101,10 @@ class ProjectCommands:
         candidate = self._prepare(command, prepare)
         if isinstance(candidate, dict):
             return candidate
-        if candidate.sources is not None:
-            # Source updates must retain this fact inside the frozen staged payload;
-            # this is not an implicit source-registration side effect of a preview.
-            review = {**(candidate.review or {}), "source_versions": list(candidate.sources)}
-        else:
-            review = candidate.review or {}
         return self._bound(command, self.store.stage(
             command.key, command.command_digest, writes=candidate.writes,
-            result=candidate.result, review=review, artifacts=candidate.artifacts))
+            result=candidate.result, review=candidate.review or {}, artifacts=candidate.artifacts,
+            sources=self._sources(candidate)))
 
     def decide(self, command: ProjectCommand, *, decision_id: str, accept: bool) -> dict[str, Any]:
         if type(accept) is not bool:
@@ -117,13 +122,22 @@ class ProjectCommands:
         return decided
 
     def resume(self, command: ProjectCommand) -> dict[str, Any]:
-        self.store.recover()
         prior = self.store.query(command.key)
         if prior is None:
             raise ProjectCommandError("project_command_unknown", "No saved operation belongs to this command.")
         record = self._bound(command, prior)
+        self.store.recover()
+        repaired = self.store.query(command.key)
+        if repaired is not None:
+            record = self._bound(command, repaired)
         if record.get("phase") == "accepted":
             return self._bound(command, self.store.publish_staged(command.key, command.command_digest))
+        review = record.get("review", {})
+        if (record.get("phase") == "needs_review"
+                and command.kind in {CommandKind.SEMANTIC_RECORD, CommandKind.ATTACHMENT_IMPORT}
+                and review.get("publication") == "prepared_storage"
+                and review.get("prepared_digest") == json.loads(command.request_json).get("prepared_digest")):
+            return self.decide(command, decision_id=record["decision_id"], accept=True)
         if record.get("phase") in {"complete", "rejected", "needs_review", "reserved"}:
             return record
         raise ProjectCommandUnknown()

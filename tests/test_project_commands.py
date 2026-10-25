@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from sciplot_core.project_commands import (
-    CommandKind, NativeAdoption, ProjectCommand, ProjectCommands, ProjectMutation,
+    CommandKind, MembershipRead, NativeAdoption, PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation,
     ProjectCommandError, ProjectCommandUnknown, ProjectionRead,
 )
 
@@ -49,10 +49,10 @@ class MemoryPort:
                            artifacts=deepcopy(artifacts))
         return deepcopy(self.record)
 
-    def stage(self, _key, _digest, *, writes, result, review, artifacts):
+    def stage(self, _key, _digest, *, writes, result, review, artifacts, sources=None):
         self.calls.append("stage")
         self.record.update(phase="needs_review", decision_id="exact-candidate", writes=deepcopy(writes),
-                           result=deepcopy(result), review=deepcopy(review), artifacts=deepcopy(artifacts))
+                           result=deepcopy(result), review=deepcopy(review), artifacts=deepcopy(artifacts), sources=sources)
         return deepcopy(self.record)
 
     def decide(self, _key, _digest, *, decision_id, accept):
@@ -143,7 +143,33 @@ def test_prepared_storage_publication_never_enters_native_execution():
     result = ProjectCommands(port).publish_prepared(prepared_command(mutation), mutation)
     assert result["phase"] == "complete"
     assert "begin" not in port.calls
-    assert port.calls == ["recover", "reserve", "stage", "decide", "publish_staged"]
+    assert port.calls == ["reserve", "recover", "stage", "decide", "publish_staged"]
+
+
+def test_prepared_source_bytes_and_original_alias_are_bound_without_path_io():
+    import hashlib
+    source = PreparedSource("a" * 32, "/original/raw.csv", hashlib.sha256(b"raw").hexdigest(), b"raw", ("A",))
+    port = MemoryPort()
+    mutation = ProjectMutation({"head.json": b"fixed-json"}, {}, review={"origin": "unchanged"},
+                               prepared_sources=(source,))
+    saved = ProjectCommands(port).publish_prepared(prepared_command(mutation), mutation)
+    assert saved["sources"][0]["data"] == b"raw"
+    assert saved["sources"][0]["aliases"] == ["A"]
+    assert saved["sources"][0]["source_id"] == "a" * 32
+    assert saved["review"]["candidate_review"] == {"origin": "unchanged"}
+    with pytest.raises(ValueError, match="exact captured bytes"):
+        PreparedSource("a" * 32, "/original/raw.csv", "b" * 64, b"different", ("A",))
+
+
+def test_membership_witness_binds_additions_without_confusing_member_content_hashes():
+    files = {"studio/A.vsz": {"sha256": "a" * 64}, "@delivery/A.pdf": {"sha256": "b" * 64}}
+    original = MembershipRead.capture(files, "studio")
+    assert MembershipRead.capture({**files, "studio/B.vsz": {}}, "studio") != original
+    assert MembershipRead.capture({**files, "studio/A.vsz": {"sha256": "c" * 64}}, "studio") == original
+    assert MembershipRead.capture({**files, "@delivery/B.pdf": {}}, "") == MembershipRead.capture(files, "")
+    assert MembershipRead.capture(files, "@delivery") != MembershipRead.capture({"@delivery/B.pdf": {}}, "@delivery")
+    admitted = command(read_memberships=[original])
+    assert ProjectCommand.from_payload(admitted.to_payload()).read_memberships == (original,)
 
 
 def test_prepared_storage_resumes_exact_staged_bytes_after_lost_stage_reply():
@@ -158,7 +184,7 @@ def test_prepared_storage_resumes_exact_staged_bytes_after_lost_stage_reply():
     request = prepared_command(mutation)
     with pytest.raises(RuntimeError, match="lost stage reply"):
         ProjectCommands(port).publish_prepared(request, mutation)
-    assert ProjectCommands(port).publish_prepared(request, mutation)["phase"] == "complete"
+    assert ProjectCommands(port).resume(request)["phase"] == "complete"
     assert port.calls.count("stage") == 1
     assert "begin" not in port.calls
     with pytest.raises(ProjectCommandError, match="exact storage command"):
@@ -222,6 +248,7 @@ def test_unknown_query_controls_do_not_reserve_a_new_command(operation):
             app.decide(command(), decision_id="none", accept=True)
     assert port.record is None
     assert "reserve" not in port.calls
+    assert "recover" not in port.calls
 
 
 def test_same_key_cannot_change_kind_native_revision_scope_or_request():
