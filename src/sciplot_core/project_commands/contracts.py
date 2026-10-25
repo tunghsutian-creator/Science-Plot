@@ -121,7 +121,35 @@ class ProjectCommand:
         return cls(CommandKind(kind), key, project_id, expected_generation,
                    tuple(sorted(read_set.items())), tuple(sorted(write_set)),
                    json.dumps(request, sort_keys=True, ensure_ascii=False, allow_nan=False),
-                   expected_revision, tuple(projected_reads), tuple(projected_writes))
+                   expected_revision,
+                   tuple(sorted(projected_reads, key=lambda item: (item.resource, item.kind, item.key))),
+                   tuple(sorted(projected_writes, key=lambda item: (item.resource, item.kind, item.key))))
+
+    @classmethod
+    def from_payload(cls, value: Any) -> ProjectCommand:
+        keys = {"version", "kind", "key", "project_id", "expected_generation", "expected_revision",
+                "read_set", "write_set", "projected_reads", "projected_writes", "request"}
+        if (not isinstance(value, dict) or set(value) != keys or type(value.get("version")) is not int
+                or value["version"] != 1 or not isinstance(value["read_set"], dict)
+                or not isinstance(value["write_set"], list) or not isinstance(value["request"], dict)):
+            raise ValueError("A saved command must satisfy its exact versioned contract.")
+
+        def selectors(name: str) -> list[ProjectionRead]:
+            items = value[name]
+            if not isinstance(items, list):
+                raise ValueError("Saved projected guards must be an explicit list.")
+            result = []
+            for item in items:
+                if not isinstance(item, dict) or set(item) != {"resource", "kind", "key", "sha256"}:
+                    raise ValueError("A saved projected guard has an unknown or missing field.")
+                result.append(ProjectionRead(item["resource"], item["kind"], item["key"], item["sha256"]))
+            return result
+
+        return cls.create(value["kind"], value["key"], project_id=value["project_id"],
+                          expected_generation=value["expected_generation"], read_set=value["read_set"],
+                          write_set=value["write_set"], request=value["request"],
+                          expected_revision=value["expected_revision"], projected_reads=selectors("projected_reads"),
+                          projected_writes=selectors("projected_writes"))
 
     def to_payload(self) -> dict[str, Any]:
         self.__post_init__()

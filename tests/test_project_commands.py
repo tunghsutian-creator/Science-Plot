@@ -26,6 +26,9 @@ class MemoryPort:
     def query(self, _key):
         return deepcopy(self.record)
 
+    def commands(self):
+        return (deepcopy(self.record),) if self.record is not None else ()
+
     def reserve(self, key, digest, **options):
         self.calls.append("reserve")
         self.record = {"command_id": key, "command_digest": digest, "project_id": "project-a",
@@ -139,6 +142,8 @@ def test_preview_decision_reuses_frozen_candidate_without_native_callback():
     reviewed = app.preview(command(), prepare)
     assert reviewed["phase"] == "needs_review"
     assert "publish" not in port.calls
+    assert app.query_decision("exact-candidate")["metadata"] == command().to_payload()
+    assert app.query_decision("missing") is None
     with pytest.raises(ValueError, match="wrong candidate"):
         app.decide(command(), decision_id="different", accept=True)
     result = app.decide(command(), decision_id="exact-candidate", accept=True)
@@ -147,6 +152,17 @@ def test_preview_decision_reuses_frozen_candidate_without_native_callback():
     assert calls == ["preview"]
     with pytest.raises(ValueError, match="conflicting decision"):
         app.decide(command(), decision_id="exact-candidate", accept=False)
+
+
+def test_readonly_decision_lookup_refuses_nonunique_owner_records():
+    class AmbiguousPort(MemoryPort):
+        def commands(self):
+            return ({"decision_id": "same"}, {"decision_id": "same"})
+    port = AmbiguousPort()
+    with pytest.raises(ProjectCommandError, match="uniquely bound"):
+        ProjectCommands(port).query_decision("same")
+    assert port.record is None
+    assert port.calls == []
 
 
 @pytest.mark.parametrize("operation", ["resume", "decide"], ids=["unknown-resume", "unknown-decision"])
@@ -214,6 +230,31 @@ def test_command_owns_a_canonical_copy_and_preserves_legacy_key_strings():
     original["nested"]["width"] = 100
     assert admitted.command_digest == digest
     assert admitted.to_payload()["request"]["nested"]["width"] == 2
+
+
+def test_saved_command_roundtrip_keeps_original_base_after_unrelated_head_change():
+    original = command()
+    resumed = ProjectCommand.from_payload(original.to_payload())
+    assert resumed == original
+    assert resumed.expected_generation == "generation-a"
+    assert resumed.command_digest == original.command_digest
+
+
+@pytest.mark.parametrize("change", ["version", "extra", "missing", "selector"],
+                         ids=["boolean-version", "unknown-field", "missing-request", "unknown-selector-field"])
+def test_saved_command_corruption_is_not_accepted_as_current_metadata(change):
+    saved = command().to_payload()
+    if change == "version":
+        saved["version"] = True
+    elif change == "extra":
+        saved["permissions"] = ["all"]
+    elif change == "missing":
+        del saved["request"]
+    else:
+        saved["projected_reads"] = [{"resource": "a", "kind": "studio_figure_v1", "key": "A",
+                                     "sha256": "a" * 64, "allow_any": True}]
+    with pytest.raises(ValueError):
+        ProjectCommand.from_payload(saved)
 
 
 def test_projected_write_must_bind_its_exact_selected_read_and_declared_resource():

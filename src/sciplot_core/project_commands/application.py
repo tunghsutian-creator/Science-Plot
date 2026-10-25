@@ -107,3 +107,14 @@ class ProjectCommands:
 
     def query(self, key: str) -> dict[str, Any] | None:
         return self.store.query(key)
+
+    def commands(self) -> tuple[dict[str, Any], ...]:
+        return self.store.commands()
+
+    def query_decision(self, decision_id: str) -> dict[str, Any] | None:
+        if not isinstance(decision_id, str) or not decision_id:
+            raise ValueError("Use the exact saved preview decision identity.")
+        matching = [record for record in self.store.commands() if record.get("decision_id") == decision_id]
+        if len(matching) > 1:
+            raise ProjectCommandError("project_command_decision_ambiguous", "The decision is not uniquely bound to one command.")
+        return matching[0] if matching else None
