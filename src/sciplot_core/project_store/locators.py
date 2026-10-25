@@ -58,8 +58,8 @@ def checked_member(io: StoreIO, value: dict[str, Any], logical: str, expected: s
     if entry is None or expected is not None and expected != entry["sha256"]:
         raise ProjectConflict("The original locator does not bind this generation's exact bytes.")
     io.get(entry)
-    physical = io.physical(logical)
-    if physical is None or sha(physical[0]) != entry["sha256"]:
+    physical = io.physical(logical, owned=logical not in value.get("input_resources", []))
+    if physical is None or sha(physical[0]) != entry["sha256"] or physical[1] != entry["mode"]:
         raise ProjectConflict("The current resource view differs from the registered generation.")
     return dict(entry)
 

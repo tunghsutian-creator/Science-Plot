@@ -36,6 +36,14 @@ def reserve(io: StoreIO, current: dict[str, Any], command_id: str, command_diges
         if physical is None:
             raise ProjectConflict("The audited native import resource disappeared.")
         record["adoption_modes"][name] = physical[1]
+    from .source_observations import observations
+
+    record["source_adoption_modes"] = {}
+    for name in observations(record):
+        physical = io.physical(name, owned=False)
+        if physical is None:
+            raise ProjectConflict("The exact observed original input disappeared.")
+        record["source_adoption_modes"][name] = physical[1]
     for name in [*record["read_set"], *record["write_set"]]:
         parts(name)
         io.split(name)
@@ -125,6 +133,9 @@ def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | P
         raise ProjectStoreError("The candidate must exactly cover the declared write set.")
     frozen = {"writes": state.import_writes(io, writes), "artifacts": state.import_writes(io, artifacts or {}),
               "sources": capture_sources(io, sources or review.get("source_versions")), "result": result, "review": review}
+    for name in preconditions.native_adoptions(record):
+        if isinstance(writes[name], bytes):
+            frozen["writes"][name]["mode"] = record["adoption_modes"][name]
     seal(io, record, frozen)
     record.update(phase="needs_review", result=result, review=review)
     state.save_command(io, record)

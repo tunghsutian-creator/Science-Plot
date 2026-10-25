@@ -224,12 +224,12 @@ class StoreIO:
             raise ProjectStoreError("The logical member is outside its exact trusted file capability.")
         return self.root_fds[key], components
 
-    def physical(self, logical: str) -> tuple[bytes, int] | None:
+    def physical(self, logical: str, *, owned: bool = True) -> tuple[bytes, int] | None:
         fd, components = self.split(logical)
         try:
             with directory(fd, components[:-1]) as parent:
-                value = read_file(parent, components[-1], owned=True)
-                if os.stat(components[-1], dir_fd=parent, follow_symlinks=False).st_nlink != 1:
+                value = read_file(parent, components[-1], owned=owned)
+                if owned and os.stat(components[-1], dir_fd=parent, follow_symlinks=False).st_nlink != 1:
                     raise ProjectConflict("A declared project resource is hard-linked outside its owned projection.")
                 return value
         except FileNotFoundError:

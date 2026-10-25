@@ -12,6 +12,7 @@ import sciplot_core.project_store.state as state
 import sciplot_core.project_store.preconditions as preconditions
 from .errors import ProjectCommandConflict, ProjectConflict
 from .io import StoreIO, digest
+from .source_observations import adopt
 
 
 def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
@@ -55,6 +56,7 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
         else:
             prior = current["files"].get(name)
             value["files"][name] = {**entry, "file_id": prior["file_id"] if prior else uuid4().hex}
+    adopt(io, current, value, record, frozen)
     for source_id, versions in frozen.get("sources", {}).items():
         destination = value["sources"].setdefault(source_id, {})
         for version, entry in versions.items():

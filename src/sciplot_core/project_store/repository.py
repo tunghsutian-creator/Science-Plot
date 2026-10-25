@@ -76,7 +76,7 @@ class FileProjectStore:
             metadata_drift: dict[str, str] = {}
             for name, entry in current["files"].items():
                 try:
-                    physical = io.physical(name)
+                    physical = io.physical(name, owned=name not in current.get("input_resources", []))
                 except ProjectConflict as exc:
                     drift[name] = None
                     metadata_drift[name] = str(exc)
@@ -116,7 +116,7 @@ class FileProjectStore:
                 review=review, artifacts=artifacts, sources=sources), create_views=True)
 
     def decide(self, command_id: str, command_digest: str, *, decision_id: str, accept: bool) -> dict[str, Any]:
-        with self._locked(repair=True) as (io, _current):
+        with self._locked(allow_pending=True) as (io, _current):
             record = state.command(io, command_id, command_digest)
             if record is None:
                 raise ProjectStoreError("The frozen candidate does not exist.")
@@ -277,6 +277,19 @@ class FileProjectStore:
                 owned = directories.owned_view(io, value, Path(literal), expected_sha256=expected_sha256)
             if owned is not None:
                 return owned[0]
+            if (generation is not None and generation != current["generation"]
+                    and source_id is not None and expected_sha256 is not None):
+                logical_source = locators.logical_for_literal(value, literal)
+                if logical_source is None:
+                    try:
+                        selected = self.logical_path(Path(literal))
+                        logical_source = selected if selected in value["files"] else None
+                    except ProjectStoreError:
+                        pass
+                origin = locators.original_for_logical(value, logical_source) if logical_source else literal
+                identity, version, _entry = locators.source_entry(io, value, origin,
+                    expected_sha256=expected_sha256, source_id=source_id)
+                return self.resolve_source(identity, version)
             logical = locators.logical_for_literal(value, literal)
             if logical is None:
                 try:
