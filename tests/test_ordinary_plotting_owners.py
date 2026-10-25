@@ -136,6 +136,12 @@ VERIFICATION_CAPTURE_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/verification/process_private_launch.py",
     }
 )
+NATIVE_BATCH_ISOLATION_STRICT_ADDITIONS = frozenset(
+    {
+        "src/sciplot_gui/studio_assistant/native_batch.py",
+        "src/sciplot_gui/studio_assistant/native_batch_window.py",
+    }
+)
 FINAL_STRICT_ADDITIONS = (
     ROUND2_STRICT_ADDITIONS
     | CATEGORICAL_EDIT_STRICT_ADDITIONS
@@ -146,6 +152,7 @@ FINAL_STRICT_ADDITIONS = (
     | SOURCE_IDENTITY_STRICT_ADDITIONS
     | NATIVE_PRESENTATION_STRICT_ADDITIONS
     | VERIFICATION_CAPTURE_STRICT_ADDITIONS
+    | NATIVE_BATCH_ISOLATION_STRICT_ADDITIONS
 )
 
 
@@ -360,6 +367,7 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
         SOURCE_IDENTITY_STRICT_ADDITIONS,
         NATIVE_PRESENTATION_STRICT_ADDITIONS,
         VERIFICATION_CAPTURE_STRICT_ADDITIONS,
+        NATIVE_BATCH_ISOLATION_STRICT_ADDITIONS,
     )
     assert all(
         scope.isdisjoint(other)
