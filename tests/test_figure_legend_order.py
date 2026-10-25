@@ -58,7 +58,7 @@ def order_patch(document, order, *, key='order-legend', target='guide:legend'):
 
 def test_full_summary_and_selective_wire_contract_expose_complete_order_and_current_value(tmp_path, monkeypatch):
     from test_managed_description_scopes import _service
-    from sciplot_core.plot_engine import service as service_module
+    from sciplot_core.project_lifecycle import application as service_module
     from sciplot_core.plot_protocol import rpc
 
     document = legend_document(tmp_path)

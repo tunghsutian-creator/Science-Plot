@@ -9,7 +9,7 @@ import pytest
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
-from sciplot_core.plot_engine import execution
+from sciplot_core.project_lifecycle import execution
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_engine.storage import active, load_head, persist
 from managed_plot_helpers import patch, request_for_source

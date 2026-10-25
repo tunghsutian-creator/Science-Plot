@@ -55,7 +55,7 @@ def resolved_ir(root: Path, document: dict[str, Any]) -> dict[str, Any]:
 
     expanded = resolve_document_content(root, document)
     datasets = expanded["scientific"]["provenance"]["datasets"]
-    from sciplot_core.plot_backends.figure_plan import capability_profile
+    from sciplot_core.project_lifecycle.context import capability_profile
 
     return compile_document(document, datasets, capabilities=capability_profile())
 

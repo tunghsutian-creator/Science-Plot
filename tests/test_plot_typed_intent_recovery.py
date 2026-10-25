@@ -13,7 +13,7 @@ from test_plot_engine import SimulatedCrash
 from test_plot_typed_intent import _document, _request
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.plot_engine import execution
+from sciplot_core.project_lifecycle import execution
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_engine.storage import commit, load_head, read, transaction_path
@@ -41,6 +41,10 @@ def _engine(tmp_path: Path) -> tuple[PlotService, Path, FigureCandidateBackend, 
     binding = {"document": str(original_native), "fingerprint": {"files": {
         str(source): file_sha256(source), str(original_native): file_sha256(original_native)}}}
     root = tmp_path / "plot"
+    from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
+
+    document = resolved_metadata(document, rule_id="uvvis_spectrum", executors={})
+    document, _ = resolve_science(root, document)
     commit(root, document, binding, "import")
     return PlotService(backend), root, backend, source, original_native
 

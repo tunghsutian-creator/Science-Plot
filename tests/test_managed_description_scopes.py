@@ -8,7 +8,7 @@ import pytest
 from managed_plot_helpers import request_for_source
 from test_figure_document import request_for_figure
 
-from sciplot_core.plot_engine import service as service_module
+from sciplot_core.project_lifecycle import application as service_module
 from sciplot_core.plot_engine.description_scope import selector_issues
 from sciplot_core.plot_engine.figure_updates import patch_capabilities
 from sciplot_core.plot_engine.service import PlotService

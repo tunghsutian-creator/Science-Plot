@@ -4,7 +4,7 @@ import json
 import pytest
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.plot_engine import service as service_module
+from sciplot_core.project_lifecycle import application as service_module
 from test_managed_description_scopes import _service
 
 

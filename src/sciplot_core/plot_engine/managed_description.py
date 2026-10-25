@@ -14,7 +14,7 @@ from .managed_source_revision import source_descriptor, source_value
 def describe_managed(root: Path, head: dict[str, Any], result: dict[str, Any], backend: PlotBackend, *,
                      description: dict[str, Any] | None = None) -> dict[str, Any]:
     document, binding = head["document"], head["binding"]
-    from sciplot_core.plot_backends.figure_plan import capability_profile
+    from sciplot_core.project_lifecycle.context import capability_profile
     from sciplot_core.plot_ir.figure_document import (
         figure_spec,
         is_figure,
@@ -114,7 +114,7 @@ def _scoped_description(result: dict[str, Any], document: dict[str, Any], bindin
                         description: dict[str, Any], *, root: Path) -> dict[str, Any]:
     """Project only advertised edit state; keep every safety and currentness guard."""
     kept = ("kind", "version", "status", "plot_type", "plot", "plot_id", "revision",
-            "scientific_hash", "presentation_hash", "coverage", "authority", "changed_inputs",
+            "scientific_hash", "presentation_hash", "revision_token", "coverage", "authority", "changed_inputs",
             "pending", "ir_hash", "artifact", "artifact_status", "plot_ir_version",
             "next_step", "recovery", "external_mutation", "external_mutation_unavailable", "export_current")
     compact = {key: result[key] for key in kept if key in result}

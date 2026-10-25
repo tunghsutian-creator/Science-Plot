@@ -10,7 +10,7 @@ from test_plot_ir import managed_example
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256, file_sha256
 from sciplot_core.plot_document import invalidated_nodes
-from sciplot_core.plot_engine import service as service_module
+from sciplot_core.project_lifecycle import application as service_module
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_ir import create_managed_document
 

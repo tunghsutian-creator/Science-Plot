@@ -27,7 +27,7 @@ def width_patch(head, key="correct-width"):
 
 @pytest.mark.comprehensive
 def test_real_qa_failure_width_patch_reviews_then_exports_without_science_reexecution(tmp_path, monkeypatch):
-    from sciplot_core.plot_engine import managed_creation
+    from sciplot_core.project_lifecycle import managed_creation
 
     count = []
     resolve = managed_creation.resolve_science
@@ -121,7 +121,7 @@ def test_other_pending_states_and_nonpresentation_repairs_stay_blocked(tmp_path,
 @pytest.mark.comprehensive
 @pytest.mark.parametrize("window", ["candidate_saved", "old_link_saved"])
 def test_interrupted_repair_reservation_resumes_exact_successor_without_old_execution(tmp_path, monkeypatch, window):
-    from sciplot_core.plot_engine import publication_repair
+    from sciplot_core.project_lifecycle import publication_repair
     from test_plot_engine import SimulatedCrash
 
     service = PlotService()

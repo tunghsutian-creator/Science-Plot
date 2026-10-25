@@ -8,9 +8,9 @@ import pytest
 
 from sciplot_core.plot_document import seal_document
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.plot_engine import execution
+from sciplot_core.project_lifecycle import execution
 from sciplot_core.plot_engine.errors import EngineError
-from sciplot_core.plot_engine.managed_rollback import presentation_diff, rollback_managed
+from sciplot_core.project_lifecycle.managed_rollback import presentation_diff, rollback_managed
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_engine.storage import active, commit, digest, load_head, read, transaction_path
 from sciplot_core.plot_ir import apply_theme
@@ -103,7 +103,7 @@ def test_rejects_scientific_history_and_unsupported_target_before_reserving(tmp_
     root, original, backend, request = _history(tmp_path)
     current = deepcopy(load_head(root)["document"])
     current["revision"] = 3
-    current["scientific"]["guards"]["different"] = True
+    current["scientific"]["provenance"]["history_sentinel"] = True
     commit(root, seal_document(current), load_head(root)["binding"], "new_science")
     with pytest.raises(EngineError) as error:
         rollback_managed(root, {**request, "base_revision": 3}, backend)
@@ -153,7 +153,7 @@ def test_diff_retains_full_metadata_and_numeric_representation_changes():
 
 
 def test_target_compile_failure_leaves_no_reserved_rollback(tmp_path, monkeypatch):
-    from sciplot_core.plot_engine import managed_rollback
+    from sciplot_core.project_lifecycle import managed_rollback
 
     root, _original, backend, request = _history(tmp_path)
     before = load_head(root)

@@ -350,7 +350,7 @@ def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None 
                     "reason_code": "common_edit_currentness_required", "doctor": doctor,
                     "next_step": description.get("next_step", {"action": "plot.describe", "plot": description.get("plot")})}
         if description.get("pending"):
-            from sciplot_core.plot_engine.receipts import receipt
+            from sciplot_core.project_lifecycle.receipts import receipt
 
             pending = active(Path(description["plot"]))
             continuation = receipt(Path(description["plot"]), pending) if pending is not None else {}

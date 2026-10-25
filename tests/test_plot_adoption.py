@@ -74,11 +74,10 @@ def test_open_created_persists_identity_and_reuses_exact_adoption(monkeypatch, t
         def fingerprint(self, current):
             return deepcopy(current["fingerprint"])
 
-    from sciplot_core.plot_engine import service
 
-    monkeypatch.setattr(service, "resolve_project_figure", lambda *_: {"project": str(tmp_path / "project"), "figure_id": "primary"})
     backend = Backend()
     engine = PlotService(backend)
+    monkeypatch.setattr(engine.targets, "resolve_figure", lambda *_: {"project": str(tmp_path / "project"), "figure_id": "primary"})
     first = engine.open_created(tmp_path / "project", series_ids=ids, recipe=recipe)
     root = Path(first["plot"])
     head = (root / "head.json").read_bytes()

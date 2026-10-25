@@ -1,11 +1,13 @@
 """Current admission precedes mutations and leaves durable replay semantics intact."""
 
 from copy import deepcopy
+from contextlib import nullcontext
 
 import pytest
 from test_current_unit_admission import expert_wire, managed
 
-from sciplot_core.plot_engine import managed_creation, service
+from sciplot_core.project_lifecycle import managed_creation
+from sciplot_core.project_lifecycle import application as service
 from sciplot_core.plot_engine.content_store import intern_document, resolve_provenance_value
 from sciplot_core.plot_engine.contracts import validate_create
 from sciplot_core.plot_engine.service import PlotService
@@ -83,6 +85,7 @@ def test_saved_transaction_replay_does_not_reenter_new_admission(tmp_path, monke
 
 
 def test_saved_creation_state_replay_bypasses_new_admission(tmp_path, monkeypatch):
+    monkeypatch.setattr(managed_creation, "external_project_session", lambda _: nullcontext())
     request = validate_create(expert_wire(tmp_path, header="Charge_C"))
     document = managed(request)
     root = tmp_path / ".sciplot_documents" / "managed" / digest(request["idempotency_key"])
@@ -96,7 +99,10 @@ def test_saved_creation_state_replay_bypasses_new_admission(tmp_path, monkeypatc
     monkeypatch.setattr(managed_creation, "export_head", lambda *args: {})
     monkeypatch.setattr(managed_creation, "authority_status", lambda *args: {})
     monkeypatch.setattr(managed_creation, "plot_object_handle", lambda *args, **kwargs: {})
-    assert managed_creation.create_managed(request, object())["ir_hash"] == "frozen"
+    from sciplot_core.project_lifecycle.target_adapter import FilesystemProjectTargets
+    from sciplot_core.project_lifecycle.context import repository
+    location = FilesystemProjectTargets(repository()).managed_creation(request)
+    assert managed_creation.create_managed(request, object(), location=location)["ir_hash"] == "frozen"
 
 
 def test_presentation_alias_does_not_reinterpret_historical_unit_graph(tmp_path, monkeypatch):

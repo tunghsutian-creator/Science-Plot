@@ -10,7 +10,9 @@ from test_managed_source_reconfirmation import basic, fresh_value, patch
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_document import seal_document
-from sciplot_core.plot_engine import current_unit_admission, managed_state, publication_repair, service
+from sciplot_core.plot_engine import current_unit_admission, managed_state
+from sciplot_core.project_lifecycle import publication_repair
+from sciplot_core.project_lifecycle import application as service
 from sciplot_core.plot_engine.content_store import intern_document
 from sciplot_core.plot_engine.current_unit_admission import admit_current_units, prepare_current_update
 from sciplot_core.plot_engine.managed_sources import load_sources

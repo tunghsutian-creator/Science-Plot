@@ -10,6 +10,18 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_document import DocumentError
 from sciplot_core.plot_engine import creation, template_creation
 from sciplot_core.plot_engine.template_creation_binding import prepare
+from sciplot_core.project_lifecycle.target_adapter import FilesystemProjectTargets
+from sciplot_core.project_lifecycle.context import repository
+
+
+@pytest.fixture(autouse=True)
+def lifecycle_repository_scope():
+    from sciplot_core.project_lifecycle.context import repository_scope
+    from sciplot_core.project_lifecycle.repository import FileProjectRepository
+    from sciplot_core.studio_core.project_session import external_project_session
+
+    with repository_scope(FileProjectRepository(lease=external_project_session)):
+        yield
 
 
 def template_request(source: Path, *, key: str = "template-create") -> dict[str, Any]:
@@ -144,8 +156,8 @@ def test_committed_template_retry_reuses_frozen_patch_without_restarting_source_
 
     monkeypatch.setattr(template_creation, "start_task", start)
     monkeypatch.setattr(template_creation, "inspect_task", lambda *_: pytest.fail("Source task restarted"))
-    first = creation.create(Service(), request)
-    second = creation.create(Service(), request)
+    first = creation.create(Service(), request, targets=FilesystemProjectTargets(repository()))
+    second = creation.create(Service(), request, targets=FilesystemProjectTargets(repository()))
     assert first["status"] == "blocked" and second["status"] == "complete"
     assert len(starts) == 1 and len(patches) == 2 and patches[0] == patches[1]
     assert patches[0]["base_revision"] == 0 and second["template_id"] == "paired-spectra"
@@ -169,7 +181,7 @@ def test_existing_output_requires_bound_choice_without_overwriting_or_guessing(s
 
     monkeypatch.setattr(task_execution, "create_project", create)
     service = object()  # No native service method may be reached before output selection/preparation.
-    first = creation.create(service, request)
+    first = creation.create(service, request, targets=FilesystemProjectTargets(repository()))
     assert first["status"] == "needs_input" and first["question"]["field"] == "out" and not calls
     response = {"response": {"out": str(source.parent / "New"), "expected_question_id": first["question"]["question_id"]}}
     if change_source:

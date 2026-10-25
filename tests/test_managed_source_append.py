@@ -170,7 +170,7 @@ def test_sequential_appends_keep_all_prior_sources_datasets_and_context(tmp_path
 
 def test_append_edit_contract_is_closed_and_specific_to_eligible_managed_views(tmp_path, monkeypatch):
     from test_managed_description_scopes import _service
-    from sciplot_core.plot_engine import service as service_module
+    from sciplot_core.project_lifecycle import application as service_module
 
     service, root, document = _service(tmp_path, monkeypatch)
     document = resolved_metadata(document, rule_id='uvvis_spectrum', executors={})
@@ -215,7 +215,7 @@ def test_append_keeps_original_revision_guard(tmp_path):
 
 
 def test_source_facts_clarification_allocates_no_transaction_and_same_key_can_continue(tmp_path, monkeypatch):
-    from sciplot_core.plot_engine import service as service_module
+    from sciplot_core.project_lifecycle import application as service_module
     from sciplot_core.plot_engine.service import PlotService
     from sciplot_core.plot_engine.storage import transaction_path
 

@@ -8,7 +8,7 @@ import pytest
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_document import DocumentError, seal_document
-from sciplot_core.plot_engine import execution
+from sciplot_core.project_lifecycle import execution
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_engine.storage import commit, digest, load_head, read, transaction_path, write
@@ -399,13 +399,13 @@ def test_bad_native_preview_preserves_exact_correction_fields_in_short_reply(eng
 
 
 def test_initial_import_snapshot_recovers_without_reimport_after_missing_head(engine, monkeypatch):
-    from sciplot_core.plot_engine import service as service_module
+    from sciplot_core.project_lifecycle import target_adapter
 
     service, root, backend = engine
     original = load_head(root)["document"]
     (root / "head.json").unlink()
-    monkeypatch.setattr(service_module, "resolve_project_figure", lambda *_: {"project": str(backend.directory), "figure_id": "primary"})
-    monkeypatch.setattr(service_module, "document_root", lambda *_: root)
+    monkeypatch.setattr(service.targets, "resolve_figure", lambda *_: {"project": str(backend.directory), "figure_id": "primary"})
+    monkeypatch.setattr(target_adapter, "document_root", lambda *_: root)
     monkeypatch.setattr(backend, "import_project", lambda *_: pytest.fail("The durable import snapshot must be reused"))
     recovered = service.open(backend.directory)
     assert recovered["status"] == "current" and recovered["plot_id"] == original["plot_id"]

@@ -130,7 +130,7 @@ def test_fixed_tick_conflict_refuses_without_mutating_saved_science_or_rules(tmp
 def test_scoped_current_view_reads_expose_rules_and_their_actual_numeric_projection(tmp_path, monkeypatch):
     from jsonschema import Draft202012Validator
     from test_managed_description_scopes import _service
-    from sciplot_core.plot_engine import service as service_module
+    from sciplot_core.project_lifecycle import application as service_module
 
     owner, root, _ = _service(tmp_path, monkeypatch)
     a, b = _sources(tmp_path)

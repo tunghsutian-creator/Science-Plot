@@ -79,7 +79,7 @@ def _root(directory, request):
 
 
 def _spy_work(monkeypatch):
-    from sciplot_core.plot_engine import managed_creation
+    from sciplot_core.project_lifecycle import managed_creation
 
     counts = {"science": 0, "compile": 0}
     resolve, compile_ir = managed_creation.resolve_science, ManagedVeuszCompiler.compile_ir

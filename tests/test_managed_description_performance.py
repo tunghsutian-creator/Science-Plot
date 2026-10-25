@@ -8,7 +8,7 @@ import pytest
 from test_managed_description_scopes import _service, _wire_size
 
 from sciplot_core.plot_engine import figure_updates, managed_description
-from sciplot_core.plot_engine import service as service_module
+from sciplot_core.project_lifecycle import application as service_module
 from sciplot_core.plot_engine.managed_source_revision import source_descriptor, source_value
 from sciplot_core.plot_ir.figure_document import figure_spec
 from sciplot_core.verification import build_changed_verification_plan

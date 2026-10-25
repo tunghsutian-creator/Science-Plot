@@ -11,7 +11,8 @@ import pytest
 from test_figure_document import request_for_figure
 
 from sciplot_core.plot_document import seal_document
-from sciplot_core.plot_engine import service as service_module
+from sciplot_core.project_lifecycle import application as service_module
+from sciplot_core.project_lifecycle import admission as admission_module
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.managed_updates import prepare_update
 from sciplot_core.plot_engine.service import PlotService
@@ -147,6 +148,7 @@ def test_plan_is_read_only_and_apply_delegates_to_patch(tmp_path: Path, monkeypa
     head = {"document": document, "binding": {}}
     monkeypatch.setattr(service_module, "canonical_path", lambda path: path)
     monkeypatch.setattr(service_module, "load_head", lambda _: head)
+    monkeypatch.setattr(admission_module, "load_head", lambda _: head)
     monkeypatch.setattr(service_module, "active", lambda _: None)
     monkeypatch.setattr(service_module, "require_current", lambda *_: None)
     service = PlotService(backend=object())
@@ -236,9 +238,11 @@ def test_apply_retry_resolves_original_snapshot_not_renamed_label(tmp_path: Path
     monkeypatch.setattr(service_module, "canonical_path", lambda path: path)
     monkeypatch.setattr(service_module, "external_project_session", lambda _: nullcontext())
     monkeypatch.setattr(service_module, "transaction_path", lambda *_: saved)
+    monkeypatch.setattr(admission_module, "transaction_path", lambda *_: saved)
     transaction = {"before": original, "request": patch, "request_hash": service_module.digest(patch),
                    "phase": "complete"}
     monkeypatch.setattr(service_module, "read", lambda _: transaction)
+    monkeypatch.setattr(admission_module, "read", lambda _: transaction)
     monkeypatch.setattr(service_module, "load_head", lambda _: {"document": newer})
     service = PlotService(backend=object())
     replayed = []

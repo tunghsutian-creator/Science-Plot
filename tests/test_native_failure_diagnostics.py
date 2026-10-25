@@ -6,9 +6,9 @@ import subprocess
 
 import pytest
 
-from sciplot_core.plot_engine.execution import _attempt, _failure
-from sciplot_core.plot_engine.receipts import receipt
-from sciplot_core.plot_engine.recovery import project_recovery
+from sciplot_core.project_lifecycle.execution import _attempt, _failure
+from sciplot_core.project_lifecycle.receipts import receipt
+from sciplot_core.project_lifecycle.recovery import project_recovery
 
 
 def transaction():
@@ -146,7 +146,7 @@ def test_worker_cli_emits_structured_domain_failure_with_traceback(monkeypatch, 
 @pytest.mark.comprehensive
 def test_real_managed_native_failure_retries_original_transaction_without_scientific_reexecution(tmp_path, monkeypatch):
     from managed_plot_helpers import request_for_source
-    from sciplot_core.plot_engine import managed_creation
+    from sciplot_core.project_lifecycle import managed_creation
     from sciplot_core.plot_engine.service import PlotService
     from sciplot_core.plot_engine.storage import load_head
 
