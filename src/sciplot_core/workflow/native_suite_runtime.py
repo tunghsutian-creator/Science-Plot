@@ -97,6 +97,38 @@ def _pending_request_store(workspace: Path, target: Path, *, role: str) -> FileP
     return FileProjectStore(workspace, locations={"delivery": delivery})
 
 
+def _store_suite_evidence(workspace: Path) -> str | None:
+    """A generic project store is not evidence of pending NativeSuite creation."""
+    from sciplot_core.project_commands import ProjectCommand
+
+    probe = FileProjectStore(workspace)
+    with probe._locked(allow_pending=True) as (_io, current):
+        saved = "suite.json" in current["files"] or "@delivery/data/delivery_manifest.json" in current["files"]
+        project_id = current["project_id"]
+    admitted = False
+    for record in probe.commands():
+        metadata = record.get("metadata")
+        if (record.get("kind") != "sciplot_project_command" or record.get("version") != 1
+                or record.get("project_id") != project_id or not isinstance(metadata, dict)):
+            raise ValueError("A damaged project command cannot establish or discard NativeSuite authority.")
+        request = metadata.get("request", {})
+        if not isinstance(request, dict):
+            raise ValueError("A project command has a damaged frozen request.")
+        adapter = request.get("adapter")
+        if adapter is not None and not isinstance(adapter, str):
+            raise ValueError("A project command has a damaged adapter identity.")
+        fixed = adapter in {"prepared_native_suite", "analysis_native_suite"}
+        if fixed or record.get("native_workspace") is not None:
+            # commands() already verifies the fixed native_workspace marker
+            # and inode. Bind its owner metadata too; never infer from a path.
+            command = ProjectCommand.from_payload(metadata)
+            if (metadata["kind"] != "native_create" or command.project_id != project_id
+                    or command.key != record["command_id"] or command.command_digest != record["command_digest"]):
+                raise ValueError("NativeSuite creation evidence differs from its admitted command.")
+            admitted = True
+    return "saved" if saved else "pending" if admitted else None
+
+
 def read_bound_store(target: Path, *, role: str = "native") -> FileProjectStore | None:
     """Resolve exact target membership without repairing or entering source IO."""
     from sciplot_core.studio_core.source_update_commit import reject_symlink_path
@@ -106,6 +138,11 @@ def read_bound_store(target: Path, *, role: str = "native") -> FileProjectStore 
     roots = [path for path in (target, *target.parents) if (path / '.sciplot_store/head.json').is_file()]
     workspace = roots[0] if roots else None
     if workspace is not None and not (workspace / "suite.json").is_file():
+        evidence = _store_suite_evidence(workspace)
+        if evidence is None:
+            return None
+        if evidence == "saved":
+            raise ValueError("A registered NativeSuite manifest is missing; preserve its saved authority for explicit recovery.")
         if role not in {"prepared_request", "analysis_request"}:
             raise ValueError("Pending native creation has no selected saved figure authority.")
         return _pending_request_store(workspace, target, role=role)
