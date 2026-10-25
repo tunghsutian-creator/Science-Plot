@@ -13,6 +13,7 @@ from sciplot_core.foundation.source_locations import selected_source_resolver, s
 from .errors import ProjectConflict, ProjectStoreError
 from .io import digest
 from .incoming_sources import expectation_payload, source_expectation_scope, without_source_expectations
+from .candidate_resources import validate_resources_binding
 from .repository import FileProjectStore
 from .resources import ResourceRoot
 from .runtime import ProjectSourceResolver
@@ -77,7 +78,11 @@ def _read_binding(reference: dict[str, str], argv: list[str]) -> dict[str, Any]:
     if project.get("kind") == "sciplot_project_candidate_runtime":
         fields.add("candidate")
         candidate = project.get("candidate")
-        if (not isinstance(candidate, dict) or set(candidate) != {"root", "device", "inode"}
+        candidate_fields = {"root", "device", "inode"}
+        if isinstance(candidate, dict) and "resources" in candidate:
+            candidate_fields.add("resources")
+            validate_resources_binding(candidate["resources"])
+        if (not isinstance(candidate, dict) or set(candidate) != candidate_fields
                 or not isinstance(candidate["root"], str) or not Path(candidate["root"]).is_absolute()
                 or any(type(candidate[key]) is not int or candidate[key] < 0 for key in ("device", "inode"))):
             raise ProjectStoreError("Invalid closed private candidate locator.")
@@ -119,8 +124,11 @@ def _worker_project_runtime(reference: dict[str, str] | None, argv: list[str]) -
         from .candidate_runtime import ProjectCandidateResolver
 
         candidate = value["candidate"]
+        resources = candidate.get("resources")
         resolver = ProjectCandidateResolver(store, Path(candidate["root"]), value["generation"],
-            bound_identity={key: candidate[key] for key in ("device", "inode")})
+            bound_identity={key: candidate[key] for key in ("device", "inode")},
+            resources_root=Path(resources["root"]) if resources is not None else None,
+            bound_resources=resources)
     else:
         resolver = ProjectSourceResolver(store, value["generation"])
     if (resolver.snapshot["project_id"] != value["project_id"]

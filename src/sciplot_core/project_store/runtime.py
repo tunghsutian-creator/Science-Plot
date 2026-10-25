@@ -52,13 +52,22 @@ def selected_project_store() -> FileProjectStore | None:
 
 @contextmanager
 def project_candidate_runtime(store: FileProjectStore, candidate_root: Path, *,
-                              generation: str | None = None) -> Iterator[ProjectSourceResolver]:
+                              generation: str | None = None,
+                              resources_root: Path | None = None) -> Iterator[ProjectSourceResolver]:
     """Bind a complete private clone without creating a second persistent owner."""
     from .candidate_runtime import ProjectCandidateResolver
 
-    resolver = ProjectCandidateResolver(store, candidate_root, generation)
+    resolver = ProjectCandidateResolver(store, candidate_root, generation, resources_root=resources_root)
     with source_location_scope(resolver):
         yield resolver
+
+
+def logical_runtime_resource(original: str | Path, *, private_only: bool = False) -> str | None:
+    """Return the selected candidate's admitted logical key, including resources."""
+    from .candidate_runtime import ProjectCandidateResolver
+
+    selected = selected_source_resolver()
+    return selected.logical_resource(original, private_only=private_only) if isinstance(selected, ProjectCandidateResolver) else None
 
 
 def resolve_runtime_output_path(original: str | Path) -> Path:
