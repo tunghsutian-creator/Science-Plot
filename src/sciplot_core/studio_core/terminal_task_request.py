@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.figure_plan.task import FigureTask
+from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.terminal_request import (
     TERMINAL_RENDER_REQUEST_FIELDS,
     normalize_terminal_render_request,
@@ -39,10 +40,12 @@ def is_terminal_worker_request(
 ) -> bool:
     """Return whether render/panel_render already selected one terminal plot."""
 
+    resolver = selected_source_resolver()
+    logical_request = Path(resolver.literal_path(request_path)) if resolver is not None else request_path
     if (
         "output" not in request
         or "exports" not in request
-        or "_veusz" not in request_path.parts
+        or "_veusz" not in logical_request.parts
     ):
         return False
     terminal_request = {

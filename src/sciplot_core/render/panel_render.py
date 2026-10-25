@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.ingest import normalized_source
 from sciplot_core.split import (
     build_split_plan,
@@ -76,7 +77,7 @@ def _render_veusz_panel(
     if _terminal_source_binding is not None and "series_order" not in terminal_request:
         terminal_request["series_order"] = list(_terminal_source_binding.sample_order)
     request = {
-        "input": str(source.resolve()),
+        "input": literal_source_path(source.resolve()),
         "output": str(output_dir),
         "exports": list(export_formats),
         **terminal_request,

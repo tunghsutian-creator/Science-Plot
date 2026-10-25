@@ -58,6 +58,9 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
     from sciplot_core.workflow.run_projection import _project_manifest_after_run
     from sciplot_core.workflow.request_io import _resolve_request_path
     from sciplot_core.workflow.project_results import project_workflow_result
+    from sciplot_core.workflow.errors import WorkflowIntervention
+    from sciplot_core.workflow.project_failures import publish_intervention
+    from sciplot_core.workflow.project_output import private_run_output, output_replacements
     from sciplot_core.delivery.package_transaction import _package_snapshot, _preserve_finder_metadata, _protect_editable_documents
 
     project = request_path.parent
@@ -65,6 +68,8 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
     baseline = _binding(store)
     output = _resolve_request_path(request.get("output"), base_dir=project, field="output").absolute()
     output_name = store.logical_path(output / "manifest.json").rpartition("/")[0]
+    if not output_name:
+        raise ValueError("A project run requires its own output directory below or outside the project root.")
     delivery = requested_delivery_root({"request": request}, run_output=output).absolute()
     delivery_name = store.logical_path(delivery / "delivery_manifest.json").rpartition("/")[0]
     delivery_before = _package_snapshot(delivery)
@@ -80,14 +85,18 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         raise ValueError("The selected project changed before private preparation.")
     with studio_preparation_candidate(store, snapshot=snapshot) as candidate:
         private_request = candidate.project_dir / request_path.name
-        private_request.write_text(json.dumps(deepcopy(request), ensure_ascii=False, indent=2), encoding="utf-8")
+        candidate.write_request(deepcopy(request))
         private_output = candidate.resource_path((output_name + "/" if output_name else "") + "manifest.json").parent
-        private_output.mkdir(parents=True, exist_ok=True)
         private_delivery = candidate.resource_path((delivery_name + "/" if delivery_name else "") + "delivery_manifest.json").parent
-        manifest = execute(request_path=private_request, source_request=deepcopy(request),
-            base_dir=candidate.project_dir, output_dir=private_output, classifier=classifier,
-            new_creation=new_creation, previous_request=previous_request,
-            staged_delivery=(private_delivery, delivery), update_project=False)
+        try:
+            with private_run_output(candidate, output_name):
+                manifest = execute(request_path=private_request, source_request=deepcopy(request),
+                    base_dir=candidate.project_dir, output_dir=private_output, classifier=classifier,
+                    new_creation=new_creation, previous_request=previous_request,
+                    staged_delivery=(private_delivery, delivery), update_project=False)
+        except WorkflowIntervention as exc:
+            publish_intervention(candidate, baseline=baseline, output=output_name, intent=intent, error=str(exc))
+            raise
         delivery_complete = manifest.get("delivery_package", {}).get("complete") is True
         if delivery_complete:
             _protect_editable_documents(delivery, private_delivery)
@@ -108,7 +117,7 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         manifest = project_workflow_result(manifest, candidate.logical_path)
         (private_output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         candidate.finalize()
-        writes: dict[str, bytes | PreparedFile | None] = dict(candidate.capture())
+        writes: dict[str, bytes | PreparedFile | None] = output_replacements(candidate, output_name, dict(candidate.capture()))
         if delivery_complete:
             writes = {**{name: None for name in baseline["files"] if name.startswith(delivery_name + "/")}, **writes}
         updated = read_intake_project_manifest(candidate.project_dir)

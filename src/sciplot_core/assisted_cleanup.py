@@ -7,6 +7,7 @@ from typing import Any
 
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.foundation.path_names import (
     safe_filename,
     unique_path,
@@ -41,7 +42,7 @@ def _path_payload(path: str | Path) -> dict[str, Any]:
     else:
         kind = "missing"
     return {
-        "path": str(resolved),
+        "path": literal_source_path(resolved),
         "exists": exists,
         "kind": kind,
     }
@@ -81,7 +82,7 @@ def build_cleanup_request(
         "reason": category,
         "provider": provider,
         "raw_input": _path_payload(input_path),
-        "output_dir": str(Path(output_dir).expanduser().resolve()),
+        "output_dir": literal_source_path(Path(output_dir).expanduser().resolve()),
         "semantic": json_safe(semantic or {}),
         "request": json_safe(request or {}),
         "required_result": {
@@ -103,7 +104,7 @@ def build_cleanup_request(
         payload["intervention_request"] = (
             json_safe(intervention_request)
             if isinstance(intervention_request, dict)
-            else str(Path(intervention_request).expanduser().resolve())
+            else literal_source_path(Path(intervention_request).expanduser().resolve())
         )
     return payload
 
@@ -130,7 +131,7 @@ def write_cleanup_request(
         provider=provider,
     )
     request_path = output_path / CLEANUP_REQUEST_FILENAME
-    payload["cleanup_request"] = str(request_path)
+    payload["cleanup_request"] = str(Path(literal_source_path(output_path)) / CLEANUP_REQUEST_FILENAME)
     request_path.write_text(
         json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8"
     )
@@ -231,11 +232,8 @@ def load_cleanup_result(path_or_dir: str | Path) -> dict[str, Any]:
 def _preserve_cleaned_data(
     cleaned_data: Path, *, output_dir: Path, payload: dict[str, Any]
 ) -> Path:
-    previous = (
-        payload.get("consumption")
-        if isinstance(payload.get("consumption"), dict)
-        else {}
-    )
+    previous_value = payload.get("consumption")
+    previous = previous_value if isinstance(previous_value, dict) else {}
     previous_input = previous.get("effective_input")
     if isinstance(previous_input, str) and previous_input.strip():
         previous_path = Path(previous_input).expanduser()
@@ -297,11 +295,8 @@ def consume_ready_cleanup_result(
     if payload.get("ready_for_normal_mode") is not True:
         return dict(request), None
 
-    cleaned = (
-        payload.get("cleaned_data")
-        if isinstance(payload.get("cleaned_data"), dict)
-        else {}
-    )
+    cleaned_payload = payload.get("cleaned_data")
+    cleaned = cleaned_payload if isinstance(cleaned_payload, dict) else {}
     cleaned_value = cleaned.get("path")
     if not isinstance(cleaned_value, str) or not cleaned_value.strip():
         raise ValueError("A ready cleanup result must define cleaned_data.path.")
@@ -310,11 +305,8 @@ def consume_ready_cleanup_result(
     preserved_input = _preserve_cleaned_data(
         cleaned_path, output_dir=output_path, payload=payload
     )
-    mapping = (
-        payload.get("mapping_proposal")
-        if isinstance(payload.get("mapping_proposal"), dict)
-        else {}
-    )
+    mapping_payload = payload.get("mapping_proposal")
+    mapping = mapping_payload if isinstance(mapping_payload, dict) else {}
     request_patch = _cleanup_request_patch(mapping)
     effective_request = dict(request)
     for key, value in request_patch.items():

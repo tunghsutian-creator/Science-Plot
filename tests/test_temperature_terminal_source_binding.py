@@ -404,9 +404,18 @@ def test_worker_binding_is_verified_once_at_worker_entry(
         "export_studio_document",
         lambda *_args, **_kwargs: {"exports": []},
     )
+    audits = []
+    def stub_native_audit(candidate, payload):
+        # This test owns the source-binding boundary; its generated VSZ above
+        # is deliberately a port double, so it must not reach the real auditor.
+        audits.append(Path(payload["document"]))
+        assert audits[-1].read_text() == "stub Veusz document\n"
+        return [], []
+    monkeypatch.setattr("sciplot_core.studio_core.preparation_commands.audit_studio_candidate", stub_native_audit)
     monkeypatch.setenv(TERMINAL_SOURCE_BINDING_ENV, sealed.to_environment_value())
 
     worker_operations.export_request(request_path, formats=["pdf"])
+    assert len(audits) == 1
 
     expected_paths = {
         request_path.resolve(),

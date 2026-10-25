@@ -209,7 +209,7 @@ def _archive_raw_input(input_path: Path, output_dir: Path) -> dict[str, Any]:
     return {
         "kind": kind,
         "source": literal,
-        "path": str(destination),
+        "path": literal_source_path(destination),
     }
 
 

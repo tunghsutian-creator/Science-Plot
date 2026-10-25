@@ -10,6 +10,8 @@ def test_project_artifacts_without_rewriting_scientific_identity_or_user_text():
     payload = {"output": "/private-candidate/runs/one", "figures": ["/private-candidate/plot.pdf"],
         "result": {"veusz_documents": ["/private-candidate/doc.vsz"], "scientific_audit": scientific},
         "request": scientific, "transform_ledger": scientific, "source_request": scientific,
+        "qa": {"pdfs": [{"path": "/private-candidate/plot.pdf", "sha256": "actual-observed-bytes"}]},
+        "publication_qa": {"document": "/private-candidate/doc.vsz", "status": "passed"},
         "label": "/private-candidate/explicit-user-label", "raw_archive": {"source": "/original/raw.csv", "path": "/private-candidate/raw/copy.csv"},
         "delivery_package": {"path": "/private-candidate/delivery", "figures": [{"source": "/private-candidate/plot.pdf", "path": "/private-candidate/delivery/plot.pdf"}]}}
     original = deepcopy(payload)
@@ -22,6 +24,8 @@ def test_project_artifacts_without_rewriting_scientific_identity_or_user_text():
     assert result["result"]["veusz_documents"] == ["/original-project/doc.vsz"]
     assert all(result[field] == scientific for field in ("request", "transform_ledger", "source_request"))
     assert result["result"]["scientific_audit"] == scientific
+    assert result["qa"] == payload["qa"]
+    assert result["publication_qa"] == payload["publication_qa"]
     assert result["label"] == payload["label"]
     assert result["raw_archive"]["source"] == "/original/raw.csv"
     assert result["raw_archive"]["path"] == "/original-project/raw/copy.csv"

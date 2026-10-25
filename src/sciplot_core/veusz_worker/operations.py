@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from importlib import import_module
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -26,6 +27,13 @@ def export_request(request_path: Path, *, formats: list[str]) -> dict[str, Any]:
         resolved_request
     )
     terminal_source_prepared = consume_terminal_source_prepared_environment()
+    from sciplot_core.studio_core.preparation_artifacts import export_private_request
+
+    private = export_private_request(resolved_request, formats=formats,
+        terminal_source_binding=terminal_source_binding,
+        terminal_source_prepared=terminal_source_prepared)
+    if private is not None:
+        return private
     payload = prepare_studio_document(
         resolved_request,
         _terminal_source_binding=terminal_source_binding,
@@ -67,9 +75,9 @@ def audit_documents(document_paths: list[Path]) -> dict[str, Any]:
     from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
 
     ensure_veusz_runtime_path()
-    from veusz import dataimport, document, widgets
-
-    _ = dataimport, document, widgets
+    import_module("veusz.dataimport")
+    import_module("veusz.document")
+    import_module("veusz.widgets")
     ensure_veusz_loader_compat()
     existing_app = QtWidgets.QApplication.instance()
     app = existing_app or QtWidgets.QApplication([])

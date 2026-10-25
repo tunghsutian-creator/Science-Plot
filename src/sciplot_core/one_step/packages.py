@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.readiness import (
     HIGH_CONFIDENCE_THRESHOLD,
     MEDIUM_CONFIDENCE_THRESHOLD,
@@ -29,10 +30,11 @@ def build_source_package(
 ) -> dict[str, Any]:
     semantic = semantic if isinstance(semantic, dict) else {}
     counts = _source_counts(input_path)
+    resolver = selected_source_resolver()
     return {
         "kind": "sciplot_source_package",
         "version": 1,
-        "source": str(input_path),
+        "source": resolver.literal_path(input_path) if resolver else str(input_path),
         "source_kind": "directory" if input_path.is_dir() else "file",
         "file_count": counts["file_count"],
         "folder_count": counts["folder_count"],
@@ -60,11 +62,8 @@ def build_mapping_package(
     has_confirmations = bool(request.get("column_confirmations"))
     sample_order = request.get("series_order")
     if not isinstance(sample_order, list):
-        sample_order = (
-            study_model.get("sample_order")
-            if isinstance(study_model.get("sample_order"), list)
-            else []
-        )
+        model_order = study_model.get("sample_order")
+        sample_order = model_order if isinstance(model_order, list) else []
     status = "confirmed" if has_confirmations or explicit_rule_confirmation else "auto"
     if (
         bool(semantic.get("needs_ai_intervention"))
@@ -99,10 +98,11 @@ def build_render_request_package(
     figure_size = (
         render_options.get("size") if isinstance(render_options, dict) else None
     ) or "60x55"
+    resolver = selected_source_resolver()
     return {
         "kind": "sciplot_render_request",
         "version": 1,
-        "path": str(request_path),
+        "path": resolver.literal_path(request_path) if resolver else str(request_path),
         "rule_id": request.get("rule_id"),
         "recipe": request.get("recipe"),
         "template": request.get("template"),
@@ -126,11 +126,8 @@ def build_figure_qa_report(
 ) -> dict[str, Any]:
     qa = qa if isinstance(qa, dict) else {}
     layout_quality = layout_quality if isinstance(layout_quality, dict) else {}
-    issue_ids = (
-        layout_quality.get("issue_ids")
-        if isinstance(layout_quality.get("issue_ids"), list)
-        else []
-    )
+    issue_values = layout_quality.get("issue_ids")
+    issue_ids = issue_values if isinstance(issue_values, list) else []
     layout_needs_ai = bool(layout_quality.get("needs_ai_intervention"))
     qa_status = str(qa.get("status") or "unknown")
     delivery_complete = (
@@ -138,7 +135,8 @@ def build_figure_qa_report(
         if isinstance(delivery_package, dict)
         else False
     )
-    pdfs = qa.get("pdfs") if isinstance(qa.get("pdfs"), list) else []
+    pdf_values = qa.get("pdfs")
+    pdfs = pdf_values if isinstance(pdf_values, list) else []
     normalized_issue_ids = [str(item) for item in issue_ids]
     raw_autofixes = layout_quality.get("autofixes_applied")
     autofixes_applied = (

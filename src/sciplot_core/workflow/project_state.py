@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.foundation.path_names import (
     slug,
 )
@@ -56,6 +57,11 @@ def _one_step_project_dir(
 
 
 def _write_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) -> str:
+    resolver = selected_source_resolver()
+    displayed_output = resolver.literal_path(output_dir) if resolver is not None else str(output_dir)
+    request_path = manifest.get("request_path")
+    if resolver is not None and isinstance(request_path, str):
+        request_path = resolver.literal_path(Path(request_path))
     figures = [
         Path(path) for path in manifest.get("figures", []) if isinstance(path, str)
     ]
@@ -104,8 +110,8 @@ def _write_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) -> str:
         "",
         "## Run",
         "",
-        f"- Output: `{output_dir}`",
-        f"- Request: `{manifest.get('request_path')}`",
+        f"- Output: `{displayed_output}`",
+        f"- Request: `{request_path}`",
         f"- Route: `{manifest.get('route')}`",
         f"- Rule: `{semantic.get('rule_id') or ''}`",
         f"- Template: `{manifest.get('result', {}).get('template') or ''}`",

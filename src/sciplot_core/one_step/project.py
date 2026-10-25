@@ -7,6 +7,7 @@ from typing import Any
 
 from sciplot_core.figure_plan import ResolvedFigurePlan
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.foundation.path_names import slug
 from sciplot_core.policy import (
     LayoutPolicy,
@@ -84,11 +85,13 @@ def build_one_step_project(
         validated_envelope=validated_envelope,
         resolved_figure_plan=resolved_figure_plan,
     )
+    resolver = selected_source_resolver()
+    logical_request = Path(resolver.literal_path(request_path)) if resolver else request_path
     payload = {
         "kind": ONE_STEP_MODEL_KIND,
         "version": ONE_STEP_MODEL_VERSION,
         "created_at": _now(),
-        "project": slug(Path(request_path).parent.name or Path(input_path).stem),
+        "project": slug(logical_request.parent.name or Path(input_path).stem),
         "state": state,
         "state_reasons": reasons,
         "source_package": source_package,

@@ -8,7 +8,8 @@ from typing import Any
 # requests, source declarations and native audit evidence retain their bytes.
 _SEALED = frozenset({"request", "source_request", "study_model", "transform_ledger", "transform_steps",
     "publication_intent", "semantic", "source_artifacts", "source_binding", "data_mapping_application",
-    "cleanup_application", "scientific_data_verification", "document_audit", "scientific_audit"})
+    "cleanup_application", "scientific_data_verification", "document_audit", "scientific_audit",
+    "qa", "publication_qa"})
 _PATHS = frozenset({"path", "output", "output_dir", "request_path", "document", "spec", "project_dir",
     "launcher", "veusz_launcher", "export_edited_launcher", "registry_path", "figure_set_registry",
     "generated_from", "primary_document", "preview_path", "pdf_path", "tiff_path"})

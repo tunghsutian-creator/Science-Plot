@@ -240,6 +240,17 @@ def require_preparation_candidate(project: Path) -> StudioPreparationCandidate:
     return selected
 
 
+@contextmanager
+def private_preparation_scope(candidate: StudioPreparationCandidate) -> Iterator[None]:
+    """Bind an already host-validated disposable image, without another store."""
+    with candidate.root_descriptor():
+        token = _ACTIVE.set(candidate)
+        try:
+            yield
+        finally:
+            _ACTIVE.reset(token)
+
+
 def install_prepared_figure_set(*, project_dir: Path, replacements: list[dict[str, Any]],
                                manual_archive_requests: list[dict[str, Any]], registry: dict[str, Any] | None,
                                path_replacer: Any = None) -> None:

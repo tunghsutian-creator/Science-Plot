@@ -19,6 +19,7 @@ from sciplot_core.figure_plan import (
 )
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.materials_rules.catalog import resolve_rule_template
 from sciplot_core.one_step import build_one_step_project
 from sciplot_core.policy import layout_policy_for_semantic
@@ -34,6 +35,7 @@ from sciplot_core.semantic_sources.scientific_source import (
 from sciplot_core.study_model import study_model_from_request
 
 from sciplot_core.workflow.project_state import _write_one_step_status
+from sciplot_core.workflow.errors import WorkflowIntervention
 from sciplot_core.workflow.request_io import (
     _archive_raw_input,
     _load_request,
@@ -395,4 +397,4 @@ def _enforce_intervention_gate(
         if pending_rule_blocked
         else "SciPlot could not auto-detect this input."
     )
-    raise ValueError(f"{failure} Intervention request written to {intervention_path}.")
+    raise WorkflowIntervention(f"{failure} Intervention request written to {literal_source_path(intervention_path)}.")

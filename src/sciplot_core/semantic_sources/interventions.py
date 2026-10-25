@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload
 
 
@@ -16,10 +17,11 @@ def build_intervention_request(
     error: str | None = None,
 ) -> dict[str, Any]:
     category = _classify_intervention(semantic, error)
+    resolver = selected_source_resolver()
     return {
         "kind": "sciplot_intervention_request",
-        "input": str(Path(input_path).expanduser()),
-        "output": str(Path(output_dir).expanduser()),
+        "input": resolver.literal_path(Path(input_path)) if resolver else str(Path(input_path).expanduser()),
+        "output": resolver.literal_path(Path(output_dir)) if resolver else str(Path(output_dir).expanduser()),
         "needs_ai_intervention": bool(semantic.get("needs_ai_intervention", True)),
         "category": category,
         "semantic": semantic,

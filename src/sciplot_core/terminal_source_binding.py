@@ -11,6 +11,7 @@ from typing import Any, NoReturn
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 
 
 TERMINAL_SOURCE_BINDING_KIND = "sciplot_internal_terminal_source_binding"
@@ -93,13 +94,13 @@ class SourceArtifactBinding:
 
     @classmethod
     def create(cls, path: Path) -> SourceArtifactBinding:
-        resolved = path.expanduser().resolve()
+        resolved = resolve_source_path(path).expanduser().resolve()
         _require(
             resolved.is_file(),
             f"Bound terminal source is not a file: {resolved}",
             reason_code=_CONTRACT_MISMATCH,
         )
-        return cls(path=str(resolved), sha256=file_sha256(resolved))
+        return cls(path=literal_source_path(resolved), sha256=file_sha256(resolved))
 
     @classmethod
     def from_payload(cls, value: object, *, label: str) -> SourceArtifactBinding:
@@ -112,10 +113,14 @@ class SourceArtifactBinding:
         return {"path": self.path, "sha256": self.sha256}
 
     def verify_current(self, *, label: str) -> None:
-        path = Path(self.path)
+        try:
+            path = resolve_source_path(self.path, expected_sha256=self.sha256)
+            current = path.is_file() and file_sha256(path) == self.sha256
+        except (OSError, ValueError):
+            current = False
         _require(
-            path.is_file() and file_sha256(path) == self.sha256,
-            f"{label} changed after the terminal source was bound: {path}",
+            current,
+            f"{label} changed after the terminal source was bound: {self.path}",
             reason_code=_SOURCE_CHANGED,
         )
 
@@ -274,7 +279,7 @@ class MaterializedTerminalSourceBinding:
         if not input_path.is_absolute():
             input_path = request_path.parent / input_path
         _require(
-            str(input_path.resolve()) == self.terminal_source.path,
+            literal_source_path(input_path.resolve()) == self.terminal_source.path,
             "Terminal request input does not match its materialized source.",
             reason_code=_REQUEST_MISMATCH,
         )
@@ -376,7 +381,7 @@ class SealedTerminalSourceBinding:
     def validate_request(self, request_path: Path, request: Mapping[str, Any]) -> None:
         resolved = request_path.expanduser().resolve()
         _require(
-            str(resolved) == self.request.path,
+            literal_source_path(resolved) == self.request.path,
             "Terminal worker request path does not match its sealed binding.",
             reason_code=_REQUEST_MISMATCH,
         )
