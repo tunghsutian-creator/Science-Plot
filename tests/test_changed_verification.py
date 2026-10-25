@@ -1373,6 +1373,97 @@ def test_verify_cli_projects_plan_and_empty_scope_without_pass(status, plan_only
     assert calls == [{"base": "HEAD~2", **({"plan_only": True} if plan_only else {})}]
 
 
+@pytest.mark.parametrize("status,plan_only,expected_exit", [
+    ("NO_TESTS", False, 2), ("NO_TESTS", True, 2),
+    ("planned", True, 0), ("failed", True, 1),
+])
+def test_quick_verify_preserves_plan_base_and_empty_scope_status(status, plan_only, expected_exit, monkeypatch, capsys):
+    from sciplot_core import cli, verification
+
+    payload = build_changed_verification_plan([], repo_root=REPO_ROOT)
+    payload["status"] = status
+    calls = []
+    def verify(**kwargs):
+        calls.append(kwargs)
+        return payload
+    monkeypatch.setattr(verification, "run_changed_verification", verify)
+    arguments = ["verify", "--quick", "--base", "HEAD~2", "--json"]
+    if plan_only:
+        arguments.append("--plan-only")
+    assert cli.main(arguments) == expected_exit
+    assert json.loads(capsys.readouterr().out) == {**payload, "claim": "development_feedback_only", "scientific_acceptance": False}
+    assert calls == [{"base": "HEAD~2", **({"plan_only": True} if plan_only else {})}]
+
+
+@pytest.mark.parametrize("path", [
+    "src/sciplot_core/unowned.py", "src/sciplot_core/task_contract.py",
+    "src/sciplot_core/plot_document/patch.py",
+])
+def test_quick_verify_preserves_unknown_and_shared_owner_scope(path, monkeypatch, capsys):
+    from sciplot_core import cli, verification
+
+    calls = []
+    def run(**kwargs):
+        return run_changed_verification(repo_root=REPO_ROOT, changed_paths=[path],
+            command_runner=lambda command, _cwd: calls.append(list(command)) or _completed(command), **kwargs)
+    monkeypatch.setattr(verification, "run_changed_verification", run)
+    assert cli.main(["verify", "--quick", "--json"]) == (1 if "unowned" in path else 0)
+    payload = json.loads(capsys.readouterr().out)
+    baseline = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+    for field in ("owners", "unowned_paths", "required_later"):
+        assert payload[field] == baseline[field]
+    assert [check["command"] for check in payload["checks"]] == [check["command"] for check in baseline["checks"]]
+    assert calls == [check["command"] for check in baseline["checks"]]
+    if "unowned" not in path:
+        assert "full_pytest" in payload["required_later"]["release"]
+
+
+def test_unrecorded_check_timings_use_monotonic_command_intervals(monkeypatch):
+    from sciplot_core.verification import changed
+
+    ticks = iter([10.0, 10.25, 20.0, 21.5])
+    monkeypatch.setattr(changed.time, "monotonic", lambda: next(ticks))
+    result = run_changed_verification(repo_root=REPO_ROOT, changed_paths=["README.md"],
+        command_runner=lambda command, _cwd: _completed(command))
+    assert [check["wall_seconds"] for check in result["checks"]] == [0.25, 1.5]
+    assert result["status"] == "passed"
+
+
+def test_quick_human_output_reports_selection_actual_summary_and_feedback_limit(monkeypatch, capsys):
+    from sciplot_core import cli, verification
+
+    payload = build_changed_verification_plan(["tests/test_changed_verification.py"], repo_root=REPO_ROOT)
+    payload["status"] = "passed"
+    for check in payload["checks"]:
+        check.update(status="passed", wall_seconds=0.125, stdout="")
+        if check["check_id"] == "pytest_changed_owners":
+            check["stdout"] = "....\n4 passed in 0.10s\n"
+    monkeypatch.setattr(verification, "run_changed_verification", lambda: payload)
+    assert cli.main(["verify", "--quick"]) == 0
+    output = capsys.readouterr().out
+    assert "Quick development feedback only; this is not merge acceptance." in output
+    assert "Owners: changed_verification" in output
+    assert "Declared pytest targets:" in output
+    assert "Pytest final output: 4 passed in 0.10s" in output
+    assert "Command elapsed: 0.12s" in output
+    assert "release: full_pytest" in output
+
+
+@pytest.mark.parametrize("elapsed", [None, float("nan"), float("inf"), -1, "unknown"])
+def test_changed_reuse_blocked_human_output_preserves_missing_timing(elapsed, monkeypatch, capsys):
+    from sciplot_core import cli, verification
+
+    payload = build_changed_verification_plan(["README.md"], repo_root=REPO_ROOT)
+    payload["status"] = "BLOCKED"
+    for check in payload["checks"]:
+        check.update(status="BLOCKED", wall_seconds=elapsed, reason="completion_unavailable")
+    monkeypatch.setattr(verification, "run_changed_verification", lambda **_kwargs: payload)
+    assert cli.main(["verify", "--changed", "--reuse", ".tmp_verify/incomplete"]) == 1
+    output = capsys.readouterr().out
+    assert "completion_unavailable" in output
+    assert "Command elapsed:" not in output
+
+
 @pytest.mark.parametrize("path", ["src/sciplot_core/plot_engine/typed_intent.py",
                                   "tests/test_plot_typed_intent.py",
                                   "tests/test_plot_typed_intent_recovery.py"])

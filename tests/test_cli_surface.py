@@ -155,6 +155,31 @@ def test_verify_parser_requires_changed_worktree_scope() -> None:
     assert excinfo.value.code == 2
 
 
+def test_quick_verify_parser_accepts_development_worktree_scope() -> None:
+    args = cli._build_parser().parse_args(["verify", "--quick", "--json"])
+    assert args.command == "verify" and args.quick is True and args.changed is False
+    assert args.json is True
+
+
+@pytest.mark.parametrize("other", [["--changed"], ["--start", "full"], ["--status", ".tmp_verify/old"]])
+def test_quick_verify_cannot_select_a_second_execution_scope(other) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli._build_parser().parse_args(["verify", "--quick", *other])
+    assert error.value.code == 2
+
+
+@pytest.mark.parametrize("option", ["--record", "--reuse", "--out", "--audit-plugin-dir", "--audit-out"])
+def test_quick_verify_rejects_evidence_and_audit_options_before_execution(option, monkeypatch, capsys) -> None:
+    from sciplot_core import verification
+
+    monkeypatch.setattr(verification, "run_changed_verification", lambda **_kwargs: pytest.fail("Invalid quick mode ran checks"))
+    assert cli.main(["verify", "--quick", option, ".tmp_verify/forbidden", "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "BLOCKED"
+    assert payload["scientific_acceptance"] is False
+    assert payload["error"]["reason_code"] == "invalid_verification_mode"
+
+
 def test_readiness_merge_parser_accepts_base_summary_and_output() -> None:
     args = cli._build_parser().parse_args(
         [

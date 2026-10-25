@@ -64,6 +64,11 @@ def register_diagnostics_commands(subparsers: Any) -> None:
 
     verify_scope = verify_parser.add_mutually_exclusive_group(required=True)
     verify_scope.add_argument(
+        "--quick",
+        action="store_true",
+        help="Run owner-selected development feedback without evidence recording; not merge acceptance.",
+    )
+    verify_scope.add_argument(
         "--changed",
         action="store_true",
         help="Verify the staged, unstaged, and untracked HEAD worktree.",

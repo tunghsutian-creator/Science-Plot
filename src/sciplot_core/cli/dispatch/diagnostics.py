@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import sys
 from typing import Any
 
@@ -88,6 +89,7 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
         return 0 if payload["status"] == "ready" else 1
 
     if args.command == "verify":
+        quick = getattr(args, "quick", False)
         if args.start is not None or args.status is not None:
             from sciplot_core.verification.suite_evidence import (
                 start_suite_verification,
@@ -130,10 +132,12 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
 
         from sciplot_core.verification import run_changed_verification
 
-        if any(value is not None for value in (args.out, args.audit_plugin_dir, args.audit_out)):
+        if (any(value is not None for value in (args.out, args.audit_plugin_dir, args.audit_out))
+                or (quick and (args.record is not None or args.reuse is not None))):
             payload = {"status": "BLOCKED", "reused": False, "scientific_acceptance": False,
                        "error": {"reason_code": "invalid_verification_mode",
-                                 "message": "Output and audit attachment options require --start."}}
+                                 "message": ("Quick development feedback cannot record or reuse evidence, or attach output/audit options."
+                                             if quick else "Output and audit attachment options require --start.")}}
             if args.json:
                 _print_json(payload)
             else:
@@ -149,19 +153,30 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
         if args.reuse is not None:
             options["reuse"] = args.reuse
         payload = run_changed_verification(**options)
+        if quick:
+            payload = {**payload, "claim": "development_feedback_only", "scientific_acceptance": False}
         if args.json:
             _print_json(payload)
         else:
             print(f"SciPlot changed verification: {payload['status']}")
+            if quick:
+                print("Quick development feedback only; this is not merge acceptance.")
             owner_ids = [owner["owner_id"] for owner in payload["owners"]]
             print("Owners: " + (", ".join(owner_ids) if owner_ids else "none"))
             print(f"Checks: {len(payload['checks'])}; base: {payload['comparison']['base']}")
+            targets = {target for owner in payload["owners"] for target in owner["pytest_targets"]}
+            print(f"Declared pytest targets: {len(targets)} (selectors, not executed node count)")
             if payload["status"] == "NO_TESTS":
                 print("No checks selected; this is not new verification evidence.")
             if payload.get("error"):
                 print(payload["error"]["message"])
             for check in payload["checks"]:
                 print(f"{check['check_id']}: {check['status']}")
+                elapsed = check.get("wall_seconds")
+                if type(elapsed) in (int, float) and math.isfinite(elapsed) and elapsed >= 0:
+                    print(f"  Command elapsed: {elapsed:.2f}s")
+                if check["check_id"] == "pytest_changed_owners" and check.get("stdout", "").strip():
+                    print("  Pytest final output: " + check["stdout"].strip().splitlines()[-1])
                 if check.get("reason"):
                     print(f"  {check['reason']}")
                 if check["status"] == "failed":

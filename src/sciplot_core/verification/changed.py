@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -186,6 +187,7 @@ def run_changed_verification(
 
     results: list[dict[str, Any]] = []
     for check in payload["checks"]:
+        started = time.monotonic()
         completed = runner(check["command"], root)
         results.append(
             {
@@ -194,6 +196,7 @@ def run_changed_verification(
                 "exit_code": completed.returncode,
                 "stdout": completed.stdout,
                 "stderr": completed.stderr,
+                "wall_seconds": time.monotonic() - started,
             }
         )
     payload["checks"] = results
