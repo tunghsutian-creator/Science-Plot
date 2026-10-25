@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from importlib import import_module
 import os
 import subprocess
 import sys
@@ -81,16 +82,15 @@ def _validate_staged_veusz_document(
         source = staged_path.read_text(encoding="utf-8")
         compile(source, str(staged_path), "exec")
 
-    from veusz import document as veusz_document
+    veusz_document = import_module("veusz.document")
 
     reopened = veusz_document.Document()
     try:
         if mode == "vsz" and logical_target is not None:
-            from veusz.document.loader import executeScript
-
             reopened.filename = str(logical_target)
-            executeScript(reopened, str(logical_target), source, callbackunsafe=lambda: False,
-                          callbackimporterror=lambda _filename, _error: False)
+            import_module("veusz.document.loader").executeScript(
+                reopened, str(logical_target), source, callbackunsafe=lambda: False,
+                callbackimporterror=lambda _filename, _error: False)
         else:
             reopened.load(str(staged_path), mode=mode, callbackunsafe=lambda: False,
                           callbackimporterror=lambda _filename, _error: False)
@@ -305,8 +305,8 @@ def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
 
     ensure_veusz_loader_compat()
     from PyQt6 import QtWidgets
-    from veusz import dataimport, document, widgets
-    from veusz.document.operations import OperationSettingSet
+    dataimport, document, widgets = (import_module("veusz." + name) for name in ("dataimport", "document", "widgets"))
+    OperationSettingSet = import_module("veusz.document.operations").OperationSettingSet
 
     _ = dataimport, widgets
     existing_app = QtWidgets.QApplication.instance()

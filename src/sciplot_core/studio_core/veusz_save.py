@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from importlib import import_module
 import subprocess
 import sys
 from pathlib import Path
@@ -68,8 +69,8 @@ def _save_veusz_document_from_spec(
         _prefer_offscreen_export_platform()
         _ensure_veusz_on_path()
         from PyQt6 import QtWidgets
-        from veusz import dataimport, document, widgets
-        from veusz.document import CommandInterface
+        dataimport, document, widgets = (import_module("veusz." + name) for name in ("dataimport", "document", "widgets"))
+        CommandInterface = document.CommandInterface
         from sciplot_core.studio_core.veusz_numeric_persistence import (
             FLOAT64_ENCODING, NUMERIC_ENCODING_KEY, ensure_veusz_numeric_precision,
         )
