@@ -42,6 +42,25 @@ def test_private_candidate_captures_files_and_modes_without_an_authority(tmp_pat
         assert candidate.capture() == {"Open.command": PreparedFile(b"portable launcher", 0o755)}
         assert store.snapshot()["generation"] == before["generation"]
         assert not (root / "Open.command").exists()
+
+
+def test_frozen_private_deletion_is_idempotent_and_cannot_delete_originals_or_follow_aliases(tmp_path):
+    root, store, before = fixture_store(tmp_path)
+    native = root / "studio/document.vsz"
+    original = native.read_bytes(), native.stat().st_mtime_ns
+    with studio_preparation_candidate(store) as candidate:
+        candidate.remove_member("studio/document.vsz")
+        candidate.remove_member("studio/document.vsz")
+        assert candidate.capture() == {"studio/document.vsz": None}
+        with pytest.raises(ProjectConflict, match="scientific inputs"):
+            candidate.remove_member("source/data.csv")
+        alias = candidate.project_dir / "studio/alias.vsz"
+        alias.symlink_to(native)
+        with pytest.raises(OSError):
+            candidate.remove_member("studio/alias.vsz")
+        assert alias.is_symlink()
+    assert (native.read_bytes(), native.stat().st_mtime_ns) == original
+    assert store.snapshot()["generation"] == before["generation"]
     assert not candidate.project_dir.exists()
 
 

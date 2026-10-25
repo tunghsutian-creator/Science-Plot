@@ -6,7 +6,7 @@ import pytest
 
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.studio_core.preparation_candidate import studio_preparation_candidate
-from sciplot_core.workflow.project_output import private_run_output, output_replacements
+from sciplot_core.workflow.project_output import private_run_output
 
 
 @pytest.mark.parametrize("external", [False, True], ids=["primary-output", "selected-external-output"])
@@ -28,7 +28,7 @@ def test_private_run_retires_only_prior_managed_members(external, tmp_path):
             assert not (private / "figures/old.pdf").exists()
             assert not (private / "manifest.json").exists()
             (private / "manifest.json").write_text('{"state":"new"}')
-        writes = output_replacements(candidate, logical, dict(candidate.capture()))
+        writes = candidate.capture()
         assert writes[logical + "/figures/old.pdf"] is None
         assert writes[logical + "/manifest.json"].data == b'{"state":"new"}'
         assert logical + "/notes.txt" not in writes

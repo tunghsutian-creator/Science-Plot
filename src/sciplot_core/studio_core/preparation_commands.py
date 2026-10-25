@@ -9,12 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.foundation.source_locations import resolve_source_path, selected_source_resolver
-from sciplot_core.project_store.candidate_runtime import ProjectCandidateResolver
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.project_commands import MembershipRead, PreparedFile, PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation
 from sciplot_core.project_commands.resources import resource_key
 from sciplot_core.project_store.io import read_file, sha
-from sciplot_core.project_store.runtime import selected_project_store
+from sciplot_core.project_store.runtime import selected_project_store, logical_runtime_resource
 from sciplot_core.studio_core.preparation_candidate import (
     StudioPreparationCandidate, require_preparation_candidate, studio_preparation_candidate,
 )
@@ -56,11 +55,9 @@ def prepare_studio_candidate(candidate: StudioPreparationCandidate, *, request_t
 
 
 def _produced_resource(candidate: StudioPreparationCandidate, actual: Path, version: str, mode: int) -> str | None:
-    selected = selected_source_resolver()
-    if (not isinstance(selected, ProjectCandidateResolver)
-            or not (actual.is_relative_to(candidate.project_dir) or actual.is_relative_to(candidate.resources))):
+    if not (actual.is_relative_to(candidate.project_dir) or actual.is_relative_to(candidate.resources)):
         return None
-    logical = selected._relative(actual)
+    logical = logical_runtime_resource(actual, private_only=True)
     if logical is None or logical == ".":
         return None
     before = candidate.snapshot["files"].get(logical)

@@ -97,6 +97,22 @@ class StudioPreparationCandidate:
                 data, mode = read_file(parent, parts[-1], owned=True)
         return PreparedFile(data, mode)
 
+    def remove_member(self, relative: str) -> None:
+        """Apply one exact frozen deletion only within this private image."""
+        resource_key(relative)
+        parts = tuple(relative.split("/"))
+        if (relative.startswith("@") or parts[0] in {"raw", "source", ".sciplot_store"}
+                or relative in self.snapshot.get("input_resources", [])):
+            raise ProjectConflict("A private deletion cannot select scientific inputs or another resource root.")
+        with self.root_descriptor() as root:
+            try:
+                with directory(root, parts[:-1]) as parent:
+                    read_file(parent, parts[-1], owned=True)
+                    os.unlink(parts[-1], dir_fd=parent)
+                    os.fsync(parent)
+            except FileNotFoundError:
+                pass
+
     def write_request(self, payload: dict[str, Any], *, relative: str = "plot_request.json") -> None:
         if Path(relative).suffix != ".json":
             raise ValueError("Studio requests must be JSON project members.")
@@ -203,9 +219,19 @@ class StudioPreparationCandidate:
         for key in self.store.locations:
             root = self.resources / key
             if root.exists():
-                for relative, prepared in _files(root).items():
+                current_resource = _files(root)
+                original_resource = {name[len(key) + 2:]: value for name, value in self.snapshot["files"].items()
+                                     if name.startswith("@" + key + "/")}
+                for relative in original_resource.keys() | current_resource.keys():
+                    prepared, before = current_resource.get(relative), original_resource.get(relative)
                     logical = "@" + key + "/" + relative
                     self.resource_path(logical)
+                    old = (before["sha256"], before["mode"]) if before else None
+                    new = (sha(prepared.data), prepared.mode) if prepared else None
+                    if old == new:
+                        continue
+                    if logical in self.snapshot.get("input_resources", []):
+                        raise ProjectConflict("A private resource projection cannot replace scientific inputs.")
                     writes[logical] = prepared
         return writes
 
@@ -362,7 +388,7 @@ def studio_preparation_candidate(store: FileProjectStore, *, snapshot: dict[str,
         candidate = StudioPreparationCandidate(store, before, root, resources)
         token = _ACTIVE.set(candidate)
         try:
-            with project_candidate_runtime(store, root, generation=before["generation"]), private_project_manifest_scope(root):
+            with project_candidate_runtime(store, root, generation=before["generation"], resources_root=resources), private_project_manifest_scope(root):
                 yield candidate
         finally:
             _ACTIVE.reset(token)

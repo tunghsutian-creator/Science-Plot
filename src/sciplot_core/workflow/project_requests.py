@@ -34,9 +34,9 @@ def _binding(store: FileProjectStore) -> dict[str, Any]:
 
 
 def _publication_store(project: Path) -> FileProjectStore:
-    from sciplot_core.studio_core.project_publication_commands import _publication_store as selected
+    from sciplot_core.studio_core.project_command_scope import project_store
 
-    return selected(project)
+    return project_store(project, create_delivery=True, with_snapshot=True, create_output=True)
 
 
 def next_project_run(project: Path) -> Path:
@@ -60,7 +60,7 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
     from sciplot_core.workflow.project_results import project_workflow_result
     from sciplot_core.workflow.errors import WorkflowIntervention
     from sciplot_core.workflow.project_failures import publish_intervention
-    from sciplot_core.workflow.project_output import private_run_output, output_replacements
+    from sciplot_core.workflow.project_output import private_run_output
     from sciplot_core.delivery.package_transaction import _package_snapshot, _preserve_finder_metadata, _protect_editable_documents
 
     project = request_path.parent
@@ -117,7 +117,7 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         manifest = project_workflow_result(manifest, candidate.logical_path)
         (private_output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         candidate.finalize()
-        writes: dict[str, bytes | PreparedFile | None] = output_replacements(candidate, output_name, dict(candidate.capture()))
+        writes: dict[str, bytes | PreparedFile | None] = dict(candidate.capture())
         if delivery_complete:
             writes = {**{name: None for name in baseline["files"] if name.startswith(delivery_name + "/")}, **writes}
         updated = read_intake_project_manifest(candidate.project_dir)

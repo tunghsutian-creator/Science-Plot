@@ -9,6 +9,7 @@ from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.project_store.candidate_runtime import ProjectCandidateResolver
 from sciplot_core.project_store.errors import ProjectConflict
 from sciplot_core.project_store.io import directory
+from sciplot_core.project_store.runtime import logical_runtime_resource
 from sciplot_core.studio_core.preparation_candidate import StudioPreparationCandidate, private_preparation_scope
 from sciplot_core.terminal_source_binding import SealedTerminalSourceBinding
 
@@ -31,8 +32,8 @@ def export_private_request(request: Path, *, formats: list[str],
     selected = selected_source_resolver()
     if not isinstance(selected, ProjectCandidateResolver):
         return None
-    if (not request.is_relative_to(selected.candidate_root) or request.parent == selected.candidate_root
-            or request.name != "plot_request.json"):
+    logical = logical_runtime_resource(request, private_only=True)
+    if logical is None or "/" not in logical or request.name != "plot_request.json":
         raise ProjectConflict("A bound private worker must select a nested terminal artifact request.")
     # The inherited native-worker locator has already verified host/argv/root
     # identity. Validate this concrete directory too; never infer a new project.
@@ -40,8 +41,8 @@ def export_private_request(request: Path, *, formats: list[str],
     project = request.parent
     if (project / ".sciplot_store").exists():
         raise ProjectConflict("A private terminal artifact cannot contain another project authority.")
-    with selected._root() as root:
-        with directory(root, project.relative_to(selected.candidate_root).parts) as artifact:
+    with selected._namespace(logical.rpartition("/")[0]) as (root, relative):
+        with directory(root, () if relative == "." else Path(relative).parts) as artifact:
             info = os.fstat(artifact)
             if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
                 raise ProjectConflict("A terminal artifact directory must remain host-owned.")
