@@ -129,10 +129,13 @@ def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *, adm
             raise ProjectConflict("A transfer cannot replace another existing history namespace.")
         request = record["metadata"].get("request", {})
         origin = str(Path(original_for_logical(baseline, prefix + "/head.json")).parent)
-        if request.get("origin_root") != origin or request.get("project_path") != str(io.root) or request.get("attachment_id") != transfer.attachment_id:
+        if (request.get("scientific_origin", request.get("origin_root")) != origin
+                or request.get("project_path") != str(io.root) or request.get("attachment_id") != transfer.attachment_id):
             raise ProjectConflict("The transfer origin and stable ownership context do not match this project.")
         with scope(io, prefix) as (fd, actual, allowed):
             here, physical = identity(fd), census(fd, allowed=allowed)
+        if request.get("origin_root") != str(actual):
+            raise ProjectConflict("The transfer does not bind its exact host-selected physical namespace.")
         backup, backup_identity, backup_members = _backup(io, record, transfer, actual, here)
         if physical_prefix:
             with scope(io, physical_prefix) as (_fd, declared, _allowed):

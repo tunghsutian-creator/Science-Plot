@@ -1,6 +1,7 @@
 """A fixed ownership fence retires tracked legacy bytes without a second writer."""
 
 import json
+from dataclasses import replace
 from uuid import uuid4
 
 import pytest
@@ -16,7 +17,7 @@ def encoded(value):
     return (json.dumps(value, indent=2) + "\n").encode()
 
 
-def fixture_transfer(tmp_path, *, external=False):
+def fixture_transfer(tmp_path, *, external=False, relocated=False):
     project = tmp_path / "project"
     project.mkdir()
     old = tmp_path / "legacy" if external else project / ".sciplot_documents/legacy"
@@ -26,6 +27,14 @@ def fixture_transfer(tmp_path, *, external=False):
     locations = {"legacy": ResourceRoot(old, ("head.json", "state.json"))} if external else {}
     original = FileProjectStore(project, locations=locations)
     before = original.snapshot(import_legacy=True)
+    scientific_origin = str(old)
+    if relocated:
+        assert not external
+        original.export_bundle(tmp_path / "original-bundle")
+        original = FileProjectStore.import_bundle(tmp_path / "original-bundle", tmp_path / "relocated")
+        project = original.root
+        old = project / ".sciplot_documents/legacy"
+        before = original.snapshot()
     (old / "head.json").write_bytes(b'{"revision":2}')
     (old / "state.json").write_bytes(b'{"state":"latest legacy authority"}')
     (old / "journal.json").write_bytes(b'{"history":"latest preserved"}')
@@ -35,7 +44,7 @@ def fixture_transfer(tmp_path, *, external=False):
     prefix = "@legacy" if external else ".sciplot_documents/legacy"
     physical_prefix = None if external else backup.relative_to(project).as_posix()
     history = ".sciplot_semantic/" + identity + "/original-history" if external else physical_prefix
-    request = {"attachment_id": identity, "origin_root": str(old), "history_root": str(backup),
+    request = {"attachment_id": identity, "origin_root": str(old), "scientific_origin": scientific_origin, "history_root": str(backup),
                "figure_id": "figure-A", "project_path": str(project)}
     owner = {"kind": "sciplot_semantic_owner", "version": 1, "origin_root": str(old), "project": str(project),
         "project_id": before["project_id"], "attachment_id": identity, "history_root": str(backup),
@@ -222,3 +231,22 @@ def test_empty_descriptor_attachment_import_still_blocks_pending_portable_old_wr
     with pytest.raises(ProjectRecoveryRequired, match="original location"):
         store.export_bundle(tmp_path / "bundle")
     assert not (tmp_path / "bundle").exists()
+
+
+@pytest.mark.parametrize("forged", [False, True])
+def test_moved_project_preserves_scientific_origin_and_binds_exact_physical_namespace(tmp_path, forged):
+    _original, store, _before, old, backup, history_owner, descriptor, command, mutation = fixture_transfer(tmp_path, relocated=True)
+    request = json.loads(command.request_json)
+    assert request["scientific_origin"] != request["origin_root"]
+    if forged:
+        command = replace(command, request_json=json.dumps({**request, "origin_root": str(tmp_path / "foreign-namespace")}))
+        with pytest.raises(ProjectConflict, match="physical namespace"):
+            ProjectCommands(store).stage_prepared(command, mutation)
+        assert (old / "head.json").read_bytes() == b'{"revision":2}'
+        assert json.loads((backup / "head.json").read_bytes())["kind"] == "sciplot_attached_semantic_redirect"
+        return
+    review = ProjectCommands(store).stage_prepared(command, mutation)
+    fence(old, backup, history_owner)
+    assert ProjectCommands(store).decide(command, decision_id=review["decision_id"], accept=True)["phase"] == "complete"
+    assert store.snapshot()["outside_changes"] == {}
+    assert store.read_bytes(descriptor.history_prefix + "/head.json") == b'{"revision":2}'
