@@ -183,3 +183,22 @@ def test_other_project_cannot_adopt_an_already_tracked_legacy_namespace(tmp_path
     assert not (old / OWNER).exists()
     assert original.snapshot()["generation"] == before["generation"]
     assert foreign.snapshot()["generation"] == foreign_before["generation"]
+
+
+def test_tracked_namespace_imports_the_latest_legal_old_commit_after_early_project_snapshot(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    legacy = standalone()
+    created = legacy.create(request_for_source(project))
+    old = Path(created["plot"])
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    edited = legacy.patch(old, patch(created, "late-old-commit", "style.line.width", "1.2pt", "series:A"))
+    assert edited["ready_to_use"] and edited["revision"] == 1
+    latest = bytes_in(old)
+    opened = application().open(old)
+    assert opened["revision"] == 1 and opened["scientific_hash"] == created["scientific_hash"]
+    entry = next(iter(json.loads(store.read_bytes(INDEX))["attachments"].values()))
+    assert {name: data for name, data in bytes_in(Path(entry["history_root"])).items() if name != OWNER} == latest
+    assert store.read_bytes(entry["namespace"] + "/revisions/00000001.json") == latest["revisions/00000001.json"]
+    assert store.snapshot()["projection_status"] == "current"

@@ -56,10 +56,16 @@ def resume_transfer(store: FileProjectStore, root: Path, figure_id: str, record:
             or entry.get("transfer_root", entry["origin_root"]) != str(root) or entry.get("history_root") != request["history_root"]
             or entry["figure_id"] != figure_id):
         raise EngineError("semantic_attachment_owner_conflict", "The frozen attachment index does not bind the original and history locations.")
-    marker = {"kind": "sciplot_semantic_owner", "version": 1, "origin_root": str(root),
+    expected_marker = {"kind": "sciplot_semantic_owner", "version": 1, "origin_root": str(root),
               "project": request.get("project_path", entry["project_origin"]), "project_id": command.project_id,
               "attachment_id": request["attachment_id"], "history_root": request["history_root"], "figure_id": figure_id}
     prefix = entry["namespace"] + "/"
+    marker = json.loads(candidate_bytes(record, prefix + OWNER))
+    if not isinstance(marker, dict) or type(marker.get("version")) is not int:
+        raise EngineError("semantic_attachment_owner_conflict", "The frozen ownership marker has an invalid format.")
+    marker["origin_root"] = str(root)
+    if marker != expected_marker:
+        raise EngineError("semantic_attachment_owner_conflict", "The frozen ownership marker does not bind this exact original namespace.")
     archived = {logical: relative for relative, logical in entry["archived_derivatives"].items()}
     artifact_names = set(entry.get("archived_artifacts", {}).values())
     if "original_members" in entry:

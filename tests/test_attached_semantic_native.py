@@ -204,15 +204,25 @@ def scenario(kind, root):
         return process
 
     subprocess.Popen = tracked
+    completed = False
     try:
         {"managed": managed, "legacy": legacy, "legacy_pending": legacy_pending}[kind](root)
+        completed = True
     finally:
         subprocess.Popen = original
-    assert workers and all(process.poll() is not None for process in workers)
-    (root / "owned-native.json").write_text(json.dumps({"scenario": kind, "pid": os.getpid(),
-        "parent_pid": os.getppid(), "workers": [{"pid": process.pid, "exit": process.returncode} for process in workers],
-        "checks": ["same_generation_semantic_writer", "raw_units_and_science", "style", "project_offline",
-                   "artifact_deletion", "cold_open_export", "unchanged_revision_bytes", "all_owned_workers_exited"]}))
+        natural = bool(workers) and all(process.poll() is not None for process in workers)
+        forced = []
+        for process in workers:
+            if process.poll() is None:
+                forced.append(process.pid)
+                process.terminate()
+                process.wait(timeout=10)
+        (root / "owned-native.json").write_text(json.dumps({"scenario": kind, "pid": os.getpid(),
+            "parent_pid": os.getppid(), "completed": completed, "natural_worker_exit": natural, "forced_cleanup": forced,
+            "workers": [{"pid": process.pid, "exit": process.poll()} for process in workers],
+            "checks": ["same_generation_semantic_writer", "raw_units_and_science", "style", "project_offline",
+                       "artifact_deletion", "cold_open_export", "unchanged_revision_bytes", "all_owned_workers_exited"] if completed else []}))
+    assert natural
 
 
 @pytest.mark.parametrize("kind", ["managed", "legacy", "legacy_pending"])
