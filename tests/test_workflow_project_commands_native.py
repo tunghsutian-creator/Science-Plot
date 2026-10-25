@@ -9,25 +9,27 @@ from pathlib import Path
 import pytest
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.studio_core.project_publication_commands import _publication_store
 from sciplot_core.studio_core.registry_state import _veusz_spec_path
 from sciplot_core.studio_core.studio_prepare import prepare_studio_document
 from sciplot_core.workflow.request_run import run_request
 
 
 @pytest.mark.comprehensive
-def test_general_run_publishes_native_delivery_and_matching_project_then_reopens(tmp_path, monkeypatch):
+@pytest.mark.parametrize("external", [False, True], ids=["primary-output", "explicit-external-output"])
+def test_general_run_publishes_native_delivery_and_matching_project_then_reopens(tmp_path, monkeypatch, external):
     project = tmp_path / "project"
     (project / "source").mkdir(parents=True)
     source = project / "source/data.csv"
     source.write_bytes(b"x,y\n0,1\n1,2\n2,4\n")
     source_before = source.read_bytes(), source.stat().st_mtime_ns
     request = project / "plot_request.json"
+    output = tmp_path / "selected-run" if external else project / "runs/run_001"
     request.write_text(json.dumps({"input": "source/data.csv", "template": "curve",
-        "output": str(project / "runs/run_001"), "exports": ["pdf", "tiff_300"]}))
+        "output": str(output), "exports": ["pdf", "tiff_300"]}))
     (project / "intake_manifest.json").write_text(json.dumps({"kind": "sciplot_intake_project",
         "version": 1, "project_slug": "project"}))
-    store = _publication_store(project)
+    from sciplot_core.workflow.project_requests import _publication_store as workflow_store
+    store = workflow_store(project)
     before = store.snapshot(import_legacy=True)
     classification = []
     observed_qa = []
@@ -53,13 +55,13 @@ def test_general_run_publishes_native_delivery_and_matching_project_then_reopens
     assert len(classification) == 1  # Explicit template rendering needs no AI decision.
     assert after["sequence"] == before["sequence"] + 1
     assert after["outside_changes"] == {}
-    assert result["output"] == str(project / "runs/run_001")
+    assert result["output"] == str(output)
     assert result["request_path"] == str(request)
     for field in ("transform_ledger", "publication_intent", "request", "source_request", "raw_archive"):
         assert "sciplot-studio-candidate-" not in json.dumps(result.get(field)), field
     assert result["qa"] == observed_qa[0]  # Preserve the actual inspected paths and observations.
     study = result["study_model"]
-    assert study["run"]["output"] == str(project / "runs/run_001")
+    assert study["run"]["output"] == str(output)
     assert study["run"]["qa"] == observed_qa[0]
     for artifact in study["run"]["figure_artifacts"]:
         assert Path(artifact["path"]).is_file()
@@ -73,7 +75,7 @@ def test_general_run_publishes_native_delivery_and_matching_project_then_reopens
     saved = json.loads(request.read_text())
     assert saved["input"] == "source/data.csv"
     assert list(project.rglob(".sciplot_store")) == [project / ".sciplot_store"]
-    terminal = json.loads((project / "runs/run_001/figures/_veusz/single/plot_request.json").read_text())
+    terminal = json.loads((output / "figures/_veusz/single/plot_request.json").read_text())
     assert terminal["input"] == str(source)
     spec = json.loads(_veusz_spec_path(native).read_text())
     assert "sciplot-studio-candidate-" not in json.dumps(spec)
