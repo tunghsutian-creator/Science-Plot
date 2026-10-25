@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from sciplot_core.foundation.json_values import json_safe
@@ -117,6 +118,9 @@ def _build_parser() -> argparse.ArgumentParser:
 def _execute(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     from sciplot_core.foundation.source_locations import resolve_source_path
+    from sciplot_core.project_store.native_artifacts import require_native_artifact_command, resolve_native_artifact
+
+    require_native_artifact_command(argv if argv is not None else sys.argv[1:])
 
     # Only explicit read arguments are relocated. Outputs and all serialized
     # scientific paths inside saved specs stay untouched.
@@ -125,11 +129,18 @@ def _execute(argv: list[str] | None = None) -> int:
         value = getattr(args, name, None)
         if value is not None:
             if name == "document" and args.command in {"save-spec", "compile-plot-ir"}:
-                from sciplot_core.project_store.runtime import resolve_runtime_output_path
+                if args.command == "compile-plot-ir":
+                    setattr(args, name, resolve_native_artifact(value, role=name, output=True))
+                else:
+                    from sciplot_core.project_store.runtime import resolve_runtime_output_path
 
-                setattr(args, name, resolve_runtime_output_path(value))
+                    setattr(args, name, resolve_runtime_output_path(value))
             else:
-                setattr(args, name, resolve_source_path(value))
+                setattr(args, name, resolve_native_artifact(value, role=name))
+    if args.command == "compile-plot-ir":
+        args.preview = resolve_native_artifact(args.preview, role="preview", output=True)
+    elif args.command == "preview-document":
+        args.out = resolve_native_artifact(args.out, role="out", output=True)
     if hasattr(args, "documents"):
         args.documents = [resolve_source_path(path) for path in args.documents]
     if args.command == "font-families":

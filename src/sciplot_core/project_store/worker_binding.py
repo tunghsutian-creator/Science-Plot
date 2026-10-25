@@ -14,6 +14,7 @@ from .errors import ProjectConflict, ProjectStoreError
 from .io import digest
 from .incoming_sources import expectation_payload, source_expectation_scope, without_source_expectations
 from .candidate_resources import validate_resources_binding
+from .native_artifacts import artifact_payload, bound_native_artifacts, native_artifact_binding
 from .repository import FileProjectStore
 from .resources import ResourceRoot
 from .runtime import ProjectSourceResolver
@@ -24,11 +25,16 @@ def native_runtime_binding(argv: list[str]) -> Iterator[dict[str, str] | None]:
     """Only selected trusted host state creates a locator; no wire/root discovery."""
     selected = selected_source_resolver()
     if selected is None:
+        native_artifact_binding(argv, None)
         yield None
         return
     if not isinstance(selected, ProjectSourceResolver):
         raise ProjectStoreError("This scientific locator has no trusted native-worker binding.")
-    value = {"project": selected.binding(), "argv_sha256": digest(argv), "parent_pid": os.getpid()}
+    project = selected.binding()
+    artifacts = native_artifact_binding(argv, selected)
+    if artifacts is not None:
+        project["native_artifacts"] = artifacts
+    value = {"project": project, "argv_sha256": digest(argv), "parent_pid": os.getpid()}
     data = json.dumps(value, sort_keys=True, allow_nan=False).encode()
     with tempfile.TemporaryDirectory(prefix="sciplot-project-runtime-") as temporary:
         root = Path(temporary).resolve(strict=True)
@@ -75,6 +81,9 @@ def _read_binding(reference: dict[str, str], argv: list[str]) -> dict[str, Any]:
     if "source_expectations" in project:
         fields.add("source_expectations")
         expectation_payload(project["source_expectations"])
+    if "native_artifacts" in project:
+        fields.add("native_artifacts")
+        artifact_payload(project["native_artifacts"])
     if project.get("kind") == "sciplot_project_candidate_runtime":
         fields.add("candidate")
         candidate = project.get("candidate")
@@ -95,7 +104,7 @@ def _read_binding(reference: dict[str, str], argv: list[str]) -> dict[str, Any]:
 
 @contextmanager
 def worker_project_runtime(reference: dict[str, str] | None, argv: list[str]) -> Iterator[None]:
-    with without_source_expectations():
+    with without_source_expectations(), bound_native_artifacts(None, argv, None):
         with _worker_project_runtime(reference, argv):
             yield
 
@@ -134,10 +143,11 @@ def _worker_project_runtime(reference: dict[str, str] | None, argv: list[str]) -
     if (resolver.snapshot["project_id"] != value["project_id"]
             or digest(resolver.snapshot) != value["generation_sha256"]):
         raise ProjectConflict("The native locator differs from the selected project generation.")
-    if "source_expectations" in value:
-        mode, sources = expectation_payload(value["source_expectations"])
-        with source_expectation_scope(resolver.snapshot, mode, sources), source_location_scope(resolver):
-            yield
-    else:
-        with source_location_scope(resolver):
-            yield
+    with bound_native_artifacts(value.get("native_artifacts"), argv, resolver):
+        if "source_expectations" in value:
+            mode, sources = expectation_payload(value["source_expectations"])
+            with source_expectation_scope(resolver.snapshot, mode, sources), source_location_scope(resolver):
+                yield
+        else:
+            with source_location_scope(resolver):
+                yield
