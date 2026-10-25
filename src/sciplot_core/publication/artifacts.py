@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 import pandas as pd
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 
 
 def _table_shape(path: Path) -> list[int] | None:
@@ -28,12 +29,13 @@ def _table_shape(path: Path) -> list[int] | None:
 
 
 def artifact_record(path: str | Path, *, artifact_id: str, role: str) -> dict[str, Any]:
-    resolved = Path(path).expanduser().resolve()
+    literal = literal_source_path(Path(path))
+    resolved = resolve_source_path(path).expanduser().resolve()
     if not resolved.exists():
         return {
             "id": artifact_id,
             "role": role,
-            "path": str(resolved),
+            "path": literal,
             "exists": False,
             "sha256": None,
         }
@@ -42,7 +44,7 @@ def artifact_record(path: str | Path, *, artifact_id: str, role: str) -> dict[st
             "id": artifact_id,
             "role": role,
             "kind": "file",
-            "path": str(resolved),
+            "path": literal,
             "exists": True,
             "size_bytes": resolved.stat().st_size,
             "sha256": file_sha256(resolved),
@@ -63,7 +65,7 @@ def artifact_record(path: str | Path, *, artifact_id: str, role: str) -> dict[st
         "id": artifact_id,
         "role": role,
         "kind": "directory",
-        "path": str(resolved),
+        "path": literal,
         "exists": True,
         "size_bytes": total_bytes,
         "sha256": digest.hexdigest(),

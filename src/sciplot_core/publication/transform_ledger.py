@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.source_locations import literal_source_path
 
 from sciplot_core.publication.profiles import (
     TRANSFORM_LEDGER_KIND,
@@ -96,11 +97,8 @@ def build_transform_ledger(
         if str(step.get("confirmation_status") or "runtime_recorded")
         not in {"runtime_recorded", "confirmed", "not_applicable"}
     ]
-    first_step_inputs = (
-        recorded_steps[0].get("input_artifacts")
-        if isinstance(recorded_steps[0].get("input_artifacts"), list)
-        else []
-    )
+    first_step_inputs_value = recorded_steps[0].get("input_artifacts")
+    first_step_inputs = first_step_inputs_value if isinstance(first_step_inputs_value, list) else []
     first_source_path = next(
         (
             str(artifact.get("path"))
@@ -109,7 +107,7 @@ def build_transform_ledger(
             and isinstance(artifact.get("path"), str)
             and str(artifact.get("path")).strip()
         ),
-        str(Path(input_path).expanduser().resolve()),
+        literal_source_path(Path(input_path)),
     )
     payload = {
         "kind": TRANSFORM_LEDGER_KIND,
@@ -117,7 +115,7 @@ def build_transform_ledger(
         "status": "needs_human_confirmation"
         if unresolved_step_ids
         else "runtime_recorded",
-        "source_root": str(Path(first_source_path).expanduser().resolve()),
+        "source_root": literal_source_path(Path(first_source_path)),
         "replicate_policy": deepcopy(study_model.get("replicate_policy") or {}),
         "column_confirmations": deepcopy(request.get("column_confirmations") or []),
         "steps": recorded_steps,
@@ -149,11 +147,8 @@ def link_intent_to_transform_ledger(
     ]
     valid_refs = set(step_refs)
     for contract_key in ("panels", "figure_contracts"):
-        contracts = (
-            linked.get(contract_key)
-            if isinstance(linked.get(contract_key), list)
-            else []
-        )
+        contracts_value = linked.get(contract_key)
+        contracts = contracts_value if isinstance(contracts_value, list) else []
         structured = [contract for contract in contracts if isinstance(contract, dict)]
         for contract in structured:
             existing_refs = contract.get("transform_step_refs")
