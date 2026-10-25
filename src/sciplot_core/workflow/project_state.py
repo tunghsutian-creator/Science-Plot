@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from sciplot_core.figure_plan import sync_figure_plan_projection
@@ -15,6 +16,16 @@ from sciplot_core.project_manifest import (
     read_intake_project_manifest,
 )
 from sciplot_core.one_step import build_quality_actions
+
+
+def _object_field(payload: dict[str, Any], name: str) -> dict[str, Any]:
+    value = payload.get(name)
+    return value if isinstance(value, dict) else {}
+
+
+def _array_field(payload: dict[str, Any], name: str) -> list[Any]:
+    value = payload.get(name)
+    return value if isinstance(value, list) else []
 
 
 def _write_one_step_status(output_dir: Path, payload: dict[str, Any]) -> None:
@@ -61,58 +72,28 @@ def _write_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) -> str:
             else figure
         )
         figure_lines.append(f"- `{rel}`")
-    semantic = (
-        manifest.get("semantic") if isinstance(manifest.get("semantic"), dict) else {}
-    )
-    request = (
-        manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
-    )
+    semantic = _object_field(manifest, "semantic")
+    request = _object_field(manifest, "request")
     size = ""
-    render_options = (
-        request.get("render_options")
-        if isinstance(request.get("render_options"), dict)
-        else {}
-    )
+    render_options = _object_field(request, "render_options")
     if isinstance(render_options.get("size"), str):
         size = str(render_options["size"])
-    layout_quality = (
-        manifest.get("layout_quality")
-        if isinstance(manifest.get("layout_quality"), dict)
-        else {}
-    )
-    layout_issue_ids = (
-        layout_quality.get("issue_ids")
-        if isinstance(layout_quality.get("issue_ids"), list)
-        else []
-    )
-    layout_autofixes = (
-        layout_quality.get("autofixes_applied")
-        if isinstance(layout_quality.get("autofixes_applied"), list)
-        else []
-    )
+    layout_quality = _object_field(manifest, "layout_quality")
+    layout_issue_ids = _array_field(layout_quality, "issue_ids")
+    layout_autofixes = _array_field(layout_quality, "autofixes_applied")
     quality_actions = build_quality_actions(
         issue_ids=[str(item) for item in layout_issue_ids],
         autofixes_applied=[str(item) for item in layout_autofixes],
-        layout_summaries=layout_quality.get("summaries")
-        if isinstance(layout_quality.get("summaries"), list)
-        else [],
+        layout_summaries=_array_field(layout_quality, "summaries"),
     )
     quality_action_lines = [
         f"- `{action.get('status', 'suggested')}` {action.get('label', action.get('id', 'Quality action'))}: "
         f"{action.get('reason', '')}"
         for action in quality_actions
     ]
-    split_plan = (
-        layout_quality.get("split_plan")
-        if isinstance(layout_quality.get("split_plan"), dict)
-        else {}
-    )
+    split_plan = _object_field(layout_quality, "split_plan")
     if split_plan:
-        split_policy = (
-            split_plan.get("policy")
-            if isinstance(split_plan.get("policy"), dict)
-            else {}
-        )
+        split_policy = _object_field(split_plan, "policy")
         split_mode = split_policy.get("mode", "")
         split_line = (
             f"- Split: applied=`{bool(split_plan.get('applied'))}`, "
@@ -170,6 +151,50 @@ def _write_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) -> str:
     return "revision_brief.md"
 
 
+def _project_manifest_after_run(existing_project_manifest: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
+    """Derive the complete run registration without native preparation or IO."""
+    project_manifest = deepcopy(existing_project_manifest)
+    manifest = deepcopy(manifest)
+    project_manifest["last_run"] = {
+        "completed_at": manifest["created_at"],
+        "output": manifest["output"],
+        "figures": manifest["figures"],
+        "analysis_metrics": manifest.get("result", {}).get("analysis_metrics", []),
+        "qa": manifest.get("qa", {}),
+        "revision_brief": manifest.get("revision_brief"),
+        "package_contract": manifest.get("package_contract", {}),
+        "delivery_package": manifest.get("delivery_package", {}),
+        "layout_quality": manifest.get("layout_quality", {}),
+        "one_step": manifest.get("one_step", {}),
+        "publication_intent": manifest.get("publication_intent", {}),
+        "transform_ledger": manifest.get("transform_ledger", {}),
+        "journal_profile": manifest.get("journal_profile", {}),
+        "publication_qa": manifest.get("publication_qa", {}),
+    }
+    if isinstance(manifest.get("study_model"), dict):
+        project_manifest["study_model"] = manifest["study_model"]
+        project_manifest["last_run"]["study_model"] = manifest["study_model"]
+    if isinstance(manifest.get("package_contract"), dict):
+        project_manifest["package_contract"] = manifest["package_contract"]
+    if isinstance(manifest.get("layout_quality"), dict):
+        project_manifest["layout_quality"] = manifest["layout_quality"]
+    if isinstance(manifest.get("delivery_package"), dict):
+        project_manifest["delivery_package"] = manifest["delivery_package"]
+    if isinstance(manifest.get("one_step"), dict):
+        project_manifest["one_step"] = manifest["one_step"]
+    sync_figure_plan_projection(project_manifest, manifest)
+    sync_figure_plan_projection(project_manifest["last_run"], manifest)
+    for key in (
+        "publication_intent",
+        "transform_ledger",
+        "journal_profile",
+        "publication_qa",
+    ):
+        if isinstance(manifest.get(key), dict):
+            project_manifest[key] = manifest[key]
+    return project_manifest
+
+
 def _update_intake_project_after_run(
     request_path: Path, manifest: dict[str, Any]
 ) -> None:
@@ -190,41 +215,7 @@ def _update_intake_project_after_run(
         require_existing=True,
     ) as project_manifest:
         assert project_manifest is not None
-        project_manifest["last_run"] = {
-            "completed_at": manifest["created_at"],
-            "output": manifest["output"],
-            "figures": manifest["figures"],
-            "analysis_metrics": manifest.get("result", {}).get("analysis_metrics", []),
-            "qa": manifest.get("qa", {}),
-            "revision_brief": manifest.get("revision_brief"),
-            "package_contract": manifest.get("package_contract", {}),
-            "delivery_package": manifest.get("delivery_package", {}),
-            "layout_quality": manifest.get("layout_quality", {}),
-            "one_step": manifest.get("one_step", {}),
-            "publication_intent": manifest.get("publication_intent", {}),
-            "transform_ledger": manifest.get("transform_ledger", {}),
-            "journal_profile": manifest.get("journal_profile", {}),
-            "publication_qa": manifest.get("publication_qa", {}),
-        }
-        if isinstance(manifest.get("study_model"), dict):
-            project_manifest["study_model"] = manifest["study_model"]
-            project_manifest["last_run"]["study_model"] = manifest["study_model"]
-        if isinstance(manifest.get("package_contract"), dict):
-            project_manifest["package_contract"] = manifest["package_contract"]
-        if isinstance(manifest.get("layout_quality"), dict):
-            project_manifest["layout_quality"] = manifest["layout_quality"]
-        if isinstance(manifest.get("delivery_package"), dict):
-            project_manifest["delivery_package"] = manifest["delivery_package"]
-        if isinstance(manifest.get("one_step"), dict):
-            project_manifest["one_step"] = manifest["one_step"]
-        sync_figure_plan_projection(project_manifest, manifest)
-        sync_figure_plan_projection(project_manifest["last_run"], manifest)
-        for key in (
-            "publication_intent",
-            "transform_ledger",
-            "journal_profile",
-            "publication_qa",
-        ):
-            if isinstance(manifest.get(key), dict):
-                project_manifest[key] = manifest[key]
+        updated = _project_manifest_after_run(project_manifest, manifest)
+        project_manifest.clear()
+        project_manifest.update(updated)
     refresh_intake_project_zip(project_dir)

@@ -732,7 +732,15 @@ def test_failed_project_packaging_rolls_back_and_retry_reuses_base_name(
     with pytest.raises(OSError, match="synthetic ZIP failure"):
         _build_project(output_root, b"x,y\n0,1\n")
 
-    assert list(output_root.iterdir()) == []
+    assert [path.name for path in output_root.iterdir()] == [".sciplot_session_locks"]
+    lock_root = output_root / ".sciplot_session_locks"
+    assert lock_root.is_dir() and not lock_root.is_symlink()
+    assert lock_root.stat().st_mode & 0o777 == 0o700
+    assert list(lock_root.iterdir())
+    for lock in lock_root.iterdir():
+        assert lock.suffix == ".lock" and len(lock.stem) == 64
+        assert lock.is_file() and not lock.is_symlink()
+        assert lock.read_bytes() == b"" and lock.stat().st_mode & 0o777 == 0o600
 
     monkeypatch.setattr(project_builder, "_write_zip", original_write_zip)
     project = _build_project(output_root, b"x,y\n0,1\n")

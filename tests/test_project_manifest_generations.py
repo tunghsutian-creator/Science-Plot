@@ -53,3 +53,22 @@ def test_cold_project_adds_only_finite_local_snapshot_capability(tmp_path):
     assert reopened.locations["snapshot"] == cold.root / ".sciplot_resources/snapshot"
     assert reopened.read_bytes("@snapshot/portable.zip") == staged["@snapshot/portable.zip"]
     assert not (tmp_path / "portable.zip").exists()
+
+
+def test_pure_run_registration_preserves_inputs_and_all_scientific_metadata(tmp_path):
+    from copy import deepcopy
+    from sciplot_core.workflow.project_state import _project_manifest_after_run
+
+    existing = {"project_slug": "existing", "studio": {"status": "prepared"}}
+    run = {"created_at": "saved", "output": str(tmp_path / "run"), "figures": ["exact.pdf"],
+           "study_model": {"source_id": "unchanged"}, "transform_ledger": {"pin": "same"},
+           "publication_qa": {"status": "passed"}, "qa": {"status": "passed"}}
+    before_existing, before_run = deepcopy(existing), deepcopy(run)
+    result = _project_manifest_after_run(existing, run)
+    assert existing == before_existing and run == before_run
+    assert result["studio"] == {"status": "prepared"}
+    assert result["last_run"]["figures"] == ["exact.pdf"]
+    assert result["study_model"] == result["last_run"]["study_model"] == run["study_model"]
+    assert result["transform_ledger"] == run["transform_ledger"]
+    result["study_model"]["source_id"] = "private result change"
+    assert run == before_run
