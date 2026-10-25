@@ -74,6 +74,7 @@ def mark_applying(io: StoreIO, record: dict[str, Any]) -> dict[str, Any]:
 
 def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> dict[str, Any]:
     from uuid import uuid4
+    from .produced_sources import bind
 
     result: dict[str, Any] = {}
     for supplied in sources or ():
@@ -89,7 +90,7 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
             from sciplot_core.project_commands.resources import PreparedSource
 
             source = PreparedSource(source_id, item["locator"], item["version"], item["data"],
-                                    tuple(item.get("aliases", ())), item.get("mode", 0o600))
+                                    tuple(item.get("aliases", ())), item.get("mode", 0o600), item.get("produced_resource"))
             if item.get("size", len(source.data)) != len(source.data):
                 raise ProjectConflict("The prepared source size differs from its exact bytes.")
             entry = {**io.put(source.data), "source_id": source_id, "locator": source.locator,
@@ -98,6 +99,7 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
                 if any(prior.get(key) != entry[key] for key in entry):
                     raise ProjectConflict("A prepared source conflicts with the existing immutable source version.")
                 entry = dict(prior)
+            entry = bind(entry, source.produced_resource)
             aliases = sorted(set(entry.get("aliases", [])) | set(source.aliases))
             if aliases:
                 entry["aliases"] = aliases
@@ -108,7 +110,7 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
             if str(item.get("locator") or path) != prior.get("locator"):
                 raise ProjectConflict("The relocated source descriptor changed its preserved original locator.")
             io.get(prior)
-            result.setdefault(source_id, {})[version] = dict(prior)
+            result.setdefault(source_id, {})[version] = bind(dict(prior), item.get("produced_resource"))
             continue
         parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
@@ -124,6 +126,7 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
             if prior is None or prior.get("locator") != entry["locator"] or prior["sha256"] != version:
                 raise ProjectConflict("Only an existing source ID/version can preserve a different host read locator.")
             entry = dict(prior)
+        entry = bind(entry, item.get("produced_resource"))
         aliases = sorted(set(entry.get("aliases", [])) | set(item.get("aliases", [])))
         if aliases:
             entry["aliases"] = aliases
@@ -146,6 +149,16 @@ def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | P
         if isinstance(writes[name], bytes):
             frozen["writes"][name]["mode"] = record["adoption_modes"][name]
     frozen = json.loads(json.dumps(json_safe(frozen), allow_nan=False))
+    from .produced_sources import frozen_output
+
+    source_baseline = state.head(io)
+    assert source_baseline is not None
+    for versions in frozen["sources"].values():
+        for entry in versions.values():
+            matched = frozen_output(io, entry, {**record, "draft": frozen})
+            prior = source_baseline["sources"].get(entry["source_id"], {}).get(entry["version"], {})
+            if entry.get("produced_resource") is not None and not matched and prior.get("produced_resource") != entry["produced_resource"]:
+                raise ProjectConflict("A new produced source binding requires its exact same-command sealed output.")
     seal(io, record, frozen)
     from .namespace_transfers import require as require_namespaces
 
@@ -249,11 +262,14 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
 
 def verify_sources(io: StoreIO, sources: Mapping[str, Any], record: dict[str, Any] | None = None) -> None:
     from .source_observations import observations
+    from .produced_sources import frozen_output
 
     selected = observations(record) if record is not None else {}
     local = io.read("local_sources.json") or {"versions": {}}
     for source_id, versions in sources.items():
         for version, entry in versions.items():
+            if frozen_output(io, entry, record):
+                continue
             if any(value.source_id == source_id and value.observed_sha256 == version for value in selected.values()):
                 io.get(entry)  # The exact confined original resource was rechecked immediately before this call.
                 continue

@@ -71,7 +71,10 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
                 before = destination[version]
                 before_core = {key: item for key, item in before.items() if key != "aliases"}
                 after_core = {key: item for key, item in entry.items() if key != "aliases"}
-                if (before_core != after_core or not set(before.get("aliases", [])).issubset(entry.get("aliases", []))):
+                before_produced = before_core.pop("produced_resource", None)
+                after_produced = after_core.pop("produced_resource", None)
+                if (before_core != after_core or before_produced is not None and before_produced != after_produced
+                        or not set(before.get("aliases", [])).issubset(entry.get("aliases", []))):
                     raise ProjectConflict("A stable source version already has different provenance or lost an explicit alias.")
             destination[version] = entry
     alias_owners: dict[tuple[str, str, str], str] = {}
