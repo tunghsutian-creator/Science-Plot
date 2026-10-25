@@ -165,6 +165,9 @@ from sciplot_core.studio_core.veusz_document import (
 from sciplot_core.studio_render.terminal_contract import (
     derive_terminal_render_data_contract as derive_terminal_render_data_contract,
 )
+from sciplot_core.studio_core.native_export_commands import (
+    export_native_document_artifacts as export_native_document_artifacts,
+)
 from sciplot_core.studio_core.export_execution import (
     export_studio_document as export_studio_document,
 )
@@ -258,6 +261,7 @@ __all__ = [
     "configure_studio_window_presentation",
     "ensure_veusz_qsettings_compat",
     "export_studio_document",
+    "export_native_document_artifacts",
     "maybe_reexec_with_qt_runtime",
     "migrate_studio_document_unit_labels",
     "prepare_studio_document",

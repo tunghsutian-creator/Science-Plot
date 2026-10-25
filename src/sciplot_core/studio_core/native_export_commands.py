@@ -65,3 +65,11 @@ def export_saved_native(document: Path, *, formats: list[str], audit_spec_path: 
         record = app.execute(command, lambda: ProjectMutation(writes, payload,
             sources=source_versions(binding, store=repository), artifacts=artifacts))
         return export_projection(record, repository)
+
+
+def export_native_document_artifacts(document: Path, *, formats: list[str]) -> dict[str, Any]:
+    """Export one registered saved figure and its QA receipt in one generation."""
+    from sciplot_core.studio_core.registry_state import _veusz_spec_path
+
+    return export_saved_native(document, formats=formats, audit_spec_path=_veusz_spec_path(document),
+                               standalone_receipt=True)

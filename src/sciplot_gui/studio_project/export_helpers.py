@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from PyQt6 import QtWidgets
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.studio import export_project_document
+from sciplot_core.studio import export_project_document, export_native_document_artifacts
 from sciplot_gui.studio_assistant.native_batch import native_batch_blocker
 from sciplot_gui.studio_project_status import (
     _read_json,
@@ -70,11 +70,7 @@ class ExportHelpersMixin:
 
     def _standalone_export(self) -> dict[str, Any]:
         if self.project_dir is not None:
-            from sciplot_core.studio_core.native_export_commands import export_saved_native
-            from sciplot_core.studio_core.registry_state import _veusz_spec_path
-
-            export_payload = export_saved_native(self.document_path, formats=["pdf", "tiff_300"],
-                audit_spec_path=_veusz_spec_path(self.document_path), standalone_receipt=True)
+            export_payload = export_native_document_artifacts(self.document_path, formats=["pdf", "tiff_300"])
             receipt = export_payload["standalone_export"]
             return {"kind": "sciplot_studio_menu_export", "version": 1,
                 "scope": "standalone_exact_current_export", "status": receipt["status"], "state": receipt["state"],
