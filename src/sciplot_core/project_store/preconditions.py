@@ -1,0 +1,77 @@
+"""Closed read/write admission and exact native import guards."""
+from __future__ import annotations
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+from .errors import ProjectConflict, ProjectStoreError
+from .io import StoreIO, sha
+import sciplot_core.project_store.state as state
+
+
+def projected_writes(record: Mapping[str, Any]) -> list[dict[str, Any]]:
+    selected = record.get("metadata", {}).get("projected_writes", [])
+    if not isinstance(selected, list):
+        raise ProjectStoreError("Projected writes must use the fixed domain descriptors.")
+    reads = record.get("projected_reads", [])
+    for item in selected:
+        if not isinstance(item, dict) or set(item) != {"resource", "kind", "key", "sha256"} or item not in reads:
+            raise ProjectStoreError("Each projected write must bind the identical admitted projected read.")
+    return selected
+
+
+def native_adoptions(record: Mapping[str, Any]) -> dict[str, dict[str, str]]:
+    import re
+
+    values = record.get("metadata", {}).get("native_adoptions", [])
+    if not values:
+        return {}
+    if record["metadata"].get("kind") != "native_import":
+        raise ProjectStoreError("Only an explicit audited native import can adopt outside native bytes.")
+    result = {}
+    for item in values:
+        if (not isinstance(item, dict) or set(item) != {"resource", "before_sha256", "observed_sha256", "audit_sha256"}
+                or any(not isinstance(item[key], str) or not re.fullmatch(r"[0-9a-f]{64}", item[key])
+                       for key in ("before_sha256", "observed_sha256", "audit_sha256"))
+                or item["resource"] not in record["write_set"] or item["resource"] in result
+                or Path(item["resource"]).suffix.casefold() != ".vsz"
+                or record["read_set"].get(item["resource"]) != item["before_sha256"]):
+            raise ProjectStoreError("A native adoption must exactly bind one guarded native resource and audit identity.")
+        result[item["resource"]] = item
+    return result
+
+
+def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, Any]) -> None:
+    from .errors import ProjectRecoveryRequired
+
+    adoptions = native_adoptions(record)
+    baseline = state.reachable(io, dict(current), record["expected_generation"])
+    if baseline["project_id"] != current["project_id"]:
+        raise ProjectConflict("The expected generation belongs to another project.")
+    for name, expected in record["read_set"].items():
+        old = baseline["files"].get(name)
+        latest = current["files"].get(name)
+        if expected != (old["sha256"] if old else None) or expected != (latest["sha256"] if latest else None):
+            raise ProjectConflict(f"A declared project read changed: {name}")
+        physical = io.physical(name)
+        actual = sha(physical[0]) if physical else None
+        observed = adoptions[name]["observed_sha256"] if name in adoptions else expected
+        if actual != observed:
+            raise ProjectConflict(f"Outside bytes changed a declared project read: {name}")
+    projected = record.get("projected_reads", [])
+    if projected:
+        from sciplot_core.project_commands.read_projections import projection_digest
+
+        for item in projected:
+            name = item["resource"]
+            before = baseline["files"].get(name)
+            after = current["files"].get(name)
+            if before is None or after is None:
+                raise ProjectConflict("A projected read resource is missing.")
+            physical = io.physical(name)
+            if physical is None or sha(physical[0]) != after["sha256"]:
+                raise ProjectRecoveryRequired("A projected resource has unregistered outside bytes.")
+            for entry in (before, after):
+                if projection_digest(io.get(entry), kind=item["kind"], key=item["key"]) != item["sha256"]:
+                    raise ProjectConflict("The selected project membership or source projection changed.")
+
+

@@ -7,7 +7,7 @@ from typing import Any
 
 from .errors import ProjectConflict, ProjectRecoveryRequired
 from .io import StoreIO, directory, install, sha
-from . import state
+import sciplot_core.project_store.state as state
 
 
 def pending(io: StoreIO, current: dict[str, Any]) -> bool:

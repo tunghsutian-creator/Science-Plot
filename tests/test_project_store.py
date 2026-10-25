@@ -269,3 +269,26 @@ def test_shared_runtime_locators_preserve_literals_after_move_and_later_commits(
         cold.resolve_path(same_name, expected_sha256=expected)
     with pytest.raises(ProjectStoreError):
         cold.literal_path(same_name)
+
+
+def test_cold_mutation_reuses_only_registered_source_version_without_changing_provenance(tmp_path):
+    from sciplot_core.project_store.io import sha
+
+    store, snapshot = fixture_store(tmp_path)
+    original = tmp_path / "outside.csv"
+    original.write_bytes(b"source outside project")
+    source = {"source_id": uuid4().hex, "path": str(original), "version": sha(original.read_bytes())}
+    reserve(store, snapshot)
+    store.publish("edit", "edit-digest", writes={"studio/document.vsz": b"first", "studio/spec.json": b"spec"},
+                  result={}, sources=[source])
+    preserved = store.snapshot()["sources"][source["source_id"]][source["version"]]
+    bundle = store.export_bundle(tmp_path / "bundle")
+    store.root.rename(tmp_path / "old-project-offline")
+    original.rename(tmp_path / "original-offline.csv")
+    cold = FileProjectStore.import_bundle(bundle, tmp_path / "cold-project")
+    current = cold.snapshot()
+    reserve(cold, current, "cold-edit")
+    cold.publish("cold-edit", "cold-edit-digest", writes={"studio/document.vsz": b"cold new",
+        "studio/spec.json": b"spec"}, result={}, sources=[source])
+    assert cold.snapshot()["sources"][source["source_id"]][source["version"]] == preserved
+    assert cold.resolve_path(source["path"], expected_sha256=source["version"], source_id=source["source_id"]).read_bytes() == b"source outside project"

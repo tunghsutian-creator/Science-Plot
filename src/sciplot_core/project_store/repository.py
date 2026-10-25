@@ -7,7 +7,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import commands, projection, publication, state
+import sciplot_core.project_store.commands as commands
+import sciplot_core.project_store.projection as projection
+import sciplot_core.project_store.publication as publication
+import sciplot_core.project_store.state as state
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
 from .io import STORE, StoreIO, directory, install, parts, read_file, sha
 from .resources import ResourceRoot
@@ -228,7 +231,7 @@ class FileProjectStore:
 
     def resolve_path(self, original: str | Path, *, expected_sha256: str | None = None,
                      source_id: str | None = None, generation: str | None = None) -> Path:
-        from . import locators
+        import sciplot_core.project_store.locators as locators
 
         literal = str(original)
         with self._locked() as (io, current):
@@ -267,7 +270,7 @@ class FileProjectStore:
             return source
 
     def literal_path(self, actual: Path, *, generation: str | None = None) -> str:
-        from . import locators
+        import sciplot_core.project_store.locators as locators
 
         with self._locked() as (io, current):
             value = state.reachable(io, current, generation) if generation else current
@@ -304,4 +307,4 @@ class FileProjectStore:
     def import_bundle(cls, bundle: Path, destination: Path) -> FileProjectStore:
         from .portable import import_bundle
 
-        return import_bundle(bundle, destination)
+        return import_bundle(bundle, destination, factory=lambda root, locations: cls(root, locations=locations))

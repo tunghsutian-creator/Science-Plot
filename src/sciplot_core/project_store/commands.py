@@ -9,39 +9,8 @@ from typing import Any
 
 from .errors import ProjectCommandConflict, ProjectConflict, ProjectStoreError
 from .io import StoreIO, digest, directory, install, parts, read_file, sha
-from . import state
-
-
-def projected_writes(record: Mapping[str, Any]) -> list[dict[str, Any]]:
-    selected = record.get("metadata", {}).get("projected_writes", [])
-    if not isinstance(selected, list):
-        raise ProjectStoreError("Projected writes must use the fixed domain descriptors.")
-    reads = record.get("projected_reads", [])
-    for item in selected:
-        if not isinstance(item, dict) or set(item) != {"resource", "kind", "key", "sha256"} or item not in reads:
-            raise ProjectStoreError("Each projected write must bind the identical admitted projected read.")
-    return selected
-
-
-def native_adoptions(record: Mapping[str, Any]) -> dict[str, dict[str, str]]:
-    import re
-
-    values = record.get("metadata", {}).get("native_adoptions", [])
-    if not values:
-        return {}
-    if record["metadata"].get("kind") != "native_import":
-        raise ProjectStoreError("Only an explicit audited native import can adopt outside native bytes.")
-    result = {}
-    for item in values:
-        if (not isinstance(item, dict) or set(item) != {"resource", "before_sha256", "observed_sha256", "audit_sha256"}
-                or any(not isinstance(item[key], str) or not re.fullmatch(r"[0-9a-f]{64}", item[key])
-                       for key in ("before_sha256", "observed_sha256", "audit_sha256"))
-                or item["resource"] not in record["write_set"] or item["resource"] in result
-                or Path(item["resource"]).suffix.casefold() != ".vsz"
-                or record["read_set"].get(item["resource"]) != item["before_sha256"]):
-            raise ProjectStoreError("A native adoption must exactly bind one guarded native resource and audit identity.")
-        result[item["resource"]] = item
-    return result
+import sciplot_core.project_store.state as state
+import sciplot_core.project_store.preconditions as preconditions
 
 
 def reserve(io: StoreIO, current: dict[str, Any], command_id: str, command_digest: str, *,
@@ -57,14 +26,14 @@ def reserve(io: StoreIO, current: dict[str, Any], command_id: str, command_diges
         "expected_generation": expected_generation or current["generation"], "generation": current["generation"],
         "read_set": dict(read_set), "write_set": sorted(set(write_set)),
         "projected_reads": list(projected_reads), "metadata": metadata or {}, "result": {}, "review": {}}
-    projected = {item["resource"] for item in projected_writes(record)}
-    native_adoptions(record)
+    projected = {item["resource"] for item in preconditions.projected_writes(record)}
+    preconditions.native_adoptions(record)
     for name in [*record["read_set"], *record["write_set"]]:
         parts(name)
         io.split(name)
     if any(name not in read_set and name not in projected for name in record["write_set"]):
         raise ProjectStoreError("Every full-resource write needs an exact before hash or absence read.")
-    state.require_reads(io, current, record)
+    preconditions.require_reads(io, current, record)
     state.save_command(io, record)
     return record
 
@@ -88,6 +57,16 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
         if not isinstance(source_id, str) or len(source_id) != 32 or any(c not in "0123456789abcdef" for c in source_id):
             raise ProjectStoreError("A source identity must be a stable UUID hex value.")
         path = Path(item["path"])
+        local = io.read("local_sources.json") or {"versions": {}}
+        current = state.head(io)
+        version = item.get("version")
+        prior = current["sources"].get(source_id, {}).get(version) if current else None
+        if prior is not None and local["versions"].get(source_id, {}).get(version) == prior["sha256"]:
+            if str(item.get("locator") or path) != prior.get("locator"):
+                raise ProjectConflict("The relocated source descriptor changed its preserved original locator.")
+            io.get(prior)
+            result.setdefault(source_id, {})[version] = dict(prior)
+            continue
         parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
             data, mode = read_file(parent, path.name)
@@ -97,7 +76,11 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
         if item.get("version") != version:
             raise ProjectConflict("The captured source differs from its explicit version.")
         entry = {**io.put(data), "mode": mode, "source_id": source_id,
-                 "locator": str(path), "version": version}
+                 "locator": str(item.get("locator") or path), "version": version}
+        if entry["locator"] != str(path):
+            if prior is None or prior.get("locator") != entry["locator"] or prior["sha256"] != version:
+                raise ProjectConflict("Only an existing source ID/version can preserve a different host read locator.")
+            entry = dict(prior)
         result.setdefault(source_id, {})[entry["version"]] = entry
     return result
 

@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from .errors import ProjectConflict, ProjectStoreError
-from .io import StoreIO, digest, parts, sha
+from .io import StoreIO, digest, parts
 
 
 def boundary(_name: str) -> None:
@@ -63,20 +63,10 @@ def write_generation(io: StoreIO, value: dict[str, Any]) -> None:
     io.write(f"generations/{value['generation']}.json", value, exclusive=True)
 
 
-def publish_head(io: StoreIO, value: dict[str, Any], *, selected_sources: dict[str, Any] | None = None,
-                 read_record: dict[str, Any] | None = None, read_current: dict[str, Any] | None = None) -> None:
-    boundary("before_head")
-    io.verify_roots()
-    if read_record is not None and read_current is not None:
-        require_reads(io, read_current, read_record)
-    if selected_sources:
-        from .commands import verify_sources
-
-        verify_sources(io, selected_sources)
+def publish_head(io: StoreIO, value: dict[str, Any]) -> None:
     io.write("head.json", {"kind": "sciplot_project_head", "version": 1,
              "project_id": value["project_id"], "generation": value["generation"],
              "sequence": value["sequence"], "sha256": digest(value)})
-    boundary("after_head")
 
 
 def import_legacy(io: StoreIO) -> dict[str, Any]:
@@ -98,7 +88,10 @@ def import_legacy(io: StoreIO) -> dict[str, Any]:
         "locators": {"": str(io.root), **{key: str(path) for key, path in io.locations.items()}},
         "origin": "explicit_legacy_import"}
     write_generation(io, value)
+    boundary("before_head")
+    io.verify_roots()
     publish_head(io, value)
+    boundary("after_head")
     return value
 
 
@@ -120,43 +113,6 @@ def command(io: StoreIO, command_id: str, command_digest: str | None = None) -> 
 
 def save_command(io: StoreIO, value: dict[str, Any]) -> None:
     io.write(command_path(value["command_id"]), value)
-
-
-def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, Any]) -> None:
-    from .errors import ProjectRecoveryRequired
-
-    from .commands import native_adoptions
-
-    adoptions = native_adoptions(record)
-    baseline = reachable(io, dict(current), record["expected_generation"])
-    if baseline["project_id"] != current["project_id"]:
-        raise ProjectConflict("The expected generation belongs to another project.")
-    for name, expected in record["read_set"].items():
-        old = baseline["files"].get(name)
-        latest = current["files"].get(name)
-        if expected != (old["sha256"] if old else None) or expected != (latest["sha256"] if latest else None):
-            raise ProjectConflict(f"A declared project read changed: {name}")
-        physical = io.physical(name)
-        actual = sha(physical[0]) if physical else None
-        observed = adoptions[name]["observed_sha256"] if name in adoptions else expected
-        if actual != observed:
-            raise ProjectConflict(f"Outside bytes changed a declared project read: {name}")
-    projected = record.get("projected_reads", [])
-    if projected:
-        from sciplot_core.project_commands.read_projections import projection_digest
-
-        for item in projected:
-            name = item["resource"]
-            before = baseline["files"].get(name)
-            after = current["files"].get(name)
-            if before is None or after is None:
-                raise ProjectConflict("A projected read resource is missing.")
-            physical = io.physical(name)
-            if physical is None or sha(physical[0]) != after["sha256"]:
-                raise ProjectRecoveryRequired("A projected resource has unregistered outside bytes.")
-            for entry in (before, after):
-                if projection_digest(io.get(entry), kind=item["kind"], key=item["key"]) != item["sha256"]:
-                    raise ProjectConflict("The selected project membership or source projection changed.")
 
 
 def import_writes(io: StoreIO, writes: Mapping[str, bytes | Path | None]) -> dict[str, Any]:

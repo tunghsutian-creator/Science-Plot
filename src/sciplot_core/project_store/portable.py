@@ -6,14 +6,23 @@ import json
 import os
 from pathlib import Path
 import re
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Mapping
+from contextlib import AbstractContextManager
+from typing import Any, Protocol, TypeVar
 
 from .errors import ProjectConflict, ProjectStoreError
-from .io import STORE, directory, install, parts, read_file, sha
+from .io import STORE, StoreIO, directory, install, parts, read_file, sha
 from .resources import ResourceRoot
 
-if TYPE_CHECKING:
-    from .repository import FileProjectStore
+class BundleStore(Protocol):
+    root: Path
+    locations: dict[str, Path]
+    location_members: dict[str, tuple[str, ...] | None]
+
+    def _locked(self, *, import_legacy: bool = False, repair: bool = False) -> AbstractContextManager[tuple[StoreIO, dict[str, Any]]]: ...
+
+
+StoreT = TypeVar("StoreT", bound=BundleStore)
 
 
 def _members(fd: int, prefix: tuple[str, ...] = ()) -> dict[str, tuple[bytes, int]]:
@@ -32,7 +41,7 @@ def _members(fd: int, prefix: tuple[str, ...] = ()) -> dict[str, tuple[bytes, in
     return result
 
 
-def export_bundle(store: FileProjectStore, destination: Path) -> Path:
+def export_bundle(store: BundleStore, destination: Path) -> Path:
     target = Path(destination).expanduser().absolute()
     if target.exists() or target.is_symlink():
         raise FileExistsError("A portable bundle destination must be new.")
@@ -57,10 +66,10 @@ def export_bundle(store: FileProjectStore, destination: Path) -> Path:
     return target
 
 
-def import_bundle(bundle: Path, destination: Path) -> FileProjectStore:
-    from .repository import FileProjectStore
-    from .io import StoreIO
-    from . import projection, state
+def import_bundle(bundle: Path, destination: Path, *,
+                  factory: Callable[[Path, Mapping[str, Path | ResourceRoot]], StoreT]) -> StoreT:
+    import sciplot_core.project_store.projection as projection
+    import sciplot_core.project_store.state as state
 
     source = Path(bundle).expanduser().resolve(strict=True)
     target = Path(destination).expanduser().absolute()
@@ -100,7 +109,7 @@ def import_bundle(bundle: Path, destination: Path) -> FileProjectStore:
             os.close(root_fd)
     finally:
         os.close(source_fd)
-    store = FileProjectStore(target, locations=locations)
+    store = factory(target, locations)
     with StoreIO(store.root, store.locations, store.location_members).locked() as io:
         current = state.head(io)
         if current is None or (current["project_id"], current["generation"]) != (header["project_id"], header["generation"]):
@@ -108,7 +117,7 @@ def import_bundle(bundle: Path, destination: Path) -> FileProjectStore:
         io.write("local_locations.json", {"ids": ids, "members": store.location_members})
         source_versions = {source_id: {version: entry["sha256"]
             for version, entry in versions.items()} for source_id, versions in current["sources"].items()}
-        from . import commands
+        import sciplot_core.project_store.commands as commands
 
         try:
             with directory(io.fd, ("commands",)) as command_fd:

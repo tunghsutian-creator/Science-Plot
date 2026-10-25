@@ -13,7 +13,8 @@ from sciplot_core.project_commands import ProjectCommand, ProjectCommands, Proje
 from .io import StoreIO, owned_io
 from .repository import FileProjectStore
 from .resources import ResourceRoot
-from . import projection, state
+import sciplot_core.project_store.projection as projection
+import sciplot_core.project_store.state as state
 
 
 def store_for_project(project: Path, *, locations: Mapping[str, Path | ResourceRoot] | None = None) -> FileProjectStore:

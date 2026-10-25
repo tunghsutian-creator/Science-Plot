@@ -6,7 +6,10 @@ from copy import deepcopy
 from typing import Any
 from uuid import uuid4
 
-from . import commands, projection, state
+import sciplot_core.project_store.commands as commands
+import sciplot_core.project_store.projection as projection
+import sciplot_core.project_store.state as state
+import sciplot_core.project_store.preconditions as preconditions
 from .errors import ProjectCommandConflict, ProjectConflict
 from .io import StoreIO, digest
 
@@ -21,14 +24,14 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
         return state.command(io, record["command_id"], record["command_digest"]) or record
     if record["phase"] not in {"reserved", "applying", "accepted"}:
         raise ProjectCommandConflict("The command cannot publish without its frozen accepted decision.")
-    state.require_reads(io, current, record)
+    preconditions.require_reads(io, current, record)
     writes = dict(frozen["writes"])
     if set(writes) != set(record["write_set"]):
         raise ProjectConflict("Publication does not cover the exact reserved write set.")
-    for name, adoption in commands.native_adoptions(record).items():
+    for name, adoption in preconditions.native_adoptions(record).items():
         if writes[name] is None or writes[name]["sha256"] != adoption["observed_sha256"]:
             raise ProjectConflict("The imported native candidate differs from the explicitly audited outside bytes.")
-    projected = commands.projected_writes(record)
+    projected = preconditions.projected_writes(record)
     for name in {item["resource"] for item in projected}:
         from sciplot_core.project_commands.read_projections import merge_projection
 
@@ -70,7 +73,12 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     record.update(install_parent=current["generation"], install_generation=value["generation"],
                   install_files=sorted(writes), pending_result=frozen["result"])
     state.save_command(io, record)
-    state.publish_head(io, value, selected_sources=frozen.get("sources"), read_record=record, read_current=current)
+    state.boundary("before_head")
+    io.verify_roots()
+    preconditions.require_reads(io, current, record)
+    commands.verify_sources(io, frozen.get("sources", {}))
+    state.publish_head(io, value)
+    state.boundary("after_head")
     projection.project(io, record, value)
     record.update(phase="complete", generation=value["generation"], result=frozen["result"])
     state.save_command(io, record)
