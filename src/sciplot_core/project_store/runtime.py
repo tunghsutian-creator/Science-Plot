@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.source_locations import (
-    literal_source_path, resolve_source_path, source_location_scope,
+    literal_source_path, resolve_source_path, selected_source_resolver, source_location_scope,
 )
 from . import state
 from .errors import ProjectConflict
@@ -62,3 +62,9 @@ def project_runtime(store: FileProjectStore, generation: str | None = None) -> I
 # Host adapters use the same port as pure source consumers.
 resolve_runtime_path = resolve_source_path
 literal_runtime_path = literal_source_path
+
+
+def selected_project_store() -> FileProjectStore | None:
+    """Return only the currently host-bound concrete store, preserving its caps."""
+    selected = selected_source_resolver()
+    return selected.store if isinstance(selected, ProjectSourceResolver) else None
