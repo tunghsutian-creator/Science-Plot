@@ -132,6 +132,10 @@
       "source_path": "src/sciplot_core/project_lifecycle/contracts.py",
       "sha256": "c3ce4a3e65901454422b886aa8a3ad0011b5bc007bf94f70dcf81b703f4538bb"
     },
+    "src/sciplot_core/project_lifecycle/errors.py": {
+      "source_path": "src/sciplot_core/project_lifecycle/errors.py",
+      "sha256": "a99e7cb80a20f6e30340cf35744e432cc773722212ae86f9ae7e5c04f9098e9f"
+    },
     "src/sciplot_core/project_lifecycle/journal_identity.py": {
       "source_path": "src/sciplot_core/project_lifecycle/journal_identity.py",
       "sha256": "5efc1462c2fe2362d351593540b1ca067e30e021d644f7797bf3c6fae991109c"
