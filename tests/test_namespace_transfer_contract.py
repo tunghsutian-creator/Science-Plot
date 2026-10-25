@@ -80,3 +80,15 @@ def test_inside_project_physical_backup_has_explicit_identity_and_cannot_alias_o
     assert value.namespace_transfers[0].physical_backup_prefix == "old/physical-backup"
     with pytest.raises(ValueError, match="disjoint"):
         replace(transfer(), physical_backup_prefix="old/plot/history")
+
+
+def test_exact_host_root_namespace_uses_its_explicit_capability_without_parent_discovery():
+    item = replace(transfer(), prefix="@semantic", physical_backup_prefix="@history")
+    reads = {"@semantic/head.json": "9" * 64, "@semantic/.sciplot_semantic_owner.json": None,
+             "old/history/.sciplot_semantic_owner.json": None}
+    value = ProjectCommand.create("attachment_import", "transfer", project_id="project", expected_generation="generation",
+        read_set=reads, write_set=list(reads), request={}, namespace_transfers=[item],
+        read_memberships=[MembershipRead.capture(reads, "@semantic"), MembershipRead.capture({}, "old/history")])
+    assert ProjectCommand.from_payload(value.to_payload()) == value
+    with pytest.raises(ValueError):
+        replace(item, prefix="@")

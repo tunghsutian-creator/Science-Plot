@@ -26,6 +26,12 @@ def resource_key(value: str) -> str:
         raise ValueError("An external resource requires an explicit host-selected root ID.")
     return value
 
+
+def namespace_prefix(value: str) -> str:
+    if isinstance(value, str) and value.startswith("@") and "/" not in value and _identity(value[1:]):
+        return value
+    return resource_key(value)
+
 @dataclass(frozen=True)
 class ProjectionRead:
     resource: str
@@ -109,11 +115,11 @@ class NamespaceTransfer:
     physical_backup_prefix: str | None = None
 
     def __post_init__(self) -> None:
-        resource_key(self.prefix)
-        resource_key(self.history_prefix)
+        namespace_prefix(self.prefix)
+        namespace_prefix(self.history_prefix)
         old, history = PurePosixPath(self.prefix), PurePosixPath(self.history_prefix)
         if self.physical_backup_prefix is not None:
-            resource_key(self.physical_backup_prefix)
+            namespace_prefix(self.physical_backup_prefix)
             physical = PurePosixPath(self.physical_backup_prefix)
             if (physical.is_relative_to(old) or old.is_relative_to(physical)
                     or physical.parts[0] in {".sciplot_store", ".sciplot_resources"}):
