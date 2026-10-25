@@ -157,9 +157,9 @@ def test_finite_zip_resource_never_imports_or_admits_sibling_files(tmp_path, mon
     secret.write_bytes(b"do not read sibling")
     real_read = io.read_file
 
-    def read(fd, name):
+    def read(fd, name, **kwargs):
         assert name != secret.name, "Finite trusted root scanned an ungranted sibling."
-        return real_read(fd, name)
+        return real_read(fd, name, **kwargs)
 
     monkeypatch.setattr(io, "read_file", read)
     store = FileProjectStore(root, locations={"snapshot": ResourceRoot(tmp_path, (archive.name,))})

@@ -47,12 +47,12 @@ def scope(io: StoreIO, prefix: str) -> Iterator[tuple[int, Path, set[str] | None
     components = parts(prefix)
     key = components[0][1:] if components[0].startswith("@") else ""
     relative = components[1:] if key else components
-    if not relative or key not in io.root_fds:
+    if not relative and not key or key not in io.root_fds:
         raise ProjectStoreError("A semantic namespace must be an explicit child in its trusted resource root.")
     io.split(prefix + "/head.json")
     root = io.locations[key] if key else io.root
     allowed = io.location_members.get(key)
-    suffix = "/".join(relative) + "/"
+    suffix = "/".join(relative) + "/" if relative else ""
     members = {name[len(suffix):] for name in allowed if name.startswith(suffix)} if allowed is not None else None
     with directory(io.root_fds[key], relative) as fd:
         yield fd, root / Path(*relative), members

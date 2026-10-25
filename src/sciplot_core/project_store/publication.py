@@ -13,6 +13,7 @@ import sciplot_core.project_store.preconditions as preconditions
 from .errors import ProjectCommandConflict, ProjectConflict
 from .io import StoreIO, digest
 from .source_observations import adopt, local_versions
+from .root_bindings import identities, rebind_local
 
 
 def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
@@ -48,6 +49,7 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     value = deepcopy(current)
     value.update(parent=current["generation"], parent_sha256=digest(current), generation=uuid4().hex,
                  sequence=current["sequence"] + 1, origin="command")
+    value["resource_roots"] = identities(io)
     for key, path in io.locations.items():
         value["locators"].setdefault(key, str(path))
     for name, entry in writes.items():
@@ -93,6 +95,7 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     preconditions.require_reads(io, current, record)
     commands.verify_sources(io, frozen.get("sources", {}), record)
     local_versions(io, record)
+    rebind_local(io, current)
     if io.read("local_locations.json") is not None:
         expected_root = io.root / ".sciplot_resources"
         if any(path != expected_root / key for key, path in io.locations.items()):

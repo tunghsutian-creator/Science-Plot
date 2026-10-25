@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from .errors import ProjectConflict, ProjectStoreError
 from .io import StoreIO, digest, parts
+from .root_bindings import identities
 
 
 def boundary(_name: str) -> None:
@@ -87,6 +88,7 @@ def import_legacy(io: StoreIO) -> dict[str, Any]:
     value = {"kind": "sciplot_project_generation", "version": 1,
         "project_id": project_id, "generation": uuid4().hex, "sequence": 0, "parent": None,
         "files": files, "sources": sources, "commands": {},
+        "resource_roots": identities(io),
         "locators": {"": str(io.root), **{key: str(path) for key, path in io.locations.items()}},
         "origin": "explicit_legacy_import"}
     write_generation(io, value)

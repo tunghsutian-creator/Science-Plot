@@ -11,6 +11,7 @@ from sciplot_core.project_commands.resources import PreparedFile
 
 from .errors import ProjectCommandConflict, ProjectConflict, ProjectStoreError
 from .io import StoreIO, digest, directory, install, parts, read_file, sha
+from .root_bindings import identities
 import sciplot_core.project_store.state as state
 import sciplot_core.project_store.preconditions as preconditions
 
@@ -28,6 +29,7 @@ def reserve(io: StoreIO, current: dict[str, Any], command_id: str, command_diges
         "expected_generation": expected_generation or current["generation"], "generation": current["generation"],
         "read_set": dict(read_set), "write_set": sorted(set(write_set)),
         "projected_reads": list(projected_reads), "metadata": metadata or {}, "result": {}, "review": {}}
+    record["resource_roots"] = identities(io)
     projected = {item["resource"] for item in preconditions.projected_writes(record)}
     adoptions = preconditions.native_adoptions(record)
     record["adoption_modes"] = {}
@@ -186,6 +188,7 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
         raise ProjectConflict("A command cannot claim completion without a committed generation outcome.")
     if result["phase"] == "applying":
         result["phase"] = "unknown"
+    result["generation_sequence"] = state.reachable(io, current, result["generation"])["sequence"] if current else None
     result["projection_pending"] = projection_pending
     if record.get("native_workspace") is not None:
         import sciplot_core.project_store.native_work as native_work

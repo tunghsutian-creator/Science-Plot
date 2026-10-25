@@ -8,6 +8,7 @@ from .io import StoreIO, sha
 import sciplot_core.project_store.state as state
 from .membership import require_memberships
 from .source_observations import observations, require_bindings
+from .root_bindings import require as require_roots
 
 
 def projected_writes(record: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -45,6 +46,7 @@ def native_adoptions(record: Mapping[str, Any]) -> dict[str, dict[str, str]]:
 def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, Any]) -> None:
     from .errors import ProjectRecoveryRequired
 
+    require_roots(io, dict(current), dict(record))
     adoptions = native_adoptions(record)
     sources = observations(record)
     baseline = state.reachable(io, dict(current), record["expected_generation"])

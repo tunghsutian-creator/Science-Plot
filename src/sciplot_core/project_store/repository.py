@@ -76,6 +76,9 @@ class FileProjectStore:
 
     def snapshot(self, *, import_legacy: bool = False) -> dict[str, Any]:
         with self._locked(import_legacy=import_legacy) as (io, current):
+            from .root_bindings import require
+
+            require(io, current)
             drift: dict[str, str | None] = {}
             metadata_drift: dict[str, str] = {}
             for name, entry in current["files"].items():

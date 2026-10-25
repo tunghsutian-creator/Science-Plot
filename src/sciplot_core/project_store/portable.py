@@ -115,6 +115,9 @@ def import_bundle(bundle: Path, destination: Path, *,
         current = state.head(io)
         if current is None or (current["project_id"], current["generation"]) != (header["project_id"], header["generation"]):
             raise ProjectConflict("The portable head differs from its complete bundle binding.")
+        from .root_bindings import identities
+
+        io.write("local_resource_roots.json", {"project_id": current["project_id"], "roots": identities(io)})
         io.write("local_locations.json", {"ids": ids, "members": store.location_members})
         source_versions = {source_id: {version: entry["sha256"]
             for version, entry in versions.items()} for source_id, versions in current["sources"].items()}

@@ -7,6 +7,7 @@ from typing import Any
 
 from .errors import ProjectConflict, ProjectRecoveryRequired
 from .io import StoreIO, directory, install, sha
+from .root_bindings import require as require_roots
 import sciplot_core.project_store.state as state
 
 
@@ -29,6 +30,7 @@ def pending(io: StoreIO, current: dict[str, Any]) -> bool:
 
 def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> None:
     """Finish only old-or-exact-new projections; never overwrite foreign bytes."""
+    require_roots(io, current, record)
     old = state.generation(io, record["install_parent"])
     names = record["install_files"]
     # Validate the entire installation before the first replacement.
@@ -63,6 +65,7 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
 
 
 def recover(io: StoreIO, current: dict[str, Any]) -> list[str]:
+    require_roots(io, current)
     relocate(io, current)
     recovered: list[str] = []
     try:
