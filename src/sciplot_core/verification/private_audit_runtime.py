@@ -7,17 +7,14 @@ import inspect
 import os
 from pathlib import Path
 import signal
-import socket
 import subprocess
 import sys
 import tempfile
 from typing import Any
-import weakref
-from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.plot_protocol.paths import kernel_peer_pid
-from sciplot_core.verification.native_exit_boundary import endpoint_identity as _endpoint, namespace_identity as _directory, settled_binding, explicit_exit_bound
+from sciplot_core.verification.native_exit_boundary import namespace_identity as _directory, settled_binding, explicit_exit_bound
+from sciplot_core.verification.private_socket_ports import install_socket_ports as install_socket_ports, _closed_native_binding
 from sciplot_core.verification.private_process_boundaries import owned_caller, owner_identity
 
 SOCKET = "SCIPLOT_ENGINE_SOCKET"
@@ -26,64 +23,6 @@ _held: list[tuple[Any, subprocess.Popen[Any], Path, str]] = []
 _actor_installed = False
 _fixture_observer: Any = None
 
-def install_socket_ports(observer: Any) -> None:
-    original_bind, original_connect, original_listen = socket.socket.bind, socket.socket.connect, socket.socket.listen
-    bindings: dict[str, tuple[Any, dict[str, Any]]] = {}
-
-    def bind(endpoint: socket.socket, address: Any) -> None:
-        absent = endpoint.family == socket.AF_UNIX and not Path(os.fsdecode(address)).exists()
-        observer.guard.socket_port = True
-        try:
-            original_bind(endpoint, address)
-        finally:
-            observer.guard.socket_port = False
-        if endpoint.family == socket.AF_UNIX:
-            path, identity = _endpoint(address)
-            facts = {"event": "audit_socket_bind", "socket": str(path), "endpoint": identity,
-                     "binding_token": uuid4().hex, "initial_absent": absent}
-            bindings[str(path)] = weakref.ref(endpoint), facts
-            recorded = observer.record(facts, sync=True)
-            if recorded is not None:
-                facts["sha256"] = recorded["sha256"]
-
-    def listen(endpoint: socket.socket, *args: Any, **kwargs: Any) -> None:
-        original_listen(endpoint, *args, **kwargs)
-        for name, (held, creation) in list(bindings.items()):
-            if held() is endpoint:
-                _, identity = _endpoint(name)
-                ready = {**creation, "event": "audit_socket_listen", "endpoint": identity,
-                         "creation_sha256": creation.get("sha256"),
-                         "owner": owned_caller("server.py", "serve")}
-                ready.pop("sha256", None)
-                observer.record(ready, sync=True)
-                bindings[name] = held, ready
-
-    def connect(endpoint: socket.socket, address: Any) -> None:
-        before = _endpoint(address) if endpoint.family == socket.AF_UNIX else None
-        observer.guard.socket_port = True
-        try:
-            original_connect(endpoint, address)
-        finally:
-            observer.guard.socket_port = False
-        if before is not None:
-            path, identity = before
-            if _endpoint(address) != before:
-                raise ValueError("AF_UNIX endpoint changed during connect.")
-            local = bindings.get(str(path))
-            token = None
-            if local is not None and (owned := local[0]()) is not None and owned.fileno() >= 0 and local[1]["endpoint"] == identity:
-                token = local[1]["binding_token"]
-            from sciplot_core.plot_protocol.paths import read_owner
-            try:
-                owner = read_owner(path)
-            except (OSError, ValueError):
-                owner = None
-            observer.record({"event": "audit_socket_connect", "socket": str(path), "endpoint": identity,
-                             "local_binding_token": token, "socket_owner": owner,
-                             "peer_pid": kernel_peer_pid(endpoint)}, sync=True)
-
-    for name, operation in (("bind", bind), ("listen", listen), ("connect", connect)):
-        setattr(socket.socket, name, operation)
 
 def start_node(observer: Any, item: Any) -> None:
     global _fixture_observer
@@ -375,6 +314,9 @@ def review_sockets(frames: list[dict[str, Any]], *, primary: int, scope: dict[st
         launches = [r for r in events.get("spawn_attempt", []) if r["epoch"] == actor["launch_epoch"] and r.get("child_token") == actor["launch_token"]]
         actor["item_generation"] = _item_generation(launches[0], frames, entries, primary, index) if len(launches) == 1 else None
     for connected in events.get("audit_socket_connect", []):
+        if connected.get("endpoint_observation_error") is not None:
+            issues.append("AF_UNIX endpoint identity became unknown during connect")
+            continue
         generation = _item_generation(connected, frames, entries, primary, index)
         ready = [row for row in events.get("audit_socket_listen", []) if settled_binding(row, events.get("audit_socket_bind", []))]
         bound = [row for row in [*events.get("audit_socket_bind", []), *ready] if row.get("initial_absent") is True
@@ -385,12 +327,35 @@ def review_sockets(frames: list[dict[str, Any]], *, primary: int, scope: dict[st
                       or (isinstance(connected.get("socket_owner"), dict) and connected["socket_owner"].get("pid") == row["pid"]
                           and connected["socket_owner"].get("device") == row["endpoint"]["device"]
                           and connected["socket_owner"].get("inode") == row["endpoint"]["inode"]))]
+        # A known different peer cannot be rescued by a socket-owner JSON file.
+        # A failed lookup is not proof from a Python bind frame alone either.
+        if connected.get("peer_lookup_error") is not None:
+            bound = []
+        elif connected.get("peer_pid") is not None:
+            bound = [row for row in bound if type(connected["peer_pid"]) is int and row["pid"] == connected["peer_pid"]]
         native_bound = [actor for actor in (native_actors or {}).values() if actor["socket"] == connected["socket"]
                   and actor["ready"]["endpoint"] == connected.get("endpoint")
+                  and connected.get("peer_lookup_error") is None and type(connected.get("peer_pid")) is int
                   and actor["identity"]["pid"] == connected.get("peer_pid")
                   and actor["item_generation"] == generation
                   and actor["ready_monotonic_ns"] < connected["monotonic_ns"]]
-        if not bound and not native_bound:
+        closed_bound = {key: actor for key, actor in (native_actors or {}).items()
+                        if _closed_native_binding(connected, actor, key, generation, native_exits)}
+        same_endpoint = [actor for actor in (native_actors or {}).values()
+                         if actor["socket"] == connected["socket"] and actor["ready"]["endpoint"] == connected.get("endpoint")
+                         and actor["item_generation"] == generation and actor["ready_monotonic_ns"] < connected["monotonic_ns"]]
+        if len(same_endpoint) != 1:
+            closed_bound = {}
+        if closed_bound:
+            # Invalid/unclosed competitors are absent from native_actors. They
+            # must still prevent an unknown peer borrowing a closed generation.
+            registrations = [row for row in events.get("native_registration_request", [])
+                if row["request"]["actor"].get("socket") == connected["socket"]
+                and row["request"]["actor"].get("ready", {}).get("endpoint") in (None, connected.get("endpoint"))
+                and _item_generation(row, frames, entries, primary, index) in (None, generation)]
+            if len(registrations) != 1 or registrations[0]["request"].get("generation") not in closed_bound:
+                closed_bound = {}
+        if not bound and not native_bound and len(closed_bound) != 1:
             issues.append("AF_UNIX connection has no observed fresh actor binding")
     if events.get("untracked_socket_connect"):
         issues.append("AF_UNIX connection bypassed its successful endpoint owner")

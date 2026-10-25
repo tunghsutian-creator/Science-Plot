@@ -130,6 +130,7 @@ VERIFICATION_CAPTURE_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/verification/evidence_runtime.py",
         "src/sciplot_core/verification/native_exit_boundary.py",
         "src/sciplot_core/verification/private_audit_runtime.py",
+        "src/sciplot_core/verification/private_socket_ports.py",
         "src/sciplot_core/verification/private_exclusion_boundary.py",
         "src/sciplot_core/verification/private_native_exit_port.py",
         "src/sciplot_core/verification/process_private_exclusion.py",

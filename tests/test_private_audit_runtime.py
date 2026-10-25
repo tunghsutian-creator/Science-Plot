@@ -1,5 +1,6 @@
 """Fresh engine scopes follow real item/source context, never ambient labels."""
 from contextlib import contextmanager, nullcontext
+import errno
 import inspect
 import os
 import threading
@@ -9,6 +10,7 @@ import pytest
 
 from sciplot_core.verification.input_scope import load_manifest
 from sciplot_core.verification import private_audit_runtime as runtime
+from sciplot_core.verification import private_socket_ports as socket_ports
 from sciplot_core.verification import private_exclusion_boundary as boundary
 from sciplot_core.verification import private_observer as observation
 
@@ -20,6 +22,212 @@ class Observer:
 
     def record(self, value, **kwargs):
         self.frames.append(value)
+
+
+@pytest.mark.parametrize("peer_errno,error_class", [(errno.ENOTCONN, "OSError"), (errno.EACCES, "PermissionError")])
+def test_successful_connect_is_not_changed_by_peer_observation_failure(monkeypatch, peer_errno, error_class):
+    from pathlib import Path
+    import socket
+    from sciplot_core.plot_protocol import paths
+
+    calls, frames = [], []
+    path = Path("/generated/observed/engine.sock")
+    identity = {"device": 1, "inode": 2, "ctime_ns": 3}
+    owner = {"pid": 401, "device": 1, "inode": 2}
+
+    class Socket:
+        family = socket.AF_UNIX
+
+        def bind(self, address):
+            pytest.fail("The generated connect contract must not bind a socket")
+
+        def listen(self, *args, **kwargs):
+            pytest.fail("The generated connect contract must not listen")
+
+        def connect(self, address):
+            calls.append(address)
+
+    def unavailable(connection):
+        assert isinstance(connection, Socket)
+        raise OSError(peer_errno, "generated peer lookup failure")
+
+    observer = SimpleNamespace(guard=threading.local(), record=lambda value, **_: frames.append(value))
+    with monkeypatch.context() as control:
+        control.setattr(socket_ports, "socket", SimpleNamespace(socket=Socket, AF_UNIX=socket.AF_UNIX))
+        control.setattr(socket_ports, "_endpoint", lambda address: (path, identity))
+        control.setattr(socket_ports, "kernel_peer_pid", unavailable)
+        control.setattr(paths, "read_owner", lambda _: owner)
+        runtime.install_socket_ports(observer)
+        assert Socket().connect(str(path)) is None
+        assert observer.guard.socket_port is False
+
+    assert calls == [str(path)]
+    assert len(frames) == 1
+    assert type(frames[0].pop("connected_monotonic_ns")) is int
+    assert frames[0] == {"event": "audit_socket_connect", "socket": str(path), "endpoint": identity,
+                         "local_binding_token": None, "socket_owner": owner, "peer_pid": None,
+                         "peer_lookup_error": {"error_class": error_class, "errno": peer_errno}}
+
+
+def _closed_peer_facts():
+    endpoint = {"device": 1, "inode": 2, "ctime_ns": 3}
+    owner = {"pid": 401, "device": 1, "inode": 2, "instance_id": "first-instance"}
+    identity = {"pid": 401, "start_sec": 10, "start_usec": 1}
+    connected = {"socket": "/generated/engine.sock", "endpoint": endpoint,
+                 "socket_owner": owner, "peer_pid": None, "connected_monotonic_ns": 30,
+                 "peer_lookup_error": {"error_class": "OSError", "errno": errno.ENOTCONN}}
+    actor = {"socket": connected["socket"], "identity": identity, "default_owned": False,
+             "ready": {"endpoint": endpoint, "socket_owner": owner, "peer_pid": 401},
+             "item_generation": "first-item", "ready_monotonic_ns": 20}
+    actual = {"identity": identity, "generation": "first-launch", "status": "OBSERVED",
+              "returncode": -15, "observed_monotonic_ns": 40}
+    return connected, actor, {"first-launch": actual}
+
+
+def test_closed_binding_retains_unknown_peer_and_original_exit_policy():
+    from copy import deepcopy
+
+    connected, actor, exits = _closed_peer_facts()
+    before = deepcopy((connected, actor, exits))
+    assert runtime._closed_native_binding(connected, actor, "first-launch", "first-item", exits)
+    assert (connected, actor, exits) == before and connected["peer_pid"] is None
+    actor["default_owned"] = True
+    assert not runtime._closed_native_binding(connected, actor, "first-launch", "first-item", exits)
+    exits["first-launch"]["returncode"] = 0
+    assert runtime._closed_native_binding(connected, actor, "first-launch", "first-item", exits)
+
+
+@pytest.mark.parametrize("change", [
+    "known_different_peer", "known_same_peer_with_error", "missing_lookup_error", "other_errno", "unknown_error_class",
+    "endpoint_changed", "endpoint_unobserved", "owner_instance_changed", "owner_missing", "peer_ready_mismatch",
+    "wrong_item", "unknown_item", "missing_exit", "other_exit_generation", "other_exit_identity", "unknown_exit",
+    "late_ready", "exit_observed_before_connection", "missing_connection_time", "boolean_connection_time",
+])
+def test_closed_binding_refuses_incomplete_or_borrowed_facts(change):
+    from copy import deepcopy
+
+    connected, actor, exits = deepcopy(_closed_peer_facts())
+    item = "first-item"
+    if change == "known_different_peer":
+        connected["peer_pid"] = 999
+    elif change == "known_same_peer_with_error":
+        connected["peer_pid"] = 401
+    elif change == "missing_lookup_error":
+        connected.pop("peer_lookup_error")
+    elif change == "other_errno":
+        connected["peer_lookup_error"]["errno"] = errno.EACCES
+    elif change == "unknown_error_class":
+        connected["peer_lookup_error"]["error_class"] = "ValueError"
+    elif change == "endpoint_changed":
+        connected["endpoint"] = {**connected["endpoint"], "inode": 999}
+    elif change == "endpoint_unobserved":
+        connected["endpoint_observation_error"] = {"error_class": "FileNotFoundError", "errno": errno.ENOENT}
+    elif change == "owner_instance_changed":
+        connected["socket_owner"] = {**connected["socket_owner"], "instance_id": "second-instance"}
+    elif change == "owner_missing":
+        connected["socket_owner"] = None
+    elif change == "peer_ready_mismatch":
+        actor["ready"]["peer_pid"] = 999
+    elif change == "wrong_item":
+        item = "second-item"
+    elif change == "unknown_item":
+        item = None
+    elif change == "missing_exit":
+        exits.clear()
+    elif change == "other_exit_generation":
+        exits["first-launch"]["generation"] = "second-launch"
+    elif change == "other_exit_identity":
+        exits["first-launch"]["identity"] = {**actor["identity"], "start_usec": 999}
+    elif change == "unknown_exit":
+        exits["first-launch"]["status"] = "UNKNOWN"
+    elif change == "late_ready":
+        actor["ready_monotonic_ns"] = 30
+    elif change == "exit_observed_before_connection":
+        exits["first-launch"]["observed_monotonic_ns"] = 29
+    elif change == "missing_connection_time":
+        connected.pop("connected_monotonic_ns")
+    elif change == "boolean_connection_time":
+        connected["connected_monotonic_ns"] = True
+    else:
+        pytest.fail("Unknown generated contract mutation")
+    assert not runtime._closed_native_binding(connected, actor, "first-launch", item, exits)
+
+
+@pytest.mark.parametrize("mode", ["closed", "different_peer", "missing_native", "competing_generation",
+                                  "unclosed_registration", "unknown_exit_registration", "duplicate_exit_registration"])
+def test_socket_review_requires_unique_closed_native_binding_and_never_rescues_wrong_peer(mode, monkeypatch):
+    from copy import deepcopy
+    from pathlib import Path
+    from sciplot_core.foundation.json_hashing import canonical_json_sha256
+
+    # These are already-validated actor/exit model inputs, not kernel evidence.
+    primary, child, token, node = 100, 401, "first-child", "tests/test_private_audit_runtime.py::generated_item"
+    path = str(Path("/tmp").resolve() / "sp-audit-generated-closed-peer" / "engine.sock")
+    directory = {"device": 1, "inode": 2, "uid": 501, "mode": 0o700}
+    scope = dict(manifest_sha256="generated-manifest", collection_sha256="generated-collection",
+                 suite_root_sha256="generated-suite", nodes={node})
+    source = Path(runtime.__file__).resolve().parents[3] / node.split("::")[0]
+    source_sha = runtime.file_sha256(source)
+    records = {canonical_json_sha256(str(source)): {"sha256": source_sha}}
+    monkeypatch.setattr(runtime, "_directory", lambda _: directory)
+    connected, actor, exits = _closed_peer_facts()
+    connected.update(socket=path, event="audit_socket_connect", pid=primary, epoch="primary",
+                     sequence=6, monotonic_ns=31)
+    actor.update(socket=path, default_owned=True, launch_epoch="primary", launch_token=token)
+    actor.pop("item_generation")  # review derives this from real item lineage.
+    actual = exits.pop("first-launch")
+    actual.update(generation="primary:first-child", returncode=0)
+    exits["primary:first-child"] = actual
+    actors = {"primary:first-child": actor}
+    common = {"pid": primary, "epoch": "primary", "socket": path, "test_nodeid": node}
+    frames = [
+        {**common, "event": "audit_socket_enter", "sequence": 1, "sha256": "first-item",
+         "owner": runtime.owner_identity("private_audit_runtime.py", "start_node"), "initial_absent": True,
+         **{key: value for key, value in scope.items() if key != "nodes"},
+         "test_source_sha256": source_sha, "directory": directory},
+        {**common, "event": "spawn_attempt", "sequence": 2, "child_token": token},
+        {**common, "event": "child_spawn", "sequence": 3, "child_pid": child, "child_token": token},
+        {"event": "process_start", "pid": child, "epoch": "server", "sequence": 0,
+         "parent_epoch": "primary", "child_token": token},
+        {"event": "audit_socket_bind", "pid": child, "epoch": "server", "sequence": 1,
+         "socket": path, "endpoint": connected["endpoint"], "binding_token": token,
+         "initial_absent": True, "monotonic_ns": 10},
+        {**common, "event": "native_registration_request", "sequence": 4,
+         "request": {"generation": "primary:first-child", "actor": deepcopy(actor)}},
+        {**common, "event": "audit_server_spawn", "sequence": 5, "child_pid": child, "child_token": token,
+         "owner": runtime.owner_identity("socket_client.py", "ensure_server")},
+        connected,
+        {**common, "event": "audit_server_close", "sequence": 7, "child_pid": child,
+         "child_token": token, "actual_wait_returncode": 0},
+        {**common, "event": "audit_socket_exit", "sequence": 9, "directory": directory},
+    ]
+    if mode == "different_peer":
+        connected.pop("peer_lookup_error")
+        connected["peer_pid"] = 999
+    elif mode == "missing_native":
+        actors.clear()
+        exits.clear()
+    elif mode == "competing_generation":
+        other = deepcopy(actor)
+        other.update(launch_token="second-child", identity={"pid": 999})
+        actors["primary:second-child"] = other
+        frames.append({**common, "event": "spawn_attempt", "sequence": 4, "child_token": "second-child"})
+        frames.append({**common, "event": "native_registration_request", "sequence": 5,
+                       "request": {"generation": "primary:second-child", "actor": deepcopy(other)}})
+    elif mode in {"unclosed_registration", "unknown_exit_registration", "duplicate_exit_registration"}:
+        # validated_exits omits B from actors/exits in all three cases. Its raw
+        # registration still prevents A from authorizing the ambiguous socket.
+        frames.append({**common, "event": "native_registration_request", "sequence": 5,
+                       "request": {"generation": "primary:second-child", "actor": deepcopy(actor)}})
+        if mode != "unclosed_registration":
+            status = {**common, "event": "native_exit_status", "sequence": 8,
+                      "fact": {"generation": "primary:second-child",
+                               "status": "UNKNOWN" if mode == "unknown_exit_registration" else "OBSERVED"}}
+            frames.extend([status] * (2 if mode == "duplicate_exit_registration" else 1))
+    result = runtime.review_sockets(frames, primary=primary, scope=scope, records=records,
+                                   native_exits=exits, native_actors=actors)
+    assert result == ([] if mode == "closed" else ["AF_UNIX connection has no observed fresh actor binding"])
+    assert connected["peer_pid"] == (999 if mode == "different_peer" else None)
 
 
 @pytest.mark.parametrize("scope_name", ["public", "private"])

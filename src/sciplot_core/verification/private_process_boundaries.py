@@ -27,7 +27,7 @@ def source_hashes() -> dict[str, str]:
     names = ["private_observer.py", "private_observer_pytest.py", "private_capture.py", "private_process_boundaries.py",
              "suite_evidence.py", "evidence_scope.py", "durable_runner.py", "evidence_identity.py", "private_corpus.py", "private_corpus_audit.py",
              "native_probe_boundary.py", "evidence_runtime.py", "evidence_environment.py",
-             "process_private_exclusion.py", "process_private_launch.py", "private_exclusion_boundary.py", "private_audit_runtime.py",
+             "process_private_exclusion.py", "process_private_launch.py", "private_exclusion_boundary.py", "private_audit_runtime.py", "private_socket_ports.py",
              "private_native_exit_port.py", "native_exit_boundary.py",
              "../plot_protocol/socket_client.py", "../plot_protocol/paths.py", "../plot_protocol/server.py",
              "input_scope.py", "input_scope_manifest.json"]

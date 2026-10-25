@@ -204,6 +204,7 @@ def test_startup_binding_separates_entrypoint_from_kernel_image():
 
 def test_socket_ready_preserves_creation_and_records_settled_permission_identity(monkeypatch):
     from sciplot_core.verification import private_audit_runtime as runtime
+    from sciplot_core.verification import private_socket_ports as socket_ports
     import socket
 
     owner = runtime.owner_identity("server.py", "serve")
@@ -228,9 +229,9 @@ def test_socket_ready_preserves_creation_and_records_settled_permission_identity
     observer = SimpleNamespace(guard=SimpleNamespace(), record=record)
     endpoint = {"device": 1, "inode": 2, "uid": 501}
     with monkeypatch.context() as patch:
-        patch.setattr(runtime.socket, "socket", Endpoint)
-        patch.setattr(runtime, "_endpoint", lambda address: (__import__('pathlib').Path(address), {**endpoint, **state}))
-        patch.setattr(runtime, "owned_caller", lambda *args: runtime.owner_identity("server.py", "serve"))
+        patch.setattr(socket_ports, "socket", SimpleNamespace(socket=Endpoint, AF_UNIX=socket.AF_UNIX))
+        patch.setattr(socket_ports, "_endpoint", lambda address: (__import__('pathlib').Path(address), {**endpoint, **state}))
+        patch.setattr(socket_ports, "owned_caller", lambda *args: runtime.owner_identity("server.py", "serve"))
         runtime.install_socket_ports(observer)
         server = Endpoint()
         server.bind('/tmp/generated-listen.sock')
