@@ -6,6 +6,7 @@ from typing import Any
 from PyQt6 import QtWidgets
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.studio import export_project_document
+from sciplot_gui.studio_assistant.native_batch import native_batch_blocker
 from sciplot_gui.studio_project_status import (
     _read_json,
     export_result_message,
@@ -108,6 +109,9 @@ class ExportHelpersMixin:
         }
 
     def _assistant_export_blocker(self) -> str | None:
+        blocker = native_batch_blocker(getattr(self, "document", None))
+        if blocker is not None:
+            return blocker
         assistant = getattr(
             self.window,
             "_sciplot_assistant_bridge",

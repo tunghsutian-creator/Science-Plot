@@ -186,6 +186,11 @@ class SeriesRevisionMixin:
         self,
         target: Path,
     ) -> dict[str, Any]:
+        from sciplot_gui.studio_assistant.native_batch import native_batch_blocker
+
+        blocker = native_batch_blocker(self.document)
+        if blocker is not None:
+            raise RuntimeError(blocker)
         resolved_target = target.expanduser().resolve()
         if not self._series_revision_available:
             return self._atomic_save_document(self.document, resolved_target)

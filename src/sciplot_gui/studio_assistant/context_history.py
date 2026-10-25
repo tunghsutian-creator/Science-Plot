@@ -13,6 +13,7 @@ from sciplot_gui.studio_assistant_history import (
     build_assistant_history_event,
 )
 from sciplot_gui.window_context import resolved_window_document_path
+from sciplot_gui.studio_assistant.native_batch import native_batch_blocker
 
 
 class ContextHistoryMixin:
@@ -25,6 +26,9 @@ class ContextHistoryMixin:
         return self._pending_batch
 
     def _document_context_blocker(self) -> str | None:
+        blocker = native_batch_blocker(self.document)
+        if blocker is not None:
+            return blocker
         current = resolved_window_document_path(self.window)
         if current == self.document_path:
             return None

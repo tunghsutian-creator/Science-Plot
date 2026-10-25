@@ -10,6 +10,10 @@ from sciplot_core.assistant_provider import (
     AssistantRequest,
 )
 from sciplot_core.assistant_provider.capabilities import bind_setting_batch
+from sciplot_gui.studio_assistant.native_batch import (
+    NativeBatchExecutionError,
+    apply_native_setting_batch,
+)
 
 
 class ProposalApplicationMixin:
@@ -104,11 +108,9 @@ class ProposalApplicationMixin:
             )
             return None
 
-        from veusz.document.operations import OperationMultiple
-
         before_render = request.visual_preview["sha256"]
         try:
-            self.document.applyOperation(OperationMultiple(native, descr=description))
+            apply_native_setting_batch(self.document, native, description=description)
         except Exception as exc:
             try:
                 self._record_history(
@@ -117,7 +119,7 @@ class ProposalApplicationMixin:
                     response=self._pending_response,
                     batch=batch,
                     operations=prepared,
-                    reason_code="apply_failed",
+                    reason_code=(exc.reason_code if isinstance(exc, NativeBatchExecutionError) else "apply_failed"),
                     native_undo_label=description,
                 )
             except Exception:

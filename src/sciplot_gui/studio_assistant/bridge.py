@@ -26,6 +26,7 @@ from sciplot_gui.studio_assistant.request_context import RequestContextMixin
 from sciplot_gui.studio_assistant.request_flow import RequestFlowMixin
 from sciplot_gui.studio_assistant.proposal_application import ProposalApplicationMixin
 from sciplot_gui.studio_assistant.rejection import RejectionMixin
+from sciplot_gui.studio_assistant.native_batch_window import bind_native_batch_window
 
 
 class StudioAssistantBridge(
@@ -56,6 +57,7 @@ class StudioAssistantBridge(
         super().__init__(window)
         self.window = window
         self.document = window.document
+        bind_native_batch_window(window)
         self.plot = window.plot
         self.document_path = document_path.expanduser().resolve()
         self.history_path = assistant_history_path(self.document_path)
