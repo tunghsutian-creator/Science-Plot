@@ -135,3 +135,39 @@ def test_typed_recovery_is_the_single_compatible_status_projection(tmp_path):
     for phase, expected in (("planned", "blocked"), ("applying", "blocked"), ("export_pending", "blocked"), ("complete", "complete")):
         state = {"document": document, "phase": phase, "error": {"stage": "export"}}
         assert Receipt.of(state).to_payload()["status"] == expected
+
+
+def test_published_filesystem_index_continues_memory_repository_semantic_target(tmp_path):
+    from managed_plot_helpers import request_for_source
+    from test_project_lifecycle import ManagedBackend
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.project_lifecycle.repository import digest
+
+    repo, backend = MemoryRepository(), ManagedBackend()
+    app = application(backend, repo)
+    created = app.create(request_for_source(tmp_path))
+    plot = Path(created["plot"])
+    head = repo.load_head(plot)
+    native = Path(head["binding"]["document"])
+    package = tmp_path / "published-snapshot"
+    package.mkdir()
+    snapshot = package / "Figure_A.vsz"
+    snapshot.write_bytes(native.read_bytes())
+    manifest = {"kind": "sciplot_managed_delivery", "version": 1, "mode": "native_snapshot",
+                "managed_project_included": False, "snapshot_files": {snapshot.name: file_sha256(snapshot)},
+                "items": [{"id": "figure-A", "label": "A", "scientific_hash": created["scientific_hash"],
+                           "presentation_hash": created["presentation_hash"], "files": {"editable": snapshot.name},
+                           "audit": {"native_sha256": file_sha256(native)}, "local_managed_continuation": {
+                               "plot": str(plot), "plot_id": created["plot_id"], "revision": 0}}]}
+    manifest["manifest_sha256"] = digest(manifest)
+    index = package / "index.json"
+    index.write_text(json.dumps(manifest))
+    original = index.read_bytes()
+    before = deepcopy(repo.values)
+    opened = app.open(package, figure_id="figure-A")
+    assert opened["plot_id"] == created["plot_id"] and opened["revision"] == 0
+    assert opened["delivery_continuation"] == {"mode": "original_local_managed", "item_id": "figure-A",
+        "independent_native_snapshot": str(snapshot), "portable_managed_project": False}
+    assert repo.values == before and index.read_bytes() == original
+    assert str(index) not in repo.values and not (plot / "head.json").exists()
+    assert backend.calls == {"preview": 0, "apply": 0, "export": 1}

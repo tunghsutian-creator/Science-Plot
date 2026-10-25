@@ -5,8 +5,9 @@ from typing import Any
 
 from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadata
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.plot_engine.errors import EngineError
-from sciplot_core.plot_engine.storage import digest, load_head, read
+from sciplot_core.plot_engine.storage import digest, load_head
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.source_update_commit import file_inventory
 
@@ -23,8 +24,17 @@ def require_native_seal(head: dict[str, Any], expected: str) -> None:
         raise EngineError("managed_delivery_original_native_changed", "The original native bytes are missing or differ from this delivery's audited seal. Nothing was rebuilt or restored.")
 
 
+def _published_manifest(root: Path) -> dict[str, Any]:
+    """A published snapshot index belongs to filesystem artifacts, not semantic state."""
+    path = canonical_path(root / "index.json")
+    manifest = read_json_object(path)
+    if manifest is None:
+        raise EngineError("document_state_missing", "Required document state is missing or invalid.", evidence=str(path))
+    return manifest
+
+
 def local_managed_target(root: Path, figure_id: str | None) -> dict[str, Any]:
-    manifest = read(root / "index.json")
+    manifest = _published_manifest(root)
     if (manifest.get("kind") != "sciplot_managed_delivery" or manifest.get("version") != 1
             or manifest.get("mode") != "native_snapshot" or manifest.get("managed_project_included") is not False
             or manifest.get("manifest_sha256") != digest({key: value for key, value in manifest.items() if key != "manifest_sha256"})):
