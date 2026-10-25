@@ -187,6 +187,25 @@ class MembershipRead:
 
 
 @dataclass(frozen=True)
+class SourceTreeRead:
+    locator: str
+    tree_sha256: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.locator, str):
+            raise ValueError("A source tree locator must be an absolute string.")
+        path = PurePosixPath(self.locator)
+        if (not path.is_absolute()
+                or str(path) != self.locator or ".." in path.parts or "\x00" in self.locator
+                or not _sha(self.tree_sha256)):
+            raise ValueError("A source tree read binds an exact absolute locator and composite tree SHA256.")
+
+    def to_payload(self) -> dict[str, str]:
+        self.__post_init__()
+        return {"locator": self.locator, "tree_sha256": self.tree_sha256}
+
+
+@dataclass(frozen=True)
 class PreparedSource:
     source_id: str
     locator: str

@@ -17,6 +17,7 @@ from .resources import (NativeAdoption as NativeAdoption, ProjectionRead as Proj
 from .resources import PreparedFile as PreparedFile
 from .resources import SourceAdoption as SourceAdoption
 from .resources import NamespaceMember as NamespaceMember, NamespaceTransfer as NamespaceTransfer
+from .resources import SourceTreeRead as SourceTreeRead
 
 
 class CommandKind(StrEnum):
@@ -64,6 +65,7 @@ class ProjectCommand:
     read_memberships: tuple[MembershipRead, ...] = ()
     source_adoptions: tuple[SourceAdoption, ...] = ()
     namespace_transfers: tuple[NamespaceTransfer, ...] = ()
+    source_trees: tuple[SourceTreeRead, ...] = ()
 
     def __post_init__(self) -> None:
         if (not isinstance(self.kind, CommandKind) or not isinstance(self.key, str) or not 1 <= len(self.key) <= 128
@@ -125,6 +127,9 @@ class ProjectCommand:
                     or not {transfer.prefix + "/head.json", transfer.prefix + "/.sciplot_semantic_owner.json",
                             transfer.history_prefix + "/.sciplot_semantic_owner.json"}.issubset(self.write_set)):
                 raise ValueError("An ownership transfer must bind the original head, both member sets and its exact shell writes.")
+        if (any(not isinstance(item, SourceTreeRead) for item in self.source_trees)
+                or len({item.locator for item in self.source_trees}) != len(self.source_trees)):
+            raise ValueError("Source tree reads must be typed and unique per exact locator.")
         request = json.loads(self.request_json)
         if not isinstance(request, dict) or "idempotency_key" in request and request["idempotency_key"] != self.key:
             raise ValueError("The original request must agree with its command key.")
@@ -140,7 +145,8 @@ class ProjectCommand:
                native_adoptions: Sequence[NativeAdoption] = (),
                read_memberships: Sequence[MembershipRead] = (),
                source_adoptions: Sequence[SourceAdoption] = (),
-               namespace_transfers: Sequence[NamespaceTransfer] = ()) -> ProjectCommand:
+               namespace_transfers: Sequence[NamespaceTransfer] = (),
+               source_trees: Sequence[SourceTreeRead] = ()) -> ProjectCommand:
         return cls(CommandKind(kind), key, project_id, expected_generation,
                    tuple(sorted(read_set.items())), tuple(sorted(write_set)),
                    json.dumps(request, sort_keys=True, ensure_ascii=False, allow_nan=False),
@@ -150,13 +156,15 @@ class ProjectCommand:
                    tuple(sorted(native_adoptions, key=lambda item: item.resource)),
                    tuple(sorted(read_memberships, key=lambda item: item.prefix)),
                    tuple(sorted(source_adoptions, key=lambda item: item.resource)),
-                   tuple(sorted(namespace_transfers, key=lambda item: item.prefix)))
+                   tuple(sorted(namespace_transfers, key=lambda item: item.prefix)),
+                   tuple(sorted(source_trees, key=lambda item: item.locator)))
 
     @classmethod
     def from_payload(cls, value: Any) -> ProjectCommand:
         keys = {"version", "kind", "key", "project_id", "expected_generation", "expected_revision",
                 "read_set", "write_set", "projected_reads", "projected_writes", "native_adoptions", "read_memberships", "source_adoptions", "namespace_transfers", "request"}
-        if (not isinstance(value, dict) or set(value) != keys or type(value.get("version")) is not int
+        optional = {"source_trees"} if isinstance(value, dict) and "source_trees" in value else set()
+        if (not isinstance(value, dict) or set(value) != keys | optional or type(value.get("version")) is not int
                 or value["version"] != 1 or not isinstance(value["read_set"], dict)
                 or not isinstance(value["write_set"], list) or not isinstance(value["request"], dict)):
             raise ValueError("A saved command must satisfy its exact versioned contract.")
@@ -201,16 +209,21 @@ class ProjectCommand:
                     "relative", "sha256", "size", "mode"} for member in members):
                 raise ValueError("Saved observed namespace members require exact closed fields.")
             transfers.append(NamespaceTransfer(**{**item, "members": tuple(NamespaceMember(**member) for member in members)}))
+        trees = value.get("source_trees", [])
+        if (not isinstance(trees, list) or optional and not trees
+                or any(not isinstance(item, dict) or set(item) != {"locator", "tree_sha256"} for item in trees)):
+            raise ValueError("Saved source tree reads require exact closed nonempty fields.")
         return cls.create(value["kind"], value["key"], project_id=value["project_id"],
                           expected_generation=value["expected_generation"], read_set=value["read_set"],
                           write_set=value["write_set"], request=value["request"],
                           expected_revision=value["expected_revision"], projected_reads=selectors("projected_reads"),
                           projected_writes=selectors("projected_writes"), native_adoptions=adoptions,
-                          read_memberships=memberships, source_adoptions=observations, namespace_transfers=transfers)
+                          read_memberships=memberships, source_adoptions=observations, namespace_transfers=transfers,
+                          source_trees=[SourceTreeRead(**item) for item in trees])
 
     def to_payload(self) -> dict[str, Any]:
         self.__post_init__()
-        return {"version": 1, "kind": self.kind.value, "key": self.key, "project_id": self.project_id,
+        result = {"version": 1, "kind": self.kind.value, "key": self.key, "project_id": self.project_id,
                 "expected_generation": self.expected_generation, "expected_revision": self.expected_revision,
                 "read_set": dict(self.read_set), "write_set": list(self.write_set),
                 "projected_reads": [item.to_payload() for item in self.projected_reads],
@@ -220,6 +233,9 @@ class ProjectCommand:
                 "source_adoptions": [item.to_payload() for item in self.source_adoptions],
                 "namespace_transfers": [item.to_payload() for item in self.namespace_transfers],
                 "request": json.loads(self.request_json)}
+        if self.source_trees:
+            result["source_trees"] = [item.to_payload() for item in self.source_trees]
+        return result
 
     @property
     def command_digest(self) -> str:
