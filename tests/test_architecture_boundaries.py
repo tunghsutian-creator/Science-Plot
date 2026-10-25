@@ -478,6 +478,13 @@ def test_generic_catchall_module_names_stay_absent() -> None:
 
 
 def test_non_probe_source_has_no_exact_duplicate_function_implementations() -> None:
+    from immutable_operator_architecture import pinned_duplicate_locations
+
+    # Historical execution must retain its original dependency implementations.
+    # Only these exact 17 current/immutable pairs are admitted, with retained
+    # bytes independently pinned. Every module/function still participates in
+    # the ordinary scan; a third copy or another version has no exception.
+    retained_pairs = pinned_duplicate_locations(REPO_ROOT)
     implementations: dict[str, list[str]] = {}
     for path in _source_files():
         if path.name.endswith("_probe.py"):
@@ -499,7 +506,8 @@ def test_non_probe_source_has_no_exact_duplicate_function_implementations() -> N
             )
 
     duplicates = sorted(
-        locations for locations in implementations.values() if len(locations) > 1
+        locations for locations in implementations.values()
+        if len(locations) > 1 and frozenset(locations) not in retained_pairs
     )
     assert duplicates == []
 
