@@ -172,3 +172,55 @@ def apply_native_edit(project: Path, supplied: dict[str, Any]) -> dict[str, Any]
     if not result["result_is_current"]:
         raise ValueError("The saved native edit has since changed; preserve its evidence")
     return {**result, "status": "already_applied" if record["phase"] == "complete" else "applied"}
+
+
+def verify_document_edit_receipt(project: Path, supplied: dict[str, Any]) -> dict[str, Any] | None:
+    """Verify an already completed native outcome without executing or repairing it."""
+    from sciplot_core.project_store.runtime import project_runtime, resolve_runtime_path
+    from sciplot_core.project_commands.read_projections import projection_digest
+    from sciplot_core.studio_core.document_edit_commit import _operation_result
+
+    if supplied.get("version") != 3:
+        return None
+    project = resolve_project_path(project)
+    repository = project_store(project)
+    record = ProjectCommands(repository).query(str(supplied.get("operation_id") or ""))
+    if record is None or record["phase"] != "complete":
+        return None
+    review = rebind_document_edit_review(project, supplied)
+    if review["decision_id"] != record.get("decision_id"):
+        raise ValueError("The completed native decision differs from its owned receipt")
+    result = _operation_result(project, record)
+    audit = review.get("scientific_audit", {})
+    selected = resolve_project_figure(project, review["figure_id"])
+    native, spec = Path(selected["document"]), Path(selected["spec"])
+    if repository.logical_path(native) != record["result"]["document_relative"]:
+        raise ValueError("The completed native receipt no longer selects the same figure")
+    snapshot = repository.snapshot()
+    if snapshot["project_id"] != record["project_id"]:
+        raise ValueError("The completed native receipt belongs to another stable project")
+    if (not result["result_is_current"] or audit.get("status") != "passed"
+            or audit.get("document_sha256") != result["result_sha256"]
+            or audit.get("spec_sha256") != file_sha256(spec)):
+        raise ValueError("The completed native receipt is not exact-current scientific evidence")
+    for name, before in record["read_set"].items():
+        write = record["draft"]["writes"].get(name)
+        expected = write["sha256"] if write is not None else before
+        entry = snapshot["files"].get(name)
+        if (entry["sha256"] if entry is not None else None) != expected:
+            raise ValueError("A completed native receipt read witness has changed")
+        if entry is not None:
+            actual = repository.projection_path(name)
+            expected_mode = write["mode"] if write is not None else entry["mode"]
+            if actual.stat().st_mode & 0o777 != expected_mode:
+                raise ValueError("A completed native receipt output mode has changed")
+    for value in record["metadata"].get("projected_reads", []):
+        if projection_digest(repository.projection_path(value["resource"]).read_bytes(), kind=value["kind"], key=value["key"]) != value["sha256"]:
+            raise ValueError("The completed native receipt selected membership or scientific task changed")
+    with project_runtime(repository):
+        for path, expected in record["metadata"]["request"].get("source_files", {}).items():
+            if file_sha256(resolve_runtime_path(path, expected_sha256=expected)) != expected:
+                raise ValueError("The completed native receipt scientific source changed")
+    return {**result, "document_sha256": result["result_sha256"], "spec_sha256": audit["spec_sha256"],
+            "decision_id": record["decision_id"], "read_set": record["read_set"],
+            "readonly_native_receipt": True}

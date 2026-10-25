@@ -66,6 +66,28 @@ def _public_native_scenario(root: Path) -> None:
         expected_document_sha256=file_sha256(document))
     result = apply_document_edit(original, review)
     assert result["result_is_current"] and Path(result["archive"]).read_bytes() == before
+    from sciplot_core.studio_core.document_edit_commands import verify_document_edit_receipt
+    starts = len(owned_workers)
+    completed = verify_document_edit_receipt(original, review)
+    assert completed["readonly_native_receipt"] and completed["document_sha256"] == file_sha256(document)
+    assert len(owned_workers) == starts
+    forged = json.loads(json.dumps(review))
+    forged["changes"][0]["value"] = "30pt"
+    try:
+        verify_document_edit_receipt(original, forged)
+        raise AssertionError("A forged native receipt was accepted")
+    except ValueError:
+        pass
+    source.write_bytes(raw + b"changed original bytes")
+    try:
+        try:
+            verify_document_edit_receipt(original, review)
+            raise AssertionError("A changed scientific source was accepted")
+        except ValueError:
+            pass
+    finally:
+        source.write_bytes(raw)
+    assert len(owned_workers) == starts
     assert source.read_bytes() == raw and spec.read_bytes() == spec_bytes
     saved = document.read_bytes()
     export_studio_document(document, formats=["pdf"], audit_spec_path=spec)
