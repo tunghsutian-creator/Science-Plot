@@ -413,6 +413,13 @@ custom-provider, stale/live native, cancellation, Undo and save/reopen/export pa
 Use changed-owner fast checks for development, then the unchanged complete
 merge/release requirements on the frozen batch. Remote CI for an isolated
 experiment does not hold all subsequent development hostage.
+The following bounded slice binds width/color edits through the existing pure
+series selector and semantic transaction, including FigureSpec v2 mark styles.
+Retain independent development feedback for this slice; acceptance of the
+previous assistant snapshot does not certify it. Complete its integrated
+native/replay/rollback and eventual frozen merge gates before including it in
+main. Compatibility entry-path protection and recovery ordering need a separate
+bounded review; this slice does not claim their entire lifecycle is converged.
 Check the single template entry, explicit overrides and TTS interaction. Derive
 any restructuring from actual dependencies and workflow failures; splitting
 files alone is not a product or architecture improvement.

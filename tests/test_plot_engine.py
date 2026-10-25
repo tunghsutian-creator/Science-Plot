@@ -361,6 +361,32 @@ def test_migrated_typed_style_rejects_different_intent_before_any_native_work(en
     assert error.value.reason_code == "document_idempotency_conflict" and backend.calls == counts
 
 
+def test_migrated_typed_style_edits_v2_mark_and_replays_frozen_selection(tmp_path, monkeypatch):
+    from test_plot_typed_intent_recovery import _engine
+
+    from sciplot_core.plot_engine import compat
+    from sciplot_core.plot_ir.figure_document import figure_spec
+    from sciplot_core.task_shortcuts import style_task
+
+    service, root, backend, source, original_native = _engine(tmp_path)
+    monkeypatch.setattr(compat, "PlotService", lambda: service)
+    before = load_head(root)["document"]
+    raw, native = source.read_bytes(), original_native.read_bytes()
+    kwargs = {"samples": ["layer:modulus"], "color": "#123456", "width": "0.7mm",
+              "task_dir": root.parent / "style-v2"}
+    first = style_task(root, **kwargs)
+    after = load_head(root)["document"]
+    assert first["status"] == "complete" and after["revision"] == 1
+    assert after["scientific"] == before["scientific"]
+    assert after["scientific_hash"] == before["scientific_hash"]
+    marks = figure_spec(after)["views"][0]["layers"][0]["marks"]
+    assert marks[0]["style"] == {"line_color": "#123456", "line_width_pt": pytest.approx(0.7 * 72 / 25.4)}
+    assert marks[1]["style"] == {"marker_color": "#123456"}
+    assert style_task(root, **kwargs)["replayed"] is True
+    assert backend.native_writes == 1
+    assert source.read_bytes() == raw and original_native.read_bytes() == native
+
+
 def test_bad_native_preview_preserves_exact_correction_fields_in_short_reply(engine):
     service, root, backend = engine
     issues = [{"path": "/changes/0/value", "constraint": "native_color", "allowed": ["black", "#123456"]}]

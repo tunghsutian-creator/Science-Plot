@@ -122,6 +122,15 @@ owns native paths and recovery. Repeating its idempotency key resumes the same
 work. Structural changes return a bound preview when needed. CLI and MCP share
 this engine; existing projects retain their native VSZ and explicit partial-import
 coverage. See the [saved-figure route](skill/references/saved-figure-edit.md).
+`task style` selects represented series by stable ID or a unique source/display
+label. For ordinary FigureSpec v2 measurement line/point layers, color updates
+both line and point symbols; width updates line marks only. Existing line
+patterns, marker geometry, opacity and unrelated explicit styles remain intact.
+Point-only layers accept color, while line width requires an actual line mark.
+Ambiguous selections and unsupported v2 mark families reject before saving a
+style request. Existing
+v1/Legacy properties and their review requirements remain in force; v2 uses its
+advertised generic style risk and color schema.
 Represented curves support display names and hide/show edits while retaining
 their complete source data. In figures with auto/fixed endpoint rules, automatic
 axis endpoints follow visible curves while explicit limits remain fixed. Showing

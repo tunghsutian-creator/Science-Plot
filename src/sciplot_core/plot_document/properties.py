@@ -1,9 +1,8 @@
 """Semantic property registry; callers cannot downgrade scientific risk."""
 
-import re
 from typing import Any
 
-from sciplot_core.style_values import normalize_physical_size
+from sciplot_core.style_values import normalize_physical_size, physical_size_points
 from sciplot_core.policy.frame_export import DEFAULT_LINE_STYLE_SEQUENCE
 
 from .errors import fail
@@ -119,10 +118,7 @@ def effective_risk(obj: dict[str, Any], prop: str, value: Any) -> str:
     if obj.get("scientific_role") and prop in {"title.visible", "annotation.visible"}:
         risk = maximum_risk(risk, "review")
     if capability["type"] == "physical_size" and isinstance(value, str):
-        size = normalize_physical_size(value)
-        match = re.fullmatch(r"([0-9.]+)(pt|mm|cm|in|inch)", size)
-        assert match is not None
-        points = float(match[1]) * {"pt": 1, "mm": 72 / 25.4, "cm": 72 / 2.54, "in": 72, "inch": 72}[match[2]]
+        points = physical_size_points(value)
         low, high = (0.1, 10) if prop == "style.line.width" else (4, 72)
         if not low <= points <= high:
             risk = maximum_risk(risk, "review")

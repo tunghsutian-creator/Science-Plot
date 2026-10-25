@@ -1002,8 +1002,30 @@ Legacy display-name/membership changes through the existing native revision and
 presentation persistence owners. Managed edits retain every layer, mapping and
 dataset while updating presentation visibility, labels and corresponding guide
 labels. These operations preserve the scientific hash and partial Legacy shadow
-coverage; they do not acquire source or native-state adoption authority. Legend
-columns use existing schema/catalog bounds, and layout QA may block export.
+coverage; they do not acquire source or native-state adoption authority.
+
+The same pure series selector now binds the width/color shortcut: exact stable
+ID first, otherwise one unique current display, legend alias or scientific sample
+label. Duplicate selectors for one target reject. All-series selection retains
+document order and hidden members, and the compatibility checkpoint freezes
+that resolved patch; old checkpoints replay their literal request unchanged.
+The v1 shortcut retains advertised `style.line.*` properties. FigureSpec v2
+ordinary measurement line/point layers lower to existing mark `style` patches,
+merging only requested fields into each explicit mark override. Color updates
+both line and point marks; width changes line marks and never infers a marker
+outline or size. Theme/view/layer defaults and guide text/layout stay intact;
+guide symbols derive from the resolved layer marks in the existing compiler.
+`style_values` owns the existing physical-point conversion and v1 Managed color
+resolution; risk validation and compilation reuse these pure values. RGB6/RGB12
+v2 colors still use their existing grammar schema. The v1 0.1–10 pt review range
+and v2 generic style presentation risk remain distinct existing contracts, not
+a new shortcut policy. Scientific-role v1 colors and nonmeasurement/mixed-mark
+v2 layers require their explicit edit contract. The shortcut adds no Undo state,
+journal, renderer, native adoption or scientific writer; `PlotService` still
+owns currentness, preview, commit/export, replay and rollback. This does not
+resolve every historical compatibility entry-path/rebinding limitation.
+
+Legend columns use existing schema/catalog bounds, and layout QA may block export.
 Installed font validation uses the existing native process. The closed internal
 `font-families` command accepts no paths or extra arguments and creates Qt only
 on that process's main thread; an MCP background owner never initializes Qt.

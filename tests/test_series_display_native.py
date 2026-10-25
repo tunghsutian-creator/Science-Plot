@@ -130,6 +130,56 @@ def _collision_stays_blocked(directory):
 
 
 @pytest.mark.comprehensive
+def test_public_cli_v2_series_style_cold_reopen_replay_and_rollback(tmp_path):
+    request = request_for_figure(tmp_path)
+    layer = request["template_definition"]["figure_spec"]["views"][0]["layers"][0]
+    layer["marks"][0]["style"] = {"line_width_pt": 1.3, "line_style": "dashed", "line_opacity": 1.}
+    layer["marks"][1]["style"] = {"marker": "square", "marker_size_pt": 4., "marker_line_width_pt": .9}
+    path = tmp_path / "create-style.json"
+    path.write_text(json.dumps(request))
+    root = Path(_cli("plot", "create", "--request", path, "--direct")["plot"])
+    source = tmp_path / "figure.csv"
+    raw = source.read_bytes()
+    initial = load_head(root)
+    _complete(root, _cli("task", "edit", root, "--rename-series", "layer:modulus", "Control A",
+                        "--task-dir", tmp_path / "rename"), tmp_path)
+    before = load_head(root)
+    old_spec = figure_spec(before["document"])
+    entry = tmp_path / "style"
+    arguments = ["task", "style", root, "--sample", "Control A", "--width", "1.1pt",
+                 "--color", "#990000", "--task-dir", entry]
+    result = _complete(root, _cli(*arguments), tmp_path)
+    after = load_head(root)
+    assert result["revision"] == 2
+    assert after["document"]["scientific"] == initial["document"]["scientific"]
+    assert after["document"]["scientific_hash"] == initial["document"]["scientific_hash"]
+    expected = deepcopy(old_spec)
+    marks = expected["views"][0]["layers"][0]["marks"]
+    marks[0]["style"].update(line_color="#990000", line_width_pt=1.1)
+    marks[1]["style"].update(marker_color="#990000")
+    assert figure_spec(after["document"]) == expected
+    before_ir, after_ir = (read(Path(head["binding"]["ir_path"])) for head in (before, after))
+    assert after_ir["datasets"] == before_ir["datasets"] and after_ir["scales"] == before_ir["scales"]
+    assert after_ir["guides"][0]["entries"][0]["marks"] == after_ir["views"][0]["layers"][0]["marks"]
+    assert {item["format"] for item in result["exports"]} >= {"pdf", "tiff_300", "vsz"}
+    assert all(Path(item["path"]).is_file() for item in result["exports"])
+    record = read(entry / "semantic-style.json")
+    assert _cli(*arguments)["replayed"] and load_head(root) == after
+    assert read(entry / "semantic-style.json") == record
+    opened = _cli("plot", "open", root, "--direct")
+    assert opened["status"] == "current" and opened["revision"] == 2
+    bad_entry = tmp_path / "bad-style"
+    _cli("task", "style", root, "--sample", "Control A", "--sample", "unknown",
+         "--color", "#000000", "--task-dir", bad_entry, success=False)
+    assert not (bad_entry / "semantic-style.json").exists() and load_head(root) == after
+    rollback = tmp_path / "rollback.json"
+    rollback.write_text(json.dumps({"base_revision": 2, "target_revision": 1, "idempotency_key": "undo-style"}))
+    _complete(root, _cli("plot", "rollback", root, "--request", rollback, "--direct"), tmp_path)
+    assert load_head(root)["document"]["presentation_hash"] == before["document"]["presentation_hash"]
+    assert source.read_bytes() == raw
+
+
+@pytest.mark.comprehensive
 @pytest.mark.parametrize("authority", ["managed", "legacy"])
 def test_public_cli_series_display_cold_reopen_replay_and_rollback(tmp_path, authority):
     root, sources, first, second = _create(tmp_path, authority)

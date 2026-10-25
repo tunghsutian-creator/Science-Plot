@@ -1,30 +1,13 @@
 """Pure semantic resolution; no native backend, source reader or file access."""
 
 from copy import deepcopy
-import re
 from typing import Any
 
 from sciplot_core.plot_document.errors import fail
-from sciplot_core.style_values import normalize_physical_size
+from sciplot_core.style_values import managed_color as _color, physical_size_points as _points
 
 from .managed import validate_managed
 from .schema import seal_ir
-
-
-def _points(value: str) -> float:
-    normalized = normalize_physical_size(value)
-    match = re.fullmatch(r"([0-9.]+)(pt|mm|cm|in|inch)", normalized)
-    assert match is not None
-    return float(match[1]) * {"pt": 1, "mm": 72 / 25.4, "cm": 72 / 2.54, "in": 72, "inch": 72}[match[2]]
-
-
-def _color(value: str) -> str:
-    colors = {"black": "#000000", "white": "#ffffff", "red": "#ff0000", "blue": "#0000ff",
-              "green": "#008000", "gray": "#808080", "grey": "#808080", "yellow": "#ffff00"}
-    result = colors.get(value.casefold(), value)
-    if not re.fullmatch(r"#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?", result):
-        fail("managed_color_unresolved", "Use an explicit hexadecimal color in the managed theme.", "/presentation/objects", "resolved_color")
-    return result.lower()
 
 
 def _properties(objects: dict[str, Any], identifier: str, kind: str) -> dict[str, Any]:
