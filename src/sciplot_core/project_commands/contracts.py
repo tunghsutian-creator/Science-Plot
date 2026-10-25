@@ -1,0 +1,165 @@
+"""Pure, closed command identity and resource preconditions; no file discovery."""
+
+from __future__ import annotations
+
+import json
+import re
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path, PurePosixPath
+from typing import Any
+
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
+
+
+class CommandKind(StrEnum):
+    CREATE = "create"
+    DOCUMENT_EDIT = "document_edit"
+    SOURCE_UPDATE = "source_update"
+    FIGURE_SET = "figure_set"
+    STYLE = "style"
+    NATIVE_PATCH = "native_patch"
+    NATIVE_CREATE = "native_create"
+    NATIVE_EXPORT = "native_export"
+    EXPORT = "export"
+    SAVE = "save"
+    PUBLISH = "publish"
+    UNDO = "undo"
+    REDO = "redo"
+
+
+def _identity(value: str) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", value) is not None
+
+
+def _sha(value: str) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value) is not None
+
+
+def resource_key(value: str) -> str:
+    if (not isinstance(value, str) or not value or "\\" in value or "\x00" in value
+            or PurePosixPath(value).is_absolute() or any(part in {"", ".", ".."} for part in value.split("/"))
+            or str(PurePosixPath(value)) != value):
+        raise ValueError("A resource must be a canonical relative logical path in a host-selected root.")
+    if value.startswith("@") and ("/" not in value or not _identity(value.split("/", 1)[0][1:])):
+        raise ValueError("An external resource requires an explicit host-selected root ID.")
+    return value
+
+
+@dataclass(frozen=True)
+class ProjectionRead:
+    resource: str
+    kind: str
+    key: str
+    sha256: str
+
+    def __post_init__(self) -> None:
+        resource_key(self.resource)
+        if (self.kind not in {"studio_figure_v1", "native_suite_figure_v1"}
+                or not _identity(self.key) or not _sha(self.sha256)):
+            raise ValueError("A projected read requires a supported fixed selector and an exact digest.")
+
+    def to_payload(self) -> dict[str, str]:
+        return {"resource": self.resource, "kind": self.kind, "key": self.key, "sha256": self.sha256}
+
+
+@dataclass(frozen=True)
+class ProjectCommand:
+    kind: CommandKind
+    key: str
+    project_id: str
+    expected_generation: str | None
+    read_set: tuple[tuple[str, str | None], ...]
+    write_set: tuple[str, ...]
+    request_json: str
+    expected_revision: str | int | None = None
+    projected_reads: tuple[ProjectionRead, ...] = ()
+    projected_writes: tuple[ProjectionRead, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (not isinstance(self.kind, CommandKind) or not isinstance(self.key, str) or not 1 <= len(self.key) <= 128
+                or not _identity(self.project_id)
+                or self.expected_generation is not None and not _identity(self.expected_generation)
+                or self.expected_revision is not None and (type(self.expected_revision) not in {str, int}
+                    or isinstance(self.expected_revision, str) and not self.expected_revision
+                    or type(self.expected_revision) is int and self.expected_revision < 0)):
+            raise ValueError("A command requires valid project, kind, key and revision identities.")
+        reads = dict(self.read_set)
+        if len(reads) != len(self.read_set) or len(set(self.write_set)) != len(self.write_set):
+            raise ValueError("A command cannot declare a resource twice.")
+        for name, digest in self.read_set:
+            resource_key(name)
+            if digest is not None and not _sha(digest):
+                raise ValueError("A read precondition must be an exact SHA256 or explicit absence.")
+        for name in self.write_set:
+            resource_key(name)
+        if any(not isinstance(item, ProjectionRead) for item in (*self.projected_reads, *self.projected_writes)):
+            raise ValueError("Projected preconditions must be typed values.")
+        projected_targets = {item.resource for item in self.projected_writes}
+        if not set(self.write_set).issubset(set(reads) | projected_targets):
+            raise ValueError("Every write must bind its previous bytes or explicit absence.")
+        selectors = [(item.resource, item.kind, item.key) for item in self.projected_reads]
+        if len(set(selectors)) != len(selectors):
+            raise ValueError("Projected read selectors must be typed and unique.")
+        if (any(item not in self.projected_reads for item in self.projected_writes)
+                or len(set(self.projected_writes)) != len(self.projected_writes)
+                or not projected_targets.issubset(self.write_set)):
+            raise ValueError("Projected writes require unique, identical selected read guards and a declared write.")
+        request = json.loads(self.request_json)
+        if not isinstance(request, dict) or "idempotency_key" in request and request["idempotency_key"] != self.key:
+            raise ValueError("The original request must agree with its command key.")
+        canonical_json_sha256(request, allow_nan=False)
+
+    @classmethod
+    def create(cls, kind: CommandKind | str, key: str, *, project_id: str,
+               expected_generation: str | None, read_set: Mapping[str, str | None],
+               write_set: Sequence[str], request: dict[str, Any],
+               expected_revision: str | int | None = None,
+               projected_reads: Sequence[ProjectionRead] = (),
+               projected_writes: Sequence[ProjectionRead] = ()) -> ProjectCommand:
+        return cls(CommandKind(kind), key, project_id, expected_generation,
+                   tuple(sorted(read_set.items())), tuple(sorted(write_set)),
+                   json.dumps(request, sort_keys=True, ensure_ascii=False, allow_nan=False),
+                   expected_revision, tuple(projected_reads), tuple(projected_writes))
+
+    def to_payload(self) -> dict[str, Any]:
+        self.__post_init__()
+        return {"version": 1, "kind": self.kind.value, "key": self.key, "project_id": self.project_id,
+                "expected_generation": self.expected_generation, "expected_revision": self.expected_revision,
+                "read_set": dict(self.read_set), "write_set": list(self.write_set),
+                "projected_reads": [item.to_payload() for item in self.projected_reads],
+                "projected_writes": [item.to_payload() for item in self.projected_writes],
+                "request": json.loads(self.request_json)}
+
+    @property
+    def command_digest(self) -> str:
+        return canonical_json_sha256(self.to_payload(), allow_nan=False)
+
+
+@dataclass(frozen=True)
+class ProjectMutation:
+    writes: Mapping[str, bytes | Path | None]
+    result: dict[str, Any]
+    sources: Sequence[dict[str, Any]] | None = None
+    review: dict[str, Any] | None = None
+    artifacts: Mapping[str, bytes | Path] = field(default_factory=dict)
+
+    def validate_for(self, command: ProjectCommand) -> None:
+        if set(self.writes) != set(command.write_set):
+            raise ValueError("A candidate must contain exactly its admitted writes and deletions.")
+        for name, value in self.writes.items():
+            resource_key(name)
+            if value is not None and not isinstance(value, (bytes, Path)):
+                raise ValueError("Candidate content must be bytes, a staged file, or an explicit deletion.")
+        for name, value in self.artifacts.items():
+            resource_key(name)
+            if not isinstance(value, (bytes, Path)):
+                raise ValueError("Review artifacts must be bytes or staged files.")
+        if not isinstance(self.result, dict) or self.review is not None and not isinstance(self.review, dict):
+            raise ValueError("Candidate result and review must be JSON objects.")
+        canonical_json_sha256(self.result, allow_nan=False)
+        if self.review is not None:
+            canonical_json_sha256(self.review, allow_nan=False)
+        if self.sources is not None:
+            canonical_json_sha256(list(self.sources), allow_nan=False)
