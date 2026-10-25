@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import json
 import os
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.project_commands.resources import PreparedFile
+from sciplot_core.foundation.json_values import json_safe
 
 from .errors import ProjectCommandConflict, ProjectConflict, ProjectStoreError
 from .io import StoreIO, digest, directory, install, parts, read_file, sha
@@ -28,7 +30,8 @@ def reserve(io: StoreIO, current: dict[str, Any], command_id: str, command_diges
         "command_id": command_id, "command_digest": command_digest, "phase": "reserved",
         "expected_generation": expected_generation or current["generation"], "generation": current["generation"],
         "read_set": dict(read_set), "write_set": sorted(set(write_set)),
-        "projected_reads": list(projected_reads), "metadata": metadata or {}, "result": {}, "review": {}}
+        "projected_reads": list(projected_reads), "metadata": json.loads(json.dumps(json_safe(metadata or {}), allow_nan=False)),
+        "result": {}, "review": {}}
     record["resource_roots"] = identities(io)
     projected = {item["resource"] for item in preconditions.projected_writes(record)}
     adoptions = preconditions.native_adoptions(record)
@@ -138,8 +141,9 @@ def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | P
     for name in preconditions.native_adoptions(record):
         if isinstance(writes[name], bytes):
             frozen["writes"][name]["mode"] = record["adoption_modes"][name]
+    frozen = json.loads(json.dumps(json_safe(frozen), allow_nan=False))
     seal(io, record, frozen)
-    record.update(phase="needs_review", result=result, review=review)
+    record.update(phase="needs_review", result=frozen["result"], review=frozen["review"])
     state.save_command(io, record)
     return record
 

@@ -96,3 +96,25 @@ def test_declared_output_metadata_drift_is_never_silently_replaced(tmp_path, tam
         assert target.stat().st_mode & 0o777 == 0o755
     else:
         assert target.stat().st_nlink == 2
+
+
+def test_immediate_and_review_results_use_one_closed_json_value(tmp_path):
+    store, snapshot = fixture_store(tmp_path)
+    name = "studio/document.vsz"
+    command = ProjectCommand.create("native_export", "json result", project_id=snapshot["project_id"],
+        expected_generation=snapshot["generation"], read_set={name: snapshot["files"][name]["sha256"]},
+        write_set=[name], request={})
+    result = {"qa": {"cells": (1, 2)}, "native": Path("preserved-relative.vsz")}
+    receipt = ProjectCommands(store).execute(command, lambda: ProjectMutation({name: b"new json native"}, result))
+    expected = {"qa": {"cells": [1, 2]}, "native": "preserved-relative.vsz"}
+    assert receipt["phase"] == "complete" and receipt["result"] == expected
+    assert store.query(command.key)["result"] == expected
+    assert result["qa"]["cells"] == (1, 2)
+    next_snapshot = store.snapshot()
+    review = ProjectCommand.create("native_patch", "json review", project_id=snapshot["project_id"],
+        expected_generation=next_snapshot["generation"], read_set={name: next_snapshot["files"][name]["sha256"]},
+        write_set=[name], request={})
+    staged = ProjectCommands(store).preview(review, lambda: ProjectMutation({name: b"review native"}, result,
+        review={"pixels": ((1, 2), (3, 4))}))
+    assert staged["review"] == {"pixels": [[1, 2], [3, 4]]}
+    assert ProjectCommands(store).decide(review, decision_id=staged["decision_id"], accept=True)["result"] == expected
