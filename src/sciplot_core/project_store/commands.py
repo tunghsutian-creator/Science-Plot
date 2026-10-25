@@ -176,6 +176,10 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
     if result["phase"] == "applying":
         result["phase"] = "unknown"
     result["projection_pending"] = projection_pending
+    if record.get("native_workspace") is not None:
+        import sciplot_core.project_store.native_work as native_work
+
+        result["native_workspace_path"] = str(native_work.verify(io, record)[0])
     draft = record.get("draft")
     if draft is not None:
         expected = digest({"command_digest": record["command_digest"], "candidate": draft})

@@ -13,6 +13,7 @@ import sciplot_core.project_store.commands as commands
 import sciplot_core.project_store.projection as projection
 import sciplot_core.project_store.publication as publication
 import sciplot_core.project_store.state as state
+import sciplot_core.project_store.native_work as native_work
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
 from .io import STORE, StoreIO, directory, install, parts, read_file, sha
 from .resources import ResourceRoot
@@ -151,6 +152,22 @@ class FileProjectStore:
         with self._locked(allow_pending=True) as (io, current):
             record = state.command(io, command_id)
             return commands.public(io, record, projection_pending=projection.pending(io, current)) if record else None
+
+    def claim_native_workspace(self, command_id: str, command_digest: str, adapter: str) -> Path:
+        with self._locked(allow_pending=True) as (io, _current):
+            record = state.command(io, command_id, command_digest)
+            if record is None:
+                raise ProjectStoreError("An admitted exact command must own native execution evidence.")
+            return native_work.claim(io, record, adapter)
+
+    def append_native_failure(self, command_id: str, command_digest: str, *, original_error: str,
+                              renderer_dispatch_entered: bool, owned_invocation_closed: bool) -> dict[str, Any]:
+        with self._locked(allow_pending=True) as (io, _current):
+            record = state.command(io, command_id, command_digest)
+            if record is None:
+                raise ProjectStoreError("No admitted command owns this native failure evidence.")
+            return commands.public(io, native_work.append_failure(io, record, original_error=original_error,
+                renderer_dispatch_entered=renderer_dispatch_entered, owned_invocation_closed=owned_invocation_closed))
 
     def commands(self) -> tuple[dict[str, Any], ...]:
         import os

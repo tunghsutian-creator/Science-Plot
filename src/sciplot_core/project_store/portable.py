@@ -127,6 +127,14 @@ def import_bundle(bundle: Path, destination: Path, *,
             command_names = []
         for name in command_names:
             record = io.read("commands/" + name)
+            if record and record.get("native_workspace") is not None:
+                import sciplot_core.project_store.native_work as native_work
+                from .io import digest
+
+                _path, identity = native_work.verify(io, record, relocating=True)
+                bindings = io.read("local_native_work.json") or {"bindings": {}}
+                bindings["bindings"][digest(record["command_id"])] = identity
+                io.write("local_native_work.json", bindings)
             if record and record.get("draft") is not None:
                 commands.public(io, record)
                 for source_id, versions in record["draft"].get("sources", {}).items():
