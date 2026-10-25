@@ -23,19 +23,13 @@ def _studio_snapshot_sources(
     supported_suffixes = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
     resolved_project = Path(literal_source_path(project_dir))
     if isinstance(transform_ledger, dict):
-        steps = (
-            transform_ledger.get("steps")
-            if isinstance(transform_ledger.get("steps"), list)
-            else []
-        )
+        step_values = transform_ledger.get("steps")
+        steps = step_values if isinstance(step_values, list) else []
         for step in reversed(steps):
             if not isinstance(step, dict):
                 continue
-            artifacts = (
-                step.get("output_artifacts")
-                if isinstance(step.get("output_artifacts"), list)
-                else []
-            )
+            artifact_values = step.get("output_artifacts")
+            artifacts = artifact_values if isinstance(artifact_values, list) else []
             ordered = sorted(
                 (item for item in artifacts if isinstance(item, dict)),
                 key=lambda item: 0 if item.get("role") == "output" else 1,
