@@ -51,3 +51,30 @@ def test_native_working_root_replacement_is_refused_without_promoting_unknown(tm
     with pytest.raises(ProjectRecoveryRequired, match="identity"):
         store.claim_native_workspace(command.key, command.command_digest, "native_suite_create_v1")
     assert store.snapshot()["generation"] == snapshot["generation"]
+
+
+def test_only_exact_command_owned_work_paths_reenter_scoped_read_ports(tmp_path):
+    from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
+    from sciplot_core.project_store.io import sha
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.project_store import ProjectConflict
+
+    store, snapshot = fixture_store(tmp_path)
+    command = unknown_creation(store, snapshot)
+    workspace = Path(store.query(command.key)["native_workspace_path"])
+    evidence = workspace / "native-receipt.json"
+    with project_runtime(store):
+        assert resolve_source_path(evidence, expected_sha256=sha(evidence.read_bytes())) == evidence
+        assert literal_source_path(evidence) == str(evidence)
+        assert resolve_source_path(workspace) == workspace
+        with pytest.raises(ProjectConflict):
+            resolve_source_path(evidence, expected_sha256="0" * 64)
+        with pytest.raises(ProjectConflict):
+            resolve_source_path(evidence, source_id="unrelated-scientific-source", expected_sha256=sha(evidence.read_bytes()))
+        outside = tmp_path / "outside.json"
+        outside.write_bytes(evidence.read_bytes())
+        alias = workspace / "alias.json"
+        alias.symlink_to(outside)
+        with pytest.raises(ProjectConflict):
+            resolve_source_path(alias)
+    assert store.query(command.key)["phase"] == "unknown"

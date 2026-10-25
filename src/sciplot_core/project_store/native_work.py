@@ -1,14 +1,50 @@
 """Finite NativeSuite creation evidence lives below the same command record."""
 
 import os
+import stat
 from pathlib import Path
 from typing import Any
 
-from .errors import ProjectCommandConflict, ProjectRecoveryRequired
-from .io import StoreIO, digest, directory
+from .errors import ProjectCommandConflict, ProjectConflict, ProjectRecoveryRequired
+from .io import STORE, StoreIO, digest, directory, member_names, parts, read_file, sha
 import sciplot_core.project_store.state as state
 
 _ADAPTER = "native_suite_create_v1"
+
+
+def resolve(io: StoreIO, actual: Path, *, expected_sha256: str | None = None,
+            source_id: str | None = None) -> Path | None:
+    base = io.root / STORE / "native_work"
+    if not actual.is_relative_to(base):
+        return None
+    relative = actual.relative_to(base).parts
+    if len(relative) < 2 or relative[1] != "candidate" or source_id is not None:
+        raise ProjectConflict("A private native candidate cannot assert an unrelated scientific source identity.")
+    record = io.read("commands/" + relative[0] + ".json")
+    if record is None or digest(record["command_id"]) != relative[0]:
+        raise ProjectRecoveryRequired("This native candidate has no admitted command owner.")
+    workspace, _identity = verify(io, record)
+    components = parts("/".join(relative))
+    with directory(io.fd, ("native_work", *components[:-1])) as parent:
+        info = os.stat(components[-1], dir_fd=parent, follow_symlinks=False)
+        if stat.S_ISREG(info.st_mode):
+            data, _mode = read_file(parent, components[-1], owned=True)
+            version = sha(data)
+        elif stat.S_ISDIR(info.st_mode):
+            with directory(parent, (components[-1],)) as selected:
+                members = {}
+                for name in member_names(selected):
+                    leaf = parts(name)
+                    with directory(selected, leaf[:-1]) as folder:
+                        members[name] = sha(read_file(folder, leaf[-1], owned=True)[0])
+            version = digest({"kind": "directory", "files": [
+                {"path": name, "content_sha256": value} for name, value in sorted(members.items())]})
+        else:
+            raise ProjectConflict("Private native work cannot reconnect through a symbolic or special entry.")
+    if expected_sha256 is not None and version != expected_sha256:
+        raise ProjectConflict("The private native candidate differs from its exact observed bytes.")
+    verify(io, record)
+    return workspace / Path(*relative[2:])
 
 
 def _binding(record: dict[str, Any]) -> dict[str, str]:

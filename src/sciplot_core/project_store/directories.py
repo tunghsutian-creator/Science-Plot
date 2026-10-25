@@ -48,7 +48,8 @@ def version(members: dict[str, Any]) -> str:
         {"path": name, "content_sha256": entry["sha256"]} for name, entry in sorted(members.items())]})
 
 
-def resolve(io: StoreIO, value: dict[str, Any], literal: Path, *, expected_sha256: str | None = None) -> Path | None:
+def _checked_prefix(io: StoreIO, value: dict[str, Any], literal: Path, *,
+                    expected_sha256: str | None = None) -> tuple[str, str, dict[str, Any]] | None:
     selected = _prefix(value, literal, {"": io.root, **io.locations})
     if selected is None:
         return None
@@ -60,8 +61,8 @@ def resolve(io: StoreIO, value: dict[str, Any], literal: Path, *, expected_sha25
     if expected_sha256 is not None and version(members) != expected_sha256:
         raise ProjectConflict("The registered source directory has another explicit version.")
     for relative, entry in members.items():
-        physical = io.physical(prefix + relative)
-        if physical is None or sha(physical[0]) != entry["sha256"]:
+        physical = io.physical(prefix + relative, owned=prefix + relative not in value.get("input_resources", []))
+        if physical is None or sha(physical[0]) != entry["sha256"] or physical[1] != entry["mode"]:
             raise ProjectConflict("The registered source directory changed outside its generation.")
     components = tuple(prefix.rstrip("/").split("/")) if prefix else ()
     key = components[0][1:] if components and components[0].startswith("@") else ""
@@ -71,6 +72,19 @@ def resolve(io: StoreIO, value: dict[str, Any], literal: Path, *, expected_sha25
             names = _names(actual, exclude=(".sciplot_resources",) if not key and not relative_parts else ())
             if names != set(members):
                 raise ProjectConflict("The original source directory has unregistered outside members.")
+    return prefix, original, members
+
+
+def literal(io: StoreIO, value: dict[str, Any], actual: Path) -> str | None:
+    selected = _checked_prefix(io, value, actual)
+    return selected[1] if selected is not None else None
+
+
+def resolve(io: StoreIO, value: dict[str, Any], literal: Path, *, expected_sha256: str | None = None) -> Path | None:
+    selected = _checked_prefix(io, value, literal, expected_sha256=expected_sha256)
+    if selected is None:
+        return None
+    prefix, original, members = selected
     descriptor = {"generation": value["generation"], "prefix": prefix, "original": original, "members": members}
     identity = digest(descriptor)
     base = ("directories", value["generation"])
@@ -117,8 +131,9 @@ def owned_view(io: StoreIO, value: dict[str, Any], actual: Path, *, expected_sha
             raise ProjectConflict("The cached source directory has another explicit version.")
         for name, entry in descriptor["members"].items():
             current = value["files"].get(descriptor["prefix"] + name)
-            physical = io.physical(descriptor["prefix"] + name)
-            if current is None or current["sha256"] != entry["sha256"] or physical is None or sha(physical[0]) != entry["sha256"]:
+            physical = io.physical(descriptor["prefix"] + name, owned=descriptor["prefix"] + name not in value.get("input_resources", []))
+            if (current is None or current["sha256"] != entry["sha256"] or current["mode"] != entry["mode"]
+                    or physical is None or sha(physical[0]) != entry["sha256"] or physical[1] != entry["mode"]):
                 raise ProjectConflict("The cached directory no longer matches the selected source generation.")
         return actual, descriptor["original"]
     name = "/".join(relative)
@@ -128,7 +143,7 @@ def owned_view(io: StoreIO, value: dict[str, Any], actual: Path, *, expected_sha
         raise ProjectConflict("The cached source member is not the selected generation version.")
     if expected_sha256 is not None and entry["sha256"] != expected_sha256:
         raise ProjectConflict("The cached source member has another explicit version.")
-    physical = io.physical(descriptor["prefix"] + name)
-    if physical is None or sha(physical[0]) != entry["sha256"]:
+    physical = io.physical(descriptor["prefix"] + name, owned=descriptor["prefix"] + name not in value.get("input_resources", []))
+    if physical is None or sha(physical[0]) != entry["sha256"] or physical[1] != entry["mode"]:
         raise ProjectConflict("The original registered source member changed outside its generation.")
     return actual, str(Path(descriptor["original"]) / Path(*relative))

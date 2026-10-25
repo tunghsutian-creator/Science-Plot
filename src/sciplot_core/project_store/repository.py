@@ -277,6 +277,9 @@ class FileProjectStore:
         literal = str(original)
         with self._locked() as (io, current):
             value = state.reachable(io, current, generation) if generation else current
+            private = native_work.resolve(io, Path(literal), expected_sha256=expected_sha256, source_id=source_id)
+            if private is not None:
+                return private
             import sciplot_core.project_store.directories as directories
             owned = locators.owned_source_view(io, value, Path(literal), expected_sha256=expected_sha256, source_id=source_id)
             if owned is None:
@@ -340,6 +343,9 @@ class FileProjectStore:
 
         with self._locked() as (io, current):
             value = state.reachable(io, current, generation) if generation else current
+            private = native_work.resolve(io, actual)
+            if private is not None:
+                return str(private)
             import sciplot_core.project_store.directories as directories
             owned = locators.owned_source_view(io, value, actual)
             if owned is None:
@@ -353,6 +359,9 @@ class FileProjectStore:
             if logical is not None and logical in value["files"]:
                 locators.checked_member(io, value, logical, None)
                 return locators.original_for_logical(value, logical)
+            prefix_literal = directories.literal(io, value, actual)
+            if prefix_literal is not None:
+                return prefix_literal
             for identity, versions in value["sources"].items():
                 for version, entry in versions.items():
                     name = Path(entry.get("locator") or entry.get("logical") or "source.bin").name
