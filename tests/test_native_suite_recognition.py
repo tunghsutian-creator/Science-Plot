@@ -24,7 +24,10 @@ def recorded_project(tmp_path, *, adapter=None, workspace=False):
     store = FileProjectStore(root, locations={"delivery": delivery})
     snapshot = store.snapshot(import_legacy=True)
     command = None
-    if adapter is not None:
+    if adapter == "lowlevel":
+        store.reserve("ordinary-lowlevel", "ordinary-digest", expected_generation=snapshot["generation"],
+            read_set={}, write_set=[], metadata={"kind": "synthetic", "key": "domain-owned-lowlevel-label"})
+    elif adapter is not None:
         command = ProjectCommand.create("native_create", "owned-create", project_id=snapshot["project_id"],
             expected_generation=snapshot["generation"], read_set={}, write_set=[], request={"adapter": adapter,
                 "request_file": {"path": str(request_path), "sha256": sha(request_path.read_bytes())},
@@ -37,7 +40,7 @@ def recorded_project(tmp_path, *, adapter=None, workspace=False):
     return store, target, request_path, command
 
 
-@pytest.mark.parametrize("adapter", [None, "managed_document", "legacy_semantic_import"])
+@pytest.mark.parametrize("adapter", [None, "managed_document", "legacy_semantic_import", "lowlevel"])
 def test_real_generic_store_is_not_a_pending_native_suite_and_does_not_repair(tmp_path, monkeypatch, adapter):
     store, target, _request, _command = recorded_project(tmp_path, adapter=adapter)
     head = (store.root / ".sciplot_store/head.json").read_bytes()
@@ -95,4 +98,17 @@ def test_damaged_pending_records_are_refused_without_falling_through_to_generic(
             value["metadata"]["request"] = []
         path.write_text(json.dumps(value))
     with pytest.raises((ValueError, ProjectStoreError)):
+        read_bound_store(target)
+
+
+@pytest.mark.parametrize("damage", ["adapter-before-workspace", "typed-version-before-workspace"])
+def test_typed_admission_cannot_be_hidden_by_corrupting_its_suite_tag(tmp_path, damage):
+    store, target, _request, command = recorded_project(tmp_path, adapter="prepared_native_suite")
+    path = store.root / ".sciplot_store/commands" / (digest(command.key) + ".json")
+    record = json.loads(path.read_bytes())
+    record["metadata"]["request"]["adapter"] = "unrelated-generic-label"
+    if damage == "typed-version-before-workspace":
+        record["metadata"]["version"] = 2
+    path.write_text(json.dumps(record))
+    with pytest.raises(ValueError):
         read_bound_store(target)

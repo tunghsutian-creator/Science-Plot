@@ -118,13 +118,18 @@ def _store_suite_evidence(workspace: Path) -> str | None:
         if adapter is not None and not isinstance(adapter, str):
             raise ValueError("A project command has a damaged adapter identity.")
         fixed = adapter in {"prepared_native_suite", "analysis_native_suite"}
-        if fixed or record.get("native_workspace") is not None:
+        native_workspace = record.get("native_workspace") is not None
+        typed = "expected_generation" in metadata or {"key", "project_id"}.issubset(metadata)
+        if typed or fixed or native_workspace:
             # commands() already verifies the fixed native_workspace marker
             # and inode. Bind its owner metadata too; never infer from a path.
             command = ProjectCommand.from_payload(metadata)
-            if (metadata["kind"] != "native_create" or command.project_id != project_id
-                    or command.key != record["command_id"] or command.command_digest != record["command_digest"]):
+            if (command.project_id != project_id or command.key != record["command_id"]
+                    or command.command_digest != record["command_digest"]):
                 raise ValueError("NativeSuite creation evidence differs from its admitted command.")
+        if fixed or native_workspace:
+            if metadata["kind"] != "native_create":
+                raise ValueError("Fixed NativeSuite evidence requires an admitted native_create command.")
             admitted = True
     return "saved" if saved else "pending" if admitted else None
 
