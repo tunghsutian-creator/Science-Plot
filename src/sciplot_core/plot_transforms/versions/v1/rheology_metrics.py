@@ -75,4 +75,3 @@ def _viscosity_from_modulus(omega: float, modulus: float, *, output_unit: str) -
     if not math.isfinite(value):
         raise ValueError('Derived complex viscosity is not finite.')
     return value
-
