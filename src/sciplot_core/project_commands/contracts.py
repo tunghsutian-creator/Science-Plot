@@ -14,6 +14,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 
 from .resources import (NativeAdoption as NativeAdoption, ProjectionRead as ProjectionRead,
                         MembershipRead as MembershipRead, PreparedSource as PreparedSource, _identity, _sha, resource_key)
+from .resources import PreparedFile as PreparedFile
 
 
 class CommandKind(StrEnum):
@@ -179,11 +180,11 @@ class ProjectCommand:
 
 @dataclass(frozen=True)
 class ProjectMutation:
-    writes: Mapping[str, bytes | Path | None]
+    writes: Mapping[str, bytes | Path | PreparedFile | None]
     result: dict[str, Any]
     sources: Sequence[dict[str, Any]] | None = None
     review: dict[str, Any] | None = None
-    artifacts: Mapping[str, bytes | Path] = field(default_factory=dict)
+    artifacts: Mapping[str, bytes | Path | PreparedFile] = field(default_factory=dict)
     prepared_sources: tuple[PreparedSource, ...] = ()
 
     @property
@@ -192,13 +193,15 @@ class ProjectMutation:
         if self.sources is not None or any(isinstance(item, Path) for item in (*self.writes.values(), *self.artifacts.values())):
             raise ValueError("Prepared storage publication requires byte values and no deferred source capture.")
 
-        def entries(values: Mapping[str, bytes | Path | None]) -> dict[str, Any]:
+        def entries(values: Mapping[str, bytes | Path | PreparedFile | None]) -> dict[str, Any]:
             result: dict[str, Any] = {}
             for name, value in values.items():
                 if value is None:
                     result[name] = None
                 elif isinstance(value, bytes):
-                    result[name] = {"sha256": hashlib.sha256(value).hexdigest(), "size": len(value)}
+                    result[name] = {"sha256": hashlib.sha256(value).hexdigest(), "size": len(value), "mode": 0o600}
+                elif isinstance(value, PreparedFile):
+                    result[name] = value.descriptor()
                 else:
                     raise ValueError("Prepared storage publication cannot resolve external IO.")
             return result
@@ -212,12 +215,16 @@ class ProjectMutation:
             raise ValueError("A candidate must contain exactly its admitted writes and deletions.")
         for name, value in self.writes.items():
             resource_key(name)
-            if value is not None and not isinstance(value, (bytes, Path)):
+            if value is not None and not isinstance(value, (bytes, Path, PreparedFile)):
                 raise ValueError("Candidate content must be bytes, a staged file, or an explicit deletion.")
+            if isinstance(value, PreparedFile):
+                value.__post_init__()
         for name, value in self.artifacts.items():
             resource_key(name)
-            if not isinstance(value, (bytes, Path)):
+            if not isinstance(value, (bytes, Path, PreparedFile)):
                 raise ValueError("Review artifacts must be bytes or staged files.")
+            if isinstance(value, PreparedFile):
+                value.__post_init__()
         if not isinstance(self.result, dict) or self.review is not None and not isinstance(self.review, dict):
             raise ValueError("Candidate result and review must be JSON objects.")
         canonical_json_sha256(self.result, allow_nan=False)

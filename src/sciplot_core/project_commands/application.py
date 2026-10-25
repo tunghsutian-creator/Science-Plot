@@ -70,8 +70,8 @@ class ProjectCommands:
             command.key, command.command_digest, writes=candidate.writes,
             result=candidate.result, sources=self._sources(candidate), artifacts=candidate.artifacts))
 
-    def publish_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
-        """Resume a sealed physical write without admitting any native callback."""
+    def stage_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
+        """Durably freeze bytes without accepting a later ownership transfer."""
         candidate.validate_for(command)
         expected = candidate.prepared_digest
         if (command.kind not in {CommandKind.SEMANTIC_RECORD, CommandKind.ATTACHMENT_IMPORT}
@@ -94,8 +94,15 @@ class ProjectCommands:
             review = record.get("review", {})
             if review.get("publication") != "prepared_storage" or review.get("prepared_digest") != expected:
                 raise ProjectCommandError("project_prepared_publication_invalid", "An interactive or different candidate cannot be automatically accepted.")
-            return self.decide(command, decision_id=record["decision_id"], accept=True)
+            return record
         raise ProjectCommandUnknown()
+
+    def publish_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
+        """Publish the admitted prepared bytes with no native callback."""
+        record = self.stage_prepared(command, candidate)
+        if record.get("phase") == "complete":
+            return record
+        return self.decide(command, decision_id=record["decision_id"], accept=True)
 
     def preview(self, command: ProjectCommand, prepare: Callable[[], ProjectMutation]) -> dict[str, Any]:
         candidate = self._prepare(command, prepare)
@@ -132,12 +139,6 @@ class ProjectCommands:
             record = self._bound(command, repaired)
         if record.get("phase") == "accepted":
             return self._bound(command, self.store.publish_staged(command.key, command.command_digest))
-        review = record.get("review", {})
-        if (record.get("phase") == "needs_review"
-                and command.kind in {CommandKind.SEMANTIC_RECORD, CommandKind.ATTACHMENT_IMPORT}
-                and review.get("publication") == "prepared_storage"
-                and review.get("prepared_digest") == json.loads(command.request_json).get("prepared_digest")):
-            return self.decide(command, decision_id=record["decision_id"], accept=True)
         if record.get("phase") in {"complete", "rejected", "needs_review", "reserved"}:
             return record
         raise ProjectCommandUnknown()

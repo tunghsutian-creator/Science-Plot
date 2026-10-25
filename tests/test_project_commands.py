@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from sciplot_core.project_commands import (
-    CommandKind, MembershipRead, NativeAdoption, PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation,
+    CommandKind, MembershipRead, NativeAdoption, PreparedFile, PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation,
     ProjectCommandError, ProjectCommandUnknown, ProjectionRead,
 )
 
@@ -161,6 +161,17 @@ def test_prepared_source_bytes_and_original_alias_are_bound_without_path_io():
         PreparedSource("a" * 32, "/original/raw.csv", "b" * 64, b"different", ("A",))
 
 
+def test_captured_launcher_permissions_are_part_of_prepared_publication_identity():
+    launcher = PreparedFile(b"#!/bin/sh\n", 0o755)
+    executable = ProjectMutation({"head.json": launcher}, {})
+    plain = ProjectMutation({"head.json": PreparedFile(launcher.data, 0o600)}, {})
+    assert executable.prepared_digest != plain.prepared_digest
+    saved = ProjectCommands(MemoryPort()).publish_prepared(prepared_command(executable), executable)
+    assert saved["writes"]["head.json"].mode == 0o755
+    with pytest.raises(ValueError, match="ordinary permission bits"):
+        PreparedFile(b"code", 0o4755)
+
+
 def test_membership_witness_binds_additions_without_confusing_member_content_hashes():
     files = {"studio/A.vsz": {"sha256": "a" * 64}, "@delivery/A.pdf": {"sha256": "b" * 64}}
     original = MembershipRead.capture(files, "studio")
@@ -184,11 +195,25 @@ def test_prepared_storage_resumes_exact_staged_bytes_after_lost_stage_reply():
     request = prepared_command(mutation)
     with pytest.raises(RuntimeError, match="lost stage reply"):
         ProjectCommands(port).publish_prepared(request, mutation)
-    assert ProjectCommands(port).resume(request)["phase"] == "complete"
+    assert ProjectCommands(port).resume(request)["phase"] == "needs_review"
+    assert ProjectCommands(port).publish_prepared(request, mutation)["phase"] == "complete"
     assert port.calls.count("stage") == 1
     assert "begin" not in port.calls
     with pytest.raises(ProjectCommandError, match="exact storage command"):
         ProjectCommands(port).publish_prepared(request, ProjectMutation({"head.json": b"different"}, {}))
+
+
+def test_staged_transfer_cannot_publish_before_its_explicit_acceptance():
+    port = MemoryPort()
+    mutation = ProjectMutation({"head.json": b"fixed-json"}, {})
+    request = prepared_command(mutation)
+    app = ProjectCommands(port)
+    staged = app.stage_prepared(request, mutation)
+    assert staged["phase"] == "needs_review"
+    assert app.resume(request)["phase"] == "needs_review"
+    assert "decide" not in port.calls and "publish_staged" not in port.calls
+    # A real attachment owner inserts its old-writer fence before this decision.
+    assert app.decide(request, decision_id=staged["decision_id"], accept=True)["phase"] == "complete"
 
 
 def test_prepared_storage_cannot_accept_an_interactive_preview_or_read_a_path():

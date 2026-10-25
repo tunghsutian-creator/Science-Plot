@@ -65,6 +65,20 @@ def membership_digest(names: Iterable[str]) -> str:
 
 
 @dataclass(frozen=True)
+class PreparedFile:
+    data: bytes
+    mode: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.data, bytes) or type(self.mode) is not int or not 0 <= self.mode <= 0o777:
+            raise ValueError("A prepared file requires captured bytes and ordinary permission bits.")
+
+    def descriptor(self) -> dict[str, Any]:
+        self.__post_init__()
+        return {"sha256": hashlib.sha256(self.data).hexdigest(), "size": len(self.data), "mode": self.mode}
+
+
+@dataclass(frozen=True)
 class MembershipRead:
     prefix: str
     members_sha256: str

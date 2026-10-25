@@ -4,6 +4,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
+from .resources import PreparedFile
+
 
 class ProjectStore(Protocol):
     def snapshot(self, *, import_legacy: bool = False) -> dict[str, Any]: ...
@@ -16,13 +18,13 @@ class ProjectStore(Protocol):
     def mark_applying(self, command_id: str, command_digest: str) -> dict[str, Any]: ...
 
     def publish(self, command_id: str, command_digest: str, *,
-                writes: Mapping[str, bytes | Path | None], result: dict[str, Any],
+                writes: Mapping[str, bytes | Path | PreparedFile | None], result: dict[str, Any],
                 sources: Sequence[dict[str, Any]] | None = None,
-                artifacts: Mapping[str, bytes | Path] | None = None) -> dict[str, Any]: ...
+                artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None) -> dict[str, Any]: ...
 
     def stage(self, command_id: str, command_digest: str, *,
-              writes: Mapping[str, bytes | Path | None], result: dict[str, Any], review: dict[str, Any],
-              artifacts: Mapping[str, bytes | Path] | None = None,
+              writes: Mapping[str, bytes | Path | PreparedFile | None], result: dict[str, Any], review: dict[str, Any],
+              artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None,
               sources: Sequence[dict[str, Any]] | None = None) -> dict[str, Any]: ...
 
     def decide(self, command_id: str, command_digest: str, *, decision_id: str, accept: bool) -> dict[str, Any]: ...
