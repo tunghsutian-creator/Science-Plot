@@ -111,6 +111,9 @@ class Document:
     def saveToHDF5File(self, _stream):
         self.saved.append("hdf5")
 
+    def exportStyleSheet(self, stream):
+        stream.write("stylesheet")
+
     def load(self, _filename, **_kwargs):
         self.settings["first"].set("reloaded")
 
@@ -123,7 +126,12 @@ def native(monkeypatch):
     monkeypatch.setitem(sys.modules, module.__name__, module)
     export = ModuleType("veusz.document.export")
     export.AsyncExport = type("AsyncExport", (), {"add": lambda self, *_args: self.doc.saved.append("export")})
+    export.printPages = lambda document, *_args, **_kw: document.saved.append("print")
+    export.printDialog = lambda _window, document, *_args, **_kw: document.saved.append("print-dialog")
     monkeypatch.setitem(sys.modules, export.__name__, export)
+    package = ModuleType("veusz.document")
+    package.printDialog = export.printDialog
+    monkeypatch.setitem(sys.modules, package.__name__, package)
     return Document()
 
 
@@ -228,6 +236,12 @@ def test_success_is_one_undo_step_and_manual_operations_remain_native(native):
     assert native.settings["manual"].value == "unsaved manual work"
     native.save("allowed.vsz")
     assert native.saved == ["allowed.vsz"]
+    stream = StringIO()
+    native.exportStyleSheet(stream)
+    assert stream.getvalue() == "stylesheet"
+    sys.modules["veusz.document.export"].printPages(native, None, [0])
+    sys.modules["veusz.document"].printDialog(None, native)
+    assert native.saved[-2:] == ["print", "print-dialog"]
 
 
 @pytest.mark.parametrize("action", ["apply", "undo", "redo"])
@@ -266,6 +280,10 @@ def test_rollback_failure_quarantines_all_mutation_save_and_export_ports(native,
     for port in (
         lambda: native.save("never-written.vsz"), lambda: native.saveToFile(stream),
         lambda: native.saveToHDF5File(None), lambda: exporter.add("never-written.pdf", [0]),
+        lambda: native.exportStyleSheet(stream),
+        lambda: sys.modules["veusz.document.export"].printPages(native, None, [0]),
+        lambda: sys.modules["veusz.document.export"].printDialog(None, native),
+        lambda: sys.modules["veusz.document"].printDialog(None, native),
         lambda: native.applyOperation(SettingOperation("manual", "blocked")),
         native.undoOperation, native.redoOperation,
         lambda: apply_native_setting_batch(native, operations, description="blocked proposal"),

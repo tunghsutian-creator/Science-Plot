@@ -9,7 +9,11 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 from sciplot_core.veusz_runtime import veusz_worker_environment
+
+pytestmark = pytest.mark.comprehensive
 
 
 def _native_scenario(root: Path) -> None:
@@ -201,6 +205,60 @@ def _native_scenario(root: Path) -> None:
     assert (root / "successful.pdf").stat().st_size > 100
     evidence["checks"].append("successful_one_undo_save_as_export_and_opaque_native_reopen")
 
+    from veusz.document import export as native_export
+    from veusz.dialogs.stylesheet import StylesheetDialog
+
+    def pdf_printer(path):
+        printer = qtall.QPrinter()
+        printer.setOutputFormat(qtall.QPrinter.OutputFormat.PdfFormat)
+        printer.setOutputFileName(str(path))
+        return printer
+
+    successful_print = root / "successful-print.pdf"
+    native_export.printPages(native, pdf_printer(successful_print), [0], setsizes=True)
+    assert successful_print.stat().st_size > 100
+    original_print_dialog = qtall.QPrintDialog
+    print_target = root / "successful-command-print.pdf"
+    print_approval = None
+    print_dialog_entries = []
+
+    class ApprovedPrintDialog:
+        """Supply dialog consent; retain the actual native printer and renderer."""
+
+        def __init__(self, printer, _parent):
+            printer.setOutputFormat(qtall.QPrinter.OutputFormat.PdfFormat)
+            printer.setOutputFileName(str(print_target))
+
+        def setMinMax(self, *_args):
+            pass
+
+        def exec(self):
+            print_dialog_entries.append(str(print_target))
+            if print_approval is not None:
+                print_approval()
+            return True
+
+        def printRange(self):
+            return qtall.QAbstractPrintDialog.PrintRange.AllPages
+
+    qtall.QPrintDialog = ApprovedPrintDialog
+    commands.Print()
+    assert print_target.stat().st_size > 100
+    print_target = root / "successful-alias-print.pdf"
+    document.printDialog(window, native)
+    assert print_target.stat().st_size > 100
+    print_target = root / "successful-window-print.pdf"
+    window.slotFilePrint()
+    assert print_target.stat().st_size > 100
+    styles = StylesheetDialog(window, native)
+    existing_style = root / "existing.vst"
+    window.fileSaveDialog = lambda *_args: str(existing_style)
+    styles.saveButton.click()
+    assert "Set(" in existing_style.read_text()
+    existing_style.write_bytes(b"existing stylesheet must not be truncated")
+    existing_print = root / "existing-print.pdf"
+    existing_print.write_bytes(b"existing print must not be overwritten")
+
     # Open the native export dialog before failure; its existing output is protected.
     dialog = window.slotFileExport()
     existing_exporter = document.AsyncExport(native)
@@ -208,28 +266,57 @@ def _native_scenario(root: Path) -> None:
     existing_export.write_bytes(b"existing export must not be removed")
     dialog.editFileName.setText(str(existing_export))
     dialog.checkOverwrite.setChecked(True)
-    original_set = size_setting.set
+    def quarantine_draft():
+        current_size = native.resolveSettingPath(None, size_path)
+        original_set = current_size.set
 
-    def failed_restore(value):
-        if value == "12pt":
-            raise RuntimeError("generated restoration failure")
-        return original_set(value)
+        def failed_restore(value):
+            if value == "12pt":
+                raise RuntimeError("generated restoration failure")
+            return original_set(value)
 
-    size_setting.set = failed_restore
-    OperationSettingSet.do = fail_second
-    try:
+        current_size.set = failed_restore
+        OperationSettingSet.do = fail_second
         try:
-            apply_native_setting_batch(native, [OperationSettingSet(size_path, "14pt"),
-                                               OperationSettingSet(label_path, "quarantined")],
-                                       description="Generated quarantine")
-            raise AssertionError("Fault did not execute")
-        except NativeBatchExecutionError as exc:
-            assert not exc.restored
-    finally:
-        size_setting.set = original_set
-        OperationSettingSet.do = original_do
+            try:
+                apply_native_setting_batch(native, [OperationSettingSet(size_path, "14pt"),
+                                                   OperationSettingSet(label_path, "quarantined")],
+                                           description="Generated quarantine")
+                raise AssertionError("Fault did not execute")
+            except NativeBatchExecutionError as exc:
+                assert not exc.restored
+        finally:
+            current_size.set = original_set
+            OperationSettingSet.do = original_do
+
+    # The native print dialog's modal loop is already active when failure occurs.
+    print_target = existing_print
+    print_approval = quarantine_draft
+    window.vzactions["file.print"].trigger()
+    assert print_dialog_entries[-1] == str(existing_print)
+    assert "quarantined" in window._sciplot_native_batch_error
+    qtall.QPrintDialog = original_print_dialog
     assert native_batch_blocker(native) is not None and native.isModified()
     assert native._sciplot_native_setting_batch_adapter.last_failure["restoration_error"]
+    missing_output_guards = []
+    try:
+        native_export.printPages(native, pdf_printer(existing_print), [0], setsizes=True)
+        missing_output_guards.append("printPages accepted quarantined draft")
+    except OSError as exc:
+        assert "quarantined" in str(exc)
+    style_stream = StringIO()
+    try:
+        native.exportStyleSheet(style_stream)
+        missing_output_guards.append("exportStyleSheet accepted quarantined draft")
+    except OSError as exc:
+        assert "quarantined" in str(exc)
+    styles.saveButton.click()
+    if existing_style.read_bytes() != b"existing stylesheet must not be truncated":
+        missing_output_guards.append("existing stylesheet dialog truncated output")
+    if existing_print.read_bytes() != b"existing print must not be overwritten":
+        missing_output_guards.append("printPages overwrote existing output")
+    assert not missing_output_guards, missing_output_guards
+    assert style_stream.getvalue() == ""
     quarantined_text = _document_text(native)
     assert window.slotFileSave() is False
     assert window.slotFileSaveAs() is False
@@ -240,7 +327,8 @@ def _native_scenario(root: Path) -> None:
                  lambda: native.save(str(denied_target), mode="hdf5"),
                  lambda: native.saveToFile(denied_stream), lambda: native.saveToHDF5File(None),
                  lambda: commands.Export(str(existing_export), page=[0]),
-                 lambda: existing_exporter.add(str(existing_export), [0])):
+                 lambda: existing_exporter.add(str(existing_export), [0]),
+                 commands.Print, lambda: document.printDialog(window, native)):
         try:
             port()
             raise AssertionError("Quarantined port accepted")
@@ -251,6 +339,8 @@ def _native_scenario(root: Path) -> None:
     dialog.accept()
     assert existing_export.read_bytes() == b"existing export must not be removed"
     assert window.slotFileExport() is False
+    assert window.slotFilePrint() is False
+    window.vzactions["file.print"].trigger()
     window.vzactions["edit.undo"].trigger()
     window.vzactions["edit.redo"].trigger()
     assert _document_text(native) == quarantined_text
@@ -265,9 +355,22 @@ def _native_scenario(root: Path) -> None:
     evidence["checks"].append("quarantine_blocks_native_save_save_as_command_export_open_dialog_project_save_and_qt_history")
     native.load(str(success_save), callbackunsafe=lambda: False)
     assert native_batch_blocker(native) is None
+    # Quarantine can also arise while the stylesheet filename picker is open.
+    def choose_stylesheet_after_failure(*_args):
+        quarantine_draft()
+        return str(existing_style)
+
+    window.fileSaveDialog = choose_stylesheet_after_failure
+    styles.saveButton.click()
+    assert native_batch_blocker(native) is not None
+    assert existing_style.read_bytes() == b"existing stylesheet must not be truncated"
+    native.load(str(success_save), callbackunsafe=lambda: False)
+    assert native_batch_blocker(native) is None
+    evidence["checks"].append("print_alias_qt_existing_modal_and_stylesheet_existing_dialog_picker_preserve_outputs")
     commands.Save(str(root / "after-explicit-reload.vsz"))
     evidence["checks"].append("explicit_successful_reload_releases_quarantine")
     window.document.setModified(False)
+    styles.close()
     dialog.close()
     window.close()
     app.quit()
@@ -280,6 +383,6 @@ def test_generated_native_batch_failure_isolation_and_gui_ports(tmp_path: Path):
                             capture_output=True, env=veusz_worker_environment(), timeout=90)
     assert result.returncode == 0, result.stdout + result.stderr
     evidence = json.loads(result.stdout.strip().splitlines()[-1])
-    assert len(evidence["checks"]) == 6
+    assert len(evidence["checks"]) == 7
     assert evidence["parent_pid"] == os.getpid()
     print(json.dumps(evidence, sort_keys=True))

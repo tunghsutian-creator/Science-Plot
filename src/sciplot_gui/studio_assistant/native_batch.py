@@ -156,12 +156,12 @@ class NativeSettingBatchAdapter:
         self._loading = False
         self._original = {name: getattr(document, name) for name in (
             "applyOperation", "undoOperation", "redoOperation", "save", "saveToFile",
-            "saveToHDF5File", "load")}
+            "saveToHDF5File", "exportStyleSheet", "load")}
         document.applyOperation = self._apply
         document.undoOperation = self._undo
         document.redoOperation = self._redo
-        for name in ("save", "saveToFile", "saveToHDF5File"):
-            setattr(document, name, self._guard_save(self._original[name]))
+        for name in ("save", "saveToFile", "saveToHDF5File", "exportStyleSheet"):
+            setattr(document, name, self._guard_output(self._original[name]))
         document.load = self._load
 
     def require_usable(self) -> None:
@@ -170,7 +170,7 @@ class NativeSettingBatchAdapter:
         if self._executing:
             raise OSError(errno.EBUSY, "A native setting batch is executing; save and export are blocked.")
 
-    def _guard_save(self, original: Callable[..., Any]) -> Callable[..., Any]:
+    def _guard_output(self, original: Callable[..., Any]) -> Callable[..., Any]:
         def guarded(*args: Any, **kwargs: Any) -> Any:
             self.require_usable()
             return original(*args, **kwargs)
@@ -261,28 +261,52 @@ def native_batch_blocker(document: Any) -> str | None:
     return adapter.blocker
 
 
-def _install_export_guard() -> None:
+def _require_document_output(document: Any) -> None:
+    adapter = getattr(document, "_sciplot_native_setting_batch_adapter", None)
+    if adapter is not None:
+        adapter.require_usable()
+
+
+def _install_output_guards() -> None:
     # Export dialogs can predate a failing batch. Guard the actual rendering
     # admission, shared by native File→Export and CommandInterface.Export.
-    exporter = import_module("veusz.document.export").AsyncExport
+    native_export: Any = import_module("veusz.document.export")
+    exporter = native_export.AsyncExport
     if getattr(exporter.add, "_sciplot_native_batch_guard", False):
         return
     original = exporter.add
 
     def guarded(self: Any, *args: Any, **kwargs: Any) -> Any:
-        adapter = getattr(self.doc, "_sciplot_native_setting_batch_adapter", None)
-        if adapter is not None:
-            adapter.require_usable()
+        _require_document_output(self.doc)
         return original(self, *args, **kwargs)
 
     guarded._sciplot_native_batch_guard = True  # type: ignore[attr-defined]
     exporter.add = guarded
 
+    # Printing has a separate native renderer and can write PDF directly.
+    # Guard before QPainter begins, keeping paintTo available to the canvas.
+    original_print_pages = native_export.printPages
+    original_print_dialog = native_export.printDialog
+
+    def print_pages(document: Any, *args: Any, **kwargs: Any) -> Any:
+        _require_document_output(document)
+        return original_print_pages(document, *args, **kwargs)
+
+    def print_dialog(parentwindow: Any, document: Any, *args: Any, **kwargs: Any) -> Any:
+        _require_document_output(document)
+        return original_print_dialog(parentwindow, document, *args, **kwargs)
+
+    native_export.printPages = print_pages
+    native_export.printDialog = print_dialog
+    # MainWindow uses the package alias; CommandInterface uses the export module.
+    native_document: Any = import_module("veusz.document")
+    native_document.printDialog = print_dialog
+
 
 def ensure_native_setting_batch_adapter(document: Any) -> NativeSettingBatchAdapter:
     adapter = getattr(document, "_sciplot_native_setting_batch_adapter", None)
     if adapter is None:
-        _install_export_guard()
+        _install_output_guards()
         adapter = NativeSettingBatchAdapter(document)
         document._sciplot_native_setting_batch_adapter = adapter
     if not isinstance(adapter, NativeSettingBatchAdapter):
