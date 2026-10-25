@@ -57,10 +57,11 @@ def publish_files(store: FileProjectStore, writes: Mapping[str, bytes | Path | P
     for name in writes:
         if name not in reads:
             raise ValueError("The editing session did not observe this save destination.")
-    from sciplot_core.project_commands.contracts import ProjectionRead
+    from sciplot_core.project_commands.contracts import MembershipRead, ProjectionRead
 
     projected = [ProjectionRead(**item) for item in expected.get("projected_reads", [])]
     command = ProjectCommand.create(kind, uuid4().hex, project_id=snapshot["project_id"],
         expected_generation=expected["generation"], read_set=reads, write_set=sorted(writes),
-        request={"storage_adapter": kind, "resources": sorted(writes)}, projected_reads=projected)
+        request={"storage_adapter": kind, "resources": sorted(writes)}, projected_reads=projected,
+        read_memberships=[MembershipRead(**item) for item in expected.get("read_memberships", [])])
     return ProjectCommands(store).execute(command, lambda: ProjectMutation(writes, result or {}, artifacts=artifacts or {}))

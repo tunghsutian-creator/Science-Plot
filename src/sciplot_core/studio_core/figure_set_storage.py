@@ -1,264 +1,140 @@
-"""Commit a complete Studio figure set as one atomic transaction."""
+"""Commit complete native figure sets through the immutable project repository."""
 
 from __future__ import annotations
 
 import json
-import shutil
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from uuid import uuid4
+
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
-from sciplot_core.foundation.file_hashing import (
-    existing_file_sha256,
-)
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.project_commands.resources import MembershipRead, PreparedFile
+from sciplot_core.project_store.adapters import publish_files, store_for_project
+from sciplot_core.project_store.io import read_file, sha
 from sciplot_core.studio_figure_set_contract import (
-    STUDIO_FIGURE_SET_KIND,
-    STUDIO_FIGURE_SET_LEGACY_VERSION,
-    STUDIO_FIGURE_SET_TASK_VERSION,
+    STUDIO_FIGURE_SET_KIND, STUDIO_FIGURE_SET_LEGACY_VERSION, STUDIO_FIGURE_SET_TASK_VERSION,
 )
-
-from sciplot_core.studio_core.json_files import (
-    _read_json,
-)
-
-from sciplot_core.studio_core.figure_set_state import (
-    _replace_studio_figure_set_path,
-)
+from sciplot_core.studio_core.json_files import _read_json
+from sciplot_core.studio_core.figure_set_state import _replace_studio_figure_set_path
 from sciplot_core.studio_core.figure_task_evidence import (
-    figure_task_from_registry_entry,
-    validate_figure_registry_against_plan,
-    validate_veusz_spec_figure_task,
+    figure_task_from_registry_entry, validate_figure_registry_against_plan, validate_veusz_spec_figure_task,
 )
+from sciplot_core.studio_core.registry_state import _studio_figure_set_path, _veusz_spec_path
 
-from sciplot_core.studio_core.registry_state import (
-    _studio_figure_set_path,
-    _veusz_spec_path,
-)
+
+def _captured(path: Path) -> PreparedFile:
+    descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        data, mode = read_file(descriptor, path.name, owned=True)
+    finally:
+        os.close(descriptor)
+    return PreparedFile(data, mode)
 
 
 def _commit_studio_figure_set_transaction(
-    *,
-    project_dir: Path,
-    replacements: list[dict[str, Any]],
-    manual_archive_requests: list[dict[str, Any]],
-    registry: dict[str, Any] | None,
+    *, project_dir: Path, replacements: list[dict[str, Any]],
+    manual_archive_requests: list[dict[str, Any]], registry: dict[str, Any] | None,
     path_replacer: Callable[[Path, Path], None] | None = None,
+    command_binding: dict[str, Any] | None = None,
 ) -> None:
-    """Install prepared Studio files and an optional registry as one rollback set."""
+    """Validate private complete candidates, then publish one generation head.
 
-    replace_path = (
-        path_replacer if path_replacer is not None else _replace_studio_figure_set_path
-    )
-    registry_path = _studio_figure_set_path(project_dir)
-    staged_registry: Path | None = None
-    pending = list(replacements)
-    if registry is not None:
-        staged_registry = registry_path.with_name(
-            f".sciplot-figure-set-transaction-{uuid4().hex}.json"
-        )
-        try:
-            staged_registry.write_text(
-                json.dumps(json_safe(registry), indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            staged_registry_payload = _read_json(staged_registry)
-        except Exception:
-            staged_registry.unlink(missing_ok=True)
-            raise
-        if staged_registry_payload.get("kind") != STUDIO_FIGURE_SET_KIND:
-            staged_registry.unlink(missing_ok=True)
-            raise RuntimeError("The staged figure-set registry failed validation.")
-        registry_hash = existing_file_sha256(staged_registry)
-        if not registry_hash:
-            staged_registry.unlink(missing_ok=True)
-            raise RuntimeError("The staged figure-set registry is empty.")
-        pending.append(
-            {
-                "staged": staged_registry,
-                "target": registry_path,
-                "expected_hash": registry_hash,
-                "kind": "registry",
-            }
-        )
-    records: list[dict[str, Any]] = []
-    archived_paths: list[Path] = []
-    created_history_dirs: list[Path] = []
-    committed = False
-    rollback_incomplete = False
+    The injectable replacer operates only in the private candidate tree. Native
+    producers with an existing edit session supply its original command binding.
+    """
+    root = project_dir.expanduser().resolve(strict=True)
+    replace_path = path_replacer or _replace_studio_figure_set_path
+    source_paths = [Path(item["staged"]) for item in replacements]
+    pending: dict[str, PreparedFile] = {}
+    archive_members: set[str] = set()
     try:
         if registry is not None:
-            _validate_staged_figure_set_task_evidence(
-                project_dir=project_dir,
-                replacements=replacements,
-                registry=registry,
-            )
-        for item in pending:
-            target = Path(item["target"])
-            record = {
-                **item,
-                "target": target,
-                "prior_hash": None,
-                "backup": None,
-                "replacement_attempted": False,
-            }
-            records.append(record)
+            _validate_staged_figure_set_task_evidence(project_dir=root, replacements=replacements, registry=registry)
+        for item in replacements:
+            target, source = Path(item["target"]), Path(item["staged"])
             if target.is_symlink():
-                raise RuntimeError(
-                    f"Cannot transactionally replace symbolic link {target}."
-                )
-            prior_hash = existing_file_sha256(target)
-            record["prior_hash"] = prior_hash
-            backup = None
-            if target.exists():
-                if not target.is_file() or not prior_hash:
-                    raise RuntimeError(
-                        f"Cannot transactionally replace invalid file {target}."
-                    )
-                backup = target.with_name(
-                    f".sciplot-figure-set-transaction-{uuid4().hex}.backup"
-                )
-            record["backup"] = backup
-            if backup is not None:
-                shutil.copy2(target, backup)
-                if existing_file_sha256(backup) != prior_hash:
-                    raise RuntimeError(
-                        f"Could not verify the figure-set backup for {target}."
-                    )
-
-        by_target = {record["target"]: record for record in records}
-        file_records = records[:-1] if registry is not None else records
-        for record in file_records:
-            record["replacement_attempted"] = True
-            replace_path(record["staged"], record["target"])
-            if existing_file_sha256(record["target"]) != record["expected_hash"]:
-                raise RuntimeError(
-                    f"Installed figure-set {record['kind']} failed validation."
-                )
-            if record["kind"] == "spec":
-                _read_json(record["target"])
-
-        for request in manual_archive_requests:
-            document_path = Path(request["document"])
-            document_record = by_target.get(document_path)
-            if document_record is None or document_record["backup"] is None:
-                continue
-            current_hash = document_record["prior_hash"]
-            generated_hash = request.get("generated_hash")
-            if generated_hash and current_hash == generated_hash:
-                continue
-            history_dir = document_path.parent / "history"
-            if not history_dir.exists():
-                history_dir.mkdir(parents=True)
-                created_history_dirs.append(history_dir)
-            stamp = (
-                datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + f"_{uuid4().hex[:8]}"
-            )
-            archived_document = (
-                history_dir / f"{document_path.stem}_{stamp}{document_path.suffix}"
-            )
-            archived_paths.append(archived_document)
-            shutil.copy2(document_record["backup"], archived_document)
-            if existing_file_sha256(archived_document) != current_hash:
-                raise RuntimeError(
-                    f"Could not verify the manual figure archive for {document_path}."
-                )
-            spec_path = Path(request["spec"])
-            spec_record = by_target.get(spec_path)
-            if spec_record is not None and spec_record["backup"] is not None:
-                archived_spec = history_dir / f"{document_path.stem}_{stamp}.spec.json"
-                archived_paths.append(archived_spec)
-                shutil.copy2(spec_record["backup"], archived_spec)
-                if existing_file_sha256(archived_spec) != spec_record["prior_hash"]:
-                    raise RuntimeError(
-                        f"Could not verify the manual spec archive for {spec_path}."
-                    )
-
+                raise RuntimeError(f"Cannot transactionally replace symbolic link {target}.")
+            if target.absolute() == source.absolute():
+                raise RuntimeError("A prepared figure must be separate from its active destination.")
+            logical = target.absolute().relative_to(root).as_posix()
+            if logical in pending:
+                raise RuntimeError("A figure-set mutation cannot write the same target twice.")
+            captured = _captured(source)
+            if sha(captured.data) != item["expected_hash"]:
+                raise RuntimeError("Prepared figure-set bytes changed before publication.")
+            if item["kind"] == "spec" and not isinstance(json.loads(captured.data), dict):
+                raise RuntimeError("A staged native spec must be one JSON object.")
+            pending[logical] = captured
         if registry is not None:
-            registry_record = records[-1]
-            registry_record["replacement_attempted"] = True
-            replace_path(registry_record["staged"], registry_record["target"])
-            if existing_file_sha256(registry_path) != registry_record[
-                "expected_hash"
-            ] or _read_json(registry_path) != json_safe(registry):
-                raise RuntimeError(
-                    "The installed figure-set registry failed validation."
-                )
+            if registry.get("kind") != STUDIO_FIGURE_SET_KIND:
+                raise RuntimeError("The staged figure-set registry failed validation.")
+            name = _studio_figure_set_path(root).relative_to(root).as_posix()
+            pending[name] = PreparedFile(json.dumps(json_safe(registry), indent=2, ensure_ascii=False).encode(), 0o644)
+        # Candidate producer files are not imported as live project members.
+        for source in source_paths:
+            source.unlink(missing_ok=True)
+        store = store_for_project(root)
+        snapshot = store.snapshot(import_legacy=True)
+        for request in manual_archive_requests:
+            document = Path(request["document"])
+            logical = document.absolute().relative_to(root).as_posix()
+            before = snapshot["files"].get(logical)
+            if logical not in pending or before is None or before["sha256"] == request.get("generated_hash"):
+                continue
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + "_" + uuid4().hex[:8]
+            history = document.parent.relative_to(root) / "history"
+            pending[(history / f"{document.stem}_{stamp}{document.suffix}").as_posix()] = PreparedFile(
+                store.read_bytes(logical, generation=snapshot["generation"]), before["mode"])
+            archive_members.add((history / f"{document.stem}_{stamp}{document.suffix}").as_posix())
+            spec = Path(request["spec"]).absolute().relative_to(root).as_posix()
+            if spec in pending and spec in snapshot["files"]:
+                entry = snapshot["files"][spec]
+                pending[(history / f"{document.stem}_{stamp}.spec.json").as_posix()] = PreparedFile(
+                    store.read_bytes(spec, generation=snapshot["generation"]), entry["mode"])
+                archive_members.add((history / f"{document.stem}_{stamp}.spec.json").as_posix())
+        if registry is not None:
             for entry in registry.get("figures", []):
                 if not isinstance(entry, dict) or entry.get("status") != "ready":
                     continue
-                document = Path(str(entry.get("document") or ""))
-                spec = Path(str(entry.get("spec") or ""))
-                if not document.is_file() or not spec.is_file():
-                    raise RuntimeError(
-                        f"Ready figure {entry.get('figure_id')} is incomplete."
-                    )
-                _read_json(spec)
-                document_record = by_target.get(document)
-                document_state = entry.get("document_state")
-                expected_current_hash = (
-                    document_state.get("current_hash")
-                    if isinstance(document_state, dict)
-                    else entry.get("generated_hash")
-                )
-                if (
-                    document_record is not None
-                    and expected_current_hash != existing_file_sha256(document)
-                ):
-                    raise RuntimeError(
-                        f"Ready figure {entry.get('figure_id')} has a stale hash."
-                    )
-        committed = True
-    except Exception as exc:
-        for path in reversed(archived_paths):
-            path.unlink(missing_ok=True)
-        rollback_errors: list[str] = []
-        for record in reversed(records):
-            if not record["replacement_attempted"]:
-                continue
-            target = record["target"]
-            backup = record["backup"]
-            try:
-                if backup is None:
-                    target.unlink(missing_ok=True)
-                    if target.exists() or target.is_symlink():
-                        raise RuntimeError("restored absence mismatch")
-                else:
-                    # Keep the verified backup until restoration itself has
-                    # been hash-checked. If the copy fails, the original bytes
-                    # remain beside the target for recovery instead of being
-                    # consumed by the rollback attempt.
-                    shutil.copy2(backup, target)
-                if (
-                    backup is not None
-                    and existing_file_sha256(target) != record["prior_hash"]
-                ):
-                    raise RuntimeError("restored hash mismatch")
-            except Exception as rollback_exc:
-                rollback_errors.append(f"{target}: {rollback_exc}")
-        if rollback_errors:
-            rollback_incomplete = True
-            raise RuntimeError(
-                "Figure-set transaction failed and rollback was incomplete: "
-                + "; ".join(rollback_errors)
-            ) from exc
-        raise
+                document_name, spec_name = (Path(entry[field]).absolute().relative_to(root).as_posix() for field in ("document", "spec"))
+                if any(name not in pending and name not in snapshot["files"] for name in (document_name, spec_name)):
+                    raise RuntimeError(f"Ready figure {entry.get('figure_id')} is incomplete.")
+                selected = pending[document_name].data if document_name in pending else store.read_bytes(document_name, generation=snapshot["generation"])
+                state = entry.get("document_state")
+                expected = state.get("current_hash") if isinstance(state, dict) else entry.get("generated_hash")
+                if document_name in pending and expected != sha(selected):
+                    raise RuntimeError(f"Ready figure {entry.get('figure_id')} has a stale hash.")
+        baseline = command_binding or {"project_id": snapshot["project_id"], "generation": snapshot["generation"],
+            "files": {name: entry["sha256"] for name, entry in snapshot["files"].items()},
+            "read_memberships": [MembershipRead.capture(snapshot["files"]).to_payload()]}
+        baseline = {**baseline, "files": {**baseline["files"]}}
+        for name in pending:
+            if command_binding is not None and name not in baseline["files"] and name not in archive_members:
+                raise RuntimeError("The editing baseline did not observe this figure-set destination.")
+            baseline["files"].setdefault(name, snapshot["files"].get(name, {}).get("sha256"))
+        with TemporaryDirectory(prefix="sciplot-figure-generation-") as folder:
+            candidate = Path(folder)
+            frozen = {}
+            for index, (name, prepared) in enumerate(pending.items()):
+                source = candidate / f"input-{index}"
+                destination = candidate / "candidate" / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                source.write_bytes(prepared.data)
+                source.chmod(prepared.mode)
+                replace_path(source, destination)
+                captured = _captured(destination)
+                if captured != prepared:
+                    raise RuntimeError("The privately installed figure-set candidate failed validation.")
+                frozen[name] = captured
+            publish_files(store, frozen, kind="figure_set", baseline=baseline)
     finally:
-        for record in records:
-            Path(record["staged"]).unlink(missing_ok=True)
-            backup = record["backup"]
-            if backup is not None and not rollback_incomplete:
-                backup.unlink(missing_ok=True)
-        if staged_registry is not None:
-            staged_registry.unlink(missing_ok=True)
-        if not committed:
-            for history_dir in reversed(created_history_dirs):
-                try:
-                    history_dir.rmdir()
-                except OSError:
-                    pass
+        for source in source_paths:
+            source.unlink(missing_ok=True)
 
 
 def _validate_staged_figure_set_task_evidence(

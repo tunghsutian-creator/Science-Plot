@@ -963,7 +963,8 @@ def test_post_registry_replace_failure_restores_prior_registry(
     prior_bytes = registry_path.read_bytes()
 
     def replace_then_fail(source: Path, destination: Path) -> None:
-        assert destination == registry_path
+        assert destination.name == registry_path.name
+        assert not destination.is_relative_to(project_dir)
         source.replace(destination)
         raise OSError("failure after registry replacement")
 
