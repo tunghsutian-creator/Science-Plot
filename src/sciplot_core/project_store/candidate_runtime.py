@@ -12,6 +12,7 @@ from .errors import ProjectConflict, ProjectStoreError
 from .io import STORE, digest, directory, member_names, parts, read_file, sha
 from .repository import FileProjectStore
 from .source_resolver import ProjectSourceResolver
+from .incoming_sources import selected_sealed_view
 
 
 class ProjectCandidateResolver(ProjectSourceResolver):
@@ -96,6 +97,10 @@ class ProjectCandidateResolver(ProjectSourceResolver):
     def resolve_path(self, original: str | Path, *, expected_sha256: str | None = None,
                      source_id: str | None = None) -> Path:
         path = Path(original).expanduser().absolute()
+        sealed = selected_sealed_view(self.store, self.snapshot, path,
+                                      expected_sha256=expected_sha256, source_id=source_id)
+        if sealed is not None:
+            return sealed
         relative = self._relative(path)
         if relative is None:
             return super().resolve_path(original, expected_sha256=expected_sha256, source_id=source_id)
@@ -153,6 +158,9 @@ class ProjectCandidateResolver(ProjectSourceResolver):
         return self.candidate_root / relative
 
     def literal_path(self, actual: Path) -> str:
+        sealed = selected_sealed_view(self.store, self.snapshot, actual.expanduser().absolute())
+        if sealed is not None:
+            return super().literal_path(sealed)
         relative = self._relative(actual.expanduser().absolute())
         if relative is None:
             return super().literal_path(actual)

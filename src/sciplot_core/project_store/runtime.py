@@ -1,12 +1,13 @@
 """Bind a trusted selected project generation to the pure scientific IO port."""
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import Iterator, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
 from sciplot_core.foundation.source_locations import (
     literal_source_path, resolve_source_path, selected_source_resolver, source_location_scope,
 )
 from .repository import FileProjectStore
+from .incoming_sources import SourceExpectation, SourceReadMode, require_unambiguous_scope, source_expectation_scope
 from .source_resolver import ProjectSourceResolver as ProjectSourceResolver
 
 
@@ -15,6 +16,27 @@ def project_runtime(store: FileProjectStore, generation: str | None = None) -> I
     resolver = ProjectSourceResolver(store, generation)
     with source_location_scope(resolver):
         yield resolver
+
+
+@contextmanager
+def _source_runtime(store: FileProjectStore, sources: Sequence[SourceExpectation], mode: SourceReadMode,
+                    generation: str | None) -> Iterator[ProjectSourceResolver]:
+    require_unambiguous_scope()
+    resolver = ProjectSourceResolver(store, generation)
+    with source_expectation_scope(resolver.snapshot, mode, sources), source_location_scope(resolver):
+        yield resolver
+
+
+def incoming_source_runtime(store: FileProjectStore, sources: Sequence[SourceExpectation], *,
+                            generation: str | None = None) -> AbstractContextManager[ProjectSourceResolver]:
+    """Trusted host's explicit incoming version; no stored source version changes."""
+    return _source_runtime(store, sources, "incoming", generation)
+
+
+def sealed_source_runtime(store: FileProjectStore, sources: Sequence[SourceExpectation], *,
+                          generation: str | None = None) -> AbstractContextManager[ProjectSourceResolver]:
+    """Read one reviewed baseline version without reconnecting its live literal."""
+    return _source_runtime(store, sources, "sealed", generation)
 
 
 # Host adapters use the same port as pure source consumers.

@@ -5,6 +5,7 @@ from typing import Any
 from . import state
 from .errors import ProjectConflict
 from .io import digest
+from .incoming_sources import resolve_expected_source, selected_expectations
 from .repository import FileProjectStore
 
 
@@ -42,6 +43,10 @@ class ProjectSourceResolver:
 
     def resolve_path(self, original: str | Path, *, expected_sha256: str | None = None,
                      source_id: str | None = None) -> Path:
+        expected = resolve_expected_source(self.store, self.snapshot, original,
+                                           expected_sha256=expected_sha256, source_id=source_id)
+        if expected is not None:
+            return expected
         path = Path(original).expanduser().absolute()
         # Only exact known namespaces enter the store. Private host-created
         # audit copies outside those roots retain their ordinary local IO.
@@ -61,9 +66,13 @@ class ProjectSourceResolver:
         return str(path)
 
     def binding(self) -> dict[str, Any]:
-        return {"kind": "sciplot_project_runtime", "version": 1, "root": str(self.store.root),
+        value = {"kind": "sciplot_project_runtime", "version": 1, "root": str(self.store.root),
                 "project_id": self.snapshot["project_id"], "generation": self.generation,
                 "generation_sha256": digest(self.snapshot),
                 "locations": {key: {"path": str(path), "members": list(members) if members is not None else None}
                               for key, path in self.store.locations.items()
                               for members in [self.store.location_members[key]]}}
+        expectations = selected_expectations(self.snapshot)
+        if expectations is not None:
+            value["source_expectations"] = expectations
+        return value

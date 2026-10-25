@@ -12,6 +12,7 @@ from typing import Any
 from sciplot_core.foundation.source_locations import selected_source_resolver, source_location_scope
 from .errors import ProjectConflict, ProjectStoreError
 from .io import digest
+from .incoming_sources import expectation_payload, source_expectation_scope, without_source_expectations
 from .repository import FileProjectStore
 from .resources import ResourceRoot
 from .runtime import ProjectSourceResolver
@@ -70,6 +71,9 @@ def _read_binding(reference: dict[str, str], argv: list[str]) -> dict[str, Any]:
     if not isinstance(project, dict):
         raise ProjectStoreError("Unsupported closed native project locator.")
     fields = {"kind", "version", "root", "project_id", "generation", "generation_sha256", "locations"}
+    if "source_expectations" in project:
+        fields.add("source_expectations")
+        expectation_payload(project["source_expectations"])
     if project.get("kind") == "sciplot_project_candidate_runtime":
         fields.add("candidate")
         candidate = project.get("candidate")
@@ -86,6 +90,13 @@ def _read_binding(reference: dict[str, str], argv: list[str]) -> dict[str, Any]:
 
 @contextmanager
 def worker_project_runtime(reference: dict[str, str] | None, argv: list[str]) -> Iterator[None]:
+    with without_source_expectations():
+        with _worker_project_runtime(reference, argv):
+            yield
+
+
+@contextmanager
+def _worker_project_runtime(reference: dict[str, str] | None, argv: list[str]) -> Iterator[None]:
     if reference is None:
         # Even pooled requests without a project cannot inherit the previous one.
         with source_location_scope(None):
@@ -115,5 +126,10 @@ def worker_project_runtime(reference: dict[str, str] | None, argv: list[str]) ->
     if (resolver.snapshot["project_id"] != value["project_id"]
             or digest(resolver.snapshot) != value["generation_sha256"]):
         raise ProjectConflict("The native locator differs from the selected project generation.")
-    with source_location_scope(resolver):
-        yield
+    if "source_expectations" in value:
+        mode, sources = expectation_payload(value["source_expectations"])
+        with source_expectation_scope(resolver.snapshot, mode, sources), source_location_scope(resolver):
+            yield
+    else:
+        with source_location_scope(resolver):
+            yield
