@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from .errors import ProjectConflict, ProjectStoreError
-from .io import StoreIO, digest
+from .io import StoreIO, digest, parts, sha
 
 
 def boundary(_name: str) -> None:
@@ -19,7 +19,8 @@ def generation(io: StoreIO, identity: str) -> dict[str, Any]:
     if not isinstance(identity, str) or len(identity) != 32 or any(c not in "0123456789abcdef" for c in identity):
         raise ProjectStoreError("Invalid immutable project generation identity.")
     value = io.read(f"generations/{identity}.json")
-    if value is None or value.get("generation") != identity:
+    if (value is None or value.get("generation") != identity
+            or value.get("kind") != "sciplot_project_generation" or value.get("version") != 1):
         raise ProjectStoreError("The immutable project generation is missing.")
     return value
 
@@ -32,11 +33,29 @@ def head(io: StoreIO) -> dict[str, Any] | None:
     if (pointer.get("kind") != "sciplot_project_head" or pointer.get("version") != 1
             or pointer.get("sha256") != digest(value) or pointer.get("project_id") != value["project_id"]):
         raise ProjectConflict("The project head and complete generation disagree.")
-    for item in value["files"].values():
+    for name, item in value["files"].items():
+        parts(name)
         io.get(item)
     for versions in value.get("sources", {}).values():
         for item in versions.values():
             io.get(item)
+    cursor, seen = value, {value["generation"]}
+    while cursor.get("parent") is not None:
+        parent = generation(io, cursor["parent"])
+        if (parent["generation"] in seen or cursor.get("parent_sha256") != digest(parent)
+                or parent["project_id"] != value["project_id"] or parent["sequence"] != cursor["sequence"] - 1):
+            raise ProjectConflict("The immutable complete project history changed or split.")
+        seen.add(parent["generation"])
+        cursor = parent
+    return value
+
+
+def reachable(io: StoreIO, current: dict[str, Any], identity: str) -> dict[str, Any]:
+    value = current
+    while value["generation"] != identity:
+        if value.get("parent") is None:
+            raise ProjectConflict("The expected generation is not committed project history.")
+        value = generation(io, value["parent"])
     return value
 
 
@@ -44,9 +63,16 @@ def write_generation(io: StoreIO, value: dict[str, Any]) -> None:
     io.write(f"generations/{value['generation']}.json", value, exclusive=True)
 
 
-def publish_head(io: StoreIO, value: dict[str, Any]) -> None:
+def publish_head(io: StoreIO, value: dict[str, Any], *, selected_sources: dict[str, Any] | None = None,
+                 read_record: dict[str, Any] | None = None, read_current: dict[str, Any] | None = None) -> None:
     boundary("before_head")
     io.verify_roots()
+    if read_record is not None and read_current is not None:
+        require_reads(io, read_current, read_record)
+    if selected_sources:
+        from .commands import verify_sources
+
+        verify_sources(io, selected_sources)
     io.write("head.json", {"kind": "sciplot_project_head", "version": 1,
              "project_id": value["project_id"], "generation": value["generation"],
              "sequence": value["sequence"], "sha256": digest(value)})
@@ -99,7 +125,10 @@ def save_command(io: StoreIO, value: dict[str, Any]) -> None:
 def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, Any]) -> None:
     from .errors import ProjectRecoveryRequired
 
-    baseline = generation(io, record["expected_generation"])
+    from .commands import native_adoptions
+
+    adoptions = native_adoptions(record)
+    baseline = reachable(io, dict(current), record["expected_generation"])
     if baseline["project_id"] != current["project_id"]:
         raise ProjectConflict("The expected generation belongs to another project.")
     for name, expected in record["read_set"].items():
@@ -108,8 +137,9 @@ def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, 
         if expected != (old["sha256"] if old else None) or expected != (latest["sha256"] if latest else None):
             raise ProjectConflict(f"A declared project read changed: {name}")
         physical = io.physical(name)
-        actual = io.put(physical[0])["sha256"] if physical else None
-        if actual != expected:
+        actual = sha(physical[0]) if physical else None
+        observed = adoptions[name]["observed_sha256"] if name in adoptions else expected
+        if actual != observed:
             raise ProjectConflict(f"Outside bytes changed a declared project read: {name}")
     projected = record.get("projected_reads", [])
     if projected:
@@ -122,7 +152,7 @@ def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, 
             if before is None or after is None:
                 raise ProjectConflict("A projected read resource is missing.")
             physical = io.physical(name)
-            if physical is None or io.put(physical[0])["sha256"] != after["sha256"]:
+            if physical is None or sha(physical[0]) != after["sha256"]:
                 raise ProjectRecoveryRequired("A projected resource has unregistered outside bytes.")
             for entry in (before, after):
                 if projection_digest(io.get(entry), kind=item["kind"], key=item["key"]) != item["sha256"]:

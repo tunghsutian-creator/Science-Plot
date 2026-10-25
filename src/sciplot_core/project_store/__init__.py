@@ -2,5 +2,6 @@
 
 from .errors import ProjectCommandConflict, ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
 from .repository import FileProjectStore
+from .resources import ResourceRoot
 
-__all__ = ["FileProjectStore", "ProjectCommandConflict", "ProjectConflict", "ProjectRecoveryRequired", "ProjectStoreError"]
+__all__ = ["FileProjectStore", "ResourceRoot", "ProjectCommandConflict", "ProjectConflict", "ProjectRecoveryRequired", "ProjectStoreError"]

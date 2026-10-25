@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from . import commands, projection, state
 from .errors import ProjectCommandConflict, ProjectConflict
-from .io import StoreIO
+from .io import StoreIO, digest
 
 
 def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
@@ -25,6 +25,9 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     writes = dict(frozen["writes"])
     if set(writes) != set(record["write_set"]):
         raise ProjectConflict("Publication does not cover the exact reserved write set.")
+    for name, adoption in commands.native_adoptions(record).items():
+        if writes[name] is None or writes[name]["sha256"] != adoption["observed_sha256"]:
+            raise ProjectConflict("The imported native candidate differs from the explicitly audited outside bytes.")
     projected = commands.projected_writes(record)
     for name in {item["resource"] for item in projected}:
         from sciplot_core.project_commands.read_projections import merge_projection
@@ -38,7 +41,7 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
             merged = merge_projection(merged, candidate_bytes, kind=selector["kind"], key=selector["key"])
         writes[name] = {**io.put(merged), "mode": present["mode"]}
     value = deepcopy(current)
-    value.update(parent=current["generation"], generation=uuid4().hex,
+    value.update(parent=current["generation"], parent_sha256=digest(current), generation=uuid4().hex,
                  sequence=current["sequence"] + 1, origin="command")
     value["locators"].update({key: str(path) for key, path in io.locations.items()})
     for name, entry in writes.items():
@@ -66,7 +69,7 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     record.update(install_parent=current["generation"], install_generation=value["generation"],
                   install_files=sorted(writes), pending_result=frozen["result"])
     state.save_command(io, record)
-    state.publish_head(io, value)
+    state.publish_head(io, value, selected_sources=frozen.get("sources"), read_record=record, read_current=current)
     projection.project(io, record, value)
     record.update(phase="complete", generation=value["generation"], result=frozen["result"])
     state.save_command(io, record)

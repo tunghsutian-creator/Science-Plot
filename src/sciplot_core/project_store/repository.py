@@ -10,10 +10,11 @@ from typing import Any
 from . import commands, projection, publication, state
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
 from .io import STORE, StoreIO, directory, install, parts, read_file, sha
+from .resources import ResourceRoot
 
 
 class FileProjectStore:
-    def __init__(self, project_root: Path, *, locations: Mapping[str, Path] | None = None) -> None:
+    def __init__(self, project_root: Path, *, locations: Mapping[str, Path | ResourceRoot] | None = None) -> None:
         self.root = Path(project_root).expanduser().resolve(strict=True)
         if locations is None and (self.root / STORE / "local_locations.json").exists():
             # Cold bundles may register only confined, host-created local views.
@@ -23,21 +24,35 @@ class FileProjectStore:
             ids = local.get("ids", []) if local else []
             if any(not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", key) for key in ids):
                 raise ProjectStoreError("Invalid confined cold-project resource-root IDs.")
-            locations = {key: self.root / ".sciplot_resources" / key for key in ids}
-        self.locations = {key: Path(path).expanduser().resolve(strict=True) for key, path in (locations or {}).items()}
+            members = local.get("members", {}) if local else {}
+            locations = {key: ResourceRoot(self.root / ".sciplot_resources" / key,
+                         tuple(members[key]) if members.get(key) is not None else None) for key in ids}
+        self.locations = {}
+        self.location_members = {}
+        for key, supplied in (locations or {}).items():
+            capability = supplied if isinstance(supplied, ResourceRoot) else ResourceRoot(supplied)
+            self.locations[key] = Path(capability.path).expanduser().resolve(strict=True)
+            if capability.members is not None:
+                for relative in capability.members:
+                    if parts(relative)[0].startswith("@"):
+                        raise ProjectStoreError("File capabilities must be relative within one trusted root.")
+            self.location_members[key] = capability.members
         roots = [self.root, *self.locations.values()]
         if len(set(roots)) != len(roots):
             raise ProjectStoreError("Trusted resource roots must have distinct identities.")
 
     @contextmanager
-    def _locked(self, *, import_legacy: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any]]]:
-        with StoreIO(self.root, self.locations).locked() as io:
+    def _locked(self, *, import_legacy: bool = False, repair: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any]]]:
+        with StoreIO(self.root, self.locations, self.location_members).locked() as io:
             current = state.head(io)
             if current is None:
                 if not import_legacy:
                     raise ProjectRecoveryRequired("Explicit legacy import is required before project mutation.")
                 current = state.import_legacy(io)
-            projection.recover(io, current)
+            if repair:
+                projection.recover(io, current)
+            elif projection.pending(io, current):
+                raise ProjectRecoveryRequired("A complete generation is committed; explicitly recover its derived files first.")
             yield io, current
 
     def snapshot(self, *, import_legacy: bool = False) -> dict[str, Any]:
@@ -54,13 +69,13 @@ class FileProjectStore:
                 read_set: Mapping[str, str | None], write_set: Sequence[str],
                 metadata: dict[str, Any] | None = None,
                 projected_reads: Sequence[dict[str, Any]] = ()) -> dict[str, Any]:
-        with self._locked() as (io, current):
+        with self._locked(repair=True) as (io, current):
             return commands.public(io, commands.reserve(io, current, command_id, command_digest,
                 expected_generation=expected_generation, read_set=read_set, write_set=write_set,
                 metadata=metadata, projected_reads=projected_reads))
 
     def mark_applying(self, command_id: str, command_digest: str) -> dict[str, Any]:
-        with self._locked() as (io, _current):
+        with self._locked(repair=True) as (io, _current):
             record = state.command(io, command_id, command_digest)
             if record is None:
                 raise ProjectStoreError("Reserve this command before native preparation.")
@@ -71,15 +86,15 @@ class FileProjectStore:
               result: dict[str, Any], review: dict[str, Any],
               artifacts: Mapping[str, bytes | Path] | None = None,
               sources: Sequence[dict[str, Any]] | None = None) -> dict[str, Any]:
-        with self._locked() as (io, _current):
+        with self._locked(repair=True) as (io, _current):
             record = state.command(io, command_id, command_digest)
             if record is None:
                 raise ProjectStoreError("Reserve this command before freezing a candidate.")
             return commands.public(io, commands.stage(io, record, writes=writes, result=result,
-                review=review, artifacts=artifacts, sources=sources))
+                review=review, artifacts=artifacts, sources=sources), create_views=True)
 
     def decide(self, command_id: str, command_digest: str, *, decision_id: str, accept: bool) -> dict[str, Any]:
-        with self._locked() as (io, _current):
+        with self._locked(repair=True) as (io, _current):
             record = state.command(io, command_id, command_digest)
             if record is None:
                 raise ProjectStoreError("The frozen candidate does not exist.")
@@ -88,7 +103,7 @@ class FileProjectStore:
     def publish(self, command_id: str, command_digest: str, *, writes: Mapping[str, bytes | Path | None],
                 result: dict[str, Any], sources: Sequence[dict[str, Any]] | None = None,
                 artifacts: Mapping[str, bytes | Path] | None = None) -> dict[str, Any]:
-        with self._locked() as (io, current):
+        with self._locked(repair=True) as (io, current):
             record = state.command(io, command_id, command_digest)
             if record is None:
                 raise ProjectStoreError("Reserve this command before publication.")
@@ -98,15 +113,15 @@ class FileProjectStore:
                       "sources": commands.capture_sources(io, sources), "review": {},
                       "artifacts": state.import_writes(io, artifacts or {})}
             commands.seal(io, record, frozen)
-            return commands.public(io, publication.publish(io, current, record, frozen=frozen))
+            return commands.public(io, publication.publish(io, current, record, frozen=frozen), create_views=True)
 
     def publish_staged(self, command_id: str, command_digest: str) -> dict[str, Any]:
-        with self._locked() as (io, current):
+        with self._locked(repair=True) as (io, current):
             record = state.command(io, command_id, command_digest)
             if record is None or record.get("accepted") is not True:
                 raise ProjectStoreError("An exact accepted frozen candidate is required.")
             commands.public(io, record)  # Verify the sealed descriptor before using it.
-            return commands.public(io, publication.publish(io, current, record, frozen=record["draft"]))
+            return commands.public(io, publication.publish(io, current, record, frozen=record["draft"]), create_views=True)
 
     def query(self, command_id: str) -> dict[str, Any] | None:
         if not (self.root / STORE / "head.json").exists():
@@ -132,7 +147,7 @@ class FileProjectStore:
             return tuple(result)
 
     def recover(self) -> dict[str, Any]:
-        with self._locked() as (io, current):
+        with self._locked(repair=True) as (io, current):
             unknown = []
             try:
                 import os
@@ -149,7 +164,7 @@ class FileProjectStore:
 
     def read_bytes(self, logical: str, *, generation: str | None = None) -> bytes:
         with self._locked() as (io, current):
-            value = state.generation(io, generation) if generation else current
+            value = state.reachable(io, current, generation) if generation else current
             if value["project_id"] != current["project_id"] or logical not in value["files"]:
                 raise ProjectStoreError("The logical resource is not a member of this generation.")
             return io.get(value["files"][logical])
@@ -160,6 +175,9 @@ class FileProjectStore:
             if candidate.is_relative_to(root):
                 relative = candidate.relative_to(root).as_posix()
                 parts(relative)
+                allowed = self.location_members.get(key)
+                if allowed is not None and relative not in allowed:
+                    raise ProjectStoreError("This file is outside the trusted member capability.")
                 return f"@{key}/{relative}"
         if candidate.is_relative_to(self.root):
             relative = candidate.relative_to(self.root).as_posix()
@@ -179,6 +197,10 @@ class FileProjectStore:
             return self.root / Path(*components)
 
     def resolve_source(self, source_id: str, version: str) -> Path:
+        import re
+
+        if not re.fullmatch(r"[0-9a-f]{32}", source_id) or not re.fullmatch(r"[0-9a-f]{64}", version):
+            raise ProjectStoreError("Source and version identifiers must match their frozen project identity.")
         with self._locked() as (io, current):
             entry = current["sources"].get(source_id, {}).get(version)
             if entry is None:

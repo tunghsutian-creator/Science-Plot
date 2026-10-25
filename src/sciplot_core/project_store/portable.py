@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from .errors import ProjectConflict, ProjectStoreError
 from .io import STORE, directory, install, parts, read_file, sha
+from .resources import ResourceRoot
 
 if TYPE_CHECKING:
     from .repository import FileProjectStore
@@ -48,7 +49,7 @@ def export_bundle(store: FileProjectStore, destination: Path) -> Path:
                 checks[name] = {"sha256": sha(data), "size": len(data), "mode": mode}
             header = {"kind": "sciplot_project_bundle", "version": 1,
                 "project_id": current["project_id"], "generation": current["generation"],
-                "location_ids": sorted(store.locations), "members": checks}
+                "location_ids": sorted(store.locations), "location_members": store.location_members, "members": checks}
             install(descriptor, "bundle.json", (json.dumps(header, sort_keys=True,
                     ensure_ascii=False, allow_nan=False) + "\n").encode(), exclusive=True)
         finally:
@@ -92,17 +93,21 @@ def import_bundle(bundle: Path, destination: Path) -> FileProjectStore:
             for key in ids:
                 with directory(root_fd, (".sciplot_resources", key), create=True):
                     pass
-                locations[key] = target / ".sciplot_resources" / key
+                allowed = header.get("location_members", {}).get(key)
+                locations[key] = ResourceRoot(target / ".sciplot_resources" / key,
+                                              tuple(allowed) if allowed is not None else None)
         finally:
             os.close(root_fd)
     finally:
         os.close(source_fd)
     store = FileProjectStore(target, locations=locations)
-    with StoreIO(store.root, store.locations).locked() as io:
+    with StoreIO(store.root, store.locations, store.location_members).locked() as io:
         current = state.head(io)
         if current is None or (current["project_id"], current["generation"]) != (header["project_id"], header["generation"]):
             raise ProjectConflict("The portable head differs from its complete bundle binding.")
-        io.write("local_locations.json", {"ids": ids})
+        io.write("local_locations.json", {"ids": ids, "members": store.location_members})
+        io.write("local_sources.json", {"versions": {source_id: {version: entry["sha256"]
+            for version, entry in versions.items()} for source_id, versions in current["sources"].items()}})
         io.write("relocation.json", {"generation": current["generation"], "files": sorted(current["files"]), "complete": False})
         projection.relocate(io, current)
     return store

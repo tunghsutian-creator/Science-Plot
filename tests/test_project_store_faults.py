@@ -110,3 +110,18 @@ def test_unidentified_live_native_window_excludes_store_even_without_file_change
     with ProjectSessionLease(store.root, native=True):
         with pytest.raises(ProjectSessionBusy):
             store.reserve("unsafe-window", "digest", expected_generation=None, read_set={}, write_set=[])
+
+
+def test_readonly_query_commands_snapshot_never_repair_interrupted_active_files(tmp_path):
+    store, _before, delivery = roots(tmp_path)
+    process = start(store, delivery, "after_head")
+    process.kill()
+    process.communicate(timeout=5)
+    members = [path for root in (store.root, delivery) for path in root.rglob("*") if path.is_file()]
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in members}
+    for inspect in (lambda: store.query("owned-fault"), store.commands, store.snapshot):
+        with pytest.raises(ProjectRecoveryRequired):
+            inspect()
+        assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in members} == before
+    assert store.recover()["phase"] == "complete"
+    assert (store.root / "document.vsz").read_bytes() == (delivery / "native.vsz").read_bytes() == b"new"

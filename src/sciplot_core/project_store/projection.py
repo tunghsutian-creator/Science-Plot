@@ -10,6 +10,23 @@ from .io import StoreIO, directory, install, sha
 from . import state
 
 
+def pending(io: StoreIO, current: dict[str, Any]) -> bool:
+    relocation = io.read("relocation.json")
+    if relocation is not None and relocation.get("complete") is not True:
+        return True
+    try:
+        with directory(io.fd, ("commands",)) as parent:
+            names = sorted(name for name in os.listdir(parent) if name.endswith(".json"))
+    except FileNotFoundError:
+        return False
+    for name in names:
+        record = io.read("commands/" + name)
+        if record and record.get("install_generation") is not None and record.get("phase") != "complete":
+            if record["command_id"] in current["commands"]:
+                return True
+    return False
+
+
 def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> None:
     """Finish only old-or-exact-new projections; never overwrite foreign bytes."""
     old = state.generation(io, record["install_parent"])

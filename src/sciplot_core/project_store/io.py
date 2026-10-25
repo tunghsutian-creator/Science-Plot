@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from contextvars import ContextVar
 import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
 import stat
+from threading import get_ident
 from typing import Any
 from uuid import uuid4
 
@@ -20,6 +22,7 @@ from sciplot_core.foundation.project_session_lease import external_project_sessi
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
 
 STORE = ".sciplot_store"
+_ACTIVE: ContextVar[tuple[StoreIO, int, int] | None] = ContextVar("project_store_owned_io", default=None)
 
 
 def digest(value: Any) -> str:
@@ -97,14 +100,27 @@ def install(fd: int, name: str, data: bytes, *, mode: int = 0o600, exclusive: bo
 
 
 class StoreIO:
-    def __init__(self, root: Path, locations: Mapping[str, Path]) -> None:
+    def __init__(self, root: Path, locations: Mapping[str, Path],
+                 location_members: Mapping[str, tuple[str, ...] | None] | None = None) -> None:
         self.root = root
         self.locations = dict(locations)
+        self.location_members = {key: (location_members or {}).get(key) for key in locations}
         self.root_fds: dict[str, int] = {}
         self.fd = -1
 
     @contextmanager
     def locked(self) -> Iterator[StoreIO]:
+        active = _ACTIVE.get()
+        if active is not None:
+            owned, process, thread = active
+            if process == os.getpid() and thread == get_ident() and owned.root == self.root and owned.fd >= 0:
+                if owned.locations != self.locations or owned.location_members != self.location_members:
+                    raise ProjectStoreError("An owned project transaction cannot expand its resource roots.")
+                owned.verify_roots()
+                yield owned
+                return
+            if process != os.getpid() or thread != get_ident():
+                _ACTIVE.set(None)
         with external_project_session(self.root), exclusive_directory_lease(self.root) as lease:
             try:
                 self.root_fds[""] = os.dup(lease.fd)
@@ -114,9 +130,13 @@ class StoreIO:
                     self.root_fds[key] = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
                 with directory(lease.fd, (STORE,), create=True) as store_fd:
                     self.fd = store_fd
-                    yield self
-                    self.verify_roots()
-                    lease.verify()
+                    token = _ACTIVE.set((self, os.getpid(), get_ident()))
+                    try:
+                        yield self
+                        self.verify_roots()
+                        lease.verify()
+                    finally:
+                        _ACTIVE.reset(token)
             finally:
                 for descriptor in self.root_fds.values():
                     os.close(descriptor)
@@ -137,6 +157,9 @@ class StoreIO:
             components = components[1:]
         if not components or key not in self.root_fds:
             raise ProjectRecoveryRequired("The project needs its explicitly trusted resource-root mapping.")
+        permitted = self.location_members.get(key)
+        if key and permitted is not None and "/".join(components) not in permitted:
+            raise ProjectStoreError("The logical member is outside its exact trusted file capability.")
         return self.root_fds[key], components
 
     def physical(self, logical: str) -> tuple[bytes, int] | None:
@@ -220,5 +243,14 @@ class StoreIO:
                     raise ProjectStoreError("Portable project import refuses symlink or special members.")
 
         for key, fd in self.root_fds.items():
-            walk(fd, f"@{key}/" if key else "")
+            permitted = self.location_members.get(key)
+            if key and permitted is not None:
+                for relative in permitted:
+                    logical = f"@{key}/{relative}"
+                    value = self.physical(logical)
+                    if value is not None:
+                        data, mode = value
+                        files[logical] = {**self.put(data), "mode": mode}
+            else:
+                walk(fd, f"@{key}/" if key else "")
         return files

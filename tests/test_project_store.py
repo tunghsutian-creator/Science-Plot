@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from sciplot_core.project_store import (
-    FileProjectStore, ProjectCommandConflict, ProjectConflict, ProjectStoreError,
+    FileProjectStore, ProjectCommandConflict, ProjectConflict, ProjectStoreError, ResourceRoot,
 )
 
 
@@ -143,3 +143,104 @@ def test_complete_portable_bundle_preserves_ids_native_history_and_source_versio
         relocated.resolve_locator(str(tmp_path / "same.csv"), source_id=original_source_id, version=version)
     with pytest.raises(ProjectStoreError):
         relocated.resolve_source(uuid4().hex, version)
+
+
+def test_finite_zip_resource_never_imports_or_admits_sibling_files(tmp_path, monkeypatch):
+    from sciplot_core.project_store import io
+
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "document.vsz").write_bytes(b"native")
+    archive = tmp_path / "project.zip"
+    archive.write_bytes(b"synthetic archive")
+    secret = tmp_path / "same-name-private.csv"
+    secret.write_bytes(b"do not read sibling")
+    real_read = io.read_file
+
+    def read(fd, name):
+        assert name != secret.name, "Finite trusted root scanned an ungranted sibling."
+        return real_read(fd, name)
+
+    monkeypatch.setattr(io, "read_file", read)
+    store = FileProjectStore(root, locations={"snapshot": ResourceRoot(tmp_path, (archive.name,))})
+    snapshot = store.snapshot(import_legacy=True)
+    assert set(snapshot["files"]) == {"document.vsz", "@snapshot/project.zip"}
+    with pytest.raises(ProjectStoreError):
+        store.logical_path(secret)
+    with pytest.raises(ProjectStoreError):
+        store.reserve("ungranted", "digest", expected_generation=snapshot["generation"],
+                      read_set={"@snapshot/same-name-private.csv": None}, write_set=[])
+    bundle = store.export_bundle(tmp_path / "bundle")
+    cold = FileProjectStore.import_bundle(bundle, tmp_path / "cold")
+    reopened = FileProjectStore(cold.root)
+    assert reopened.location_members == {"snapshot": ("project.zip",)}
+    assert reopened.read_bytes("@snapshot/project.zip") == b"synthetic archive"
+    with pytest.raises(ProjectStoreError):
+        reopened.logical_path(cold.root / ".sciplot_resources/snapshot/same-name-private.csv")
+
+
+def test_selected_external_source_rechecked_at_accept_and_immediately_before_head(tmp_path, monkeypatch):
+    from sciplot_core.project_store import state
+    from sciplot_core.project_store.io import sha
+
+    store, snapshot = fixture_store(tmp_path)
+    source = tmp_path / "external.csv"
+    source.write_bytes(b"original raw source")
+    source_id = uuid4().hex
+    source_version = sha(source.read_bytes())
+    names = ("studio/document.vsz",)
+    reserve(store, snapshot, "source-preview", names)
+    staged = store.stage("source-preview", "source-preview-digest", writes={names[0]: b"candidate"}, result={},
+        review={"source_versions": [{"source_id": source_id, "path": str(source), "version": source_version}]})
+    store.decide("source-preview", "source-preview-digest", decision_id=staged["decision_id"], accept=True)
+    source.write_bytes(b"foreign raw source")
+    with pytest.raises(ProjectConflict, match="source changed"):
+        store.publish_staged("source-preview", "source-preview-digest")
+    assert store.read_bytes(names[0]) == b"native old"
+    source.write_bytes(b"original raw source")
+
+    def change_before_head(boundary):
+        if boundary == "before_head":
+            source.write_bytes(b"changed at publication edge")
+
+    monkeypatch.setattr(state, "boundary", change_before_head)
+    with pytest.raises(ProjectConflict, match="source changed"):
+        store.publish_staged("source-preview", "source-preview-digest")
+    assert store.snapshot()["generation"] == snapshot["generation"]
+    assert source.read_bytes() == b"changed at publication edge"
+
+
+def test_audited_native_import_adopts_only_exact_observed_native_bytes(tmp_path, monkeypatch):
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.project_commands.contracts import NativeAdoption
+    from sciplot_core.project_store.io import sha
+    from sciplot_core.project_store import state
+
+    store, before = fixture_store(tmp_path)
+    name = "studio/document.vsz"
+    outside = b"explicit manual native edit"
+    (store.root / name).write_bytes(outside)
+    command = ProjectCommand.create("native_import", "adopt", project_id=before["project_id"],
+        expected_generation=before["generation"], read_set={name: before["files"][name]["sha256"]},
+        write_set=[name], request={"audit": "owned domain audit"}, native_adoptions=[NativeAdoption(
+            name, before["files"][name]["sha256"], sha(outside), sha(b"synthetic audit identity"))])
+    receipt = ProjectCommands(store).execute(command, lambda: ProjectMutation({name: outside}, {"adopted": True}))
+    assert receipt["phase"] == "complete" and store.read_bytes(name) == outside
+    assert (store.root / name).read_bytes() == outside
+    next_before = store.snapshot()
+    observed = b"second observed manual edit"
+    (store.root / name).write_bytes(observed)
+    next_command = ProjectCommand.create("native_import", "adopt-edge", project_id=before["project_id"],
+        expected_generation=next_before["generation"], read_set={name: next_before["files"][name]["sha256"]},
+        write_set=[name], request={}, native_adoptions=[NativeAdoption(
+            name, next_before["files"][name]["sha256"], sha(observed), sha(b"second audit"))])
+
+    def drift(boundary):
+        if boundary == "before_head":
+            (store.root / name).write_bytes(b"third outside bytes")
+
+    monkeypatch.setattr(state, "boundary", drift)
+    with pytest.raises(ProjectConflict):
+        ProjectCommands(store).execute(next_command, lambda: ProjectMutation({name: observed}, {}))
+    assert (store.root / name).read_bytes() == b"third outside bytes"
+    assert store.snapshot()["generation"] == next_before["generation"]
