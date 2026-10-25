@@ -26,6 +26,12 @@ from sciplot_core.studio_core.runtime import (
 from sciplot_core.studio_core.launchers import (
     _prefer_offscreen_export_platform,
 )
+from sciplot_core.studio_core.native_save_storage import (
+    bind_project_document_save as _bind_project_document_save,
+    project_save_binding,
+    publish_native_save,
+)
+from sciplot_core.studio_core.native_serialization import serialize_native
 
 
 def _is_project_secondary_document(document_path: Path) -> bool:
@@ -114,7 +120,7 @@ def stage_veusz_document(
     *,
     staged_validator: Callable[..., bool] | None = None,
 ) -> dict[str, Any]:
-    """Serialize beside a target while leaving both target and live state intact."""
+    """Serialize a private candidate while retaining its logical native base."""
 
     requested = target.expanduser()
     if not requested.is_absolute():
@@ -136,7 +142,6 @@ def stage_veusz_document(
     staged_fd, staged_name = tempfile.mkstemp(
         prefix=f".{resolved_target.stem}.sciplot-save-",
         suffix=resolved_target.suffix,
-        dir=parent,
     )
     os.close(staged_fd)
     staged_path = Path(staged_name)
@@ -150,7 +155,7 @@ def stage_veusz_document(
         if hasattr(document, "blockSignals"):
             document.blockSignals(True)
         try:
-            document.save(str(staged_path), mode)
+            serialize_native(document, staged_path, resolved_target, mode)
         finally:
             restore_live_state()
             if hasattr(document, "blockSignals"):
@@ -210,7 +215,11 @@ def atomic_save_veusz_document(
     parent = resolved_target.parent
     replaced = False
     try:
-        os.replace(staged_path, resolved_target)
+        outcome = publish_native_save(document, resolved_target, staged_path, result={"save": stage})
+        if outcome is None:
+            os.replace(staged_path, resolved_target)
+        else:
+            staged_path.unlink(missing_ok=True)
         replaced = True
         directory_fd: int | None = None
         directory_fsync = False
@@ -236,10 +245,15 @@ def atomic_save_veusz_document(
             **{key: value for key, value in stage.items() if key != "staged"},
             "kind": "sciplot_atomic_veusz_save",
             "directory_fsync": directory_fsync,
+            "project_command": outcome,
         }
     finally:
         if not replaced:
             staged_path.unlink(missing_ok=True)
+
+
+def bind_project_document_save(document: Any, project: Path, target: Path) -> None:
+    _bind_project_document_save(document, project, target, save=atomic_save_veusz_document)
 
 
 def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
@@ -274,7 +288,10 @@ def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
             check=True,
             env=veusz_worker_environment(),
         )
-        return json.loads(result.stdout)
+        payload = json.loads(result.stdout)
+        if not isinstance(payload, dict):
+            raise ValueError("Native unit migration must return one result object.")
+        return payload
 
     _prefer_offscreen_export_platform()
     _ensure_veusz_on_path()
@@ -291,6 +308,11 @@ def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
     try:
         loaded = document.Document()
         loaded.load(str(resolved))
+        from sciplot_core.studio_core.context import _project_context_for_document
+
+        context = _project_context_for_document(resolved)
+        if context is not None:
+            loaded._sciplot_project_read_set = project_save_binding(Path(context["project_dir"]), resolved)
         candidates: list[tuple[str, Any, str, str]] = []
 
         def collect(widget_path: str, widget: Any) -> None:
