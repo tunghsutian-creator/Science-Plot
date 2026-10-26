@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
 from typing import Any, Callable
 
@@ -46,7 +47,7 @@ def _attach_studio_window_presentation(
 
 def _create_veusz_window(document_path: Path | None) -> Any:
     ensure_veusz_qsettings_compat()
-    from veusz.windows.mainwindow import MainWindow
+    MainWindow = import_module("veusz.windows.mainwindow").MainWindow
 
     _ensure_veusz_loader_compat()
     _ensure_veusz_examples_menu_compat(MainWindow)
@@ -76,7 +77,7 @@ def _ensure_veusz_mainwindow_compat(main_window_type: type[Any]) -> None:
     if getattr(main_window_type, "_sciplot_mainwindow_compat", False):
         return
 
-    from veusz import qtall as qt
+    qt = import_module("veusz.qtall")
 
     original_close_event = main_window_type.closeEvent
     original_open_file_in_window = main_window_type.openFileInWindow
@@ -265,7 +266,6 @@ def _ensure_veusz_mainwindow_compat(main_window_type: type[Any]) -> None:
             )
         return result
 
-    @classmethod
     def create_window(
         cls: type[Any],
         filename: str | None = None,
@@ -287,13 +287,13 @@ def _ensure_veusz_mainwindow_compat(main_window_type: type[Any]) -> None:
     slot_file_save_as._sciplot_atomic_save_as = True  # type: ignore[attr-defined]
     update_titlebar._sciplot_titlebar = True  # type: ignore[attr-defined]
     open_file_in_window._sciplot_integrated_open = True  # type: ignore[attr-defined]
-    create_window.__func__._sciplot_integrated_factory = True  # type: ignore[attr-defined]
+    create_window.__dict__["_sciplot_integrated_factory"] = True
     main_window_type.closeEvent = close_event
     main_window_type.slotFileSave = slot_file_save
     main_window_type.slotFileSaveAs = slot_file_save_as
     main_window_type.updateTitlebar = update_titlebar
     main_window_type.openFileInWindow = open_file_in_window
-    main_window_type.CreateWindow = create_window
+    main_window_type.CreateWindow = classmethod(create_window)
     main_window_type._sciplot_mainwindow_compat = True
 
 

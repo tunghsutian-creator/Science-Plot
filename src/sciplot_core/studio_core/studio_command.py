@@ -142,15 +142,15 @@ def run_studio_command(
                 document_path=document_path,
                 formats=requested_formats,
             )
-            studio_run = published.run_payload
+            published_run = published.run_payload
             payload["exports"] = published.exports
-            payload["studio_run"] = studio_run
-            if isinstance(studio_run.get("exports"), list):
-                payload["exports"] = json_safe(studio_run["exports"])
-            figure_set_export_scope = studio_run.get("figure_set_export_scope")
+            payload["studio_run"] = published_run
+            if isinstance(published_run.get("exports"), list):
+                payload["exports"] = json_safe(published_run["exports"])
+            figure_set_export_scope = published_run.get("figure_set_export_scope")
             if isinstance(figure_set_export_scope, dict):
                 payload["figure_set_export_scope"] = json_safe(figure_set_export_scope)
-            payload["scope"] = str(studio_run.get("scope") or "project_delivery")
+            payload["scope"] = str(published_run.get("scope") or "project_delivery")
         else:
             from sciplot_core.studio_core.context import resolve_studio_project_context
 

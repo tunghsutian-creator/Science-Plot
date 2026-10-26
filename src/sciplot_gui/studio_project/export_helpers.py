@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from pathlib import Path
+from typing import Any, Protocol
 from PyQt6 import QtWidgets
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.studio import export_project_document, export_native_document_artifacts
 from sciplot_gui.studio_assistant.native_batch import native_batch_blocker
 from sciplot_gui.studio_project_status import (
-    _read_json,
     export_result_message,
 )
+from sciplot_gui.studio_project_status.project_runs import _read_json
 
 from sciplot_gui.studio_project.services import (
     _is_primary_figure_set_export_scope,
@@ -20,8 +21,23 @@ from sciplot_gui.studio_project.services import (
 )
 
 
+class _ExportContext(Protocol):
+    project_dir: Path | None
+    request_path: Path | None
+    document_path: Path
+    document: object
+    window: QtWidgets.QWidget
+
+    @property
+    def mode(self) -> str: ...
+
+    def _figure_set_export_scope(self) -> str: ...
+    def _current_project_figure_set_scope(self) -> dict[str, Any] | None: ...
+    def _project_delivery_scope(self) -> str: ...
+
+
 class ExportHelpersMixin:
-    def _project_export(self) -> dict[str, Any]:
+    def _project_export(self: _ExportContext) -> dict[str, Any]:
         assert self.project_dir is not None
         assert self.request_path is not None
         if self._figure_set_export_scope() != "project":
@@ -68,7 +84,7 @@ class ExportHelpersMixin:
             result["figure_set_export_scope"] = json_safe(figure_set_export_scope)
         return result
 
-    def _standalone_export(self) -> dict[str, Any]:
+    def _standalone_export(self: _ExportContext) -> dict[str, Any]:
         if self.project_dir is not None:
             export_payload = export_native_document_artifacts(self.document_path, formats=["pdf", "tiff_300"])
             receipt = export_payload["standalone_export"]
@@ -105,7 +121,7 @@ class ExportHelpersMixin:
             "standalone_export": json_safe(receipt),
         }
 
-    def _assistant_export_blocker(self) -> str | None:
+    def _assistant_export_blocker(self: _ExportContext) -> str | None:
         blocker = native_batch_blocker(getattr(self, "document", None))
         if blocker is not None:
             return blocker
@@ -137,13 +153,13 @@ class ExportHelpersMixin:
             )
         return None
 
-    def _figure_set_export_scope(self) -> str:
+    def _figure_set_export_scope(self: _ExportContext) -> str:
         if self.project_dir is None:
             return "standalone"
         canonical_primary = (self.project_dir / "studio" / "document.vsz").resolve()
         return "project" if self.document_path == canonical_primary else "standalone"
 
-    def _current_project_figure_set_scope(self) -> dict[str, Any] | None:
+    def _current_project_figure_set_scope(self: _ExportContext) -> dict[str, Any] | None:
         if (
             self.project_dir is None
             or self.request_path is None
@@ -155,9 +171,9 @@ class ExportHelpersMixin:
             self.project_dir,
             request=request,
         )
-        return dict(scope) if _is_primary_figure_set_export_scope(scope) else None
+        return dict(scope) if _is_primary_figure_set_export_scope(scope) and scope is not None else None
 
-    def _figure_set_export_blocker(self) -> str | None:
+    def _figure_set_export_blocker(self: _ExportContext) -> str | None:
         if (
             self.project_dir is None
             or self.request_path is None
@@ -188,7 +204,7 @@ class ExportHelpersMixin:
             )
         return None
 
-    def _project_delivery_scope(self) -> str:
+    def _project_delivery_scope(self: _ExportContext) -> str:
         if self.mode == "project" and self._figure_set_export_scope() == "project":
             try:
                 scope = self._current_project_figure_set_scope()
@@ -200,7 +216,7 @@ class ExportHelpersMixin:
         return "standalone_exact_current_export"
 
     def _failed_export_payload(
-        self,
+        self: _ExportContext,
         *,
         state: str,
         message: str,
@@ -223,7 +239,7 @@ class ExportHelpersMixin:
             payload["unaccepted_export"] = json_safe(unaccepted_export)
         return payload
 
-    def _show_export_message(self, payload: dict[str, Any]) -> None:
+    def _show_export_message(self: _ExportContext, payload: dict[str, Any]) -> None:
         level, title, message = export_result_message(payload)
         if level == "information":
             QtWidgets.QMessageBox.information(self.window, title, message)
