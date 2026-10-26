@@ -12,7 +12,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
 from sciplot_core.studio_core.document_edit_policy import validate_edit_science_policy
-from sciplot_core.studio_core.document_edit_state import new_preview_directory
+from sciplot_core.studio_core.document_edit_state import new_preview_directory, native_edit_request_key
 from sciplot_core.studio_core.document_edit_review import (
     reviewed_edit as reviewed_edit, rebind_document_edit_review as rebind_document_edit_review,
 )
@@ -28,7 +28,8 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
                         operations: list[dict[str, Any]] | None,
                         expected_spec_sha256: str | None,
                         candidate_builder: Callable[..., dict[str, Any]],
-                        audit_document: Callable[..., dict[str, Any]]) -> dict[str, Any]:
+                        audit_document: Callable[..., dict[str, Any]],
+                        request_id: str | None = None) -> dict[str, Any]:
 
     project = resolve_project_path(project)
     selected = resolve_project_figure(project, figure_id)
@@ -55,7 +56,10 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
     intent = {"figure_id": selected["figure_id"], "document_relative": relative,
               "expected_files": binding["files"], "projected_reads": binding["projected_reads"],
               "source_files": binding["source_files"], "changes": changes, "operations": operations}
-    key = canonical_json_sha256({"kind": "document_edit", "project_id": binding["project_id"], "intent": intent})
+    if request_id is not None:
+        intent["request_id"] = request_id
+    key = (native_edit_request_key(binding["project_id"], request_id) if request_id is not None else
+           canonical_json_sha256({"kind": "document_edit", "project_id": binding["project_id"], "intent": intent}))
     app = ProjectCommands(repository)
     prior = app.query(key)
     if prior is not None:

@@ -76,6 +76,7 @@ def inspect_annotation_state(project: Path, *, figure_id: str | None = None) -> 
 def preview_document_operations(
     project: Path, operations: list[dict[str, Any]], *, output_dir: Path,
     figure_id: str | None = None, expected_document_sha256: str,
+    request_id: str | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.studio_core.document_edit import preview_document_edit
 
@@ -98,7 +99,7 @@ def preview_document_operations(
             operations = expand_sample_styles(spec, selected["objects"], expand_style_presets(spec, operations))
         return preview_document_edit(project, [], output_dir=output_dir, figure_id=selected["figure_id"],
                                      expected_document_sha256=expected_document_sha256,
-                                     expected_spec_sha256=spec_sha, operations=operations)
+                                     expected_spec_sha256=spec_sha, operations=operations, request_id=request_id)
     return preview_document_edit(project, [], output_dir=output_dir, figure_id=figure_id,
                                  expected_document_sha256=expected_document_sha256,
-                                 operations=operations)
+                                 operations=operations, request_id=request_id)

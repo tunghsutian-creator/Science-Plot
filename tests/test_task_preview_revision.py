@@ -6,6 +6,7 @@ from hashlib import sha256
 from types import SimpleNamespace
 
 import pytest
+from test_project_query import project as project
 
 from sciplot_core import task_control, task_execution, task_storage
 from sciplot_core.studio_core import annotation_operations
@@ -244,6 +245,80 @@ def test_only_complete_native_validated_unchanged_styles_skip_review(edits, inva
     else:
         review["actual_changes"][0]["new_value"] = "2pt"
     assert not unchanged_style_review(review)
+
+
+@pytest.mark.parametrize("case", ["unchanged", "changed", "native-drift", "source-drift"])
+def test_current_sealed_native_producer_keeps_unchanged_and_changed_task_style_intents_distinct(project, tmp_path, monkeypatch, case):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.studio_core import document_edit
+
+    native = project / "studio/document.vsz"
+    original = native.read_bytes()
+    changed = case == "changed"
+    calls = []
+    def candidate(document, spec, changes, output, *, operations, **_kwargs):
+        calls.append(operations)
+        rendered, companion, image = output / "candidate.vsz", output / "candidate.spec.json", output / "candidate.png"
+        rendered.write_bytes(document.read_bytes() + b"\ncontrolled native serialization")
+        companion.write_bytes(spec.read_bytes())
+        image.write_bytes(b"controlled native image")
+        return {"candidate": {"path": str(rendered), "sha256": file_sha256(rendered)},
+                "candidate_spec": {"path": str(companion), "sha256": file_sha256(companion)},
+                "preview": {"path": str(image), "sha256": file_sha256(image)},
+                "changes": [{"object_path": op["object_path"], "setting_path": op["setting_path"],
+                             "old_value": op["expected_value"], "new_value": op["value"]} for op in operations],
+                "scientific_audit": {"status": "passed", "document_sha256": file_sha256(rendered),
+                                     "spec_sha256": file_sha256(companion)}}
+    monkeypatch.setattr(document_edit, "_candidate", candidate)
+    monkeypatch.setattr(document_edit, "audit_edited_document", lambda *_a: {"status": "passed"})
+    monkeypatch.setattr(subprocess, "Popen", lambda *_a, **_k: pytest.fail("Pure task control must not start native processes."))
+    monkeypatch.setattr(subprocess, "run", lambda *_a, **_k: pytest.fail("Pure task control must not start native processes."))
+    repository = project_store(project)
+    before = repository.snapshot(import_legacy=True)
+    producer = annotation_operations.preview_document_operations
+    drift_target = native if case == "native-drift" else project / "source/data.csv"
+    drift_before = drift_target.read_bytes()
+    if case in {"native-drift", "source-drift"}:
+        def drift_after_freezing(*args, **kwargs):
+            review = producer(*args, **kwargs)
+            drift_target.write_bytes(b"controlled post-preview drift")
+            return review
+        monkeypatch.setattr(annotation_operations, "preview_document_operations", drift_after_freezing)
+    result = task_control.start_task({"version": 1, "action": "edit", "project": str(project), "figure_id": "first",
+        "expected_document_sha256": file_sha256(native), "operations": [style("2pt" if changed else "1pt")],
+        "export": False}, task_dir=tmp_path / "native-task")
+    if case in {"native-drift", "source-drift"}:
+        assert result["status"] == "blocked" and repository.commands()[0]["phase"] == "needs_review"
+        assert drift_target.read_bytes() == b"controlled post-preview drift"
+        assert repository.snapshot()["generation"] == before["generation"]
+        drift_target.write_bytes(drift_before)  # Explicit restoration by this controlled fixture, never a production repair.
+        monkeypatch.setattr(annotation_operations, "preview_document_operations", producer)
+        result = task_control.resume_task(tmp_path / "native-task", {"retry": True})
+    assert result["status"] == ("needs_review" if changed else "complete")
+    if not changed:
+        assert result["result"]["status"] == "unchanged" and result["result"]["document_changed"] is False
+        assert "preview" not in result
+        reviewed = json.loads((tmp_path / "native-task/review.json").read_text())
+        for fault in ("kind", "version", "decision", "candidate", "scientific-native", "scientific-spec", "actual-path", "actual-value"):
+            tampered = json.loads(json.dumps(reviewed))
+            if fault in {"kind", "version"}:
+                tampered[fault] = "unknown"
+            elif fault == "decision":
+                tampered.pop("decision_id")
+            elif fault == "candidate":
+                tampered.pop("candidate_spec")
+            elif fault in {"scientific-native", "scientific-spec"}:
+                tampered["scientific_audit"]["document_sha256" if fault == "scientific-native" else "spec_sha256"] = "a" * 64
+            else:
+                tampered["actual_changes"][0]["setting_path" if fault == "actual-path" else "new_value"] = "different"
+            assert not unchanged_style_review(tampered), fault
+    record, = repository.commands()
+    assert record["phase"] == ("needs_review" if changed else "rejected") and record["review"]["version"] == 3
+    if not changed:
+        assert record["accepted"] is False
+        assert task_control.resume_task(tmp_path / "native-task", {"retry": True}) == result
+    assert len(calls) == 1 and native.read_bytes() == original and repository.snapshot()["generation"] == before["generation"]
 
 
 def test_response_schema_advertises_revision_and_bound_acceptance():

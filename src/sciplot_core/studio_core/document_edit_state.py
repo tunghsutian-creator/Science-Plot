@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any
 
 from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadata
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.studio_core.native_scientific_audit import audit_edited_document as audit_edited_document
 from sciplot_core.studio_core.delivery_recovery_state import canonical_path
@@ -29,6 +31,13 @@ def value_digest(value: object) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()
     ).hexdigest()
+
+
+def native_edit_request_key(project_id: str, request_id: str) -> str:
+    """A host's explicit operation identity stays stable through preview retries."""
+    if not isinstance(request_id, str) or re.fullmatch(r"[0-9a-f]{64}", request_id) is None:
+        raise ValueError("A native edit request identity requires one exact SHA256 identifier.")
+    return canonical_json_sha256({"kind": "document_edit", "project_id": project_id, "request_id": request_id})
 
 
 @project_read_runtime

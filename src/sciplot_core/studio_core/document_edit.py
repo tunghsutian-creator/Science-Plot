@@ -126,12 +126,14 @@ def preview_document_edit(
     expected_document_sha256: str,
     operations: list[dict[str, Any]] | None = None,
     expected_spec_sha256: str | None = None,
+    request_id: str | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.studio_core.document_edit_commands import preview_native_edit
 
     return preview_native_edit(project, changes, output_dir=output_dir, figure_id=figure_id,
         expected_document_sha256=expected_document_sha256, operations=operations,
-        expected_spec_sha256=expected_spec_sha256, candidate_builder=_candidate, audit_document=audit_edited_document)
+        expected_spec_sha256=expected_spec_sha256, candidate_builder=_candidate, audit_document=audit_edited_document,
+        request_id=request_id)
 
 
 def apply_document_edit(project: Path, preview: dict[str, Any]) -> dict[str, Any]:

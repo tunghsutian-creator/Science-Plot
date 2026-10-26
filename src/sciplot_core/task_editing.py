@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import re
 
 from sciplot_core.studio_core.annotation_schema import validate_operation_batch
 from sciplot_core.task_contract import TaskControlError, validate_task_request
@@ -76,9 +77,27 @@ def validate_preview_response(state: dict[str, Any], response: dict[str, Any]) -
 def unchanged_style_review(review: dict[str, Any]) -> bool:
     """Only native-normalized, audited pure style batches can bypass visual review."""
     operations, changes = review.get("operations"), review.get("actual_changes")
+    version = review.get("version")
+    if version == 3:
+        references = [review.get(key) for key in ("candidate", "candidate_spec", "preview")]
+        if (any(not isinstance(item, dict) or not isinstance(item.get("sha256"), str)
+                or re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) is None for item in references)
+                or any(not isinstance(review.get(key), str) or re.fullmatch(r"[0-9a-f]{64}", review[key]) is None
+                       for key in ("operation_id", "decision_id", "document_sha256"))):
+            return False
+        audit = review.get("scientific_audit")
+        if (not isinstance(audit, dict) or audit.get("document_sha256") != review["candidate"]["sha256"]
+                or audit.get("spec_sha256") != review["candidate_spec"]["sha256"]):
+            return False
+        if (not isinstance(operations, list) or not isinstance(changes, list) or len(changes) != len(operations)
+                or any(not isinstance(op, dict) or not isinstance(change, dict)
+                       or any(not isinstance(op.get(key), str) or not op[key] for key in ("object_path", "setting_path"))
+                       or any(change.get(key) != op.get(key) for key in ("object_path", "setting_path"))
+                       for op, change in zip(operations, changes, strict=True))):
+            return False
     return bool(
         review.get("kind") == "sciplot_document_edit_preview"
-        and review.get("version") == 2 and review.get("status") == "ready"
+        and type(version) is int and version in (2, 3) and review.get("status") == "ready"
         and (review.get("scientific_audit") or {}).get("status") == "passed"
         and isinstance(operations, list) and operations
         and all(isinstance(op, dict) and op.get("op") == "set_style" for op in operations)

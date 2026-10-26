@@ -84,8 +84,11 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
     _completed(root, state, result)
 
 
-def run_edit_preview(root: Path, state: dict[str, Any]) -> None:
+def run_edit_preview(root: Path, state: dict[str, Any], *, new_revision: bool = False) -> None:
     """Retry one terminated preview worker locally, never a write or bad operation."""
+    from sciplot_core.task_native_edit import initialize_native_task
+
+    initialize_native_task(root, state, new_revision=new_revision)
     try:
         _run_edit_preview(root, state)
     except TimeoutExpired as exc:
@@ -106,6 +109,7 @@ def run_edit_preview(root: Path, state: dict[str, Any]) -> None:
 
 def _run_edit_preview(root: Path, state: dict[str, Any]) -> None:
     from sciplot_core.studio_core.annotation_operations import preview_document_operations
+    from sciplot_core.task_native_edit import finish_native_task_preview, native_task_request_id
 
     _phase(root, state, "previewing")
     request = current_edit_request(state)
@@ -113,12 +117,15 @@ def _run_edit_preview(root: Path, state: dict[str, Any]) -> None:
     index = int(state.get("preview_attempt", 0)) + 1
     state["preview_attempt"] = index
     save_task(root, state)
+    identity = native_task_request_id(state)
     review = preview_document_operations(
         Path(request["project"]), request["operations"],
         output_dir=root / f"preview_{index:03}",
         figure_id=request.get("figure_id"),
         expected_document_sha256=request["expected_document_sha256"],
+        **({"request_id": identity} if identity is not None else {}),
     )
+    review = finish_native_task_preview(state, review, identity)
     atomic_write_json(root / "review.json", review)
     state.update({
         "status": "needs_review", "phase": "review", "project": review["project"],

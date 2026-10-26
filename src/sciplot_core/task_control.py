@@ -205,7 +205,7 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
         return
     if "revise_operations" in response:
         if begin_preview_revision(state, response):
-            run_edit_preview(root, state)
+            run_edit_preview(root, state, new_revision=True)
         return
     if state["status"] in {"complete", "cancelled"}:
         return
@@ -310,6 +310,9 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
             return
         validate_preview_response(state, response)
         if not response["accept_preview"]:
+            from sciplot_core.task_native_edit import cancel_native_task
+
+            cancel_native_task(root, state)
             state.update({"status": "cancelled", "phase": "finished"})
             save_task(root, state)
             return
