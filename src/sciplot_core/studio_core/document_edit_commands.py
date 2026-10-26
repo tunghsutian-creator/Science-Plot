@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 import json
 from pathlib import Path
 from typing import Any
@@ -14,65 +13,13 @@ from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
 from sciplot_core.studio_core.document_edit_policy import validate_edit_science_policy
 from sciplot_core.studio_core.document_edit_state import new_preview_directory
+from sciplot_core.studio_core.document_edit_review import (
+    reviewed_edit as reviewed_edit, rebind_document_edit_review as rebind_document_edit_review,
+)
 from sciplot_core.studio_core.project_command_scope import (
     command_for_binding, figure_binding, project_command_runtime, project_store, query_for_apply, source_versions,
 )
 from sciplot_core.studio_core.project_query import resolve_project_figure, resolve_project_path
-
-
-def reviewed_edit(record: dict[str, Any], project: Path) -> dict[str, Any]:
-    if record.get("metadata", {}).get("kind") != "document_edit":
-        raise ValueError("This saved command is not a reviewed native document edit")
-    review: dict[str, Any] = deepcopy(record["review"])
-    result = record.get("result") or record["draft"]["result"]
-    paths = record["artifact_paths"]
-    frozen = record["draft"]
-    native_hash = review["candidate"]["sha256"]
-    if (frozen["writes"][result["document_relative"]]["sha256"] != native_hash
-            or frozen["artifacts"]["after.vsz"]["sha256"] != native_hash
-            or frozen["artifacts"]["before.vsz"]["sha256"] != result["base_sha256"]
-            or frozen["artifacts"]["candidate.png"]["sha256"] != review["preview"]["sha256"]):
-        raise ValueError("The sealed native candidate does not match its exact audited review")
-    if "companion" in result:
-        companion = result["companion"]
-        if (frozen["writes"][companion["relative"]]["sha256"] != companion["result_sha256"]
-                or frozen["artifacts"]["after.spec.json"]["sha256"] != review["candidate_spec"]["sha256"]
-                or frozen["artifacts"]["before.spec.json"]["sha256"] != companion["base_sha256"]):
-            raise ValueError("The sealed specification does not match its exact audited native pair")
-    review.update(operation_id=record["command_id"], decision_id=record["decision_id"],
-                  project=str(project), document=str(project / result["document_relative"]))
-    review["candidate"]["path"] = paths["after.vsz"]
-    review["preview"]["path"] = paths["candidate.png"]
-    if "candidate_spec" in review:
-        review["candidate_spec"]["path"] = paths["after.spec.json"]
-        review["spec"] = str(project / result["companion"]["relative"])
-    return review
-
-
-def rebind_document_edit_review(project: Path, original: dict[str, Any]) -> dict[str, Any]:
-    """Host relocation port: verify sealed intent, then replace known runtime paths.
-
-    Scientific audit/source literals and the original command/decision identities
-    remain byte-for-byte JSON equivalent. User-facing apply stays strict; attached
-    immutable transactions invoke this explicit adapter after selecting their host.
-    """
-    if original.get("version") != 3:
-        raise ValueError("A legacy pending preview needs a new current preview after relocation")
-    project = resolve_project_path(project)
-    record = ProjectCommands(project_store(project)).query(str(original.get("operation_id") or ""))
-    if record is None:
-        raise ValueError("No frozen native review belongs to this selected project")
-    expected = reviewed_edit(record, project)
-    rebound = deepcopy({key: value for key, value in original.items() if key != "review_path"})
-    for key in ("project", "document", "spec"):
-        if key in expected:
-            rebound[key] = expected[key]
-    for key in ("candidate", "preview", "candidate_spec"):
-        if key in expected and isinstance(rebound.get(key), dict):
-            rebound[key]["path"] = expected[key]["path"]
-    if rebound != expected:
-        raise ValueError("The relocated native preview changed its sealed intent or scientific evidence")
-    return expected
 
 
 @project_command_runtime
