@@ -99,6 +99,17 @@ preserve original logical labels; an original locator is never rewritten to a
 cache address. Source observations and output installation still belong to their
 existing owners.
 
+Terminal figure requests and stored source-artifact bindings retain their logical
+source locators. A private candidate's physical input is used only at the IO
+boundary; serializing that address into the scientific request would invalidate
+continuation after cleanup. Mechanical and impact projections follow this same
+rule as the existing rheology, DMA and DSC projections. Readers resolve the
+selected source through the existing source-location port and retain any known
+byte version. Physical native attestations continue to describe the bytes
+actually observed. An active request census uses verified current members and
+exact recorded storage roles; history objects are not additional active requests,
+and an unknown file inside a storage directory is not silently ignored.
+
 ## Complete caller target
 
 - NativeSuite public open/describe/patch/decide/resume/export and prepared/analysis
