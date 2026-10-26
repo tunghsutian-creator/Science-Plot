@@ -70,6 +70,20 @@ claiming that an unavailable original host was observed again. Completion is the
 authoritative head transition: later original-host changes cannot turn an already
 committed publication into an uncommitted failure.
 
+Read-only mapping evidence has these finite states; it never repairs admission:
+
+| Selected state | Query contract |
+| --- | --- |
+| Current, completely registered inputs | Verify the exact selected versions and complete numerical mapping. |
+| Older, partly registered inputs at their recorded live locations | Verify the complete mapping in one invocation-local witness. Report current facts without adding source identities or claiming historical authentication. |
+| Official imported inputs with complete immutable proof | Inspect the exact sealed byte facts without materializing source views. Numerical mapping verification remains unknown until an explicit operation performs its complete replay. |
+| Missing, changed or ambiguous required evidence | Preserve the existing refusal or unknown result; do not select another version or repair the project. |
+| Undeclared or foreign reference | Refuse it within the existing selected-source boundary; a mapping fact never grants filesystem access. |
+
+Unknown mapping evidence does not become readiness. Raw/prepared bytes, artifact
+existence and QA remain independent observations; an actual edit or export keeps
+its own complete scientific admission and validation.
+
 ## Complete caller target
 
 - NativeSuite public open/describe/patch/decide/resume/export and prepared/analysis
