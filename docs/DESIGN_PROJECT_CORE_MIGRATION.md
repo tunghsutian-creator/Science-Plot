@@ -36,6 +36,13 @@ Cold and pooled native requests bind the trusted selected project/generation and
 finite resource roots. Stored specs, scientific source IDs and historical hashes
 are not rewritten to make relocation work. Same-name files do not reconnect.
 
+A known content-byte version travels through capture, table/text/sheet IO,
+scientific audit, candidate preparation and publication archival. A directory or
+semantic composite hash cannot stand in for one file's byte version. Recapture
+checks the captured version and identity again; generic initial discovery does
+not invent an expected hash. Physical delivery existence uses its selected host
+resource capability, not an immutable scientific directory cache.
+
 ## Complete caller target
 
 - NativeSuite public open/describe/patch/decide/resume/export and prepared/analysis
@@ -60,6 +67,22 @@ An unsealed uncertain execution never runs again automatically. A complete seale
 candidate has a durable accepted state before head publication and can finish
 without executing the native edit again. Export-only continuation is separate
 from applying the committed native/scientific effect.
+
+An existing saved-project export enters that publication owner directly. It
+audits and, when valid, explicitly adopts the exact current native bytes; it
+cannot prepare a replacement from an older generation. Compact figure receipts
+come from that committed publication's read/CAS snapshot, not an independently
+read earlier registry. Selected suite export receipts overlay the immutable
+creation baseline, preserving unselected figures and explicit empty exports.
+
+Legacy native operations are read-only migration inputs. Import requires the
+complete finite candidate/decision evidence and a new exact-current scientific
+audit; mutable legacy files alone cannot authenticate historical execution or
+authorize another native edit. Import a legacy pending operation at its original
+verified locations before creating the official whole-project bundle. The new
+typed outcome and its frozen evidence can then travel through normal bundle
+continuation. Direct relocation of an unimported absolute-path legacy journal
+is not claimed; ambiguous or incomplete evidence remains an explicit refusal.
 
 Already captured semantic bytes use publish_prepared with a digest of the exact
 writes, artifacts, result and prepared source versions. It has no native callback.

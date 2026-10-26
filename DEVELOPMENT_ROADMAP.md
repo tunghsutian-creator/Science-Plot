@@ -1,11 +1,23 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-25. External AI is the task interface. Current behavior belongs
+Status: 2026-10-26. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
 original local evidence retain that history; historical PASS is not a new
 snapshot's acceptance.
+
+## Next bounded architecture work
+
+After the integrated project-core milestone passes its complete acceptance,
+measure the remaining runtime cost on the same task, inputs and environment.
+Separate necessary native computation, repeated initialization and validation;
+do not extrapolate the measured locked-history improvement to whole CI. Tighten
+remaining historical package dependencies and test-owner impact selection using
+actual call edges, while retaining every release case and strict assertion.
+Historical open scientific aggregates and real AI outbound disclosure/cost need
+separate finite contracts. Host execution grants do not close outbound privacy,
+and generated/local byte counts are not real-client token or cost telemetry.
 
 ## Scientific authority convergence
 
