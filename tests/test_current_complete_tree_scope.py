@@ -105,7 +105,8 @@ def test_live_tree_rechecks_complete_original_namespace_on_each_read(tmp_path, c
             if change == "bytes":
                 paths[-1].write_bytes(b"unconfirmed unused note")
             elif change == "empty-mode":
-                (source / "empty").chmod(0o700)
+                empty = source / "empty"
+                empty.chmod((empty.stat().st_mode & 0o777) ^ 0o200)
             elif change == "empty-missing":
                 (source / "empty").rmdir()
             elif change == "empty-extra":
