@@ -230,8 +230,11 @@ def scenario(kind, root):
         (root / "owned-native.json").write_text(json.dumps({"scenario": kind, "pid": os.getpid(),
             "parent_pid": os.getppid(), "completed": completed, "natural_worker_exit": natural, "forced_cleanup": forced,
             "workers": [{"pid": process.pid, "exit": process.poll()} for process in workers],
-            "checks": ["same_generation_semantic_writer", "raw_units_and_science", "style", "project_offline",
-                       "artifact_deletion", "cold_open_export", "unchanged_revision_bytes", "all_owned_workers_exited"] if completed else []}))
+            "checks": (["same_generation_semantic_writer", "unchanged_scientific_seal", "style",
+                        "unchanged_revision_bytes", "all_owned_workers_exited"] + (
+                        ["native_complete_reply_loss", "forged_decision_refused_before_fence", "readonly_receipt_handoff", "same_key_recovery"]
+                        if kind == "legacy_pending" else ["raw_units_and_science", "project_offline", "artifact_deletion", "cold_open_export"]))
+                       if completed else []}))
     assert natural
 
 

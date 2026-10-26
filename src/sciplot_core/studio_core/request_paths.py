@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.source_locations import resolve_source_path
 
 
 def _canonical_publish_paths(
@@ -58,13 +59,14 @@ def _resolve_request_input(request: dict[str, Any], *, base_dir: Path) -> Path |
 
 
 def _archive_studio_input(input_path: Path, output_dir: Path) -> dict[str, Any]:
+    actual = resolve_source_path(input_path)
     raw_dir = output_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
     destination = raw_dir / input_path.name
-    if input_path.is_dir():
-        shutil.copytree(input_path, destination)
+    if actual.is_dir():
+        shutil.copytree(actual, destination)
         kind = "directory"
     else:
-        shutil.copy2(input_path, destination)
+        shutil.copy2(actual, destination)
         kind = "file"
     return {"kind": kind, "source": str(input_path), "path": str(destination)}
