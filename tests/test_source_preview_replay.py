@@ -85,6 +85,28 @@ def test_source_identity_and_entire_read_witness_are_part_of_the_normalized_inte
     assert source_review_binding(store, newer, review)[2] != key
 
 
+@pytest.mark.parametrize("mismatch", ["kind", "intent"])
+def test_exact_source_preview_key_cannot_replay_a_different_command_kind(project, tmp_path, mismatch):
+    from dataclasses import replace
+
+    from sciplot_core.project_commands import ProjectMutation, SourceTreeRead
+    from sciplot_core.project_store import ProjectConflict
+    from sciplot_core.studio_core.source_update_commands import verified_source_preview
+
+    _candidate, source, review = prepared(project, tmp_path)
+    store = project_store(project, with_snapshot=True)
+    snapshot = store.snapshot(import_legacy=True)
+    binding, intent, key = source_review_binding(store, snapshot, review)
+    command = command_for_binding(store, binding, kind="style" if mismatch == "kind" else "source_update", key=key,
+        writes=[], request={**intent, "worksheet": "different saved intent"} if mismatch == "intent" else intent)
+    command = replace(command, source_trees=(SourceTreeRead(str(source), review["source_tree_sha256"]),))
+    record = ProjectCommands(store).preview(command, lambda: ProjectMutation({}, {}, review=review))
+    before = project_inventory(project)
+    with pytest.raises(ProjectConflict, match="command identity"):
+        verified_source_preview(store, snapshot, intent)
+    assert store.query(key) == record and project_inventory(project) == before
+
+
 @pytest.mark.parametrize("change", ["locator", "worksheet", "mapping", "annotations", "read-witness"])
 def test_new_source_intent_cannot_read_incoming_data_while_searching_saved_previews(project, tmp_path, monkeypatch, change):
     from sciplot_core.project_commands import ProjectCommand, ProjectMutation

@@ -93,7 +93,8 @@ def verified_source_preview(repository: FileProjectStore, snapshot: dict[str, An
     if record is None:
         return None
     command = ProjectCommand.from_payload(record["metadata"])
-    if command.key != record["command_id"] or command.project_id != snapshot["project_id"] or command.command_digest != record["command_digest"]:
+    if (command.kind != "source_update" or json.loads(command.request_json) != intent or command.key != record["command_id"]
+            or command.project_id != snapshot["project_id"] or command.command_digest != record["command_digest"]):
         raise ProjectConflict("The saved source preview has inconsistent command identity.")
     review = record.get("review")
     if not isinstance(review, dict) or source_review_binding(repository, snapshot, review)[1:] != (intent, command.key):
