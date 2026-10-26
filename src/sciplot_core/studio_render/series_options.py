@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 from sciplot_core.policy import (
-    DEFAULT_CURVE_LINE_STYLE_SEQUENCE,
     UNIFIED_LINE_WIDTH_PT,
     UNIFIED_MARKER_SIZE_PT,
-    categorical_component_fill_color,
     resolve_palette_authority,
 )
+from sciplot_core.policy.frame_export import DEFAULT_CURVE_LINE_STYLE_SEQUENCE
+from sciplot_core.policy.categorical import categorical_component_fill_color
 
 from sciplot_core.studio_render.models import (
     IMPACT_POINT_LINE_KINDS,
@@ -198,7 +198,7 @@ def resolve_series_encodings(
             marker_sequence[replicate_index % len(marker_sequence)]
             if (
                 template_id == "point_line"
-                or item.presentation_kind == "categorical_replicates"
+                or item.presentation_kind in {"categorical_replicates", "categorical_grouped_replicates"}
             )
             else "none"
         )
@@ -263,9 +263,9 @@ def resolve_series_encodings(
             marker_bound = False
         else:
             resolved_marker = item.marker or default_marker
-            if template_id == "point_line" or item.presentation_kind == (
-                "categorical_replicates"
-            ):
+            if template_id == "point_line" or item.presentation_kind in {
+                "categorical_replicates", "categorical_grouped_replicates"
+            }:
                 resolved_marker_source = marker_sequence_source
                 marker_bound = marker_sequence_bound
             else:
