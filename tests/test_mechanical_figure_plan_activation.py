@@ -16,9 +16,7 @@ from sciplot_core.figure_plan import ResolvedFigurePlan
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.mechanical_figure_contract import mechanical_figure_contract
 from sciplot_core.policy import DEFAULT_PALETTE_COLORS, DEFAULT_PALETTE_PRESET
-from sciplot_core.studio_core.export_execution import export_studio_document
-from sciplot_core.studio_core.prepare_generated import generate_studio_document
-from sciplot_core.studio_core.publish_run import publish_studio_export_run
+from sciplot_core.studio import export_project_document, prepare_studio_document
 
 
 EXPECTED_COUNTS = {
@@ -52,6 +50,7 @@ def _write_project(tmp_path: Path, rule_id: str) -> tuple[Path, Path]:
         json.dumps(
             {
                 "input": str(_fixture(rule_id)),
+                "delivery_output": str(tmp_path / "delivery"),
                 "rule_id": rule_id,
                 "template": "curve",
                 "explicit_template_selection": True,
@@ -105,12 +104,12 @@ def test_tensile_studio_publishes_the_complete_source_bound_figure_plan(
         return real_prepare(source, **kwargs)
 
     monkeypatch.setattr(semantic_module, "prepare_semantic_source", prepare_spy)
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepared = prepare_studio_document(
+        request_path,
         rule_id=None,
         template=None,
         project_name=None,
+        regenerate_generated=True,
     )
 
     assert preparation_calls == [_fixture(rule_id).resolve()]
@@ -156,23 +155,22 @@ def test_tensile_studio_publishes_the_complete_source_bound_figure_plan(
         else:
             _assert_summary_spec(spec, task_payload=task.to_payload(), n=9)
 
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepared = prepare_studio_document(
+        request_path,
         rule_id=None,
         template=None,
         project_name=None,
+        regenerate_generated=True,
     )
     assert len([path for path in task_source_root.iterdir() if path.is_dir()]) == 1
     document = Path(str(prepared["document"]))
-    exported = export_studio_document(document, formats=["pdf", "tiff_300"])
-    studio_run = publish_studio_export_run(
+    published = export_project_document(
         project_dir=project_dir,
         request_path=request_path,
         document_path=document,
-        exports=exported["exports"],
-        export_document_sha256=str(exported["document_sha256"]),
+        formats=["pdf", "tiff_300"],
     )
+    studio_run = published.run_payload
     completed = ResolvedFigurePlan.from_payload(studio_run["resolved_figure_plan"])
     assert completed.status == "ready"
     assert all(outcome.delivery_artifacts_complete for outcome in completed.outcomes)
@@ -230,6 +228,7 @@ def test_mechanical_workflow_delivers_exact_real_figure_plan(
                 "recipe": "auto",
                 "input": str(_fixture(rule_id)),
                 "output": str(output_dir),
+                "delivery_output": str(tmp_path / f"{rule_id}_delivery"),
                 "rule_id": rule_id,
                 "exports": ["pdf", "tiff_300"],
                 "explicit_render_option_keys": [],
@@ -315,12 +314,12 @@ def test_mechanical_studio_secondary_failure_rolls_back_the_whole_plan(
         reject_secondary,
     )
     with pytest.raises(RuntimeError, match="mechanical secondary failure"):
-        generate_studio_document(
-            project_dir=project_dir,
-            request_path=request_path,
+        prepare_studio_document(
+            request_path,
             rule_id=None,
             template=None,
             project_name=None,
+            regenerate_generated=True,
         )
 
     assert request_path.read_bytes() == original_request

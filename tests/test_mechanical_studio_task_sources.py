@@ -23,7 +23,6 @@ from sciplot_core.studio import prepare_studio_document
 from sciplot_core.studio_core.figure_task_evidence import figure_queue_from_plan
 from sciplot_core.studio_core.figure_set_prepare import _prepare_studio_figure_set
 from sciplot_core.studio_core.figure_source_request import _mechanical_task_source
-from sciplot_core.studio_core.prepare_generated import generate_studio_document
 from sciplot_core.studio_core.source_bound_prepare import (
     bind_mechanical_task_sources,
 )
@@ -48,6 +47,7 @@ def _project(tmp_path: Path, rule_id: str) -> tuple[Path, Path]:
         json.dumps(
             {
                 "input": str(_fixture(rule_id)),
+                "delivery_output": str(tmp_path / "delivery"),
                 "rule_id": rule_id,
                 "template": "curve",
                 "explicit_template_selection": True,
@@ -61,12 +61,12 @@ def _project(tmp_path: Path, rule_id: str) -> tuple[Path, Path]:
 
 
 def _generate(project_dir: Path, request_path: Path) -> None:
-    generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepare_studio_document(
+        request_path,
         rule_id=None,
         template=None,
         project_name=None,
+        regenerate_generated=True,
     )
 
 
@@ -201,30 +201,42 @@ def test_postcommit_task_source_gc_failure_does_not_report_a_false_failure(
     _generate(project_dir, request_path)
     predecessor = _task_source_directories(project_dir)[0]
     real_rmtree = shutil.rmtree
+    faults: list[str] = []
+    from sciplot_core.foundation.source_locations import literal_source_path
 
     def fail_only_for_predecessor(
         path: str | Path,
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        if Path(str(path)).resolve() == predecessor.resolve():
+        if Path(literal_source_path(Path(path))) == predecessor.resolve():
+            faults.append("removal")
             raise OSError("synthetic postcommit prune failure")
         real_rmtree(path, *args, **kwargs)
 
     real_iterdir = Path.iterdir
 
     def fail_only_for_task_source_root(path: Path) -> Any:
-        if path.resolve() == predecessor.parent.resolve():
+        if Path(literal_source_path(path)) == predecessor.parent.resolve():
+            faults.append("enumeration")
             raise PermissionError("synthetic postcommit enumeration failure")
         return real_iterdir(path)
 
-    if failure_site == "removal":
-        monkeypatch.setattr(lifecycle.shutil, "rmtree", fail_only_for_predecessor)
-    else:
-        monkeypatch.setattr(Path, "iterdir", fail_only_for_task_source_root)
+    real_prune = lifecycle._remove_same_plan_predecessors
+
+    def fail_during_prune(active: tuple[Path, ...]) -> None:
+        with monkeypatch.context() as pruning:
+            if failure_site == "removal":
+                pruning.setattr(lifecycle.shutil, "rmtree", fail_only_for_predecessor)
+            else:
+                pruning.setattr(Path, "iterdir", fail_only_for_task_source_root)
+            real_prune(active)
+
+    monkeypatch.setattr(lifecycle, "_remove_same_plan_predecessors", fail_during_prune)
     _generate(project_dir, request_path)
     if failure_site == "enumeration":
         monkeypatch.setattr(Path, "iterdir", real_iterdir)
+    assert faults == [failure_site]
 
     directories = _task_source_directories(project_dir)
     assert predecessor in directories
@@ -441,7 +453,18 @@ def test_exact_current_mechanical_reuse_rejects_missing_ready_secondary_artifact
         for item in registry["figures"]
         if item["figure_id"] != registry["primary_figure_id"]
     )
-    Path(secondary[missing_artifact]).unlink()
+    # Admit the deliberately incomplete figure-set fixture, rather than turning this
+    # queue-validation test into an unregistered outside-writer rejection.
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store.adapters import publish_files
+
+    store = project_store(project_dir)
+    before = store.snapshot()
+    missing_member = Path(secondary[missing_artifact]).relative_to(project_dir).as_posix()
+    publish_files(store, {missing_member: None}, kind="figure_set", baseline={
+        "project_id": before["project_id"], "generation": before["generation"],
+        "files": {missing_member: before["files"][missing_member]["sha256"]},
+    })
     request_before = request_path.read_bytes()
     metadata_writes: list[str] = []
 
