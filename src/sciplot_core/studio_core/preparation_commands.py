@@ -13,7 +13,8 @@ from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.project_commands import MembershipRead, PreparedFile, PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation
 from sciplot_core.project_commands.resources import resource_key
 from sciplot_core.project_store.io import read_file, sha
-from sciplot_core.project_store.runtime import selected_project_store, logical_runtime_resource
+from sciplot_core.project_store import FileProjectStore, ProjectConflict
+from sciplot_core.project_store.runtime import selected_project_store, logical_runtime_resource, project_runtime
 from sciplot_core.studio_core.preparation_candidate import (
     StudioPreparationCandidate, require_preparation_candidate, studio_preparation_candidate,
 )
@@ -122,6 +123,32 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
     return audits, list(sources.values())
 
 
+def _preflight_observed_native(store: FileProjectStore, before: dict[str, Any]) -> None:
+    """Report represented presentation conflicts before private clone admission.
+
+    This does not admit outside bytes. Only a changed existing primary native
+    with its unchanged canonical spec reaches the existing scientific audit.
+    The ordinary candidate/generation guards still reject all outside changes.
+    """
+    changes = before.get("outside_changes", {})
+    if (set(changes) != {"studio/document.vsz"} or changes["studio/document.vsz"] is None
+            or "studio/spec.json" not in before["files"]):
+        return
+    from sciplot_core.studio_core.categorical_display_preflight import require_categorical_display_current
+    from sciplot_core.project_store.membership import require_memberships
+
+    with store._locked() as (io, current):
+        require_memberships(io, before, current, {"metadata": {"read_memberships": [
+            MembershipRead.capture(before["files"], prefix).to_payload()
+            for prefix in ("", *("@" + key for key in sorted(store.locations)))
+        ]}})
+    spec = store.projection_path("studio/spec.json")
+    if sha(spec.read_bytes()) != before["files"]["studio/spec.json"]["sha256"]:
+        raise ProjectConflict("The observed native presentation has a changed canonical specification.")
+    with project_runtime(store, generation=before["generation"]):
+        require_categorical_display_current(store.root / "studio/document.vsz", spec)
+
+
 def prepare_studio_generation(project: Path, *, request_target: bool = False,
                               request_relative: str = "plot_request.json",
                               delivery_root: Path | None = None, rule_id: str | None = None,
@@ -138,6 +165,7 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
     selected = selected_project_store()
     store = selected if selected is not None and selected.root == root else project_store(root, with_snapshot=True)
     before = store.snapshot(import_legacy=True)
+    _preflight_observed_native(store, before)
     with current_preparation_runtime(store, before) as verify_sources, studio_preparation_candidate(store, snapshot=before) as candidate:
         payload = prepare_studio_candidate(candidate, request_target=request_target, request_relative=request_relative, delivery_root=delivery_root,
             rule_id=rule_id, template=template, project_name=project_name,

@@ -13,6 +13,7 @@ from sciplot_core.studio_core.project_command_scope import project_store
 from sciplot_core.studio_core.project_export import export_project_document
 from sciplot_core.studio_core import publication_prepare
 from sciplot_core.studio_core.request_paths import _archive_studio_input
+from sciplot_core.studio_core.categorical_display_preflight import require_categorical_display_current
 
 
 @pytest.fixture
@@ -107,3 +108,61 @@ def test_publication_uses_only_the_complete_imported_external_version(external_p
     assert not source.exists() and not project.exists()
     manifest = cold.root / "runs/studio_001/manifest.json"
     assert Path(result.run_payload["exports"][0]["path"]).is_file() and manifest.is_file()
+
+
+@pytest.mark.parametrize("other_change", [None, "domain_pass", "spec", "foreign_member", "native_alias"])
+def test_existing_native_drift_preserves_categorical_domain_preflight(external_publication, monkeypatch, other_change):
+    from sciplot_core.studio_core import categorical_display_preflight, project_creation
+    from sciplot_core.studio_core.categorical_display import KEY
+    from sciplot_core.studio_core.categorical_display_errors import CategoricalPresentationConflict
+
+    project, _source, _original, calls, store = external_publication
+    before = store.snapshot()
+    spec = json.loads(store.read_bytes("studio/spec.json"))
+    spec[KEY] = {"fixture": "known represented categorical presentation"}
+    command = ProjectCommand.create("document_edit", "represented-presentation",
+        project_id=before["project_id"], expected_generation=before["generation"],
+        read_set={"studio/spec.json": before["files"]["studio/spec.json"]["sha256"]},
+        write_set=["studio/spec.json"], request={"synthetic": True})
+    ProjectCommands(store).execute(command, lambda: ProjectMutation({"studio/spec.json": json.dumps(spec).encode()}, {}))
+    native = project / "studio/document.vsz"
+    changed = native.read_bytes() + b"\ncontrolled outside native presentation edit"
+    native.write_bytes(changed)
+    if other_change == "spec":
+        (project / "studio/spec.json").write_bytes(b"{}")
+    elif other_change == "foreign_member":
+        (project / "unregistered.txt").write_bytes(b"foreign")
+    elif other_change == "native_alias":
+        alias = project.parent / "foreign.vsz"
+        alias.write_bytes(changed)
+        native.unlink()
+        native.symlink_to(alias)
+    current = command.expected_generation
+    if other_change != "native_alias":
+        current = store.snapshot()["generation"]
+    if other_change in (None, "domain_pass"):
+        assert store.snapshot()["outside_changes"] == {"studio/document.vsz": sha(changed)}
+    checked = []
+
+    def rejected(document, specification):
+        checked.append((document, specification))
+        assert document.read_bytes() == changed
+        assert specification.read_bytes() == store.read_bytes("studio/spec.json")
+        if other_change != "domain_pass":
+            raise CategoricalPresentationConflict("Controlled exact native presentation conflict")
+        return {"status": "passed"}
+
+    monkeypatch.setattr(categorical_display_preflight, "audit_edited_document", rejected)
+    monkeypatch.setattr(categorical_display_preflight, "require_categorical_display_current", require_categorical_display_current)
+    if other_change is None:
+        with pytest.raises(CategoricalPresentationConflict):
+            project_creation.export_project(project)
+        assert checked == [(native, project / "studio/spec.json")]
+    else:
+        with pytest.raises((ValueError, OSError)):
+            project_creation.export_project(project)
+        assert checked == ([(native, project / "studio/spec.json")] if other_change == "domain_pass" else [])
+    assert calls == []
+    assert native.read_bytes() == changed
+    if other_change != "native_alias":
+        assert store.snapshot()["generation"] == current
