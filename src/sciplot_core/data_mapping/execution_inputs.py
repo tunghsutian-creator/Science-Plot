@@ -18,7 +18,7 @@ from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path, selected_source_resolver
 from sciplot_core.project_commands import PreparedSource, SourceTreeRead, InputRead
-from sciplot_core.project_store import ProjectConflict
+from sciplot_core.project_store.errors import ProjectConflict, ProjectSourceVersionMismatch
 from sciplot_core.project_store.io import read_file, sha
 from sciplot_core.project_store.source_resolver import ProjectSourceResolver
 from sciplot_core.project_store.sealed_source_trees import SealedSourceTree
@@ -218,7 +218,7 @@ def _read(path: Path, expected: str | None = None, *, metadata: bool = False) ->
     finally:
         os.close(parent)
     if expected is not None and sha(data) != expected:
-        raise ProjectConflict("A confirmed mapping input content hash changed from its exact source version.")
+        raise ProjectSourceVersionMismatch(literal, expected, sha(data), "A confirmed mapping input content hash changed from its exact source version.")
     metadata = metadata or active is not None and literal in active.metadata
     if metadata and original_mode is not None and actual == Path(literal) and mode != original_mode:
         raise ProjectConflict("A confirmed mapping input changed its registered permissions.")

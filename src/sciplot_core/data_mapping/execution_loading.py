@@ -15,6 +15,7 @@ from sciplot_core.data_mapping.execution_inputs import (
     mapping_execution_header, require_mapping_original_source,
 )
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_errors import SourceVersionMismatch
 from sciplot_core.mapping_contract import (
     LegacyDataMappingConfirmation,
 )
@@ -210,9 +211,14 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         output_path = Path(str(output.get("path") or "")).expanduser()
         if output_path.resolve() != expected_path.resolve():
             raise ValueError(f"Mapped output path changed for {reference.source_id!r}.")
-        if not mapping_file_path(expected_path, expected_sha256=output.get("sha256")).is_file():
-            raise FileNotFoundError(f"Mapped data output not found: {expected_path}")
-        if file_sha256(expected_path) != output.get("sha256"):
+        try:
+            actual_output = mapping_file_path(expected_path, expected_sha256=output.get("sha256"))
+            if not actual_output.is_file():
+                raise FileNotFoundError(f"Mapped data output not found: {expected_path}")
+            current_hash = file_sha256(expected_path)
+        except SourceVersionMismatch as exc:
+            raise ValueError(f"Mapped data output hash mismatch: {expected_path}") from exc
+        if current_hash != output.get("sha256"):
             raise ValueError(f"Mapped data output hash mismatch: {expected_path}")
         expected_output_paths.append(expected_path)
     expected_effective_input = (

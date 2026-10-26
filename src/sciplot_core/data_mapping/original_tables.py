@@ -13,6 +13,7 @@ import pandas as pd
 
 from sciplot_core.data_mapping.raw_tables import _original_text, _read_raw_table
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_errors import SourceVersionMismatch
 from sciplot_core.mapping_contract import DataSourceReference
 from sciplot_core.source_tables.raw_readers import read_sheet_names
 
@@ -36,7 +37,8 @@ def source_table_catalog(source: Path, *, expected_sha256: str | None = None) ->
         return None
     before = file_sha256(resolve_source_path(source, expected_sha256=expected_sha256))
     if expected_sha256 is not None and before != expected_sha256:
-        raise ValueError("The original table changed from its exact declared byte version.")
+        raise SourceVersionMismatch(str(source), expected_sha256, before,
+                                    "The original table changed from its exact declared byte version.")
     sheets: list[str | None] = [None]
     if source.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}:
         sheets = list(read_sheet_names(source, expected_sha256=before))

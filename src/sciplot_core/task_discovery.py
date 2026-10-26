@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.output_contract import resolve_user_output_layout
+from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.studio_core.project_query_evidence import _tree_hash
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError
@@ -64,14 +65,28 @@ def find_tasks(source: Path, *, tasks_root: Path | None = None, limit: int = 20)
                                "reason_code": getattr(exc, "reason_code", "unreadable_task"),
                                "message": str(exc)[:500]})
     current_hash, source_error = None, None
+    missing_original = False
     if matches:
         try:
             current_hash = _tree_hash(source)
         except (OSError, ValueError) as exc:
             source_error = str(exc)[:500]
+            if selected_source_resolver() is None:
+                try:
+                    source.lstat()
+                except FileNotFoundError:
+                    missing_original = True
+                except OSError:
+                    pass  # Unreadable is unknown, not proof of a missing original.
     for match in matches:
         expected = match["recorded_source_sha256"]
-        match["source_current"] = current_hash == expected if expected and source_error is None else None
+        current = None
+        if expected:
+            if missing_original:
+                current = False
+            elif source_error is None:
+                current = current_hash == expected
+        match["source_current"] = current
     matches.sort(key=lambda item: (item["updated_at"] or "", item["task_dir"]), reverse=True)
     return {
         "kind": "sciplot_task_search", "version": 1, "status": "ok",

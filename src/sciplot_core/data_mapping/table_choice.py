@@ -24,6 +24,7 @@ from sciplot_core.data_mapping.original_tables import (
 )
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.foundation.source_errors import SourceVersionMismatch
 from sciplot_core.mapping_contract import DataColumnMapping, DataMappingProposal, DataSourceReference
 from sciplot_core.mapping_contract.source_identity import source_view_id
 from sciplot_core.materials_rules import get_rule
@@ -71,8 +72,11 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
     source = Path(snapshot["source"])
     # Selection validates original evidence. Discovery/proposal callers retain
     # their rule-adapter eligibility gate in table_choice_snapshot itself.
-    fresh = source_table_snapshot(source, rule_id=snapshot["rule_id"], sheets=snapshot.get("observed_sheets"),
-                                  expected_sha256=snapshot["file_sha256"])
+    try:
+        fresh = source_table_snapshot(source, rule_id=snapshot["rule_id"], sheets=snapshot.get("observed_sheets"),
+                                      expected_sha256=snapshot["file_sha256"])
+    except SourceVersionMismatch as exc:
+        raise ValueError("Table-choice original evidence changed.") from exc
     if fresh != snapshot:
         raise ValueError("Table-choice original evidence changed.")
     required = {"sheet", "header_rows", "data_start_row", "data_end_row"}
@@ -316,9 +320,12 @@ def verify_table_confirmation(proposal: DataMappingProposal, source: Path, *,
     if len(versions) != 1:
         raise ValueError("A confirmed original table requires one exact raw byte version.")
     version = next(iter(versions))
-    snapshot = (source_table_snapshot(source, rule_id=binding["rule_id"], sheets=sheets, expected_sha256=version)
-                if "replicates" in binding else
-                table_choice_snapshot(source, binding["rule_id"], sheets=sheets, expected_sha256=version))
+    try:
+        snapshot = (source_table_snapshot(source, rule_id=binding["rule_id"], sheets=sheets, expected_sha256=version)
+                    if "replicates" in binding else
+                    table_choice_snapshot(source, binding["rule_id"], sheets=sheets, expected_sha256=version))
+    except SourceVersionMismatch as exc:
+        raise ValueError("Confirmed table metadata does not reproduce the proposed mapping.") from exc
     if snapshot is None:
         raise ValueError("Confirmed table source is no longer supported.")
     columns = select_table(snapshot, binding["selection"], binding["metadata_confirmations"], numeric_contract=numeric_contract)

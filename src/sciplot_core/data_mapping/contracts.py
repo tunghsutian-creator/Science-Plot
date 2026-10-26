@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_errors import SourceVersionMismatch
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_hashing import (
     canonical_json_sha256 as _canonical_sha256,
@@ -158,15 +159,15 @@ def _resolve_source_path(
         raise ValueError(
             f"Data source escapes the declared root: {reference.relative_path}"
         )
-    if not mapping_file_path(candidate, expected_sha256=reference.sha256).is_file():
-        raise FileNotFoundError(
-            f"Data mapping source not found: {reference.relative_path}"
-        )
-    if candidate.suffix.casefold() not in _SUPPORTED_TABLE_SUFFIXES:
-        raise ValueError(
-            f"Unsupported data mapping source format: {candidate.suffix or '<none>'}"
-        )
-    current_hash = file_sha256(mapping_file_path(candidate, expected_sha256=reference.sha256))
+    try:
+        actual = mapping_file_path(candidate, expected_sha256=reference.sha256)
+        if not actual.is_file():
+            raise FileNotFoundError(f"Data mapping source not found: {reference.relative_path}")
+        if candidate.suffix.casefold() not in _SUPPORTED_TABLE_SUFFIXES:
+            raise ValueError(f"Unsupported data mapping source format: {candidate.suffix or '<none>'}")
+        current_hash = file_sha256(mapping_file_path(candidate, expected_sha256=reference.sha256))
+    except SourceVersionMismatch as exc:
+        raise ValueError(f"Data mapping source hash changed: {reference.relative_path}") from exc
     if current_hash != reference.sha256:
         raise ValueError(f"Data mapping source hash changed: {reference.relative_path}")
     return candidate

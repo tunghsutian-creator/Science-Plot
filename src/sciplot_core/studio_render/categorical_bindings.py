@@ -10,6 +10,7 @@ from typing import Any
 from sciplot_core.data_mapping.original_tables import read_original_table, source_table_snapshot
 from sciplot_core.data_mapping.table_choice import select_table
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_errors import SourceVersionMismatch
 from sciplot_core.semantic_sources.registered_paired_curve_transform import _comparable_unit
 from sciplot_core.studio_render.models import StudioPreparationBlocked, StudioSourceFrame
 from sciplot_core.mapping_contract.categorical import validate_categorical_binding
@@ -19,8 +20,12 @@ from sciplot_core.source_tables.parsing import DECIMAL_ROUND_TRIP_ENCODING, SOUR
 def categorical_table_facts(source: Path, binding: dict[str, Any]) -> dict[str, Any]:
     """Return source evidence and metadata conflicts before allocating a project."""
     validate_categorical_binding(binding)
-    snapshot = source_table_snapshot(source, sheets=[binding["table_selection"]["sheet"]] if "table_selection" in binding else None,
-                                     expected_sha256=binding.get("source_sha256"))
+    try:
+        snapshot = source_table_snapshot(source, sheets=[binding["table_selection"]["sheet"]] if "table_selection" in binding else None,
+                                         expected_sha256=binding.get("source_sha256"))
+    except SourceVersionMismatch as exc:
+        raise StudioPreparationBlocked("categorical_source_changed",
+            "The categorical source SHA is stale; inspect its current original table.") from exc
     if snapshot is None:
         raise StudioPreparationBlocked("categorical_source_unsupported", "Select one original CSV/TSV or Excel file.")
     if binding.get("source_sha256", snapshot["file_sha256"]) != snapshot["file_sha256"]:
