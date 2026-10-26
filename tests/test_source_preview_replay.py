@@ -199,7 +199,7 @@ def test_source_preview_uses_unchanged_full_read_witness_after_an_unrelated_head
     assert store.snapshot()["generation"] == after["generation"] and len(store.commands()) == 2
 
 
-def test_source_preview_does_not_choose_between_multiple_exact_saved_intents(project, tmp_path, monkeypatch):
+def test_unadmitted_source_preview_requires_a_decision_for_multiple_stored_versions(project, tmp_path, monkeypatch):
     from sciplot_core.project_store import source_trees
 
     candidate, source, review = prepared(project, tmp_path)
@@ -210,5 +210,94 @@ def test_source_preview_does_not_choose_between_multiple_exact_saved_intents(pro
     assert first["command_key"] != second["command_key"]
     monkeypatch.setattr(source_trees, "observe", lambda *_a, **_k: pytest.fail("ambiguous previews guessed an incoming version"))
     result = source_update.preview_project_source_update(project, source)
-    assert result["status"] == "blocked" and "multiple exact saved commands" in result["reason"]
+    assert result["status"] == "blocked" and "Multiple stored source versions" in result["reason"]
     assert len(ProjectCommands(project_store(project)).commands()) == 2
+
+
+@pytest.mark.parametrize("change", ["source-version", "native-save", "multiple-source-versions", "confirmed-mapping-version"])
+def test_authorized_new_source_intent_can_leave_older_sealed_previews_untouched(project, tmp_path, monkeypatch, change):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.plan_preview import build_plan_preview
+    from sciplot_core.studio_core import native_scientific_audit
+
+    (project / "studio/figure_set.json").unlink()  # This control uses the supported primary native route.
+    request_path = project / "plot_request.json"
+    request_path.write_text(json.dumps({**json.loads(request_path.read_bytes()),
+        "rule_id": "uvvis_spectrum", "template": "curve"}))
+    candidate, source, review = prepared(project, tmp_path)
+    mapping_request = None
+    captured_sources, captured_inputs = (), ()
+    if change == "confirmed-mapping-version":
+        from test_task_mapping_plan import _mapped_case
+        from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
+
+        proof_root = tmp_path / "confirmed-mapping"
+        proof_root.mkdir()
+        source, mapping_request, execution = _mapped_case(proof_root)
+        review["source"] = str(source)
+        review["mapping_request"] = mapping_request
+        store = project_store(project)
+        snapshot = store.snapshot(import_legacy=True)
+        with mapping_input_reads(mapping_request["data_mapping_execution"], expected_source=source) as reads:
+            assert build_plan_preview(source, request=mapping_request)["status"] == "planned"
+            captured_sources = tuple(reads.prepared_sources(snapshot))
+            captured_inputs = tuple(reads.input_reads(snapshot))
+            review["mapping_source_trees"] = [tree.to_payload() for tree in reads.trees.values()]
+    else:
+        source.write_text("Wavelength (nm),Absorbance (a.u.)\n400,0.3\n450,0.4\n500,0.5\n")
+    review.update(source_files=file_inventory(source), source_tree_sha256=source_tree_sha256(source))
+    saved = [stage_source_update(project, candidate, review, prepared_sources=captured_sources, input_reads=captured_inputs)]
+    if change == "multiple-source-versions":
+        source.write_text(source.read_text().replace("0.3", "0.7"))
+        updated = {**review, "source_files": file_inventory(source), "source_tree_sha256": source_tree_sha256(source)}
+        saved.append(stage_source_update(project, candidate, updated))
+    store = project_store(project)
+    originals = {item["command_key"]: store.query(item["command_key"]) for item in saved}
+    if change == "native-save":
+        (project / "studio/document.vsz").write_bytes(b"scientifically unchanged external native style save")
+    else:
+        source.write_text(source.read_text().replace("0.3", "0.9").replace("0.7", "0.9"))
+    if change == "confirmed-mapping-version":
+        from dataclasses import replace
+        from sciplot_core.data_mapping import create_data_mapping_confirmation, execute_data_mapping_proposal, load_data_mapping_proposal
+
+        old_output = tmp_path / "confirmed-mapping/mappings/chosen_columns"
+        old_proposal = load_data_mapping_proposal(execution["proposal"])
+        old_output.rename(tmp_path / "retained-confirmed-mapping-v0")
+        proposal = replace(old_proposal, sources=tuple(replace(item, sha256=file_sha256(source)) for item in old_proposal.sources))
+        confirmation = create_data_mapping_confirmation(proposal, source_root=proof_root, request_path=proof_root / "base.json",
+            output_root=proof_root / "mappings", confirmed_by="explicit-new-version")
+        fresh = execute_data_mapping_proposal(proposal, confirmation, source_root=proof_root, request_path=proof_root / "base.json",
+            output_root=proof_root / "mappings")
+        assert mapping_request["data_mapping_execution"] == str(old_output / "execution.json")
+        assert fresh["proposal_sha256"] != execution["proposal_sha256"]
+    monkeypatch.setattr(native_scientific_audit, "audit_edited_document", lambda document, _spec:
+        {"document_sha256": file_sha256(document), "scientific_data_verification": {"status": "passed"}})
+    monkeypatch.setattr(source_update, "_audit_exact_document_data", lambda **_kwargs: {})
+    monkeypatch.setattr(source_update, "capture_project_styles", lambda *_args: {})
+    reached = []
+
+    class NewPreparationReached(Exception):
+        pass
+
+    def prepare_new(_project, selected_source, _temporary, **kwargs):
+        assert selected_source == source and kwargs.get("mapping_request") == mapping_request
+        request = json.loads(request_path.read_bytes())
+        plan = build_plan_preview(source, request=mapping_request or request)
+        assert plan["status"] == "planned", plan.get("blocker")
+        assert plan["scientific_transform"]["output"]["series"][0]["first_point"] == [400, 0.3 if change == "native-save" else 0.9]
+        current_review = {**review, "source_files": file_inventory(source), "source_tree_sha256": source_tree_sha256(source),
+                          "project_sha256": payload_hash(project_inventory(project))}
+        key = source_review_binding(store, store.snapshot(), current_review)[2]
+        assert key not in originals and store.query(key) is None
+        reached.append(key)
+        raise NewPreparationReached
+
+    monkeypatch.setattr(source_update, "prepare_candidate", prepare_new)
+    with pytest.raises(NewPreparationReached):
+        source_update.preview_project_source_update(project, source, mapping_request=mapping_request)
+    assert len(reached) == 1
+    for key, original in originals.items():
+        after = store.query(key)
+        assert after["decision_id"] == original["decision_id"] and after["draft"] == original["draft"]
+        assert after["metadata"] == original["metadata"] and after["phase"] == "needs_review"

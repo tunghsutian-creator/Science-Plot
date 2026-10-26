@@ -143,6 +143,13 @@ def _worksheet_confirmation(
     ]
 
 
+def source_mapping_required(previous: dict[str, Any], mapping_request: dict[str, Any] | None) -> bool:
+    """The one pure admission predicate shared by new and saved-intent routing."""
+    return mapping_request is None and bool(not previous.get("rule_id") or previous.get("data_mapping")
+        or previous.get("data_mapping_application") or any(key in previous for key in (
+            "data_mapping_execution", "data_mapping_proposal_id", "data_mapping_plan_binding")))
+
+
 def current_source_update_request(
     project: Path, mapping_request: dict[str, Any] | None, *, snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -176,11 +183,9 @@ def current_source_update_request(
     if not isinstance(previous, dict):
         raise ValueError("The canonical project request must be an object")
     rule_id = str(previous.get("rule_id") or "")
-    if mapping_request is None:
-        if (not rule_id or previous.get("data_mapping") or previous.get("data_mapping_application")
-                or any(key in previous for key in ("data_mapping_execution", "data_mapping_proposal_id", "data_mapping_plan_binding"))):
-            raise ValueError("This source needs a fresh explicit data mapping before it can replace the project source.")
-    elif mapping_request.get("rule_id") != rule_id or mapping_request.get("template") != previous.get("template"):
+    if source_mapping_required(previous, mapping_request):
+        raise ValueError("This source needs a fresh explicit data mapping before it can replace the project source.")
+    if mapping_request is not None and (mapping_request.get("rule_id") != rule_id or mapping_request.get("template") != previous.get("template")):
         raise ValueError("Fresh mapping must preserve the project's confirmed experiment and template.")
     return previous
 

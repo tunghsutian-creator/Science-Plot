@@ -60,15 +60,41 @@ def lookup_source_preview(project: Path, source: Path, *, worksheet: str | None,
         return None
     repository = project_store(project)
     snapshot = repository.snapshot()
-    matches = [(command, intent) for command, intent in candidates
-               if source_review_binding(repository, snapshot, intent)[1:] == (intent, command.key)]
-    if not matches:
-        return None
-    if len(matches) != 1:
-        raise ProjectConflict("The source preview request matches multiple exact saved commands; use its saved decision.")
-    command, intent = matches[0]
-    record = prior_source_preview(repository, snapshot, intent)
+    from sciplot_core.output_contract import requested_delivery_root
+    from sciplot_core.studio_core.source_update_review import payload_hash
+    from sciplot_core.studio_core.source_update_state import _delivery_inventory
+    from sciplot_core.studio_core.source_update_staging import source_mapping_required
+
+    project_hash = payload_hash(project_inventory(project))
+    delivery_hash = payload_hash(_delivery_inventory(requested_delivery_root({"request": request}, run_output=project)))
+    current_candidates = [(command, intent) for command, intent in candidates
+        if source_review_binding(repository, snapshot, intent)[1:] == (intent, command.key)
+        and intent.get("project_sha256") == project_hash and intent.get("delivery_sha256") == delivery_hash]
+    # Unknown execution cannot be resolved by rereading data or rerunning a
+    # callback. Coarse metadata alone is never called an exact input version.
+    for _command, stored in current_candidates:
+        prior_source_preview(repository, snapshot, stored)
+    if not source_mapping_required(request, mapping_request) or not current_candidates:
+        return None  # NEW admission must precede observing its actual version.
+    if len(current_candidates) != 1:
+        raise ProjectConflict("Multiple stored source versions require an exact saved decision or fresh source mapping.")
+    _command, intent = current_candidates[0]
+    record = verified_source_preview(repository, snapshot, intent)
     assert record is not None
+    return repository, snapshot, record
+
+
+def verified_source_preview(repository: FileProjectStore, snapshot: dict[str, Any], intent: dict[str, Any]) -> dict[str, Any] | None:
+    """Consume one exact key, using the original saved input/read witnesses."""
+    from sciplot_core.project_store import ProjectConflict
+
+    project, source = repository.root, Path(intent["source"])
+    record = prior_source_preview(repository, snapshot, intent)
+    if record is None:
+        return None
+    command = ProjectCommand.from_payload(record["metadata"])
+    if command.key != record["command_id"] or command.project_id != snapshot["project_id"] or command.command_digest != record["command_digest"]:
+        raise ProjectConflict("The saved source preview has inconsistent command identity.")
     review = record.get("review")
     if not isinstance(review, dict) or source_review_binding(repository, snapshot, review)[1:] != (intent, command.key):
         raise ProjectConflict("The frozen source review differs from its exact normalized command.")
@@ -91,8 +117,7 @@ def lookup_source_preview(project: Path, source: Path, *, worksheet: str | None,
             if payload_hash(project_inventory(project)) != review["project_sha256"]:
                 raise ProjectConflict("The saved source preview's current project read witness changed.")
             _check_external_state(project, source, review)
-        snapshot = current
-    return repository, snapshot, record
+    return record
 
 
 def source_mutation(project: Path, candidate: Path, review: dict[str, Any], *,

@@ -103,6 +103,22 @@ def _prepared_update_current(
     delivery = requested_delivery_root({"request": request}, run_output=project)
     delivery_state = _delivery_inventory(delivery)
     from sciplot_core.studio_core.source_update_sources import baseline_scope, incoming_scope
+    from sciplot_core.foundation.json_hashing import canonical_json_sha256
+    from sciplot_core.studio_core.source_update_commands import verified_source_preview, _public_review
+    from sciplot_core.studio_core.source_update_replay import frozen_source_candidate
+
+    tree = ({"kind": "file", "content_sha256": next(iter(source_state.values()))} if source.is_file() else
+            {"kind": "directory", "files": [{"path": name, "content_sha256": digest} for name, digest in sorted(source_state.items())]})
+    intent = {"source": str(source), "source_kind": "file" if source.is_file() else "directory",
+              "source_files": source_state, "source_tree_sha256": canonical_json_sha256(tree, allow_nan=False),
+              "worksheet": selected_sheet, "mapping_request": mapping_request,
+              "annotation_decisions": annotation_decisions or [], "project_sha256": payload_hash(original_state),
+              "delivery_sha256": payload_hash(delivery_state)}
+    existing = verified_source_preview(repository, before_snapshot, intent)
+    if existing is not None:
+        with incoming_scope(repository, before_snapshot, source, source_state), frozen_source_candidate(repository, before_snapshot, existing) as candidate:
+            yield candidate, _public_review(project, existing), (), before_snapshot
+        return
 
     figures = project_figures(project)
     from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
