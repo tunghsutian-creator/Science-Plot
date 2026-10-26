@@ -175,7 +175,7 @@ def test_continue_edit_then_export_uses_canonical_project_without_regeneration(
         )
         == 0
     )
-    assert calls == [("publish", canonical)] and len(reused) == 2
+    assert calls == [("publish", canonical)] and len(reused) == 1
     payload = json.loads(capsys.readouterr().out)
     assert Path(payload["document"]) == canonical
     assert payload["studio_run"]["ready_to_use"] is True

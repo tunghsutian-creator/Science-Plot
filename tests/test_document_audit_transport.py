@@ -61,6 +61,70 @@ def test_current_returned_audit_does_not_start_another_worker(candidate, monkeyp
     assert result == original and result is not original
 
 
+def test_exact_native_artifact_role_audits_observed_bytes_without_admitting_source_drift(tmp_path):
+    from sciplot_core.project_store import FileProjectStore, ProjectConflict
+    from sciplot_core.project_store.native_artifacts import NativeArtifactInput, native_artifact_runtime
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
+
+    project = tmp_path / "project"
+    document, spec = project / "studio/document.vsz", project / "studio/spec.json"
+    document.parent.mkdir(parents=True)
+    document.write_bytes(b"registered native")
+    spec.write_text('{"series":[]}')
+    source = project / "source/input.csv"
+    source.parent.mkdir()
+    source.write_bytes(b"original scientific values")
+    store = FileProjectStore(project)
+    before = store.snapshot(import_legacy=True)
+    document.write_bytes(b"observed native presentation")
+    source.write_bytes(b"changed scientific values")
+    argv = ["export-document", str(document), "--formats", "pdf"]
+    with project_runtime(store), native_artifact_runtime(argv, inputs=[NativeArtifactInput(
+            "document", document, file_sha256(document), document.stat().st_mode & 0o777)]):
+        result, _ = audit._audit_exact_document_data(document_path=document, spec_path=spec,
+            check_presentation=False, native_audit=evidence(document, spec))
+        assert result == evidence(document, spec)
+        with pytest.raises(ProjectConflict):
+            stable_file_snapshot(source, label="scientific source")
+    with project_runtime(store), pytest.raises(ProjectConflict):
+        stable_file_snapshot(document, label="not a native artifact grant")
+    assert store.snapshot()["generation"] == before["generation"] and not store.commands()
+
+
+def test_native_artifact_snapshot_keeps_preserved_literal_and_exact_physical_argument(tmp_path):
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.native_artifacts import NativeArtifactInput, native_artifact_runtime
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.source_coverage.native_file_snapshots import native_document_snapshot, assert_native_document_current
+
+    project = tmp_path / "original"
+    document = project / "studio/document.vsz"
+    document.parent.mkdir(parents=True)
+    document.write_bytes(b"exact portable native bytes")
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "cold")
+    project.rename(tmp_path / "offline")
+    actual = cold.root / "studio/document.vsz"
+    with project_runtime(cold), native_artifact_runtime(["export-document", str(actual), "--formats", "pdf"],
+            inputs=[NativeArtifactInput("document", actual, file_sha256(actual), actual.stat().st_mode & 0o777)]):
+        captured = native_document_snapshot(actual, label="portable native")
+        assert captured["path"] == document and captured["native_argument"] == str(actual)
+        assert_native_document_current(captured, label="portable native")
+    assert not document.exists()
+
+
+def test_native_artifact_snapshot_does_not_erase_an_unbound_file_alias(candidate):
+    from sciplot_core.source_coverage.native_file_snapshots import native_document_snapshot
+
+    document, _spec = candidate
+    alias = document.with_name("aliased.vsz")
+    alias.symlink_to(document)
+    with pytest.raises(OSError):
+        native_document_snapshot(alias, label="native artifact")
+
+
 @pytest.mark.parametrize("fault", ["document_bytes", "spec_bytes", "document_path", "scope", "status", "units", "count"])
 def test_stale_or_incomplete_inline_audit_cannot_pass(candidate, fault):
     document, spec = candidate

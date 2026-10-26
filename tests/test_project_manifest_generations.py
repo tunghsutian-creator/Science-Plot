@@ -3,6 +3,7 @@
 import json
 from io import BytesIO
 from zipfile import ZipFile
+import pytest
 
 from sciplot_core.project_manifest import (
     _manifest_store,
@@ -112,3 +113,65 @@ def test_zip_and_project_seal_same_candidate_bytes_and_executable_mode(tmp_path)
     with ZipFile(BytesIO(staged["@snapshot/project.zip"])) as archive:
         assert archive.read("project/launch.command") == captured
         assert archive.getinfo("project/launch.command").external_attr >> 16 & 0o777 == 0o755
+
+
+@pytest.mark.parametrize("fault", [None, "missing-adoption", "old-hash", "observed-hash", "write-bytes", "mode", "source", "unknown"])
+def test_native_adoption_zip_is_the_same_frozen_single_generation_mutation(tmp_path, fault):
+    from dataclasses import replace
+    from sciplot_core.project_commands import NativeAdoption, ProjectCommand, ProjectCommands, ProjectMutation, MembershipRead
+    from sciplot_core.project_store import ProjectConflict
+    from sciplot_core.project_store.io import sha
+
+    root = tmp_path / "project"
+    native, source = root / "studio/document.vsz", root / "raw/original.csv"
+    native.parent.mkdir(parents=True)
+    source.parent.mkdir()
+    native.write_bytes(b"registered native")
+    source.write_bytes(b"original scientific cells")
+    payload = {"project_slug": "project"}
+    (root / "intake_manifest.json").write_text(json.dumps(payload))
+    store = _manifest_store(root, payload)
+    before = store.snapshot(import_legacy=True)
+    observed = b"observed and domain-audited presentation"
+    native.write_bytes(observed)
+    proof = NativeAdoption("studio/document.vsz", before["files"]["studio/document.vsz"]["sha256"], sha(observed), "a" * 64)
+    if fault == "old-hash":
+        proof = replace(proof, before_sha256="b" * 64)
+    elif fault == "observed-hash":
+        proof = replace(proof, observed_sha256="c" * 64)
+    elif fault == "mode":
+        native.chmod(0o600 if native.stat().st_mode & 0o777 != 0o600 else 0o644)
+    elif fault == "source":
+        source.write_bytes(b"tampered scientific cells")
+    elif fault == "unknown":
+        (root / "unknown.txt").write_bytes(b"unregistered member")
+    overlay = {"studio/document.vsz": b"not the audited bytes" if fault == "write-bytes" else native}
+    physical = {name: path.read_bytes() for name, path in (("native", native), ("source", source))}
+    kwargs = dict(store=store, project_writes=overlay, native_adoptions=[] if fault == "missing-adoption" else [proof])
+    if fault not in {None, "unknown"}:
+        with pytest.raises(ProjectConflict):
+            stage_intake_project_manifest(root, payload, **kwargs)
+        assert store.snapshot()["generation"] == before["generation"] and not store.commands()
+    else:
+        staged = stage_intake_project_manifest(root, payload, **kwargs)
+        assert store.snapshot()["generation"] == before["generation"] and not store.commands()
+        with ZipFile(BytesIO(staged["@snapshot/project.zip"])) as archive:
+            assert archive.read("project/studio/document.vsz") == observed
+            assert archive.read("project/raw/original.csv") == physical["source"]
+            assert "project/unknown.txt" not in archive.namelist()
+        command = ProjectCommand.create("native_import", "audited-native-and-zip-one-head", project_id=before["project_id"],
+            expected_generation=before["generation"], read_set={name: before["files"].get(name, {}).get("sha256")
+                for name in set(before["files"]) | set(staged)}, write_set=list(staged), request={}, native_adoptions=[proof],
+            read_memberships=[MembershipRead.capture(before["files"], "")])
+        if fault == "unknown":
+            with pytest.raises(ProjectConflict):
+                ProjectCommands(store).execute(command, lambda: ProjectMutation(staged, {}))
+            assert store.snapshot()["generation"] == before["generation"] and (root / "unknown.txt").read_bytes() == b"unregistered member"
+        else:
+            ProjectCommands(store).execute(command, lambda: ProjectMutation(staged, {}))
+            after = store.snapshot()
+            assert after["sequence"] == before["sequence"] + 1 and not after["outside_changes"]
+            assert "studio/document.vsz" not in after.get("input_resources", [])
+            assert all(entry.get("locator") != str(native) for versions in after["sources"].values() for entry in versions.values())
+            assert len(store.commands()) == 1 and store.read_bytes("@snapshot/project.zip") == staged["@snapshot/project.zip"]
+    assert native.read_bytes() == physical["native"] and source.read_bytes() == physical["source"]

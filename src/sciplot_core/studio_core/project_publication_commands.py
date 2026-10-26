@@ -146,13 +146,6 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         if delivery_complete:
             writes.update({name: None for name in reads if name.startswith(delivery_prefix + "/")})
             _stage_tree(delivery, delivery_prefix, writes, roots)
-        # The authoritative registry and ZIP are made from these exact pending
-        # bytes. Neither builder installs active files or publishes another head.
-        registry = read_intake_project_manifest(project, store=repository)
-        if registry is not None:
-            updated = studio_run_registration(deepcopy(registry), manifest, studio_run=payload)
-            writes.update(stage_intake_project_manifest(project, updated, store=repository,
-                project_writes={name: value for name, value in writes.items() if not name.startswith("@")}))
         adoptions = []
         for name, actual in before.get("outside_changes", {}).items():
             if not name.endswith(".vsz") or not name.startswith("studio/") or actual is None:
@@ -162,6 +155,14 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
             writes[name] = project / name
             adoptions.append(NativeAdoption(name, reads[name], actual,
                 canonical_json_sha256(manifest["result"]["scientific_data_verification"])))
+        # The authoritative registry and ZIP consume the same audited native
+        # overlay as the one final command; neither builder publishes a head.
+        registry = read_intake_project_manifest(project, store=repository)
+        if registry is not None:
+            updated = studio_run_registration(deepcopy(registry), manifest, studio_run=payload)
+            writes.update(stage_intake_project_manifest(project, updated, store=repository,
+                project_writes={name: value for name, value in writes.items() if not name.startswith("@")},
+                native_adoptions=adoptions))
         command = command_for_binding(repository, binding, kind="native_import" if adoptions else "publish",
             key=key, writes=list(writes), request=intent, native_adoptions=adoptions)
         if mapping_reads is not None:

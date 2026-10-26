@@ -38,10 +38,13 @@ def _snapshot_native_audit(
     document: Path, snapshot: Path, native_audit: dict[str, Any],
 ) -> dict[str, Any]:
     """Bind this export call's audit to its byte-identical archived document."""
-    audit, _ = _audit_exact_document_data(
-        document_path=document, spec_path=_veusz_spec_path(document),
-        check_presentation=False, native_audit=native_audit,
-    )
+    from sciplot_core.source_coverage.native_file_snapshots import observed_native_document
+
+    spec = _veusz_spec_path(document)
+    with observed_native_document(["audit-spec-data", str(document), str(spec), "--allow-presentation-edits"],
+                                  document, expected_sha256=native_audit["document"]["sha256"]):
+        audit, _ = _audit_exact_document_data(document_path=document, spec_path=spec,
+            check_presentation=False, native_audit=native_audit)
     rebound = {
         **audit,
         "document": {**audit["document"], "path": str(snapshot.resolve())},

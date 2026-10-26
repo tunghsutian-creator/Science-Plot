@@ -92,6 +92,76 @@ def test_missing_saved_native_cannot_be_recreated_by_export(publication, monkeyp
     assert not calls and not native.exists()
 
 
+@pytest.mark.parametrize("target_kind", ["project", "canonical-request"])
+def test_studio_saved_export_publishes_current_native_without_preparation(publication, monkeypatch, capsys, target_kind):
+    from sciplot_core.studio_core import studio_command
+
+    project, calls, _ = publication
+    store = project_store(project)
+    before = store.snapshot(import_legacy=True)
+    native = project / "studio/document.vsz"
+    observed = native.read_bytes() + b"\nmanual presentation save"
+    native.write_bytes(observed)
+    inputs = {name: (project / name).read_bytes() for name in ("plot_request.json", "source/data.csv", "studio/spec.json")}
+    monkeypatch.setattr(studio_command, "maybe_reexec_with_qt_runtime", lambda *_a: None)
+    monkeypatch.setattr(studio_command, "prepare_studio_document", lambda *_a, **_k:
+                        pytest.fail("Saved native-only export must not prepare or publish another generation first."))
+    target = project if target_kind == "project" else project / "plot_request.json"
+
+    assert studio_command.run_studio_command(target=target, export="pdf,tiff_300", json_output=True) == 0
+
+    result = json.loads(capsys.readouterr().out)
+    assert result["project_dir"] == str(project) and result["document"] == str(native)
+    assert result["preserved_existing_document"] is True and result["studio_run"]["ready_to_use"] is True
+    assert result["figure_set"] == result["studio_run"]["figure_set"]
+    assert [call[0] for call in calls] == ["export", "publish"]
+    assert native.read_bytes() == observed and all((project / name).read_bytes() == data for name, data in inputs.items())
+    records = store.commands()
+    assert len(records) == 1 and records[0]["metadata"]["kind"] == "native_import" and records[0]["phase"] == "complete"
+    assert store.snapshot()["generation"] != before["generation"] and not store.snapshot()["outside_changes"]
+
+
+@pytest.mark.parametrize("options", [{"rule_id": "uvvis_spectrum"}, {"template": "curve"}, {"project_name": "Requested name"},
+                                     {"output_root": "output"}, {"delivery_root": "delivery"}, {"prepare_only": True}])
+def test_studio_explicit_preparation_intent_cannot_take_saved_export_shortcut(publication, monkeypatch, options):
+    from sciplot_core.studio_core import studio_command
+
+    project, calls, _ = publication
+    class PreparationSelected(Exception):
+        pass
+    def prepare(target, **kwargs):
+        assert target == project
+        assert all(kwargs.get(name) == value for name, value in options.items() if name != "prepare_only")
+        raise PreparationSelected
+    monkeypatch.setattr(studio_command, "maybe_reexec_with_qt_runtime", lambda *_a: None)
+    monkeypatch.setattr(studio_command, "prepare_studio_document", prepare)
+    with pytest.raises(PreparationSelected):
+        studio_command.run_studio_command(target=project, export="pdf", json_output=True, **options)
+    assert not calls
+
+
+@pytest.mark.parametrize("target_kind", ["raw-source", "standalone-vsz", "secondary-vsz", "other-request"])
+def test_studio_saved_project_export_does_not_claim_other_target_modes(publication, monkeypatch, target_kind):
+    from sciplot_core.studio_core import studio_command
+
+    project, calls, _ = publication
+    target = {"raw-source": project / "source/data.csv", "standalone-vsz": project.parent / "standalone.vsz",
+              "secondary-vsz": project / "studio/figures/secondary.vsz", "other-request": project / "other.json"}[target_kind]
+    if target_kind != "raw-source":
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"{}" if target_kind == "other-request" else b"separate native")
+    class OtherPreparationSelected(Exception):
+        pass
+    def prepare(value, **_kwargs):
+        assert value == target
+        raise OtherPreparationSelected
+    monkeypatch.setattr(studio_command, "maybe_reexec_with_qt_runtime", lambda *_a: None)
+    monkeypatch.setattr(studio_command, "prepare_studio_document", prepare)
+    with pytest.raises(OtherPreparationSelected):
+        studio_command.run_studio_command(target=target, export="pdf", json_output=True)
+    assert not calls
+
+
 def test_export_receipt_uses_the_published_generation_not_an_earlier_projection(publication, monkeypatch):
     project, calls, _ = publication
     path = project / "studio/figure_set.json"

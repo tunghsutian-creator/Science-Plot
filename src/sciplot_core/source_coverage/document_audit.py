@@ -18,6 +18,7 @@ from sciplot_core.source_coverage.file_snapshots import (
     _assert_snapshot_current,
     _write_private_snapshot,
 )
+from sciplot_core.source_coverage.native_file_snapshots import native_document_snapshot, assert_native_document_current
 
 
 def _audit_exact_document_data(
@@ -31,7 +32,7 @@ def _audit_exact_document_data(
     """Bind a fresh worker audit to stable bytes; in-worker calls reuse the same snapshots."""
     if audit_runner is not None and native_audit is not None:
         raise ValueError("Choose a native audit runner or its returned evidence, not both.")
-    document_snapshot = _stable_file_snapshot(
+    document_snapshot = native_document_snapshot(
         document_path,
         label="Veusz document",
     )
@@ -39,7 +40,7 @@ def _audit_exact_document_data(
         spec_path,
         label="Veusz specification",
     )
-    _assert_snapshot_current(document_snapshot, label="Veusz document", expected_sha256=document_snapshot["sha256"])
+    assert_native_document_current(document_snapshot, label="Veusz document")
     _assert_snapshot_current(spec_snapshot, label="Veusz specification", expected_sha256=spec_snapshot["sha256"])
     try:
         spec_payload = json.loads(spec_snapshot["bytes"].decode("utf-8"))
@@ -56,7 +57,7 @@ def _audit_exact_document_data(
         audit_document, audit_spec = Path(document_snapshot["path"]), Path(spec_snapshot["path"])
     else:
         with tempfile.TemporaryDirectory(prefix="sciplot_vsz_audit_") as temporary:
-            snapshot_root = Path(temporary)
+            snapshot_root = Path(temporary).resolve()
             os.chmod(snapshot_root, 0o700)
             audit_document = snapshot_root / "document.vsz"
             audit_spec = snapshot_root / "spec.json"
@@ -98,7 +99,7 @@ def _audit_exact_document_data(
         raise ValueError(
             "Exact-current Veusz data-consumption audit has no closed unit inventory."
         )
-    _assert_snapshot_current(document_snapshot, label="Veusz document", expected_sha256=document_snapshot["sha256"])
+    assert_native_document_current(document_snapshot, label="Veusz document")
     _assert_snapshot_current(spec_snapshot, label="Veusz specification", expected_sha256=spec_snapshot["sha256"])
     payload["document"] = {
         "path": str(document_snapshot["path"]),
@@ -112,22 +113,27 @@ def _audit_exact_document_data(
 
 
 def _run_audit_worker(document: Path, spec: Path, check_presentation: bool) -> dict[str, Any]:
-    completed = run_worker(
-        [
-            sys.executable,
-            "-m",
-            "sciplot_core.veusz_worker",
-            "audit-spec-data",
-            str(document),
-            str(spec),
-            *([] if check_presentation else ["--allow-presentation-edits"]),
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=120,
-        env=veusz_worker_environment(), cold_runner=subprocess.run,
-    )
+    from sciplot_core.project_store.native_artifacts import bound_native_artifacts
+
+    # This new invocation reads only the host-frozen private copies, not the
+    # outer export/inspect command's artifact arguments. Scientific IO stays pinned.
+    with bound_native_artifacts(None, [], None):
+        completed = run_worker(
+            [
+                sys.executable,
+                "-m",
+                "sciplot_core.veusz_worker",
+                "audit-spec-data",
+                str(document),
+                str(spec),
+                *([] if check_presentation else ["--allow-presentation-edits"]),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=120,
+            env=veusz_worker_environment(), cold_runner=subprocess.run,
+        )
     if completed.returncode != 0:
         from sciplot_core.studio_core.categorical_display_errors import raise_categorical_worker_rejection
 

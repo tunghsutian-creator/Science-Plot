@@ -11,7 +11,9 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path as resolve_runtime_path
 from sciplot_core.source_coverage.document_audit import _audit_exact_document_data
-from sciplot_core.source_coverage.file_snapshots import _assert_snapshot_current, stable_file_snapshot
+from sciplot_core.source_coverage.file_snapshots import (
+    _assert_snapshot_current, stable_file_snapshot, _physical_file_snapshot, _require_snapshot_identity,
+)
 from sciplot_core.source_coverage.managed_documents import source_records, _verify_prepared_data
 
 
@@ -40,13 +42,16 @@ def audit_native_candidate(
 def audit_edited_document(
     document: Path, spec: Path, *, native_audit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    specification = spec.read_bytes()
-    native_bytes = document.read_bytes()
-    native_digest = hashlib.sha256(native_bytes).hexdigest()
+    specification_snapshot = stable_file_snapshot(spec, label="Observed native specification")
+    specification = specification_snapshot["bytes"]
+    observed = _physical_file_snapshot(document, literal=document, label="Observed native document")
+    native_bytes, native_digest = observed["bytes"], observed["sha256"]
     records = source_records(json.loads(specification))
 
     def verify_sources() -> None:
-        if spec.read_bytes() != specification or any(
+        _assert_snapshot_current(specification_snapshot, label="Observed native specification",
+                                 expected_sha256=specification_snapshot["sha256"])
+        if any(
             not resolve_runtime_path(path, expected_sha256=digest).is_file()
             or file_sha256(resolve_runtime_path(path, expected_sha256=digest)) != digest
             for path, digest in records.items()
@@ -63,7 +68,7 @@ def audit_edited_document(
                    if native_audit is not None else None)
         audit = audit_native_candidate(candidate, spec, native_audit=rebound)
     verify_sources()
-    if file_sha256(document) != native_digest:
-        raise ValueError("The observed native document changed during its exact scientific audit")
+    current = _physical_file_snapshot(document, literal=document, label="Observed native document", expected_sha256=native_digest)
+    _require_snapshot_identity(observed, current, label="Observed native document")
     return {**audit, "document_sha256": native_digest,
             "spec_sha256": hashlib.sha256(specification).hexdigest()}

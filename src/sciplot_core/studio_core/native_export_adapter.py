@@ -75,6 +75,21 @@ def export_studio_document(
     output_dir: Path | None = None,
     audit_spec_path: Path | None = None,
 ) -> dict[str, Any]:
+    from sciplot_core.source_coverage.native_file_snapshots import observed_native_document
+
+    arguments = ["export-document", str(document_path), "--formats", ",".join(normalize_export_formats(formats, default=()))]
+    if output_dir is not None:
+        arguments.extend(["--out", str(output_dir.expanduser().resolve())])
+    if audit_spec_path is not None:
+        arguments.extend(["--audit-spec", str(audit_spec_path)])
+    with observed_native_document(arguments, document_path):
+        return _export_studio_document(document_path, formats=formats, output_dir=output_dir, audit_spec_path=audit_spec_path)
+
+
+def _export_studio_document(
+    document_path: Path, *, formats: list[str], output_dir: Path | None,
+    audit_spec_path: Path | None,
+) -> dict[str, Any]:
     from sciplot_core.veusz_runtime import (
         needs_veusz_worker_process,
         veusz_worker_environment,

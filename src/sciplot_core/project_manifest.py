@@ -1,7 +1,7 @@
 """Intake compatibility views delegate to complete immutable project generations."""
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 import json
@@ -18,7 +18,7 @@ from sciplot_core.foundation.private_project_manifest import (
     private_manifest_descriptor,
     private_project_manifest_scope as private_project_manifest_scope,
 )
-from sciplot_core.project_commands.resources import PreparedFile
+from sciplot_core.project_commands.resources import NativeAdoption, PreparedFile
 from sciplot_core.project_host_factory import project_store
 from sciplot_core.project_manifest_locations import (
     _CANONICAL_MANIFEST_NAME, _project_manifest_paths as _project_manifest_paths,
@@ -26,7 +26,7 @@ from sciplot_core.project_manifest_locations import (
 )
 from sciplot_core.project_store import FileProjectStore, ProjectConflict, ResourceRoot
 from sciplot_core.project_store.adapters import project_storage_scope, publish_files
-from sciplot_core.project_store.io import install, parts, read_file
+from sciplot_core.project_store.io import install, parts, read_file, sha
 
 _PROJECT_MANIFEST_LOCK = RLock()
 _PRIVATE_SNAPSHOT: ContextVar[tuple[Path, int, int] | None] = ContextVar("intake_private_snapshot", default=None)
@@ -142,10 +142,22 @@ def _write_snapshot_member(candidate: Path, name: str, value: bytes | Path | Pre
 
 
 def _stage_snapshot(store: FileProjectStore, payload: dict[str, Any], writes: Mapping[str, bytes | Path | PreparedFile | None],
-                    snapshot_writer: Callable[[Path, dict[str, Any]], None] | None = None) -> bytes:
+                    snapshot_writer: Callable[[Path, dict[str, Any]], None] | None = None, *,
+                    native_adoptions: Sequence[NativeAdoption] = ()) -> bytes:
     snapshot = store.snapshot()
-    if any(not name.startswith("@") for name in snapshot["outside_changes"]):
-        raise ProjectConflict("Outside project bytes changed; reconcile them before packaging.")
+    adopted = {item.resource: item for item in native_adoptions}
+    if len(adopted) != len(native_adoptions):
+        raise ProjectConflict("A snapshot native observation must identify one exact pending write.")
+    for name, observed in snapshot["outside_changes"].items():
+        if name.startswith("@"):
+            continue
+        proof, value, previous = adopted.get(name), writes.get(name), snapshot["files"].get(name)
+        if proof is None or value is None or previous is None or name in snapshot.get("input_resources", []):
+            raise ProjectConflict("Outside project bytes changed; reconcile them before packaging.")
+        captured = _captured_project_write(value)
+        if (proof.before_sha256 != previous["sha256"] or proof.observed_sha256 != observed
+                or sha(captured.data) != observed or captured.mode != previous["mode"]):
+            raise ProjectConflict("The snapshot native overlay differs from its audited pending adoption.")
     with TemporaryDirectory(prefix="sciplot-package-stage-") as folder:
         candidate = Path(folder) / store.root.name
         candidate.mkdir()
@@ -180,7 +192,8 @@ def _stage_snapshot(store: FileProjectStore, payload: dict[str, Any], writes: Ma
 def stage_intake_project_manifest(project: Path, payload: dict[str, Any], *, include_snapshot: bool = True,
                                   store: FileProjectStore | None = None,
                                   mirror_path: Path | None = None,
-                                  project_writes: Mapping[str, bytes | Path | PreparedFile | None] | None = None) -> dict[str, bytes | PreparedFile | None]:
+                                  project_writes: Mapping[str, bytes | Path | PreparedFile | None] | None = None,
+                                  native_adoptions: Sequence[NativeAdoption] = ()) -> dict[str, bytes | PreparedFile | None]:
     """Build one complete private manifest/mirror/ZIP mutation; never install it."""
     root = project.expanduser().resolve(strict=True)
     selected = store or _manifest_store(root, payload)
@@ -195,7 +208,7 @@ def stage_intake_project_manifest(project: Path, payload: dict[str, Any], *, inc
     if include_snapshot:
         resource = intake_snapshot_location(root, payload)
         assert resource.members is not None
-        writes["@snapshot/" + resource.members[0]] = _stage_snapshot(selected, payload, writes)
+        writes["@snapshot/" + resource.members[0]] = _stage_snapshot(selected, payload, writes, native_adoptions=native_adoptions)
     return writes
 
 

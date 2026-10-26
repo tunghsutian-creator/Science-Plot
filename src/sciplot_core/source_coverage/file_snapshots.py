@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
+from sciplot_core.project_store.io import directory
 
 
 def _canonical_sha256(value: object) -> str:
@@ -34,26 +35,43 @@ def stable_file_snapshot(path: Path, *, label: str, expected_sha256: str | None 
         raise ValueError(f"{label} requires an exact SHA256 source version.")
     literal = Path(literal_source_path(path))
     resolved = resolve_source_path(path, expected_sha256=expected_sha256).expanduser().resolve()
+    return _physical_file_snapshot(resolved, literal=literal, label=label, expected_sha256=expected_sha256)
+
+
+def _physical_file_snapshot(path: Path, *, literal: Path, label: str,
+                            expected_sha256: str | None = None) -> dict[str, Any]:
+    """Capture one already role-resolved file through its exact directory FDs."""
+    resolved = path.expanduser().absolute()
     flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
-    descriptor = os.open(resolved, flags)
+    root = os.open(resolved.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        before = os.fstat(descriptor)
-        if not stat.S_ISREG(before.st_mode):
-            raise ValueError(f"{label} is not a regular file: {resolved}")
-        chunks: list[bytes] = []
-        while True:
-            chunk = os.read(descriptor, 1024 * 1024)
-            if not chunk:
-                break
-            chunks.append(chunk)
-        after = os.fstat(descriptor)
+        with directory(root, resolved.parts[1:-1]) as parent:
+            parent_identity = os.fstat(parent)
+            descriptor = os.open(resolved.name, flags, dir_fd=parent)
+            try:
+                before = os.fstat(descriptor)
+                if not stat.S_ISREG(before.st_mode):
+                    raise ValueError(f"{label} is not a regular file: {resolved}")
+                chunks: list[bytes] = []
+                while True:
+                    chunk = os.read(descriptor, 1024 * 1024)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                after = os.fstat(descriptor)
+            finally:
+                os.close(descriptor)
+            path_after = os.stat(resolved.name, dir_fd=parent, follow_symlinks=False)
+            with directory(root, resolved.parts[1:-1]) as current_parent:
+                current_identity = os.fstat(current_parent)
+            if (parent_identity.st_dev, parent_identity.st_ino) != (current_identity.st_dev, current_identity.st_ino):
+                raise ValueError(f"{label} parent changed while it was captured: {resolved}")
     finally:
-        os.close(descriptor)
-    path_after = os.stat(resolved, follow_symlinks=False)
+        os.close(root)
     identity = _stat_identity(before)
     if _stat_identity(after) != identity or _stat_identity(path_after) != identity:
         raise ValueError(f"{label} changed while it was captured: {resolved}")
@@ -80,6 +98,10 @@ def _assert_snapshot_current(snapshot: dict[str, Any], *, label: str, expected_s
         current = _stable_file_snapshot(Path(snapshot["path"]), label=label)
     else:
         current = _stable_file_snapshot(Path(snapshot["path"]), label=label, expected_sha256=expected_sha256)
+    _require_snapshot_identity(snapshot, current, label=label)
+
+
+def _require_snapshot_identity(snapshot: dict[str, Any], current: dict[str, Any], *, label: str) -> None:
     # Cloud providers can update extended attributes (and thus ctime) without
     # changing the file, its modification time or its contents. Each capture
     # remains race checked; accept ctime-only drift only after a fresh full hash.

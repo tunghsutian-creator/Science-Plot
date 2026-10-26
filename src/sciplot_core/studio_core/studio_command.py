@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from sciplot_core.foundation.json_values import json_safe
 
 from sciplot_core.studio_core.runtime import (
@@ -41,6 +42,27 @@ from sciplot_core.studio_core.project_export import export_project_document
 from sciplot_core.studio_core.studio_prepare import (
     prepare_studio_document,
 )
+
+
+def _saved_export_payload(target: Path) -> dict[str, Any] | None:
+    """Resolve saved export inputs without entering the preparation writer."""
+    from sciplot_core.studio_core.delivery_target import resolve_delivery_target
+    from sciplot_core.studio_core.project_query_paths import resolve_project_path
+    from sciplot_core.studio_core.request_overrides import _existing_document_payload
+
+    path = target.expanduser()
+    delivery = resolve_delivery_target(path)
+    if delivery is not None:
+        if delivery["mode"] == "vsz":
+            return _existing_document_payload(Path(delivery["document"]))
+        path = Path(delivery["project_dir"])
+    if not ((path.is_dir() and (path / "plot_request.json").is_file())
+            or (path.is_file() and path.name == "plot_request.json")):
+        return None
+    project = resolve_project_path(path)
+    return {**_existing_document_payload(project / "studio/document.vsz"),
+            "mode": "project", "project_dir": str(project), "request": str(project / "plot_request.json"),
+            "preserved_existing_document": True}
 
 
 def run_studio_command(
@@ -110,14 +132,13 @@ def run_studio_command(
             command.append("--prepare-only")
         maybe_reexec_with_qt_runtime(original_argv or command)
 
-    payload = prepare_studio_document(
-        target,
-        output_root=output_root,
-        delivery_root=delivery_root,
-        rule_id=rule_id,
-        template=template,
-        project_name=project_name,
-    )
+    preparation_options: dict[str, Any] = dict(output_root=output_root, delivery_root=delivery_root,
+                                              rule_id=rule_id, template=template, project_name=project_name)
+    # These are the actual preparation arguments, so an explicit override cannot
+    # be silently discarded by the saved-native publication route.
+    saved_payload = (_saved_export_payload(target) if export and not prepare_only
+                     and all(value is None for value in preparation_options.values()) else None)
+    payload = saved_payload if saved_payload is not None else prepare_studio_document(target, **preparation_options)
     document_path = Path(payload["document"])
     if export:
         requested_formats = _split_formats(export)
@@ -145,6 +166,8 @@ def run_studio_command(
             published_run = published.run_payload
             payload["exports"] = published.exports
             payload["studio_run"] = published_run
+            if isinstance(published_run.get("figure_set"), dict):
+                payload["figure_set"] = json_safe(published_run["figure_set"])
             if isinstance(published_run.get("exports"), list):
                 payload["exports"] = json_safe(published_run["exports"])
             figure_set_export_scope = published_run.get("figure_set_export_scope")

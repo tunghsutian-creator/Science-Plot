@@ -68,6 +68,7 @@ def _argument(argv: list[str], role: str, output: bool) -> Path:
     positional = {("compile-plot-ir", "ir", False): 1, ("compile-plot-ir", "document", True): 2,
         ("inspect-plot-ir", "ir", False): 1, ("inspect-plot-ir", "document", False): 2,
         ("preview-document", "document", False): 1, ("export-document", "document", False): 1,
+        ("audit-spec-data", "document", False): 1,
         ("inspect-document-state", "document", False): 1}
     options = {("compile-plot-ir", "preview", True): "--preview", ("preview-document", "out", True): "--out"}
     key = (command, role, output)
@@ -177,6 +178,7 @@ def bound_native_artifacts(value: Any, argv: list[str], resolver: ProjectSourceR
             required = {"compile-plot-ir": ({"ir"}, {"document", "preview"}),
                 "inspect-plot-ir": ({"ir", "document"}, set()), "preview-document": ({"document"}, {"out"}),
                 "export-document": ({"document"}, set()), "inspect-document-state": ({"document"}, set())}
+            required["audit-spec-data"] = ({"document"}, set())
             roles = ({item["role"] for item in inputs}, {item["role"] for item in outputs})
             if not argv or required.get(argv[0]) != roles:
                 raise ProjectStoreError("A native command requires its complete closed metadata input/output witnesses.")
