@@ -343,7 +343,7 @@ def test_recovery_rejects_an_unbound_or_multiple_document_delivery(recoverable):
     foreign_wire = launcher.read_bytes()
     changed = recovery.preview_delivery_recovery(project)
     assert changed["reason_code"] == "recovery_validation_failed"
-    assert "registered source directory changed outside its generation" in changed["message"]
+    assert changed["message"] == "The current resource view differs from the registered generation."
     assert launcher.read_bytes() == foreign_wire
     # Keep the outside-change refusal above, then admit this next adversarial
     # fixture through the real owner so the foreign-binding domain check runs.

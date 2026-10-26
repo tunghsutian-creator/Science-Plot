@@ -103,7 +103,8 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
                 external_sources.update(figure_read_state(project, figure)["source_files"])
         binding["source_files"] = external_sources
         candidate = Path(temporary).resolve()
-        run, primary, secondary, delivery = (candidate / name for name in ("run", "primary", "secondary", "delivery"))
+        run = candidate / final_run.name
+        primary, secondary, delivery = (candidate / name for name in ("primary", "secondary", "delivery"))
         run.mkdir()
         if exports is None:
             from sciplot_core.studio_core.registry_state import _veusz_spec_path

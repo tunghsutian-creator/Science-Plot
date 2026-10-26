@@ -5,7 +5,7 @@ from typing import Any
 
 from . import directories, locators, state
 from .errors import ProjectStoreError
-from .io import StoreIO, parts
+from .io import STORE, StoreIO, parts
 from .paths import LocatorStore
 from .root_bindings import require as require_roots
 
@@ -19,6 +19,8 @@ def literal_project_root(store: LocatorStore, original: str | Path, *,
     This neither resolves scientific inputs nor asserts current delivery bytes.
     """
     literal = Path(original).expanduser().absolute()
+    if not (store.root / STORE / "head.json").is_file():
+        raise ProjectStoreError("Project identity requires an existing registered generation.")
     with store._locked() as (io, current):
         value = state.reachable(io, current, generation) if generation else current
         require_roots(io, current)

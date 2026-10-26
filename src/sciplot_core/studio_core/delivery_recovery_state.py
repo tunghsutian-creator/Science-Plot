@@ -8,7 +8,7 @@ from typing import Any
 
 from sciplot_core.figure_plan import resolved_figure_plan_from_payload
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.foundation.source_tree import source_tree_sha256
+from sciplot_core.project_store.runtime import inspect_runtime_source_tree
 from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
 from sciplot_core.launchers.delivery_inspection import (
     inspect_delivery_launcher_contract,
@@ -187,7 +187,7 @@ def capture_recovery_state(project_dir: Path, candidate: Path | None) -> dict[st
         )
     source = canonical_path(Path(str(binding.source)))
     _files(source)
-    source_hash = source_tree_sha256(source)
+    source_hash = inspect_runtime_source_tree(source)
     archive_value = manifest.get("raw_archive")
     archive = archive_value.get("path") if isinstance(archive_value, dict) else None
     if not isinstance(archive, str) or not canonical_path(Path(archive)).is_relative_to(
@@ -200,7 +200,7 @@ def capture_recovery_state(project_dir: Path, candidate: Path | None) -> dict[st
     _files(Path(archive))
     if (
         source_hash != plan.source_sha256
-        or source_tree_sha256(Path(archive)) != source_hash
+        or inspect_runtime_source_tree(Path(archive)) != source_hash
     ):
         raise RecoveryBlocked(
             "source_changed",
