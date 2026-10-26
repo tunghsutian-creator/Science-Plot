@@ -62,6 +62,15 @@ being admitted again as a new request. Unknown current state does not imply an
 unmapped project. Actual byte mismatches use typed boundary errors; permission,
 membership, scope and unknown-state failures retain their own meanings.
 
+Source-preview selector matches are only candidates, not exact byte versions.
+Unknown execution with the same complete current read witness is queried before
+new-source IO. The existing pure mapping-admission predicate separates new intent
+from sealed-only continuation. An admitted new request retains native adoption
+and observes its actual source/project/delivery versions before exact-key lookup;
+an older preview cannot prohibit that new version. Without new admission, only an
+unchanged sealed decision may replay. Both routes use one saved-witness verifier;
+neither chooses the latest record nor repairs a stale decision.
+
 Existing annotation admission precedes the mapping requirement after current
 authority/preimage checks. It reads exact admitted specification bytes, or finite
 project-local NoFollow legacy members, and never imports a store to reject a
