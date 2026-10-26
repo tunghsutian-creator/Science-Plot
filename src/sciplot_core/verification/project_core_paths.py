@@ -40,12 +40,15 @@ ATTACHED_SOURCE_PATHS = frozenset({
     'tests/fixtures/frozen_semantic_597/repository.py.txt',
     'tests/fixtures/frozen_semantic_597/studio_project_session.py.txt',
     'tests/frozen_semantic_597.py',
+    'tests/test_plot_protocol_native.py',
 })
 
 SOURCE_LOCATOR_PATHS = frozenset({
     'src/sciplot_core/data_mapping/original_tables.py',
     'src/sciplot_core/data_mapping/raw_tables.py',
     'src/sciplot_core/figure_plan/frequency_resolution.py',
+    'src/sciplot_core/delivery/file_set_validation.py',
+    'src/sciplot_core/delivery/runtime_evidence.py',
     'src/sciplot_core/foundation/source_locations.py',
     'src/sciplot_core/foundation/source_tree.py',
     'src/sciplot_core/foundation/text_decoding.py',
@@ -54,6 +57,7 @@ SOURCE_LOCATOR_PATHS = frozenset({
     'src/sciplot_core/project_store/candidate_runtime.py',
     'src/sciplot_core/project_store/incoming_sources.py',
     'src/sciplot_core/project_store/native_artifacts.py',
+    'src/sciplot_core/project_store/physical_projection.py',
     'src/sciplot_core/project_store/prepared_inputs.py',
     'src/sciplot_core/project_store/runtime.py',
     'src/sciplot_core/project_store/sealed_source_trees.py',

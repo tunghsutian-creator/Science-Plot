@@ -174,6 +174,7 @@ PROJECT_CORE_OWNERS = (
         owner_id="selected_project_runtime_io",
         exact_paths=SOURCE_LOCATOR_PATHS,
         owned_test_paths=frozenset({"tests/test_project_runtime_locations.py",
+                                   "tests/test_project_delivery_runtime.py",
                                    "tests/test_project_runtime_locations_native.py",
                                    "tests/test_project_candidate_runtime.py",
                                    "tests/test_project_runtime_capabilities.py",

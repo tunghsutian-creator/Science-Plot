@@ -196,6 +196,7 @@ PROJECT_STORAGE_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/project_store/native_artifacts.py',
         'src/sciplot_core/project_store/native_work.py',
         'src/sciplot_core/project_store/paths.py',
+        'src/sciplot_core/project_store/physical_projection.py',
         'src/sciplot_core/project_store/portable.py',
         'src/sciplot_core/project_store/preconditions.py',
         'src/sciplot_core/project_store/prepared_inputs.py',
@@ -222,6 +223,8 @@ PROJECT_STORAGE_STRICT_ADDITIONS = frozenset(
 SOURCE_LOCATOR_STRICT_ADDITIONS = frozenset(
     {
         'src/sciplot_core/data_mapping/raw_tables.py',
+        'src/sciplot_core/delivery/file_set_validation.py',
+        'src/sciplot_core/delivery/runtime_evidence.py',
         'src/sciplot_core/ingest.py',
         'src/sciplot_core/project_store/candidate_runtime.py',
         'src/sciplot_core/project_store/sealed_source_trees.py',

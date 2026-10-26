@@ -77,6 +77,7 @@ PROJECT_INTEGRITY_OWNERS = (
                 "tests/test_delivery_project_documents.py",
                 "tests/test_delivery_editor_launcher.py",
                 "tests/test_delivery_project_continuation.py",
+            "tests/test_project_delivery_runtime.py",
                 "tests/test_delivery_studio_lifecycle.py",
                 "tests/test_project_export_use_case.py",
             }
@@ -86,6 +87,7 @@ PROJECT_INTEGRITY_OWNERS = (
             "tests/test_delivery_project_documents.py",
             "tests/test_delivery_editor_launcher.py",
             "tests/test_delivery_project_continuation.py",
+            "tests/test_project_delivery_runtime.py",
             "tests/test_delivery_studio_lifecycle.py",
             "tests/test_project_export_use_case.py",
             "tests/test_mechanical_figure_plan_activation.py",

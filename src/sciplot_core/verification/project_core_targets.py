@@ -32,6 +32,7 @@ ATTACHED_PROJECT_TESTS = (
     'tests/test_studio_request_archive_locations.py',
     'tests/test_attached_edit_checkpoints.py',
     'tests/test_attached_edit_checkpoints_native.py',
+    'tests/test_protocol_revision_observations.py',
 )
 
 PROJECT_STORE_TESTS = (
@@ -53,10 +54,12 @@ PROJECT_STORE_TESTS = (
     'tests/test_project_source_trees.py',
     'tests/test_project_host_factory.py',
     'tests/test_project_store_recovery_authority.py',
+    'tests/test_project_store_validation_cost.py',
 )
 
 PROJECT_RUNTIME_TESTS = (
     'tests/test_project_runtime_locations.py',
+    'tests/test_project_delivery_runtime.py',
     'tests/test_project_runtime_locations_native.py',
     'tests/test_project_candidate_runtime.py',
     'tests/test_project_runtime_capabilities.py',
