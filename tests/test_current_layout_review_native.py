@@ -7,13 +7,34 @@ import subprocess
 
 import pytest
 
+from test_project_query import project as project
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+from sciplot_core.project_host_factory import project_store
 from sciplot_core.studio_core.annotation_operations import preview_document_operations
 from sciplot_core.studio_core.document_edit import apply_document_edit
 from sciplot_core.studio_core.project_query import inspect_project, resolve_project_figure
 from sciplot_core.studio_core.review_artifacts import _current_layout_issues
 from sciplot_core.qa.audit_support import _run_veusz_audit
+
+
+def _record_generated_diagnostic(project, spec_path, spec):
+    """Model an earlier producer through its single generation publication."""
+    store = project_store(project)
+    before = store.snapshot()
+    logical = store.logical_path(spec_path)
+    original = json.loads(store.read_bytes(logical))
+    assert {key: value for key, value in original.items() if key != "layout_issues"} == {
+        key: value for key, value in spec.items() if key != "layout_issues"}
+    command = ProjectCommand.create("figure_set", "generated-layout-diagnostic-control",
+        project_id=before["project_id"], expected_generation=before["generation"],
+        read_set={logical: before["files"][logical]["sha256"]}, write_set=[logical],
+        request={"generated_layout_diagnostic": spec["layout_issues"]})
+    result = ProjectCommands(store).execute(command, lambda: ProjectMutation(
+        {logical: json.dumps(spec).encode()}, {"generated_layout_diagnostic": True}))
+    assert result["phase"] == "complete"
+    assert store.snapshot()["outside_changes"] == {}
 
 
 @pytest.mark.comprehensive
@@ -39,7 +60,7 @@ def test_current_native_legend_layout_uses_current_geometry_without_changing_sci
     # Generated control models a prior placement's immutable diagnostic.
     spec["layout_issues"] = ([{"id": "legend_curve_clearance_below_target", "severity": "critical",
                               "required_clearance_mm": 2., "measured_clearance_mm": 0.}] if old_issue else [])
-    spec_path.write_text(json.dumps(spec))
+    _record_generated_diagnostic(project, spec_path, spec)
     objects = inspect_project(project, figure_id=selected["figure_id"])["selected_figure"]["objects"]
     def style(path, suffix, value):
         setting = path + "/" + suffix
@@ -83,6 +104,57 @@ def test_current_native_legend_layout_uses_current_geometry_without_changing_sci
     assert run["ready_to_use"] is (expected == "passed"), run
     assert before == {str(p): p.read_bytes() for p in (source, document, spec_path)}
     assert source.read_bytes() == source_bytes
+
+
+def test_generated_layout_control_binds_only_the_diagnostic_to_the_generation(project):
+    selected = resolve_project_figure(project, "first")
+    spec_path = Path(selected["spec"])
+    before = {str(path): path.read_bytes() for path in project.rglob("*") if path.is_file()}
+    spec = json.loads(spec_path.read_text())
+    spec["layout_issues"] = [{"id": "legend_curve_clearance_below_target", "severity": "critical"}]
+    store = project_store(project)
+    initial = store.snapshot(import_legacy=True)
+    _record_generated_diagnostic(project, spec_path, spec)
+    after = store.snapshot()
+    assert after["generation"] != initial["generation"]
+    assert {name: value for name, value in after["files"].items() if name != "studio/spec.json"} == {
+        name: value for name, value in initial["files"].items() if name != "studio/spec.json"}
+    assert json.loads(store.read_bytes("studio/spec.json")) == spec
+    assert all(Path(path).read_bytes() == data for path, data in before.items() if path != str(spec_path))
+
+
+@pytest.mark.parametrize("drift", ["spec", "raw", "native", "unknown_native"])
+def test_layout_control_keeps_outside_edits_blocked_before_native_preparation(project, tmp_path, monkeypatch, drift):
+    from sciplot_core.studio_core import document_edit as native
+    from sciplot_core.studio_core import document_edit_commands as commands
+
+    store = project_store(project)
+    initial = store.snapshot(import_legacy=True)
+    selected = resolve_project_figure(project, "first")
+    document = Path(selected["document"])
+    if drift == "spec":
+        Path(selected["spec"]).write_text(json.dumps({"layout_issues": []}))
+    elif drift == "raw":
+        (project / "source/data.csv").write_text("x,y\n1,3\n")
+    elif drift == "native":
+        document.write_text("unregistered native edit")
+    else:
+        document = project / "studio/unregistered.vsz"
+        document.write_bytes(Path(selected["document"]).read_bytes())
+        monkeypatch.setattr(commands, "resolve_project_figure", lambda *_args: {**selected, "document": str(document)})
+    observed = {str(path): path.read_bytes() for path in project.rglob("*") if path.is_file()}
+    calls = []
+    def forbidden(*_args, **_kwargs):
+        calls.append("native preparation")
+        raise AssertionError("Outside changes must be rejected before native preparation")
+    monkeypatch.setattr(native, "_candidate", forbidden)
+    monkeypatch.setattr(native, "audit_edited_document", forbidden)
+    with pytest.raises(ValueError, match="unregistered outside changes|source|version"):
+        native.preview_document_edit(project, [], figure_id="first", output_dir=tmp_path / "preview",
+                                     expected_document_sha256=file_sha256(document))
+    assert calls == [] and not (tmp_path / "preview").exists()
+    assert store.snapshot()["generation"] == initial["generation"] and store.commands() == ()
+    assert all(Path(path).read_bytes() == data for path, data in observed.items())
 
 
 @pytest.mark.comprehensive
