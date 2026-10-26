@@ -195,6 +195,7 @@ PROJECT_CORE_OWNERS = (
         "tests/test_mapping_execution_portability.py",
         "tests/test_mapping_replicate_source_versions.py",
         "tests/test_mapping_worker_inputs.py",
+        "tests/test_studio_snapshot_source_versions.py",
     }),
         pytest_targets=(*PROJECT_RUNTIME_TESTS, *SCIENTIFIC_ARTIFACT_TESTS, *ATTACHED_PROJECT_TESTS,
                         "tests/test_managed_sources.py", "tests/test_managed_source_reconfirmation.py",

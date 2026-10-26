@@ -87,6 +87,7 @@ PROJECT_RUNTIME_TESTS = (
     "tests/test_mapping_execution_portability.py",
     "tests/test_mapping_replicate_source_versions.py",
     "tests/test_mapping_worker_inputs.py",
+    "tests/test_studio_snapshot_source_versions.py",
 )
 
 PROJECT_COMMAND_TESTS = (
@@ -122,6 +123,7 @@ NATIVE_PROJECT_COMMAND_TESTS = (
     'tests/test_source_update_versions.py',
     'tests/test_source_update_style_admission.py',
     'tests/test_source_update_preview_artifacts.py',
+    'tests/test_source_update_project_namespaces.py',
     'tests/test_project_query_source_versions.py',
     'tests/test_native_edit_receipt_result.py',
     'tests/test_source_pending_native.py',
@@ -136,6 +138,7 @@ NATIVE_PROJECT_COMMAND_TESTS = (
     "tests/test_mapping_execution_portability.py",
     "tests/test_mapping_replicate_source_versions.py",
     "tests/test_mapping_worker_inputs.py",
+    "tests/test_studio_snapshot_source_versions.py",
 )
 
 STUDIO_PREPARATION_TESTS = (
@@ -148,6 +151,7 @@ STUDIO_PREPARATION_TESTS = (
     'tests/test_prepared_source_output_binding.py',
     'tests/test_current_preparation_sources_native.py',
     'tests/test_current_directory_reader_sources.py',
+    'tests/test_studio_snapshot_source_versions.py',
 )
 
 WORKFLOW_PROJECT_TESTS = (

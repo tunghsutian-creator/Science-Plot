@@ -250,6 +250,7 @@ SOURCE_LOCATOR_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/data_mapping/execution_inputs.py",
         "src/sciplot_core/data_mapping/execution_directories.py",
         "src/sciplot_core/data_mapping/request_resolution.py",
+        "src/sciplot_core/studio_core/request_overrides.py",
     }
 )
 NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(

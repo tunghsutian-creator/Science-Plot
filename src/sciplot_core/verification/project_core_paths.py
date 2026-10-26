@@ -80,6 +80,8 @@ SOURCE_LOCATOR_PATHS = frozenset({
     'src/sciplot_core/source_tables/raw_readers.py',
     'src/sciplot_core/source_tables/read_session.py',
     'src/sciplot_core/studio_core/preparation_source_runtime.py',
+    'src/sciplot_core/studio_core/publish_sources.py',
+    'src/sciplot_core/studio_core/request_overrides.py',
     'src/sciplot_core/studio_core/request_paths.py',
     'src/sciplot_core/studio_core/source_snapshots.py',
     'src/sciplot_core/veusz_worker/cli.py',
