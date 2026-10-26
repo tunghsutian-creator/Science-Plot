@@ -84,6 +84,21 @@ Unknown mapping evidence does not become readiness. Raw/prepared bytes, artifact
 existence and QA remain independent observations; an actual edit or export keeps
 its own complete scientific admission and validation.
 
+Source-update review keeps the old selected generation and new private candidate
+in separate version scopes. Each external review image uses the existing exact
+native input/output roles; an image output grants no parent-directory write
+authority. Compatible preserved styles come from the scientific correspondence
+plan and share the ordinary audited setting executor. Public free-form editing
+retains its own scientific restrictions. The update's physical raw/source
+namespace requirements follow the selected before-members, while complete source
+versions and scientific audits remain required even when no overlay exists.
+
+Publication snapshots carry the already-verified file versions through their IO
+boundary. They parse the resolved bytes with the existing numerical parser and
+preserve original logical labels; an original locator is never rewritten to a
+cache address. Source observations and output installation still belong to their
+existing owners.
+
 ## Complete caller target
 
 - NativeSuite public open/describe/patch/decide/resume/export and prepared/analysis
