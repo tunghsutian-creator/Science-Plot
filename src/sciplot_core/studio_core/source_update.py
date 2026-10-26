@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from sciplot_core.data_mapping.execution_directories import mapping_tree_reads, mapping_immutable_reads
-from sciplot_core.studio_core.project_command_scope import project_command_runtime
 
 import json
 from contextlib import contextmanager
@@ -26,6 +25,7 @@ from sciplot_core.studio_core.source_update_review import (
     project_figures,
 )
 from sciplot_core.studio_core.source_update_staging import (
+    current_source_update_request,
     prepare_candidate,
     verify_project_science,
 )
@@ -68,6 +68,7 @@ def _prepared_update(project_dir: Path, source_path: Path, worksheet: str | None
     from sciplot_core.studio_core.source_update_sources import baseline_scope
 
     project = project_dir.expanduser().resolve()
+    current_source_update_request(project, mapping_request)
     repository = project_store(project, with_snapshot=True)
     snapshot = repository.snapshot(import_legacy=True)
     figures = project_figures(project)
@@ -103,9 +104,9 @@ def _prepared_update_current(
 
     repository = project_store(project, with_snapshot=True)
     before_snapshot = repository.snapshot()
+    request = current_source_update_request(project, mapping_request, snapshot=before_snapshot)
     original_state = project_inventory(project)
     source_state = file_inventory(source)
-    request = json.loads((project / "plot_request.json").read_text())
     selected_sheet = _selected_worksheet(request, worksheet)
     delivery = requested_delivery_root({"request": request}, run_output=project)
     delivery_state = _delivery_inventory(delivery)
@@ -218,7 +219,6 @@ def _prepared_update_current(
         yield candidate, review, tuple(prepared_sources), before_snapshot
 
 
-@project_command_runtime
 def preview_project_source_update(
     project_dir: Path, source: Path, *, worksheet: str | None = None,
     on_candidate: Callable[[Path, dict[str, Any]], None] | None = None,
@@ -226,6 +226,9 @@ def preview_project_source_update(
     annotation_decisions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build and audit an isolated candidate without changing the active project."""
+    from sciplot_core.studio_core.project_query_paths import resolve_project_path
+
+    project_dir = resolve_project_path(project_dir)
     try:
         with _prepared_update(project_dir, source, worksheet, mapping_request, annotation_decisions) as (candidate, preview, prepared_sources, before_snapshot):
             if on_candidate is not None:

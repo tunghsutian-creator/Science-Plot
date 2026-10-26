@@ -194,18 +194,68 @@ def test_same_task_corrects_choice_reviews_same_figure_and_installs_once_with_ar
 
 
 def test_existing_staging_rejects_changed_old_domain_before_native_preparation(bound, tmp_path, monkeypatch):
-    from sciplot_core.studio_core import project_creation
-    from sciplot_core.studio_core.source_update_staging import prepare_candidate
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.studio_core import source_update_staging
     source, project, mapping, _ = bound
     candidate = expanded(mapping)
     candidate["column_mapping"]["replicates"][0]["table_selection"] = {**mapping["table_selection"], "data_end_row": 9}
     plan = mapped_plan(source, candidate, tmp_path, monkeypatch)
+    store = project_store(project)
+    snapshot = store.snapshot(import_legacy=True)
     before = transaction.project_inventory(project)
-    monkeypatch.setattr(project_creation, "_prepare_mapped_project", lambda *a, **k: pytest.fail("changed old group must stop before native preparation"))
-    with pytest.raises(ValueError, match="Fresh source mapping cannot prepare.*existing raw group"):
-        prepare_candidate(project, source, tmp_path / "staging", worksheet=None, mapping_request={
-            **plan["data_mapping"], "rule_id": "impact_metric", "template": "box"})
+    monkeypatch.setattr(source_update_staging, "_build_source_candidate", lambda *a, **k: pytest.fail("changed old group must stop before private/native preparation"))
+    with project_runtime(store), pytest.raises(ValueError, match="Fresh source mapping cannot prepare.*existing raw group"):
+        with source_update_staging.prepare_candidate(project, source, tmp_path / "staging", worksheet=None, mapping_request={
+                **plan["data_mapping"], "rule_id": "impact_metric", "template": "box"}):
+            pytest.fail("A changed existing raw group reached a private candidate")
     assert transaction.project_inventory(project) == before and not (tmp_path / "staging").exists()
+    assert store.snapshot() == snapshot
+
+
+def test_fresh_mapping_reaches_real_private_native_boundary_with_old_raw_groups_intact(bound, tmp_path, monkeypatch):
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.studio_core import preparation_commands, source_update_staging
+    from sciplot_core.studio_core.source_update_sources import incoming_scope
+    import subprocess
+
+    source, project, mapping, previous = bound
+    plan = mapped_plan(source, expanded(mapping), tmp_path, monkeypatch)
+    old = load_data_mapping_execution(previous["data_mapping_execution"])
+    store = project_store(project, with_snapshot=True)
+    snapshot = store.snapshot(import_legacy=True)
+    before = transaction.project_inventory(project)
+    original = source.read_bytes()
+    reached = []
+
+    class NativeBoundaryReached(Exception):
+        pass
+
+    def native_boundary(candidate, **kwargs):
+        request = json.loads(candidate.read_member("plot_request.json").data)
+        assert candidate.store.root == project and candidate.snapshot["generation"] == snapshot["generation"]
+        assert candidate.project_dir != project and kwargs["regenerate_generated"] is True
+        assert request["data_mapping_execution"] == plan["data_mapping"]["data_mapping_execution"]
+        assert request["data_mapping_plan_binding"]["expected_sample_labels"] == ["Amber", "Blue", "Coral"]
+        current = load_data_mapping_execution(request["data_mapping_execution"])
+        assert [item["rows"] for item in current["outputs"]] == [7, 7, 5]
+        assert [item["sha256"] for item in current["outputs"][:2]] == [item["sha256"] for item in old["outputs"]]
+        assert (candidate.project_dir / "raw" / source.name).read_bytes() == original
+        reached.append(candidate.project_dir)
+        raise NativeBoundaryReached
+
+    monkeypatch.setattr(preparation_commands, "prepare_studio_candidate", native_boundary)
+    monkeypatch.setattr(subprocess, "Popen", lambda *_a, **_k: pytest.fail("pure admission spawned native"))
+    # Mirror the public owner's existing exact incoming-file capability, rather
+    # than asking a selected old generation to discover an unbound new source.
+    with project_runtime(store), incoming_scope(store, snapshot, source, transaction.file_inventory(source)), pytest.raises(NativeBoundaryReached):
+        with source_update_staging.prepare_candidate(project, source, tmp_path / "unused-staging", worksheet=None,
+                snapshot=snapshot, mapping_request={**plan["data_mapping"], "rule_id": "impact_metric", "template": "box"}):
+            pytest.fail("controlled native boundary unexpectedly returned a completed figure")
+    assert len(reached) == 1 and not reached[0].exists()
+    assert transaction.project_inventory(project) == before and store.snapshot() == snapshot
+    assert source.read_bytes() == original and not (tmp_path / "unused-staging").exists()
 
 
 def test_shared_metric_predicate_does_not_expand_legacy_duplicate_header_parsing(tmp_path):

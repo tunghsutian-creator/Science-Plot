@@ -75,6 +75,44 @@ def _worksheet_confirmation(
     ]
 
 
+def current_source_update_request(
+    project: Path, mapping_request: dict[str, Any] | None, *, snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Admit current scientific intent before new-source IO or a project writer."""
+    from sciplot_core.foundation.canonical_paths import canonical_path
+    from sciplot_core.foundation.source_locations import selected_source_resolver
+    from sciplot_core.project_host_factory import _admitted_request, project_store
+    from sciplot_core.project_store.runtime import ProjectSourceResolver
+
+    project = canonical_path(project)
+    if not (project / ".sciplot_store/head.json").is_file() and not (project / "plot_request.json").is_file():
+        raise ValueError("Source update requires an existing SciPlot project.")
+    # Pinning an immutable decision never authorizes an unregistered physical
+    # request edit. Reuse the host owner's exact current/preimage check first.
+    previous = _admitted_request(project)
+    selected = selected_source_resolver()
+    if isinstance(selected, ProjectSourceResolver) and selected.store.root == project:
+        before = snapshot if snapshot is not None else selected.snapshot
+        previous = json.loads(selected.store.read_bytes("plot_request.json", generation=before["generation"]))
+    elif snapshot is not None:
+        # An explicit host snapshot is read from its real immutable generation,
+        # never reconstructed from a caller's dictionary or a creation task.
+        repository = project_store(project, with_snapshot=True)
+        previous = json.loads(repository.read_bytes("plot_request.json", generation=snapshot["generation"]))
+    # Without a selected generation, the host factory's supported unimported
+    # legacy request remains the explicit fallback; no store was imported.
+    if not isinstance(previous, dict):
+        raise ValueError("The canonical project request must be an object")
+    rule_id = str(previous.get("rule_id") or "")
+    if mapping_request is None:
+        if (not rule_id or previous.get("data_mapping") or previous.get("data_mapping_application")
+                or any(key in previous for key in ("data_mapping_execution", "data_mapping_proposal_id", "data_mapping_plan_binding"))):
+            raise ValueError("This source needs a fresh explicit data mapping before it can replace the project source.")
+    elif mapping_request.get("rule_id") != rule_id or mapping_request.get("template") != previous.get("template"):
+        raise ValueError("Fresh mapping must preserve the project's confirmed experiment and template.")
+    return previous
+
+
 @contextmanager
 def prepare_candidate(
     project: Path, source: Path, temporary: Path, *, worksheet: str | None,
@@ -83,20 +121,21 @@ def prepare_candidate(
 ) -> Iterator[tuple[StudioPreparationCandidate, list[dict[str, Any]]]]:
     from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
 
+    previous = current_source_update_request(project, mapping_request, snapshot=snapshot)
     reference = mapping_request.get("data_mapping_execution") if mapping_request is not None else None
     with mapping_input_reads(reference, expected_source=source):
         with _prepare_candidate(project, source, temporary, worksheet=worksheet,
-                mapping_request=mapping_request, snapshot=snapshot) as result:
+                previous=previous, mapping_request=mapping_request, snapshot=snapshot) as result:
             yield result
 
 
 def _prepare_candidate(
     project: Path, source: Path, temporary: Path, *, worksheet: str | None,
+    previous: dict[str, Any],
     mapping_request: dict[str, Any] | None = None,
     snapshot: dict[str, Any] | None = None,
 ) -> AbstractContextManager[tuple[StudioPreparationCandidate, list[dict[str, Any]]]]:
     """Validate a fresh scientific request before allocating its private image."""
-    previous = json.loads((project / "plot_request.json").read_text())
     rule_id = str(previous.get("rule_id") or "")
     delivery = requested_delivery_root({"request": previous}, run_output=project)
     confirmations = _worksheet_confirmation(source, worksheet, rule_id)
@@ -105,8 +144,6 @@ def _prepare_candidate(
         from sciplot_core.data_mapping.plan_binding import verify_replicate_source_expansion
         from sciplot_core.studio_core.project_creation import request_from_verified_plan
 
-        if mapping_request.get("rule_id") != rule_id or mapping_request.get("template") != previous.get("template"):
-            raise ValueError("Fresh mapping must preserve the project's confirmed experiment and template.")
         plan = dict(build_plan_preview(source, request=mapping_request))
         if plan["status"] != "planned":
             raise ValueError(f"Fresh source mapping cannot prepare this project: {plan.get('blocker')}")
@@ -116,9 +153,6 @@ def _prepare_candidate(
             raise ValueError(f"Fresh source mapping cannot prepare this project: {exc}") from exc
         request = request_from_verified_plan(source, verified=plan, project_dir=project, delivery_root=delivery)
     else:
-        if (not rule_id or previous.get("data_mapping") or previous.get("data_mapping_application")
-                or any(key in previous for key in ("data_mapping_execution", "data_mapping_proposal_id", "data_mapping_plan_binding"))):
-            raise ValueError("This source needs a fresh explicit data mapping before it can replace the project source.")
         # Scientific labels, ranges, units, plans and transformations are derived
         # afresh from the confirmed incoming source. Existing raw/source members
         # remain historical original bytes in the same project generation.
@@ -157,4 +191,4 @@ def _build_source_candidate(project: Path, request: dict[str, Any], confirmation
 
 
 
-__all__ = ["prepare_candidate", "verify_project_science"]
+__all__ = ["current_source_update_request", "prepare_candidate", "verify_project_science"]

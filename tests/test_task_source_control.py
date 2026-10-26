@@ -125,19 +125,24 @@ def test_update_source_task_directory_cannot_overlap_selected_new_data(tmp_path)
 @pytest.mark.parametrize("field", ["data_mapping_execution", "data_mapping_proposal_id", "data_mapping_plan_binding"])
 @pytest.mark.parametrize("binding", ["confirmed-binding", {}, None])
 def test_mapped_source_update_requires_new_mapping_before_reading_new_source(tmp_path, monkeypatch, field, binding):
-    from sciplot_core.intake import session
-    from sciplot_core.studio_core.source_update_staging import prepare_candidate
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.studio_core import source_update_staging
 
     project = tmp_path / "mapped_project"
     project.mkdir()
     request = project / "plot_request.json"
     request.write_text(json.dumps({"rule_id": "uvvis_spectrum", field: binding}))
     before = request.read_bytes()
+    store = FileProjectStore(project)
+    snapshot = store.snapshot(import_legacy=True)
     # A missing source makes any attempted new-source read distinguishable from
     # the required early mapping rejection; no replacement files may be built.
     source, staging = tmp_path / "unread_new_source.csv", tmp_path / "candidate"
-    monkeypatch.setattr(session, "prepare_intake_session",
-                        lambda *a, **k: pytest.fail("must not recognize or prepare the unconfirmed new source"))
-    with pytest.raises(ValueError, match="fresh explicit data mapping"):
-        prepare_candidate(project, source, staging, worksheet=None)
+    monkeypatch.setattr(source_update_staging, "_build_source_candidate",
+                        lambda *a, **k: pytest.fail("must not build or prepare the unconfirmed new source"))
+    with project_runtime(store), pytest.raises(ValueError, match="fresh explicit data mapping"):
+        with source_update_staging.prepare_candidate(project, source, staging, worksheet=None):
+            pytest.fail("Unconfirmed replacement mapping reached a private candidate")
     assert request.read_bytes() == before and not staging.exists() and not source.exists()
+    assert store.snapshot() == snapshot and not store.commands()

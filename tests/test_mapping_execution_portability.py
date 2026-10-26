@@ -206,9 +206,78 @@ def test_existing_saved_export_captures_missing_mapping_metadata_in_the_same_pub
         metadata = [entry for versions in store.snapshot()["sources"].values() for entry in versions.values()
             if entry["locator"] == request["data_mapping_execution"]]
         assert len(metadata) == 1 and metadata[0]["sha256"] == file_sha256(Path(request["data_mapping_execution"]))
-        record = store.commands()[-1]
+        command_id = result.run_payload["project_command"]["command_id"]
+        record, = [item for item in store.commands() if item["command_id"] == command_id]
         assert record["phase"] == "complete" and record["generation"] == store.snapshot()["generation"]
+        assert store.snapshot()["sequence"] == before["sequence"] + 1
     assert (project / "studio/document.vsz").read_bytes() == native
+
+
+def test_current_mapping_refuses_new_worksheet_before_source_read_or_private_allocation(tmp_path, monkeypatch):
+    from sciplot_core.intake import table_preview
+    from sciplot_core.studio_core import source_update_staging
+
+    _origin, project, store, _request, _execution = confirmed_project(tmp_path, monkeypatch)
+    before = store.snapshot()
+    replacement = tmp_path / "not_yet_confirmed.xlsx"
+    replacement.write_bytes(b"must not be opened as a workbook")
+    original = replacement.read_bytes()
+    staging = tmp_path / "unallocated"
+    monkeypatch.setattr(table_preview, "preview_table_payload", lambda **_k: pytest.fail("unconfirmed new worksheet was read"))
+    monkeypatch.setattr(source_update_staging, "_build_source_candidate", lambda *_a, **_k: pytest.fail("unconfirmed candidate was allocated"))
+    with project_runtime(store), pytest.raises(ValueError, match="fresh explicit data mapping"):
+        with source_update_staging.prepare_candidate(project, replacement, staging, worksheet="Data"):
+            pytest.fail("unconfirmed mapping yielded a candidate")
+    assert store.snapshot() == before and not staging.exists()
+    assert replacement.read_bytes() == original
+
+
+def test_public_current_mapping_refuses_before_store_import_native_or_incoming_io(tmp_path, monkeypatch, publication):
+    from sciplot_core.studio_core import project_command_scope, source_update
+    from sciplot_core.task_storage import load_task
+
+    project, _calls, _published = publication
+    origin, _project, store, _request, _execution = confirmed_project(tmp_path, monkeypatch, project_override=project)
+    # Creation intent predates the confirmed mapping; only the current admitted
+    # project request may decide whether a new source needs new confirmation.
+    creation_request = load_task(origin / "task")["request"]
+    assert "data_mapping_execution" not in creation_request
+    before = store.snapshot()
+    native = (project / "studio/document.vsz").read_bytes()
+    replacement = tmp_path / "never_read_new_source.csv"
+    monkeypatch.setattr(project_command_scope, "project_store", lambda *_a, **_k: pytest.fail("missing mapping imported a store or inspected native state"))
+    monkeypatch.setattr(source_update, "file_inventory", lambda *_a: pytest.fail("missing mapping read the incoming source"))
+    monkeypatch.setattr(source_update, "_audit_exact_document_data", lambda **_k: pytest.fail("missing mapping audited native state"))
+    result = source_update.preview_project_source_update(project, replacement)
+    assert result["status"] == "blocked" and "fresh explicit data mapping" in result["reason"]
+    assert store.snapshot() == before and not replacement.exists()
+    assert (project / "studio/document.vsz").read_bytes() == native
+
+
+@pytest.mark.parametrize("ambient", [False, True])
+def test_mapping_admission_refuses_physical_request_drift_before_new_source_io(tmp_path, monkeypatch, ambient):
+    from contextlib import nullcontext
+    from sciplot_core.studio_core import source_update_staging
+
+    _origin, project, store, _request, _execution = confirmed_project(tmp_path, monkeypatch)
+    path = project / "plot_request.json"
+    original = path.read_bytes()
+    head = (project / ".sciplot_store/head.json").read_bytes()
+    context = project_runtime(store) if ambient else nullcontext()
+    with context:
+        altered = {key: value for key, value in json.loads(original).items()
+                   if key not in {"data_mapping", "data_mapping_application", "data_mapping_execution",
+                                  "data_mapping_proposal_id", "data_mapping_plan_binding"}}
+        path.write_text(json.dumps(altered))
+        changed = path.read_bytes()
+        monkeypatch.setattr(source_update_staging, "_worksheet_confirmation", lambda *_a: pytest.fail("physical drift read a new source"))
+        monkeypatch.setattr(source_update_staging, "_build_source_candidate", lambda *_a, **_k: pytest.fail("physical drift allocated a candidate"))
+        with pytest.raises(ProjectConflict, match="canonical request differs"):
+            with source_update_staging.prepare_candidate(project, tmp_path / "unread.csv", tmp_path / "unallocated", worksheet=None):
+                pytest.fail("an outside request edit bypassed current mapping admission")
+    assert (project / ".sciplot_store/head.json").read_bytes() == head
+    assert path.read_bytes() == changed and store.read_bytes("plot_request.json") == original
+    assert not (tmp_path / "unread.csv").exists() and not (tmp_path / "unallocated").exists()
 
 
 def test_fresh_confirmed_mapping_can_be_verified_before_candidate_request_changes(tmp_path, monkeypatch):
