@@ -23,6 +23,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
             "src/sciplot_core/studio_core/prepare_existing.py",
             "src/sciplot_core/studio_core/presentation_evidence.py",
             "src/sciplot_core/studio_core/figure_task_evidence.py",
+            "src/sciplot_core/studio_core/figure_requests.py",
             "src/sciplot_core/studio_core/figure_source_request.py",
             "src/sciplot_core/studio_core/registry_state.py",
             "src/sciplot_core/studio_core/series_request.py",
@@ -62,6 +63,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
             "tests/test_studio_snapshot_binding.py",
             "tests/test_rheology_workbook_stability.py",
             "tests/test_terminal_source_roles.py",
+            "tests/test_terminal_request_literals.py",
         }
     ),
     pytest_targets=(
@@ -82,6 +84,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
         "tests/test_managed_document_science.py",
         "tests/test_rheology_workbook_stability.py",
         "tests/test_terminal_source_roles.py",
+        "tests/test_terminal_request_literals.py",
         "tests/test_preparation_source_attestation.py",
         "tests/test_temperature_terminal_source_binding.py::test_public_request_cannot_claim_prepared_terminal_source",
         "tests/test_temperature_terminal_source_binding.py::test_worker_binding_is_verified_once_at_worker_entry",
