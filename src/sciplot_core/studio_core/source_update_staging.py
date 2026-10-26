@@ -80,26 +80,28 @@ def current_source_update_request(
 ) -> dict[str, Any]:
     """Admit current scientific intent before new-source IO or a project writer."""
     from sciplot_core.foundation.canonical_paths import canonical_path
-    from sciplot_core.foundation.source_locations import selected_source_resolver
-    from sciplot_core.project_host_factory import _admitted_request, project_store
-    from sciplot_core.project_store.runtime import ProjectSourceResolver
+    from sciplot_core.project_host_factory import _admitted_request
+    from sciplot_core.project_manifest_locations import admitted_project_generation
+    from sciplot_core.project_store import ProjectConflict
 
     project = canonical_path(project)
-    if not (project / ".sciplot_store/head.json").is_file() and not (project / "plot_request.json").is_file():
+    has_head = (project / ".sciplot_store/head.json").is_file()
+    if not has_head and not (project / "plot_request.json").is_file():
         raise ValueError("Source update requires an existing SciPlot project.")
-    # Pinning an immutable decision never authorizes an unregistered physical
-    # request edit. Reuse the host owner's exact current/preimage check first.
-    previous = _admitted_request(project)
-    selected = selected_source_resolver()
-    if isinstance(selected, ProjectSourceResolver) and selected.store.root == project:
-        before = snapshot if snapshot is not None else selected.snapshot
-        previous = json.loads(selected.store.read_bytes("plot_request.json", generation=before["generation"]))
-    elif snapshot is not None:
-        # An explicit host snapshot is read from its real immutable generation,
-        # never reconstructed from a caller's dictionary or a creation task.
-        repository = project_store(project, with_snapshot=True)
-        previous = json.loads(repository.read_bytes("plot_request.json", generation=snapshot["generation"]))
-    # Without a selected generation, the host factory's supported unimported
+    if has_head:
+        # New source preparation always belongs to current intent, even within
+        # a legitimate historical read runtime. Reuse the host's preimage check
+        # under this same readonly lock when checking an explicit generation.
+        with admitted_project_generation(project) as (_primary, _io, current):
+            previous = _admitted_request(project)
+            if snapshot is not None and (snapshot.get("project_id") != current["project_id"]
+                    or snapshot.get("generation") != current["generation"]):
+                raise ProjectConflict("Source update preparation requires the current project generation.")
+    else:
+        if snapshot is not None:
+            raise ProjectConflict("Source update preparation requires the current project generation.")
+        previous = _admitted_request(project)
+    # Without an admitted head, the host factory's supported unimported
     # legacy request remains the explicit fallback; no store was imported.
     if not isinstance(previous, dict):
         raise ValueError("The canonical project request must be an object")

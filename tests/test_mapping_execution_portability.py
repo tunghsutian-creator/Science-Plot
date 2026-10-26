@@ -280,6 +280,54 @@ def test_mapping_admission_refuses_physical_request_drift_before_new_source_io(t
     assert not (tmp_path / "unread.csv").exists() and not (tmp_path / "unallocated").exists()
 
 
+@pytest.mark.parametrize("entry", ["public", "staging", "explicit-old-snapshot"])
+def test_current_mapping_admission_cannot_be_replaced_by_a_legal_historical_runtime(tmp_path, monkeypatch, publication, entry):
+    from sciplot_core.studio_core import project_command_scope, source_update, source_update_staging
+    from sciplot_core.task_storage import load_task
+
+    origin, project, store, request, _execution = confirmed_project(tmp_path, monkeypatch, project_override=publication[0])
+
+    def publish_request(value, key):
+        before = store.snapshot()
+        command = ProjectCommand.create("figure_set", key, project_id=before["project_id"],
+            expected_generation=before["generation"],
+            read_set={"plot_request.json": before["files"]["plot_request.json"]["sha256"]},
+            write_set=["plot_request.json"], request={"fixture": key})
+        ProjectCommands(store).execute(command, lambda: ProjectMutation(
+            {"plot_request.json": json.dumps(value).encode()}, {}))
+        return store.snapshot()
+
+    creation_request = load_task(origin / "task")["request"]
+    assert "data_mapping_execution" not in creation_request
+    old = publish_request(creation_request, "fixture-original-unmapped-intent")
+    current = publish_request(request, "fixture-current-confirmed-mapping")
+    assert old["generation"] != current["generation"]
+    assert json.loads(store.read_bytes("plot_request.json", generation=old["generation"])) == creation_request
+    assert json.loads((project / "plot_request.json").read_bytes()) == request
+    command_ids = [item["command_id"] for item in store.commands()]
+    replacement, staging = tmp_path / "unread-new.xlsx", tmp_path / "unallocated"
+    monkeypatch.setattr(project_command_scope, "adopt_saved_native", lambda *_a, **_k: pytest.fail("historical intent admitted a native write"))
+    monkeypatch.setattr(source_update, "file_inventory", lambda *_a: pytest.fail("historical intent read the incoming source"))
+    monkeypatch.setattr(source_update_staging, "_worksheet_confirmation", lambda *_a: pytest.fail("historical intent inspected a new worksheet"))
+    monkeypatch.setattr(source_update_staging, "_build_source_candidate", lambda *_a, **_k: pytest.fail("historical intent allocated a private candidate"))
+    with project_runtime(store, generation=old["generation"]) as selected:
+        assert selected.generation == old["generation"]
+        if entry == "public":
+            result = source_update.preview_project_source_update(project, replacement)
+            assert result["status"] == "blocked" and "fresh explicit data mapping" in result["reason"]
+        else:
+            explicit = {"snapshot": old, "mapping_request": request} if entry == "explicit-old-snapshot" else {}
+            error, message = ((ProjectConflict, "current project generation") if explicit else
+                              (ValueError, "fresh explicit data mapping"))
+            with pytest.raises(error, match=message):
+                with source_update_staging.prepare_candidate(project, replacement, staging, worksheet="Data", **explicit):
+                    pytest.fail("historical intent yielded a new-source candidate")
+    assert store.snapshot() == current
+    assert [item["command_id"] for item in store.commands()] == command_ids
+    assert json.loads((project / "plot_request.json").read_bytes()) == request
+    assert not replacement.exists() and not staging.exists()
+
+
 def test_fresh_confirmed_mapping_can_be_verified_before_candidate_request_changes(tmp_path, monkeypatch):
     from test_task_mapping_plan import _mapped_case
     from sciplot_core.plan_preview import build_plan_preview
