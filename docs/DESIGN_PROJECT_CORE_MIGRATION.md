@@ -78,6 +78,24 @@ committed receipt census must agree before repair or new admission. A missing
 committed receipt is an explicit recovery conflict, never a new command or an
 instruction to recreate its effect.
 
+A checked history is a derived validation result for one locked Store IO epoch,
+not another state owner or a reusable pass. The complete immutable parent chain
+is validated once within that batch; mutable receipt identity and membership,
+sealed candidates, CAS and physical resource checks remain required. Metadata
+writes and the end of the outer physical lease invalidate that result, including
+descriptor reuse and nested operations. Installation separately obtains a fresh
+last-writer decision; a read-only completed outcome cannot authorize old-byte
+installation. No validation result survives into a later operation.
+
+Executable deliveries are inspected through the selected materialized host
+resource capability. A read-only scientific directory view cannot prove that a
+user launcher is executable or that its delivery root owns this project. Logical
+root/request/source identities remain distinct from their host IO locations;
+content, executable mode, binding and exact package membership must still agree.
+A finite file capability for a ZIP or source parent never grants whole-directory
+enumeration. Cold continuation requires explicitly registered host locations,
+not an old absolute path or a same-named foreign package.
+
 Literal common/style edit checkpoints are intent resources, not execution
 journals. Default entries inside an attached or recognized project use that same
 Store; explicit external entries retain their independent request-file owner.
