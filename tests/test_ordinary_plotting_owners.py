@@ -343,6 +343,7 @@ SOURCE_ARTIFACT_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/studio_render/series_options.py",
         "src/sciplot_core/task_paper_publication.py",
         "src/sciplot_core/task_paper_selection.py",
+        "src/sciplot_core/workflow/rheology_terminal_validation.py",
     }
 )
 VERIFICATION_PROJECT_CORE_STRICT_ADDITIONS = frozenset(

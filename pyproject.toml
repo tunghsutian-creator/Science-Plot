@@ -561,6 +561,7 @@ files = [
   "src/sciplot_core/data_mapping/execution_directories.py",
   "src/sciplot_core/data_mapping/request_resolution.py",
   "src/sciplot_core/studio_core/request_overrides.py",
+  "src/sciplot_core/workflow/rheology_terminal_validation.py",
 ]
 mypy_path = "src"
 explicit_package_bases = true
