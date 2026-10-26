@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -122,7 +123,8 @@ def test_invalid_replacement_keeps_previous_native_core_candidate_pending(native
     assert ProjectCommands(f.store).query(first["operation_id"])["phase"] == "rejected"
 
 
-def test_legacy_unscoped_preview_cancellation_does_not_reject_a_shared_command(native_task):
+@pytest.mark.parametrize("accepted", [False, True])
+def test_legacy_unscoped_preview_cancellation_does_not_reject_a_shared_command(native_task, accepted):
     f = native_task
     review = annotation_operations.preview_document_operations(f.project, f.request["operations"],
         output_dir=f.root.parent / "legacy-preview", figure_id="first",
@@ -134,9 +136,12 @@ def test_legacy_unscoped_preview_cancellation_does_not_reject_a_shared_command(n
              "preview_attempt": 1, "operation_id": review["operation_id"],
              "preview": {"image": review["preview"], "review_path": str(f.root / "review.json")}}
     task_storage.save_task(f.root, state)
-    assert _cancel(f, review)["status"] == "cancelled"
+    if accepted:
+        record = ProjectCommands(f.store).query(review["operation_id"])
+        f.store.decide(record["command_id"], record["command_digest"], decision_id=record["decision_id"], accept=True)
+    assert _cancel(f, review)["status"] == ("blocked" if accepted else "cancelled")
     assert "native_command_scope" not in task_storage.load_task(f.root)
-    assert ProjectCommands(f.store).query(review["operation_id"])["phase"] == "needs_review"
+    assert ProjectCommands(f.store).query(review["operation_id"])["phase"] == ("accepted" if accepted else "needs_review")
     assert f.native.read_bytes() == f.original
 
 
@@ -223,3 +228,28 @@ def test_native_task_cancellation_cannot_claim_another_tasks_scoped_review(nativ
     assert _cancel(f, other)['status'] == 'blocked'
     assert all(item['phase'] == 'needs_review' for item in f.store.commands())
     assert len(f.calls) == 2 and first['operation_id'] != other['operation_id']
+
+
+
+@pytest.mark.parametrize('missing', ['active-native', 'candidate-image', 'candidate-native'])
+def test_native_discard_needs_sealed_identity_not_physical_acceptance_or_display_files(native_task, missing):
+    f = native_task
+    result = task_control.start_task(f.request, task_dir=f.root)
+    review = json.loads((f.root / 'review.json').read_text())
+    target = f.native if missing == 'active-native' else Path(
+        review['preview' if missing == 'candidate-image' else 'candidate']['path'])
+    if missing != 'active-native':
+        assert target.is_relative_to(f.project / '.sciplot_store/drafts'), 'Never delete sealed CAS objects in this fixture.'
+    target.unlink()
+    from sciplot_core.studio_core.document_edit_review import verified_document_edit_identity, verified_document_edit_review
+
+    identity, record = verified_document_edit_identity(f.project, review)
+    assert identity['operation_id'] == result['operation_id'] and record['phase'] == 'needs_review'
+    if missing == 'active-native':
+        with pytest.raises(ValueError, match='saved canonical document'):
+            verified_document_edit_review(f.project, review)
+    assert _cancel(f, result)['status'] == 'cancelled'
+    record = ProjectCommands(f.store).query(result['operation_id'])
+    assert record['phase'] == 'rejected' and record['accepted'] is False
+    assert f.store.snapshot()['generation'] == f.before['generation']
+    assert not target.exists() and len(f.calls) == 1

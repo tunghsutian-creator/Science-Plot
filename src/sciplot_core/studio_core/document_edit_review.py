@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.project_commands import CommandKind, ProjectCommand, ProjectCommands
 from sciplot_core.studio_core.document_edit_state import check_artifact, native_edit_request_key
 from sciplot_core.studio_core.project_command_scope import project_store
@@ -46,17 +47,17 @@ def reviewed_edit(record: dict[str, Any], project: Path) -> dict[str, Any]:
     return review
 
 
-def verified_document_edit_review(project: Path, supplied: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Select one typed sealed review; runtime paths come only from its owner.
+def verified_document_edit_identity(project: Path, supplied: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read sealed historical identity without requiring current display/native files.
 
-    This is historical candidate evidence. Current input/figure preconditions
-    belong to the caller's read/commit boundary and are not inferred here.
+    Only an exact canonical project root enters this negative-decision read port.
+    Accepting, displaying and comparing candidates use the full reader below.
     """
     if (supplied.get("kind") != "sciplot_document_edit_preview"
             or type(supplied.get("version")) is not int or supplied["version"] != 3
             or supplied.get("status") != "ready"):
         raise ValueError("A complete version-3 native document edit review is required")
-    project = resolve_project_path(project)
+    project = canonical_path(project)
     store = project_store(project)
     record = ProjectCommands(store).query(str(supplied.get("operation_id") or ""))
     if record is None or record.get("phase") not in {"needs_review", "accepted", "rejected", "complete"}:
@@ -90,6 +91,13 @@ def verified_document_edit_review(project: Path, supplied: dict[str, Any]) -> tu
             rebound[key]["path"] = expected[key]["path"]
     if canonical_json_sha256(rebound, allow_nan=False) != canonical_json_sha256(expected, allow_nan=False):
         raise ValueError("The relocated native preview changed its sealed intent or scientific evidence")
+    return expected, record
+
+
+def verified_document_edit_review(project: Path, supplied: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read candidate evidence with its original native entry and artifact checks."""
+    project = resolve_project_path(project)
+    expected, record = verified_document_edit_identity(project, supplied)
     for key in ("candidate", "preview", "candidate_spec"):
         if key in expected:
             check_artifact(expected[key])

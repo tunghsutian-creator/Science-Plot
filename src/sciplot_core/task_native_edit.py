@@ -11,7 +11,9 @@ from sciplot_core.project_commands import CommandKind, ProjectCommand, ProjectCo
 from sciplot_core.project_commands.errors import ProjectCommandUnknown
 from sciplot_core.project_store.preconditions import require_reads
 from sciplot_core.project_store.runtime import project_runtime
-from sciplot_core.studio_core.document_edit_review import reviewed_edit, verified_document_edit_review
+from sciplot_core.studio_core.document_edit_review import (
+    reviewed_edit, verified_document_edit_identity, verified_document_edit_review,
+)
 from sciplot_core.studio_core.document_edit_state import native_edit_request_key
 from sciplot_core.studio_core.project_command_scope import figure_read_state, project_store
 from sciplot_core.studio_core.project_query import resolve_project_figure
@@ -64,7 +66,7 @@ def _owned_records(repository: Any, state: dict[str, Any]) -> list[tuple[Project
         if record["phase"] not in {"needs_review", "rejected"}:
             # Never hide an accepted, completed or uncertain effect behind Task cancellation.
             raise ProjectCommandUnknown()
-        verified_document_edit_review(repository.root, reviewed_edit(record, repository.root))
+        verified_document_edit_identity(repository.root, reviewed_edit(record, repository.root))
         records.append((command, record))
     return records
 
@@ -111,9 +113,11 @@ def cancel_native_task(root: Path, state: dict[str, Any]) -> None:
     if review.get("version") != 3:
         return
     project = Path(state["project"])
-    _verified, record = verified_document_edit_review(project, review)  # Historical identity, not current source freshness.
-    if record["metadata"]["request"].get("request_id") != native_task_request_id(state):
-        raise ValueError("The cancelled native preview does not belong to this task revision.")
     repository = project_store(project)
     with repository._locked():
+        _verified, record = verified_document_edit_identity(project, review)
+        if record["phase"] not in {"needs_review", "rejected"}:
+            raise ProjectCommandUnknown()
+        if record["metadata"]["request"].get("request_id") != native_task_request_id(state):
+            raise ValueError("The cancelled native preview does not belong to this task revision.")
         _reject(repository, _owned_records(repository, state))
