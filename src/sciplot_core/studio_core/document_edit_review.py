@@ -59,7 +59,7 @@ def verified_document_edit_review(project: Path, supplied: dict[str, Any]) -> tu
     project = resolve_project_path(project)
     store = project_store(project)
     record = ProjectCommands(store).query(str(supplied.get("operation_id") or ""))
-    if record is None or record.get("phase") not in {"needs_review", "accepted", "complete"}:
+    if record is None or record.get("phase") not in {"needs_review", "accepted", "rejected", "complete"}:
         raise ValueError("No frozen native review belongs to this selected project")
     command = ProjectCommand.from_payload(record["metadata"])
     if (command.kind != CommandKind.DOCUMENT_EDIT or command.key != record["command_id"]
@@ -70,7 +70,8 @@ def verified_document_edit_review(project: Path, supplied: dict[str, Any]) -> tu
         raise ValueError("The native review changed its typed command identity or read/write witness")
     expected = reviewed_edit(record, project)
     intent, result = json.loads(command.request_json), record["draft"]["result"]
-    if (result["base_files"] != record["read_set"] or intent["expected_files"] != result["base_files"]
+    if (intent["expected_files"] != result["base_files"]
+            or any(record["read_set"].get(name) != value for name, value in result["base_files"].items())
             or intent["document_relative"] != result["document_relative"]
             or intent["figure_id"] != expected["figure_id"] or result["figure_id"] != expected["figure_id"]
             or result["base_sha256"] != expected["document_sha256"]

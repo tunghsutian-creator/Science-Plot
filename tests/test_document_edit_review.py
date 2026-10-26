@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+from pathlib import Path
 import pytest
 
 from test_native_project_commands import edit as edit
@@ -33,6 +34,43 @@ def test_sealed_review_is_historical_evidence_without_native_apply_or_repair(edi
     historical, completed = verified_document_edit_review(project, review)
     assert historical == verified and completed['phase'] == 'complete'
     assert document.read_bytes() == b'later native bytes' and len(calls) == 1
+
+
+def test_rejected_sealed_review_is_readable_history_and_cannot_be_accepted(edit):
+    project, document, review, calls = edit
+    before = document.read_bytes()
+    app = ProjectCommands(project_store(project))
+    record = app.query(review['operation_id'])
+    command = ProjectCommand.from_payload(record['metadata'])
+    app.decide(command, decision_id=review['decision_id'], accept=False)
+    verified, rejected = verified_document_edit_review(project, review)
+    assert verified['decision_id'] == review['decision_id'] and rejected['phase'] == 'rejected'
+    with pytest.raises(ValueError):
+        app.decide(command, decision_id=review['decision_id'], accept=True)
+    assert document.read_bytes() == before and len(calls) == 1
+
+
+def test_additional_typed_read_witness_is_retained_beyond_selected_base_files(edit):
+    project, document, review, calls = edit
+    store = project_store(project)
+    app = ProjectCommands(store)
+    prior = app.query(review['operation_id'])
+    extra = 'studio/figures/second.vsz'
+    snapshot = store.snapshot()
+    original = ProjectCommand.from_payload(prior['metadata'])
+    command = ProjectCommand.create('document_edit', 'review-with-extra-read', project_id=original.project_id,
+        expected_generation=original.expected_generation,
+        read_set={**dict(original.read_set), extra: snapshot['files'][extra]['sha256']},
+        write_set=original.write_set, request=json.loads(original.request_json),
+        projected_reads=original.projected_reads)
+    recorded = app.preview(command, lambda: ProjectMutation(
+        {name: Path(value) for name, value in prior['staged_paths'].items()}, prior['result'],
+        review=prior['review'], artifacts={name: Path(value) for name, value in prior['artifact_paths'].items()}))
+    supplied = {**review, 'operation_id': command.key, 'decision_id': recorded['decision_id']}
+    verified, retained = verified_document_edit_review(project, supplied)
+    assert verified['document_sha256'] == review['document_sha256']
+    assert retained['read_set'][extra] == snapshot['files'][extra]['sha256']
+    assert extra not in retained['result']['base_files'] and len(calls) == 1
 
 
 @pytest.mark.parametrize('changed', ['decision', 'version_type', 'intent', 'receipt_review', 'metadata'])
