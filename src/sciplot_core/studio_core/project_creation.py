@@ -19,7 +19,7 @@ from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.plan_preview import verify_expected_plan
 from sciplot_core.studio_core.project_export import export_project_document
 from sciplot_core.studio_core.project_query import resolve_project_path
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.studio_core.project_query_paths import canonical_path, project_snapshot
 from sciplot_core.studio_core.project_receipt import project_receipt
 from sciplot_core.studio_core.studio_prepare import prepare_studio_document
 
@@ -151,11 +151,13 @@ def request_from_verified_plan(source: Path, *, verified: dict[str, Any], projec
 @with_table_reads
 def export_project(project: Path) -> dict[str, Any]:
     root = resolve_project_path(project)
+    _request, primary, figures = project_snapshot(root)
     # resolve_project_path requires the saved canonical document. Export owns
     # its exact-current audit and native adoption; preparation would clone an
     # older generation or reject a legitimate manual native save beforehand.
     payload = {"project_dir": str(root), "request": str(root / "plot_request.json"),
-               "document": str(root / "studio/document.vsz")}
+               "document": str(root / "studio/document.vsz"),
+               "figure_set": {"primary_figure_id": primary, "figures": figures}}
     result = _publish(payload)
     return {
         **result, "kind": "sciplot_project_export_result",
