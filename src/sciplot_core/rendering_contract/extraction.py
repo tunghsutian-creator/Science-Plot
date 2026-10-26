@@ -168,6 +168,53 @@ def extract_house_contract(root: Path) -> dict[str, Any]:
                           "properties": props})
 
 
+def _pdf_export_default(reader: SourceReader) -> Any:
+    """Follow only the public export symbol's closed native adapter edge.
+
+    v1 source_file/source_symbol identify the original public entry. Its current
+    facade still forwards that symbol, while the actual kwargs assignment lives
+    in native_export_adapter. Keep this provenance identity; audit real bytes.
+    """
+    public_file = STUDIO + "export_execution.py"
+
+    def owner(filename: str) -> ast.FunctionDef:
+        functions = [node for node in reader.tree(filename).body
+                     if isinstance(node, ast.FunctionDef) and node.name == "export_studio_document"]
+        if len(functions) != 1:
+            raise ValueError("PDF native export baseline changed structure.")
+        return functions[0]
+
+    def assignments(function: ast.FunctionDef) -> list[ast.Assign]:
+        return [node for node in ast.walk(function) if isinstance(node, ast.Assign)
+                and any(isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant)
+                        and target.slice.value == "pdfdpi" for target in node.targets)]
+
+    public = owner(public_file)
+    direct = assignments(public)
+    imports = [node for node in ast.walk(public) if isinstance(node, ast.ImportFrom)
+               and node.level == 0 and node.module == "sciplot_core.studio_core.native_export_adapter"]
+    if direct:
+        if len(direct) != 1 or imports:
+            raise ValueError("PDF native export baseline changed structure.")
+        return ast.literal_eval(direct[0].value)
+    if (len(imports) != 1 or len(imports[0].names) != 1
+            or imports[0].names[0].name != "export_studio_document"
+            or imports[0].names[0].asname != "export_private"):
+        raise ValueError("PDF native export baseline changed structure.")
+    calls = [node for node in ast.walk(public) if isinstance(node, ast.Call)
+             and isinstance(node.func, ast.Name) and node.func.id == "export_private"]
+    if (len(calls) != 1 or len(calls[0].args) != 1 or len(calls[0].keywords) != 3
+            or not isinstance(calls[0].args[0], ast.Name) or calls[0].args[0].id != "document_path"
+            or not isinstance(public.body[-1], ast.Return) or public.body[-1].value is not calls[0]
+            or {key.arg for key in calls[0].keywords} != {"formats", "output_dir", "audit_spec_path"}
+            or any(not isinstance(key.value, ast.Name) or key.value.id != key.arg for key in calls[0].keywords)):
+        raise ValueError("PDF native export baseline changed structure.")
+    actual = assignments(owner(STUDIO + "native_export_adapter.py"))
+    if len(actual) != 1:
+        raise ValueError("PDF native export baseline changed structure.")
+    return ast.literal_eval(actual[0].value)
+
+
 def _native_adapter_baselines(reader: SourceReader, props: dict[str, Any]) -> None:
     """Label inherited backend behaviour separately from the old house rules."""
     join_file = STUDIO + "veusz_line_joins.py"
@@ -179,12 +226,7 @@ def _native_adapter_baselines(reader: SourceReader, props: dict[str, Any]) -> No
     props["line.join"] = _record(ast.literal_eval(calls[0].args[2]), join_file, "ensure_veusz_line_joins:Choice(joinStyle)",
                                  "Explicit SciPlot adapter default preserves old native joins.", status="adapter_baseline")
     export_file = STUDIO + "export_execution.py"
-    assignments = [node for node in ast.walk(reader.tree(export_file)) if isinstance(node, ast.Assign)
-                   and any(isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant)
-                           and target.slice.value == "pdfdpi" for target in node.targets)]
-    if len(assignments) != 1:
-        raise ValueError("PDF native export baseline changed structure.")
-    props["export.veusz_pdf_dpi"] = _record(ast.literal_eval(assignments[0].value), export_file,
+    props["export.veusz_pdf_dpi"] = _record(_pdf_export_default(reader), export_file,
                                             "export_studio_document:kwargs[pdfdpi]")
     color_file = "third_party/veusz/veusz/document/colors.py"
     colors = [node for node in ast.walk(reader.tree(color_file)) if isinstance(node, ast.Dict)

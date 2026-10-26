@@ -146,9 +146,14 @@ def test_cache_tampering_blocks_the_selected_tree_without_restoring_raw_or_publi
     elif change == "inode":
         data = target.read_bytes()
         view.chmod(0o700)
-        target.unlink()
-        target.write_bytes(data)
-        target.chmod(0o400)
+        previous = target.stat()
+        replacement = view / "replacement-fixture.csv"
+        replacement.write_bytes(data)
+        replacement.chmod(0o400)
+        installed = replacement.stat()
+        assert (installed.st_dev, installed.st_ino) != (previous.st_dev, previous.st_ino)
+        replacement.replace(target)
+        assert (target.stat().st_dev, target.stat().st_ino) == (installed.st_dev, installed.st_ino)
         view.chmod(0o500)
     else:
         view.chmod(0o700)

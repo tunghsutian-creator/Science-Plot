@@ -21,6 +21,16 @@ from sciplot_core.rendering_contract import legacy_algorithms
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def copy_contract_sources(target_root: Path) -> None:
+    sources = {record["source_file"] for record in load_contract()["properties"].values() if record["source_file"]}
+    # The v1 public export symbol now delegates to this exact native owner.
+    sources.add("src/sciplot_core/studio_core/native_export_adapter.py")
+    for relative in sources:
+        target = target_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, target)
+
+
 def test_snapshot_is_exact_programmatic_extraction_of_existing_authority() -> None:
     assert load_contract() == extract_house_contract(ROOT)
     Draft202012Validator(rendering_contract_schema()).validate(load_contract())
@@ -94,11 +104,7 @@ def test_resealed_resource_cannot_change_existing_contract_version(tmp_path: Pat
 
 
 def test_source_drift_is_a_failure_not_an_automatic_contract_rewrite(tmp_path: Path) -> None:
-    files = {record["source_file"] for record in load_contract()["properties"].values() if record["source_file"]}
-    for relative in files:
-        target = tmp_path / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / relative, target)
+    copy_contract_sources(tmp_path)
     source = tmp_path / "src/sciplot_core/policy/frame_export.py"
     source.write_text(source.read_text().replace("UNIFIED_LINE_WIDTH_PT = 1.2", "UNIFIED_LINE_WIDTH_PT = 1.3"))
     result = audit_legacy_sources(tmp_path)
@@ -107,6 +113,39 @@ def test_source_drift_is_a_failure_not_an_automatic_contract_rewrite(tmp_path: P
     assert diff["line.width_pt"]["pinned"]["value"] == 1.2
     assert diff["line.width_pt"]["current_source"]["value"] == 1.3
     assert load_contract()["properties"]["line.width_pt"]["value"] == 1.2
+
+
+@pytest.mark.parametrize("change", ["dpi", "missing_delegate", "wrong_alias", "duplicate_delegate", "multiple_assignments"])
+def test_pdf_baseline_follows_only_the_closed_current_native_owner(tmp_path: Path, change: str) -> None:
+    copy_contract_sources(tmp_path)
+    facade = tmp_path / "src/sciplot_core/studio_core/export_execution.py"
+    adapter = tmp_path / "src/sciplot_core/studio_core/native_export_adapter.py"
+    if change == "dpi":
+        original = adapter.read_text()
+        adapter.write_text(original.replace('kwargs["pdfdpi"] = 72', 'kwargs["pdfdpi"] = 73'))
+        assert adapter.read_text() != original
+        result = audit_legacy_sources(tmp_path)
+        assert result["status"] == "failed"
+        assert len(result["differences"]) == 1
+        difference = result["differences"][0]
+        assert difference["property"] == "export.veusz_pdf_dpi"
+        assert difference["pinned"]["value"] == 72 and difference["current_source"]["value"] == 73
+        assert load_contract()["properties"]["export.veusz_pdf_dpi"]["value"] == 72
+        return
+    if change == "multiple_assignments":
+        adapter.write_text(adapter.read_text().replace('kwargs["pdfdpi"] = 72', 'kwargs["pdfdpi"] = 72\n                        kwargs["pdfdpi"] = 72'))
+    else:
+        original = facade.read_text()
+        if change == "missing_delegate":
+            changed = original.replace("from sciplot_core.studio_core.native_export_adapter import export_studio_document as export_private", "from untrusted import export_studio_document as export_private")
+        elif change == "wrong_alias":
+            changed = original.replace("as export_private", "as wrong_private")
+        else:
+            changed = original.replace("    return export_private(", "    export_private(document_path, formats=formats, output_dir=output_dir, audit_spec_path=audit_spec_path)\n    return export_private(")
+        assert changed != original
+        facade.write_text(changed)
+    with pytest.raises(ValueError, match="PDF native export baseline changed structure"):
+        extract_house_contract(tmp_path)
 
 
 def test_composition_policy_is_distinct_and_never_claims_legacy_multi_panel_equivalence() -> None:

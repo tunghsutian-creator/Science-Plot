@@ -11,7 +11,7 @@ from sciplot_core.plot_document import seal_document
 from sciplot_core.plot_engine.managed_source_revision import validate_reconfirmed_contexts
 from sciplot_core.plot_engine.managed_sources import load_sources
 from sciplot_core.plot_engine.managed_updates import prepare_update
-from sciplot_core.plot_transforms import resolve_transforms
+from sciplot_core.plot_transforms import builtin_executor, resolve_transforms
 from sciplot_core.plot_transforms.unit_relations import resolve_unit_relation
 
 
@@ -69,7 +69,7 @@ def test_transform_only_scale_remains_an_explicit_valid_scientific_change(tmp_pa
     final["output"] = "before-scale"
     document["scientific"]["transforms"].append({"id": "control-scale", "kind": "scale", "inputs": ["before-scale"],
         "output": output, "parameters": {"columns": ["y"], "factor": 1},
-        "executor": deepcopy(final["executor"]), "determinism": "deterministic"})
+        "executor": builtin_executor("scale"), "determinism": "deterministic"})
     document = seal_document(document)
     original = deepcopy(document)
     request = {"plot_id": document["plot_id"], "base_revision": document["revision"], "idempotency_key": "valid-scale",
@@ -91,7 +91,7 @@ def test_same_source_registered_input_unit_conversion_preserves_role_and_values(
     derived["inputs"] = ["unit-projected"]
     document["scientific"]["transforms"].append({"id": "control-unit", "kind": "convert_unit", "inputs": [original_input],
         "output": "unit-projected", "parameters": {"columns": ["column:4"], "from_unit": "[Pa]", "to_unit": "[Pa]"},
-        "executor": deepcopy(derived["executor"]), "determinism": "deterministic"})
+        "executor": builtin_executor("convert_unit"), "determinism": "deterministic"})
     document = seal_document(document)
     source = document["scientific"]["data_sources"][0]
     value = fresh_value(document, tmp_path / "source.csv")

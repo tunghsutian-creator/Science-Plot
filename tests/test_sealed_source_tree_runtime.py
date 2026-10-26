@@ -381,9 +381,14 @@ def test_every_directory_resolution_revalidates_complete_import_proof_and_clears
                     (view / "alias.csv").symlink_to(view / "a.csv")
                 else:
                     data = target.read_bytes()
-                    target.unlink()
-                    target.write_bytes(data)
-                    target.chmod(0o400)
+                    previous = target.stat()
+                    replacement = view / "replacement-fixture.txt"
+                    replacement.write_bytes(data)
+                    replacement.chmod(0o400)
+                    installed = replacement.stat()
+                    assert (installed.st_dev, installed.st_ino) != (previous.st_dev, previous.st_ino)
+                    replacement.replace(target)
+                    assert (target.stat().st_dev, target.stat().st_ino) == (installed.st_dev, installed.st_ino)
                 view.chmod(0o500)
             elif change == "directory-mode":
                 (view / "empty").chmod(0o700)
