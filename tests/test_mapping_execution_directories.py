@@ -51,6 +51,40 @@ def test_existing_directory_mapping_request_keeps_complete_effective_input(tmp_p
     assert application["source_hashes"] == execution["source_hashes"]
 
 
+def test_explicit_original_directory_admission_binds_all_declared_raw_members(tmp_path):
+    _origin, request, execution = directory_execution(tmp_path)
+    reference = request["data_mapping_execution"]
+    assert load_data_mapping_execution(reference, expected_source=Path(request["input"])) == execution
+
+
+@pytest.mark.parametrize("change", ["foreign", "extra", "missing", "alias"])
+def test_explicit_raw_directory_rejects_foreign_or_incomplete_members_before_numeric_replay(tmp_path, monkeypatch, change):
+    from sciplot_core.data_mapping import execution_loading
+
+    _origin, request, execution = directory_execution(tmp_path)
+    selected = Path(request["input"])
+    if change == "foreign":
+        selected = tmp_path / "same-named-foreign"
+        selected.mkdir()
+        for member in Path(request["input"]).iterdir():
+            (selected / member.name).write_bytes(member.read_bytes())
+    elif change == "extra":
+        (selected / "unconfirmed.csv").write_bytes(b"outside confirmed source inventory")
+    else:
+        member = selected / "one.csv"
+        data = member.read_bytes()
+        member.unlink()
+        if change == "alias":
+            external = tmp_path / "same-bytes.csv"
+            external.write_bytes(data)
+            member.symlink_to(external)
+    monkeypatch.setattr(execution_loading, "_prepare_mapping_frames",
+        lambda *_a, **_kw: pytest.fail("An unadmitted original directory reached numeric replay"))
+    with pytest.raises((ValueError, OSError)):
+        load_data_mapping_execution(request["data_mapping_execution"], expected_source=selected)
+    assert execution["effective_input"] == execution["data_dir"]
+
+
 def registered_directory(tmp_path):
     origin, request, execution = directory_execution(tmp_path)
     reference = str(Path(execution["output_root"]) / "execution.json")

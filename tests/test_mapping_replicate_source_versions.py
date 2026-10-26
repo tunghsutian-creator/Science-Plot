@@ -9,6 +9,7 @@ from sciplot_core.project_commands import ProjectCommand, ProjectCommands, Proje
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.project_store.runtime import project_runtime
 from test_task_raw_replicate_mapping import original
+from test_task_raw_replicate_source_update import bound as bound, expanded, mapped_plan
 
 
 def test_registered_replicate_confirmation_replay_preserves_its_raw_byte_proof(tmp_path, monkeypatch):
@@ -32,3 +33,18 @@ def test_registered_replicate_confirmation_replay_preserves_its_raw_byte_proof(t
     with project_runtime(store):
         assert load_data_mapping_execution(reference) == expected
     assert Path(reference).read_bytes() == reads.files[reference].data
+
+
+def test_new_replicate_confirmation_is_admitted_during_same_project_expansion(bound, tmp_path, monkeypatch):
+    from sciplot_core.data_mapping.plan_binding import verify_replicate_source_expansion
+
+    source, project, mapping, previous = bound
+    store = FileProjectStore(project)
+    before = store.snapshot(import_legacy=True)
+    target = tmp_path / "new-confirmation"
+    target.mkdir()
+    plan = mapped_plan(source, expanded(mapping), target, monkeypatch)
+    selection = {**plan["data_mapping"], "rule_id": "impact_metric", "template": "box"}
+    with project_runtime(store):
+        verify_replicate_source_expansion(previous, source, selection, plan)
+    assert store.snapshot()["generation"] == before["generation"]

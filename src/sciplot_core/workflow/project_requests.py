@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from sciplot_core.data_mapping.execution_directories import mapping_tree_reads, mapping_immutable_reads
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_commands import PreparedFile, ProjectCommand, ProjectCommands, ProjectMutation
 from sciplot_core.project_manifest import read_intake_project_manifest, stage_intake_project_manifest
@@ -135,9 +136,9 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
             writes.update(stage_intake_project_manifest(project, updated, store=store,
                 project_writes={name: value for name, value in writes.items() if not name.startswith("@")}))
         command = command_for_binding(store, baseline, kind="publish", key=key, writes=list(writes), request=intent)
-        command = replace(command, source_trees=candidate.mapping_tree_reads)
+        command = replace(command, source_trees=mapping_tree_reads(candidate.mapping_inputs.values(), candidate.mapping_baseline_trees))
         record = app.execute(command, lambda: ProjectMutation(writes, manifest, prepared_sources=tuple(sources),
-            input_reads=candidate.mapping_input_reads,
+            input_reads=mapping_immutable_reads(candidate.snapshot, candidate.mapping_inputs.values(), candidate.mapping_baseline_roles),
             artifacts={"native-audits.json": json.dumps(audits, ensure_ascii=False, allow_nan=False).encode()}))
         if mapping_reads is not None:
             mapping_reads.publication_complete(record)
@@ -170,7 +171,7 @@ def commit_completed_project_run(request_path: Path, manifest: dict[str, Any]) -
         intent = {"completed_run": manifest, "read_generation": baseline["generation"]}
         key = "workflow-register:" + canonical_json_sha256(intent)
         command = command_for_binding(store, baseline, kind="publish", key=key, writes=list(writes), request=intent)
-        command = replace(command, source_trees=candidate.mapping_tree_reads)
+        command = replace(command, source_trees=mapping_tree_reads(candidate.mapping_inputs.values(), candidate.mapping_baseline_trees))
         ProjectCommands(store).execute(command, lambda: ProjectMutation(writes, {}, prepared_sources=tuple(sources),
-            input_reads=candidate.mapping_input_reads,
+            input_reads=mapping_immutable_reads(candidate.snapshot, candidate.mapping_inputs.values(), candidate.mapping_baseline_roles),
             artifacts={"native-audits.json": json.dumps(audits, ensure_ascii=False, allow_nan=False).encode()}))

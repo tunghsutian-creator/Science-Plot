@@ -167,7 +167,7 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
     if payload.get("request_patch") != json_safe(proposal.request_patch):
         raise ValueError("Data mapping execution request patch mismatch.")
     source_root = mapping_literal(Path(str(payload.get("source_root") or "")))
-    require_mapping_original_source(source_root, [item.relative_path for item in proposal.sources],
+    require_mapping_original_source(source_root, {item.relative_path: item.sha256 for item in proposal.sources},
                                     _read_json(Path(payload["request_seed"])))
     sources = verify_data_mapping_sources(proposal, source_root=source_root)
     source_hashes = {reference.source_id: reference.sha256 for reference in proposal.sources}

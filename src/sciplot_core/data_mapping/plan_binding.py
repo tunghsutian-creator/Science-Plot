@@ -155,6 +155,11 @@ def verify_mapping_sample_identity(
 
 def verify_replicate_projection(binding: dict[str, Any]) -> None:
     """Check finite display membership against complete, source-verified domains."""
+    with mapping_input_reads(binding["data_mapping_execution"], expected_source=Path(binding["original_input"])):
+        _verify_replicate_projection(binding)
+
+
+def _verify_replicate_projection(binding: dict[str, Any]) -> None:
 
     # This rebuilds every complete original region and verifies its output bytes,
     # including null positions. The finite projection cannot establish that domain.
@@ -199,7 +204,10 @@ def project_replicate_binding(request: dict[str, Any]) -> dict[str, Any] | None:
 def verify_replicate_source_expansion(previous: dict[str, Any], source: Path,
                                       request: dict[str, Any], plan: dict[str, Any]) -> None:
     """An existing raw binding may gain groups without replacing old observations."""
-    old = project_replicate_binding(previous)
+    from sciplot_core.data_mapping.execution_inputs import without_mapping_inputs
+
+    with without_mapping_inputs():
+        old = project_replicate_binding(previous)
     if old is None:
         if (plan.get("data_mapping") or {}).get("mapping_shape") == "replicates":
             raise ValueError("Adding raw groups requires an existing immutable raw group binding.")
@@ -218,10 +226,12 @@ def verify_replicate_source_expansion(previous: dict[str, Any], source: Path,
         after_plan = plan.get("resolved_figure_plan") or {}
         if before_plan.get(key) != after_plan.get(key):
             raise ValueError("Adding raw groups must preserve the existing figure task identity.")
-    before = load_data_mapping_execution(old["data_mapping_execution"])
-    after = load_data_mapping_execution(new["data_mapping_execution"])
-    old_proposal = _read_json(Path(before["proposal"]))
-    new_proposal = _read_json(Path(after["proposal"]))
+    with without_mapping_inputs(), mapping_input_reads(old["data_mapping_execution"], expected_source=source):
+        before = load_data_mapping_execution(old["data_mapping_execution"])
+        old_proposal = _read_json(Path(before["proposal"]))
+    with mapping_input_reads(new["data_mapping_execution"], expected_source=source):
+        after = load_data_mapping_execution(new["data_mapping_execution"])
+        new_proposal = _read_json(Path(after["proposal"]))
     for index in range(len(labels)):
         source_id = old_proposal["sources"][index]["source_id"]
         if old_proposal.get("display_labels", {}).get(source_id) != new_proposal.get("display_labels", {}).get(source_id):

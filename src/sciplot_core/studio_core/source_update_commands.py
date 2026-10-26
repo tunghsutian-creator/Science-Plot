@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
@@ -12,6 +13,7 @@ from sciplot_core.project_commands import PreparedSource, ProjectCommand, Projec
 from sciplot_core.studio_core.project_command_scope import command_for_binding, project_store, query_for_apply, whole_memberships
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore
+from sciplot_core.project_store.io import read_file, sha
 from sciplot_core.studio_core.source_update_files import project_inventory, relocate_metadata
 
 
@@ -100,6 +102,24 @@ def stage_source_update(project: Path, candidate: Path, review: dict[str, Any], 
     (candidate / "source_update.json").write_text(json.dumps(review, ensure_ascii=False, indent=2))
     writes, artifacts = source_mutation(project, candidate, review, relocate_companion=relocate_companion, expected=before,
                                        store=repository, logical_paths_bound=logical_paths_bound)
+    for item in input_reads:
+        if item.resource not in writes:
+            continue
+        value = writes[item.resource]
+        if isinstance(value, Path):
+            fd = os.open(value.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                data, mode = read_file(fd, value.name)
+            finally:
+                os.close(fd)
+        elif isinstance(value, PreparedFile):
+            data, mode = value.data, value.mode
+        else:
+            data, mode = value or b"", 0o644
+        old = snapshot["files"].get(item.resource)
+        if old is None or value is None or sha(data) != item.sha256 or mode != old["mode"]:
+            raise ValueError("A source candidate changed immutable mapping metadata instead of preserving its exact preimage")
+        del writes[item.resource]  # An unchanged input is read, never reinstalled as an output.
     binding, intent, key = source_review_binding(repository, snapshot, review)
     command = command_for_binding(repository, binding, kind="source_update", key=key,
                                    writes=list(writes), request=intent)

@@ -21,7 +21,7 @@ from .repository import FileProjectStore
 from .resources import ResourceRoot
 from .runtime import ProjectSourceResolver
 from sciplot_core.data_mapping.execution_inputs import (
-    _READ_SET, _read, mapping_input_reads,
+    _READ_SET, _read, mapping_input_reads, without_mapping_inputs,
 )
 
 
@@ -192,14 +192,12 @@ def mapping_binding_payload(value: Any) -> dict[str, Any]:
         direct = [item for item in value["files"] if item["path"] == guard.locator]
         if direct:
             content = {"kind": "file", "content_sha256": direct[0]["sha256"]}
-        elif Path(guard.locator) == Path(value["execution"]).parent / "data":
+        else:
             members = [{"path": str(Path(item["path"]).relative_to(guard.locator)), "content_sha256": item["sha256"]}
                        for item in value["files"] if Path(item["path"]).is_relative_to(guard.locator)]
             if not members:
                 raise ProjectConflict("A mapping tree must bind its complete captured outputs.")
             content = {"kind": "directory", "files": sorted(members, key=lambda item: item["path"])}
-        else:
-            raise ProjectConflict("A mapping tree cannot expand the captured execution closure.")
         if canonical_json_sha256(content, allow_nan=False) != guard.tree_sha256:
             raise ProjectConflict("A mapping tree composite differs from its captured file byte versions.")
     return value
@@ -219,15 +217,6 @@ def native_mapping_binding() -> dict[str, Any] | None:
 
 
 @contextmanager
-def without_mapping_inputs() -> Iterator[None]:
-    token = _READ_SET.set(None)
-    try:
-        yield
-    finally:
-        _READ_SET.reset(token)
-
-
-@contextmanager
 def bound_mapping_inputs(value: dict[str, Any] | None) -> Iterator[None]:
     if value is None:
         yield
@@ -239,6 +228,10 @@ def bound_mapping_inputs(value: dict[str, Any] | None) -> Iterator[None]:
             observed, _path = _read(Path(item["path"]), item["sha256"])
             if observed.actual_mode != item["mode"]:
                 raise ProjectConflict("The worker mapping input changed its exact physical permissions.")
+        execution = json.loads(active.files[active.execution].data)
+        roots = {str(Path(active.execution).parent / "data"), execution["source_root"]}
+        if any(item["locator"] not in active.files and item["locator"] not in roots for item in value["trees"]):
+            raise ProjectConflict("A worker mapping tree is not one of this exact execution's declared source/output roots.")
         active.trees = {item["locator"]: SourceTreeRead(**item) for item in value["trees"]}
         active.seal()
         yield

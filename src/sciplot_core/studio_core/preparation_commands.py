@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.data_mapping.execution_directories import mapping_tree_reads, mapping_immutable_reads
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.project_commands import MembershipRead, PreparedFile, PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation
@@ -95,6 +96,8 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
     figures = registry.get("figures", []) if isinstance(registry, dict) else [
         {"status": "ready", "document": payload["document"], "spec": str(candidate.project_dir / "studio/spec.json")}]
     audits, sources = [], {}
+    for baseline_source in candidate.mapping_baseline_sources:
+        sources[(baseline_source.source_id, baseline_source.version)] = baseline_source
     for relative in candidate.request_members:
         request = json.loads(candidate.read_member(relative).data)
         reference = request.get("data_mapping_execution")
@@ -213,10 +216,10 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
             expected_generation=before["generation"], read_set=reads, write_set=sorted(writes), request=request,
             read_memberships=[MembershipRead.capture(before["files"], prefix)
                               for prefix in ("", *("@" + name for name in sorted(store.locations)))],
-            source_trees=candidate.mapping_tree_reads)
+            source_trees=mapping_tree_reads(candidate.mapping_inputs.values(), candidate.mapping_baseline_trees))
         verify_sources()
         record = ProjectCommands(store).execute(command, lambda: ProjectMutation(writes, result,
-            prepared_sources=tuple(sources), input_reads=candidate.mapping_input_reads,
+            prepared_sources=tuple(sources), input_reads=mapping_immutable_reads(candidate.snapshot, candidate.mapping_inputs.values(), candidate.mapping_baseline_roles),
             artifacts={"native-audits.json": json.dumps(audits, ensure_ascii=False, allow_nan=False).encode()}))
         return {**record["result"], "project_command": {field: record[field]
             for field in ("command_id", "command_digest", "project_id", "generation", "phase")}}

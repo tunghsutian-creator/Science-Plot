@@ -7,7 +7,7 @@ from sciplot_core.data_mapping.execution_directories import mapping_directory_pa
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
-from sciplot_core.data_mapping.execution_inputs import mapping_file_sha256 as file_sha256, mapping_file_path
+from sciplot_core.data_mapping.execution_inputs import mapping_file_sha256 as file_sha256, mapping_file_path, mapping_input_reads
 
 from sciplot_core.data_mapping.contracts import (
     DATA_MAPPING_APPLICATION_KIND,
@@ -26,6 +26,17 @@ def resolve_data_mapping_request(
     *,
     base_dir: str | Path,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    reference = request.get("data_mapping_execution")
+    if not isinstance(reference, str) or not reference.strip():
+        return deepcopy(request), None
+    path = Path(reference).expanduser()
+    if not path.is_absolute():
+        path = Path(base_dir).expanduser().resolve() / path
+    with mapping_input_reads(str(path)):
+        return _resolve_data_mapping_request(request, base_dir=base_dir)
+
+
+def _resolve_data_mapping_request(request: dict[str, Any], *, base_dir: str | Path) -> tuple[dict[str, Any], dict[str, Any] | None]:
     execution_value = request.get("data_mapping_execution")
     if not isinstance(execution_value, str) or not execution_value.strip():
         return deepcopy(request), None

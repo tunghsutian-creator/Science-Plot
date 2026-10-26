@@ -7,11 +7,16 @@ from typing import Any
 
 from sciplot_core.mapping_contract import DataMappingProposal
 from sciplot_core.mapping_contract.source_identity import proposal_source_identities
-from sciplot_core.data_mapping.execution_inputs import mapping_read_json
+from sciplot_core.data_mapping.execution_inputs import mapping_read_json, mapping_input_reads
 
 
 def mapping_source_groups(execution: dict[str, Any], *, replicates: bool | None = None) -> list[dict[str, Any]]:
     """Read the proposal only after the execution owner has verified its bytes."""
+    with mapping_input_reads(str(Path(execution["output_root"]) / "execution.json")):
+        return _mapping_source_groups(execution, replicates=replicates)
+
+
+def _mapping_source_groups(execution: dict[str, Any], *, replicates: bool | None) -> list[dict[str, Any]]:
     proposal = DataMappingProposal.from_dict(mapping_read_json(Path(execution["proposal"])))
     if replicates is not None and ("replicates" in proposal.table_confirmation) != replicates:
         return []

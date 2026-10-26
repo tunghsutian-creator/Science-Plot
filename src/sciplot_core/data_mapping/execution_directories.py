@@ -1,11 +1,12 @@
 """Complete confirmed-mapping directories and their real committed tree authors."""
 from pathlib import Path
+from collections.abc import Iterable
 from typing import Any
 
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path, selected_source_resolver
-from sciplot_core.project_commands import SourceTreeRead
+from sciplot_core.project_commands import SourceTreeRead, InputRead
 from sciplot_core.project_store import ProjectConflict
 from sciplot_core.project_store.sealed_source_trees import SealedSourceTree
 from sciplot_core.project_store.source_resolver import ProjectSourceResolver
@@ -130,5 +131,26 @@ def mapping_tree_sources(reference: str) -> list[Any]:
             raise ProjectConflict("The complete mapping tree lacks an exact output source version.")
         result.append(SourceExpectation(literal, identity, version))
     return result
+
+
+def mapping_tree_reads(readsets: Iterable[MappingInputReadSet], baseline: tuple[SourceTreeRead, ...]) -> tuple[SourceTreeRead, ...]:
+    result = {item.locator: item for item in baseline}
+    for readset in readsets:
+        for item in mapping_live_trees(readset):
+            if item.locator in result and result[item.locator] != item:
+                raise ProjectConflict("A private preparation observed different mapping directory versions.")
+            result[item.locator] = item
+    return tuple(result[name] for name in sorted(result))
+
+
+def mapping_immutable_reads(snapshot: dict[str, Any], readsets: Iterable[MappingInputReadSet],
+                            baseline: tuple[InputRead, ...]) -> tuple[InputRead, ...]:
+    result = {item.resource: item for item in baseline}
+    for readset in readsets:
+        for item in readset.input_reads(snapshot):
+            if item.resource in result and result[item.resource] != item:
+                raise ProjectConflict("A private preparation has conflicting metadata input identities.")
+            result[item.resource] = item
+    return tuple(result[name] for name in sorted(result))
 
 

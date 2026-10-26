@@ -75,7 +75,22 @@ def _worksheet_confirmation(
     ]
 
 
+@contextmanager
 def prepare_candidate(
+    project: Path, source: Path, temporary: Path, *, worksheet: str | None,
+    mapping_request: dict[str, Any] | None = None,
+    snapshot: dict[str, Any] | None = None,
+) -> Iterator[tuple[StudioPreparationCandidate, list[dict[str, Any]]]]:
+    from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
+
+    reference = mapping_request.get("data_mapping_execution") if mapping_request is not None else None
+    with mapping_input_reads(reference, expected_source=source):
+        with _prepare_candidate(project, source, temporary, worksheet=worksheet,
+                mapping_request=mapping_request, snapshot=snapshot) as result:
+            yield result
+
+
+def _prepare_candidate(
     project: Path, source: Path, temporary: Path, *, worksheet: str | None,
     mapping_request: dict[str, Any] | None = None,
     snapshot: dict[str, Any] | None = None,

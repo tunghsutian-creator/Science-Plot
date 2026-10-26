@@ -255,14 +255,24 @@ def mapping_read_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def require_mapping_original_source(root: Path, relatives: list[str], seed: dict[str, Any]) -> None:
+def require_mapping_original_source(root: Path, files: dict[str, str], seed: dict[str, Any]) -> None:
     """Check the explicit planning intent before any original data are read."""
     active = _READ_SET.get()
     expected = active.expected_source if active is not None else None
-    if expected is not None and (not isinstance(seed.get("input"), str)
-            or mapping_literal(Path(seed["input"])) != expected
-            or {mapping_literal(root / relative) for relative in relatives} != {expected}):
+    if expected is None:
+        return
+    if (not isinstance(seed.get("input"), str) or mapping_literal(Path(seed["input"])) != expected
+            or not files or expected != root and {mapping_literal(root / relative) for relative in files} != {expected}):
         raise ProjectConflict("The confirmed mapping does not bind the exact selected original task source.")
+    if expected == root:
+        from sciplot_core.project_store.source_tree_io import observe
+
+        version = canonical_json_sha256({"kind": "directory", "files": [
+            {"path": name, "content_sha256": digest} for name, digest in sorted(files.items())]}, allow_nan=False)
+        if observe(str(resolve_source_path(root)), allowed=set(files))[0] != version:
+            raise ProjectConflict("The selected original directory differs from its complete confirmed member inventory.")
+        assert active is not None
+        active.trees[str(root)] = SourceTreeRead(str(root), version)
 
 
 def mapping_execution_header(path: Path, kind: str) -> dict[str, Any]:
@@ -324,7 +334,7 @@ def mapping_imported_execution(reference: str | Path) -> bool:
         return True
 
 
-def mapping_effective_source(reference: str | Path, effective: str | Path) -> tuple[str, str] | None:
+def mapping_effective_source(reference: str | Path, effective: str | Path) -> tuple[str | None, str] | None:
     """Readonly exact composite-file fact after the caller's full numeric replay."""
     from sciplot_core.project_store.source_inspection import inspect_file
 
@@ -332,13 +342,24 @@ def mapping_effective_source(reference: str | Path, effective: str | Path) -> tu
     if not isinstance(selected, ProjectSourceResolver):
         return None
     execution = str(mapping_execution_path(reference))
+    literal = str(mapping_literal(Path(effective)))
+    active = _READ_SET.get()
+    if active is not None and active.sealed and active.execution == execution:
+        active.require_current()
+        payload = json.loads(active.files[execution].data)
+        if payload["effective_input"] != literal:
+            raise ProjectConflict("The observed composite is not this verified execution's effective input.")
+        if payload["effective_input"] == payload["data_dir"]:
+            return None
+        observed = active.files[literal]
+        identity, version, _mode = _registered(literal, observed.sha256)
+        return identity, observed.sha256
     identity, version, _mode = _registered(execution, None)
     if identity is None or version is None:
         raise ProjectConflict("A composite mapping fact requires its exact registered execution version.")
     inspect_file(selected.store, execution, expected_sha256=version, source_id=identity, generation=selected.generation)
     with selected.store._locked() as (io, _current):
         payload = json.loads(io.get(selected.snapshot["sources"][identity][version]))
-    literal = str(mapping_literal(Path(effective)))
     if payload["effective_input"] != literal:
         raise ProjectConflict("The observed composite is not this verified execution's effective input.")
     if payload["effective_input"] == payload["data_dir"]:
@@ -362,5 +383,14 @@ def mapping_input_scope(readset: MappingInputReadSet | None) -> Iterator[None]:
     try:
         yield
         readset.require_current()
+    finally:
+        _READ_SET.reset(token)
+
+
+@contextmanager
+def without_mapping_inputs() -> Iterator[None]:
+    token = _READ_SET.set(None)
+    try:
+        yield
     finally:
         _READ_SET.reset(token)

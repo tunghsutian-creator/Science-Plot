@@ -17,6 +17,7 @@ from sciplot_core.project_store.worker_binding import native_runtime_binding
 
 
 @pytest.mark.parametrize("change", ["none", "metadata-drift"], ids=["same-bytes", "after-packet-drift"])
+@pytest.mark.comprehensive
 def test_real_child_uses_prepublication_mapping_byte_witness_and_clears_it(tmp_path, monkeypatch, change):
     _origin, _project, store, request, execution = confirmed_project(tmp_path, monkeypatch)
     generation = store.snapshot()["parent"]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sciplot_core.data_mapping.execution_directories import mapping_tree_reads, mapping_immutable_reads
 from sciplot_core.studio_core.project_command_scope import project_command_runtime
 
 import json
@@ -32,7 +33,7 @@ from sciplot_core.studio_core.source_update_annotations import transfer_annotati
 from sciplot_core.studio_core.source_update_styles import capture_project_styles, transfer_project_styles
 from sciplot_core.studio_core.annotation_contracts import annotation_records
 from sciplot_core.studio_core.annotation_rebinding import relocate_annotation_evidence
-from sciplot_core.project_commands import PreparedSource
+from sciplot_core.project_commands import PreparedSource, InputRead, SourceTreeRead
 
 from sciplot_core.studio_core.source_update_state import (
     _delivery_inventory as _delivery_inventory, _check_external_state as _check_external_state,
@@ -127,7 +128,21 @@ def _prepared_update_current(
         return
 
     figures = project_figures(project)
-    with baseline_scope(repository, before_snapshot, specs=[spec for _doc, spec in figures.values()]):
+    from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
+    from sciplot_core.data_mapping.execution_loading import load_data_mapping_execution
+    from sciplot_core.data_mapping.execution_directories import mapping_live_trees
+
+    baseline_sources: tuple[PreparedSource, ...] = ()
+    baseline_roles: tuple[InputRead, ...] = ()
+    baseline_trees: tuple[SourceTreeRead, ...] = ()
+    with baseline_scope(repository, before_snapshot, specs=[spec for _doc, spec in figures.values()]), \
+            mapping_input_reads(request.get("data_mapping_execution")) as baseline_mapping:
+        if baseline_mapping is not None:
+            load_data_mapping_execution(baseline_mapping.execution)
+            baseline_sources = tuple(item for item in baseline_mapping.prepared_sources(before_snapshot)
+                if item.locator in baseline_mapping.metadata or item.version not in before_snapshot["sources"].get(item.source_id, {}))
+            baseline_roles = baseline_mapping.input_reads(before_snapshot)
+            baseline_trees = mapping_live_trees(baseline_mapping)
         for document, spec in figures.values():
             annotation_records(json.loads(spec.read_text()))
             _audit_exact_document_data(
@@ -136,6 +151,9 @@ def _prepared_update_current(
         old_styles = capture_project_styles(project)
     with incoming_scope(repository, before_snapshot, source, source_state), prepare_candidate(project, source, project.parent, worksheet=selected_sheet, snapshot=before_snapshot,
             **({"mapping_request": mapping_request} if mapping_request else {})) as (private, confirmations):
+        private.mapping_baseline_sources = baseline_sources
+        private.mapping_baseline_roles = baseline_roles
+        private.mapping_baseline_trees = baseline_trees
         candidate = private.project_dir
         if delivery and delivery.is_dir():
             # An unmerged visible edit must be recovered first; update cannot
@@ -189,8 +207,8 @@ def _prepared_update_current(
         if mapping_request is not None:
             review["mapping_request"] = mapping_request
             review["mapping"] = json.loads((candidate / "plot_request.json").read_text())["data_mapping_plan_binding"]
-        if private.mapping_tree_reads:
-            review["mapping_source_trees"] = [tree.to_payload() for tree in private.mapping_tree_reads]
+        if mapping_tree_reads(private.mapping_inputs.values(), private.mapping_baseline_trees):
+            review["mapping_source_trees"] = [tree.to_payload() for tree in mapping_tree_reads(private.mapping_inputs.values(), private.mapping_baseline_trees)]
         if annotations:
             review["annotation_review"] = annotations
             review["annotation_decisions"] = annotation_decisions or []
@@ -225,7 +243,7 @@ def preview_project_source_update(
             return stage_source_update(Path(preview["project"]), candidate, preview,
                 relocate_companion=relocate_annotation_evidence if preview.get("annotation_review") else None,
                 prepared_sources=prepared_sources, logical_paths_bound=True, before_snapshot=before_snapshot,
-                input_reads=require_preparation_candidate(candidate).mapping_input_reads)
+                input_reads=mapping_immutable_reads(require_preparation_candidate(candidate).snapshot, require_preparation_candidate(candidate).mapping_inputs.values(), require_preparation_candidate(candidate).mapping_baseline_roles))
     except (ValueError, OSError, RuntimeError) as exc:
         return {
             "kind": "sciplot_project_source_update",
