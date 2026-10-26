@@ -19,6 +19,16 @@ from sciplot_core.workflow.rheology_tts_tables import write_json
 from test_rheology_tts_render import _native_settings
 
 
+def _saved_command(workspace, delivery, request):
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.workflow.native_suite_generation import command_key
+
+    key = command_key("native_patch", {"figure": "Main", "key": request["idempotency_key"]})
+    record = FileProjectStore(workspace, locations={"delivery": delivery}).query(key)
+    assert record is not None and record["metadata"]["request"]["request"] == request
+    return record
+
+
 @pytest.fixture
 def suite(tmp_path, monkeypatch):
     from sciplot_core.semantic_sources import rheology_tts
@@ -197,7 +207,7 @@ def test_selected_export_and_edit_ignore_missing_optional_native_and_spec(suite,
 @pytest.mark.comprehensive
 def test_export_failure_resume_and_publication_retry_do_not_apply_twice(suite, monkeypatch):
     from sciplot_core import rheology_tts_render
-    from sciplot_core.workflow import rheology_tts_style_storage as storage
+    from sciplot_core.project_store import state
 
     workspace, _delivery, _source, _prepared, manifest = suite
     native = Path(manifest["documents"][0]["path"])
@@ -219,20 +229,18 @@ def test_export_failure_resume_and_publication_retry_do_not_apply_twice(suite, m
     assert snapshot([Path(path) for path in before]) == before
     preview = resume_native_object(native, failure["next_step"]["request"])
     assert preview["status"] == "needs_review" and counts["display_patch"] == 1 and counts["export"] == 2
-    replace, calls = storage.os.replace, 0
+    boundary = state.boundary
 
-    def fail_second(source, target):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
+    def fail_publication(name):
+        if name == "before_head":
             raise OSError("transient publication failure")
-        return replace(source, target)
+        return boundary(name)
 
-    monkeypatch.setattr(storage.os, "replace", fail_second)
+    monkeypatch.setattr(state, "boundary", fail_publication)
     with pytest.raises(OSError, match="publication failure"):
         decide_native_object(native, _accept(preview))
     assert snapshot([Path(path) for path in before]) == before
-    monkeypatch.setattr(storage.os, "replace", replace)
+    monkeypatch.setattr(state, "boundary", boundary)
     result = decide_native_object(native, _accept(preview))
     assert result["status"] == "complete" and counts["display_patch"] == 1 and counts["export"] == 2
     assert patch_native_object(native, request)["replayed"] is True
@@ -269,28 +277,31 @@ def test_stale_unknown_and_rejected_changes_preserve_native(suite):
 @pytest.mark.comprehensive
 def test_publication_reply_loss_recovers_exact_installed_candidate_without_reapplication(suite, monkeypatch):
     from sciplot_core import rheology_tts_render
-    from sciplot_core.workflow import rheology_tts_style_update as style
+    from sciplot_core.project_store import state
 
-    _workspace, _delivery, _source, _prepared, manifest = suite
+    workspace, delivery, _source, _prepared, manifest = suite
     native = Path(manifest["documents"][0]["path"])
     description = describe_native_object(native, description={"scope": "summary"})
     request = _request(description)
     preview = patch_native_object(native, request)
-    write, fail = style.write_json, True
+    save, fail = state.save_command, True
 
-    def lose_completion(path, payload):
+    def lose_completion(io, record):
         nonlocal fail
-        if Path(path).name == "applied.json" and fail:
+        if record["phase"] == "complete" and fail:
             fail = False
             raise OSError("lost completion after successful native publication")
-        return write(path, payload)
+        return save(io, record)
 
-    monkeypatch.setattr(style, "write_json", lose_completion)
+    monkeypatch.setattr(state, "save_command", lose_completion)
     before = file_sha256(native)
     with pytest.raises(OSError, match="after successful"):
         decide_native_object(native, _accept(preview))
     assert file_sha256(native) != before
     installed = snapshot([native, *(Path(name) for name in manifest["documents"][0]["exports"])])
+    pending = _saved_command(workspace, delivery, request)
+    assert pending["accepted"] is True and pending["phase"] == "accepted"
+    assert pending["projection_pending"] is True
 
     def forbid_native(_request):
         pytest.fail("Exact-installed recovery must not execute native work again.")
@@ -298,8 +309,10 @@ def test_publication_reply_loss_recovers_exact_installed_candidate_without_reapp
     monkeypatch.setattr(rheology_tts_render, "_dispatch", forbid_native)
     recovered = decide_native_object(native, _accept(preview))
     assert recovered["status"] == "complete"
-    evidence = json.loads(Path(recovered["evidence"]).read_text())
-    assert evidence["publication"]["recovered_publication"] is True
+    evidence = _saved_command(workspace, delivery, request)
+    assert evidence["phase"] == "complete" and evidence["generation"] == pending["install_generation"]
+    assert evidence["decision_id"] == pending["decision_id"]
+    assert evidence["draft"] == pending["draft"]
     assert snapshot([Path(name) for name in installed]) == installed
     assert patch_native_object(native, request)["replayed"] is True
 
@@ -307,29 +320,33 @@ def test_publication_reply_loss_recovers_exact_installed_candidate_without_reapp
 @pytest.mark.comprehensive
 @pytest.mark.parametrize("stage", ["apply", "export"])
 def test_native_save_after_successful_owner_cannot_mint_a_verified_revision(suite, monkeypatch, stage):
-    from sciplot_core.workflow import rheology_tts_style_update as style
+    from sciplot_core.project_store import state
     from sciplot_core.workflow import rheology_tts_suite as suite_owner
 
-    workspace, _delivery, _source, _prepared, manifest = suite
+    workspace, delivery, source, prepared, manifest = suite
     native = Path(manifest["documents"][0]["path"])
     description = describe_native_object(native, description={"scope": "summary"})
     request = _request(description)
     preview = patch_native_object(native, request)
+    scientific = snapshot([source, prepared])
 
     def native_save():
         _native_settings(native, edits=[("/page1/graph1/x/label", "Concurrent native save")])
 
     if stage == "apply":
-        apply = style.apply_suite_style
+        boundary = state.boundary
 
-        def save_after_apply(*args, **kwargs):
-            result = apply(*args, **kwargs)
-            native_save()
-            return result
+        def save_after_apply(name):
+            if name == "before_reply":
+                native_save()
+            return boundary(name)
 
-        monkeypatch.setattr(style, "apply_suite_style", save_after_apply)
-        with pytest.raises(EngineError, match="changed after verified"):
-            decide_native_object(native, _accept(preview))
+        monkeypatch.setattr(state, "boundary", save_after_apply)
+        decided = decide_native_object(native, _accept(preview))
+        # The committed revision remains historical; a later foreign native
+        # save must never acquire its current/ready authority.
+        assert decided["ready_to_use"] is False and decided["current_state_matches"] is False
+        assert decided["exports"] == [] and decided["export_status"] == "unknown"
     else:
         decided = decide_native_object(native, _accept(preview))
         assert decided["ready_to_use"] is True
@@ -346,12 +363,12 @@ def test_native_save_after_successful_owner_cannot_mint_a_verified_revision(suit
     updated = json.loads((workspace / "suite.json").read_text())
     receipt = next(item for item in updated["last_export"] if Path(item["document"]) == native)
     assert file_sha256(native) != receipt["document_sha256"]
-    record = json.loads(Path(preview["evidence"]).read_text())
-    if stage == "apply":
-        assert record["phase"] == "prepared" and record["accepted"] is True
-        assert "revision" not in record
-    else:
-        assert record["revision"] == decided["revision"]
+    record = _saved_command(workspace, delivery, request)
+    assert record["phase"] == "complete" and record["accepted"] is True
+    assert record["result"]["revision"] == decided["revision"]
+    assert record["result"]["presentation_hash"] == receipt["document_sha256"]
+    assert _native_settings(native, reads=["/page1/graph1/x/label"])["/page1/graph1/x/label"] == "Concurrent native save"
+    assert snapshot([Path(name) for name in scientific]) == scientific
 
 
 @pytest.mark.comprehensive

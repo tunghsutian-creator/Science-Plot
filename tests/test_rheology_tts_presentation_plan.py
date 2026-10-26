@@ -7,7 +7,6 @@ import pytest
 
 from sciplot_core import cli
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.rheology_tts_spec import compile_tts_spec
 from sciplot_core.rheology_tts_style import prepare_tts_presentation
 from sciplot_core.workflow.rheology_tts_contract import rheology_capabilities
@@ -88,24 +87,50 @@ def test_compiled_science_guard_ignores_only_display_text_and_legend_position():
 
 def test_plan_dependency_change_blocks_apply_before_publication(tmp_path, monkeypatch):
     from sciplot_core.workflow import rheology_tts_style_update as update
-    from sciplot_core.workflow import rheology_tts_suite as suite
+    from sciplot_core.workflow.rheology_tts_style_storage import snapshot
+    from sciplot_core.workflow.rheology_tts_tables import write_json
+    from test_native_suite_project_commands import bound
 
-    workspace = tmp_path / "suite"
-    delivery = tmp_path / "delivery"
-    directory = workspace / "style_previews" / "case"
-    directory.mkdir(parents=True)
+    # Fake only native rendering. Plan validation, frozen candidate import,
+    # dependency admission and publication all use the real application/store.
+    fixture = bound.__wrapped__(tmp_path, monkeypatch)
+    workspace, delivery, _source, documents, *_ = fixture
+    manifest = json.loads((workspace / "suite.json").read_bytes())
+    manifest["figure_layout"] = "separate_polymer_modulus"
+    write_json(workspace / "suite.json", manifest)
+    write_json(delivery / "data/delivery_manifest.json", manifest)
+    for root in (workspace, delivery / "data"):
+        write_json(root / "figure_plan.json", _plan())
     external = _write(tmp_path / "provided.json", _plan())
-    preview = {"kind": "sciplot_rheology_style_preview", "workspace": str(workspace), "delivery": str(delivery), "sources": [],
-        "presentation_plan": {"path": str(external), "sha256": file_sha256(external)}}
-    path = _write(directory / "preview.json", preview)
-    (directory / "preview.sha256").write_text(canonical_json_sha256(preview))
+
+    def prepare(_workspace, directory, *, presentation_plan=None):
+        candidate_plan, binding = _presentation_plan(_plan(), presentation_plan, authoritative_paths=())
+        plan = directory / "figure_plan.json"
+        write_json(plan, candidate_plan)
+        figures = []
+        for receipt in manifest["native_result"]["figures"]:
+            spec = directory / (receipt["id"] + ".spec.json")
+            spec.write_bytes(Path(receipt["spec_path"]).read_bytes())
+            figures.append({"id": receipt["id"], "spec_path": str(spec), "spec_sha256": file_sha256(spec)})
+        candidate = directory / "A.vsz"
+        candidate.write_bytes(Path(documents[0]["path"]).read_bytes() + b":display-only")
+        exported = fixture[6](candidate, directory / "exports" / "A", {"id": "A"})
+        return {"kind": "sciplot_rheology_style_preview", "version": 1, "status": "preview_ready",
+            "contract_sha256": "f" * 64, "sources": manifest["sources"], "figures": figures,
+            "presentation_plan": binding, "plan": str(plan), "candidate_files": {str(plan): file_sha256(plan)},
+            "candidates": [{"id": "A", "edit": {"changes": [{"field": "legend"}]}, "export": exported}]}
+
+    from pathlib import Path
+    monkeypatch.setattr(update, "_prepare_style_preview", prepare)
+    preview = update.preview_suite_style(workspace, presentation_plan=external)
+    protected = snapshot([workspace / "suite.json", delivery / "data/delivery_manifest.json",
+                          *(Path(item["path"]) for item in documents),
+                          *(Path(name) for item in documents for name in item["exports"])])
     external.write_text("changed after preview")
-    monkeypatch.setattr(update, "_load", lambda _, *, native_display=False: (workspace, {"delivery": str(delivery)}))
-    monkeypatch.setattr(suite, "_check_sources", lambda _: None)
-    monkeypatch.setattr(update, "publish_files", lambda *a, **kw: pytest.fail("must reject before publishing"))
     with pytest.raises(ValueError, match="Stale external presentation plan"):
-        apply_suite_style(workspace, path)
-    assert not (directory / "backup").exists()
+        apply_suite_style(workspace, Path(preview["preview"]))
+    assert snapshot([Path(name) for name in protected]) == protected
+    assert not (Path(preview["preview"]).parent / "backup").exists()
 
 
 def test_public_cli_and_capabilities_advertise_and_forward_explicit_plan(tmp_path, monkeypatch):
