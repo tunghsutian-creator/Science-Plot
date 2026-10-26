@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Literal, TypedDict
+from sciplot_core.delivery.runtime_evidence import path_identity, launcher_contract_identity, recorded_path_exists
 
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
@@ -74,7 +75,7 @@ def verify_delivery_package(
         if isinstance(path_value, str) and path_value.strip()
         else None
     )
-    root_ready = bool(recorded_root == expected and expected.is_dir())
+    root_ready = bool(recorded_root is not None and path_identity(recorded_root) == path_identity(expected) and expected.is_dir())
     # Older delivery records remain valid without the newer editor entry. Any
     # recorded editor evidence requires the entire current launcher contract.
     editor_recorded = any(
@@ -165,7 +166,7 @@ def verify_delivery_package(
     launcher_path_current = bool(
         isinstance(recorded_launcher_path, str)
         and recorded_launcher_path.strip()
-        and Path(recorded_launcher_path).expanduser().resolve() == launcher.resolve()
+        and path_identity(Path(recorded_launcher_path).expanduser()) == path_identity(launcher)
     )
     recorded_launcher_sha256 = str(record.get("open_in_veusz_sha256") or "").strip()
     launcher_hash_current = bool(
@@ -179,7 +180,7 @@ def verify_delivery_package(
     )
     launcher_contract_current = bool(
         recorded_launcher_contract
-        and recorded_launcher_contract == live_launcher_contract
+        and launcher_contract_identity(recorded_launcher_contract) == launcher_contract_identity(live_launcher_contract)
     )
     launcher_ready = bool(
         launcher_path_current
@@ -192,10 +193,10 @@ def verify_delivery_package(
     editor_launcher_current = not editor_recorded or bool(
         isinstance(editor_path, str)
         and editor_path.strip()
-        and Path(editor_path).expanduser().resolve() == expected / DELIVERY_EDITOR_LAUNCHER
+        and path_identity(Path(editor_path).expanduser()) == path_identity(expected / DELIVERY_EDITOR_LAUNCHER)
         and live_editor_contract.get("ready") is True
         and record.get("open_in_sciplot_sha256") == live_editor_contract.get("content_sha256")
-        and record.get("editor_launcher_contract") == live_editor_contract
+        and launcher_contract_identity(record.get("editor_launcher_contract")) == launcher_contract_identity(live_editor_contract)
     )
     artifacts = record.get("artifacts")
     plan_artifact = (
@@ -344,7 +345,7 @@ def verify_delivery_package(
             isinstance(item, dict)
             and item.get("exists") is True
             and isinstance(item.get("path"), str)
-            and Path(str(item["path"])).expanduser().exists()
+            and recorded_path_exists(item["path"])
             for item in artifacts
         )
     )

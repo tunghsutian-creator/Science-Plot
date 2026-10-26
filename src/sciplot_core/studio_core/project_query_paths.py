@@ -9,6 +9,7 @@ from typing import Any
 
 from sciplot_core.figure_plan import resolved_figure_plan_from_payload
 from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
 from sciplot_core.launchers.delivery_inspection import (
     inspect_delivery_launcher_contract,
@@ -36,15 +37,20 @@ def bound_delivery_project(root: Path) -> Path:
     binding = delivery_binding_from_content(launcher.read_text(encoding="utf-8"))
     if binding is None or binding.request is None:
         raise ValueError("Portable delivery has no associated managed project.")
-    canonical_path(Path(binding.request))
-    if binding.source is not None:
-        if not canonical_path(Path(binding.source)).exists():
-            raise ValueError("The delivery's associated project source is missing.")
     project = _managed_project(root, binding)
     if project is None:
         raise ValueError(
             "Portable or relocated delivery has no current project binding."
         )
+    canonical_path(resolve_source_path(binding.request))
+    if binding.source is not None:
+        from sciplot_core.studio_core.project_query_sources import current_source_files
+
+        files, identities = current_source_files(project, Path(binding.source), project_snapshot(project)[2])
+        sources = [resolve_source_path(path, expected_sha256=digest, source_id=identities.get(path))
+                   for path, digest in files.items()] if files else [resolve_source_path(binding.source)]
+        if not all(canonical_path(path).exists() for path in sources):
+            raise ValueError("The delivery's associated project source is missing.")
     return canonical_path(project)
 
 

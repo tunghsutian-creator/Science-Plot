@@ -46,6 +46,24 @@ resolve_runtime_path = resolve_source_path
 literal_runtime_path = literal_source_path
 
 
+def projected_runtime_directory(original: str | Path) -> Path:
+    """Observe visible delivery bytes through an existing selected host cap.
+
+    This neither admits output nor grants an executor access. Private candidates
+    and immutable source-directory caches are not visible delivery evidence.
+    """
+    from .candidate_runtime import ProjectCandidateResolver
+    from .errors import ProjectStoreError
+    from .physical_projection import projected_directory
+
+    selected = selected_source_resolver()
+    if isinstance(selected, ProjectCandidateResolver):
+        raise ProjectStoreError("A private candidate cannot certify the current visible delivery.")
+    if isinstance(selected, ProjectSourceResolver):
+        return projected_directory(selected.store, original, generation=selected.generation)
+    return Path(original)
+
+
 def selected_project_store() -> FileProjectStore | None:
     """Return only the currently host-bound concrete store, preserving its caps."""
     selected = selected_source_resolver()

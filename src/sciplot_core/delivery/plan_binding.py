@@ -7,6 +7,7 @@ from typing import Literal, NotRequired, TypedDict
 
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.policy import canonical_figure_stem
 
 
@@ -267,11 +268,11 @@ def project_document_hashes_current(value: object) -> bool:
             return False
         source = Path(str(item.get("source") or "")).expanduser()
         delivery = Path(str(item.get("path") or "")).expanduser()
-        source_hash = existing_file_sha256(source)
-        delivery_hash = existing_file_sha256(delivery)
         recorded_source_hash = str(item.get("source_sha256") or "").strip()
         expected_hash = str(item.get("expected_sha256") or "").strip()
         recorded_delivery_hash = str(item.get("delivery_sha256") or "").strip()
+        source_hash = existing_file_sha256(resolve_source_path(source, expected_sha256=recorded_source_hash or None))
+        delivery_hash = existing_file_sha256(resolve_source_path(delivery, expected_sha256=recorded_delivery_hash or None))
         if not (
             source_hash
             and source_hash == recorded_source_hash
@@ -295,10 +296,10 @@ def figure_artifact_hashes_current(value: object) -> bool:
             return False
         source = Path(str(item.get("source") or "")).expanduser()
         delivery = Path(str(item.get("path") or "")).expanduser()
-        source_hash = existing_file_sha256(source)
-        delivery_hash = existing_file_sha256(delivery)
         recorded_source_hash = str(item.get("source_sha256") or "").strip()
         recorded_delivery_hash = str(item.get("delivery_sha256") or "").strip()
+        source_hash = existing_file_sha256(resolve_source_path(source, expected_sha256=recorded_source_hash or None))
+        delivery_hash = existing_file_sha256(resolve_source_path(delivery, expected_sha256=recorded_delivery_hash or None))
         if not (
             source_hash
             and source_hash == recorded_source_hash

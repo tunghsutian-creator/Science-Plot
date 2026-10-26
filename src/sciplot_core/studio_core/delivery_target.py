@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
+from sciplot_core.project_store.runtime import selected_project_store
 from sciplot_core.launchers.delivery_binding import (
     DeliveryBinding,
     delivery_binding_from_content,
@@ -81,12 +83,15 @@ def resolve_delivery_target(path: Path) -> dict[str, Any] | None:
 
 
 def _managed_project(root: Path, binding: DeliveryBinding) -> Path | None:
-    if binding.root != str(root) or binding.request is None:
+    if binding.root != literal_source_path(root) or binding.request is None:
         return None
-    request_path = Path(binding.request)
+    request_path = resolve_source_path(binding.request)
     if request_path.name != "plot_request.json" or not request_path.is_file():
         return None
     project = request_path.parent
+    selected = selected_project_store()
+    if selected is not None and project != selected.root:
+        return None
     if not (project / "studio" / "document.vsz").is_file():
         return None
     try:
@@ -95,13 +100,13 @@ def _managed_project(root: Path, binding: DeliveryBinding) -> Path | None:
             return None
         output = request.get("delivery_output")
         source = request.get("input")
-        if not isinstance(output, str) or Path(output).expanduser().resolve() != root:
+        if not isinstance(output, str) or Path(output).expanduser().resolve() != Path(literal_source_path(root)):
             return None
         if not isinstance(source, str) or not source.strip():
             return None
         source_path = Path(source).expanduser()
         if not source_path.is_absolute():
-            source_path = project / source_path
+            source_path = Path(literal_source_path(project)) / source_path
         if str(source_path.resolve()) != binding.source:
             return None
     except (OSError, ValueError):

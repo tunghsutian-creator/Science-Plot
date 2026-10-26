@@ -10,7 +10,7 @@ from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_re
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.project_store.runtime import resolve_runtime_path, literal_runtime_path
+from sciplot_core.project_store.runtime import resolve_runtime_path, literal_runtime_path, projected_runtime_directory
 from sciplot_core.source_coverage.managed_documents import source_records
 from sciplot_core.studio_core.project_query_paths import (
     bound_delivery_project,
@@ -314,7 +314,7 @@ def publication_indicators(
             root = Path(value).expanduser()
             if not root.is_absolute():
                 root = project / root
-            root = canonical_path(resolve_runtime_path(root))
+            root = canonical_path(projected_runtime_directory(root))
             binding_current = bound_delivery_project(root) == project
             for member in root.rglob("*"):
                 canonical_path(member)
