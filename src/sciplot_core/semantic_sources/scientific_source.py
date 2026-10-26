@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.materials_rules.models import SemanticRule
 from sciplot_core.semantic_sources.scientific_source_models import (
@@ -189,7 +190,7 @@ def _resolve_rheology_frequency_scientific_source(
     request: dict[str, Any],
     study_model: dict[str, Any],
 ) -> ResolvedScientificSource | None:
-    if not source.is_dir():
+    if not resolve_source_path(source).is_dir():
         return None
     from sciplot_core.figure_plan.frequency_resolution import resolve_frequency_plan
     from sciplot_core.semantic_sources.rheology_sweep_domain import (

@@ -17,15 +17,20 @@ from sciplot_core.studio_core.preparation_source_runtime import _current_tree_co
 from test_project_query_source_versions import generation
 
 
-def current_revision(tmp_path, *, directory=False):
+def current_revision(tmp_path, *, directory=False, rheology=False):
     store, request, source, paths = generation(tmp_path, directory=directory)
     old_versions = {path: file_sha256(path) for path in paths}
     for index, path in enumerate(paths):
-        path.write_text(f"x,y\n1,{index + 10}\n")
+        path.write_text(
+            "Angular Frequency,Storage Modulus\nrad/s,Pa\n"
+            + "".join(f"{x},{y}\n" for x, y in zip((1, 10, 100), (10 + index, 20 + index, 30 + index), strict=True))
+            if rheology else f"x,y\n1,{index + 10}\n")
     if directory:
-        unused = source / "notes.txt"
+        unused = source / ("unused.md" if rheology else "notes.txt")
         unused.write_bytes(b"original unused input; not scientific data")
         paths.append(unused)
+        if rheology:
+            (source / "empty").mkdir()
     inventory = {path.relative_to(source).as_posix() if directory else path.name: file_sha256(path) for path in paths}
     tree_sha = source_tree_sha256(source)
     artifacts = [{"kind": "file", "path": str(path), "sha256": file_sha256(path)} for path in paths if path.suffix == ".csv"]

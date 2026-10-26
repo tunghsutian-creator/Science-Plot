@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from sciplot_core.foundation.source_locations import resolve_source_path
 
 from sciplot_core.semantic_sources.preparation_context import SemanticPreparationContext
 
@@ -73,17 +74,18 @@ def prepare_rheology_source(
     context: SemanticPreparationContext,
 ) -> dict[str, Any] | None:
     source = context.source
+    actual = resolve_source_path(source)
     processed_dir = context.processed_dir
     family = context.family
     series_order = context.series_order
     column_confirmations = context.column_confirmations
     replicate_mode = context.replicate_mode
 
-    if family == "rheology_frequency" and source.is_file() and source.suffix.lower() in {".xlsx", ".xls"}:
+    if family == "rheology_frequency" and actual.is_file() and source.suffix.lower() in {".xlsx", ".xls"}:
         import pandas as pd
         from sciplot_core.semantic_sources.rheology_frequency_metrics import complete_frequency_frame
 
-        frame, derivations = complete_frequency_frame(pd.read_excel(source, sheet_name=0, header=None))
+        frame, derivations = complete_frequency_frame(pd.read_excel(actual, sheet_name=0, header=None))
         if derivations:
             processed_source = processed_dir / "rheology_frequency_comparison.xlsx"
             write_frequency_comparison_frame(frame, processed_source)
@@ -95,7 +97,7 @@ def prepare_rheology_source(
 
     shared_sweep = _SHARED_RHEOLOGY_SWEEP_CONFIG.get(family)
 
-    if shared_sweep is not None and source.is_dir():
+    if shared_sweep is not None and actual.is_dir():
         processed_source = processed_dir / f"{family}_comparison.xlsx"
         source_samples = _read_rheology_sweep_comparison_samples(
             source,
@@ -143,7 +145,7 @@ def prepare_rheology_source(
             },
         )
 
-    if family == "rheology_frequency" and source.is_dir():
+    if family == "rheology_frequency" and actual.is_dir():
         processed_source = processed_dir / "rheology_frequency_comparison.xlsx"
         frequency_domain = (
             context.resolved_scientific_source.require_domain(
@@ -360,7 +362,7 @@ def prepare_rheology_source(
                 ),
                 "series_order": [series.sample for series in series_list],
                 "automatic_visual_ordering": not bool(_series_order_map(series_order))
-                and source.is_dir(),
+                and actual.is_dir(),
                 "scientific_transform": resolved_transform.contract.to_payload(),
                 "source_normalizations": [
                     {"sample": series.sample, **(series.diagnostics or {})}

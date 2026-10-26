@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.foundation.text_values import clean_text
 from sciplot_core.semantic_sources.models import (
@@ -103,7 +104,7 @@ def resolve_rheology_frequency_domain(
     """Resolve one raw-export frequency directory into the shared domain."""
 
     source = input_path.expanduser().resolve()
-    if not source.is_dir():
+    if not resolve_source_path(source).is_dir():
         _fail(
             "frequency_source_unavailable",
             "Rheology frequency domain resolution requires a source directory.",

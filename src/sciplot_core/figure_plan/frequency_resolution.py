@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.figure_plan.errors import FigurePlanResolutionError
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.figure_plan.source_binding import source_tree_sha256
@@ -50,7 +51,7 @@ def resolve_frequency_plan(
     sample_order: tuple[str, ...] = ()
     replicate_counts: tuple[tuple[str, int], ...] = ()
     directory_source = bool(
-        input_path is not None and input_path.expanduser().resolve().is_dir()
+        input_path is not None and resolve_source_path(input_path.expanduser().resolve()).is_dir()
     )
     if directory_source:
         assert input_path is not None

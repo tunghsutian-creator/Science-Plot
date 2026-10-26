@@ -7,6 +7,7 @@ from dataclasses import replace
 import re
 from typing import Any
 import pandas as pd
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 from sciplot_core.foundation.text_values import (
     clean_text as _clean_text,
     token as _token,
@@ -53,13 +54,14 @@ from sciplot_core.semantic_sources.rheology_sweep_columns import (
 
 
 def _sweep_source_files(source: Path) -> list[Path]:
-    if not source.is_dir():
+    actual = resolve_source_path(source)
+    if not actual.is_dir():
         return [source]
     suffixes = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
     candidates = sorted(
         (
-            child
-            for child in source.iterdir()
+            Path(literal_source_path(child))
+            for child in actual.iterdir()
             if child.is_file() and child.suffix.lower() in suffixes
         ),
         key=lambda path: path.name.casefold(),
@@ -118,7 +120,7 @@ def _frequency_result_sections(
         raise ValueError("Mixed frequency Result metadata cannot be silently merged; bind each original result explicitly.")
     if len(results) <= 1:
         return [(sample, raw, None)]
-    sections = []
+    sections: list[tuple[str, pd.DataFrame, dict[str, Any] | None]] = []
     for position, (start, text, nominal_text, nominal) in enumerate(results):
         stop = results[position + 1][0] if position + 1 < len(results) else len(raw)
         block = raw.iloc[start:stop]
@@ -165,8 +167,15 @@ def _read_rheology_sweep_sample(
         source_regions = rheology_instrument_regions(raw)
     if source_regions is None:
         raw = raw.dropna(axis=1, how="all")
-    header_indexes = ([int(raw.index.get_loc(region["header_row"])) for region in source_regions]
-                      if source_regions else _find_rheology_sweep_headers(raw, x_aliases=x_aliases, metrics=metrics))
+    header_indexes: list[int] = []
+    if source_regions:
+        for region in source_regions:
+            position = raw.index.get_loc(region["header_row"])
+            if not isinstance(position, int):
+                raise ValueError("A rheology interval header must identify one original row.")
+            header_indexes.append(position)
+    else:
+        header_indexes = _find_rheology_sweep_headers(raw, x_aliases=x_aliases, metrics=metrics)
     select_last_interval = interval_selection == "last_numeric_interval"
     header_index = header_indexes[-1] if select_last_interval else header_indexes[0]
     headers = [_clean_text(value) for value in raw.iloc[header_index].tolist()]
@@ -202,11 +211,11 @@ def _read_rheology_sweep_sample(
     metric_factors: dict[str, float] = {}
     metric_conversions: dict[str, dict[str, Any]] = {}
     for key, _label, _aliases, default_unit in metrics:
-        metric_index = metric_indexes.get(key)
-        if metric_index is None:
+        selected_metric_index = metric_indexes.get(key)
+        if selected_metric_index is None:
             continue
         source_unit, unit_authority = _sweep_source_unit(
-            headers, units, metric_index, default_unit, explicit=explicit_units,
+            headers, units, selected_metric_index, default_unit, explicit=explicit_units,
         )
         output_unit, factor, method = _unit_conversion(source_unit, default_unit)
         if method == "source_unit_preserved":
@@ -222,14 +231,14 @@ def _read_rheology_sweep_sample(
             "output_unit": output_unit,
             "factor": factor,
             "method": method,
-            'source_header': headers[metric_index],
-            'source_column': metric_index,
+            'source_header': headers[selected_metric_index],
+            'source_column': selected_metric_index,
             'source_unit_authority': unit_authority,
         }
     selected_regions = source_regions[-1:] if select_last_interval and source_regions else source_regions
     row_indexes = ([row for row in range(len(raw)) if any(
         region["data_start_row"] <= int(raw.index[row]) < region["data_end_row"] for region in selected_regions)]
-        if selected_regions else range(header_index + 1, raw.shape[0]))
+        if selected_regions else list(range(header_index + 1, raw.shape[0])))
     decimal_comma = selected_columns_use_decimal_comma(
         raw.iloc[row_indexes] if selected_regions else raw,
         start_row=0 if selected_regions else header_index + 1,
