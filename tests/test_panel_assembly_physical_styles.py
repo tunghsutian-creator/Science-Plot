@@ -38,9 +38,11 @@ def test_actual_native_relative_physical_style_refuses_export_with_actionable_de
         statements = f" doc.resolveSettingPath(None,{target!r}).set('3%')\n"
     script.write_text("from pathlib import Path\nfrom sciplot_core.veusz_worker.document_edit import loaded_native_document\n"
         "from sciplot_core.studio_core.persistence import atomic_save_veusz_document, project_save_binding\n"
-        f"path=Path({str(native)!r})\nbaseline=project_save_binding(Path({str(project)!r}),path)\n"
+        "from sciplot_core.project_host_factory import project_store\n"
+        f"path=Path({str(native)!r})\nproject=Path({str(project)!r})\nstore=project_store(project)\nbaseline=project_save_binding(project,path,store=store)\n"
         "with loaded_native_document(path) as doc:\n"
         " doc._sciplot_project_read_set=baseline\n"
+        " doc._sciplot_project_store=store\n"
         " from veusz.setting import Reference\n" + statements + " atomic_save_veusz_document(doc,path)\n")
     modified = subprocess.run([sys.executable, str(script)], env=veusz_worker_environment(), capture_output=True, text=True, timeout=120)
     assert modified.returncode == 0, modified.stderr
