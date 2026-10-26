@@ -110,6 +110,16 @@ actually observed. An active request census uses verified current members and
 exact recorded storage roles; history objects are not additional active requests,
 and an unknown file inside a storage directory is not silently ignored.
 
+File projection also retires a direct leaf directory when this command deletes
+all its old members and each has an exact produced-resource record, byte version,
+size and mode. Current members, declared inputs, capability roots and unproved
+directories prevent that inference. The same projection owner checks the current
+head and directory identity, removes only the empty proved directory and can
+finish after interruption without repeating the command effect. It does not scan
+for empty directories or recursively clean unknown intermediate scaffolds. This
+is a cooperative Store and descriptor contract, not OS isolation against a
+hostile process racing the final filesystem operation.
+
 ## Complete caller target
 
 - NativeSuite public open/describe/patch/decide/resume/export and prepared/analysis
