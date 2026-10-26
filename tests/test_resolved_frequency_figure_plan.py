@@ -280,9 +280,8 @@ def test_studio_regeneration_failure_rolls_back_plan_and_primary_document(
     tmp_path: Path,
 ) -> None:
     from sciplot_core.studio import prepare_studio_document
-    from sciplot_core.studio_core.figure_set_state import (
-        _replace_studio_figure_set_path,
-    )
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store import ProjectConflict
     from sciplot_core.studio_core.studio_prepare import (
         prepare_studio_document as prepare_with_replacer,
     )
@@ -327,6 +326,7 @@ def test_studio_regeneration_failure_rolls_back_plan_and_primary_document(
         project_source = request_path.parent / project_source
     if project_source.is_dir():
         project_source = next(project_source.rglob("*.xlsx"))
+    original_source = project_source.read_bytes()
     _write_frequency_source(
         project_source,
         include_complex_modulus=True,
@@ -334,10 +334,27 @@ def test_studio_regeneration_failure_rolls_back_plan_and_primary_document(
         include_loss_factor_and_viscosity=True,
     )
 
+    # A registered raw replacement now requires an explicit source-update
+    # command. Regeneration must reject that drift before preparing a candidate.
+    with pytest.raises(ProjectConflict, match="source directory changed"):
+        prepare_with_replacer(project, regenerate_generated=True)
+    assert {
+        path: path.read_bytes() for path in (request_path, document, spec, registry)
+    } == before
+    project_source.write_bytes(original_source)
+    store = project_store(project, with_snapshot=True)
+    before_generation = store.snapshot()["generation"]
+    private_replacements: list[Path] = []
+
     def fail_request_replace(staged: Path, target: Path) -> None:
-        if target == request_path:
+        # The replacement seam belongs to the disposable candidate. No active
+        # file is replaced before the complete prepared mutation is published.
+        assert not target.is_relative_to(project)
+        if target.name == request_path.name:
+            assert any(path.suffix == ".vsz" for path in private_replacements)
             raise OSError("injected request replacement failure")
-        _replace_studio_figure_set_path(staged, target)
+        staged.replace(target)
+        private_replacements.append(target)
 
     with pytest.raises(OSError, match="injected request replacement failure"):
         prepare_with_replacer(
@@ -349,6 +366,10 @@ def test_studio_regeneration_failure_rolls_back_plan_and_primary_document(
     assert {
         path: path.read_bytes() for path in (request_path, document, spec, registry)
     } == before
+    assert project_source.read_bytes() == original_source
+    assert store.snapshot()["generation"] == before_generation
+    assert private_replacements
+    assert all(not path.exists() for path in private_replacements)
     assert not list(project.rglob(".sciplot-studio-prepare-*"))
     assert not list(project.rglob(".sciplot-figure-set-transaction-*"))
 
@@ -436,6 +457,8 @@ def test_studio_publish_inventory_rejects_source_drift_after_prepare(
             document_path=document,
             exports=[],
             export_document_sha256="prepared-hash",
+            output_dir=tmp_path / "candidate-output",
+            secondary_output_dir=tmp_path / "candidate-secondary-output",
         )
 
     assert collect_calls == []
@@ -497,6 +520,8 @@ def test_studio_publish_inventory_cannot_downgrade_prepared_plan(
             document_path=document,
             exports=[],
             export_document_sha256="prepared-hash",
+            output_dir=tmp_path / "candidate-output",
+            secondary_output_dir=tmp_path / "candidate-secondary-output",
         )
 
 

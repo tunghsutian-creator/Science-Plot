@@ -23,7 +23,7 @@ from sciplot_core.semantic_sources.scientific_source import (
     ScientificSourceResolutionError,
     resolve_scientific_source,
 )
-from sciplot_core.studio_core.prepare_generated import generate_studio_document
+from sciplot_core.studio import prepare_studio_document
 from sciplot_core.studio_core.publish_sources import (
     StudioRunSources,
     verify_studio_run_source_binding,
@@ -578,13 +578,7 @@ def test_studio_and_workflow_each_resolve_one_scientific_source_snapshot(
         encoding="utf-8",
     )
 
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=studio_request,
-        rule_id=None,
-        template=None,
-        project_name=None,
-    )
+    prepared = prepare_studio_document(studio_request)
 
     assert Path(prepared["document"]).is_file()
     assert calls == [source.resolve()]
