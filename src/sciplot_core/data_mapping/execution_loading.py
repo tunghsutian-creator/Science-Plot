@@ -7,8 +7,9 @@ from sciplot_core.data_mapping.execution_directories import mapping_directory_pa
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.data_mapping.execution_inputs import (
-    mapping_file_sha256 as file_sha256, mapping_file_path, mapping_file_bytes, mapping_literal,
+    mapping_file_sha256 as file_sha256, mapping_file_path, mapping_file_bytes,
     mapping_input_reads,
     mapping_execution_path,
     mark_mapping_metadata,
@@ -122,9 +123,7 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
     confirmation = load_data_mapping_confirmation(confirmation_path)
     _validate_confirmation(proposal, confirmation)
     legacy_confirmation = isinstance(confirmation, LegacyDataMappingConfirmation)
-    manifest_source_root = (
-        Path(str(payload.get("source_root") or "")).expanduser().resolve()
-    )
+    manifest_source_root = canonical_path(Path(str(payload.get("source_root") or "")))
     manifest_request_path = (
         Path(str(payload.get("base_request") or "")).expanduser().resolve()
     )
@@ -167,7 +166,8 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         raise ValueError("Data mapping execution source binding mismatch.")
     if payload.get("request_patch") != json_safe(proposal.request_patch):
         raise ValueError("Data mapping execution request patch mismatch.")
-    source_root = mapping_literal(Path(str(payload.get("source_root") or "")))
+    # Keep the frozen namespace literal. Only its declared files are IO inputs.
+    source_root = manifest_source_root
     require_mapping_original_source(source_root, {item.relative_path: item.sha256 for item in proposal.sources},
                                     _read_json(Path(payload["request_seed"])))
     sources = verify_data_mapping_sources(proposal, source_root=source_root)

@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_errors import SourceVersionMismatch
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
@@ -178,7 +179,9 @@ def verify_data_mapping_sources(
     *,
     source_root: str | Path,
 ) -> dict[str, Path]:
-    root = mapping_literal(Path(source_root))
+    # This frozen namespace joins relative references; it is not a directory
+    # read. Each resulting file still resolves through its exact SHA below.
+    root = canonical_path(Path(source_root))
     if selected_source_resolver() is None:
         root = _resolve_source_root(root)
     # A selected generation proves the exact declared files, not an ambient
