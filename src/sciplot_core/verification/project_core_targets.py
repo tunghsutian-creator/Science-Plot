@@ -120,6 +120,8 @@ NATIVE_PROJECT_COMMAND_TESTS = (
     'tests/test_native_export_replay.py',
     'tests/test_source_preview_replay.py',
     'tests/test_source_update_versions.py',
+    'tests/test_source_update_style_admission.py',
+    'tests/test_source_update_preview_artifacts.py',
     'tests/test_project_query_source_versions.py',
     'tests/test_native_edit_receipt_result.py',
     'tests/test_source_pending_native.py',

@@ -139,6 +139,7 @@ NATIVE_PROJECT_PATHS = frozenset({
     'src/sciplot_core/studio_core/studio_command.py',
     'src/sciplot_core/studio_core/style_transfer_storage.py',
     'src/sciplot_core/studio_core/terminal_task_request.py',
+    'src/sciplot_core/task_source_update.py',
     'src/sciplot_core/veusz_worker/cli.py',
     'src/sciplot_core/veusz_worker/style_transfer.py',
     'src/sciplot_gui/studio_project/export_helpers.py',

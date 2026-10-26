@@ -184,6 +184,8 @@ TASK_CONTROL_OWNERS = (
             "tests/test_mapping_execution_portability.py",
             "tests/test_mapping_replicate_source_versions.py",
             "tests/test_mapping_worker_inputs.py",
+            "tests/test_source_update_style_admission.py",
+            "tests/test_source_update_preview_artifacts.py",
         ),
         mypy_required=True, handoff_gates=("doctor",), final_milestone_gates=("smoke",),
         release_gates=("acceptance_rules", "full_pytest"),
