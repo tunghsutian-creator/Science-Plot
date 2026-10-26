@@ -18,6 +18,7 @@ from sciplot_core.studio_core.preparation_candidate import (
     StudioPreparationCandidate, require_preparation_candidate, studio_preparation_candidate,
 )
 from sciplot_core.terminal_source_binding import SealedTerminalSourceBinding
+from sciplot_core.studio_core.preparation_source_runtime import current_preparation_runtime
 
 
 def source_identity_for_locator(snapshot: dict[str, Any], locator: str) -> str:
@@ -137,7 +138,7 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
     selected = selected_project_store()
     store = selected if selected is not None and selected.root == root else project_store(root, with_snapshot=True)
     before = store.snapshot(import_legacy=True)
-    with studio_preparation_candidate(store, snapshot=before) as candidate:
+    with current_preparation_runtime(store, before) as verify_sources, studio_preparation_candidate(store, snapshot=before) as candidate:
         payload = prepare_studio_candidate(candidate, request_target=request_target, request_relative=request_relative, delivery_root=delivery_root,
             rule_id=rule_id, template=template, project_name=project_name,
             regenerate_generated=regenerate_generated, figure_set_path_replacer=figure_set_path_replacer,
@@ -163,6 +164,7 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
             expected_generation=before["generation"], read_set=reads, write_set=sorted(writes), request=request,
             read_memberships=[MembershipRead.capture(before["files"], prefix)
                               for prefix in ("", *("@" + name for name in sorted(store.locations)))])
+        verify_sources()
         record = ProjectCommands(store).execute(command, lambda: ProjectMutation(writes, result,
             prepared_sources=tuple(sources), artifacts={"native-audits.json": json.dumps(audits, ensure_ascii=False, allow_nan=False).encode()}))
         return {**record["result"], "project_command": {field: record[field]
