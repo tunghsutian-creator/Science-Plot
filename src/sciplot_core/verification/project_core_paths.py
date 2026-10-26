@@ -75,6 +75,7 @@ SOURCE_LOCATOR_PATHS = frozenset({
     'src/sciplot_core/source_coverage/artifacts.py',
     'src/sciplot_core/source_coverage/file_snapshots.py',
     'src/sciplot_core/source_coverage/inventory_paths.py',
+    'src/sciplot_core/source_coverage/managed_task_sources.py',
     'src/sciplot_core/source_coverage/verify.py',
     'src/sciplot_core/source_tables/raw_readers.py',
     'src/sciplot_core/source_tables/read_session.py',
@@ -82,6 +83,10 @@ SOURCE_LOCATOR_PATHS = frozenset({
     'src/sciplot_core/studio_core/request_paths.py',
     'src/sciplot_core/studio_core/source_snapshots.py',
     'src/sciplot_core/veusz_worker/cli.py',
+    'src/sciplot_core/workflow/project_requests.py',
+    "src/sciplot_core/project_store/source_inspection.py",
+    "src/sciplot_core/data_mapping/execution_inputs.py",
+    "src/sciplot_core/data_mapping/execution_directories.py",
 })
 
 NATIVE_PROJECT_PATHS = frozenset({

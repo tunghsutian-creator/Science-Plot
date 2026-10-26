@@ -218,6 +218,8 @@ PROJECT_STORAGE_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/studio_core/veusz_save.py',
         'src/sciplot_core/workflow/project_state.py',
         'src/sciplot_core/workflow/request_publish.py',
+        "src/sciplot_core/project_store/source_inspection.py",
+        "src/sciplot_core/project_store/input_reads.py",
     }
 )
 SOURCE_LOCATOR_STRICT_ADDITIONS = frozenset(
@@ -243,6 +245,11 @@ SOURCE_LOCATOR_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/studio_core/source_snapshots.py',
         'src/sciplot_core/veusz_worker/cli.py',
         "src/sciplot_core/source_coverage/derivation.py",
+        "src/sciplot_core/data_mapping/contracts.py",
+        "src/sciplot_core/data_mapping/execution_loading.py",
+        "src/sciplot_core/data_mapping/execution_inputs.py",
+        "src/sciplot_core/data_mapping/execution_directories.py",
+        "src/sciplot_core/data_mapping/request_resolution.py",
     }
 )
 NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(

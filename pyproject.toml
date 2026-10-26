@@ -553,6 +553,13 @@ files = [
   "src/sciplot_core/workflow/rheology_tts_publication_recovery.py",
   "src/sciplot_core/workflow/rheology_tts_style_update.py",
   "src/sciplot_core/workflow/rheology_tts_suite.py",
+  "src/sciplot_core/project_store/source_inspection.py",
+  "src/sciplot_core/project_store/input_reads.py",
+  "src/sciplot_core/data_mapping/contracts.py",
+  "src/sciplot_core/data_mapping/execution_loading.py",
+  "src/sciplot_core/data_mapping/execution_inputs.py",
+  "src/sciplot_core/data_mapping/execution_directories.py",
+  "src/sciplot_core/data_mapping/request_resolution.py",
 ]
 mypy_path = "src"
 explicit_package_bases = true

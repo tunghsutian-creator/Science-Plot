@@ -55,6 +55,8 @@ PROJECT_STORE_TESTS = (
     'tests/test_project_host_factory.py',
     'tests/test_project_store_recovery_authority.py',
     'tests/test_project_store_validation_cost.py',
+    "tests/test_project_observed_inputs.py",
+    "tests/test_project_input_read_faults.py",
 )
 
 PROJECT_RUNTIME_TESTS = (
@@ -76,6 +78,15 @@ PROJECT_RUNTIME_TESTS = (
     'tests/test_current_directory_reader_sources.py',
     "tests/test_native_audit_source_versions.py",
     "tests/test_snapshot_consumer_source_versions.py",
+    "tests/test_project_query_readonly_sources.py",
+    "tests/test_project_query_mapping_readonly.py",
+    "tests/test_project_query_replicate_mapping.py",
+    "tests/test_mapping_metadata_observation.py",
+    "tests/test_mapping_execution_directories.py",
+    "tests/test_mapping_execution_native.py",
+    "tests/test_mapping_execution_portability.py",
+    "tests/test_mapping_replicate_source_versions.py",
+    "tests/test_mapping_worker_inputs.py",
 )
 
 PROJECT_COMMAND_TESTS = (
@@ -115,6 +126,14 @@ NATIVE_PROJECT_COMMAND_TESTS = (
     "tests/test_native_audit_source_versions.py",
     "tests/test_project_publication_source_versions.py",
     "tests/test_saved_project_export_route.py",
+    "tests/test_project_query_readonly_sources.py",
+    "tests/test_project_query_mapping_readonly.py",
+    "tests/test_project_query_replicate_mapping.py",
+    "tests/test_mapping_execution_directories.py",
+    "tests/test_mapping_execution_native.py",
+    "tests/test_mapping_execution_portability.py",
+    "tests/test_mapping_replicate_source_versions.py",
+    "tests/test_mapping_worker_inputs.py",
 )
 
 STUDIO_PREPARATION_TESTS = (
