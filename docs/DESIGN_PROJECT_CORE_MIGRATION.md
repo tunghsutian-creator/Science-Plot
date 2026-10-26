@@ -43,6 +43,33 @@ checks the captured version and identity again; generic initial discovery does
 not invent an expected hash. Physical delivery existence uses its selected host
 resource capability, not an immutable scientific directory cache.
 
+A frozen source version is a read witness, not an automatic declaration that a
+generated resource can never change again. Immutable input evidence requires an
+explicit typed declaration, bound to the selected logical member, exact source
+identity, byte version and the same command's read set and prepared bytes. The
+generation's existing input-resource set owns that restriction. The same mutation
+cannot also write that input; later output declarations cannot remove it.
+Explicit source adoption retains its existing version-update contract. Ordinary
+reads of older generated files must preserve their legitimate regeneration path.
+
+Confirmed table mapping owns a finite immutable execution-input closure, including
+its confirmation and lineage metadata. Creation and continuation must verify and
+freeze that closure before publication, retaining original locators and numerical
+contracts. An official offline bundle must retain the same verified inputs; a
+missing original execution directory cannot be repaired by guessing a same-named
+file. Compact read-only queries must not create source views to repeat numerical
+mapping execution. When the selected evidence is explicitly sealed and full
+revalidation requires that work, mapping verification is unknown; independent
+raw/prepared-byte observations and artifact/QA status retain their own meaning.
+Explicit export and refresh still perform the complete scientific validation.
+The finite witness belongs to one operation, including its private workers; it
+is neither a reusable validation result nor a grant for its parent directory.
+Live inputs retain their exact fresh pre-commit checks. Explicit imported inputs
+must instead prove their original complete committed byte/tree versions, without
+claiming that an unavailable original host was observed again. Completion is the
+authoritative head transition: later original-host changes cannot turn an already
+committed publication into an uncommitted failure.
+
 ## Complete caller target
 
 - NativeSuite public open/describe/patch/decide/resume/export and prepared/analysis
