@@ -1,5 +1,7 @@
 """The old typed style entry delegates migrated plots to the same semantic service."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -32,7 +34,9 @@ def _bound_style(saved: dict[str, Any], caller: dict[str, Any],
     return canonical_path(Path(saved["intent"]["plot"])), saved["request"]
 
 
-def _saved_style(target: Path, entry: Path | None, caller: dict[str, Any]) -> tuple[Path, dict[str, Any]] | None:
+@contextmanager
+def _saved_style(target: Path, entry: Path | None, caller: dict[str, Any]) -> Iterator[tuple[Path, dict[str, Any]] | None]:
+    """Keep the literal checkpoint's selected owner bound until execution ends."""
     saved = read_edit_entry(entry, "semantic-style.json") if entry is not None else None
     if saved is not None and ("entry_intent" in saved or saved["intent"]["plot"] == str(target)):
         assert entry is not None
@@ -40,8 +44,9 @@ def _saved_style(target: Path, entry: Path | None, caller: dict[str, Any]) -> tu
             current = read_edit_entry(entry, "semantic-style.json")
             if current is None:
                 raise EngineError("document_state_missing", "The original style binding disappeared.")
-            return _bound_style(current, caller)
-    return None
+            yield _bound_style(current, caller)
+        return
+    yield None
 
 
 def _execute_style(owner: PlotService, root: Path, request: dict[str, Any]) -> dict[str, Any]:
@@ -57,9 +62,9 @@ def _migrated_style(owner: PlotService, target: Path, *, samples: list[str] | No
         return None
     caller = _style_binding(target, samples, all_samples, style, figure_id)
     saved = read_edit_entry(entry, "semantic-style.json") if entry is not None else None
-    frozen = _saved_style(target, entry, caller)
-    if frozen is not None:
-        return _execute_style(owner, *frozen)
+    with _saved_style(target, entry, caller) as frozen:
+        if frozen is not None:
+            return _execute_style(owner, *frozen)
     if owner.repository.has_head(target):
         root = target
     else:
@@ -107,10 +112,10 @@ def migrated_style(target: Path, *, samples: list[str] | None, all_samples: bool
     caller = _style_binding(target, samples, all_samples, style, figure_id)
     # Literal checkpoint admission precedes constructing an execution owner.
     # The checkpoint owner stores literal intent, never semantic head/journal.
-    frozen = _saved_style(target, entry, caller)
-    owner = PlotService()
-    with edit_service_owner(owner):
-        if frozen is not None:
-            return _execute_style(owner, *frozen)
-        return _migrated_style(owner, target, samples=samples, all_samples=all_samples,
-                               style=style, figure_id=figure_id, task_dir=task_dir)
+    with _saved_style(target, entry, caller) as frozen:
+        owner = PlotService()
+        with edit_service_owner(owner):
+            if frozen is not None:
+                return _execute_style(owner, *frozen)
+            return _migrated_style(owner, target, samples=samples, all_samples=all_samples,
+                                   style=style, figure_id=figure_id, task_dir=task_dir)

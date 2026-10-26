@@ -206,3 +206,51 @@ def test_internal_compatibility_exception_never_covers_scientific_or_execution_s
         admit_edit_entry(entry, root, head)
     assert failed.value.reason_code == "task_path_overlap"
     assert not entry.exists()
+
+
+@pytest.mark.parametrize("public", ["shortcut", "facade"])
+def test_cold_typed_style_keeps_selected_checkpoint_owner_through_execution(tmp_path, monkeypatch, public):
+    import json
+    from sciplot_core.foundation.source_locations import selected_source_resolver
+    from sciplot_core.plot_engine.edit_entry import read_edit_entry
+
+    project = tmp_path / "project"
+    project.mkdir()
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    original_service = PlotService(SourceAwareManagedBackend())
+    created = original_service.create(request_for_figure(tmp_path), project=project)
+    old_root = Path(created["plot"])
+    monkeypatch.setattr(compat, "PlotService", lambda: original_service)
+    first = style_task(old_root, all_samples=True, width="1.2pt")
+    assert first["ready_to_use"] and first["revision"] == 1
+    logical = next(name for name in store.snapshot()["files"] if name.endswith("semantic-style.json"))
+    original = store.read_bytes(logical)
+    saved = json.loads(original)
+    assert saved["intent"]["plot"] == saved["entry_intent"]["target"] == str(old_root)
+    history = {name: store.read_bytes(name) for name in store.snapshot()["files"] if "/revisions/" in name}
+    bundle = store.export_bundle(tmp_path / "bundle")
+    project.rename(tmp_path / "offline-project")
+    (tmp_path / "figure.csv").rename(tmp_path / "offline-source.csv")
+    moved = FileProjectStore.import_bundle(bundle, tmp_path / "moved")
+    entry = (moved.root / logical).parent
+    cold_backend = SourceAwareManagedBackend()
+    cold = PlotService(cold_backend)
+    monkeypatch.setattr(compat, "PlotService", lambda: cold)
+    monkeypatch.setattr(cold, "open", lambda *_a, **_k: pytest.fail("cold style discovered a fresh baseline"))
+    monkeypatch.setattr(cold.targets, "resolve_open", lambda *_a, **_k: pytest.fail("cold style resolved a new target"))
+    assert selected_source_resolver() is None
+    replayed = (style_task(old_root, all_samples=True, width="1.2pt", task_dir=entry) if public == "shortcut" else
+                compat.migrated_style(old_root, samples=None, all_samples=True, style={"width": "1.2pt"}, figure_id=None, task_dir=entry))
+    assert replayed["ready_to_use"] and replayed["revision"] == 1, replayed
+    assert cold_backend.calls["apply"] == 0
+    assert {name: moved.read_bytes(name) for name in history} == history
+    assert moved.read_bytes(logical) == original
+    assert read_edit_entry(entry, "semantic-style.json") == saved
+    assert selected_source_resolver() is None
+    monkeypatch.setattr(compat, "PlotService", lambda: pytest.fail("constructed an owner for a different frozen intent"))
+    with pytest.raises(ValueError) as conflict:
+        style_task(old_root, all_samples=True, width="2pt", task_dir=entry)
+    assert conflict.value.reason_code == "document_idempotency_conflict"
+    assert selected_source_resolver() is None
+    assert moved.read_bytes(logical) == original
