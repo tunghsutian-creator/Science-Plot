@@ -505,7 +505,8 @@ def test_sealed_legacy_preview_migrates_without_reapplying_native_and_keeps_deci
         'scientific_hash': canonical_json_sha256(json.loads(spec.read_bytes())),
         'before_native_sha256': file_sha256(path), 'spec_sha256': file_sha256(spec),
         'sources': context['manifest']['sources'], 'baseline': baseline, 'diff': diff,
-        'native_changes': changes, 'preview': str(preview_path)}
+        'native_changes': changes, 'preview': str(preview_path),
+        'preview_png': next(item['path'] for item in exported['exports'] if item['format'] == 'png_300')}
     write_json(operation, legacy)
     original_record = operation.read_bytes()
     audits = []

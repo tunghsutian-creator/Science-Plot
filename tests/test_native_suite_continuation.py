@@ -147,8 +147,9 @@ def test_initial_export_projection_requires_bound_receipt_and_actual_visible_byt
     visible = [str(delivery / "panels" / Path(item["path"]).name) for item in exports]
     document = {"id": "Main", "path": str(native), "sha256": sha, "exports": visible}
     receipt = {"document": str(workspace / "initial_render/Main.vsz"), "document_sha256": sha, "exports": exports}
+    # require_object supplies the bound document catalog used to overlay sparse receipts.
     context = {"workspace": str(workspace), "delivery": str(delivery), "plot": str(native), "figure_id": "Main",
-               "document": document, "manifest": {"native_result": {"figures": [receipt]}}}
+               "document": document, "manifest": {"documents": [document], "native_result": {"figures": [receipt]}}}
     if drift == "native_sha":
         receipt["document_sha256"] = "0" * 64
     elif drift == "native_path":
