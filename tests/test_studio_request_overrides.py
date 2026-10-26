@@ -10,11 +10,12 @@ from sciplot_core.project_manifest import (
 from sciplot_core.studio_core.request_overrides import (
     _apply_studio_request_overrides,
 )
+from sciplot_core.foundation.private_project_manifest import private_project_manifest_scope
 
 
 def _pending_project(tmp_path: Path) -> tuple[Path, Path]:
     project_dir = tmp_path / "project"
-    project_dir.mkdir()
+    project_dir.mkdir(mode=0o700)
     request_path = project_dir / "plot_request.json"
     request_path.write_text(
         json.dumps(
@@ -35,23 +36,28 @@ def _pending_project(tmp_path: Path) -> tuple[Path, Path]:
         ),
         encoding="utf-8",
     )
-    commit_intake_project_manifest(
-        project_dir,
-        {
-            "kind": "sciplot_intake_project",
-            "version": 1,
-            "project_slug": project_dir.name,
-            "recognition": {
-                "rule_id": "performance_comparison",
-                "pending_rule_review": True,
-                "production_status": "needs_rule_repair",
+    # This private producer fixture precedes its first admitted generation.
+    # The manifest writer must not bootstrap a canonical Store before the
+    # request-overrides producer has constructed the initial request bytes.
+    with private_project_manifest_scope(project_dir):
+        commit_intake_project_manifest(
+            project_dir,
+            {
+                "kind": "sciplot_intake_project",
+                "version": 1,
+                "project_slug": project_dir.name,
+                "recognition": {
+                    "rule_id": "performance_comparison",
+                    "pending_rule_review": True,
+                    "production_status": "needs_rule_repair",
+                },
+                "experiment": {
+                    "rule_id": "performance_comparison",
+                    "template": "scatter",
+                },
             },
-            "experiment": {
-                "rule_id": "performance_comparison",
-                "template": "scatter",
-            },
-        },
-    )
+        )
+    assert not (project_dir / ".sciplot_store/head.json").exists()
     return project_dir, request_path
 
 

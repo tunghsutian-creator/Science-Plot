@@ -290,11 +290,16 @@ def test_ordinary_raw_task_creation_reaches_frozen_xrd_before_native_transaction
     with pytest.raises(BeforeNative):
         prepare_studio_document(replay)
     assert "show_y_ticks" not in captured[-1]["request"].get("render_options", {})
-    for options in (
+    for index, options in enumerate((
         {"show_y_ticks": True},
         {"y_min": 0, "y_max": 1, "y_ticks": [0, 0.5, 1]},
-    ):
-        replay.write_text(
+    )):
+        # Each explicit new creation is a separate draft. Do not overwrite the
+        # admitted historical request left by the preceding stopped preview.
+        explicit = tmp_path / f"explicit_{index}"
+        explicit.mkdir()
+        explicit_request = explicit / "plot_request.json"
+        explicit_request.write_text(
             json.dumps(
                 {
                     "input": str(source),
@@ -305,7 +310,7 @@ def test_ordinary_raw_task_creation_reaches_frozen_xrd_before_native_transaction
             )
         )
         with pytest.raises(BeforeNative):
-            prepare_studio_document(replay, _new_creation=True)
+            prepare_studio_document(explicit_request, _new_creation=True)
         assert captured[-1]["request"]["render_options"]["show_y_ticks"] is True
 
 
@@ -433,13 +438,16 @@ def test_same_selected_presentation_regeneration_preserves_frozen_bool(tmp_path)
         _apply_studio_request_overrides,
     )
 
-    path = tmp_path / "plot_request.json"
-    for show, template in (
+    for index, (show, template) in enumerate((
         (False, "curve"),
         (True, "curve"),
         (False, None),
         (True, None),
-    ):
+    )):
+        # Independent frozen-request cases cannot mutate another case's head.
+        project = tmp_path / f"frozen_{index}"
+        project.mkdir()
+        path = project / "plot_request.json"
         original_template = {"template": template} if template is not None else {}
         path.write_text(
             json.dumps(
@@ -452,7 +460,7 @@ def test_same_selected_presentation_regeneration_preserves_frozen_bool(tmp_path)
             )
         )
         _apply_studio_request_overrides(
-            tmp_path, request_path=path, rule_id="xrd_pattern", template="curve"
+            project, request_path=path, rule_id="xrd_pattern", template="curve"
         )
         saved = json.loads(path.read_text())
         assert saved["render_options"]["show_y_ticks"] is show
