@@ -2,6 +2,7 @@
 
 import shutil
 import json
+import stat
 
 import pytest
 
@@ -91,7 +92,9 @@ def test_recovery_tree_observation_keeps_full_namespace_and_version_guards(tmp_p
     elif change == "archive_extra":
         (project / "runs/studio_001/raw/source/foreign.csv").write_bytes(source.read_bytes())
     elif change == "mode":
-        source.chmod(0o600)
+        original_mode = stat.S_IMODE(source.stat().st_mode)
+        source.chmod(original_mode ^ stat.S_IWUSR)
+        assert stat.S_IMODE(source.stat().st_mode) != original_mode
     else:
         foreign = tmp_path / "foreign.csv"
         foreign.write_bytes(source.read_bytes())
