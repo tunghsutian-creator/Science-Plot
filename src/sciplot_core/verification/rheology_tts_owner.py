@@ -7,10 +7,11 @@ RHEOLOGY_TTS_OWNER = ChangedOwner(
     path_prefixes=("src/sciplot_core/workflow/rheology_tts", "src/sciplot_core/workflow/native_suite_", "src/sciplot_core/rheology_tts",
                    "src/sciplot_core/semantic_sources/rheology_tts"),
     exact_paths=frozenset({
+        "tests/native_suite_legacy_creation_fixture.py",
         "src/sciplot_core/semantic_sources/rheology_tts.py",
         "src/sciplot_core/cli/parsers/rheology.py", "src/sciplot_core/cli/dispatch/rheology.py",
     }),
-    owned_test_paths=frozenset({"tests/test_rheology_tts.py", "tests/test_rheology_tts_errors.py", "tests/test_rheology_tts_render.py", "tests/test_rheology_tts_native_edit.py", "tests/test_rheology_tts_suite.py",
+    owned_test_paths=frozenset({"tests/test_native_suite_recognition.py", "tests/test_native_suite_project_commands.py", "tests/test_native_suite_generation_projection.py", "tests/test_rheology_tts.py", "tests/test_rheology_tts_errors.py", "tests/test_rheology_tts_render.py", "tests/test_rheology_tts_native_edit.py", "tests/test_rheology_tts_suite.py",
                               "tests/test_rheology_tts_separated_plan.py", "tests/test_rheology_tts_revision_tables.py",
                               "tests/test_rheology_tts_style.py", "tests/test_rheology_tts_style_update.py",
                               "tests/test_rheology_tts_prepared.py", "tests/test_rheology_tts_prepared_recovery.py",
@@ -18,7 +19,7 @@ RHEOLOGY_TTS_OWNER = ChangedOwner(
                               "tests/test_rheology_tts_creation_repair.py", "tests/test_rheology_tts_native_failure_wire.py",
                               "tests/test_native_suite_operations.py", "tests/test_native_suite_protocol.py",
                               "tests/test_native_suite_continuation.py", "tests/test_native_suite_decision_recovery.py"}),
-    pytest_targets=("tests/test_rheology_tts.py", "tests/test_rheology_tts_errors.py", "tests/test_rheology_tts_render.py", "tests/test_rheology_tts_native_edit.py", "tests/test_rheology_tts_suite.py",
+    pytest_targets=("tests/test_native_suite_recognition.py", "tests/test_native_suite_project_commands.py", "tests/test_native_suite_generation_projection.py", "tests/test_rheology_tts.py", "tests/test_rheology_tts_errors.py", "tests/test_rheology_tts_render.py", "tests/test_rheology_tts_native_edit.py", "tests/test_rheology_tts_suite.py",
                     "tests/test_rheology_tts_separated_plan.py", "tests/test_rheology_tts_revision_tables.py",
                     "tests/test_rheology_tts_style.py", "tests/test_rheology_tts_style_update.py",
                     "tests/test_rheology_tts_prepared.py", "tests/test_rheology_tts_prepared_recovery.py",
@@ -26,5 +27,6 @@ RHEOLOGY_TTS_OWNER = ChangedOwner(
                               "tests/test_rheology_tts_creation_repair.py", "tests/test_rheology_tts_native_failure_wire.py",
                               "tests/test_native_suite_operations.py", "tests/test_native_suite_protocol.py",
                               "tests/test_native_suite_continuation.py", "tests/test_native_suite_decision_recovery.py"),
+    mypy_required=True,
     handoff_gates=("doctor",), final_milestone_gates=("smoke",), release_gates=("full_pytest",),
 )

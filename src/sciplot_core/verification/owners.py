@@ -10,6 +10,7 @@ from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.ordinary_plotting_owners import ORDINARY_PLOTTING_OWNERS
 from sciplot_core.verification.plot_owners import PLOT_OWNER, TYPED_INTENT_OWNER
 from sciplot_core.verification.project_integrity_owners import PROJECT_INTEGRITY_OWNERS
+from sciplot_core.verification.project_core_owners import PROJECT_CORE_OWNERS
 from sciplot_core.verification.project_revision_owners import PROJECT_REVISION_OWNERS
 from sciplot_core.verification.rheology_tts_owner import RHEOLOGY_TTS_OWNER
 from sciplot_core.verification.support_owners import DOCUMENTATION_OWNER, SCIENTIFIC_TEXT_OWNER, VEUSZ_NATIVE_BUILD_OWNER, WHEEL_DISTRIBUTION_OWNER, WORKFLOW_BUNDLE_EXPORT_OWNER
@@ -30,6 +31,7 @@ from sciplot_core.verification.type_gate_owners import (
 )
 
 CHANGED_OWNERS = (
+    *PROJECT_CORE_OWNERS,
     *ORDINARY_PLOTTING_OWNERS,
     PANEL_ASSEMBLY_OWNER,
     WHEEL_DISTRIBUTION_OWNER,

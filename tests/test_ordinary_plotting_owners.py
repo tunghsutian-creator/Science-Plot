@@ -22,6 +22,10 @@ from sciplot_core.verification.ordinary_plotting_owners import (
     REPLICATE_TESTS,
 )
 from sciplot_core.verification.owners import CHANGED_OWNERS
+from sciplot_core.verification.project_core_owners import (
+    PROJECT_CORE_OWNERS, PROJECT_COMMAND_TESTS, PROJECT_STORE_TESTS,
+    PROJECT_RUNTIME_TESTS, ATTACHED_PROJECT_TESTS, NATIVE_PROJECT_CONSUMERS,
+)
 from sciplot_core.verification.type_gate_owners import (
     ARCHITECTURE_CORE_TARGETS,
     SCIENTIFIC_TRANSACTION_TYPE_PATHS,
@@ -143,6 +147,190 @@ NATIVE_BATCH_ISOLATION_STRICT_ADDITIONS = frozenset(
         "src/sciplot_gui/studio_assistant/native_batch_window.py",
     }
 )
+HOST_EXECUTOR_STRICT_ADDITIONS = frozenset(
+    {
+        "src/sciplot_core/cli/dispatch/host.py",
+        "src/sciplot_core/cli/parsers/host.py",
+        "src/sciplot_core/host_grants/__init__.py",
+        "src/sciplot_core/host_grants/__main__.py",
+        "src/sciplot_core/host_grants/administration.py",
+        "src/sciplot_core/host_grants/authorization.py",
+        "src/sciplot_core/host_grants/context.py",
+        "src/sciplot_core/host_grants/models.py",
+        "src/sciplot_core/host_grants/registry.py",
+    }
+)
+PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
+    {
+        "src/sciplot_core/project_commands/__init__.py",
+        "src/sciplot_core/project_commands/application.py",
+        "src/sciplot_core/project_commands/contracts.py",
+        "src/sciplot_core/project_commands/errors.py",
+        "src/sciplot_core/project_commands/native_suite_projections.py",
+        "src/sciplot_core/project_commands/ports.py",
+        "src/sciplot_core/project_commands/read_projections.py",
+        "src/sciplot_core/project_commands/resources.py",
+    }
+)
+PROJECT_STORAGE_STRICT_ADDITIONS = frozenset(
+    {
+        'src/sciplot_core/intake/archive_storage.py',
+        'src/sciplot_core/intake/packaging.py',
+        'src/sciplot_core/project_host_factory.py',
+        'src/sciplot_core/project_manifest.py',
+        'src/sciplot_core/project_manifest_locations.py',
+        'src/sciplot_core/project_store/__init__.py',
+        'src/sciplot_core/project_store/adapters.py',
+        'src/sciplot_core/project_store/candidate_resources.py',
+        'src/sciplot_core/project_store/command_records.py',
+        'src/sciplot_core/project_store/commands.py',
+        'src/sciplot_core/project_store/committed_outcomes.py',
+        'src/sciplot_core/project_store/directories.py',
+        'src/sciplot_core/project_store/errors.py',
+        'src/sciplot_core/project_store/incoming_sources.py',
+        'src/sciplot_core/project_store/io.py',
+        'src/sciplot_core/project_store/locators.py',
+        'src/sciplot_core/project_store/membership.py',
+        'src/sciplot_core/project_store/namespace_io.py',
+        'src/sciplot_core/project_store/namespace_transfers.py',
+        'src/sciplot_core/project_store/native_artifacts.py',
+        'src/sciplot_core/project_store/native_work.py',
+        'src/sciplot_core/project_store/paths.py',
+        'src/sciplot_core/project_store/portable.py',
+        'src/sciplot_core/project_store/preconditions.py',
+        'src/sciplot_core/project_store/prepared_inputs.py',
+        'src/sciplot_core/project_store/produced_sources.py',
+        'src/sciplot_core/project_store/projection.py',
+        'src/sciplot_core/project_store/publication.py',
+        'src/sciplot_core/project_store/repository.py',
+        'src/sciplot_core/project_store/resources.py',
+        'src/sciplot_core/project_store/root_bindings.py',
+        'src/sciplot_core/project_store/runtime.py',
+        'src/sciplot_core/project_store/source_observations.py',
+        'src/sciplot_core/project_store/source_tree_io.py',
+        'src/sciplot_core/project_store/source_trees.py',
+        'src/sciplot_core/project_store/state.py',
+        'src/sciplot_core/project_store/worker_binding.py',
+        'src/sciplot_core/studio_core/native_save_storage.py',
+        'src/sciplot_core/studio_core/native_serialization.py',
+        'src/sciplot_core/studio_core/persistence.py',
+        'src/sciplot_core/studio_core/veusz_save.py',
+        'src/sciplot_core/workflow/project_state.py',
+        'src/sciplot_core/workflow/request_publish.py',
+    }
+)
+SOURCE_LOCATOR_STRICT_ADDITIONS = frozenset(
+    {
+        'src/sciplot_core/data_mapping/raw_tables.py',
+        'src/sciplot_core/ingest.py',
+        'src/sciplot_core/project_store/candidate_runtime.py',
+        'src/sciplot_core/project_store/sealed_source_trees.py',
+        'src/sciplot_core/project_store/source_resolver.py',
+        'src/sciplot_core/semantic_sources/impact_sources.py',
+        'src/sciplot_core/semantic_sources/prepare_rheology.py',
+        'src/sciplot_core/semantic_sources/rheology_sweep_domain.py',
+        'src/sciplot_core/semantic_sources/rheology_sweep_sources.py',
+        'src/sciplot_core/semantic_sources/table_candidate_sources.py',
+        'src/sciplot_core/semantic_sources/table_source_files.py',
+        'src/sciplot_core/source_coverage/artifacts.py',
+        'src/sciplot_core/source_coverage/file_snapshots.py',
+        'src/sciplot_core/source_coverage/inventory_paths.py',
+        'src/sciplot_core/source_coverage/verify.py',
+        'src/sciplot_core/source_tables/raw_readers.py',
+        'src/sciplot_core/studio_core/source_snapshots.py',
+        'src/sciplot_core/veusz_worker/cli.py',
+    }
+)
+NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
+    {
+        'src/sciplot_core/studio_core/delivery_recovery_commands.py',
+        'src/sciplot_core/studio_core/document_edit_commands.py',
+        'src/sciplot_core/studio_core/document_edit_legacy.py',
+        'src/sciplot_core/studio_core/export_execution.py',
+        'src/sciplot_core/studio_core/export_projection.py',
+        'src/sciplot_core/studio_core/export_replay.py',
+        'src/sciplot_core/studio_core/external_native_export.py',
+        'src/sciplot_core/studio_core/native_export_adapter.py',
+        'src/sciplot_core/studio_core/native_export_commands.py',
+        'src/sciplot_core/studio_core/native_scientific_audit.py',
+        'src/sciplot_core/studio_core/project_command_scope.py',
+        'src/sciplot_core/studio_core/project_publication_commands.py',
+        'src/sciplot_core/studio_core/project_query_sources.py',
+        'src/sciplot_core/studio_core/publication_candidates.py',
+        'src/sciplot_core/studio_core/publication_prepare.py',
+        'src/sciplot_core/studio_core/qt_window.py',
+        'src/sciplot_core/studio_core/series_revision_persistence.py',
+        'src/sciplot_core/studio_core/source_update_commands.py',
+        'src/sciplot_core/studio_core/source_update_files.py',
+        'src/sciplot_core/studio_core/source_update_replay.py',
+        'src/sciplot_core/studio_core/source_update_sources.py',
+        'src/sciplot_core/studio_core/source_update_state.py',
+        'src/sciplot_core/studio_core/source_update_styles.py',
+        'src/sciplot_core/studio_core/studio_command.py',
+        'src/sciplot_gui/studio_project/export_helpers.py',
+    }
+)
+STUDIO_PREPARATION_STRICT_ADDITIONS = frozenset(
+    {
+        'src/sciplot_core/studio_core/figure_member_prepare.py',
+        'src/sciplot_core/studio_core/preparation_artifacts.py',
+        'src/sciplot_core/studio_core/preparation_candidate.py',
+        'src/sciplot_core/studio_core/preparation_commands.py',
+        'src/sciplot_core/studio_core/preparation_lineage.py',
+        'src/sciplot_core/studio_core/preparation_source_runtime.py',
+        'src/sciplot_core/studio_core/studio_prepare_core.py',
+    }
+)
+RHEOLOGY_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
+    {
+        'src/sciplot_core/rheology_tts_creation_bindings.py',
+        'src/sciplot_core/rheology_tts_native_invocation.py',
+        'src/sciplot_core/workflow/native_suite_admission.py',
+        'src/sciplot_core/workflow/native_suite_command_records.py',
+        'src/sciplot_core/workflow/native_suite_creation.py',
+        'src/sciplot_core/workflow/native_suite_creation_facts.py',
+        'src/sciplot_core/workflow/native_suite_creation_inspection.py',
+        'src/sciplot_core/workflow/native_suite_creation_projection.py',
+        'src/sciplot_core/workflow/native_suite_generation.py',
+        'src/sciplot_core/workflow/native_suite_receipts.py',
+        'src/sciplot_core/workflow/native_suite_review_exports.py',
+        'src/sciplot_core/workflow/native_suite_runtime.py',
+        'src/sciplot_core/workflow/native_suite_transactions.py',
+        'src/sciplot_core/workflow/rheology_tts_creation_history.py',
+        'src/sciplot_core/workflow/rheology_tts_creation_inputs.py',
+        'src/sciplot_core/workflow/rheology_tts_delivery_files.py',
+        'src/sciplot_core/workflow/rheology_tts_saved_state.py',
+    }
+)
+WORKFLOW_PROJECT_STRICT_ADDITIONS = frozenset(
+    {
+        'src/sciplot_core/workflow/errors.py',
+        'src/sciplot_core/workflow/one_step_entry.py',
+        'src/sciplot_core/workflow/project_failures.py',
+        'src/sciplot_core/workflow/project_output.py',
+        'src/sciplot_core/workflow/project_requests.py',
+        'src/sciplot_core/workflow/project_results.py',
+        'src/sciplot_core/workflow/request_io.py',
+        'src/sciplot_core/workflow/run_projection.py',
+    }
+)
+SOURCE_ARTIFACT_STRICT_ADDITIONS = frozenset(
+    {
+        "src/sciplot_core/studio_render/source_artifacts.py",
+        "src/sciplot_core/studio_render/categorical_components.py",
+        "src/sciplot_core/studio_render/frame_series.py",
+        "src/sciplot_core/studio_render/scalar_series.py",
+        "src/sciplot_core/studio_core/series_request.py",
+        "src/sciplot_core/studio_core/impact_series.py",
+    }
+)
+VERIFICATION_PROJECT_CORE_STRICT_ADDITIONS = frozenset(
+    {
+        'src/sciplot_core/verification/project_core_owners.py',
+        'src/sciplot_core/verification/project_core_paths.py',
+        'src/sciplot_core/verification/project_core_targets.py',
+    }
+)
 FINAL_STRICT_ADDITIONS = (
     ROUND2_STRICT_ADDITIONS
     | CATEGORICAL_EDIT_STRICT_ADDITIONS
@@ -154,6 +342,16 @@ FINAL_STRICT_ADDITIONS = (
     | NATIVE_PRESENTATION_STRICT_ADDITIONS
     | VERIFICATION_CAPTURE_STRICT_ADDITIONS
     | NATIVE_BATCH_ISOLATION_STRICT_ADDITIONS
+    | HOST_EXECUTOR_STRICT_ADDITIONS
+    | PROJECT_COMMAND_STRICT_ADDITIONS
+    | PROJECT_STORAGE_STRICT_ADDITIONS
+    | SOURCE_LOCATOR_STRICT_ADDITIONS
+    | NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS
+    | WORKFLOW_PROJECT_STRICT_ADDITIONS
+    | RHEOLOGY_PROJECT_COMMAND_STRICT_ADDITIONS
+    | STUDIO_PREPARATION_STRICT_ADDITIONS
+    | SOURCE_ARTIFACT_STRICT_ADDITIONS
+    | VERIFICATION_PROJECT_CORE_STRICT_ADDITIONS
 )
 
 
@@ -369,6 +567,16 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
         NATIVE_PRESENTATION_STRICT_ADDITIONS,
         VERIFICATION_CAPTURE_STRICT_ADDITIONS,
         NATIVE_BATCH_ISOLATION_STRICT_ADDITIONS,
+        HOST_EXECUTOR_STRICT_ADDITIONS,
+        PROJECT_COMMAND_STRICT_ADDITIONS,
+        PROJECT_STORAGE_STRICT_ADDITIONS,
+        SOURCE_LOCATOR_STRICT_ADDITIONS,
+        NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS,
+        WORKFLOW_PROJECT_STRICT_ADDITIONS,
+        RHEOLOGY_PROJECT_COMMAND_STRICT_ADDITIONS,
+        STUDIO_PREPARATION_STRICT_ADDITIONS,
+        SOURCE_ARTIFACT_STRICT_ADDITIONS,
+        VERIFICATION_PROJECT_CORE_STRICT_ADDITIONS,
     )
     assert all(
         scope.isdisjoint(other)
@@ -410,4 +618,32 @@ def test_future_categorical_neighbors_remain_unowned_and_fail_closed(path):
     blocked = _plan([path])
     assert blocked["status"] == "failed"
     assert blocked["unowned_paths"] == [path]
+    assert blocked["checks"] == []
+
+
+def test_project_core_domains_retain_all_owned_inputs_and_real_native_consumers():
+    for owner in PROJECT_CORE_OWNERS:
+        assert owner.mypy_required and "full_pytest" in owner.release_gates
+        assert owner.owned_test_paths <= set(owner.pytest_targets)
+        for target in owner.pytest_targets:
+            assert (ROOT / target.split("::", 1)[0]).is_file(), target
+        for path in owner.exact_paths | owner.owned_test_paths:
+            assert (ROOT / path).is_file(), path
+            plan = _plan([path])
+            assert not plan["unowned_paths"]
+            assert owner.owner_id in {row["owner_id"] for row in plan["owners"]}
+            selected = _targets(plan)
+            # The existing selector owner folds exact nodes into a selected full
+            # module. That preserves their bodies without duplicate execution.
+            assert all(target in selected or target.split("::", 1)[0] in selected
+                       for target in owner.pytest_targets)
+    shared = _plan(["src/sciplot_core/project_commands/contracts.py"])
+    assert set(PROJECT_COMMAND_TESTS + PROJECT_STORE_TESTS + PROJECT_RUNTIME_TESTS
+               + ATTACHED_PROJECT_TESTS + NATIVE_PROJECT_CONSUMERS) <= _targets(shared)
+
+
+def test_project_core_unknown_neighbor_does_not_inherit_an_empty_type_only_plan():
+    unknown = "src/sciplot_core/unregistered_project_authority.py"
+    blocked = _plan([unknown])
+    assert blocked["status"] == "failed" and blocked["unowned_paths"] == [unknown]
     assert blocked["checks"] == []
