@@ -31,7 +31,6 @@ from sciplot_core.studio_core.source_update_staging import (
 )
 from sciplot_core.studio_core.source_update_annotations import transfer_annotations
 from sciplot_core.studio_core.source_update_styles import capture_project_styles, transfer_project_styles
-from sciplot_core.studio_core.annotation_contracts import annotation_records
 from sciplot_core.studio_core.annotation_rebinding import relocate_annotation_evidence
 from sciplot_core.project_commands import PreparedSource, InputRead, SourceTreeRead
 
@@ -72,8 +71,6 @@ def _prepared_update(project_dir: Path, source_path: Path, worksheet: str | None
     repository = project_store(project, with_snapshot=True)
     snapshot = repository.snapshot(import_legacy=True)
     figures = project_figures(project)
-    for _document, spec in figures.values():
-        annotation_records(json.loads(spec.read_text()))
     with project_runtime(repository), baseline_scope(repository, snapshot, specs=[spec for _doc, spec in figures.values()]):
         for selected in project_snapshot(project)[2]:
             if selected["status"] == "ready":
@@ -145,7 +142,6 @@ def _prepared_update_current(
             baseline_roles = baseline_mapping.input_reads(before_snapshot)
             baseline_trees = mapping_live_trees(baseline_mapping)
         for document, spec in figures.values():
-            annotation_records(json.loads(spec.read_text()))
             _audit_exact_document_data(
                 document_path=document, spec_path=spec, check_presentation=False
             )

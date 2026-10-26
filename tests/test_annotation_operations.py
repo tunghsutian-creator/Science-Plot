@@ -559,6 +559,66 @@ def test_source_update_rejects_invalid_annotation_scope_before_preparing(tmp_pat
     assert "Annotations currently require ordinary Cartesian curves" in result["reason"]
     assert json.loads(spec.read_text())["native_annotations"]["items"] == [note()]
     assert {path: path.read_bytes() for path in before} == before
-    from sciplot_core.project_store import FileProjectStore
+    # A refused legacy read must not import a Store just to query receipts.
+    assert not (project / ".sciplot_store").exists()
+    assert not (project / ".sciplot_store/head.json").exists()
 
-    assert FileProjectStore(project).commands() == ()
+
+@pytest.mark.parametrize("entry", ["current-public", "historical-public", "historical-staging",
+    "stale-snapshot", "foreign-spec", "foreign-request"])
+def test_source_update_annotation_admission_uses_exact_current_specs_before_mapping(spec, tmp_path, monkeypatch, entry):
+    from contextlib import nullcontext
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.project_store import FileProjectStore, ProjectConflict
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.studio_core import project_command_scope, source_update, source_update_staging
+
+    project = tmp_path / "project"
+    document = project / "studio/document.vsz"
+    document.parent.mkdir(parents=True)
+    document.write_bytes(b"saved current native")
+    request_path = project / "plot_request.json"
+    request_path.write_text(json.dumps({"rule_id": "uvvis_spectrum", "template": "curve", "data_mapping_execution": None}))
+    spec_path = document.with_name("spec.json")
+    valid = {**copy.deepcopy(spec), "native_annotations": {"version": 1, "items": [normalize_annotation(spec, note())]}}
+    spec_path.write_text(json.dumps(valid))
+    store = FileProjectStore(project)
+    old = store.snapshot(import_legacy=True)
+    invalid = {**valid, "template": "box"}
+    command = ProjectCommand.create("figure_set", "fixture-current-unsupported-annotation", project_id=old["project_id"],
+        expected_generation=old["generation"], read_set={"studio/spec.json": old["files"]["studio/spec.json"]["sha256"]},
+        write_set=["studio/spec.json"], request={"fixture": "current unsupported annotation"})
+    ProjectCommands(store).execute(command, lambda: ProjectMutation({"studio/spec.json": json.dumps(invalid).encode()}, {}))
+    current = store.snapshot()
+    head = (project / ".sciplot_store/head.json").read_bytes()
+    if entry == "foreign-spec":
+        spec_path.write_text(json.dumps(valid))
+    elif entry == "foreign-request":
+        request_path.write_text("{}")
+    before = {path: path.read_bytes() for path in (document, spec_path, request_path)}
+    replacement = tmp_path / "unread-new.xlsx"
+    monkeypatch.setattr(project_command_scope, "adopt_saved_native", lambda *_a, **_k: pytest.fail("annotation admission wrote native"))
+    monkeypatch.setattr(source_update, "file_inventory", lambda *_a: pytest.fail("annotation admission read incoming data"))
+    monkeypatch.setattr(source_update_staging, "_worksheet_confirmation", lambda *_a: pytest.fail("annotation admission read a worksheet"))
+    monkeypatch.setattr(source_update_staging, "_build_source_candidate", lambda *_a, **_k: pytest.fail("annotation admission allocated a candidate"))
+    context = (project_runtime(store, generation=old["generation"])
+               if entry in {"historical-public", "historical-staging", "stale-snapshot"} else nullcontext())
+    with context:
+        if entry.endswith("public"):
+            result = source_update.preview_project_source_update(project, replacement)
+            assert result["status"] == "blocked" and "Annotations currently require ordinary Cartesian curves" in result["reason"]
+        else:
+            message = ("current project generation" if entry == "stale-snapshot" else
+                       "annotation specification differs" if entry == "foreign-spec" else
+                       "canonical request differs" if entry == "foreign-request" else
+                       "Annotations currently require ordinary Cartesian curves")
+            error = ValueError if entry == "historical-staging" else ProjectConflict
+            with pytest.raises(error, match=message):
+                with source_update_staging.prepare_candidate(project, replacement, tmp_path / "unallocated", worksheet="Data",
+                        **({"snapshot": old} if entry == "stale-snapshot" else {})):
+                    pytest.fail("annotation admission yielded a candidate")
+    assert {path: path.read_bytes() for path in before} == before
+    assert not replacement.exists() and not (tmp_path / "unallocated").exists()
+    assert (project / ".sciplot_store/head.json").read_bytes() == head
+    assert store.snapshot()["generation"] == current["generation"]
+    assert [item["command_id"] for item in store.commands()] == ["fixture-current-unsupported-annotation"]

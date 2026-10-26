@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 from collections.abc import Iterator
@@ -18,6 +19,65 @@ from sciplot_core.source_coverage.managed_documents import (
 from sciplot_core.source_coverage.managed_task_sources import registered_task_snapshot_sources
 from sciplot_core.studio_core.preparation_candidate import StudioPreparationCandidate
 from sciplot_core.studio_core.source_update_review import project_figures
+from sciplot_core.studio_core.annotation_contracts import annotation_records
+from sciplot_core.project_store.io import StoreIO, directory, read_file
+
+
+def _current_annotation_scope(project: Path, *, io: StoreIO | None = None,
+                              snapshot: dict[str, Any] | None = None) -> None:
+    """Check saved annotation structure without source IO or legacy import."""
+    from sciplot_core.foundation.canonical_paths import canonical_path
+    from sciplot_core.project_store import ProjectConflict
+
+    registry = canonical_path(project / "studio/figure_set.json")
+    primary = canonical_path(project / "studio/spec.json")
+    files = snapshot["files"] if snapshot is not None else {}
+    if not (registry.is_file() or primary.is_file()
+            or "studio/figure_set.json" in files or "studio/spec.json" in files):
+        return  # Bare mapping-admission callers need no prepared figure.
+    if io is not None:
+        entry = files.get("studio/figure_set.json")
+        expected = (io.get(entry), entry["mode"]) if entry is not None else None
+        if io.physical("studio/figure_set.json") != expected:
+            raise ProjectConflict("The annotation figure registry differs from its current admitted generation.")
+    root_fd = os.open(project, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        def read_spec(spec: Path) -> dict[str, Any]:
+            components = canonical_path(spec).relative_to(project).parts
+            logical = "/".join(components)
+            if io is not None:
+                entry = files.get(logical)
+                if entry is None:
+                    raise ProjectConflict("The annotation specification has no current admitted member.")
+                data = io.get(entry)
+                if io.physical(logical) != (data, entry["mode"]):
+                    raise ProjectConflict("The annotation specification differs from its current admitted generation.")
+            else:
+                with directory(root_fd, components[:-1]) as parent:
+                    data, _mode = read_file(parent, components[-1])
+            value = json.loads(data)
+            if not isinstance(value, dict):
+                raise ValueError("The current annotation specification must be an object.")
+            return value
+
+        # Presence discovery is limited to the native owner's reserved spec
+        # members. It does not require a complete figure set from a bare
+        # mapping-admission caller, or make an unused spec an active figure.
+        candidates = ({project / name for name in files if name == "studio/spec.json"
+            or name.startswith("studio/figures/") and name.endswith(".spec.json")}
+            if snapshot is not None else set((project / "studio/figures").glob("*.spec.json")))
+        if primary.is_file():
+            candidates.add(primary)
+        payloads = {path: read_spec(path) for path in candidates}
+        if any(value.get("native_annotations") is not None for value in payloads.values()):
+            for document, spec in project_figures(project).values():
+                canonical_path(document)
+                annotation_records(payloads[spec] if spec in payloads else read_spec(spec))
+        opened, actual = os.fstat(root_fd), project.lstat()
+        if (opened.st_dev, opened.st_ino) != (actual.st_dev, actual.st_ino):
+            raise ProjectConflict("The source-update project changed during annotation admission.")
+    finally:
+        os.close(root_fd)
 
 
 def verify_project_science(project: Path) -> dict[str, Any]:
@@ -97,10 +157,12 @@ def current_source_update_request(
             if snapshot is not None and (snapshot.get("project_id") != current["project_id"]
                     or snapshot.get("generation") != current["generation"]):
                 raise ProjectConflict("Source update preparation requires the current project generation.")
+            _current_annotation_scope(project, io=_io, snapshot=current)
     else:
         if snapshot is not None:
             raise ProjectConflict("Source update preparation requires the current project generation.")
         previous = _admitted_request(project)
+        _current_annotation_scope(project)
     # Without an admitted head, the host factory's supported unimported
     # legacy request remains the explicit fallback; no store was imported.
     if not isinstance(previous, dict):
