@@ -7,7 +7,7 @@ from sciplot_core.studio_core.project_command_scope import project_command_runti
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.studio_core.native_scientific_audit import audit_native_candidate as _audit_candidate
+from sciplot_core.studio_core.native_scientific_audit import audit_edited_document as _audit_candidate
 from sciplot_core.studio_core.delivery_recovery_state import (
     RecoveryBlocked,
     canonical_path,

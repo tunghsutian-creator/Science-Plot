@@ -10,6 +10,28 @@ from .paths import LocatorStore
 from .root_bindings import require as require_roots
 
 
+def literal_project_root(store: LocatorStore, original: str | Path, *,
+                         generation: str | None = None) -> str:
+    """Identify one bound host root without certifying its mutable members.
+
+    Only the exact physical project root or a whole-directory resource root
+    already declared by this generation can supply its preserved identity.
+    This neither resolves scientific inputs nor asserts current delivery bytes.
+    """
+    literal = Path(original).expanduser().absolute()
+    with store._locked() as (io, current):
+        value = state.reachable(io, current, generation) if generation else current
+        require_roots(io, current)
+        matches = [key for key, root in {"": io.root, **io.locations}.items() if literal == root]
+        if len(matches) != 1:
+            raise ProjectStoreError("Project identity requires an exact bound physical resource root.")
+        key = matches[0]
+        if (key not in value["resource_roots"] or key not in value["locators"]
+                or io.location_members.get(key) is not None):
+            raise ProjectStoreError("Project identity requires a generation-bound whole-directory root.")
+        return str(value["locators"][key])
+
+
 def _directory(io: StoreIO, value: dict[str, Any], literal: Path,
                selected: tuple[str, str]) -> Path:
     prefix, _literal = selected
