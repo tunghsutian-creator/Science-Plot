@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 import pandas as pd
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.materials_rules import (
     format_plot_text_units,
@@ -296,7 +297,7 @@ def _series_from_request(
         )
     else:
         if (
-            str(source.expanduser().resolve())
+            literal_source_path(source.expanduser().resolve())
             != _terminal_source_binding.terminal_source.path
         ):
             raise TerminalSourceBindingError(

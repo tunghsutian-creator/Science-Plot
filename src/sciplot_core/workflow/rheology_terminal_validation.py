@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from sciplot_core.figure_plan import CartesianMetricBinding, ResolvedFigurePlan
 from sciplot_core.figure_plan.task import FigureTask
+from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.policy import normalize_export_formats
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.terminal_request import normalize_terminal_render_request
@@ -52,7 +53,7 @@ def validate_temperature_task_sources(
             binding.rule_id != "rheology_temperature_sweep"
             or binding.template != "point_line"
             or binding.x_metric != "temperature"
-            or Path(binding.terminal_source.path) != record.source.resolve()
+            or binding.terminal_source.path != literal_source_path(record.source.resolve())
             or task.figure_id != binding.task_key
             or task.artifact_stem != record.metric_id
             or task.template != binding.template
@@ -161,8 +162,12 @@ def validate_temperature_render_payload(
         _fail("terminal specification source request diverged from its binding")
     _validate_spec_series(spec.get("series"), record=record)
 
-    request_paths = list(worker_root.rglob("plot_request.json"))
-    if len(request_paths) != 1:
+    try:
+        active_paths = _active_worker_evidence(worker_root, document_path, spec_path)
+    except (OSError, KeyError, TypeError) as exc:
+        raise ValueError(f"{_TEMPERATURE_BINDING_MISMATCH}: terminal worker inventory could not be verified.") from exc
+    request_paths = [path for path in active_paths if path.name == "plot_request.json"]
+    if request_paths != [document_path.parent.parent / "plot_request.json"]:
         _fail("terminal worker request inventory is incomplete or ambiguous")
     worker_request = _read_object(request_paths[0], label="terminal worker request")
     ledger = worker_request.get("transform_ledger")
@@ -174,8 +179,53 @@ def validate_temperature_render_payload(
         for step in steps
     ):
         _fail("terminal worker repeated semantic source preparation")
-    if list(worker_root.rglob("rheology_temperature_comparison.xlsx")):
+    if any(path.name == "rheology_temperature_comparison.xlsx" for path in active_paths):
         _fail("terminal worker materialized a second temperature workbook")
+
+
+def _active_worker_evidence(root: Path, document: Path, spec: Path) -> list[Path]:
+    """Exclude only verified frozen views/inputs, never a directory name."""
+    paths = sorted([*root.rglob("plot_request.json"), *root.rglob("rheology_temperature_comparison.xlsx")])
+    if any(path.is_symlink() for path in paths):
+        _fail("terminal worker evidence traverses a symbolic link")
+    project = document.parent.parent
+    if document != project / "studio/document.vsz" or spec != project / "studio/spec.json":
+        _fail("terminal worker document/spec do not identify one canonical project")
+    metadata = project / ".sciplot_store"
+    if not metadata.exists():
+        return paths  # Legacy workers still receive the complete physical census.
+    if metadata.is_symlink() or not (metadata / "head.json").is_file():
+        _fail("terminal worker Store has no admitted generation")
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store import commands, directories, locators, state
+    from sciplot_core.project_store.root_bindings import require as require_roots
+
+    store = project_store(project)
+    with store._locked() as (io, current):
+        require_roots(io, current)
+        for name in ("plot_request.json", "studio/document.vsz", "studio/spec.json"):
+            locators.checked_member(io, current, name, None)
+        # Existing sealed command readers verify descriptor, candidate byte
+        # views and receipt census; they never create a view during this read.
+        frozen: set[Path] = set()
+        for saved in state.read_commands(io, expected=current["commands"]):
+            receipt = commands.public(io, saved)
+            frozen.update(Path(path) for key in ("staged_paths", "artifact_paths")
+                          for path in receipt.get(key, {}).values())
+        active = []
+        for path in paths:
+            logical = path.relative_to(project).as_posix() if path.is_relative_to(project) else None
+            if logical in current.get("input_resources", []):
+                assert logical is not None
+                locators.checked_member(io, current, logical, None)
+                continue
+            if path in frozen:
+                continue
+            if (locators.owned_source_view(io, current, path) is not None
+                    or directories.owned_view(io, current, path) is not None):
+                continue
+            active.append(path)
+        return active
 
 
 def _validate_spec_series(value: object, *, record: RheologyTaskSource) -> None:
@@ -261,7 +311,7 @@ def _read_object(path: Path, *, label: str) -> dict[str, Any]:
     return payload
 
 
-def _fail(message: str) -> None:
+def _fail(message: str) -> NoReturn:
     raise ValueError(f"{_TEMPERATURE_BINDING_MISMATCH}: {message}.")
 
 

@@ -8,6 +8,7 @@ from sciplot_core.figure_plan.execution import request_for_figure_task
 from sciplot_core.figure_plan.metric_binding import CartesianMetricBinding
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.figure_plan.task import FigureTask
+from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
 from sciplot_core.mechanical_task_sources import MechanicalTaskSource
 from sciplot_core.terminal_source_binding import MaterializedTerminalSourceBinding
@@ -90,7 +91,7 @@ def _mechanical_task_source(
         or binding.template != expected_task.template
         or binding.x_metric != expected_x
         or binding.y_metric != expected_y
-        or binding.terminal_source.path != str(source)
+        or binding.terminal_source.path != literal_source_path(source)
         or binding.sample_order != expected_task.sample_order
         or (
             value.render_options.get("x_metric"),
