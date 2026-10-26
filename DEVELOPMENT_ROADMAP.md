@@ -433,8 +433,9 @@ in their existing identity domains. Broader template/TTS interaction and real
 ordinary plotting still need bounded workflow evidence; this batch adds no new
 scientific template, native/semantic identity bridge or paid AI measurement.
 
-The next core batch follows [the core migration contract](docs/DESIGN_PROJECT_LIFECYCLE.md).
-Its finite scope is all semantic figure-aggregate lifecycle callers, all desktop
+The delivered semantic/desktop/panel core batch follows
+[the lifecycle contract](docs/DESIGN_PROJECT_LIFECYCLE.md).
+Its finite scope covers all semantic figure-aggregate lifecycle callers, all desktop
 Assistant setting batches and all panel-layout saves. ProjectApplication replaces
 the semantic orchestration; ProjectRepository alone writes its existing revision,
 head and journal store. Old entry points delegate and contain no second writer.
@@ -442,14 +443,26 @@ Desktop failure compensation must verify the complete pre-command draft or
 quarantine it before save/export. Panel saves use a kernel-held directory lease,
 descriptor-bound staging and publication, and an explicit fence against old
 writers. Actual process-death and native failure controls accompany the migration.
-Per-worker checks are development evidence; integrated acceptance remains pending
-until one frozen batch passes its complete local and remote gates.
+Its main597fee38 delivery has complete local acceptance and terminal successful
+candidate/main CI. This does not supply acceptance for subsequent code.
 
-This is not a claim that every architecture finding is resolved. Operator-specific
-immutable scientific versions, portable whole-project generations, NativeSuite
-and GUI project-use-case convergence, host execution authorization and measured
-runtime costs remain separately bounded work. They must replace the relevant
-old authority when migrated, without a permanent parallel state store. Veusz is
+The subsequent [project-core contract](docs/DESIGN_PROJECT_CORE_MIGRATION.md)
+defines the complete caller/recovery closure and its combined acceptance. It
+replaces global builtin admission with retained
+per-operator versions, separates host execution grants, and converges NativeSuite,
+GUI/browser/publication and attached semantic storage on the project command and
+generation owner. Private rendering is disposable computation, not an extra
+authority or an external-effect retry exemption. Complete cold-source input
+views, actual pending relocation and caller/writer retirement require explicit
+evidence; targeted checks alone cannot authorize main delivery. Its exact frozen
+source, complete local run/capture/access records and candidate/main CI establish
+delivery status independently of this ownership description.
+
+Package dependency cleanup, measured runtime/verification costs, finer global
+test-owner closure, outbound minimization and the remaining open scientific
+schemas stay later work. This is not a claim that every architecture finding is
+resolved. Each migration must retire its old authority rather than keep a
+permanent parallel store. Veusz is
 the long-term native rendering adapter; no evidence justifies reimplementing its
 scientific rendering and existing-file capabilities in this core batch.
 

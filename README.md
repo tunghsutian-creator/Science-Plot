@@ -254,10 +254,15 @@ page dimensions are rejected. Existing saved VSZs retain their visual authority.
 Template-based `plot.create` now creates a **ManagedPlot** by default for the
 supported Cartesian and FigureSpec v2 contracts. Its SciPlotDocument is authoritative:
 resolved PlotIR compiles into disposable VSZ, previews and PDF/TIFF. Keeping raw
-sources and `.sciplot_documents` is sufficient to rebuild deleted artifacts with
-`plot export`. Source/transform/executor updates require explicit scientific
+sources and the standalone `.sciplot_documents` store supports rebuilding deleted
+artifacts with `plot export`. For figures attached to a SciPlot project, keep the
+complete project directory and original data: its saved history and source versions
+belong to that project. An exported VSZ/PDF or an old semantic-folder copy alone
+is not a complete project backup. Source/transform/executor updates require explicit scientific
 intent; theme edits preserve scientific identity. Fixed-file external scientific
-executors carry interpreter/script hashes and provenance. Unknown manual Veusz
+executors carry interpreter/script hashes and provenance and require an exact
+[host grant](src/sciplot_core/host_grants/README.md) before new execution. A saved
+descriptor or AI request cannot grant that permission. Unknown manual Veusz
 changes block rather than enter the canonical document.
 
 You can create, edit and export through the AI assistant and the SciPlot canvas

@@ -1321,7 +1321,13 @@ a cross-session identity.
 
 Scientific document validation and seals remain in `plot_document`/`plot_ir`.
 `ProjectApplication` owns semantic transactions, currentness, preview/export and
-rollback; its injected repository owns revision/head/journal persistence. The
+rollback; its injected repository validates semantic revisions and journals. For
+an attached figure, `AttachedProjectRepository` persists those facts through
+`ProjectCommands` and the selected `FileProjectStore`. The Store owns immutable
+complete generations and the sole durable project head; native/spec/manifest/
+delivery files are checked materializations. Semantic revision, project generation
+and native content identity have separate meanings. A standalone semantic
+aggregate retains its existing repository owner and format. The
 `PlotService` compatibility facade constructs concrete ports and routes separate
 native-project aggregates; it contains no competing semantic state machine.
 Provider-neutral capability admission owns AI command scope. GUI
@@ -1352,8 +1358,37 @@ and old-writer retirement. Desktop setting batches compensate failures against
 the full live draft and quarantine unverifiable state before native output.
 Panel saves use one directory-inode lease and descriptor-bound staging; process
 death releases exclusion without deleting an unproven historical lock. These
-bounded changes do not establish whole-project transaction convergence or solve
-the separate global scientific-executor version and portability findings.
+bounded changes are distinct from the subsequent
+[project-core migration](DESIGN_PROJECT_CORE_MIGRATION.md). That migration routes
+NativeSuite, Studio/GUI/browser/MCP, publication and attached semantic writers into
+one command/generation boundary, preserving their distinct scientific/native
+authorities and old-history readers. Fixed refusal shells retire transferred old
+semantic writers; preserving an immutable backup does not create another head.
+
+Builtin scientific execution selects an immutable per-operator implementation and
+its actual numerical dependency closure. Historical descriptors resolve retained
+implementations without rewriting old seals; an unrelated operator upgrade cannot
+become a request to refresh old science. External interpreter/script identity is
+separate from the host-owned action/source grant checked before every new launch.
+Adopted results remain readable after revocation. Grants do not provide an OS
+sandbox, hermetic external dependencies or cancellation of in-flight code.
+
+The host source port separates original scientific locators/UUIDs/versions from
+physical project locations. Incoming live versions, sealed baseline files and
+explicitly imported complete-tree witnesses are finite request scopes; worker
+bindings preserve them and reset between pooled calls. Same-name discovery,
+partial directory contents and file hashes cannot stand in for a complete tree.
+QA/native observations keep their actual inspected paths. Host artifact addresses
+alone project back from private preparation to published locations.
+
+Pure private render/export/QA computation is disposable and may finish before a
+storage command is reserved; it changes no active/raw/delivery files. This is not
+a general native exactly-once guarantee or an exception for external scientific
+effects. Sealed candidates resume their exact original decision/result without
+executing the effect again. External scientific resolution writes its uncertainty
+journal before launch and refuses an unknown prior outcome. Package-level domain
+dependency cleanup, global cost/owner optimization, outbound minimization and all
+historical scientific-schema closure remain separate work and claims.
 
 ## Ownership table
 

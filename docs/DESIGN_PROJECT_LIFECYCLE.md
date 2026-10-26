@@ -139,10 +139,19 @@ capture, strict access export, readiness/native smoke and exact-commit CI before
 merge. Do not repeat a complete run for every small worker change. A subset,
 static review or capture-only success cannot certify complete acceptance.
 
-Remaining project-level findings stay explicit: operator-specific immutable
-versioning; portable whole-project packages/generations; NativeSuite and GUI
-project-use-case migration; trusted host execution authorization; domain package
-dependency cleanup; and measured request/verification costs. Their future migration
-must retire the old target owner. They are not implemented by creating unused
-interfaces here, and the current scope must not be advertised as all-project
-transaction convergence or all-family scientific compatibility proof.
+The subsequent [project-core migration](DESIGN_PROJECT_CORE_MIGRATION.md) implements
+operator-specific immutable versions, host execution grants and the shared project
+command/generation boundary. Attached semantic repositories, NativeSuite, Studio,
+GUI/browser and publication callers use that boundary; standalone semantic
+aggregates retain their one documented repository owner. These are concrete caller
+migrations, not unused interfaces. Their combined release evidence remains a
+separate gate from this earlier semantic/desktop/panel batch.
+
+Discardable private native rendering, export and QA may precede storage admission
+when they affect no active project, original source or delivery. They do not have
+a durable exactly-once computation promise. Already sealed effects and external
+scientific execution retain their own decision/journal and unknown-outcome rules.
+Host grants authorize exact application actions/sources, not OS or network
+isolation. Domain package cleanup, measured costs, outbound minimization and the
+remaining open scientific schemas stay explicit later work. Neither batch proves
+all-family scientific compatibility or global architecture health.
