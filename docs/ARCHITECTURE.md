@@ -1341,9 +1341,13 @@ standalone cleanup errors surface through the redacted provider boundary.
 
 `plot_engine/edit_entry.py` admits and leases style/common edit checkpoint paths.
 A checkpoint retains the original literal request, not transaction stages. Replay
-uses that binding before fresh target discovery; the lifecycle repository journal remains
-execution authority. Source, export and revision directories cannot become user
-edit entries. Necessary old checkpoint formats remain readable.
+uses that binding before fresh target discovery; the lifecycle journal remains
+execution authority. `project_lifecycle/checkpoint_storage.py` persists default
+project entries as resources of the same Store, while explicit external entries
+retain one literal request-file owner. Its entry lease retains the selected host
+runtime through replay/cleanup when the original project is offline. Source,
+export and revision directories cannot become user edit entries. Necessary old
+checkpoint formats remain readable.
 
 `studio_render/template_resolution.py` projects declared option values once.
 Domain defaults and series-encoding provenance consume it; recorded effective

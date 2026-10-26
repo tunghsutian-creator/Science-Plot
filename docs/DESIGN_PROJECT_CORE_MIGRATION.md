@@ -70,6 +70,22 @@ Read-only queries do not repair or replace active native files. Resume validates
 the original key, project and command binding before recovery. Invalid target
 membership must fail before import, recovery or any other write.
 
+The committed outcome also owns its materialization plan: installation generation,
+parent and complete member set are derived from immutable reachable history.
+Mutable receipt hints must match, and a later resource writer removes an older
+receipt's right to reinstall its old preimage. Command filenames, keys and the
+committed receipt census must agree before repair or new admission. A missing
+committed receipt is an explicit recovery conflict, never a new command or an
+instruction to recreate its effect.
+
+Literal common/style edit checkpoints are intent resources, not execution
+journals. Default entries inside an attached or recognized project use that same
+Store; explicit external entries retain their independent request-file owner.
+One entry lease keeps the selected project runtime through bound replay and owner
+cleanup, including when the original project is offline. Rebinding physical host
+locations does not rewrite the frozen intent or bypass namespace/source/output/
+revision protections.
+
 Private render/export/QA preparation may discover its output membership before
 publication only when it changes no active/source/delivery files. This exception
 does not admit external executor effects or GUI mutations. Existing records are
