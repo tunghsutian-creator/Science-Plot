@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
+
+from sciplot_core.foundation.source_errors import SourceVersionMismatch
 from typing import Any, NoReturn
 
 from sciplot_core.performance_comparison.models import PerformanceComparisonError
@@ -139,3 +144,21 @@ def performance_selection_from_request(
         if "performance_selection" in request
         else None
     )
+
+
+
+@contextmanager
+def selected_performance_source_errors(request: dict[str, Any], *, base_dir: Path) -> Iterator[None]:
+    """Translate only a proved mismatch of this selection's exact input version."""
+    try:
+        yield
+    except SourceVersionMismatch as exc:
+        source = request.get("input")
+        selection = performance_selection_from_request(request)
+        if isinstance(source, str) and source and selection is not None:
+            literal = Path(source).expanduser()
+            literal = literal if literal.is_absolute() else base_dir / literal
+            if str(literal) == exc.literal and selection["source_sha256"] == exc.expected_sha256:
+                raise PerformanceComparisonError("performance_selection_source_changed",
+                    "Performance selection is bound to different original source bytes; inspect the current table again.") from exc
+        raise

@@ -95,3 +95,23 @@ def test_sealed_reader_refuses_changed_identity_or_mutable_review_hints(edit, ch
     with pytest.raises(ValueError):
         verified_document_edit_review(project, supplied)
     assert document.read_bytes() == before and len(calls) == 1
+
+
+
+def test_sealed_scoped_review_refuses_a_foreign_key_even_with_self_consistent_metadata(edit):
+    project, document, review, calls = edit
+    store = project_store(project)
+    app = ProjectCommands(store)
+    prior = app.query(review['operation_id'])
+    original = ProjectCommand.from_payload(prior['metadata'])
+    intent = {**json.loads(original.request_json), 'request_id': 'a' * 64}
+    command = ProjectCommand.create('document_edit', 'foreign-scoped-key', project_id=original.project_id,
+        expected_generation=original.expected_generation, read_set=dict(original.read_set),
+        write_set=original.write_set, request=intent, projected_reads=original.projected_reads)
+    record = app.preview(command, lambda: ProjectMutation(
+        {name: Path(value) for name, value in prior['staged_paths'].items()}, prior['result'],
+        review=prior['review'], artifacts={name: Path(value) for name, value in prior['artifact_paths'].items()}))
+    supplied = {**review, 'operation_id': command.key, 'decision_id': record['decision_id']}
+    with pytest.raises(ValueError, match='host-assigned operation identity'):
+        verified_document_edit_review(project, supplied)
+    assert record['phase'] == 'needs_review' and len(calls) == 1

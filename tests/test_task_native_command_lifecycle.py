@@ -208,3 +208,18 @@ def test_replacement_retry_closes_prior_decision_without_orphaning_new_candidate
     result = task_control.resume_task(f.root, {'retry': True})
     assert result['status'] == 'needs_review' and result['operation_id'] != first['operation_id']
     assert len(f.calls) == 2 and f.native.read_bytes() == f.original
+
+
+
+def test_native_task_cancellation_cannot_claim_another_tasks_scoped_review(native_task, tmp_path):
+    f = native_task
+    first = task_control.start_task(f.request, task_dir=f.root)
+    other_root = tmp_path / 'other-task'
+    other = task_control.start_task(f.request, task_dir=other_root)
+    state = task_storage.load_task(f.root)
+    state['operation_id'] = other['operation_id']
+    (f.root / 'review.json').write_bytes((other_root / 'review.json').read_bytes())
+    task_storage.save_task(f.root, state)
+    assert _cancel(f, other)['status'] == 'blocked'
+    assert all(item['phase'] == 'needs_review' for item in f.store.commands())
+    assert len(f.calls) == 2 and first['operation_id'] != other['operation_id']

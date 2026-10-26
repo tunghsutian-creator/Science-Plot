@@ -111,7 +111,9 @@ def cancel_native_task(root: Path, state: dict[str, Any]) -> None:
     if review.get("version") != 3:
         return
     project = Path(state["project"])
-    verified_document_edit_review(project, review)  # Historical identity, not current source freshness.
+    _verified, record = verified_document_edit_review(project, review)  # Historical identity, not current source freshness.
+    if record["metadata"]["request"].get("request_id") != native_task_request_id(state):
+        raise ValueError("The cancelled native preview does not belong to this task revision.")
     repository = project_store(project)
     with repository._locked():
         _reject(repository, _owned_records(repository, state))

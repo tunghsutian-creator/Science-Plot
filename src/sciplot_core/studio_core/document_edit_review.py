@@ -9,7 +9,7 @@ from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_commands import CommandKind, ProjectCommand, ProjectCommands
-from sciplot_core.studio_core.document_edit_state import check_artifact
+from sciplot_core.studio_core.document_edit_state import check_artifact, native_edit_request_key
 from sciplot_core.studio_core.project_command_scope import project_store
 from sciplot_core.studio_core.project_query import resolve_project_path
 
@@ -70,6 +70,8 @@ def verified_document_edit_review(project: Path, supplied: dict[str, Any]) -> tu
         raise ValueError("The native review changed its typed command identity or read/write witness")
     expected = reviewed_edit(record, project)
     intent, result = json.loads(command.request_json), record["draft"]["result"]
+    if "request_id" in intent and command.key != native_edit_request_key(command.project_id, intent["request_id"]):
+        raise ValueError("The native review changed its host-assigned operation identity.")
     if (intent["expected_files"] != result["base_files"]
             or any(record["read_set"].get(name) != value for name, value in result["base_files"].items())
             or intent["document_relative"] != result["document_relative"]

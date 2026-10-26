@@ -7,7 +7,7 @@ from collections.abc import Set
 from typing import Any
 
 from . import commands, directories, locators, state
-from .errors import ProjectConflict, ProjectStoreError
+from .errors import ProjectConflict, ProjectStoreError, ProjectSourceVersionMismatch
 from .io import StoreIO, directory, parts, read_file, sha
 from .incoming_sources import expectation_payload, expectation_trees, selected_expectations
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
@@ -89,7 +89,8 @@ def physical_file(path: Path, expected_sha256: str | None = None) -> SourceFileO
         os.close(root)
     digest = sha(data)
     if expected_sha256 is not None and digest != expected_sha256:
-        raise ProjectConflict("The exact original source differs from its registered version.")
+        raise ProjectSourceVersionMismatch(str(path), expected_sha256, digest,
+            "The exact original source differs from its registered version.")
     return SourceFileObservation(digest, path)
 
 

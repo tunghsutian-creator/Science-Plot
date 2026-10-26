@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.project_store import FileProjectStore, ProjectConflict
+from sciplot_core.performance_comparison.selection import selected_performance_source_errors
 from sciplot_core.project_commands.resources import SourceTreeRead
 from sciplot_core.project_store.incoming_sources import SourceExpectation, selected_expectations
 from sciplot_core.project_store.locators import logical_for_literal
@@ -81,8 +82,8 @@ def current_preparation_runtime(store: FileProjectStore, snapshot: dict[str, Any
     figures cannot add another version to its ordinary input capability.
     """
     generation = snapshot["generation"]
-    with project_runtime(store, generation=generation) as resolver:
-        request = json.loads(store.read_bytes("plot_request.json", generation=generation))
+    request = json.loads(store.read_bytes("plot_request.json", generation=generation))
+    with selected_performance_source_errors(request, base_dir=store.root), project_runtime(store, generation=generation) as resolver:
         value = request.get("input")
         source = Path(value).expanduser() if isinstance(value, str) and value else None
         if source is not None and not source.is_absolute():
