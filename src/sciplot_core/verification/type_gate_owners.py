@@ -297,6 +297,8 @@ STUDIO_FIGURE_SET_EXECUTION_TYPE_OWNER = ChangedOwner(
         "tests/test_mechanical_studio_task_sources.py",
         "tests/test_performance_figure_plan_activation.py",
         "tests/test_studio_figure_task_chain.py",
+        "tests/test_terminal_source_roles.py",
+        "tests/test_terminal_request_literals.py",
         *ARCHITECTURE_CORE_TARGETS,
     ),
     mypy_required=True,

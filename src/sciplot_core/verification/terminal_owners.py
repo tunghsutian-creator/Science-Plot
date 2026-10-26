@@ -23,8 +23,6 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
             "src/sciplot_core/studio_core/prepare_existing.py",
             "src/sciplot_core/studio_core/presentation_evidence.py",
             "src/sciplot_core/studio_core/figure_task_evidence.py",
-            "src/sciplot_core/studio_core/figure_requests.py",
-            "src/sciplot_core/studio_core/figure_source_request.py",
             "src/sciplot_core/studio_core/registry_state.py",
             "src/sciplot_core/studio_core/series_request.py",
             "src/sciplot_core/studio_render/terminal_contract.py",
