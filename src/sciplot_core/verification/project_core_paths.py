@@ -102,6 +102,7 @@ NATIVE_PROJECT_PATHS = frozenset({
     'src/sciplot_core/studio_core/delivery_recovery_commands.py',
     'src/sciplot_core/studio_core/document_edit.py',
     'src/sciplot_core/studio_core/document_edit_commands.py',
+    'src/sciplot_core/studio_core/document_edit_review.py',
     'src/sciplot_core/studio_core/document_edit_commit.py',
     'src/sciplot_core/studio_core/document_edit_companion.py',
     'src/sciplot_core/studio_core/document_edit_legacy.py',

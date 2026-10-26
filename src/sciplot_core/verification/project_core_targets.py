@@ -43,6 +43,8 @@ PROJECT_STORE_TESTS = (
     'tests/test_project_store_preconditions.py',
     'tests/test_project_source_observations.py',
     'tests/test_project_native_work.py',
+    'tests/test_native_suite_source_errors.py',
+    'tests/test_performance_source_version_errors.py',
     'tests/test_project_manifest_generations.py',
     'tests/test_project_storage_ports.py',
     'tests/test_project_figure_storage_faults.py',
@@ -119,6 +121,7 @@ NATIVE_PROJECT_CONSUMERS = (
 )
 
 NATIVE_PROJECT_COMMAND_TESTS = (
+    'tests/test_document_edit_review.py',
     'tests/test_native_project_commands.py',
     'tests/test_native_project_commands_native.py',
     'tests/test_native_export_replay.py',
@@ -171,6 +174,8 @@ NATIVE_SUITE_COMMAND_TESTS = (
     'tests/test_native_suite_project_commands.py',
     'tests/test_native_suite_generation_projection.py',
     'tests/test_native_suite_recognition.py',
+    'tests/test_native_suite_noop_authority.py',
+    'tests/test_native_suite_source_errors.py',
     "tests/test_native_suite_dependency_guards.py",
     "tests/test_native_suite_legacy_publication.py",
 )
