@@ -115,6 +115,17 @@ def command(io: StoreIO, command_id: str, command_digest: str | None = None) -> 
     return value
 
 
+def sealed_draft(io: StoreIO, record: dict[str, Any]) -> dict[str, Any]:
+    draft = record.get("draft")
+    if not isinstance(draft, dict):
+        raise ProjectConflict("The command has no exact sealed input candidate.")
+    expected = digest({"command_digest": record["command_digest"], "candidate": draft})
+    frozen = io.read(f"drafts/{digest(record['command_id'])}/{expected}.json")
+    if expected != record.get("decision_id") or frozen != draft:
+        raise ProjectConflict("The sealed command candidate changed.")
+    return draft
+
+
 def save_command(io: StoreIO, value: dict[str, Any]) -> None:
     io.write(command_path(value["command_id"]), value)
 

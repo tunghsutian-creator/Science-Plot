@@ -235,10 +235,8 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
         result["native_workspace_path"] = str(native_work.verify(io, record)[0])
     draft = record.get("draft")
     if draft is not None:
-        expected = digest({"command_digest": record["command_digest"], "candidate": draft})
-        frozen = io.read(f"drafts/{digest(record['command_id'])}/{expected}.json")
-        if expected != record.get("decision_id") or frozen != draft:
-            raise ProjectConflict("The sealed command candidate changed.")
+        draft = state.sealed_draft(io, record)
+        expected = record["decision_id"]
         for key, field in (("writes", "staged_paths"), ("artifacts", "artifact_paths")):
             paths = {}
             all_views = bool(draft[key])

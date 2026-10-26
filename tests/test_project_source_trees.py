@@ -8,7 +8,7 @@ from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation, SourceTreeRead
 from sciplot_core.project_store import FileProjectStore, ProjectConflict, state
 from sciplot_core.project_store.source_trees import observe
-import sciplot_core.project_store.source_trees as tree_io
+import sciplot_core.project_store.source_tree_io as tree_io
 
 from test_project_store import fixture_store
 

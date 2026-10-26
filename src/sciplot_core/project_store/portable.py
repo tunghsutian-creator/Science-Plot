@@ -148,14 +148,24 @@ def import_bundle(bundle: Path, destination: Path, *,
                 commands.public(io, record)
                 for source_id, versions in record["draft"].get("sources", {}).items():
                     for version, entry in versions.items():
-                        io.get(entry)
+                        try:
+                            io.get(entry)
+                        except OSError as exc:
+                            raise ProjectConflict("The imported sealed source blob is missing.") from exc
                         source_versions.setdefault(source_id, {})[version] = entry["sha256"]
         imported_roots = io.read("local_resource_roots.json")
         assert imported_roots is not None
         imported_roots["commands"] = [record["command_id"] for name in command_names
             if (record := io.read("commands/" + name)) is not None]
         io.write("local_resource_roots.json", imported_roots)
-        io.write("local_sources.json", {"versions": source_versions})
+        from .prepared_inputs import bind_import
+
+        local_sources: dict[str, Any] = {"versions": source_versions}
+        for name in command_names:
+            record = io.read("commands/" + name)
+            if record and record.get("draft") is not None:
+                bind_import(io, current, record, local_sources)
+        io.write("local_sources.json", local_sources)
         io.write("relocation.json", {"generation": current["generation"], "files": sorted(current["files"]), "complete": False})
         projection.relocate(io, current)
     return store

@@ -292,6 +292,28 @@ class FileProjectStore:
             raise ProjectConflict("A locator must match its saved source ID and exact version; names never reconnect.")
         return self.resolve_source(source_id, version)
 
+    def _prepared_path(self, command_id: str, command_digest: str, *, decision_id: str,
+                       locator: str, expected: str, source_id: str | None, tree: bool) -> Path | None:
+        from .prepared_inputs import input_path, tree_path
+
+        with self._locked(allow_pending=True) as (io, current):
+            record = state.command(io, command_id, command_digest)
+            if record is None or record.get("decision_id") != decision_id:
+                raise ProjectConflict("Prepared inputs require their exact command and sealed decision.")
+            if tree:
+                return tree_path(io, current, record, locator=locator, tree_sha256=expected)
+            return input_path(io, current, record, locator=locator, expected_sha256=expected, source_id=source_id)
+
+    def prepared_input_path(self, command_id: str, command_digest: str, *, decision_id: str,
+                            locator: str, expected_sha256: str, source_id: str | None = None) -> Path | None:
+        return self._prepared_path(command_id, command_digest, decision_id=decision_id, locator=locator,
+                                   expected=expected_sha256, source_id=source_id, tree=False)
+
+    def prepared_tree_path(self, command_id: str, command_digest: str, *, decision_id: str,
+                           locator: str, tree_sha256: str) -> Path | None:
+        return self._prepared_path(command_id, command_digest, decision_id=decision_id, locator=locator,
+                                   expected=tree_sha256, source_id=None, tree=True)
+
     def resolve_path(self, original: str | Path, *, expected_sha256: str | None = None,
                      source_id: str | None = None, generation: str | None = None) -> Path:
         from .paths import resolve_path
