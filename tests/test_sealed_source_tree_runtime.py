@@ -28,6 +28,7 @@ from sciplot_core.project_store import (
 )
 from sciplot_core.project_store.incoming_sources import (
     SourceExpectation,
+    expectation_payload,
     source_expectation_scope,
 )
 from sciplot_core.project_store.io import sha
@@ -43,6 +44,53 @@ from sciplot_core.project_store.worker_binding import (
 )
 
 from test_project_store import fixture_store
+
+
+def test_existing_sixty_four_file_capacity_composes_with_one_complete_tree(tmp_path, monkeypatch):
+    store, before = fixture_store(tmp_path)
+    source = tmp_path / "sixty-four-inputs"
+    source.mkdir()
+    prepared = []
+    for index in range(64):
+        path = source / f"member-{index:02d}.csv"
+        data = f"tiny,{index}\n".encode()
+        path.write_bytes(data)
+        path.chmod(0o644)
+        prepared.append(PreparedSource(f"{index + 1:032x}", str(path), sha(data), data, (), 0o644))
+    tree = SourceTreeRead(str(source), source_tree_sha256(source))
+    resource = "studio/document.vsz"
+    command = ProjectCommand.create("source_update", "sixty-four-files", project_id=before["project_id"],
+        expected_generation=before["generation"], read_set={resource: before["files"][resource]["sha256"]},
+        write_set=[resource], request={}, source_trees=[tree])
+    app = ProjectCommands(store)
+    review = app.preview(command, lambda: ProjectMutation({resource: b"64 captured inputs"}, {}, prepared_sources=tuple(prepared)))
+    app.decide(command, decision_id=review["decision_id"], accept=True)
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle-64"), tmp_path / "cold-64")
+    source.rename(tmp_path / "offline-64")
+    scopes = [SourceExpectation(item.locator, item.source_id, item.version) for item in prepared]
+    argv = ["read-complete-tree", str(source)]
+    with sealed_source_runtime(cold, scopes), native_runtime_binding(argv) as reference:
+        wire = json.loads(Path(reference["path"]).read_bytes())["project"]["source_expectations"]
+        assert set(wire) == {"mode", "sources"} and len(wire["sources"]) == 64
+        assert resolve_source_path(prepared[-1].locator).read_bytes() == prepared[-1].data
+    witness = SealedSourceTree(command.key, command.command_digest, review["decision_id"], tree)
+    with sealed_source_runtime(cold, scopes, trees=(witness,)), native_runtime_binding(argv) as reference:
+        assert Path(reference["path"]).stat().st_size < 65536
+        monkeypatch.setattr(os, "getppid", os.getpid)
+        with worker_project_runtime(reference, argv):
+            assert source_tree_sha256(source) == tree.tree_sha256
+            assert len(list(resolve_source_path(source).glob("*.csv"))) == 64
+    with pytest.raises(ProjectStoreError):
+        with sealed_source_runtime(cold, []):
+            pytest.fail("An empty files-and-trees scope cannot grant source IO")
+
+
+def test_tree_payload_keeps_an_independent_finite_limit_and_rejects_empty_scope():
+    witness = SealedSourceTree("exact-command", "a" * 64, "b" * 64, SourceTreeRead("/exact/source", "c" * 64))
+    with pytest.raises(ProjectStoreError):
+        expectation_payload({"mode": "sealed", "sources": [], "trees": [witness.to_payload()] * 65})
+    with pytest.raises(ProjectStoreError):
+        expectation_payload({"mode": "sealed", "sources": [], "trees": []})
 
 
 def cold_tree(tmp_path, *, complete=True, imported=True, capture_all=True):

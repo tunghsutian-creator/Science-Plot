@@ -84,7 +84,7 @@ def expectation_payload(value: Any) -> tuple[SourceReadMode, tuple[SourceExpecta
         raise ProjectStoreError("Invalid finite source expectation capability.")
     mode: SourceReadMode = "incoming" if value["mode"] == "incoming" else "sealed"
     trees = expectation_trees(value)
-    if not 1 <= len(value["sources"]) + len(trees) <= 64 or mode != "sealed" and trees:
+    if not (value["sources"] or trees) or mode != "sealed" and trees:
         raise ProjectStoreError("Complete imported tree witnesses belong only to the existing sealed source scope.")
     return mode, tuple(SourceExpectation.from_payload(item) for item in value["sources"])
 
@@ -95,7 +95,8 @@ def source_expectation_scope(snapshot: dict[str, Any], mode: SourceReadMode,
                              store: FileProjectStore | None = None) -> Iterator[None]:
     frozen = tuple(sources)
     sealed_trees = tuple(trees)
-    if (mode not in {"incoming", "sealed"} or not 1 <= len(frozen) + len(sealed_trees) <= 64
+    if (mode not in {"incoming", "sealed"} or not (frozen or sealed_trees)
+            or len(frozen) > 64 or len(sealed_trees) > 64
             or any(not isinstance(item, SourceExpectation) for item in frozen)
             or len({item.literal for item in frozen}) != len(frozen)):
         raise ProjectStoreError("Source expectations must be finite and unambiguous by exact literal.")
