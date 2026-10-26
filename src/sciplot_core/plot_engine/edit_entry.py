@@ -10,10 +10,9 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from sciplot_core.studio_core.project_query_paths import canonical_path
-from sciplot_core.studio_core.project_session import external_project_session
 
 from .errors import EngineError
-from sciplot_core.project_lifecycle.repository import FileProjectRepository
+from sciplot_core.project_lifecycle.checkpoint_storage import EditCheckpointStorage
 from sciplot_core.project_lifecycle.context import repository_scope
 
 EditEntryName = Literal["semantic-style.json", "semantic-edit.json"]
@@ -48,7 +47,8 @@ def edit_service_owner(owner: _OwnedEditService, *, owned: bool = True) -> Itera
 def edit_entry_owner(entry: Path) -> str | None:
     """A key belongs to one existing command authority, including legacy tasks."""
     entry = canonical_path(entry)
-    owners = [name for name in _BINDINGS if (entry / name).exists()]
+    storage = EditCheckpointStorage(entry)
+    owners = [name for name in _BINDINGS if storage.exists(entry / name)]
     if len(owners) > 1:
         raise EngineError("document_idempotency_conflict", "The edit entry contains competing command bindings.")
     return owners[0] if owners else None
@@ -61,9 +61,10 @@ def read_edit_entry(entry: Path, name: EditEntryName) -> dict[str, Any] | None:
     if owner is not None and owner != name:
         raise EngineError("document_idempotency_conflict",
                           "Use the original command for this occupied edit entry.")
-    if not (entry / name).is_file():
+    storage = EditCheckpointStorage(entry)
+    if not storage.exists(entry / name):
         return None
-    saved = FileProjectRepository().read(entry / name)
+    saved = storage.read(entry / name)
     intent = saved.get("intent")
     plot = intent.get("plot") if name == "semantic-style.json" and isinstance(intent, dict) else saved.get("plot")
     if (not isinstance(intent, dict) or not isinstance(saved.get("request"), dict)
@@ -76,18 +77,23 @@ def read_edit_entry(entry: Path, name: EditEntryName) -> dict[str, Any] | None:
 def admit_edit_entry(entry: Path, root: Path, head: dict[str, Any]) -> None:
     """A new request checkpoint cannot overlap scientific or delivery state."""
     entry, root = canonical_path(entry), canonical_path(root)
+    internal = entry.is_relative_to(root / "compatibility")
     protected = [canonical_path(Path(item["path"])) for item in head["document"]["scientific"]["data_sources"]]
     protected.extend(canonical_path(Path(head["binding"][field]))
-                     for field in ("project", "output", "document") if field in head["binding"])
-    protected.append(root)
+                     for field in ("output", "document") if field in head["binding"])
+    project = head["binding"].get("project")
+    if project is not None:
+        project = canonical_path(Path(project))
+        if not (internal and root.is_relative_to(project)):
+            protected.append(project)
+    if not internal:
+        protected.append(root)
     for path in protected:
-        if path == root and entry.is_relative_to(root / "compatibility"):
-            continue
         if entry == path or entry.is_relative_to(path) or path.is_relative_to(entry):
             raise EngineError("task_path_overlap",
                               "The edit entry must be separate from source, project, exports and revision storage.")
-    if entry.exists() and (not entry.is_dir() or any(entry.iterdir())) and not any(
-            (entry / name).is_file() for name in _BINDINGS):
+    storage = EditCheckpointStorage(entry)
+    if storage.occupied() and not any(storage.exists(entry / name) for name in _BINDINGS):
         raise EngineError("document_idempotency_conflict",
                           "Use an empty edit entry or its original semantic edit binding.")
 
@@ -96,8 +102,7 @@ def admit_edit_entry(entry: Path, root: Path, head: dict[str, Any]) -> None:
 def edit_entry_session(entry: Path) -> Iterator[None]:
     """Lease only the command checkpoint; PlotService leases its own plot."""
     entry = canonical_path(entry)
-    entry.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with external_project_session(entry):
+    with EditCheckpointStorage(entry).lease():
         yield
 
 
@@ -106,8 +111,9 @@ def bind_edit_entry(entry: Path, name: EditEntryName, payload: dict[str, Any]) -
     saved = read_edit_entry(entry, name)
     if saved is not None:
         return saved
-    if entry.exists() and (not entry.is_dir() or any(entry.iterdir())):
+    storage = EditCheckpointStorage(entry)
+    if storage.occupied():
         raise EngineError("document_idempotency_conflict",
                           "The edit entry became occupied before its request was bound.")
-    FileProjectRepository().write(entry / name, payload)
+    storage.bind(name, payload)
     return payload

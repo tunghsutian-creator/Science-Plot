@@ -4,14 +4,13 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sciplot_core.studio_core.project_query import resolve_project_figure
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_series_edits import compile_series_style
 
 from .edit_entry import admit_edit_entry, bind_edit_entry, edit_entry_owner, edit_entry_session, edit_service_owner, read_edit_entry
 from .errors import EngineError
 from .service import PlotService
-from .storage import digest, document_root, load_head
+from .storage import digest, load_head
 
 
 def _style_binding(target: Path, samples: list[str] | None, all_samples: bool,
@@ -65,13 +64,13 @@ def _migrated_style(owner: PlotService, target: Path, *, samples: list[str] | No
         root = target
     else:
         try:
-            selected = resolve_project_figure(target, figure_id)
+            selected = owner.targets.resolve_open(target, figure_id)
         except (ValueError, OSError) as exc:
             if saved is not None:
                 raise EngineError("document_idempotency_conflict",
                                   "Continue this style entry with its original plot root or original resolving entrypoint.") from exc
             return None
-        root = document_root(Path(selected["project"]), selected["figure_id"])
+        root = selected.root
         if saved is None and not owner.repository.has_head(root):
             return None
     entry = entry or root / "compatibility" / uuid4().hex
@@ -107,7 +106,7 @@ def migrated_style(target: Path, *, samples: list[str] | None, all_samples: bool
         return None
     caller = _style_binding(target, samples, all_samples, style, figure_id)
     # Literal checkpoint admission precedes constructing an execution owner.
-    # Its independent filesystem authority never reads semantic head/journal.
+    # The checkpoint owner stores literal intent, never semantic head/journal.
     frozen = _saved_style(target, entry, caller)
     owner = PlotService()
     with edit_service_owner(owner):
