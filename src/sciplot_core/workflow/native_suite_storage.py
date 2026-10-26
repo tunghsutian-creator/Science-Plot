@@ -52,10 +52,10 @@ def pending_operation(context: dict[str, Any]) -> dict[str, Any] | None:
     for path in operation_paths(context):
         if str(path) in migrated:
             continue
-        record = read_operation(path)
-        if (record is not None and record["plot"] == context["plot"]
-                and record["phase"] not in {"complete", "rejected"}):
-            matches.append(record)
+        legacy = read_operation(path)
+        if (legacy is not None and legacy["plot"] == context["plot"]
+                and legacy["phase"] not in {"complete", "rejected"}):
+            matches.append(legacy)
     if len(matches) > 1:
         raise ValueError("Multiple pending native display operations; preserve and inspect.")
     return matches[0] if matches else None
@@ -122,6 +122,9 @@ def recorded_decision(context: dict[str, Any], record: dict[str, Any], path: Pat
 
 
 def _bound_publication(evidence: dict[str, Any], context: dict[str, Any], expected_sha: str) -> bool:
+    if (not isinstance(evidence, dict) or not isinstance(evidence.get("published_files"), dict)
+            or not isinstance(evidence.get("result"), dict)):
+        return False
     result = evidence.get("result", {})
     return bool(evidence.get("published_files", {}).get(context["plot"]) == expected_sha
             and result.get("workspace") == context["workspace"] and result.get("delivery") == context["delivery"]

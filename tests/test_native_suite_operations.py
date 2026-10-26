@@ -21,11 +21,10 @@ from test_rheology_tts_render import _native_settings
 
 def _saved_command(workspace, delivery, request):
     from sciplot_core.project_store import FileProjectStore
-    from sciplot_core.workflow.native_suite_generation import command_key
 
-    key = command_key("native_patch", {"figure": "Main", "key": request["idempotency_key"]})
-    record = FileProjectStore(workspace, locations={"delivery": delivery}).query(key)
-    assert record is not None and record["metadata"]["request"]["request"] == request
+    record, = [item for item in FileProjectStore(workspace, locations={"delivery": delivery}).commands()
+               if item["metadata"]["request"].get("adapter") == "native_display"
+               and item["metadata"]["request"].get("request") == request]
     return record
 
 
@@ -246,8 +245,9 @@ def test_export_failure_resume_and_publication_retry_do_not_apply_twice(suite, m
     assert patch_native_object(native, request)["replayed"] is True
     altered = deepcopy(request)
     altered["changes"][0]["value"] = "bottom-right"
-    with pytest.raises(EngineError, match="key belongs"):
+    with pytest.raises(EngineError, match="exact original identity") as conflict:
         patch_native_object(native, altered)
+    assert conflict.value.reason_code == "document_idempotency_conflict"
 
 
 @pytest.mark.comprehensive

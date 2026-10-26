@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 import json
 from pathlib import Path
 from uuid import uuid4
 import tempfile
+from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
@@ -15,7 +17,7 @@ from sciplot_core.workflow.rheology_tts_tables import write_json
 from sciplot_core.workflow.native_suite_runtime import current_store, delivery_path, literal_directory, literal_resource, native_path, native_runtime
 
 
-def _load(workspace: Path, *, native_display: bool = False, repair: bool = False) -> tuple[Path, dict]:
+def _load(workspace: Path, *, native_display: bool = False, repair: bool = False) -> tuple[Path, dict[str, Any]]:
     workspace = workspace.expanduser().resolve()
     manifest = json.loads((workspace / "suite.json").read_text(encoding="utf-8"))
     active = current_store()
@@ -37,8 +39,8 @@ def _load(workspace: Path, *, native_display: bool = False, repair: bool = False
     return workspace, manifest
 
 
-def _assert_same_science(old: dict, new: dict) -> None:
-    def signature(figure):
+def _assert_same_science(old: dict[str, Any], new: dict[str, Any]) -> None:
+    def signature(figure: dict[str, Any]) -> list[dict[str, Any]]:
         return [{"id": p["id"], "rect_mm": p["rect_mm"], "axes": p["axes"],
                  "title": p["title"], "notes": p["notes"],
                  "references": p["reference_lines"],
@@ -50,14 +52,14 @@ def _assert_same_science(old: dict, new: dict) -> None:
         raise ValueError("Presentation restoration attempted to change data, axes, titles or layout.")
 
 
-def _encoding_values(figure: dict) -> list[dict]:
+def _encoding_values(figure: dict[str, Any]) -> list[dict[str, Any]]:
     return [{"legend": p["legend"], "series": [
         {"legend_key": s["legend_key"], **({key: s["encoding"][key] for key in ("line", "marker")}
                                          if s["kind"] != "bar" else {})}
         for s in p["series"]]} for p in figure["panels"]]
 
 
-def _presentation_plan(plan: dict, path: Path | None, *, authoritative_paths: tuple[Path, ...]) -> tuple[dict, dict]:
+def _presentation_plan(plan: dict[str, Any], path: Path | None, *, authoritative_paths: tuple[Path, ...]) -> tuple[dict[str, Any], dict[str, Any]]:
     from sciplot_core.rheology_tts_style import prepare_tts_presentation, upgrade_tts_presentation
 
     governed = prepare_tts_presentation(plan) if "presentation_policy" in plan else upgrade_tts_presentation(plan)
@@ -71,7 +73,7 @@ def _presentation_plan(plan: dict, path: Path | None, *, authoritative_paths: tu
     candidate = prepare_tts_presentation(json.loads(path.read_text(encoding="utf-8")))
     check_snapshot(binding, label="external presentation plan")
 
-    def invariant(payload):
+    def invariant(payload: dict[str, Any]) -> dict[str, Any]:
         result = deepcopy(payload)
         for figure in result["figures"]:
             for panel in figure["panels"]:
@@ -95,7 +97,7 @@ def _presentation_plan(plan: dict, path: Path | None, *, authoritative_paths: tu
 
 
 @native_runtime()
-def _prepare_style_preview(workspace: Path, directory: Path, *, presentation_plan: Path | None = None) -> dict:
+def _prepare_style_preview(workspace: Path, directory: Path, *, presentation_plan: Path | None = None) -> dict[str, Any]:
     from sciplot_core.rheology_tts_render import audit_tts_document, export_tts_document, restyle_tts_document
     from sciplot_core.rheology_tts_spec import compile_tts_spec
     from sciplot_core.workflow.rheology_tts_contract import rheology_capabilities
@@ -120,6 +122,7 @@ def _prepare_style_preview(workspace: Path, directory: Path, *, presentation_pla
     selected = [d for d in manifest["documents"] if _encoding_values(old_figures[d["id"]]) != _encoding_values(new_figures[d["id"]])]
     if not selected and plan.get("presentation_policy") == upgraded.get("presentation_policy"):
         return {"status": "no_change", "workspace": str(workspace), "delivery": str(delivery),
+                **({"presentation_plan": external_plan} if external_plan else {}),
                 "message": "The saved suite already has this presentation contract; native edits remain authoritative."}
     dependencies = [workspace / "suite.json", delivery / "data/delivery_manifest.json", plan_path,
                     delivery / "data/figure_plan.json"]
@@ -183,18 +186,17 @@ def _prepare_style_preview(workspace: Path, directory: Path, *, presentation_pla
 
 
 
-def publication_updates(workspace: Path, manifest: dict, preview: dict, directory: Path,
-                        *, native_display: bool = False, spec_targets: dict[str, Path] | None = None) -> dict:
+def publication_updates(workspace: Path, manifest: dict[str, Any], preview: dict[str, Any], directory: Path,
+                        *, native_display: bool = False, spec_targets: dict[str, Path] | None = None) -> dict[Path, bytes]:
     """Build exact audited byte writes; no mutable source survives this callback."""
-    from sciplot_core.workflow.rheology_tts_saved_state import _figure_folder
+    from sciplot_core.workflow.rheology_tts_saved_state import _export_receipts, _figure_folder
     from sciplot_core.workflow.native_suite_generation import candidate_bytes, json_bytes
 
     updated = deepcopy(manifest)
     by_id = {document["id"]: document for document in updated["documents"]}
     delivery = delivery_path(manifest)
     writes = {}
-    current_exports = {Path(item["document"]).stem: item for item in
-                       updated.get("last_export", updated["native_result"]["figures"])}
+    current_exports = _export_receipts(updated)
     for item in preview["candidates"]:
         identifier = item["id"]
         document = by_id[identifier]
@@ -245,9 +247,9 @@ def publication_updates(workspace: Path, manifest: dict, preview: dict, director
 
 
 @native_runtime(repair=True)
-def preview_suite_style(workspace: Path, *, presentation_plan: Path | None = None) -> dict:
-    from sciplot_core.project_commands import ProjectCommands
-    from sciplot_core.workflow.native_suite_generation import canonical_sha, command_for, json_bytes, mutation, open_store, suite_paths
+def preview_suite_style(workspace: Path, *, presentation_plan: Path | None = None) -> dict[str, Any]:
+    from sciplot_core.project_commands import ProjectCommands, ProjectMutation
+    from sciplot_core.workflow.native_suite_generation import canonical_sha, command_for, json_bytes, mutation, open_store, source_versions, suite_paths
 
     workspace, manifest = _load(workspace, repair=True)
     store = open_store(workspace, delivery_path(manifest))
@@ -268,18 +270,19 @@ def preview_suite_style(workspace: Path, *, presentation_plan: Path | None = Non
     app = ProjectCommands(store)
     with tempfile.TemporaryDirectory(prefix="sciplot-suite-style-") as temporary:
         directory = Path(temporary).resolve()
-        def prepare():
+        def prepare() -> ProjectMutation:
             preview = _prepare_style_preview(workspace, directory, presentation_plan=presentation_plan)
+            updates: dict[Path, bytes | None] = {}
             if preview.get("status") == "no_change":
-                updates = {}
                 artifacts = {"preview.json": json_bytes(preview)}
                 result = preview
             else:
-                updates = publication_updates(workspace, manifest, preview, directory, spec_targets=specs)
+                prepared_updates = publication_updates(workspace, manifest, preview, directory, spec_targets=specs)
+                updates.update(prepared_updates)
                 artifacts = {"preview.json": json_bytes({"kind": preview["kind"], "version": 1,
                     "figures": list(specs), "contract_sha256": preview["contract_sha256"],
                     "sources": preview["sources"], "candidate_files": {store.logical_path(path): canonical_sha(data)
-                    for path, data in updates.items()}})}
+                    for path, data in prepared_updates.items()}})}
                 for candidate in preview["candidates"]:
                     image = next(item["path"] for item in candidate["export"]["exports"] if item["format"] == "png_300")
                     artifacts[candidate["id"] + ".png"] = Path(image).read_bytes()
@@ -290,11 +293,23 @@ def preview_suite_style(workspace: Path, *, presentation_plan: Path | None = Non
                 if path not in updates:
                     logical = store.logical_path(path)
                     updates[path] = store.read_bytes(logical) if logical in store.snapshot()["files"] else None
-            return mutation(store, updates, result, sources=manifest["sources"],
-                review={"adapter": "suite_style", "preview": "preview.json"}, artifacts=artifacts)
+            review: dict[str, Any] = {"adapter": "suite_style", "preview": "preview.json"}
+            candidate = mutation(store, updates, result, sources=manifest["sources"],
+                review=review, artifacts=artifacts)
+            binding = preview.get("presentation_plan", {})
+            if presentation_plan is not None:
+                if (set(binding) != {"path", "sha256"}
+                        or binding["path"] != str(presentation_plan.expanduser().resolve())):
+                    raise ValueError("The display intent lacks its exact external presentation plan binding.")
+                check_snapshot({binding["path"]: binding["sha256"]}, label="external presentation plan")
+                # This is an intent dependency, never a suite scientific source.
+                review["presentation_plan"] = binding
+                candidate = replace(candidate, sources=[*(candidate.sources or ()), *source_versions(store, [binding])])
+            return candidate
         record = app.preview(command, prepare)
     if record["result"].get("status") == "no_change":
-        return app.decide(command, decision_id=record["decision_id"], accept=True)["result"]
+        result: dict[str, Any] = app.decide(command, decision_id=record["decision_id"], accept=True)["result"]
+        return result
     return {"status": "preview_ready", "preview": record["artifact_paths"]["preview.json"],
         "workspace": str(workspace), "changed_figures": record["result"].get("changed_figures", 0),
         "decision_id": record["decision_id"],
@@ -303,7 +318,7 @@ def preview_suite_style(workspace: Path, *, presentation_plan: Path | None = Non
 
 
 def apply_suite_style(workspace: Path, preview_path: Path, *, native_display: bool = False,
-                      _session_held: bool = False) -> dict:
+                      _session_held: bool = False) -> dict[str, Any]:
     from sciplot_core.project_commands import ProjectCommands
     from sciplot_core.workflow.native_suite_runtime import read_bound_store
     from sciplot_core.studio_core.source_update_commit import reject_symlink_path
@@ -319,13 +334,14 @@ def apply_suite_style(workspace: Path, preview_path: Path, *, native_display: bo
 
 @native_runtime(repair=True)
 def _apply_suite_style_admitted(workspace: Path, preview_path: Path, *, native_display: bool = False,
-                               _session_held: bool = False) -> dict:
+                               _session_held: bool = False) -> dict[str, Any]:
     from sciplot_core.project_commands import ProjectCommand, ProjectCommands
     from sciplot_core.workflow.native_suite_generation import open_store
     from sciplot_core.workflow.rheology_tts_saved_state import _check_sources
 
     workspace, manifest = _load(workspace, native_display=native_display, repair=True)
-    app = ProjectCommands(open_store(workspace, delivery_path(manifest)))
+    store = open_store(workspace, delivery_path(manifest))
+    app = ProjectCommands(store)
     path = preview_path.expanduser().resolve()
     matches = [record for record in app.commands()
                if record.get("review", {}).get("adapter") == "suite_style"
@@ -334,6 +350,12 @@ def _apply_suite_style_admitted(workspace: Path, preview_path: Path, *, native_d
         raise ValueError("Apply requires the exact sealed generation preview; legacy previews remain read-only evidence.")
     record = matches[0]
     _check_sources(manifest["sources"])
+    binding = record.get("review", {}).get("presentation_plan")
+    if binding is not None and record["phase"] != "complete":
+        prepared = store.prepared_input_path(record["command_id"], record["command_digest"],
+            decision_id=record["decision_id"], locator=binding["path"], expected_sha256=binding["sha256"])
+        path = prepared if prepared is not None else Path(binding["path"])
+        check_snapshot({str(path): binding["sha256"]}, label="external presentation plan")
     command = ProjectCommand.from_payload(record["metadata"])
     applied = app.decide(command, decision_id=record["decision_id"], accept=True)
     return {**applied["result"], "generation": applied["generation"], "already_applied": record["phase"] == "complete"}

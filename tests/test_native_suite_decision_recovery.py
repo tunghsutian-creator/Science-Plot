@@ -137,9 +137,54 @@ def test_older_terminal_records_replay_only_their_truthful_decision(suite, monke
 @pytest.mark.comprehensive
 @pytest.mark.parametrize("evidence_kind", ["applied", "intent"])
 def test_older_pending_publication_evidence_cannot_be_rejected_and_resumes(suite, monkeypatch, evidence_kind):
+    from native_suite_legacy_fixture import legacy_case
+    from sciplot_core.project_store import FileProjectStore, projection
+
+    workspace, delivery, source, prepared, _manifest = suite
+    scientific = (file_sha256(source), file_sha256(prepared))
+    dispatch, effects = rheology_tts_render._dispatch, []
+
+    def observe(payload):
+        effects.append(payload["action"])
+        return dispatch(payload)
+
+    monkeypatch.setattr(rheology_tts_render, "_dispatch", observe)
+    native, request, legacy, path, installed = legacy_case(suite, monkeypatch, evidence_kind)
+    historical = {item: item.read_bytes() for item in path.parent.rglob("*") if item.is_file()}
+    assert effects.count("display_patch") == 1 and effects.count("export") == 1
+    readonly = []
+
+    def only_scientific_audit(payload):
+        assert payload["action"] == "audit", "Legacy recovery must not repeat native edit/export."
+        readonly.append(payload["action"])
+        return dispatch(payload)
+
+    monkeypatch.setattr(rheology_tts_render, "_dispatch", only_scientific_audit)
+    monkeypatch.setattr(projection, "install", lambda *a, **kw: pytest.fail("Legacy import repeated physical publication."))
+    decision = {"decision_id": legacy["decision_id"], "base_revision": request["base_revision"], "accept": False}
+    with pytest.raises(EngineError, match="decision cannot be reversed"):
+        decide_native_object(native, decision)
+    assert json.loads(path.read_bytes())["phase"] == "needs_review"
+    resume = {key: request[key] for key in ("plot_id", "base_revision", "idempotency_key")}
+    result = resume_native_object(native, resume)
+    assert result["status"] == "complete" and result["accepted"] is True and result["ready_to_use"] is True
+    assert all(file_sha256(Path(name)) == sha for name, sha in installed.items())
+    assert all(item.read_bytes() == data for item, data in historical.items())
+    assert readonly == ["audit"]
+    assert resume_native_object(native, resume)["replayed"] is True and readonly == ["audit"]
+    assert (file_sha256(source), file_sha256(prepared)) == scientific
+    imported, = [item for item in FileProjectStore(workspace, locations={"delivery": delivery}).commands()
+                 if item.get("review", {}).get("legacy_decision_id") == legacy["decision_id"]]
+    assert imported["phase"] == "complete" and imported["accepted"] is True and imported["write_set"] == []
+
+
+def _assert_modern_pending_recovery(suite, monkeypatch, evidence_kind):
+    from sciplot_core.workflow.native_suite_objects import require_object
+    from sciplot_core.workflow.native_suite_transactions import capture_object
+
     workspace, delivery, source, prepared, manifest = suite
     native = Path(manifest["documents"][0]["path"])
-    described = describe_native_object(native, description={"scope": "summary"})
+    described = capture_object(require_object(native))
     request = _request(described, key="legacy-pending-publication")
     preview = patch_native_object(native, request)
     before = file_sha256(native)

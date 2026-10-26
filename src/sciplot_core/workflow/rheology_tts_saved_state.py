@@ -69,6 +69,30 @@ def _active_receipts(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return [original[document["id"]] for document in manifest["documents"]]
 
 
+def _export_receipts(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Overlay sparse latest export facts on complete immutable creation facts.
+
+    An explicit pending/empty export row overrides creation evidence. Missing
+    overlay rows retain their original facts; no files or successful exports
+    are inferred by this read-only projection.
+    """
+    identifiers = [item["id"] for item in manifest["documents"]]
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError("Saved document identities are not unique.")
+    result: dict[str, dict[str, Any]] = {}
+    for rows in (manifest["native_result"]["figures"], manifest.get("last_export", [])):
+        seen = set()
+        for item in rows:
+            identifier = Path(item["document"]).stem
+            if identifier not in identifiers or identifier in seen or item.get("id", identifier) != identifier:
+                raise ValueError("Saved export receipts require unique bound figure identities.")
+            seen.add(identifier)
+            result[identifier] = item
+    if set(result) != set(identifiers):
+        raise ValueError("Saved export receipts lack a creation-bound figure.")
+    return result
+
+
 def _compiled_figures(manifest: dict[str, Any], *, figure_ids: tuple[str, ...] | None = None) -> dict[str, Any]:
     """Read creation-bound numeric baselines without accepting edited spec bytes."""
     by_id = {}

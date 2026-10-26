@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import tempfile
+from typing import Any
+
+from sciplot_core.project_commands import ProjectMutation
+from sciplot_core.project_store import FileProjectStore
 
 from sciplot_core.workflow.native_suite_runtime import current_store, delivery_path, literal_directory, literal_resource, native_path, native_runtime
 from sciplot_core.workflow.rheology_tts_tables import write_json, write_methods, write_plot_tables
@@ -16,6 +20,7 @@ from sciplot_core.workflow.rheology_tts_saved_state import (
     _bound_sources as _bound_sources,
     _check_sources as _check_sources,
     _compiled_figures as _compiled_figures,
+    _export_receipts as _export_receipts,
     _figure_folder as _figure_folder,
     _selected_documents as _selected_documents,
     _sha as _sha,
@@ -29,7 +34,7 @@ from sciplot_core.workflow.rheology_tts_delivery_files import (
 
 
 @native_runtime(repair=True, role="analysis_request")
-def create_suite(request_path: Path, *, resume: bool = False) -> dict:
+def create_suite(request_path: Path, *, resume: bool = False) -> dict[str, Any]:
     from sciplot_core.workflow.native_suite_creation import create_project
     request_path = request_path.expanduser().resolve()
     request = json.loads(request_path.read_text(encoding="utf-8"))
@@ -61,7 +66,7 @@ def create_suite(request_path: Path, *, resume: bool = False) -> dict:
 
 
 def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Path],
-                            known_workspace: Path | None = None) -> dict:
+                            known_workspace: Path | None = None) -> dict[str, Any]:
     from sciplot_core.semantic_sources.rheology_tts import analyze_tts_request
     from sciplot_core.workflow.rheology_tts_figures import build_tts_figures
     from sciplot_core.rheology_tts_render import render_tts_figures
@@ -99,9 +104,10 @@ def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Pat
         from sciplot_core.workflow.native_suite_generation import candidate_file
         from sciplot_core.project_store.runtime import resolve_runtime_path, literal_runtime_path
         original = known_workspace / "initial_render"
-        native_result = check_native_continuation(compile_tts_spec(spec), original, completed=True)
-        if native_result is None:
+        continued = check_native_continuation(compile_tts_spec(spec), original, completed=True)
+        if continued is None:
             raise ValueError("The original native effect has no complete verified receipt.")
+        native_result = continued
         out = workspace / "initial_render"
         out.mkdir()
         for item in native_result["figures"]:
@@ -163,13 +169,13 @@ def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Pat
 
 
 @native_runtime(repair=True)
-def export_suite(workspace: Path, *, figure_ids: tuple[str, ...] | None = None) -> dict:
+def export_suite(workspace: Path, *, figure_ids: tuple[str, ...] | None = None) -> dict[str, Any]:
     return _export_saved_suite(workspace.expanduser().resolve(), figure_ids=figure_ids)
 
 
 @native_runtime(repair=True)
 def _export_saved_suite(workspace: Path, *, figure_ids: tuple[str, ...] | None = None,
-                        command_key: str | None = None) -> dict:
+                        command_key: str | None = None) -> dict[str, Any]:
     from sciplot_core.project_commands import ProjectCommands
     from sciplot_core.workflow.native_suite_generation import command_for, command_key as make_key, open_store, saved_command, suite_paths
     from sciplot_core.workflow.rheology_tts_style_update import _load
@@ -200,7 +206,8 @@ def _export_saved_suite(workspace: Path, *, figure_ids: tuple[str, ...] | None =
 
 
 @native_runtime()
-def _prepare_saved_export(workspace: Path, *, figure_ids: tuple[str, ...] | None, store, stage: Path):
+def _prepare_saved_export(workspace: Path, *, figure_ids: tuple[str, ...] | None,
+                          store: FileProjectStore, stage: Path) -> ProjectMutation:
     from sciplot_core.rheology_tts_render import export_tts_documents
     from sciplot_core.studio_core.source_update_commit import reject_symlink_path
     from sciplot_core.workflow.rheology_tts_style_storage import check_snapshot, snapshot
@@ -208,7 +215,8 @@ def _prepare_saved_export(workspace: Path, *, figure_ids: tuple[str, ...] | None
     manifest_path = workspace / "suite.json"
     baseline = snapshot([manifest_path])
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("kind") != "sciplot_rheology_tts_suite" or (current_store().root if current_store() is not None else Path(manifest["workspace"]).resolve()) != workspace:
+    active = current_store()
+    if manifest.get("kind") != "sciplot_rheology_tts_suite" or (active.root if active is not None else Path(manifest["workspace"]).resolve()) != workspace:
         raise ValueError("Expected a bound rheology suite workspace.")
     _check_sources(manifest["sources"])
     delivery = delivery_path(manifest).resolve()
@@ -282,8 +290,7 @@ def _prepare_saved_export(workspace: Path, *, figure_ids: tuple[str, ...] | None
         results.append(result)
     _check_sources(manifest["sources"])
     check_snapshot(baseline, label="suite export baseline")
-    current = {Path(item["document"]).stem: item for item in
-               manifest.get("last_export", manifest["native_result"]["figures"])}
+    current = _export_receipts(manifest)
     current.update({Path(item["document"]).stem: item for item in results})
     manifest["last_export"] = [current[document["id"]] for document in manifest["documents"]]
     staged_manifest = stage / "suite.json"

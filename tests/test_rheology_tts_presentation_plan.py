@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import json
+from pathlib import Path
 
 import pytest
 
@@ -85,9 +86,8 @@ def test_compiled_science_guard_ignores_only_display_text_and_legend_position():
         _assert_same_science(old, new)
 
 
-def test_plan_dependency_change_blocks_apply_before_publication(tmp_path, monkeypatch):
+def _sealed_style_preview(tmp_path, monkeypatch, *, with_plan=True):
     from sciplot_core.workflow import rheology_tts_style_update as update
-    from sciplot_core.workflow.rheology_tts_style_storage import snapshot
     from sciplot_core.workflow.rheology_tts_tables import write_json
     from test_native_suite_project_commands import bound
 
@@ -101,7 +101,7 @@ def test_plan_dependency_change_blocks_apply_before_publication(tmp_path, monkey
     write_json(delivery / "data/delivery_manifest.json", manifest)
     for root in (workspace, delivery / "data"):
         write_json(root / "figure_plan.json", _plan())
-    external = _write(tmp_path / "provided.json", _plan())
+    external = _write(tmp_path / "provided.json", _plan()) if with_plan else None
 
     def prepare(_workspace, directory, *, presentation_plan=None):
         candidate_plan, binding = _presentation_plan(_plan(), presentation_plan, authoritative_paths=())
@@ -120,9 +120,16 @@ def test_plan_dependency_change_blocks_apply_before_publication(tmp_path, monkey
             "presentation_plan": binding, "plan": str(plan), "candidate_files": {str(plan): file_sha256(plan)},
             "candidates": [{"id": "A", "edit": {"changes": [{"field": "legend"}]}, "export": exported}]}
 
-    from pathlib import Path
     monkeypatch.setattr(update, "_prepare_style_preview", prepare)
     preview = update.preview_suite_style(workspace, presentation_plan=external)
+    return fixture, manifest, preview, external
+
+
+def test_plan_dependency_change_blocks_apply_before_publication(tmp_path, monkeypatch):
+    from sciplot_core.workflow.rheology_tts_style_storage import snapshot
+
+    fixture, _manifest, preview, external = _sealed_style_preview(tmp_path, monkeypatch)
+    workspace, delivery, _source, documents, *_ = fixture
     protected = snapshot([workspace / "suite.json", delivery / "data/delivery_manifest.json",
                           *(Path(item["path"]) for item in documents),
                           *(Path(name) for item in documents for name in item["exports"])])

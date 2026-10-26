@@ -122,8 +122,8 @@ def _prepare_current(context: dict[str, Any], captured: dict[str, Any], request:
         preview = {"contract_sha256": rheology_capabilities()["contract_sha256"],
             "figures": deepcopy(_active_receipts(context["manifest"])),
             "candidates": [{"id": context["figure_id"], "edit": edit, "export": exported}], "presentation_plan": {}}
-        updates = publication_updates(Path(context["workspace"]), context["manifest"], preview,
-                                      directory, native_display=True)
+        updates: dict[Path, bytes | None] = dict(publication_updates(Path(context["workspace"]), context["manifest"], preview,
+                                      directory, native_display=True))
         _, writes = suite_paths(Path(context["workspace"]), context["manifest"], (context["figure_id"],), native_writes=True)
         for path in writes:
             if path not in updates:
@@ -150,7 +150,7 @@ def _prepare_current(context: dict[str, Any], captured: dict[str, Any], request:
 def _import_legacy_preview(context: dict[str, Any], record: dict[str, Any], path: Path,
                            store: FileProjectStore, app: ProjectCommands) -> dict[str, Any]:
     """Freeze an already reviewed legacy candidate without rerunning its edit."""
-    from sciplot_core.workflow.native_suite_preview import check_acceptance
+    from sciplot_core.workflow.native_suite_preview import read_candidate
     from sciplot_core.workflow.native_suite_storage import recorded_decision
     from sciplot_core.workflow.rheology_tts_style_update import publication_updates
     request = validate_patch(record["request"])
@@ -169,13 +169,18 @@ def _import_legacy_preview(context: dict[str, Any], record: dict[str, Any], path
     if any(not any(Path(name).is_relative_to(root) for root in roots) and name not in source_paths
            for name in record["baseline"]):
         raise ValueError("Legacy baseline contains an unadmitted external resource.")
-    check_acceptance(context, record, path)
-    preview = json.loads(Path(record["preview"]).read_bytes())
+    accepted = recorded_decision(context, record, path)
+    frozen = read_candidate(context, record, path)
+    from sciplot_core.workflow.native_suite_legacy_publication import import_installed
+    recovered = import_installed(context, record, path, store, app, frozen)
+    if recovered is not None:
+        return recovered
+    from sciplot_core.workflow.rheology_tts_style_storage import check_snapshot
+    check_snapshot(record["baseline"], label="presentation baseline")
+    preview = frozen.preview
     if len(preview["candidates"]) != 1 or preview["candidates"][0]["id"] != context["figure_id"]:
         raise ValueError("Legacy native preview does not bind exactly this figure.")
     selected = preview["candidates"][0]
-    if any(not Path(name).is_relative_to(path.parent) for name in preview["candidate_files"]):
-        raise ValueError("Legacy candidate evidence escapes its private preview directory.")
     candidate = Path(selected["export"]["document"])
     digest = file_sha256(candidate)
     if digest != selected["export"]["document_sha256"] or digest != selected["edit"]["document_sha256"]:
@@ -206,16 +211,20 @@ def _import_legacy_preview(context: dict[str, Any], record: dict[str, Any], path
             result = {**record, "presentation_hash": digest, "spec_sha256": file_sha256(spec),
                 "revision": native_identity(context["manifest"]["workspace"], context["figure_id"],
                     context["manifest"]["sources"], file_sha256(spec), digest)["revision"]}
-            image = next(item["path"] for item in selected["export"]["exports"] if item["format"] == "png_300")
-            return mutation(store, updates, result, sources=record["sources"],
+            from sciplot_core.workflow.native_suite_generation import candidate_file, canonical_sha
+            dependencies = [{"path": str(item), "sha256": canonical_sha(value.data)} for item, value in frozen.evidence.items()]
+            for item, captured in frozen.evidence.items():
+                if candidate_file(item, canonical_sha(captured.data)).mode != captured.mode:
+                    raise ValueError("Legacy candidate evidence changed during its scientific audit.")
+            return mutation(store, updates, result, sources=[*record["sources"], *dependencies],
                 review={"adapter": "native_display", "figure_id": context["figure_id"],
                         "legacy_decision_id": record["decision_id"], "legacy_operation": str(path)},
                 artifacts={"preview.json": json_bytes({"kind": "sciplot_native_display_preview", "version": 2,
                     "native": "native.vsz", "native_sha256": digest, "legacy_decision_id": record["decision_id"]}),
-                    "native.vsz": candidate.read_bytes(), "preview.png": Path(image).read_bytes()})
+                    "native.vsz": frozen.native, "preview.png": frozen.png})
     imported = app.preview(command, prepare)
-    if recorded_decision(context, record, path) is True:
-        return app.decide(command, decision_id=imported["decision_id"], accept=True)
+    if accepted is not None:
+        return app.decide(command, decision_id=imported["decision_id"], accept=accepted)
     return imported
 
 

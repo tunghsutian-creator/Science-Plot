@@ -52,7 +52,7 @@ def _resume_preview_export(context: dict[str, Any], parent: dict[str, Any],
 
 def _publish_reviewed_exports(context: dict[str, Any], parent: dict[str, Any], child: dict[str, Any],
                              store: FileProjectStore, app: ProjectCommands) -> dict[str, Any]:
-    from sciplot_core.workflow.rheology_tts_saved_state import _check_sources, _figure_folder
+    from sciplot_core.workflow.rheology_tts_saved_state import _check_sources, _export_receipts, _figure_folder
     request = {"adapter": "native_reviewed_export_publication", "parent": parent["command_digest"],
                "export": child["command_digest"]}
     key = command_key("reviewed_export", request)
@@ -80,7 +80,7 @@ def _publish_reviewed_exports(context: dict[str, Any], parent: dict[str, Any], c
         audit_path = folder / (context["figure_id"] + ".native-audit.json")
         receipt["native_audit_path"] = str(audit_path)
         updates[audit_path] = json_bytes(receipt["native_audit"])
-        existing = {Path(item["document"]).stem: item for item in manifest.get("last_export", manifest["native_result"]["figures"])}
+        existing = _export_receipts(manifest)
         existing[context["figure_id"]] = receipt
         manifest["last_export"] = [existing[item["id"]] for item in manifest["documents"]]
         updates[Path(context["workspace"]) / "suite.json"] = json_bytes(manifest)

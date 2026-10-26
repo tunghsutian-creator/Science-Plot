@@ -13,11 +13,10 @@ from sciplot_core.workflow.native_suite_storage import result_for
 from sciplot_core.workflow.native_suite_command_records import _application, _preview_export
 
 def _current_exports(context: dict[str, Any], native_sha: str) -> list[dict[str, Any]]:
-    from sciplot_core.workflow.rheology_tts_saved_state import _figure_folder
+    from sciplot_core.workflow.rheology_tts_saved_state import _export_receipts, _figure_folder
 
     manifest, identifier = context["manifest"], context["figure_id"]
-    receipts = manifest.get("last_export", manifest["native_result"]["figures"])
-    receipt = next((item for item in receipts if Path(item["document"]).stem == identifier), None)
+    receipt = _export_receipts(manifest).get(identifier)
     if receipt is None or receipt["document_sha256"] != native_sha:
         return []
     origin_delivery = Path(manifest.get("delivery", context["delivery"]))
