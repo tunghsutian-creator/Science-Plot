@@ -85,7 +85,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         from sciplot_core.studio_core.project_command_scope import figure_read_state
         from sciplot_core.studio_core.project_query_paths import project_snapshot
 
-        _, _, selected_figures = project_snapshot(project)
+        _, primary_figure_id, selected_figures = project_snapshot(project)
         external_sources: dict[str, str] = {}
         for figure in selected_figures:
             if figure["status"] == "ready":
@@ -107,6 +107,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
             exports=exports, export_document_sha256=native_hash, primary_native_audit=primary_native_audit,
             output_dir=run, secondary_output_dir=secondary, delivery_dir=delivery, delivery_root=delivery_root)
         payload["document_sha256"] = native_hash
+        payload["figure_set"] = {"primary_figure_id": primary_figure_id, "figures": selected_figures}
         delivery_complete = payload["delivery_package"].get("complete") is True
         if delivery_complete:
             _protect_editable_documents(delivery_root, delivery)

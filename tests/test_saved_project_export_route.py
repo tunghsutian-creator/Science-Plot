@@ -7,6 +7,7 @@ from test_project_export_use_case import publication as publication
 from sciplot_core.studio_core import native_export_adapter, project_creation, publication_prepare
 from sciplot_core.studio_core.project_command_scope import project_store
 from sciplot_core.studio_figure_set_contract import STUDIO_FIGURE_SET_KIND
+from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
 
 
 @pytest.mark.parametrize("identifiers", [("primary",), ("primary", "secondary")], ids=["single", "multiple"])
@@ -89,3 +90,33 @@ def test_missing_saved_native_cannot_be_recreated_by_export(publication, monkeyp
     with pytest.raises(ValueError, match="no saved canonical document"):
         project_creation.export_project(project)
     assert not calls and not native.exists()
+
+
+def test_export_receipt_uses_the_published_generation_not_an_earlier_projection(publication, monkeypatch):
+    project, calls, _ = publication
+    path = project / "studio/figure_set.json"
+    registry = {"kind": STUDIO_FIGURE_SET_KIND, "version": 1, "primary_figure_id": "primary",
+                "figures": [{"figure_id": "primary", "title": "Earlier title", "status": "ready"}]}
+    path.write_text(json.dumps(registry))
+    store = project_store(project)
+    before = store.snapshot(import_legacy=True)
+    publish = project_creation._publish
+
+    def update_then_publish(payload):
+        registry["figures"][0]["title"] = "Published title"
+        command = ProjectCommand.create("figure_set", "independent-registry-update",
+            project_id=before["project_id"], expected_generation=before["generation"],
+            read_set={"studio/figure_set.json": before["files"]["studio/figure_set.json"]["sha256"]},
+            write_set=["studio/figure_set.json"], request={"controlled_registry_update": True})
+        ProjectCommands(store).execute(command, lambda: ProjectMutation(
+            {"studio/figure_set.json": json.dumps(registry).encode()}, {}))
+        return publish(payload)
+
+    monkeypatch.setattr(project_creation, "_publish", update_then_publish)
+    result = project_creation.export_project(project)
+    publication = next(item for item in store.commands() if item["metadata"]["kind"] == "publish")
+    assert result["figures"][0]["title"] == "Published title"
+    assert publication["result"]["figure_set"]["figures"][0]["title"] == "Published title"
+    assert result["primary_figure_id"] == publication["result"]["figure_set"]["primary_figure_id"]
+    assert result["status"] == "exported" and len(store.commands()) == 2
+    assert [call[0] for call in calls] == ["export", "publish"]
