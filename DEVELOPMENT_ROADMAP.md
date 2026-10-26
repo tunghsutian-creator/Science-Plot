@@ -17,6 +17,11 @@ read-only materialization and directory-projection failures to distinguish desig
 defects from missing migration coverage. Decide which boundaries need redesign;
 require an explicit complete caller migration, old-path retirement and recovery
 contract for each proposed replacement, rather than adding another policy layer.
+Include namespace metadata versus read capability, host identity versus content
+freshness, and physical staging versus persistent logical identity. Check the
+real effects of deferred/context-managed test entry points and select returned
+command receipts explicitly; a constructed context or unordered final list item
+does not prove that the intended operation ran or completed.
 
 Then measure the remaining runtime cost on the same task, inputs and environment.
 Separate necessary native computation, repeated initialization and validation;

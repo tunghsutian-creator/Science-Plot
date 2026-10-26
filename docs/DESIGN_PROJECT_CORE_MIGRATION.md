@@ -43,6 +43,25 @@ checks the captured version and identity again; generic initial discovery does
 not invent an expected hash. Physical delivery existence uses its selected host
 resource capability, not an immutable scientific directory cache.
 
+A recorded source-root namespace composes preserved file locators; it does not
+request a read of every file in that directory. Each actual file read retains
+its own exact identity, byte version and alias checks. Conversely, observing a
+complete directory requires its committed whole-tree witness, including original
+membership and empty-directory facts; a list of file permissions cannot supply it.
+Host-root identity and content freshness are separate observations. Recovery
+locates the exact registered physical root before auditing the selected edited
+native bytes; it cannot resolve that root through a materialized science cache.
+Private staging basenames never become persistent logical run identities.
+
+Source replacement admits its intent against the current canonical request and
+physical preimage before reading a new worksheet, adopting native state or
+allocating a candidate. Creation-time task context is not the current decision.
+Public preview and direct preparation share that admission; a confirmed frozen
+decision resumes through its existing exact read-set/CAS contract, rather than
+being admitted again as a new request. Unknown current state does not imply an
+unmapped project. Actual byte mismatches use typed boundary errors; permission,
+membership, scope and unknown-state failures retain their own meanings.
+
 A frozen source version is a read witness, not an automatic declaration that a
 generated resource can never change again. Immutable input evidence requires an
 explicit typed declaration, bound to the selected logical member, exact source
