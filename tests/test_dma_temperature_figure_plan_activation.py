@@ -14,7 +14,7 @@ from sciplot_core.dma_temperature_contract import (
 )
 from sciplot_core.figure_plan import ResolvedFigurePlan
 from sciplot_core.materials_rules import get_rule
-from sciplot_core.studio_core.prepare_generated import generate_studio_document
+from sciplot_core.studio import prepare_studio_document
 
 
 EXPECTED_SAMPLE_ORDER = [
@@ -84,9 +84,9 @@ def _dma_preparation_step(ledger: dict[str, object]) -> dict[str, object]:
 def test_dma_studio_activates_one_source_bound_task_and_spec(tmp_path: Path) -> None:
     project_dir, request_path = _write_project(tmp_path)
 
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepared = prepare_studio_document(
+        request_path,
+        delivery_root=tmp_path / "delivery",
         rule_id=DMA_TEMPERATURE_RULE_ID,
         template=None,
         project_name=None,

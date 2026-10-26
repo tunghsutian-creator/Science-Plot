@@ -13,7 +13,7 @@ from sciplot_core._paths import resolve_fixture_path
 from sciplot_core.delivery.plan_binding import plan_source_figure_ids
 from sciplot_core.figure_plan import ResolvedFigurePlan
 from sciplot_core.materials_rules import get_rule
-from sciplot_core.studio_core.prepare_generated import generate_studio_document
+from sciplot_core.studio import prepare_studio_document
 from sciplot_core.studio_core.export_execution import export_studio_document
 from sciplot_core.studio_core.publish_run import publish_studio_export_run
 from sciplot_core.studio_render.domain_defaults import _apply_domain_render_defaults
@@ -83,9 +83,9 @@ def test_temperature_studio_activates_exact_two_task_plan_with_one_preparation(
 
     monkeypatch.setattr(semantic_module, "prepare_semantic_source", prepare_spy)
 
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepared = prepare_studio_document(
+        request_path,
+        delivery_root=tmp_path / "delivery",
         rule_id=None,
         template=None,
         project_name=None,
@@ -148,9 +148,9 @@ def test_temperature_studio_second_task_failure_rolls_back_both_documents(
     )
 
     with pytest.raises(RuntimeError, match="temperature secondary failure"):
-        generate_studio_document(
-            project_dir=project_dir,
-            request_path=request_path,
+        prepare_studio_document(
+            request_path,
+            delivery_root=tmp_path / "delivery",
             rule_id=None,
             template=None,
             project_name=None,
@@ -168,9 +168,9 @@ def test_temperature_studio_publication_delivers_two_complete_figure_members(
     tmp_path: Path,
 ) -> None:
     project_dir, request_path = _write_project(tmp_path)
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepared = prepare_studio_document(
+        request_path,
+        delivery_root=tmp_path / "delivery",
         rule_id=None,
         template=None,
         project_name=None,
