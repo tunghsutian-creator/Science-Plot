@@ -17,14 +17,8 @@ def pending(io: StoreIO, current: dict[str, Any]) -> bool:
     relocation = io.read("relocation.json")
     if relocation is not None and relocation.get("complete") is not True:
         return True
-    try:
-        with directory(io.fd, ("commands",)) as parent:
-            names = sorted(name for name in os.listdir(parent) if name.endswith(".json"))
-    except FileNotFoundError:
-        return False
-    for name in names:
-        record = io.read("commands/" + name)
-        if record and record.get("install_generation") is not None and record.get("phase") != "complete":
+    for record in state.read_commands(io, expected=current["commands"]):
+        if record.get("install_generation") is not None and record.get("phase") != "complete":
             if record["command_id"] in current["commands"]:
                 return True
     return False
@@ -73,15 +67,8 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
 
 
 def recover(io: StoreIO, current: dict[str, Any]) -> list[str]:
-    try:
-        with directory(io.fd, ("commands",)) as parent:
-            names = sorted(name for name in os.listdir(parent) if name.endswith(".json"))
-    except FileNotFoundError:
-        names = []
     pending_records = []
-    for name in names:
-        record = io.read("commands/" + name)
-        assert record is not None
+    for record in state.read_commands(io, expected=current["commands"]):
         committed = committed_outcome(io, current, record)
         if committed is not None and record.get("phase") != "complete":
             pending_records.append((record, committed))

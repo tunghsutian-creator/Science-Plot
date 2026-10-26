@@ -1,6 +1,7 @@
 """Recovery plans are bound to published outcomes, never mutable receipt hints."""
 
 import json
+import hashlib
 
 import pytest
 
@@ -194,3 +195,73 @@ def test_cold_relocation_checks_receipts_before_materializing_any_active_bytes(t
         assert (target / "document.vsz").read_bytes() == b"exact portable native"
         assert cold.query("pending")["phase"] == "complete"
         assert cold.snapshot()["outside_changes"] == {}
+
+
+def test_receipt_file_cannot_change_its_key_into_an_unpublished_command(tmp_path, monkeypatch):
+    store, before = create(tmp_path)
+    publish(store, before, "pending", b"exact committed native", monkeypatch=monkeypatch, fault="after_head")
+    rewrite(store, "pending", command_id="different unrecorded key")
+    unchanged = physical_files(store.root)
+    with pytest.raises(ProjectStoreError):
+        store.reserve("must-not-reserve", "digest", expected_generation=before["generation"], read_set={}, write_set=[])
+    assert physical_files(store.root) == unchanged
+
+
+@pytest.mark.parametrize("pending", [False, True])
+@pytest.mark.parametrize("entry", ["snapshot", "commands", "recover", "export"])
+def test_every_command_scan_refuses_a_filename_key_mismatch_without_writes(tmp_path, monkeypatch, pending, entry):
+    store, before = create(tmp_path)
+    publish(store, before, "original key", b"new", monkeypatch=monkeypatch, fault="after_head" if pending else None)
+    rewrite(store, "original key", command_id="another key")
+    unchanged = physical_files(store.root)
+    with pytest.raises(ProjectStoreError):
+        if entry == "export":
+            store.export_bundle(tmp_path / "must-not-export")
+        else:
+            getattr(store, entry)()
+    assert physical_files(store.root) == unchanged
+    assert not (tmp_path / "must-not-export").exists()
+
+
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_bundle_unknown_command_keeps_exact_filename_identity_and_unknown_outcome(tmp_path, corrupt):
+    store, before = create(tmp_path)
+    store.reserve("unknown", "digest", expected_generation=before["generation"], read_set={}, write_set=[])
+    store.mark_applying("unknown", "digest")
+    assert store.query("unknown")["phase"] == "unknown"
+    bundle = store.export_bundle(tmp_path / "bundle")
+    if corrupt:
+        relative = state.command_path("unknown")
+        receipt = bundle / "store" / relative
+        value = json.loads(receipt.read_bytes())
+        receipt.write_bytes(json.dumps({**value, "command_id": "foreign unknown"}).encode())
+        header = json.loads((bundle / "bundle.json").read_text())
+        header["members"][relative].update(sha256=hashlib.sha256(receipt.read_bytes()).hexdigest(), size=receipt.stat().st_size)
+        (bundle / "bundle.json").write_text(json.dumps(header))
+        with pytest.raises(ProjectStoreError):
+            FileProjectStore.import_bundle(bundle, tmp_path / "cold")
+        assert not (tmp_path / "cold/document.vsz").exists()
+        assert not (tmp_path / "cold/spec.json").exists()
+    else:
+        cold = FileProjectStore.import_bundle(bundle, tmp_path / "cold")
+        assert cold.query("unknown")["phase"] == "unknown"
+        assert cold.commands()[0]["phase"] == "unknown"
+        assert cold.recover()["unknown_commands"] == ["unknown"]
+        assert cold.snapshot()["generation"] == before["generation"]
+        assert (cold.root / "document.vsz").read_bytes() == b"original"
+
+
+@pytest.mark.parametrize("entry", ["query", "commands", "recover", "reserve"])
+def test_missing_committed_receipt_never_becomes_a_new_unknown_or_reservation(tmp_path, entry):
+    store, before = create(tmp_path)
+    publish(store, before, "committed", b"committed bytes")
+    (store.root / ".sciplot_store" / state.command_path("committed")).unlink()
+    unchanged = physical_files(store.root)
+    with pytest.raises(ProjectStoreError):
+        if entry == "query":
+            store.query("committed")
+        elif entry == "reserve":
+            store.reserve("committed", "committed-digest", expected_generation=before["generation"], read_set={}, write_set=[])
+        else:
+            getattr(store, entry)()
+    assert physical_files(store.root) == unchanged

@@ -24,8 +24,8 @@ def resolve(io: StoreIO, value: dict[str, Any], actual: Path, *, expected_sha256
         return None
     if len(relative) < 2 or relative[1] != "candidate" or source_id is not None:
         raise ProjectConflict("A private native candidate cannot assert an unrelated scientific source identity.")
-    record = io.read("commands/" + relative[0] + ".json")
-    if record is None or digest(record["command_id"]) != relative[0]:
+    record = state.read_command(io, "commands/" + relative[0] + ".json")
+    if record is None:
         raise ProjectRecoveryRequired("This native candidate has no admitted command owner.")
     workspace, _identity = verify(io, record)
     components = parts("/".join(relative))

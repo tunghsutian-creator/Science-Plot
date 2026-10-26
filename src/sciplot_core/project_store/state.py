@@ -9,9 +9,10 @@ from typing import Any
 from sciplot_core.project_commands.resources import PreparedFile
 from uuid import uuid4
 
-from .errors import ProjectConflict, ProjectStoreError
+from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
 from .io import StoreIO, digest, parts
 from .root_bindings import identities
+from .command_records import command_path as command_path, read_command as read_command, read_commands as read_commands
 
 
 def boundary(_name: str) -> None:
@@ -99,16 +100,14 @@ def import_legacy(io: StoreIO) -> dict[str, Any]:
     return value
 
 
-def command_path(command_id: str) -> str:
-    if not isinstance(command_id, str) or not command_id or len(command_id) > 4096:
-        raise ProjectStoreError("A bounded command identity is required.")
-    return f"commands/{digest(command_id)}.json"
-
-
 def command(io: StoreIO, command_id: str, command_digest: str | None = None) -> dict[str, Any] | None:
     from .errors import ProjectCommandConflict
 
-    value = io.read(command_path(command_id))
+    value = read_command(io, command_path(command_id))
+    if value is None:
+        current = head(io)
+        if current is not None and command_id in current["commands"]:
+            raise ProjectRecoveryRequired("A committed command has no exact derived receipt; it is not a new command.")
     if value is not None and (value.get("command_id") != command_id
             or (command_digest is not None and value.get("command_digest") != command_digest)):
         raise ProjectCommandConflict("The command key already binds a different request.")

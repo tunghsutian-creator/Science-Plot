@@ -122,6 +122,7 @@ def import_bundle(bundle: Path, destination: Path, *,
             raise ProjectConflict("The portable head differs from its complete bundle binding.")
         from .root_bindings import identities
 
+        records = state.read_commands(io, expected=current["commands"])
         io.write("local_resource_roots.json", {"project_id": current["project_id"], "generation": current["generation"],
                   "commands": [], "roots": identities(io)})
         io.write("local_locations.json", {"ids": ids, "members": store.location_members})
@@ -129,14 +130,8 @@ def import_bundle(bundle: Path, destination: Path, *,
             for version, entry in versions.items()} for source_id, versions in current["sources"].items()}
         import sciplot_core.project_store.commands as commands
 
-        try:
-            with directory(io.fd, ("commands",)) as command_fd:
-                command_names = sorted(name for name in os.listdir(command_fd) if name.endswith(".json"))
-        except FileNotFoundError:
-            command_names = []
-        for name in command_names:
-            record = io.read("commands/" + name)
-            if record and record.get("native_workspace") is not None:
+        for record in records:
+            if record.get("native_workspace") is not None:
                 import sciplot_core.project_store.native_work as native_work
                 from .io import digest
 
@@ -144,7 +139,7 @@ def import_bundle(bundle: Path, destination: Path, *,
                 bindings = io.read("local_native_work.json") or {"bindings": {}}
                 bindings["bindings"][digest(record["command_id"])] = identity
                 io.write("local_native_work.json", bindings)
-            if record and record.get("draft") is not None:
+            if record.get("draft") is not None:
                 commands.public(io, record)
                 for source_id, versions in record["draft"].get("sources", {}).items():
                     for version, entry in versions.items():
@@ -155,15 +150,13 @@ def import_bundle(bundle: Path, destination: Path, *,
                         source_versions.setdefault(source_id, {})[version] = entry["sha256"]
         imported_roots = io.read("local_resource_roots.json")
         assert imported_roots is not None
-        imported_roots["commands"] = [record["command_id"] for name in command_names
-            if (record := io.read("commands/" + name)) is not None]
+        imported_roots["commands"] = [record["command_id"] for record in records]
         io.write("local_resource_roots.json", imported_roots)
         from .prepared_inputs import bind_import
 
         local_sources: dict[str, Any] = {"versions": source_versions}
-        for name in command_names:
-            record = io.read("commands/" + name)
-            if record and record.get("draft") is not None:
+        for record in records:
+            if record.get("draft") is not None:
                 bind_import(io, current, record, local_sources)
         io.write("local_sources.json", local_sources)
         io.write("relocation.json", {"generation": current["generation"], "files": sorted(current["files"]), "complete": False})

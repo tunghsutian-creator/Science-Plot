@@ -198,36 +198,19 @@ class FileProjectStore:
                 renderer_dispatch_entered=renderer_dispatch_entered, owned_invocation_closed=owned_invocation_closed))
 
     def commands(self) -> tuple[dict[str, Any], ...]:
-        import os
-
         with self._locked(allow_pending=True) as (io, current):
-            try:
-                with directory(io.fd, ("commands",)) as parent:
-                    names = sorted(name for name in os.listdir(parent) if name.endswith(".json"))
-            except FileNotFoundError:
-                return ()
-            result = []
-            for name in names:
-                record = io.read("commands/" + name)
-                if record is not None:
-                    result.append(commands.public(io, record, projection_pending=projection.pending(io, current)))
-            return tuple(result)
+            records = state.read_commands(io, expected=current["commands"])
+            pending = projection.pending(io, current)
+            return tuple(commands.public(io, record, projection_pending=pending) for record in records)
 
     def recover(self) -> dict[str, Any]:
         with self._locked(repair=True) as (io, current):
             unknown = []
-            try:
-                import os
-                with directory(io.fd, ("commands",)) as parent:
-                    for name in os.listdir(parent):
-                        if name.endswith(".json"):
-                            record = io.read("commands/" + name)
-                            if record and record["phase"] == "applying":
-                                unknown.append(record["command_id"])
-                            if record and record.get("draft") is not None:
-                                commands.public(io, record, create_views=True)
-            except FileNotFoundError:
-                pass
+            for record in state.read_commands(io, expected=current["commands"]):
+                if record["phase"] == "applying":
+                    unknown.append(record["command_id"])
+                if record.get("draft") is not None:
+                    commands.public(io, record, create_views=True)
             return {"phase": "unknown" if unknown else "complete", "project_id": current["project_id"],
                     "generation": current["generation"], "unknown_commands": sorted(unknown)}
 

@@ -204,14 +204,8 @@ def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *, adm
 
 def root_exemptions(io: StoreIO, current: dict[str, Any]) -> set[str]:
     result: set[str] = set()
-    try:
-        with directory(io.fd, ("commands",)) as parent:
-            names = [name for name in os.listdir(parent) if name.endswith(".json")]
-    except FileNotFoundError:
-        return result
-    for name in names:
-        record = io.read("commands/" + name)
-        if record and record["phase"] == "accepted" and record["command_id"] not in current["commands"]:
+    for record in state.read_commands(io, expected=current["commands"]):
+        if record["phase"] == "accepted" and record["command_id"] not in current["commands"]:
             if any(item.prefix.startswith("@") and "/" not in item.prefix for item in values(record)):
                 result.update(require(io, current, record).root_exemptions)
     return result
@@ -235,14 +229,8 @@ def verify_committed(io: StoreIO, current: dict[str, Any], record: dict[str, Any
 
 
 def reject_pending_bundle(io: StoreIO, current: dict[str, Any]) -> None:
-    try:
-        with directory(io.fd, ("commands",)) as parent:
-            names = [name for name in os.listdir(parent) if name.endswith(".json")]
-    except FileNotFoundError:
-        return
-    for name in names:
-        record = io.read("commands/" + name)
-        if (not record or record["command_id"] in current["commands"] or record.get("draft") is None
+    for record in state.read_commands(io, expected=current["commands"]):
+        if (record["command_id"] in current["commands"] or record.get("draft") is None
                 or record.get("metadata", {}).get("kind") != "attachment_import"):
             continue
         # A rejected tracked transfer is inert only when its admitted original

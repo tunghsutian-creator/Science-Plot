@@ -6,6 +6,7 @@ from typing import Any
 
 from .errors import ProjectConflict, ProjectRecoveryRequired
 from .io import StoreIO
+from .command_records import read_commands
 
 
 def identities(io: StoreIO) -> dict[str, dict[str, int]]:
@@ -46,15 +47,5 @@ def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any] | None 
 def scope_local_import(io: StoreIO, current: dict[str, Any]) -> None:
     local = io.read("local_resource_roots.json")
     if local is not None and "generation" not in local:
-        from .io import directory
-
-        names = []
-        try:
-            with directory(io.fd, ("commands",)) as parent:
-                for name in os.listdir(parent):
-                    record = io.read("commands/" + name) if name.endswith(".json") else None
-                    if record is not None:
-                        names.append(record["command_id"])
-        except FileNotFoundError:
-            pass
+        names = [record["command_id"] for record in read_commands(io, expected=current["commands"])]
         io.write("local_resource_roots.json", {**local, "generation": current["generation"], "commands": names})
