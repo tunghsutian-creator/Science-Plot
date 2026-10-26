@@ -31,6 +31,7 @@ def _current_annotation_scope(project: Path, *, io: StoreIO | None = None,
 
     registry = canonical_path(project / "studio/figure_set.json")
     primary = canonical_path(project / "studio/spec.json")
+    figures_directory = canonical_path(project / "studio/figures")
     files = snapshot["files"] if snapshot is not None else {}
     if not (registry.is_file() or primary.is_file()
             or "studio/figure_set.json" in files or "studio/spec.json" in files):
@@ -63,9 +64,16 @@ def _current_annotation_scope(project: Path, *, io: StoreIO | None = None,
         # Presence discovery is limited to the native owner's reserved spec
         # members. It does not require a complete figure set from a bare
         # mapping-admission caller, or make an unused spec an active figure.
-        candidates = ({project / name for name in files if name == "studio/spec.json"
-            or name.startswith("studio/figures/") and name.endswith(".spec.json")}
-            if snapshot is not None else set((project / "studio/figures").glob("*.spec.json")))
+        if snapshot is not None:
+            candidates = {project / name for name in files if name == "studio/spec.json"
+                or name.startswith("studio/figures/") and name.endswith(".spec.json")}
+        else:
+            try:
+                with directory(root_fd, ("studio", "figures")) as figures_fd:
+                    candidates = {figures_directory / name for name in os.listdir(figures_fd)
+                                  if name.endswith(".spec.json")}
+            except FileNotFoundError:
+                candidates = set()  # This reserved directory is optional.
         if primary.is_file():
             candidates.add(primary)
         payloads = {path: read_spec(path) for path in candidates}

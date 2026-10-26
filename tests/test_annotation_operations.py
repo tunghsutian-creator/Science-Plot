@@ -622,3 +622,53 @@ def test_source_update_annotation_admission_uses_exact_current_specs_before_mapp
     assert (project / ".sciplot_store/head.json").read_bytes() == head
     assert store.snapshot()["generation"] == current["generation"]
     assert [item["command_id"] for item in store.commands()] == ["fixture-current-unsupported-annotation"]
+
+
+@pytest.mark.parametrize("when", ["existing-alias", "replace-before-open"])
+def test_source_update_annotation_admission_refuses_alias_before_directory_enumeration(spec, tmp_path, monkeypatch, when):
+    import os
+    from sciplot_core.studio_core import source_update, source_update_staging
+
+    project = tmp_path / "project"
+    document = project / "studio/document.vsz"
+    document.parent.mkdir(parents=True)
+    document.write_bytes(b"saved canonical native")
+    (project / "plot_request.json").write_text(json.dumps({"rule_id": "uvvis_spectrum", "data_mapping_execution": None}))
+    document.with_name("spec.json").write_text(json.dumps(spec))
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    foreign_spec = foreign / "not-admitted.spec.json"
+    foreign_spec.write_text(json.dumps(spec))
+    alias = project / "studio/figures"
+    if when == "existing-alias":
+        alias.symlink_to(foreign, target_is_directory=True)
+    else:
+        alias.mkdir()
+        directory = source_update_staging.directory
+
+        def replace_before_open(fd, components, **kwargs):
+            if components == ("studio", "figures"):
+                alias.rename(project / "studio/previous-figures")
+                alias.symlink_to(foreign, target_is_directory=True)
+            return directory(fd, components, **kwargs)
+
+        monkeypatch.setattr(source_update_staging, "directory", replace_before_open)
+    original = foreign_spec.read_bytes()
+    foreign_identity = (foreign.stat().st_dev, foreign.stat().st_ino)
+    listdir = os.listdir
+
+    def no_alias_enumeration(path):
+        info = os.fstat(path) if isinstance(path, int) else os.stat(path)
+        if (info.st_dev, info.st_ino) == foreign_identity:
+            pytest.fail("annotation admission enumerated an unadmitted alias")
+        return listdir(path)
+
+    monkeypatch.setattr(os, "listdir", no_alias_enumeration)
+    result = source_update.preview_project_source_update(project, tmp_path / "unread.csv")
+    assert result["status"] == "blocked"
+    if when == "existing-alias":
+        assert "cannot follow a symlink" in result["reason"]
+    else:
+        assert "Not a directory" in result["reason"] or "Too many levels" in result["reason"]
+    assert not (project / ".sciplot_store").exists() and not (tmp_path / "unread.csv").exists()
+    assert foreign_spec.read_bytes() == original
