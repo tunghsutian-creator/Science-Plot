@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 import sciplot_core.semantic as semantic_module
-import sciplot_core.studio_core.figure_set_prepare as figure_set_prepare_module
+import sciplot_core.studio_core.figure_member_prepare as figure_member_prepare_module
 from sciplot_core import workflow
 from sciplot_core._paths import resolve_fixture_path
 from sciplot_core.delivery.plan_binding import plan_source_figure_ids
@@ -310,7 +310,7 @@ def test_mechanical_studio_secondary_failure_rolls_back_the_whole_plan(
         raise RuntimeError("synthetic mechanical secondary failure")
 
     monkeypatch.setattr(
-        figure_set_prepare_module,
+        figure_member_prepare_module,
         "_write_veusz_document",
         reject_secondary,
     )

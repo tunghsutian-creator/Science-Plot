@@ -299,19 +299,26 @@ def test_mechanical_figure_set_rejects_a_non_internal_queue_shape(
     else:
         invalid_queue = [{}]
 
-    with pytest.raises(
-        StudioPreparationBlocked,
-        match="non-empty internal list queue|malformed internal queue",
-    ):
-        _prepare_studio_figure_set(
-            project_dir=project_dir,
-            request_path=request_path,
-            request=request,
-            primary_document=project_dir / "studio" / "document.vsz",
-            preserve_existing=False,
-            queue_override=invalid_queue,
-            figure_plan=plan,
-        )
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.studio_core.preparation_candidate import studio_preparation_candidate
+
+    store = project_store(project_dir)
+    before = store.snapshot()
+    with studio_preparation_candidate(store) as candidate:
+        with pytest.raises(
+            StudioPreparationBlocked,
+            match="non-empty internal list queue|malformed internal queue",
+        ):
+            _prepare_studio_figure_set(
+                project_dir=candidate.project_dir,
+                request_path=candidate.project_dir / "plot_request.json",
+                request=request,
+                primary_document=candidate.project_dir / "studio" / "document.vsz",
+                preserve_existing=False,
+                queue_override=invalid_queue,
+                figure_plan=plan,
+            )
+    assert store.snapshot() == before
 
 
 @pytest.mark.focused

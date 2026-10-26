@@ -124,10 +124,21 @@ def test_generated_mechanical_queue_guards_before_native_writes(tmp_path: Path, 
     else:
         invalid = {"empty": [], "tuple": tuple(queue), "non_mapping": [object()],
                    "non_string_key": [{**queue[0], 1: "forged"}, *queue[1:]], "empty_mapping": [{}]}[shape]
-        with pytest.raises(StudioPreparationBlocked, match="non-empty internal list queue|malformed internal queue"):
-            _prepare_studio_figure_set(project_dir=project, request_path=project / "plot_request.json", request=request,
-                                      primary_document=project / "studio/document.vsz", preserve_existing=False,
-                                      queue_override=invalid, figure_plan=plan)
+        from sciplot_core.project_store import FileProjectStore
+        from sciplot_core.studio_core.preparation_candidate import studio_preparation_candidate
+
+        host_project = tmp_path / "host_project"
+        host_project.mkdir()
+        store = FileProjectStore(host_project)
+        before = store.snapshot(import_legacy=True)
+        with studio_preparation_candidate(store) as candidate:
+            with pytest.raises(StudioPreparationBlocked, match="non-empty internal list queue|malformed internal queue"):
+                _prepare_studio_figure_set(project_dir=candidate.project_dir,
+                                          request_path=candidate.project_dir / "plot_request.json", request=request,
+                                          primary_document=candidate.project_dir / "studio/document.vsz", preserve_existing=False,
+                                          queue_override=invalid, figure_plan=plan)
+            assert not any(path.is_file() for path in candidate.project_dir.rglob("*"))
+        assert store.snapshot() == before
     assert not any(path.is_file() for path in project.rglob("*"))
 
 
