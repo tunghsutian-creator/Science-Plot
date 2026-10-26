@@ -250,10 +250,11 @@ def _recover_frozen_display_edit(project, document, spec_path, second_review, mo
     from sciplot_core.project_store import FileProjectStore, ProjectRecoveryRequired, state
     from sciplot_core.studio_core.document_edit import apply_document_edit
     from sciplot_core.studio_core.document_edit_state import edit_state
+    from sciplot_core.studio_core.project_command_scope import project_store
 
     # Before head publication the old pair stays authoritative; after a partial
     # materialization the new sealed pair owns recovery, never a mutable outcome.
-    repository = FileProjectStore(Path(project))
+    repository = project_store(Path(project))
     baseline_generation = repository.snapshot()["generation"]
     pair = document.read_bytes(), spec_path.read_bytes()
     boundary = state.boundary
