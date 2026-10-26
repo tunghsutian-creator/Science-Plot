@@ -62,6 +62,13 @@ being admitted again as a new request. Unknown current state does not imply an
 unmapped project. Actual byte mismatches use typed boundary errors; permission,
 membership, scope and unknown-state failures retain their own meanings.
 
+Existing annotation admission precedes the mapping requirement after current
+authority/preimage checks. It reads exact admitted specification bytes, or finite
+project-local NoFollow legacy members, and never imports a store to reject a
+request. Optional legacy figure directories are enumerated through the existing
+project descriptor. A missing head is not an empty command history; rejection
+must preserve that state rather than making an unsupported history query work.
+
 A frozen source version is a read witness, not an automatic declaration that a
 generated resource can never change again. Immutable input evidence requires an
 explicit typed declaration, bound to the selected logical member, exact source
