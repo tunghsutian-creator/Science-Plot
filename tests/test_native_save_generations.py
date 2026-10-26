@@ -1,6 +1,8 @@
 """Native Save and command Save share the original edit baseline and quarantine."""
 
 from pathlib import Path
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -103,6 +105,79 @@ def test_native_save_uses_only_explicit_host_selected_store_capabilities(tmp_pat
     receipt = document.save(str(target))
     assert receipt["project_command"]["phase"] == "complete"
     assert (delivery / "result.pdf").read_bytes() == b"existing exact delivery"
+
+
+@pytest.mark.parametrize("concurrent_save", [False, True], ids=["current", "concurrent-save"])
+def test_unit_migration_captures_the_generation_before_loading_native_bytes(tmp_path, monkeypatch, concurrent_save):
+    root = tmp_path / "project"
+    target = root / "studio/document.vsz"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"old native")
+    (root / "plot_request.json").write_bytes(b"{}")
+    store = store_for_project(root)
+    before = store.snapshot(import_legacy=True)
+    events, documents, saved = [], [], []
+    binding = persistence.project_save_binding
+
+    def capture(*args, **kwargs):
+        events.append("baseline")
+        return binding(*args, **kwargs)
+
+    class Setting:
+        value = "Velocity (m/s)"
+
+        def get(self):
+            return self.value
+
+        def normalize(self, value):
+            return value
+
+    class Document(_SavableDocument):
+        def __init__(self):
+            super().__init__()
+            self.setting = Setting()
+            documents.append(self)
+
+        def load(self, path):
+            self.observed = Path(path).read_bytes()
+            events.append("load")
+            if concurrent_save:
+                saved.append(publish_files(store, {"studio/document.vsz": b"concurrent native save"}, kind="save"))
+
+        def walkNodes(self, collect, **_kwargs):
+            collect("/page/graph", SimpleNamespace(settings=SimpleNamespace(setdict={"label": self.setting})))
+
+        def applyOperation(self, operation):
+            self.setting.value = operation[1]
+
+    app = SimpleNamespace(quit=lambda: events.append("quit"))
+    monkeypatch.setitem(sys.modules, "PyQt6", SimpleNamespace(QtWidgets=SimpleNamespace(
+        QApplication=SimpleNamespace(instance=lambda: app))))
+    monkeypatch.setattr("sciplot_core.veusz_runtime.needs_veusz_worker_process", lambda: False)
+    monkeypatch.setattr("sciplot_core.studio_core.qt_compat.ensure_veusz_loader_compat", lambda: None)
+    monkeypatch.setattr(persistence, "_prefer_offscreen_export_platform", lambda: None)
+    monkeypatch.setattr(persistence, "_ensure_veusz_on_path", lambda: None)
+    monkeypatch.setattr(persistence, "import_module", lambda name: SimpleNamespace(
+        Document=Document, OperationSettingSet=lambda path, value: (path, value)))
+    monkeypatch.setattr(persistence, "project_save_binding", capture)
+    monkeypatch.setattr(persistence, "selected_project_store", lambda: None)
+    monkeypatch.setattr(persistence, "_validate_staged_veusz_document", lambda *_args, **_kwargs: True)
+
+    if concurrent_save:
+        with pytest.raises(ProjectConflict):
+            persistence.migrate_studio_document_unit_labels(target)
+        assert target.read_bytes() == b"concurrent native save"
+        assert store.snapshot()["generation"] == saved[0]["generation"]
+        assert documents[0]._sciplot_project_read_set["generation"] == before["generation"]
+        assert len(store.commands()) == 1
+    else:
+        result = persistence.migrate_studio_document_unit_labels(target)
+        assert result["status"] == "migrated" and result["operation_count"] == 1
+        assert result["save"]["project_command"]["phase"] == "complete"
+        assert documents[0].setting.value != "Velocity (m/s)"
+        assert target.read_bytes() == b"new document"
+    assert documents[0].observed == b"old native"
+    assert events == ["baseline", "load"]
 
 
 @pytest.mark.comprehensive

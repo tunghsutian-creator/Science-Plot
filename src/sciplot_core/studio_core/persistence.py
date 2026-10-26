@@ -312,14 +312,16 @@ def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
     existing_app = QtWidgets.QApplication.instance()
     app = existing_app or QtWidgets.QApplication([])
     try:
-        loaded = document.Document()
-        loaded.load(str(resolved))
         from sciplot_core.studio_core.context import _project_context_for_document
 
         context = _project_context_for_document(resolved)
+        selected = selected_project_store()
+        baseline = (project_save_binding(Path(context["project_dir"]), resolved, store=selected)
+                    if context is not None else None)
+        loaded = document.Document()
+        loaded.load(str(resolved))
         if context is not None:
-            selected = selected_project_store()
-            loaded._sciplot_project_read_set = project_save_binding(Path(context["project_dir"]), resolved, store=selected)
+            loaded._sciplot_project_read_set = baseline
             loaded._sciplot_project_store = selected
         candidates: list[tuple[str, Any, str, str]] = []
 
