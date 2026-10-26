@@ -27,11 +27,28 @@ class CountingBackend(VeuszBackend):
         return super().preview(*args)
 
 
-def create_project(tmp_path):
+def create_project(tmp_path, *, render_options=None):
     source = tmp_path / "UVvis.csv"
     source.write_text("Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\n"
                       "E2,E2,E4,E4\n400,1,400,2\n450,2,450,3\n500,3,500,4\n")
-    created = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "studio", str(source),
+    target = source
+    if render_options is not None:
+        from sciplot_core.intake.project import create_intake_project_from_session
+        from sciplot_core.intake.session import prepare_intake_session
+        from sciplot_core.output_contract import resolve_user_output_layout
+        from sciplot_core.studio_core.studio_prepare import prepare_studio_document
+
+        layout = resolve_user_output_layout(source)
+        session = prepare_intake_session(source, output_root=layout.workspace_root / "projects",
+                                         requested_rule_id="uvvis_spectrum")
+        # Keep raw Intake grouping, source snapshots and rule defaults. Declare
+        # only this presentation option before its first generation is created.
+        session["render_options"] = {**(session.get("render_options") or {}), **render_options}
+        prepared = create_intake_project_from_session(session,
+            studio_preparer=lambda project: prepare_studio_document(project, _new_creation=True),
+            delivery_root=layout.delivery_root)
+        target = Path(prepared["project_dir"])
+    created = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "studio", str(target),
                               "--rule", "uvvis_spectrum", "--export", "pdf,tiff_300", "--json"],
                              capture_output=True, text=True, timeout=180, cwd=REPO_ROOT)
     assert created.returncode == 0, created.stdout + created.stderr
@@ -179,15 +196,8 @@ def test_right_top_native_legend_overlap_remains_blocked_without_data_changes(tm
 
 @pytest.mark.comprehensive
 def test_reversed_native_axis_limits_preserve_direction_ticks_and_rollback(tmp_path):
-    source, project = create_project(tmp_path)
+    source, project = create_project(tmp_path, render_options={"reverse_x": True})
     source_bytes = source.read_bytes()
-    from sciplot_core.studio_core.studio_prepare import prepare_studio_document
-
-    request_path = project / "plot_request.json"
-    request = json.loads(request_path.read_bytes())
-    request.setdefault("render_options", {})["reverse_x"] = True
-    request_path.write_text(json.dumps(request))
-    prepare_studio_document(project, regenerate_generated=True)
     backend = VeuszBackend()
     document, binding = backend.import_project(project, plot_id="reversed")
     original = inspect_project(project, native=True)["selected_figure"]
