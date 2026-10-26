@@ -36,6 +36,7 @@ from sciplot_core.studio_core.native_serialization import serialize_native
 from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.native_process import run_cold_worker
 from sciplot_core.project_store.runtime import selected_project_store
+from sciplot_core.project_host_factory import project_store
 
 
 def _is_project_secondary_document(document_path: Path) -> bool:
@@ -316,6 +317,8 @@ def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
 
         context = _project_context_for_document(resolved)
         selected = selected_project_store()
+        if context is not None and selected is None:
+            selected = project_store(Path(context["project_dir"]))
         baseline = (project_save_binding(Path(context["project_dir"]), resolved, store=selected)
                     if context is not None else None)
         loaded = document.Document()

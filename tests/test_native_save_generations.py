@@ -107,14 +107,27 @@ def test_native_save_uses_only_explicit_host_selected_store_capabilities(tmp_pat
     assert (delivery / "result.pdf").read_bytes() == b"existing exact delivery"
 
 
-@pytest.mark.parametrize("concurrent_save", [False, True], ids=["current", "concurrent-save"])
-def test_unit_migration_captures_the_generation_before_loading_native_bytes(tmp_path, monkeypatch, concurrent_save):
+@pytest.mark.parametrize("concurrent_save,declared_delivery", [(False, False), (True, False), (False, True)],
+                         ids=["current", "concurrent-save", "declared-delivery"])
+def test_unit_migration_captures_the_generation_before_loading_native_bytes(tmp_path, monkeypatch, concurrent_save, declared_delivery):
     root = tmp_path / "project"
     target = root / "studio/document.vsz"
     target.parent.mkdir(parents=True)
     target.write_bytes(b"old native")
-    (root / "plot_request.json").write_bytes(b"{}")
-    store = store_for_project(root)
+    if declared_delivery:
+        import json
+        from sciplot_core.project_store import FileProjectStore, ResourceRoot
+
+        delivery = tmp_path / "delivery"
+        delivery.mkdir()
+        (delivery / "figure.pdf").write_bytes(b"original delivery")
+        (tmp_path / "project.zip").write_bytes(b"original snapshot")
+        (root / "plot_request.json").write_text(json.dumps({"delivery_output": str(delivery)}))
+        store = FileProjectStore(root, locations={"delivery": delivery,
+            "snapshot": ResourceRoot(tmp_path, members=("project.zip",))})
+    else:
+        (root / "plot_request.json").write_bytes(b"{}")
+        store = store_for_project(root)
     before = store.snapshot(import_legacy=True)
     events, documents, saved = [], [], []
     binding = persistence.project_save_binding
@@ -176,6 +189,11 @@ def test_unit_migration_captures_the_generation_before_loading_native_bytes(tmp_
         assert result["save"]["project_command"]["phase"] == "complete"
         assert documents[0].setting.value != "Velocity (m/s)"
         assert target.read_bytes() == b"new document"
+        if declared_delivery:
+            assert documents[0]._sciplot_project_store.locations == store.locations
+            assert documents[0]._sciplot_project_store.location_members == store.location_members
+            assert (delivery / "figure.pdf").read_bytes() == b"original delivery"
+            assert (tmp_path / "project.zip").read_bytes() == b"original snapshot"
     assert documents[0].observed == b"old native"
     assert events == ["baseline", "load"]
 
