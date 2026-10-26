@@ -68,12 +68,12 @@ def capture_selection(project: Path, figure_id: str) -> dict[str, Any]:
             files.setdefault(canonical_path(member), file_sha256(member))
     snapshots = []
     for path, expected in sorted(files.items()):
-        snapshot = stable_file_snapshot(canonical_path(path), label="paper scientific source")
+        snapshot = stable_file_snapshot(canonical_path(path), label="paper scientific source", expected_sha256=expected)
         if snapshot["sha256"] != expected:
             raise TaskControlError("paper_source_stale", f"Recorded scientific source changed: {path}")
         snapshots.append(snapshot)
     for snapshot in snapshots:
-        _assert_snapshot_current(snapshot, label="paper scientific source")
+        _assert_snapshot_current(snapshot, label="paper scientific source", expected_sha256=files[snapshot["path"]])
     source_hashes = {str(s["path"]): s["sha256"] for s in snapshots}
     version = {"request_sha256": file_sha256(root / "plot_request.json"),
                "document_sha256": selected["document_sha256"], "spec_sha256": selected["spec_sha256"],
@@ -107,10 +107,10 @@ def assert_selection_current(selection: dict[str, Any]) -> None:
             raise TaskControlError("paper_selection_changed", "A selected scientific source's file membership changed.")
     snapshots = []
     for value, expected in selection["source_files"].items():
-        snapshot = stable_file_snapshot(canonical_path(Path(value)), label="paper scientific source")
+        snapshot = stable_file_snapshot(canonical_path(Path(value)), label="paper scientific source", expected_sha256=expected)
         identity = {k: v for k, v in snapshot["identity"].items() if k != "ctime_ns"}
         if snapshot["sha256"] != expected or identity != selection["source_identities"][value]:
             raise TaskControlError("paper_selection_changed", "A selected scientific source changed. Start a new paper selection.")
         snapshots.append(snapshot)
     for snapshot in snapshots:
-        _assert_snapshot_current(snapshot, label="paper scientific source")
+        _assert_snapshot_current(snapshot, label="paper scientific source", expected_sha256=selection["source_files"][str(snapshot["path"])])

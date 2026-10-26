@@ -68,7 +68,7 @@ def verify_managed_document_sources(
                 raise ValueError(
                     f"Managed Veusz data cite a source outside the delivery data inventory: {path}"
                 )
-            snapshot = _stable_file_snapshot(path, label="managed prepared source")
+            snapshot = _stable_file_snapshot(path, label="managed prepared source", expected_sha256=digest)
             if snapshot["sha256"] != digest:
                 raise ValueError(
                     f"Managed prepared source changed after rendering: {path}"
@@ -87,8 +87,8 @@ def verify_managed_document_sources(
                     "source_artifacts": unit["source_artifacts"],
                 }
             )
-        for snapshot in snapshots:
-            _assert_snapshot_current(snapshot, label="managed prepared source")
+        for snapshot, digest in zip(snapshots, source_records.values(), strict=True):
+            _assert_snapshot_current(snapshot, label="managed prepared source", expected_sha256=digest)
         audits.append(audit)
     payload = {
         "kind": "sciplot_managed_document_source_verification",

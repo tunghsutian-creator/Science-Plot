@@ -114,7 +114,7 @@ def registered_task_snapshot_sources(
         input_snapshot = _stable_file_snapshot(
             input_path, label="registered task input"
         )
-        snapshot = _stable_file_snapshot(source_path, label="registered task table")
+        snapshot = _stable_file_snapshot(source_path, label="registered task table", expected_sha256=records[source_path])
         if snapshot["sha256"] != records[source_path]:
             raise ValueError("Registered task table changed after rendering.")
         # Some semantic preparation writes an identical canonical table under
@@ -125,7 +125,7 @@ def registered_task_snapshot_sources(
                 "a derived-table source proof is required."
             )
         _verify_prepared_data(spec, [snapshot])
-        _assert_snapshot_current(snapshot, label="registered task table")
+        _assert_snapshot_current(snapshot, label="registered task table", expected_sha256=records[source_path])
         _assert_snapshot_current(input_snapshot, label="registered task input")
         _assert_snapshot_current(spec_snapshot, label="registered task spec")
         additions.append(source_path)
@@ -165,12 +165,12 @@ def _verify_registered_mapping_sources(
     effective_snapshot = _stable_file_snapshot(effective_input, label="registered mapping composite")
     snapshots = []
     for path, digest in records.items():
-        snapshot = _stable_file_snapshot(path, label="registered mapping group")
+        snapshot = _stable_file_snapshot(path, label="registered mapping group", expected_sha256=digest)
         if snapshot["sha256"] != digest:
             raise ValueError("Registered mapping group changed after rendering.")
         snapshots.append(snapshot)
     _verify_prepared_data(spec, snapshots)
-    for snapshot in snapshots:
-        _assert_snapshot_current(snapshot, label="registered mapping group")
+    for snapshot, digest in zip(snapshots, records.values(), strict=True):
+        _assert_snapshot_current(snapshot, label="registered mapping group", expected_sha256=digest)
     _assert_snapshot_current(input_snapshot, label="registered mapping input")
     _assert_snapshot_current(effective_snapshot, label="registered mapping composite")

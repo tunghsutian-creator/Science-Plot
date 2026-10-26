@@ -23,12 +23,12 @@ def audit_native_candidate(
         native_audit=native_audit,
     )
     snapshots = [
-        stable_file_snapshot(path, label="recovery prepared source")
-        for path in source_records(spec)
+        (stable_file_snapshot(path, label="recovery prepared source", expected_sha256=digest), digest)
+        for path, digest in source_records(spec).items()
     ]
-    derived = _verify_prepared_data(spec, snapshots)
-    for snapshot in snapshots:
-        _assert_snapshot_current(snapshot, label="recovery prepared source")
+    derived = _verify_prepared_data(spec, [snapshot for snapshot, _digest in snapshots])
+    for snapshot, digest in snapshots:
+        _assert_snapshot_current(snapshot, label="recovery prepared source", expected_sha256=digest)
     return {
         "status": "passed",
         "unit_count": audit["unit_count"],

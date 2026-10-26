@@ -27,10 +27,13 @@ def _stat_identity(value: os.stat_result) -> dict[str, int]:
     }
 
 
-def stable_file_snapshot(path: Path, *, label: str) -> dict[str, Any]:
+def stable_file_snapshot(path: Path, *, label: str, expected_sha256: str | None = None) -> dict[str, Any]:
     """Capture exact bytes and file identity, rejecting concurrent source changes."""
+    if expected_sha256 is not None and (len(expected_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in expected_sha256)):
+        raise ValueError(f"{label} requires an exact SHA256 source version.")
     literal = Path(literal_source_path(path))
-    resolved = resolve_source_path(path).expanduser().resolve()
+    resolved = resolve_source_path(path, expected_sha256=expected_sha256).expanduser().resolve()
     flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
@@ -58,6 +61,8 @@ def stable_file_snapshot(path: Path, *, label: str) -> dict[str, Any]:
     digest = hashlib.sha256(payload).hexdigest()
     if len(payload) != identity["size"]:
         raise ValueError(f"{label} size changed while it was captured: {resolved}")
+    if expected_sha256 is not None and digest != expected_sha256:
+        raise ValueError(f"{label} changed from its exact expected source version: {literal}")
     return {
         "path": literal,
         "identity": identity,
@@ -70,8 +75,11 @@ def stable_file_snapshot(path: Path, *, label: str) -> dict[str, Any]:
 _stable_file_snapshot = stable_file_snapshot
 
 
-def _assert_snapshot_current(snapshot: dict[str, Any], *, label: str) -> None:
-    current = _stable_file_snapshot(Path(snapshot["path"]), label=label)
+def _assert_snapshot_current(snapshot: dict[str, Any], *, label: str, expected_sha256: str | None = None) -> None:
+    if expected_sha256 is None:
+        current = _stable_file_snapshot(Path(snapshot["path"]), label=label)
+    else:
+        current = _stable_file_snapshot(Path(snapshot["path"]), label=label, expected_sha256=expected_sha256)
     # Cloud providers can update extended attributes (and thus ctime) without
     # changing the file, its modification time or its contents. Each capture
     # remains race checked; accept ctime-only drift only after a fresh full hash.
