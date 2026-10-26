@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from sciplot_core.data_mapping.execution_directories import mapping_directory_path
+
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
-from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.data_mapping.execution_inputs import mapping_file_sha256 as file_sha256, mapping_file_path
 
 from sciplot_core.data_mapping.contracts import (
     DATA_MAPPING_APPLICATION_KIND,
@@ -48,7 +50,9 @@ def resolve_data_mapping_request(
             "Mapped project proposal ID no longer matches its verified execution."
         )
     effective_input = Path(str(execution.get("effective_input") or "")).expanduser()
-    if not effective_input.exists():
+    actual_input = (mapping_directory_path(execution) if execution["effective_input"] == execution["data_dir"]
+                    else mapping_file_path(effective_input))
+    if not actual_input.exists():
         raise FileNotFoundError(f"Mapped effective input not found: {effective_input}")
     effective = deepcopy(request)
     effective.update(deepcopy(execution.get("request_patch") or {}))

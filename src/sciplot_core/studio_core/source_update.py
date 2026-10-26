@@ -189,6 +189,8 @@ def _prepared_update_current(
         if mapping_request is not None:
             review["mapping_request"] = mapping_request
             review["mapping"] = json.loads((candidate / "plot_request.json").read_text())["data_mapping_plan_binding"]
+        if private.mapping_tree_reads:
+            review["mapping_source_trees"] = [tree.to_payload() for tree in private.mapping_tree_reads]
         if annotations:
             review["annotation_review"] = annotations
             review["annotation_decisions"] = annotation_decisions or []
@@ -218,10 +220,12 @@ def preview_project_source_update(
             if preview.get("version") == 2:
                 return preview
             from sciplot_core.studio_core.source_update_commands import stage_source_update
+            from sciplot_core.studio_core.preparation_candidate import require_preparation_candidate
 
             return stage_source_update(Path(preview["project"]), candidate, preview,
                 relocate_companion=relocate_annotation_evidence if preview.get("annotation_review") else None,
-                prepared_sources=prepared_sources, logical_paths_bound=True, before_snapshot=before_snapshot)
+                prepared_sources=prepared_sources, logical_paths_bound=True, before_snapshot=before_snapshot,
+                input_reads=require_preparation_candidate(candidate).mapping_input_reads)
     except (ValueError, OSError, RuntimeError) as exc:
         return {
             "kind": "sciplot_project_source_update",

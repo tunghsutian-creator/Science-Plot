@@ -133,7 +133,12 @@ def _build_source_candidate(project: Path, request: dict[str, Any], confirmation
         payload = prepare_studio_candidate(candidate, request_target=True, regenerate_generated=True)
         if payload.get("document") is None:
             raise ValueError("The replacement source cannot produce a complete current figure set")
-        yield candidate, confirmations
+        from sciplot_core.data_mapping.execution_inputs import mapping_execution_path, mapping_input_scope
+
+        reference = request.get("data_mapping_execution")
+        readset = candidate.mapping_inputs.get(str(mapping_execution_path(reference))) if reference else None
+        with mapping_input_scope(readset):
+            yield candidate, confirmations
 
 
 

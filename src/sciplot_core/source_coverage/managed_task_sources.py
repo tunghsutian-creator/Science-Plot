@@ -150,7 +150,9 @@ def _verify_registered_mapping_sources(
     # rows/null masks, mapped bytes and the composite adapter input. Display
     # labels or an unverified source_artifacts list cannot grant source access.
     execution = load_data_mapping_execution(application["execution"])
-    seed = json.loads(resolve_source_path(execution["request_seed"]).read_text())
+    from sciplot_core.data_mapping.execution_inputs import mapping_read_json
+
+    seed = mapping_read_json(Path(execution["request_seed"]))
     effective_input = Path(execution["effective_input"]).resolve()
     if execution.get("handoff_allowed") is not True or any((
         input_path != Path(seed["input"]).resolve(),

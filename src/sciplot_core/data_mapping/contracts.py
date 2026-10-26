@@ -18,6 +18,8 @@ from sciplot_core.mapping_contract import (
     DataSourceReference,
     LegacyDataMappingConfirmation,
 )
+from sciplot_core.data_mapping.execution_inputs import mapping_read_json, mapping_file_path, mapping_literal
+from sciplot_core.foundation.source_locations import selected_source_resolver
 
 
 DATA_MAPPING_PREVIEW_KIND = "sciplot_data_mapping_preview"
@@ -95,10 +97,7 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected a JSON object: {path}")
-    return payload
+    return mapping_read_json(path)
 
 
 def load_data_mapping_proposal(
@@ -108,7 +107,7 @@ def load_data_mapping_proposal(
         return value
     if isinstance(value, dict):
         return DataMappingProposal.from_dict(value)
-    return DataMappingProposal.from_dict(_read_json(Path(value).expanduser().resolve()))
+    return DataMappingProposal.from_dict(_read_json(mapping_literal(Path(value))))
 
 
 def load_data_mapping_confirmation(
@@ -125,7 +124,7 @@ def load_data_mapping_confirmation(
     payload = (
         value
         if isinstance(value, dict)
-        else _read_json(Path(value).expanduser().resolve())
+        else _read_json(mapping_literal(Path(value)))
     )
     if payload.get("version") == 1:
         return LegacyDataMappingConfirmation.from_dict(payload)
@@ -154,12 +153,12 @@ def _resolve_source_path(
     root: Path,
     reference: DataSourceReference,
 ) -> Path:
-    candidate = (root / Path(reference.relative_path)).resolve()
+    candidate = mapping_literal(root / Path(reference.relative_path))
     if not candidate.is_relative_to(root):
         raise ValueError(
             f"Data source escapes the declared root: {reference.relative_path}"
         )
-    if not candidate.is_file():
+    if not mapping_file_path(candidate, expected_sha256=reference.sha256).is_file():
         raise FileNotFoundError(
             f"Data mapping source not found: {reference.relative_path}"
         )
@@ -167,7 +166,7 @@ def _resolve_source_path(
         raise ValueError(
             f"Unsupported data mapping source format: {candidate.suffix or '<none>'}"
         )
-    current_hash = file_sha256(candidate)
+    current_hash = file_sha256(mapping_file_path(candidate, expected_sha256=reference.sha256))
     if current_hash != reference.sha256:
         raise ValueError(f"Data mapping source hash changed: {reference.relative_path}")
     return candidate
@@ -178,7 +177,11 @@ def verify_data_mapping_sources(
     *,
     source_root: str | Path,
 ) -> dict[str, Path]:
-    root = _resolve_source_root(source_root)
+    root = mapping_literal(Path(source_root))
+    if selected_source_resolver() is None:
+        root = _resolve_source_root(root)
+    # A selected generation proves the exact declared files, not an ambient
+    # raw parent directory. Keep its original namespace for confirmation seals.
     return {
         reference.source_id: _resolve_source_path(root, reference)
         for reference in proposal.sources

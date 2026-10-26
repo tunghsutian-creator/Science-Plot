@@ -20,6 +20,7 @@ from sciplot_core.studio_core.preparation_candidate import (
 )
 from sciplot_core.terminal_source_binding import SealedTerminalSourceBinding
 from sciplot_core.studio_core.preparation_source_runtime import current_preparation_runtime
+from sciplot_core.data_mapping.execution_inputs import mapping_input_reads, mapping_execution_path, mapping_input_scope
 
 
 def source_identity_for_locator(snapshot: dict[str, Any], locator: str) -> str:
@@ -48,12 +49,21 @@ def prepare_studio_candidate(candidate: StudioPreparationCandidate, *, request_t
     if request_relative.startswith("@"):
         raise ValueError("A Studio request must be a member of this candidate project.")
     candidate.request_members.add(request_relative)
-    return prepare_private_studio_project(candidate, request_target=request_target, request_relative=request_relative,
-        delivery_root=delivery_root, rule_id=rule_id,
-        template=template, project_name=project_name, regenerate_generated=regenerate_generated,
-        figure_set_path_replacer=figure_set_path_replacer,
-        terminal_source_binding=_terminal_source_binding,
-        terminal_source_prepared=_terminal_source_prepared, new_creation=_new_creation)
+    request = json.loads(candidate.read_member(request_relative).data)
+    reference = request.get("data_mapping_execution")
+    with mapping_input_reads(reference) as readset:
+        if readset is not None:
+            from sciplot_core.data_mapping.execution_loading import load_data_mapping_execution
+
+            load_data_mapping_execution(readset.execution)
+            readset.seal()
+            candidate.mapping_inputs[readset.execution] = readset
+        return prepare_private_studio_project(candidate, request_target=request_target, request_relative=request_relative,
+            delivery_root=delivery_root, rule_id=rule_id,
+            template=template, project_name=project_name, regenerate_generated=regenerate_generated,
+            figure_set_path_replacer=figure_set_path_replacer,
+            terminal_source_binding=_terminal_source_binding,
+            terminal_source_prepared=_terminal_source_prepared, new_creation=_new_creation)
 
 
 def _produced_resource(candidate: StudioPreparationCandidate, actual: Path, version: str, mode: int) -> str | None:
@@ -85,6 +95,14 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
     figures = registry.get("figures", []) if isinstance(registry, dict) else [
         {"status": "ready", "document": payload["document"], "spec": str(candidate.project_dir / "studio/spec.json")}]
     audits, sources = [], {}
+    for relative in candidate.request_members:
+        request = json.loads(candidate.read_member(relative).data)
+        reference = request.get("data_mapping_execution")
+        if reference and str(mapping_execution_path(reference)) not in candidate.mapping_inputs:
+            raise ProjectConflict("A mapped native candidate lacks its original execution read set.")
+    for readset in candidate.mapping_inputs.values():
+        for prepared_input in readset.prepared_sources(candidate.snapshot):
+            sources[(prepared_input.source_id, prepared_input.version)] = prepared_input
     for figure in figures:
         if figure.get("status") != "ready":
             continue
@@ -104,8 +122,11 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
                 "reason": "exact_native_preimage_preserved", "sha256": previous["sha256"]})
             continue  # Metadata-only reuse neither executes nor certifies new science.
         else:
-            audit, spec_payload = _audit_exact_document_data(document_path=document, spec_path=spec,
-                check_presentation=presentation)
+            reference = json.loads(candidate.read_member("plot_request.json").data).get("data_mapping_execution")
+            audit_readset = candidate.mapping_inputs.get(str(mapping_execution_path(reference))) if reference else None
+            with mapping_input_scope(audit_readset):
+                audit, spec_payload = _audit_exact_document_data(document_path=document, spec_path=spec,
+                    check_presentation=presentation)
             audits.append(audit)
         for source, expected in source_records(spec_payload).items():
             literal = str(source)
@@ -191,9 +212,11 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
         command = ProjectCommand.create("figure_set", key, project_id=before["project_id"],
             expected_generation=before["generation"], read_set=reads, write_set=sorted(writes), request=request,
             read_memberships=[MembershipRead.capture(before["files"], prefix)
-                              for prefix in ("", *("@" + name for name in sorted(store.locations)))])
+                              for prefix in ("", *("@" + name for name in sorted(store.locations)))],
+            source_trees=candidate.mapping_tree_reads)
         verify_sources()
         record = ProjectCommands(store).execute(command, lambda: ProjectMutation(writes, result,
-            prepared_sources=tuple(sources), artifacts={"native-audits.json": json.dumps(audits, ensure_ascii=False, allow_nan=False).encode()}))
+            prepared_sources=tuple(sources), input_reads=candidate.mapping_input_reads,
+            artifacts={"native-audits.json": json.dumps(audits, ensure_ascii=False, allow_nan=False).encode()}))
         return {**record["result"], "project_command": {field: record[field]
             for field in ("command_id", "command_digest", "project_id", "generation", "phase")}}

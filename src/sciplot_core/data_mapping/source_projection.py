@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.mapping_contract import DataMappingProposal
 from sciplot_core.mapping_contract.source_identity import proposal_source_identities
+from sciplot_core.data_mapping.execution_inputs import mapping_read_json
 
 
 def mapping_source_groups(execution: dict[str, Any], *, replicates: bool | None = None) -> list[dict[str, Any]]:
     """Read the proposal only after the execution owner has verified its bytes."""
-    proposal = DataMappingProposal.from_dict(json.loads(Path(execution["proposal"]).read_text()))
+    proposal = DataMappingProposal.from_dict(mapping_read_json(Path(execution["proposal"])))
     if replicates is not None and ("replicates" in proposal.table_confirmation) != replicates:
         return []
     identities = proposal_source_identities(proposal)

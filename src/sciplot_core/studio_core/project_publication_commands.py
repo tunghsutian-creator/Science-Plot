@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 import json
 import shutil
 from pathlib import Path
@@ -14,9 +15,12 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_commands import NativeAdoption, ProjectCommands, ProjectMutation
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore
+from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.studio_core.preparation_source_runtime import current_preparation_runtime
 from sciplot_core.studio_core.project_command_scope import command_for_binding, project_store, source_versions, whole_memberships
 from sciplot_core.studio_core.request_paths import _canonical_publish_paths
+from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
+from sciplot_core.data_mapping.execution_loading import load_data_mapping_execution
 
 
 from sciplot_core.studio_core.publication_candidates import (
@@ -81,7 +85,14 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
 
     delivery_before = _package_snapshot(delivery_root)
     writes: dict[str, bytes | Path | PreparedFile | None] = {}
-    with TemporaryDirectory(prefix="sciplot-publication-") as temporary, current_preparation_runtime(repository, before) as verify_sources:
+    canonical_request = json.loads(repository.read_bytes(repository.logical_path(request), generation=before["generation"]))
+    with TemporaryDirectory(prefix="sciplot-publication-") as temporary, \
+            project_runtime(repository, generation=before["generation"]), \
+            mapping_input_reads(canonical_request.get("data_mapping_execution")) as mapping_reads, \
+            current_preparation_runtime(repository, before) as verify_sources:
+        if mapping_reads is not None:
+            load_data_mapping_execution(mapping_reads.execution)
+            mapping_reads.seal()
         from sciplot_core.studio_core.project_command_scope import figure_read_state
         from sciplot_core.studio_core.project_query_paths import project_snapshot
 
@@ -152,9 +163,18 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
                 canonical_json_sha256(manifest["result"]["scientific_data_verification"])))
         command = command_for_binding(repository, binding, kind="native_import" if adoptions else "publish",
             key=key, writes=list(writes), request=intent, native_adoptions=adoptions)
+        if mapping_reads is not None:
+            from sciplot_core.data_mapping.execution_directories import mapping_live_trees
+
+            command = replace(command, source_trees=mapping_live_trees(mapping_reads))
         verify_sources()
+        mapping_sources = mapping_reads.prepared_sources(before) if mapping_reads is not None else ()
         result = app.execute(command, lambda: ProjectMutation(writes, payload,
             sources=source_versions(binding, store=repository),
+            prepared_sources=mapping_sources,
+            input_reads=mapping_reads.input_reads(before) if mapping_reads is not None else (),
             artifacts={"publication.json": json.dumps(manifest, ensure_ascii=False, allow_nan=False).encode()}))
+        if mapping_reads is not None:
+            mapping_reads.publication_complete(result)
         return {**result["result"], "project_command": {field: result[field]
             for field in ("command_id", "project_id", "generation", "phase")}}

@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from sciplot_core.data_mapping.execution_directories import mapping_directory_path
+
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
-from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.data_mapping.execution_inputs import (
+    mapping_file_sha256 as file_sha256, mapping_file_path, mapping_file_bytes, mapping_literal,
+    mapping_input_reads,
+    mapping_execution_path,
+    mark_mapping_metadata,
+    mapping_execution_header, require_mapping_original_source,
+)
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.mapping_contract import (
     LegacyDataMappingConfirmation,
@@ -16,7 +24,6 @@ from sciplot_core.data_mapping.contracts import (
     DATA_MAPPING_PROPOSAL_FILENAME,
     DATA_MAPPING_CONFIRMATION_FILENAME,
     DATA_MAPPING_PREVIEW_FILENAME,
-    DATA_MAPPING_EXECUTION_FILENAME,
     DATA_MAPPING_REQUEST_FILENAME,
     DATA_MAPPING_REQUEST_SEED_FILENAME,
     DATA_MAPPING_BASE_REQUEST_FILENAME,
@@ -25,7 +32,6 @@ from sciplot_core.data_mapping.contracts import (
     _read_json,
     load_data_mapping_proposal,
     load_data_mapping_confirmation,
-    _resolve_source_root,
     _validate_confirmation,
     _validate_confirmation_paths,
     verify_data_mapping_sources,
@@ -57,23 +63,19 @@ def load_data_mapping_execution(
     path_or_dir: str | Path,
     *,
     verify: bool = True,
+    expected_source: Path | None = None,
 ) -> dict[str, Any]:
-    path = Path(path_or_dir).expanduser().resolve()
-    if path.is_dir():
-        path = path / DATA_MAPPING_EXECUTION_FILENAME
-    payload = _read_json(path)
-    if payload.get("kind") != DATA_MAPPING_EXECUTION_KIND:
-        raise ValueError("Not a SciPlot data mapping execution manifest.")
-    execution_version = payload.get("version")
-    if (
-        type(execution_version) is not int
-        or execution_version not in {1, 2, 3}
-    ):
-        raise ValueError(
-            f"Unsupported data mapping execution version: {execution_version!r}"
-        )
-    if payload.get("status") != "passed":
-        raise ValueError("Data mapping execution is not in passed state.")
+    path = mapping_execution_path(path_or_dir)
+    with mapping_input_reads(str(path), expected_source=expected_source) as readset:
+        result = _load_data_mapping_execution(path, verify=verify)
+        if readset is not None and verify:
+            readset.seal()
+        return result
+
+
+def _load_data_mapping_execution(path: Path, *, verify: bool) -> dict[str, Any]:
+    payload = mapping_execution_header(path, DATA_MAPPING_EXECUTION_KIND)
+    execution_version = payload["version"]
     if not verify:
         return payload
     if execution_version == 3:
@@ -107,7 +109,7 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         recorded = Path(str(payload.get(field) or "")).expanduser().resolve()
         if recorded != expected_path.resolve():
             raise ValueError(f"Data mapping execution {field} path is not canonical.")
-        if not expected_path.is_file():
+        if not mapping_file_path(mark_mapping_metadata(expected_path)).is_file():
             raise FileNotFoundError(
                 f"Data mapping execution {field} is missing: {expected_path}"
             )
@@ -125,7 +127,7 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
     manifest_request_path = (
         Path(str(payload.get("base_request") or "")).expanduser().resolve()
     )
-    if not legacy_confirmation:
+    if not isinstance(confirmation, LegacyDataMappingConfirmation):
         _validate_confirmation_paths(
             confirmation,
             source_root=manifest_source_root,
@@ -164,10 +166,13 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         raise ValueError("Data mapping execution source binding mismatch.")
     if payload.get("request_patch") != json_safe(proposal.request_patch):
         raise ValueError("Data mapping execution request patch mismatch.")
-    source_root = _resolve_source_root(str(payload.get("source_root") or ""))
+    source_root = mapping_literal(Path(str(payload.get("source_root") or "")))
+    require_mapping_original_source(source_root, [item.relative_path for item in proposal.sources],
+                                    _read_json(Path(payload["request_seed"])))
     sources = verify_data_mapping_sources(proposal, source_root=source_root)
+    source_hashes = {reference.source_id: reference.sha256 for reference in proposal.sources}
     expected_raw_hashes = {
-        source_id: file_sha256(source_path)
+        source_id: file_sha256(source_path, expected_sha256=source_hashes[source_id])
         for source_id, source_path in sources.items()
     }
     if (
@@ -205,7 +210,7 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         output_path = Path(str(output.get("path") or "")).expanduser()
         if output_path.resolve() != expected_path.resolve():
             raise ValueError(f"Mapped output path changed for {reference.source_id!r}.")
-        if not expected_path.is_file():
+        if not mapping_file_path(expected_path, expected_sha256=output.get("sha256")).is_file():
             raise FileNotFoundError(f"Mapped data output not found: {expected_path}")
         if file_sha256(expected_path) != output.get("sha256"):
             raise ValueError(f"Mapped data output hash mismatch: {expected_path}")
@@ -221,8 +226,10 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         != expected_effective_input.resolve()
     ):
         raise ValueError("Data mapping execution effective_input is inconsistent.")
+    if expected_effective_input == data_dir:
+        mapping_directory_path(payload)
     seed = Path(str(payload.get("request_seed") or "")).expanduser()
-    if not seed.is_file() or file_sha256(seed) != payload.get("request_seed_sha256"):
+    if not mapping_file_path(seed, expected_sha256=payload.get("request_seed_sha256")).is_file() or file_sha256(seed) != payload.get("request_seed_sha256"):
         raise ValueError("Immutable mapped request seed hash mismatch.")
     seed_payload = _read_json(seed)
     if payload.get("request_candidate_initial_sha256") != payload.get(
@@ -247,7 +254,7 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
                 f"Immutable mapped request seed changed confirmed field {key!r}."
             )
     ledger = Path(str(payload.get("transform_ledger") or "")).expanduser()
-    if not ledger.is_file() or file_sha256(ledger) != payload.get(
+    if not mapping_file_path(ledger, expected_sha256=payload.get("transform_ledger_sha256")).is_file() or file_sha256(ledger) != payload.get(
         "transform_ledger_sha256"
     ):
         raise ValueError("Active data mapping transform ledger hash mismatch.")
@@ -291,7 +298,8 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         != expected_input
     ):
         raise ValueError("Active data mapping step changed its confirmed source root.")
-    if expected_input.is_file() and step_inputs[0].get("sha256") != file_sha256(expected_input):
+    if execution_version >= 2 and len({s.relative_path for s in proposal.sources}) == 1 and step_inputs[0].get("sha256") != file_sha256(
+            expected_input, expected_sha256=proposal.sources[0].sha256):
         raise ValueError("Active data mapping step changed its confirmed source hash.")
     step_outputs = mapping_step.get("output_artifacts")
     if not isinstance(step_outputs, list) or len(step_outputs) != len(
@@ -325,7 +333,7 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         expected_superseded = execution_root / DATA_MAPPING_BASE_LEDGER_FILENAME
         if (
             superseded_ledger.resolve() != expected_superseded.resolve()
-            or not superseded_ledger.is_file()
+            or not mapping_file_path(mark_mapping_metadata(superseded_ledger), expected_sha256=payload.get("superseded_base_transform_ledger_sha256")).is_file()
             or file_sha256(superseded_ledger)
             != payload.get("superseded_base_transform_ledger_sha256")
             or _read_json(superseded_ledger) != base_transform_ledger
@@ -344,7 +352,7 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         proposal, source_root=source_root, numeric_contract=numeric_contract,
     )
     post_sources = verify_data_mapping_sources(proposal, source_root=source_root)
-    if {source_id: file_sha256(source_path) for source_id, source_path in post_sources.items()} != expected_raw_hashes:
+    if {source_id: file_sha256(source_path, expected_sha256=source_hashes[source_id]) for source_id, source_path in post_sources.items()} != expected_raw_hashes:
         raise ValueError("Data mapping execution raw-source proof changed while reconstructing frames.")
     for reference in proposal.sources:
         output = output_by_source[reference.source_id]
@@ -364,7 +372,7 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
                 raise MappingReplayMismatch(f"Mapped output metadata mismatch for {reference.source_id!r}: {field}.")
     if proposal.provider == "explicit_table_choice":
         from sciplot_core.data_mapping.output_files import paired_table_text
-        if expected_effective_input.read_bytes() != paired_table_text(proposal, frames).encode("utf-8"):
+        if mapping_file_bytes(expected_effective_input) != paired_table_text(proposal, frames).encode("utf-8"):
             raise MappingReplayMismatch("Selected paired table does not reproduce original values and metadata.")
     # Retain the original late seed/ledger checks after complete frame/output replay.
     post_frame_seals = [(seed, payload.get("request_seed_sha256"), "Immutable mapped request seed hash mismatch."),
@@ -373,7 +381,7 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         post_frame_seals.append((Path(str(superseded_ledger_value)).expanduser(),
                                  payload.get("superseded_base_transform_ledger_sha256"), "Superseded base transform ledger hash mismatch."))
     for sealed_path, sealed_sha256, message in post_frame_seals:
-        if not sealed_path.is_file() or file_sha256(sealed_path) != sealed_sha256:
+        if not mapping_file_path(sealed_path, expected_sha256=sealed_sha256).is_file() or file_sha256(sealed_path) != sealed_sha256:
             raise ValueError(message)
     verified = deepcopy(payload)
     verified["confirmation_schema_version"] = 1 if legacy_confirmation else 2

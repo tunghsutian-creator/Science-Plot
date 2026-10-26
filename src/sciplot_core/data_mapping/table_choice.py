@@ -36,12 +36,14 @@ from sciplot_core.semantic_sources.impact_sources import _is_impact_metric, _val
 _read = read_original_table
 
 
-def table_choice_snapshot(source: Path, rule_id: str, *, sheets: list[str | None] | None = None) -> dict[str, Any] | None:
+def table_choice_snapshot(source: Path, rule_id: str, *, sheets: list[str | None] | None = None,
+                          expected_sha256: str | None = None) -> dict[str, Any] | None:
     source = source.expanduser().resolve()
     rule = get_rule(rule_id)
     if not supports_table_mapping(rule):
         return None
-    return source_table_snapshot(source, rule_id=rule_id, sheets=sheets)
+    return (source_table_snapshot(source, rule_id=rule_id, sheets=sheets) if expected_sha256 is None else
+            source_table_snapshot(source, rule_id=rule_id, sheets=sheets, expected_sha256=expected_sha256))
 
 
 def _numeric_summary(source: Path, sheet: str | None, digest: str,
@@ -310,8 +312,13 @@ def verify_table_confirmation(proposal: DataMappingProposal, source: Path, *,
     sheets = [binding["selection"]["sheet"],
               *[item.get("table_selection", binding["selection"])["sheet"]
                 for item in binding.get("replicates", binding.get("pairs", []))]]
-    snapshot = (source_table_snapshot(source, rule_id=binding["rule_id"], sheets=sheets) if "replicates" in binding
-                else table_choice_snapshot(source, binding["rule_id"], sheets=sheets))
+    versions = {item.sha256 for item in proposal.sources}
+    if len(versions) != 1:
+        raise ValueError("A confirmed original table requires one exact raw byte version.")
+    version = next(iter(versions))
+    snapshot = (source_table_snapshot(source, rule_id=binding["rule_id"], sheets=sheets, expected_sha256=version)
+                if "replicates" in binding else
+                table_choice_snapshot(source, binding["rule_id"], sheets=sheets, expected_sha256=version))
     if snapshot is None:
         raise ValueError("Confirmed table source is no longer supported.")
     columns = select_table(snapshot, binding["selection"], binding["metadata_confirmations"], numeric_contract=numeric_contract)

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.project_commands import PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation, SourceTreeRead
+from sciplot_core.project_commands import PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation, SourceTreeRead, InputRead
 from sciplot_core.studio_core.project_command_scope import command_for_binding, project_store, query_for_apply, whole_memberships
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore
@@ -86,7 +86,8 @@ def prior_source_preview(repository: FileProjectStore, snapshot: dict[str, Any],
 def stage_source_update(project: Path, candidate: Path, review: dict[str, Any], *,
                         relocate_companion: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
                         prepared_sources: tuple[PreparedSource, ...] = (), logical_paths_bound: bool = False,
-                        before_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+                        before_snapshot: dict[str, Any] | None = None,
+                        input_reads: tuple[InputRead, ...] = ()) -> dict[str, Any]:
     repository = project_store(project, with_snapshot=True)
     snapshot = before_snapshot if before_snapshot is not None else repository.snapshot(import_legacy=True)
     before = project_inventory(project)
@@ -109,7 +110,13 @@ def stage_source_update(project: Path, candidate: Path, review: dict[str, Any], 
     tree_sha = canonical_json_sha256(tree, allow_nan=False)
     if review.get("source_tree_sha256", tree_sha) != tree_sha:
         raise ValueError("The confirmed source-tree hash differs from its exact file inventory")
-    command = replace(command, source_trees=(SourceTreeRead(str(source), tree_sha),))
+    tree_reads = {str(source): SourceTreeRead(str(source), tree_sha)}
+    for supplied in review.get("mapping_source_trees", []):
+        tree_read = SourceTreeRead(**supplied)
+        if tree_read.locator in tree_reads and tree_reads[tree_read.locator] != tree_read:
+            raise ValueError("The mapping and incoming source tree witnesses disagree")
+        tree_reads[tree_read.locator] = tree_read
+    command = replace(command, source_trees=tuple(tree_reads[name] for name in sorted(tree_reads)))
     sources = []
     for name, digest in review["source_files"].items():
         literal = str(source / name if source.is_dir() else source)
@@ -119,7 +126,7 @@ def stage_source_update(project: Path, candidate: Path, review: dict[str, Any], 
         sources.append({"source_id": identity, "path": literal, "locator": literal, "version": digest})
     record = ProjectCommands(repository).preview(command, lambda: ProjectMutation(writes,
         {"status": "updated", "project": str(project), "review": review}, sources=sources,
-        review=review, artifacts=artifacts, prepared_sources=prepared_sources))
+        review=review, artifacts=artifacts, prepared_sources=prepared_sources, input_reads=input_reads))
     return _public_review(project, record)
 
 

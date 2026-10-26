@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.data_mapping.execution_directories import mapping_directory_path
+
 from pathlib import Path
 from copy import deepcopy
 from typing import Any
@@ -10,6 +12,7 @@ from collections.abc import Callable
 import pandas as pd
 
 from sciplot_core.data_mapping.contracts import _read_json
+from sciplot_core.data_mapping.execution_inputs import mapping_file_path, mapping_input_reads
 from sciplot_core.data_mapping.curve_support import table_mapping_shape, supports_table_mapping
 from sciplot_core.data_mapping.execution_loading import load_data_mapping_execution
 from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_request
@@ -36,6 +39,15 @@ def resolve_mapping_plan_request(
     source: Path, request: dict[str, Any], *,
     source_tree_reader: Callable[[Path], str | None] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    reference = request.get("data_mapping_execution")
+    if not isinstance(reference, str) or not reference.strip():
+        raise ValueError("A mapping plan requires its confirmed execution path.")
+    with mapping_input_reads(reference, expected_source=source):
+        return _resolve_mapping_plan_request(source, request, source_tree_reader=source_tree_reader)
+
+
+def _resolve_mapping_plan_request(source: Path, request: dict[str, Any], *,
+    source_tree_reader: Callable[[Path], str | None] | None) -> tuple[dict[str, Any], dict[str, Any]]:
     """Recover scientific fields from the immutable receipt, never caller overrides."""
 
     source = source.expanduser().resolve()
@@ -45,7 +57,7 @@ def resolve_mapping_plan_request(
         raise ValueError("A mapping plan requires its confirmed execution path.")
     if not isinstance(proposal_id, str) or not proposal_id.strip():
         raise ValueError("A mapping plan requires its exact proposal identity.")
-    execution = load_data_mapping_execution(reference)
+    execution = load_data_mapping_execution(reference, expected_source=source)
     if execution.get("handoff_allowed") is not True:
         raise ValueError("A mapping plan requires a current path-bound confirmation.")
     if execution["proposal_id"] != proposal_id:
@@ -55,7 +67,8 @@ def resolve_mapping_plan_request(
     if not isinstance(original, str) or Path(original).expanduser().resolve() != source:
         raise ValueError("The mapping request does not target the original task source.")
     outputs = execution.get("outputs") or []
-    if not source.is_file() or not outputs:
+    raw_hashes = set(execution["source_hashes"].values())
+    if not outputs or len(raw_hashes) != 1 or not mapping_file_path(source, expected_sha256=next(iter(raw_hashes))).is_file():
         raise ValueError("Mapped creation requires one original source file and selected output tables.")
     recorded_sources = {
         (Path(execution["source_root"]) / output["source_relative_path"]).resolve()
@@ -87,9 +100,14 @@ def resolve_mapping_plan_request(
     if application is None:
         raise ValueError("The immutable mapping request lost its execution binding.")
     effective_input = Path(effective["input"]).expanduser().resolve()
-    read_tree = source_tree_reader or source_tree_sha256
-    original_hash = read_tree(source)
-    effective_hash = read_tree(effective_input)
+    if source_tree_reader is None:
+        original_hash = source_tree_sha256(source, expected_file_sha256=next(iter(raw_hashes)))
+        actual_input = (mapping_directory_path(execution) if execution["effective_input"] == execution["data_dir"]
+                        else mapping_file_path(effective_input))
+        effective_hash = source_tree_sha256(actual_input)
+    else:
+        original_hash = source_tree_reader(source)
+        effective_hash = source_tree_reader(effective_input)
     if original_hash is None or effective_hash is None:
         raise ValueError("A mapping plan source is unavailable.")
     binding = {
@@ -146,7 +164,7 @@ def verify_replicate_projection(binding: dict[str, Any]) -> None:
         raise ValueError("Mapped raw group identity differs from its original physical domains.")
     expected = []
     for output in execution["outputs"]:
-        frame = pd.read_csv(output["path"], float_precision="round_trip")
+        frame = pd.read_csv(mapping_file_path(Path(output["path"]), expected_sha256=output["sha256"]), float_precision="round_trip")
         if list(frame.columns) != ["Impact strength"] or len(frame) != output["rows"]:
             raise ValueError("Mapped replicate domain no longer matches its confirmed output.")
         expected.append(tuple(float(value).hex() for value in frame.iloc[:, 0] if pd.notna(value)))

@@ -1,7 +1,9 @@
 """Compose recognized project runs with the single project publication owner."""
 
 from collections.abc import Callable
+from contextlib import ExitStack
 from copy import deepcopy
+from dataclasses import replace
 import json
 import shutil
 from pathlib import Path
@@ -83,9 +85,16 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
     snapshot = store.snapshot()
     if snapshot["generation"] != baseline["generation"]:
         raise ValueError("The selected project changed before private preparation.")
-    with studio_preparation_candidate(store, snapshot=snapshot) as candidate:
+    with studio_preparation_candidate(store, snapshot=snapshot) as candidate, ExitStack() as mapping_scope:
         private_request = candidate.project_dir / request_path.name
         candidate.write_request(deepcopy(request))
+        from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
+        from sciplot_core.data_mapping.execution_loading import load_data_mapping_execution
+
+        mapping_reads = mapping_scope.enter_context(mapping_input_reads(request.get("data_mapping_execution")))
+        if mapping_reads is not None:
+            load_data_mapping_execution(mapping_reads.execution)
+            candidate.mapping_inputs[mapping_reads.execution] = mapping_reads
         private_output = candidate.resource_path((output_name + "/" if output_name else "") + "manifest.json").parent
         private_delivery = candidate.resource_path((delivery_name + "/" if delivery_name else "") + "delivery_manifest.json").parent
         try:
@@ -126,8 +135,12 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
             writes.update(stage_intake_project_manifest(project, updated, store=store,
                 project_writes={name: value for name, value in writes.items() if not name.startswith("@")}))
         command = command_for_binding(store, baseline, kind="publish", key=key, writes=list(writes), request=intent)
+        command = replace(command, source_trees=candidate.mapping_tree_reads)
         record = app.execute(command, lambda: ProjectMutation(writes, manifest, prepared_sources=tuple(sources),
+            input_reads=candidate.mapping_input_reads,
             artifacts={"native-audits.json": json.dumps(audits, ensure_ascii=False, allow_nan=False).encode()}))
+        if mapping_reads is not None:
+            mapping_reads.publication_complete(record)
         return dict(record["result"])
 
 
@@ -157,5 +170,7 @@ def commit_completed_project_run(request_path: Path, manifest: dict[str, Any]) -
         intent = {"completed_run": manifest, "read_generation": baseline["generation"]}
         key = "workflow-register:" + canonical_json_sha256(intent)
         command = command_for_binding(store, baseline, kind="publish", key=key, writes=list(writes), request=intent)
+        command = replace(command, source_trees=candidate.mapping_tree_reads)
         ProjectCommands(store).execute(command, lambda: ProjectMutation(writes, {}, prepared_sources=tuple(sources),
+            input_reads=candidate.mapping_input_reads,
             artifacts={"native-audits.json": json.dumps(audits, ensure_ascii=False, allow_nan=False).encode()}))

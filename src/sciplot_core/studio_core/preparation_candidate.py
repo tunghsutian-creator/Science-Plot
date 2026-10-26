@@ -16,10 +16,11 @@ from tempfile import TemporaryDirectory
 from typing import Any
 from uuid import uuid4
 
-from sciplot_core.project_commands import PreparedFile
+from sciplot_core.project_commands import PreparedFile, SourceTreeRead, InputRead
 from sciplot_core.project_commands.resources import resource_key
 from sciplot_core.project_store import FileProjectStore, ProjectConflict
 from sciplot_core.project_store.io import directory, install, read_file, sha
+from sciplot_core.data_mapping.execution_inputs import MappingInputReadSet
 
 _ACTIVE: ContextVar[StudioPreparationCandidate | None] = ContextVar("studio_preparation_candidate", default=None)
 
@@ -57,6 +58,7 @@ class StudioPreparationCandidate:
     project_dir: Path
     resources: Path
     request_members: set[str] = field(default_factory=lambda: {"plot_request.json"})
+    mapping_inputs: dict[str, MappingInputReadSet] = field(default_factory=dict)
     _root_identity: tuple[int, int] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -126,6 +128,29 @@ class StudioPreparationCandidate:
     @property
     def logical_root(self) -> Path:
         return self.store.root
+
+    @property
+    def mapping_tree_reads(self) -> tuple[SourceTreeRead, ...]:
+        from sciplot_core.data_mapping.execution_directories import mapping_live_trees
+
+        trees: dict[str, SourceTreeRead] = {}
+        for readset in self.mapping_inputs.values():
+            for tree in mapping_live_trees(readset):
+                literal = tree.locator
+                if literal in trees and trees[literal] != tree:
+                    raise ProjectConflict("A private preparation observed different mapping directory versions.")
+                trees[literal] = tree
+        return tuple(trees[name] for name in sorted(trees))
+
+    @property
+    def mapping_input_reads(self) -> tuple[InputRead, ...]:
+        values: dict[str, InputRead] = {}
+        for readset in self.mapping_inputs.values():
+            for item in readset.input_reads(self.snapshot):
+                if item.resource in values and values[item.resource] != item:
+                    raise ProjectConflict("A private preparation has conflicting metadata input identities.")
+                values[item.resource] = item
+        return tuple(values[name] for name in sorted(values))
 
     def resource_path(self, logical: str) -> Path:
         """Select a private output for one already granted logical resource."""
