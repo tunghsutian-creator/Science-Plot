@@ -12,6 +12,7 @@ from sciplot_core.project_store import FileProjectStore, ProjectConflict, Projec
 from sciplot_core.project_store.io import sha
 from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.studio_core import preparation_commands as commands
+from sciplot_core.studio_core.preparation_source_runtime import _current_tree_command
 
 from test_project_query_source_versions import generation
 
@@ -39,7 +40,7 @@ def current_revision(tmp_path, *, directory=False):
         expected_generation=before["generation"], read_set={name: before["files"][name]["sha256"] for name in writes},
         write_set=sorted(writes), request=review, source_trees=[SourceTreeRead(str(source), tree_sha)])
     sources = tuple(PreparedSource(hashlib.sha256(str(path).encode()).hexdigest()[:32], str(path),
-        file_sha256(path), path.read_bytes()) for path in paths)
+        file_sha256(path), path.read_bytes(), mode=path.stat().st_mode & 0o777) for path in paths)
     app = ProjectCommands(store)
     staged = app.preview(command, lambda: ProjectMutation(writes, {"review": review}, review=review, prepared_sources=sources))
     app.decide(command, decision_id=staged["decision_id"], accept=True)
@@ -148,3 +149,59 @@ def test_complete_current_cold_directory_resolves_same_input_tree_in_deep_prepar
     calls = controlled_preparer(monkeypatch, source, paths, expected)
     commands.prepare_studio_generation(cold.root)
     assert len(calls) == 1 and not source.exists()
+
+
+def test_current_directory_command_reference_survives_unrelated_publication(tmp_path):
+    from sciplot_core.project_store.adapters import publish_files
+
+    store, source, _paths, _old, expected = current_revision(tmp_path, directory=True)
+    original = store.query("exact-current-v1")
+    tree = SourceTreeRead(str(source), expected)
+    witness = (original["command_id"], original["command_digest"], original["decision_id"], tree)
+    assert _current_tree_command(store, store.snapshot(), tree) == witness
+    publish_files(store, {"studio/exports/independent.pdf": b"independent figure publication"}, kind="export")
+    assert _current_tree_command(store, store.snapshot(), tree) == witness
+
+
+def test_current_directory_reference_never_chooses_history_after_review_changes(tmp_path):
+    from sciplot_core.project_store.adapters import publish_files
+
+    store, source, _paths, _old, expected = current_revision(tmp_path, directory=True)
+    review = json.loads(store.read_bytes("source_update.json"))
+    publish_files(store, {"source_update.json": json.dumps({**review, "unbound": True}).encode()}, kind="save")
+    with pytest.raises(ProjectConflict, match="exact complete tree binding"):
+        _current_tree_command(store, store.snapshot(), SourceTreeRead(str(source), expected))
+
+
+def test_equal_review_bytes_follow_the_actual_generation_writer(tmp_path):
+    store, source, paths, _old, expected = current_revision(tmp_path, directory=True)
+    before = store.snapshot()
+    value = store.read_bytes("source_update.json")
+    command = ProjectCommand.create("source_update", "a-later-actual-writer", project_id=before["project_id"],
+        expected_generation=before["generation"], read_set={"source_update.json": before["files"]["source_update.json"]["sha256"]},
+        write_set=["source_update.json"], request={}, source_trees=[SourceTreeRead(str(source), expected)])
+    sources = tuple(PreparedSource(hashlib.sha256(str(path).encode()).hexdigest()[:32], str(path),
+        file_sha256(path), path.read_bytes(), mode=path.stat().st_mode & 0o777) for path in paths)
+    app = ProjectCommands(store)
+    record = app.preview(command, lambda: ProjectMutation({"source_update.json": value}, {}, prepared_sources=sources))
+    app.decide(command, decision_id=record["decision_id"], accept=True)
+    assert _current_tree_command(store, store.snapshot(), SourceTreeRead(str(source), expected)) == (
+        command.key, command.command_digest, record["decision_id"], SourceTreeRead(str(source), expected))
+
+
+def test_current_tree_author_cannot_be_selected_from_an_unpublished_generation(tmp_path):
+    from copy import deepcopy
+    from sciplot_core.project_store import state
+    from sciplot_core.project_store.io import digest
+
+    store, source, _paths, _old, expected = current_revision(tmp_path, directory=True)
+    before = store.snapshot()
+    with store._locked() as (io, head):
+        orphan = deepcopy(head)
+        orphan.update(generation="f" * 32, sequence=head["sequence"] + 1,
+            parent=head["generation"], parent_sha256=digest(head))
+        state.write_generation(io, orphan)
+    selected = {**before, "generation": orphan["generation"]}
+    with pytest.raises(ProjectConflict, match="not committed project history"):
+        _current_tree_command(store, selected, SourceTreeRead(str(source), expected))
+    assert store.snapshot() == before
