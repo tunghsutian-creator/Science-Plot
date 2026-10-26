@@ -18,13 +18,9 @@ from test_task_ordinary_categorical_native import (
     _request,
     _cold_export,
 )
-from sciplot_core.studio_core import document_edit_commit as commit
+from test_categorical_display_failures import _recover_frozen_display_edit
 from sciplot_core.studio_core.categorical_display import KEY
-from sciplot_core.studio_core.document_edit import apply_document_edit
-from sciplot_core.studio_core.document_edit_state import (
-    audit_edited_document,
-    history_directory,
-)
+from sciplot_core.studio_core.document_edit_state import audit_edited_document
 from sciplot_core.veusz_worker.document_edit import loaded_native_document
 
 
@@ -287,28 +283,14 @@ def test_public_late_categorical_display_preview_recovery_cold_export_and_source
     )
     assert second["status"] == "needs_review", second
     second_review = json.loads(Path(second["preview"]["review_path"]).read_text())
-    # Fail replacement after the companion spec was installed: existing owner must restore both files.
-    pair = document.read_bytes(), spec_path.read_bytes()
-    with monkeypatch.context() as fault:
-
-        def reject_replace(*args):
-            raise OSError("generated replacement failure")
-
-        fault.setattr(commit, "_replace_current_document", reject_replace)
-        with pytest.raises(OSError, match="generated replacement failure"):
-            apply_document_edit(Path(project), second_review)
-    assert (document.read_bytes(), spec_path.read_bytes()) == pair
-    apply_document_edit(Path(project), second_review)
-    outcome = (
-        history_directory(Path(project), second_review["operation_id"]) / "outcome.json"
-    )
-    record = json.loads(outcome.read_text())
-    record["status"] = (
-        "pending"  # Process lost its success reply after durable native+spec replacement.
-    )
-    outcome.write_text(json.dumps(record))
+    repository = _recover_frozen_display_edit(project, document, spec_path, second_review, monkeypatch)
+    installed = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (document, spec_path)}
+    generation = repository.snapshot()["generation"]
+    # The task lost this completed native reply: its cold public resume must
+    # reconcile the same command, without rewriting either native/spec view.
     _accept(tmp_path, second)
-    assert json.loads(outcome.read_text())["status"] == "applied"
+    assert {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in installed} == installed
+    assert repository.snapshot()["generation"] == generation
     cold = _cold_export(tmp_path, project)
     assert cold["status"] == "complete", cold
     after_datasets = _datasets(document)
@@ -381,6 +363,8 @@ def test_public_late_categorical_display_preview_recovery_cold_export_and_source
         path.write_text(json.dumps(altered))
         with pytest.raises(ValueError):
             audit_edited_document(document, path)
+    native_commands = {record["command_id"]: record["command_digest"]
+        for record in repository.commands() if record["metadata"]["kind"] == "document_edit"}
     verify_exports_and_conflicts(
         tmp_path,
         project=project,
@@ -396,3 +380,5 @@ def test_public_late_categorical_display_preview_recovery_cold_export_and_source
         cold=cold,
         given_series_ids=given_series_ids,
     )
+    assert {record["command_id"]: record["command_digest"]
+        for record in repository.commands() if record["metadata"]["kind"] == "document_edit"} == native_commands
