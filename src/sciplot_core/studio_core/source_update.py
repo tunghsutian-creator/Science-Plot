@@ -33,29 +33,12 @@ from sciplot_core.studio_core.source_update_annotations import transfer_annotati
 from sciplot_core.studio_core.source_update_styles import capture_project_styles, transfer_project_styles
 from sciplot_core.studio_core.annotation_rebinding import relocate_annotation_evidence
 from sciplot_core.project_commands import PreparedSource, InputRead, SourceTreeRead
+from sciplot_core.studio_core.source_update_commands import selected_worksheet as _selected_worksheet
 
 from sciplot_core.studio_core.source_update_state import (
     _delivery_inventory as _delivery_inventory, _check_external_state as _check_external_state,
     _applied_result as _applied_result,
 )
-
-def _selected_worksheet(request: dict[str, Any], worksheet: str | None) -> str | None:
-    if worksheet is not None:
-        return worksheet.strip() or None
-    old = {
-        str(c["sheet"])
-        for c in request.get("column_confirmations", [])
-        if c.get("sheet_selected") is True and c.get("sheet")
-    }
-    if len(old) > 1:
-        raise ValueError(
-            "Select one current worksheet explicitly before updating this project."
-        )
-    return next(iter(old), None)
-
-
-
-
 
 @contextmanager
 def _prepared_update(project_dir: Path, source_path: Path, worksheet: str | None,
@@ -65,8 +48,20 @@ def _prepared_update(project_dir: Path, source_path: Path, worksheet: str | None
     from sciplot_core.studio_core.project_query_paths import project_snapshot
     from sciplot_core.project_store.runtime import project_runtime
     from sciplot_core.studio_core.source_update_sources import baseline_scope
+    from sciplot_core.studio_core.source_update_sources import incoming_scope
+    from sciplot_core.studio_core.source_update_commands import lookup_source_preview, _public_review
+    from sciplot_core.studio_core.source_update_replay import frozen_source_candidate
 
     project = project_dir.expanduser().resolve()
+    source = source_path.expanduser().absolute()
+    existing = lookup_source_preview(project, source, worksheet=worksheet, mapping_request=mapping_request,
+                                     annotation_decisions=annotation_decisions)
+    if existing is not None:
+        repository, snapshot, record = existing
+        with project_runtime(repository), incoming_scope(repository, snapshot, source, record["review"]["source_files"]), \
+                frozen_source_candidate(repository, snapshot, record) as candidate:
+            yield candidate, _public_review(project, record), (), snapshot
+        return
     current_source_update_request(project, mapping_request)
     repository = project_store(project, with_snapshot=True)
     snapshot = repository.snapshot(import_legacy=True)
@@ -107,23 +102,7 @@ def _prepared_update_current(
     selected_sheet = _selected_worksheet(request, worksheet)
     delivery = requested_delivery_root({"request": request}, run_output=project)
     delivery_state = _delivery_inventory(delivery)
-    from sciplot_core.foundation.json_hashing import canonical_json_sha256
-    from sciplot_core.studio_core.source_update_commands import prior_source_preview, _public_review
-    from sciplot_core.studio_core.source_update_replay import frozen_source_candidate
     from sciplot_core.studio_core.source_update_sources import baseline_scope, incoming_scope
-
-    tree = ({"kind": "file", "content_sha256": next(iter(source_state.values()))} if source.is_file() else
-            {"kind": "directory", "files": [{"path": name, "content_sha256": digest} for name, digest in sorted(source_state.items())]})
-    intent = {"source": str(source), "source_kind": "file" if source.is_file() else "directory",
-              "source_files": source_state, "source_tree_sha256": canonical_json_sha256(tree, allow_nan=False),
-              "worksheet": selected_sheet, "mapping_request": mapping_request,
-              "annotation_decisions": annotation_decisions or [], "project_sha256": payload_hash(original_state),
-              "delivery_sha256": payload_hash(delivery_state)}
-    existing = prior_source_preview(repository, before_snapshot, intent)
-    if existing is not None:
-        with incoming_scope(repository, before_snapshot, source, source_state), frozen_source_candidate(repository, before_snapshot, existing) as candidate:
-            yield candidate, _public_review(project, existing), (), before_snapshot
-        return
 
     figures = project_figures(project)
     from sciplot_core.data_mapping.execution_inputs import mapping_input_reads

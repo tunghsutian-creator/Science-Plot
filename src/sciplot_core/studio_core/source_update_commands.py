@@ -17,6 +17,84 @@ from sciplot_core.project_store.io import read_file, sha
 from sciplot_core.studio_core.source_update_files import project_inventory, relocate_metadata
 
 
+def selected_worksheet(request: dict[str, Any], worksheet: str | None) -> str | None:
+    if worksheet is not None:
+        return worksheet.strip() or None
+    old = {str(c["sheet"]) for c in request.get("column_confirmations", [])
+           if c.get("sheet_selected") is True and c.get("sheet")}
+    if len(old) > 1:
+        raise ValueError("Select one current worksheet explicitly before updating this project.")
+    return next(iter(old), None)
+
+
+def lookup_source_preview(project: Path, source: Path, *, worksheet: str | None,
+                          mapping_request: dict[str, Any] | None,
+                          annotation_decisions: list[dict[str, Any]] | None,
+                          ) -> tuple[FileProjectStore, dict[str, Any], dict[str, Any]] | None:
+    """Query an exact saved intent before admitting any new preparation work."""
+    from sciplot_core.foundation.canonical_paths import canonical_path
+    from sciplot_core.project_host_factory import _admitted_request
+    from sciplot_core.project_manifest_locations import admitted_project_generation
+    from sciplot_core.project_store import ProjectConflict
+
+    if not (project / ".sciplot_store/head.json").is_file():
+        return None
+    source = canonical_path(source)
+    with admitted_project_generation(project) as (primary, _io, current):
+        request = _admitted_request(project)
+        supplied = {"source": str(source), "worksheet": selected_worksheet(request, worksheet),
+                    "mapping_request": mapping_request, "annotation_decisions": annotation_decisions or []}
+        candidates = []
+        for prior in primary.commands():
+            metadata = prior.get("metadata", {})
+            intent = metadata.get("request", {})
+            if (metadata.get("kind") != "source_update" or not isinstance(intent, dict)
+                    or any(intent.get(key) != value for key, value in supplied.items())):
+                continue
+            command = ProjectCommand.from_payload(metadata)
+            if (command.key != prior["command_id"] or command.project_id != current["project_id"]
+                    or prior["project_id"] != command.project_id or command.command_digest != prior["command_digest"]):
+                raise ProjectConflict("The saved source preview has inconsistent command identity.")
+            candidates.append((command, intent))
+    if not candidates:
+        return None
+    repository = project_store(project)
+    snapshot = repository.snapshot()
+    matches = [(command, intent) for command, intent in candidates
+               if source_review_binding(repository, snapshot, intent)[1:] == (intent, command.key)]
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise ProjectConflict("The source preview request matches multiple exact saved commands; use its saved decision.")
+    command, intent = matches[0]
+    record = prior_source_preview(repository, snapshot, intent)
+    assert record is not None
+    review = record.get("review")
+    if not isinstance(review, dict) or source_review_binding(repository, snapshot, review)[1:] != (intent, command.key):
+        raise ProjectConflict("The frozen source review differs from its exact normalized command.")
+    if snapshot.get("outside_changes"):
+        raise ProjectConflict("The saved source preview's current project read witness changed.")
+    from sciplot_core.project_store import input_reads, source_trees
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.studio_core.source_update_sources import incoming_scope
+    from sciplot_core.studio_core.source_update_state import _check_external_state
+    from sciplot_core.studio_core.source_update_review import payload_hash
+
+    with repository._locked() as (io, current):
+        if source_review_binding(repository, current, review)[1:] != (intent, command.key):
+            raise ProjectConflict("The saved source preview's current project read witness changed.")
+        if not any(tree.locator == str(source) for tree in command.source_trees):
+            raise ProjectConflict("The saved source preview has no exact incoming source-tree declaration.")
+        source_trees.require(io, current, record)
+        input_reads.require(io, current, record, observed={})
+        with project_runtime(repository, generation=current["generation"]), incoming_scope(repository, current, source, review["source_files"]):
+            if payload_hash(project_inventory(project)) != review["project_sha256"]:
+                raise ProjectConflict("The saved source preview's current project read witness changed.")
+            _check_external_state(project, source, review)
+        snapshot = current
+    return repository, snapshot, record
+
+
 def source_mutation(project: Path, candidate: Path, review: dict[str, Any], *,
                     relocate_companion: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
                     expected: dict[str, str] | None = None,
