@@ -282,8 +282,10 @@ def test_native_legacy_mixed_export_preserves_state_science_and_portable_sources
     linked.write_text("".join(f"{x:.17g} {y:.17g}\n" for x, y in zip(series["x_values"], series["y_values"], strict=True)))
     script = tmp_path / "manual-save.py"
     script.write_text("from pathlib import Path\nfrom sciplot_core.veusz_worker.document_edit import loaded_native_document\n"
-        "from sciplot_core.studio_core.persistence import atomic_save_veusz_document\n"
-        f"path=Path({str(native)!r})\nwith loaded_native_document(path) as doc:\n"
+        "from sciplot_core.studio_core.persistence import atomic_save_veusz_document, project_save_binding\n"
+        f"path=Path({str(native)!r})\nbaseline=project_save_binding(Path({str(project)!r}),path)\n"
+        "with loaded_native_document(path) as doc:\n"
+        " doc._sciplot_project_read_set=baseline\n"
         " from veusz.document import CommandInterface\n"
         f" CommandInterface(doc).ImportFile({str(linked)!r},{(series['x_name'] + '(numeric), ' + series['y_name'] + '(numeric)')!r},linked=True)\n"
         " doc.resolveSettingPath(None,'/page1/graph1/series_1/PlotLine/color').set('#A34455')\n"

@@ -63,8 +63,10 @@ def test_public_paper_cli_packages_two_native_figures_and_relocated_editable_exp
     series = spec["series"][0]
     linked.write_text("".join(f"{x:.17g} {y:.17g}\n" for x, y in zip(series["x_values"], series["y_values"], strict=True)))
     native_script.write_text("from pathlib import Path\nfrom sciplot_core.veusz_worker.document_edit import loaded_native_document\n"
-        "from sciplot_core.studio_core.persistence import atomic_save_veusz_document\n"
-        f"path=Path({str(selected)!r})\nwith loaded_native_document(path) as doc:\n"
+        "from sciplot_core.studio_core.persistence import atomic_save_veusz_document, project_save_binding\n"
+        f"path=Path({str(selected)!r})\nbaseline=project_save_binding(Path({str(projects[0])!r}),path)\n"
+        "with loaded_native_document(path) as doc:\n"
+        " doc._sciplot_project_read_set=baseline\n"
         " from veusz.document import CommandInterface\n"
         f" doc.resolveSettingPath(None,{(curve + '/PlotLine/color')!r}).set('#A34455')\n"
         f" CommandInterface(doc).ImportFile({str(linked)!r},{(series['x_name'] + '(numeric), ' + series['y_name'] + '(numeric)')!r},linked=True)\n"
