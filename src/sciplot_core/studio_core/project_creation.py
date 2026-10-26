@@ -151,7 +151,11 @@ def request_from_verified_plan(source: Path, *, verified: dict[str, Any], projec
 @with_table_reads
 def export_project(project: Path) -> dict[str, Any]:
     root = resolve_project_path(project)
-    payload = prepare_studio_document(root)
+    # resolve_project_path requires the saved canonical document. Export owns
+    # its exact-current audit and native adoption; preparation would clone an
+    # older generation or reject a legitimate manual native save beforehand.
+    payload = {"project_dir": str(root), "request": str(root / "plot_request.json"),
+               "document": str(root / "studio/document.vsz")}
     result = _publish(payload)
     return {
         **result, "kind": "sciplot_project_export_result",
