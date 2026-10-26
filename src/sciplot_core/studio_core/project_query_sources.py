@@ -11,6 +11,7 @@ from sciplot_core.project_store.runtime import (
     ProjectSourceResolver, inspect_runtime_source_file, inspect_runtime_source_tree,
 )
 from sciplot_core.source_coverage.managed_documents import source_records
+from sciplot_core.data_mapping.execution_inputs import mapping_effective_source
 
 
 def current_source_files(project: Path, source: Path, figures: list[dict[str, Any]]) -> tuple[dict[str, str], dict[str, str]]:
@@ -114,9 +115,17 @@ def current_source_digest(source: Path, files: dict[str, str], identities: dict[
     return inspect_runtime_source_file(literal, expected_sha256=files.get(literal), source_id=identities.get(literal)).sha256
 
 
-def current_tree_digest(source: Path, files: dict[str, str], identities: dict[str, str]) -> str:
+def current_tree_digest(source: Path, files: dict[str, str], identities: dict[str, str], *,
+                        mapping_application: dict[str, Any] | None = None) -> str:
     resolver = selected_source_resolver()
     literal = resolver.literal_path(source) if isinstance(resolver, ProjectSourceResolver) else str(source)
+    if (mapping_application is not None and mapping_application.get("source_groups")
+            and literal == mapping_application["effective_input"] and literal in files):
+        composite = mapping_effective_source(mapping_application["execution"], literal)
+        if composite is not None and composite[0] is None:
+            if files[literal] != composite[1]:
+                raise ValueError("The current composite differs from the sealed invocation observation")
+            return canonical_json_sha256({"kind": "file", "content_sha256": composite[1]}, allow_nan=False)
     if literal in files:
         digest = current_source_digest(source, files, identities)
         return canonical_json_sha256({"kind": "file", "content_sha256": digest}, allow_nan=False)
@@ -142,6 +151,13 @@ def mapping_source_files(application: dict[str, Any], files: dict[str, str]) -> 
         if path in selected and selected[path] != digest:
             raise ValueError("The verified mapping and current source facts disagree")
         selected[path] = digest
+    effective = application["effective_input"]
+    if application.get("source_groups") and effective not in selected:
+        composite = mapping_effective_source(application["execution"], effective)
+        if composite is not None:
+            identity, version = composite
+            selected[effective] = (version if identity is None else
+                inspect_runtime_source_file(effective, expected_sha256=version, source_id=identity).sha256)
     return selected
 
 

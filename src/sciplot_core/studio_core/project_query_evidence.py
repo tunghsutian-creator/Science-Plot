@@ -7,7 +7,7 @@ from typing import Any
 
 from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
 from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_request
-from sciplot_core.data_mapping.execution_inputs import mapping_execution_is_sealed
+from sciplot_core.data_mapping.execution_inputs import mapping_execution_is_sealed, mapping_input_reads
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.project_store.runtime import (
@@ -103,34 +103,38 @@ def source_indicators(
             else:
                 if source is None:
                     raise ValueError("The mapped project lost its original source.")
-                effective_request, application = resolve_data_mapping_request(
-                    request, base_dir=project
-                )
-                if application is None:
-                    raise ValueError("The mapped project lost its execution binding.")
-                mapping_files = mapping_source_files(application, files)
-                def read_tree(path: Path) -> str:
-                    return current_tree_digest(path, mapping_files, identities)
-                recorded_mapping = request.get("data_mapping_plan_binding")
-                if recorded_mapping is not None:
-                    _seed, mapping = resolve_mapping_plan_request(source, request, source_tree_reader=read_tree)
-                    if recorded_mapping != mapping:
-                        raise ValueError("The mapped project no longer matches its creation plan.")
-                effective_source = Path(effective_request["input"])
-                effective_hash = read_tree(effective_source)
-                input_state = _indicator(
-                    effective_hash == expected if expected else None,
-                    path=str(source),
-                    sha256=actual,
-                    effective_input=str(effective_source),
-                    effective_sha256=effective_hash,
-                    expected_sha256=expected,
-                    mapping_verified=True,
-                )
-                # The owner above checked the original file against its immutable
-                # proposal. Keep its file hash in the ordinary raw-source indicator.
-                for name, digest in application["source_hashes"].items():
-                    mapped_raw[str(Path(application["source_root"]) / name)] = digest
+                reference = Path(request["data_mapping_execution"]).expanduser()
+                if not reference.is_absolute():
+                    reference = project / reference
+                with mapping_input_reads(str(reference)):
+                    effective_request, application = resolve_data_mapping_request(
+                        request, base_dir=project
+                    )
+                    if application is None:
+                        raise ValueError("The mapped project lost its execution binding.")
+                    mapping_files = mapping_source_files(application, files)
+                    def read_tree(path: Path) -> str:
+                        return current_tree_digest(path, mapping_files, identities, mapping_application=application)
+                    recorded_mapping = request.get("data_mapping_plan_binding")
+                    if recorded_mapping is not None:
+                        _seed, mapping = resolve_mapping_plan_request(source, request, source_tree_reader=read_tree)
+                        if recorded_mapping != mapping:
+                            raise ValueError("The mapped project no longer matches its creation plan.")
+                    effective_source = Path(effective_request["input"])
+                    effective_hash = read_tree(effective_source)
+                    input_state = _indicator(
+                        effective_hash == expected if expected else None,
+                        path=str(source),
+                        sha256=actual,
+                        effective_input=str(effective_source),
+                        effective_sha256=effective_hash,
+                        expected_sha256=expected,
+                        mapping_verified=True,
+                    )
+                    # The owner above checked the original file against its immutable
+                    # proposal. Keep its file hash in the ordinary raw-source indicator.
+                    for name, digest in application["source_hashes"].items():
+                        mapped_raw[str(Path(application["source_root"]) / name)] = digest
         except (OSError, ValueError, KeyError, TypeError) as exc:
             input_state = _indicator(
                 False, path=str(source) if source else None,
