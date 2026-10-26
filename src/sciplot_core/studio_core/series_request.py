@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 import pandas as pd
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.foundation.source_locations import literal_source_path
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.materials_rules import (
     format_plot_text_units,
@@ -225,7 +225,7 @@ def _series_from_request(
         and _request_template(request) == "point_line"
     ):
         raw_series, axis_info, impact_steps = _impact_point_line_series_from_source(
-            source, request=request
+            resolve_source_path(source), request=request
         )
         transform_steps.extend(impact_steps)
         # The overlay builder owns its layered internal series order. Public
@@ -306,7 +306,9 @@ def _series_from_request(
             )
         semantic_steps = []
     transform_steps.extend(semantic_steps)
-    frames = _read_source_frame_records(source, request=request)
+    actual = resolve_source_path(source, expected_sha256=(
+        _terminal_source_binding.terminal_source.sha256 if _terminal_source_binding is not None else None))
+    frames = _read_source_frame_records(actual, request=request)
     styled, axis_info = _series_from_frame_records(
         request,
         frames=frames,

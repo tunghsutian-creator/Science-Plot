@@ -37,7 +37,7 @@ def figure_source_request(
     if mechanical_source is not None:
         assert task is not None
         projected = request_for_figure_task(request, task)
-        projected["input"] = str(mechanical_source.source)
+        projected["input"] = mechanical_source.binding.terminal_source.path
         projected["series_order"] = list(mechanical_source.binding.sample_order)
         projected["explicit_render_option_keys"] = list(
             mechanical_source.explicit_render_option_keys

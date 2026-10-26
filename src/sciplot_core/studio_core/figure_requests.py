@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.figure_plan import (
     FigureTask,
     ResolvedFigurePlan,
@@ -243,7 +244,7 @@ def _impact_condition_figure_request(
         if task is not None
         else deepcopy(request)
     )
-    figure_request["input"] = str(figure["condition_source"])
+    figure_request["input"] = literal_source_path(Path(figure["condition_source"]))
     if task is None:
         figure_request["template"] = resolve_rule_template(
             "impact_metric",
