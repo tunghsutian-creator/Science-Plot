@@ -23,11 +23,31 @@ from sciplot_core.plot_engine.storage import load_head
 from sciplot_core.plot_protocol import rpc
 from sciplot_core.plot_protocol.client import _ping, call
 from sciplot_core.plot_protocol.paths import read_owner
+from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
+from sciplot_core.project_lifecycle.context import repository_scope
+from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
 
 
 def _decoded_json_bytes(value):
     """Measure a decoded result, not a transport frame or client-visible text."""
     return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+
+
+def _revision_snapshot(root, scientific_hash, *, repository=None):
+    """Read the authoritative revisions even when their physical views are absent."""
+    repository = repository or ComposedProjectRepository()
+    with repository_scope(repository, capabilities=COMPATIBILITY_CAPABILITIES):
+        members = repository.json_members(root / "revisions", "*.json")
+        assert [path.name for path in members] == ["00000000.json", "00000001.json"]
+        result = {}
+        for revision, path in enumerate(members):
+            envelope = repository.load_revision(root, revision)
+            assert envelope["document"]["revision"] == revision
+            assert envelope["document"]["scientific_hash"] == scientific_hash
+            snapshot = repository.content_snapshot(path)
+            assert snapshot["bytes"] and snapshot["sha256"]
+            result[path.name] = snapshot["sha256"]
+        return result
 
 
 @pytest.mark.focused
@@ -83,7 +103,7 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
             assert patched["scientific_hash"] == scientific_hash and patched["scientific_hash_changed"] is False
             transaction = json.loads(Path(patched["evidence"]).read_text())
             assert transaction["review"]["scientific_audit"]["status"] == "passed"
-            before_replay = {str(path): file_sha256(path) for path in plot.glob("revisions/*.json")}
+            before_replay = _revision_snapshot(plot, scientific_hash)
 
             async def replay_via_mcp():
                 parameters = StdioServerParameters(command=str(REPO_ROOT / "skill/scripts/sciplot"),
@@ -98,7 +118,7 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
 
             replay = anyio.run(replay_via_mcp)
             assert replay["replayed"] is True and replay["revision"] == 1 and replay["ready_to_use"] is True
-            assert {str(path): file_sha256(path) for path in plot.glob("revisions/*.json")} == before_replay
+            assert _revision_snapshot(plot, scientific_hash) == before_replay
             assert _ping(socket, 3)["pid"] == engine_pid
             warm_descriptions = []
             for index in range(3):
