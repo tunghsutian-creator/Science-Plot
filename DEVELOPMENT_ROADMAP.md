@@ -10,7 +10,15 @@ snapshot's acceptance.
 ## Next bounded architecture work
 
 After the integrated project-core milestone passes its complete acceptance,
-measure the remaining runtime cost on the same task, inputs and environment.
+independently review the final foundation before adding features. Trace logical
+source identity, byte version, host IO location, operation phase and file role
+across every supported producer and consumer. Use the retained path-serialization,
+read-only materialization and directory-projection failures to distinguish design
+defects from missing migration coverage. Decide which boundaries need redesign;
+require an explicit complete caller migration, old-path retirement and recovery
+contract for each proposed replacement, rather than adding another policy layer.
+
+Then measure the remaining runtime cost on the same task, inputs and environment.
 Separate necessary native computation, repeated initialization and validation;
 do not extrapolate the measured locked-history improvement to whole CI. Tighten
 remaining historical package dependencies and test-owner impact selection using
