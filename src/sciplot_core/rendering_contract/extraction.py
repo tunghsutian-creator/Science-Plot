@@ -185,9 +185,18 @@ def _pdf_export_default(reader: SourceReader) -> Any:
         return functions[0]
 
     def assignments(function: ast.FunctionDef) -> list[ast.Assign]:
-        return [node for node in ast.walk(function) if isinstance(node, ast.Assign)
-                and any(isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant)
-                        and target.slice.value == "pdfdpi" for target in node.targets)]
+        result = []
+        for node in ast.walk(function):
+            if not isinstance(node, ast.Assign):
+                continue
+            targets = [target for target in node.targets if isinstance(target, ast.Subscript)
+                       and isinstance(target.slice, ast.Constant) and target.slice.value == "pdfdpi"]
+            if targets:
+                if (len(node.targets) != 1 or len(targets) != 1
+                        or not isinstance(targets[0].value, ast.Name) or targets[0].value.id != "kwargs"):
+                    raise ValueError("PDF native export baseline changed structure.")
+                result.append(node)
+        return result
 
     public = owner(public_file)
     direct = assignments(public)
@@ -201,6 +210,20 @@ def _pdf_export_default(reader: SourceReader) -> Any:
             or imports[0].names[0].name != "export_studio_document"
             or imports[0].names[0].asname != "export_private"):
         raise ValueError("PDF native export baseline changed structure.")
+    alias = "export_private"
+    imported_aliases = [node for node in ast.walk(public) if isinstance(node, ast.alias)
+                       and (node.asname or node.name.split(".")[0]) == alias]
+    if imported_aliases != [imports[0].names[0]]:
+        raise ValueError("PDF native export baseline changed structure.")
+    for node in ast.walk(public):
+        if (isinstance(node, ast.Name) and node.id == alias and isinstance(node.ctx, (ast.Store, ast.Del))
+                or isinstance(node, ast.arg) and node.arg == alias
+                or isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == alias
+                or isinstance(node, ast.ExceptHandler) and node.name == alias
+                or isinstance(node, (ast.Global, ast.Nonlocal)) and alias in node.names
+                or isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name == alias
+                or isinstance(node, ast.MatchMapping) and node.rest == alias):
+            raise ValueError("PDF native export baseline changed structure.")
     calls = [node for node in ast.walk(public) if isinstance(node, ast.Call)
              and isinstance(node.func, ast.Name) and node.func.id == "export_private"]
     if (len(calls) != 1 or len(calls[0].args) != 1 or len(calls[0].keywords) != 3

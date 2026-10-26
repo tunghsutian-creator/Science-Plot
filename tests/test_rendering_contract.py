@@ -115,7 +115,8 @@ def test_source_drift_is_a_failure_not_an_automatic_contract_rewrite(tmp_path: P
     assert load_contract()["properties"]["line.width_pt"]["value"] == 1.2
 
 
-@pytest.mark.parametrize("change", ["dpi", "missing_delegate", "wrong_alias", "duplicate_delegate", "multiple_assignments"])
+@pytest.mark.parametrize("change", ["dpi", "missing_delegate", "wrong_alias", "duplicate_delegate", "multiple_assignments",
+                                  "alias_rebind", "wrong_target"])
 def test_pdf_baseline_follows_only_the_closed_current_native_owner(tmp_path: Path, change: str) -> None:
     copy_contract_sources(tmp_path)
     facade = tmp_path / "src/sciplot_core/studio_core/export_execution.py"
@@ -132,7 +133,9 @@ def test_pdf_baseline_follows_only_the_closed_current_native_owner(tmp_path: Pat
         assert difference["pinned"]["value"] == 72 and difference["current_source"]["value"] == 73
         assert load_contract()["properties"]["export.veusz_pdf_dpi"]["value"] == 72
         return
-    if change == "multiple_assignments":
+    if change == "wrong_target":
+        adapter.write_text(adapter.read_text().replace('kwargs["pdfdpi"] = 72', 'unused["pdfdpi"] = 72'))
+    elif change == "multiple_assignments":
         adapter.write_text(adapter.read_text().replace('kwargs["pdfdpi"] = 72', 'kwargs["pdfdpi"] = 72\n                        kwargs["pdfdpi"] = 72'))
     else:
         original = facade.read_text()
@@ -140,6 +143,8 @@ def test_pdf_baseline_follows_only_the_closed_current_native_owner(tmp_path: Pat
             changed = original.replace("from sciplot_core.studio_core.native_export_adapter import export_studio_document as export_private", "from untrusted import export_studio_document as export_private")
         elif change == "wrong_alias":
             changed = original.replace("as export_private", "as wrong_private")
+        elif change == "alias_rebind":
+            changed = original.replace("    return export_private(", "    export_private = object()\n    return export_private(")
         else:
             changed = original.replace("    return export_private(", "    export_private(document_path, formats=formats, output_dir=output_dir, audit_spec_path=audit_spec_path)\n    return export_private(")
         assert changed != original
