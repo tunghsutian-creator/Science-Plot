@@ -4,6 +4,7 @@ from collections.abc import Callable
 import json
 from typing import Any
 
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from .contracts import CommandKind, ProjectCommand, ProjectMutation
 from .errors import ProjectCommandError, ProjectCommandUnknown
 from .ports import ProjectStore
@@ -19,14 +20,22 @@ class ProjectCommands:
         return values or None
 
     @staticmethod
-    def _input_options(candidate: ProjectMutation) -> dict[str, Any]:
-        return {"input_reads": [item.to_payload() for item in candidate.input_reads]} if candidate.input_reads else {}
+    def _input_options(command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
+        inputs = (*command.input_reads, *candidate.input_reads)
+        return {"input_reads": [item.to_payload() for item in inputs],
+                "expected_metadata": command.to_payload()} if inputs else {}
 
     def _bound(self, command: ProjectCommand, record: dict[str, Any]) -> dict[str, Any]:
         if record.get("command_digest") != command.command_digest:
             raise ProjectCommandError("project_command_key_conflict", "This key belongs to a different immutable command.")
         if record.get("project_id") != command.project_id:
             raise ProjectCommandError("project_command_project_conflict", "The saved command belongs to another project.")
+        try:
+            matches = canonical_json_sha256(record.get("metadata"), allow_nan=False) == command.command_digest
+        except (TypeError, ValueError):
+            matches = False
+        if not matches:
+            raise ProjectCommandError("project_command_metadata_conflict", "The saved command metadata differs from the original typed command.")
         return record
 
     def _admit(self, command: ProjectCommand) -> dict[str, Any]:
@@ -73,7 +82,7 @@ class ProjectCommands:
         return self._bound(command, self.store.publish(
             command.key, command.command_digest, writes=candidate.writes,
             result=candidate.result, sources=self._sources(candidate), artifacts=candidate.artifacts,
-            **self._input_options(candidate)))
+            **self._input_options(command, candidate)))
 
     def stage_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
         """Durably freeze bytes without accepting a later ownership transfer."""
@@ -94,7 +103,7 @@ class ProjectCommands:
                 command.key, command.command_digest, writes=candidate.writes, result=candidate.result,
                 review={"publication": "prepared_storage", "prepared_digest": expected,
                         "candidate_review": candidate.review}, artifacts=candidate.artifacts,
-                sources=self._sources(candidate), **self._input_options(candidate)))
+                sources=self._sources(candidate), **self._input_options(command, candidate)))
         if record.get("phase") in {"needs_review", "accepted"}:
             review = record.get("review", {})
             if review.get("publication") != "prepared_storage" or review.get("prepared_digest") != expected:
@@ -119,7 +128,7 @@ class ProjectCommands:
         return self._bound(command, self.store.stage(
             command.key, command.command_digest, writes=candidate.writes,
             result=candidate.result, review=candidate.review or {}, artifacts=candidate.artifacts,
-            sources=self._sources(candidate), **self._input_options(candidate)))
+            sources=self._sources(candidate), **self._input_options(command, candidate)))
 
     def decide(self, command: ProjectCommand, *, decision_id: str, accept: bool) -> dict[str, Any]:
         if type(accept) is not bool:

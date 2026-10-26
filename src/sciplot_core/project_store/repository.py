@@ -156,13 +156,15 @@ class FileProjectStore:
               result: dict[str, Any], review: dict[str, Any],
               artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None,
               sources: Sequence[dict[str, Any]] | None = None,
-              input_reads: Sequence[dict[str, str]] = ()) -> dict[str, Any]:
+              input_reads: Sequence[dict[str, str]] = (),
+              expected_metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
         with self._locked(repair=True) as (io, _current):
             record = state.command(io, command_id, command_digest)
             if record is None:
                 raise ProjectStoreError("Reserve this command before freezing a candidate.")
             return commands.public(io, commands.stage(io, record, writes=writes, result=result,
-                review=review, artifacts=artifacts, sources=sources, input_reads=input_reads), create_views=True)
+                review=review, artifacts=artifacts, sources=sources, input_reads=input_reads,
+                expected_metadata=expected_metadata), create_views=True)
 
     def decide(self, command_id: str, command_digest: str, *, decision_id: str, accept: bool) -> dict[str, Any]:
         with self._locked(allow_pending=True) as (io, _current):
@@ -174,17 +176,22 @@ class FileProjectStore:
     def publish(self, command_id: str, command_digest: str, *, writes: Mapping[str, bytes | Path | PreparedFile | None],
                 result: dict[str, Any], sources: Sequence[dict[str, Any]] | None = None,
                 artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None,
-                input_reads: Sequence[dict[str, str]] = ()) -> dict[str, Any]:
+                input_reads: Sequence[dict[str, str]] = (),
+                expected_metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
         with self._locked(repair=True) as (io, current):
             record = state.command(io, command_id, command_digest)
             if record is None:
                 raise ProjectStoreError("Reserve this command before publication.")
+            from .input_reads import require_metadata
+
+            require_metadata(record, expected_metadata)
             if record["phase"] == "complete":
                 return commands.public(io, record)
             if record["phase"] not in {"reserved", "applying"}:
                 raise ProjectStoreError("Resume an accepted command or decide its exact reviewed candidate explicitly.")
             commands.stage(io, record, writes=writes, result=result, review={"execution": "immediate"},
-                           artifacts=artifacts, sources=sources, input_reads=input_reads)
+                           artifacts=artifacts, sources=sources, input_reads=input_reads,
+                           expected_metadata=expected_metadata)
             commands.decide(io, record, record["decision_id"], True)
             return commands.public(io, publication.publish(io, current, record, frozen=record["draft"]), create_views=True)
 

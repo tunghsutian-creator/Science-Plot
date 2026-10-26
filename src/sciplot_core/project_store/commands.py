@@ -139,7 +139,11 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
 
 def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | Path | PreparedFile | None],
           result: dict[str, Any], review: dict[str, Any], artifacts: Mapping[str, bytes | Path | PreparedFile] | None,
-          sources: Sequence[dict[str, Any]] | None, input_reads: Sequence[dict[str, str]] = ()) -> dict[str, Any]:
+          sources: Sequence[dict[str, Any]] | None, input_reads: Sequence[dict[str, str]] = (),
+          expected_metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    from .input_reads import require_metadata
+
+    require_metadata(record, expected_metadata)
     if record["phase"] in {"needs_review", "accepted", "rejected", "complete"}:
         return record
     if record["phase"] not in {"reserved", "applying"}:

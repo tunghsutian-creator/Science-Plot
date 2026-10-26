@@ -5,7 +5,7 @@ from typing import Any
 from sciplot_core.project_commands.resources import InputRead, SourceAdoption
 
 from .errors import ProjectConflict, ProjectStoreError
-from .io import StoreIO
+from .io import StoreIO, digest
 from .locators import original_for_logical
 
 
@@ -23,8 +23,26 @@ def values(record: Mapping[str, Any], frozen: Mapping[str, Any] | None = None) -
     return tuple(result[name] for name in sorted(result))
 
 
+def require_metadata(record: Mapping[str, Any], expected_metadata: Mapping[str, Any] | None = None) -> None:
+    metadata = record.get("metadata", {})
+    supplied = expected_metadata if expected_metadata is not None else metadata
+    typed = metadata.get("version") == 1 and {"project_id", "key", "request", "read_set", "write_set"}.issubset(metadata)
+    if expected_metadata is None and not typed:
+        return  # The low-level repository also supports existing opaque business metadata/digests.
+    from sciplot_core.project_commands.contracts import ProjectCommand
+
+    try:
+        canonical = ProjectCommand.from_payload(supplied).command_digest
+        valid = canonical == record["command_digest"] == digest(supplied) == digest(metadata)
+    except (KeyError, TypeError, ValueError):
+        valid = False
+    if not valid:
+        raise ProjectConflict("The immutable input command metadata differs from its exact command digest.")
+
+
 def require(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, Any], *,
             observed: Mapping[str, SourceAdoption], frozen: Mapping[str, Any] | None = None) -> set[str]:
+    require_metadata(record)
     if frozen is None and isinstance(record.get("draft"), dict):
         if record.get("metadata", {}).get("input_reads") or "input_reads" in record["draft"]:
             from .state import sealed_draft
@@ -33,12 +51,6 @@ def require(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, Any], 
     selected = values(record, frozen)
     if not selected:
         return set()
-    metadata = record.get("metadata", {})
-    if metadata.get("version") == 1 and {"project_id", "key", "request", "read_set", "write_set"}.issubset(metadata):
-        from sciplot_core.project_commands.contracts import ProjectCommand
-
-        if ProjectCommand.from_payload(metadata).command_digest != record["command_digest"]:
-            raise ProjectConflict("The immutable input command metadata differs from its exact command digest.")
     for item in selected:
         entry = current["files"].get(item.resource)
         before = record["read_set"].get(item.resource)

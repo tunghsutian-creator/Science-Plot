@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.project_commands import InputRead, PreparedFile, PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation
+from sciplot_core.project_commands import InputRead, PreparedFile, PreparedSource, ProjectCommand, ProjectCommandError, ProjectCommands, ProjectMutation
 from sciplot_core.project_store import FileProjectStore, ProjectConflict, ProjectRecoveryRequired, ResourceRoot, state
 from sciplot_core.project_store.io import digest, sha
 
@@ -107,6 +107,7 @@ def test_static_or_dynamic_input_is_sealed_and_same_declaration_can_coalesce(tmp
     result = ProjectCommands(store).publish_prepared(command, mutation)
     assert result["phase"] == "complete" and store.snapshot()["input_resources"] == [resource]
     assert result["draft"]["input_reads"] == [InputRead(resource, source.source_id, source.version).to_payload()]
+    assert "expected_metadata" not in result and "expected_metadata" not in result["draft"]
     changed = {**result["draft"], "input_reads": []}
     assert digest({"command_digest": command.command_digest, "candidate": changed}) != result["decision_id"]
     assert target.read_bytes() == source.data
@@ -342,7 +343,48 @@ def test_sealed_input_declaration_cannot_be_dropped_or_rebound_by_mutable_hints(
     else:
         record["metadata"].pop("input_reads")
     path.write_text(json.dumps(record))
-    with pytest.raises(ProjectConflict):
+    with pytest.raises((ProjectConflict, ProjectCommandError)):
         ProjectCommands(store).resume(command)
     assert target.read_bytes() == source.data
     assert json.loads((store.root / ".sciplot_store/head.json").read_bytes())["generation"] == before["generation"]
+
+
+def assert_preseal_role_refuses(tmp_path, phase, removed=None):
+    store, before, resource, target, source = input_store(tmp_path)
+    command, mutation = prepared_read(store, before, resource, source)
+    head = (store.root / ".sciplot_store/head.json").read_bytes()
+    record_path = store.root / ".sciplot_store" / state.command_path(command.key)
+
+    def remove_role():
+        record = json.loads(record_path.read_bytes())
+        assert record["phase"] == phase and record.get("draft") is None
+        record["metadata"].pop("input_reads")
+        if removed is not None:
+            if removed == "version_boolean":
+                record["metadata"]["version"] = True
+            else:
+                record["metadata"].pop(removed)
+        record_path.write_text(json.dumps(record))
+        return mutation
+
+    app = ProjectCommands(store)
+    if phase == "reserved":
+        store.reserve(command.key, command.command_digest, expected_generation=command.expected_generation,
+            read_set=dict(command.read_set), write_set=command.write_set, metadata=command.to_payload())
+        remove_role()
+    with pytest.raises((ProjectConflict, ProjectCommandError), match="command metadata"):
+        app.publish_prepared(command, mutation) if phase == "reserved" else app.execute(command, remove_role)
+    assert target.read_bytes() == source.data
+    assert (store.root / ".sciplot_store/head.json").read_bytes() == head
+    assert json.loads(record_path.read_bytes()).get("draft") is None
+
+
+@pytest.mark.parametrize("phase", ["reserved", "applying"])
+def test_static_input_role_removal_before_first_seal_refuses_publication(tmp_path, phase):
+    assert_preseal_role_refuses(tmp_path, phase)
+
+
+@pytest.mark.parametrize("phase", ["reserved", "applying"])
+@pytest.mark.parametrize("removed", ["version", "request", "version_boolean"])
+def test_static_role_and_type_hint_erasure_cannot_escape_preseal_binding(tmp_path, phase, removed):
+    assert_preseal_role_refuses(tmp_path, phase, removed)
