@@ -7,10 +7,13 @@ from typing import Any
 
 from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
 from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_request
+from sciplot_core.data_mapping.execution_inputs import mapping_execution_is_sealed
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import existing_file_sha256
-from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.project_store.runtime import resolve_runtime_path, literal_runtime_path, projected_runtime_directory
+from sciplot_core.project_store.runtime import (
+    inspect_runtime_source_file, inspect_runtime_source_tree, literal_runtime_path,
+    projected_runtime_directory, projected_runtime_artifact,
+)
 from sciplot_core.source_coverage.managed_documents import source_records
 from sciplot_core.studio_core.project_query_paths import (
     bound_delivery_project,
@@ -28,12 +31,23 @@ def _indicator(current: bool | None, **fields: Any) -> dict[str, Any]:
 
 
 def _tree_hash(path: Path) -> str | None:
-    path = resolve_runtime_path(path)
-    canonical_path(path)
-    if path.is_dir():
-        for member in path.rglob("*"):
-            canonical_path(member)
-    return source_tree_sha256(path)
+    return inspect_runtime_source_tree(path)
+
+
+def _file_hash(path: str | Path, expected: str | None) -> str:
+    return inspect_runtime_source_file(path, expected_sha256=expected).sha256
+
+
+def _mismatches(files: dict[str, str]) -> list[str]:
+    changed = []
+    for path, digest in files.items():
+        try:
+            current = _file_hash(path, digest)
+        except (OSError, ValueError):
+            current = None
+        if current != digest:
+            changed.append(path)
+    return changed
 
 
 def source_indicators(
@@ -49,7 +63,7 @@ def source_indicators(
     files: dict[str, str] = {}
     identities: dict[str, str] = {}
     try:
-        from sciplot_core.studio_core.project_query_sources import current_source_files, current_source_tree, resolve_current_file
+        from sciplot_core.studio_core.project_query_sources import current_source_files, current_source_tree, current_tree_digest, mapping_sources_sealed, mapping_source_files
 
         files, identities = current_source_files(project, source, figures) if source is not None else ({}, {})
         actual = (current_source_tree(source, files, identities, expected=expected) if source is not None and files else
@@ -72,7 +86,7 @@ def source_indicators(
             if source is None:
                 raise ValueError("The categorical project lost its original source.")
             expected_file = request["categorical_binding"]["source_sha256"]
-            actual_file = existing_file_sha256(canonical_path(resolve_runtime_path(source, expected_sha256=expected_file)))
+            actual_file = _file_hash(source, expected_file)
             input_state = _indicator(actual_file == expected_file, path=str(source),
                 sha256=actual_file, expected_sha256=expected_file,
                 scope="categorical_original_file_sha256")
@@ -81,35 +95,42 @@ def source_indicators(
             input_state = _indicator(False, path=str(source) if source else None, error=str(exc))
     if "data_mapping_execution" in request:
         try:
-            if source is None:
-                raise ValueError("The mapped project lost its original source.")
-            effective_request, application = resolve_data_mapping_request(
-                request, base_dir=project
-            )
-            if application is None:
-                raise ValueError("The mapped project lost its execution binding.")
-            recorded_mapping = request.get("data_mapping_plan_binding")
-            if recorded_mapping is not None:
-                _seed, mapping = resolve_mapping_plan_request(source, request)
-                if recorded_mapping != mapping:
-                    raise ValueError("The mapped project no longer matches its creation plan.")
-            effective_source = Path(effective_request["input"])
-            effective_hash = (_tree_hash(resolve_current_file(effective_source, files, identities))
-                              if files else _tree_hash(effective_source))
-            input_state = _indicator(
-                effective_hash == expected if expected else None,
-                path=str(source),
-                sha256=actual,
-                effective_input=str(effective_source),
-                effective_sha256=effective_hash,
-                expected_sha256=expected,
-                mapping_verified=True,
-            )
-            # The owner above checked the original file against its immutable
-            # proposal. Keep its file hash in the ordinary raw-source indicator.
-            raw_digest = existing_file_sha256(resolve_current_file(source, files, identities))
-            if raw_digest is not None:
-                mapped_raw[str(source)] = raw_digest
+            if (mapping_sources_sealed(files, identities, figures)
+                    or mapping_execution_is_sealed(request["data_mapping_execution"])):
+                input_state = _indicator(None, path=str(source) if source else None,
+                    sha256=actual, expected_sha256=expected, mapping_verified=None,
+                    error="Read-only inspection does not replay numeric mappings from selected sealed source bindings.")
+            else:
+                if source is None:
+                    raise ValueError("The mapped project lost its original source.")
+                effective_request, application = resolve_data_mapping_request(
+                    request, base_dir=project
+                )
+                if application is None:
+                    raise ValueError("The mapped project lost its execution binding.")
+                mapping_files = mapping_source_files(application, files)
+                def read_tree(path: Path) -> str:
+                    return current_tree_digest(path, mapping_files, identities)
+                recorded_mapping = request.get("data_mapping_plan_binding")
+                if recorded_mapping is not None:
+                    _seed, mapping = resolve_mapping_plan_request(source, request, source_tree_reader=read_tree)
+                    if recorded_mapping != mapping:
+                        raise ValueError("The mapped project no longer matches its creation plan.")
+                effective_source = Path(effective_request["input"])
+                effective_hash = read_tree(effective_source)
+                input_state = _indicator(
+                    effective_hash == expected if expected else None,
+                    path=str(source),
+                    sha256=actual,
+                    effective_input=str(effective_source),
+                    effective_sha256=effective_hash,
+                    expected_sha256=expected,
+                    mapping_verified=True,
+                )
+                # The owner above checked the original file against its immutable
+                # proposal. Keep its file hash in the ordinary raw-source indicator.
+                for name, digest in application["source_hashes"].items():
+                    mapped_raw[str(Path(application["source_root"]) / name)] = digest
         except (OSError, ValueError, KeyError, TypeError) as exc:
             input_state = _indicator(
                 False, path=str(source) if source else None,
@@ -129,17 +150,12 @@ def source_indicators(
                 for record in unit.get("source_artifacts", []):
                     canonical_path(Path(record["path"]))
             for path, digest in source_records(spec).items():
-                canonical_path(resolve_runtime_path(path, expected_sha256=digest))
                 if str(path) in prepared and prepared[str(path)] != digest:
                     raise ValueError("Prepared figures disagree about a source hash.")
                 prepared[str(path)] = digest
     except (OSError, ValueError, TypeError, KeyError) as exc:
         prepared_error = str(exc)
-    mismatches = [
-        path
-        for path, digest in prepared.items()
-        if existing_file_sha256(resolve_runtime_path(path, expected_sha256=digest)) != digest
-    ]
+    mismatches = _mismatches(prepared)
     prepared_state = _indicator(
         None if prepared_error or not prepared else not mismatches,
         file_count=len(prepared),
@@ -151,15 +167,10 @@ def source_indicators(
     for sample in model.get("samples", []):
         for replicate in sample.get("replicates", []):
             record = replicate.get("source_file") or {}
-            value, raw_digest = record.get("raw_path"), record.get("sha256")
-            if isinstance(value, str) and isinstance(raw_digest, str):
-                canonical_path(resolve_runtime_path(value, expected_sha256=raw_digest))
-                raw[value] = raw_digest
-    raw_mismatches = [
-        path
-        for path, digest in raw.items()
-        if existing_file_sha256(resolve_runtime_path(path, expected_sha256=digest)) != digest
-    ]
+            value, recorded_digest = record.get("raw_path"), record.get("sha256")
+            if isinstance(value, str) and isinstance(recorded_digest, str):
+                raw[value] = recorded_digest
+    raw_mismatches = _mismatches(raw)
     raw_state = _indicator(
         not raw_mismatches if raw else None,
         file_count=len(raw),
@@ -239,9 +250,15 @@ def _exports_match(
     for item in exports:
         if not isinstance(item, dict) or not item.get("path") or not item.get("sha256"):
             return False
-        path = canonical_path(resolve_runtime_path(item["path"], expected_sha256=item["sha256"]))
         fmt, digest = item.get("format"), item["sha256"]
-        if not isinstance(fmt, str):
+        if (not isinstance(fmt, str) or not isinstance(digest, str) or len(digest) != 64
+                or any(char not in "0123456789abcdef" for char in digest)):
+            return False
+        declared = Path(item["path"])
+        if not declared.suffix or (fmt == "pdf" and declared.suffix.casefold() != ".pdf"):
+            return False
+        path = canonical_path(projected_runtime_artifact(declared))
+        if not path.is_file():
             return False
         if not path.is_relative_to(run) or str(path) in seen:
             return False

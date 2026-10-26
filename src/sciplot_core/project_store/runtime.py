@@ -10,6 +10,7 @@ from .repository import FileProjectStore
 from .incoming_sources import SourceExpectation, SourceReadMode, require_unambiguous_scope, source_expectation_scope
 from .source_resolver import ProjectSourceResolver as ProjectSourceResolver
 from .sealed_source_trees import SealedSourceTree
+from .source_inspection import SourceFileObservation
 
 
 @contextmanager
@@ -79,6 +80,47 @@ def projected_runtime_artifact(original: str | Path) -> Path:
     # This is the original port for nonregistered private stage paths, not a
     # retry after failed ownership, member, hash, mode or source-cache checks.
     return resolve_source_path(original)
+
+
+def inspect_runtime_source_file(original: str | Path, *, expected_sha256: str | None = None,
+                                source_id: str | None = None) -> SourceFileObservation:
+    """Read a current physical version or an explicitly selected sealed binding."""
+    from .candidate_runtime import ProjectCandidateResolver
+    from .source_inspection import inspect_file, inspect_invocation_file, physical_file
+
+    selected = selected_source_resolver()
+    if isinstance(selected, ProjectSourceResolver):
+        explicit = inspect_invocation_file(selected.store, original, expected_sha256=expected_sha256,
+            source_id=source_id, generation=selected.generation)
+        if explicit is not None:
+            return explicit
+    if isinstance(selected, ProjectCandidateResolver) and selected.logical_resource(original) is not None:
+        return physical_file(selected.resolve_path(original, expected_sha256=expected_sha256,
+            source_id=source_id), expected_sha256)
+    if isinstance(selected, ProjectSourceResolver):
+        return inspect_file(selected.store, original, expected_sha256=expected_sha256,
+                            source_id=source_id, generation=selected.generation)
+    return physical_file(resolve_source_path(original, expected_sha256=expected_sha256,
+                         source_id=source_id), expected_sha256)
+
+
+def inspect_runtime_source_tree(original: str | Path, *, allowed: set[str] | None = None) -> str:
+    """Observe a complete current namespace without resolving a cached view."""
+    from .candidate_runtime import ProjectCandidateResolver
+    from .source_inspection import inspect_tree, inspect_invocation_file
+    from .source_tree_io import observe
+    from .io import digest
+
+    selected = selected_source_resolver()
+    if isinstance(selected, ProjectSourceResolver):
+        explicit = inspect_invocation_file(selected.store, original, generation=selected.generation, tree=True)
+        if explicit is not None:
+            return digest({"kind": "file", "content_sha256": explicit.sha256})
+    if isinstance(selected, ProjectCandidateResolver) and selected.logical_resource(original) is not None:
+        return observe(str(selected.resolve_path(original)), allowed=allowed)[0]
+    if isinstance(selected, ProjectSourceResolver):
+        return inspect_tree(selected.store, original, generation=selected.generation, allowed=allowed)
+    return observe(str(resolve_source_path(original).expanduser().absolute()), allowed=allowed)[0]
 
 
 def selected_project_store() -> FileProjectStore | None:

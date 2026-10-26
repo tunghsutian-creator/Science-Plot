@@ -47,10 +47,13 @@ def bound_delivery_project(root: Path) -> Path:
         from sciplot_core.studio_core.project_query_sources import current_source_files
 
         files, identities = current_source_files(project, Path(binding.source), project_snapshot(project)[2])
-        sources = [resolve_source_path(path, expected_sha256=digest, source_id=identities.get(path))
-                   for path, digest in files.items()] if files else [resolve_source_path(binding.source)]
-        if not all(canonical_path(path).exists() for path in sources):
-            raise ValueError("The delivery's associated project source is missing.")
+        from sciplot_core.project_store.runtime import inspect_runtime_source_file, inspect_runtime_source_tree
+
+        if files:
+            for path, digest in files.items():
+                inspect_runtime_source_file(path, expected_sha256=digest, source_id=identities.get(path))
+        else:
+            inspect_runtime_source_tree(binding.source)
     return canonical_path(project)
 
 

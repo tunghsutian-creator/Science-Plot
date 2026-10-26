@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.file_hashing import existing_file_sha256
-from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.project_store.runtime import projected_runtime_artifact
 
 
 def _recorded_file_set(
@@ -42,7 +42,12 @@ def _recorded_file_set(
             invalid.append({"reason": "path_missing", "record": record})
             continue
         expected_hash = str(record.get(hash_field) or "").strip()
-        path = resolve_source_path(Path(path_value).expanduser(), expected_sha256=expected_hash or None).resolve()
+        declared = Path(path_value).expanduser()
+        if (declared.suffix.casefold() not in suffixes or len(expected_hash) != 64
+                or any(char not in "0123456789abcdef" for char in expected_hash)):
+            invalid.append({"reason": "file_or_hash_invalid", "path": str(declared)})
+            continue
+        path = projected_runtime_artifact(declared).resolve()
         actual_hash = existing_file_sha256(path)
         valid = bool(
             path.parent == directory.resolve()
