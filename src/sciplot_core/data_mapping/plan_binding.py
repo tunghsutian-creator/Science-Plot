@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from copy import deepcopy
 from typing import Any
+from collections.abc import Callable
 
 import pandas as pd
 
@@ -32,7 +33,8 @@ def mapped_preview_request(seed: dict[str, Any], binding: dict[str, Any]) -> dic
 
 
 def resolve_mapping_plan_request(
-    source: Path, request: dict[str, Any]
+    source: Path, request: dict[str, Any], *,
+    source_tree_reader: Callable[[Path], str | None] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Recover scientific fields from the immutable receipt, never caller overrides."""
 
@@ -85,8 +87,9 @@ def resolve_mapping_plan_request(
     if application is None:
         raise ValueError("The immutable mapping request lost its execution binding.")
     effective_input = Path(effective["input"]).expanduser().resolve()
-    original_hash = source_tree_sha256(source)
-    effective_hash = source_tree_sha256(effective_input)
+    read_tree = source_tree_reader or source_tree_sha256
+    original_hash = read_tree(source)
+    effective_hash = read_tree(effective_input)
     if original_hash is None or effective_hash is None:
         raise ValueError("A mapping plan source is unavailable.")
     binding = {
