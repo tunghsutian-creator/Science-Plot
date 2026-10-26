@@ -184,6 +184,7 @@ class StoreIO:
             if process != os.getpid() or thread != get_ident():
                 _ACTIVE.set(None)
         with _leases(self.root, self.locations, blocking=blocking) as leases:
+            self.validation_epoch += 1
             lease = leases[self.root]
             try:
                 self.root_fds[""] = os.dup(lease.fd)
@@ -206,6 +207,7 @@ class StoreIO:
                     os.close(descriptor)
                 self.root_fds.clear()
                 self.fd = -1
+                self.validation_epoch += 1
 
     def verify_roots(self) -> None:
         for key, fd in self.root_fds.items():

@@ -147,3 +147,13 @@ def test_failed_nested_read_admission_closes_its_proof_while_parent_fd_is_live(t
         failed = captured[-1]
         with pytest.raises(ProjectStoreError, match="boundary"):
             failed.require(io, failed.current)
+
+
+def test_direct_io_history_proof_cannot_cross_a_reopened_lease_with_reused_fd(tmp_path):
+    store, _snapshot = populated(tmp_path, 0)
+    io = StoreIO(store.root, {})
+    with io.locked():
+        checked = state.checked_head(io)
+    with io.locked():
+        with pytest.raises(ProjectStoreError, match="boundary"):
+            checked.require(io, checked.current)
