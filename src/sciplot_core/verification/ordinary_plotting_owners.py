@@ -248,6 +248,7 @@ CATEGORICAL_SOURCE_OWNER = ChangedOwner(
         "tests/test_rendering_contract.py",
         *ARCHITECTURE_CORE_TARGETS,
         "tests/test_grouped_bar_mark_contract.py",
+        "tests/test_source_version_error_contracts.py",
     ),
     mypy_required=True,
     handoff_gates=("doctor",),

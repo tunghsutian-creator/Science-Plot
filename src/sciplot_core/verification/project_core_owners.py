@@ -168,6 +168,7 @@ PROJECT_CORE_OWNERS = (
                         *NATIVE_PROJECT_COMMAND_TESTS, *PROJECT_STORE_TESTS, *PROJECT_COMMAND_TESTS, *ATTACHED_PROJECT_TESTS,
                         *PROJECT_RUNTIME_TESTS, *NATIVE_PROJECT_CONSUMERS,
                         "tests/test_mechanical_figure_plan_activation.py::test_tensile_studio_publishes_the_complete_source_bound_figure_plan",
+                        "tests/test_source_version_error_contracts.py",
                         "tests/test_intake_atomic_packaging.py", *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",), final_milestone_gates=("smoke",),
         release_gates=("full_pytest",),
