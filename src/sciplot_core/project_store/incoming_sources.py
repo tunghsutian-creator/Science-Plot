@@ -17,6 +17,7 @@ from .errors import ProjectConflict, ProjectStoreError
 from .io import STORE, directory, read_file, sha
 from .locators import logical_for_literal
 from .repository import FileProjectStore
+from .sealed_source_trees import SealedSourceTree, resolve_tree_view
 
 SourceReadMode = Literal["incoming", "sealed"]
 
@@ -51,6 +52,7 @@ class _Selection:
     generation: str
     mode: SourceReadMode
     sources: tuple[SourceExpectation, ...]
+    trees: tuple[SealedSourceTree, ...] = ()
 
 
 _SELECTED: ContextVar[_Selection | None] = ContextVar("project_source_expectations", default=None)
@@ -60,27 +62,51 @@ def selected_expectations(snapshot: dict[str, Any]) -> dict[str, Any] | None:
     selected = _SELECTED.get()
     if selected is None or (selected.project_id, selected.generation) != (snapshot["project_id"], snapshot["generation"]):
         return None
-    return {"mode": selected.mode, "sources": [source.to_payload() for source in selected.sources]}
+    payload: dict[str, Any] = {"mode": selected.mode, "sources": [source.to_payload() for source in selected.sources]}
+    if selected.trees:
+        payload["trees"] = [tree.to_payload() for tree in selected.trees]
+    return payload
+
+
+def expectation_trees(value: dict[str, Any]) -> tuple[SealedSourceTree, ...]:
+    items = value.get("trees", [])
+    if not isinstance(items, list) or len(items) > 64:
+        raise ProjectStoreError("Source-tree expectations must be an explicit finite list.")
+    return tuple(SealedSourceTree.from_payload(item) for item in items)
 
 
 def expectation_payload(value: Any) -> tuple[SourceReadMode, tuple[SourceExpectation, ...]]:
-    if (not isinstance(value, dict) or set(value) != {"mode", "sources"}
+    fields = {"mode", "sources"} | ({"trees"} if isinstance(value, dict) and "trees" in value else set())
+    if (not isinstance(value, dict) or set(value) != fields
             or not isinstance(value["mode"], str) or value["mode"] not in {"incoming", "sealed"}
             or not isinstance(value["sources"], list)
-            or not 1 <= len(value["sources"]) <= 64):
+            or len(value["sources"]) > 64):
         raise ProjectStoreError("Invalid finite source expectation capability.")
     mode: SourceReadMode = "incoming" if value["mode"] == "incoming" else "sealed"
+    trees = expectation_trees(value)
+    if not 1 <= len(value["sources"]) + len(trees) <= 64 or mode != "sealed" and trees:
+        raise ProjectStoreError("Complete imported tree witnesses belong only to the existing sealed source scope.")
     return mode, tuple(SourceExpectation.from_payload(item) for item in value["sources"])
 
 
 @contextmanager
 def source_expectation_scope(snapshot: dict[str, Any], mode: SourceReadMode,
-                             sources: Sequence[SourceExpectation]) -> Iterator[None]:
+                             sources: Sequence[SourceExpectation], *, trees: Sequence[SealedSourceTree] = (),
+                             store: FileProjectStore | None = None) -> Iterator[None]:
     frozen = tuple(sources)
-    if (mode not in {"incoming", "sealed"} or not 1 <= len(frozen) <= 64
+    sealed_trees = tuple(trees)
+    if (mode not in {"incoming", "sealed"} or not 1 <= len(frozen) + len(sealed_trees) <= 64
             or any(not isinstance(item, SourceExpectation) for item in frozen)
             or len({item.literal for item in frozen}) != len(frozen)):
         raise ProjectStoreError("Source expectations must be finite and unambiguous by exact literal.")
+    if (any(not isinstance(item, SealedSourceTree) for item in sealed_trees)
+            or sealed_trees and (mode != "sealed" or store is None)
+            or len({item.tree.locator for item in sealed_trees}) != len(sealed_trees)
+            or {item.tree.locator for item in sealed_trees} & {item.literal for item in frozen}):
+        raise ProjectStoreError("Sealed complete trees need one explicit store and unambiguous typed roots.")
+    for tree in sealed_trees:
+        assert store is not None
+        tree.view(store)
     for item in frozen:
         identities = {identity for identity, versions in snapshot["sources"].items()
                       if any(entry.get("locator") == item.literal for entry in versions.values())}
@@ -92,7 +118,7 @@ def source_expectation_scope(snapshot: dict[str, Any], mode: SourceReadMode,
             entry = snapshot["sources"][item.source_id].get(item.sha256)
             if entry is None or entry.get("locator") != item.literal:
                 raise ProjectConflict("A sealed baseline requires its exact registered source version and literal.")
-    token = _SELECTED.set(_Selection(snapshot["project_id"], snapshot["generation"], mode, frozen))
+    token = _SELECTED.set(_Selection(snapshot["project_id"], snapshot["generation"], mode, frozen, sealed_trees))
     try:
         yield
     finally:
@@ -134,7 +160,17 @@ def resolve_expected_source(store: FileProjectStore, snapshot: dict[str, Any], o
     literal = str(original)
     matched = next((item for item in sources if item.literal == literal), None)
     if matched is None:
-        return None
+        tree = resolve_tree_view(store, expectation_trees(payload), original, expected_sha256=expected_sha256)
+        if tree is None:
+            return None
+        actual, origin, root = tree
+        if source_id is not None:
+            member = next((item for item in sources if item.literal == origin), None)
+            if (root or member is None or member.source_id != source_id
+                    or expected_sha256 is not None and expected_sha256 != member.sha256):
+                raise ProjectConflict("A complete tree cannot invent a scientific file identity or version.")
+            _verify_file(actual, member.sha256)
+        return actual
     if (expected_sha256 is not None and expected_sha256 != matched.sha256
             or source_id is not None and source_id != matched.source_id):
         raise ProjectConflict("The requested source identity/version differs from the explicit invocation expectation.")
@@ -155,4 +191,15 @@ def selected_sealed_view(store: FileProjectStore, snapshot: dict[str, Any], actu
         if actual == view:
             return resolve_expected_source(store, snapshot, item.literal,
                 expected_sha256=expected_sha256, source_id=source_id)
-    return None
+    tree = resolve_tree_view(store, expectation_trees(payload), actual, expected_sha256=expected_sha256)
+    if tree is None:
+        return None
+    return resolve_expected_source(store, snapshot, actual, expected_sha256=expected_sha256, source_id=source_id)
+
+
+def literal_sealed_tree(store: FileProjectStore, snapshot: dict[str, Any], actual: Path) -> str | None:
+    payload = selected_expectations(snapshot)
+    if payload is None or payload["mode"] != "sealed":
+        return None
+    tree = resolve_tree_view(store, expectation_trees(payload), actual)
+    return tree[1] if tree is not None else None

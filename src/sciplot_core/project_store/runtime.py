@@ -9,6 +9,7 @@ from sciplot_core.foundation.source_locations import (
 from .repository import FileProjectStore
 from .incoming_sources import SourceExpectation, SourceReadMode, require_unambiguous_scope, source_expectation_scope
 from .source_resolver import ProjectSourceResolver as ProjectSourceResolver
+from .sealed_source_trees import SealedSourceTree
 
 
 @contextmanager
@@ -20,10 +21,10 @@ def project_runtime(store: FileProjectStore, generation: str | None = None) -> I
 
 @contextmanager
 def _source_runtime(store: FileProjectStore, sources: Sequence[SourceExpectation], mode: SourceReadMode,
-                    generation: str | None) -> Iterator[ProjectSourceResolver]:
+                    generation: str | None, trees: Sequence[SealedSourceTree] = ()) -> Iterator[ProjectSourceResolver]:
     require_unambiguous_scope()
     resolver = ProjectSourceResolver(store, generation)
-    with source_expectation_scope(resolver.snapshot, mode, sources), source_location_scope(resolver):
+    with source_expectation_scope(resolver.snapshot, mode, sources, trees=trees, store=store), source_location_scope(resolver):
         yield resolver
 
 
@@ -34,9 +35,10 @@ def incoming_source_runtime(store: FileProjectStore, sources: Sequence[SourceExp
 
 
 def sealed_source_runtime(store: FileProjectStore, sources: Sequence[SourceExpectation], *,
-                          generation: str | None = None) -> AbstractContextManager[ProjectSourceResolver]:
+                          generation: str | None = None,
+                          trees: Sequence[SealedSourceTree] = ()) -> AbstractContextManager[ProjectSourceResolver]:
     """Read one reviewed baseline version without reconnecting its live literal."""
-    return _source_runtime(store, sources, "sealed", generation)
+    return _source_runtime(store, sources, "sealed", generation, trees)
 
 
 # Host adapters use the same port as pure source consumers.

@@ -5,7 +5,7 @@ from typing import Any
 from . import state
 from .errors import ProjectConflict
 from .io import digest
-from .incoming_sources import resolve_expected_source, selected_expectations
+from .incoming_sources import literal_sealed_tree, resolve_expected_source, selected_expectations
 from .repository import FileProjectStore
 
 
@@ -58,6 +58,9 @@ class ProjectSourceResolver:
         return path
 
     def literal_path(self, actual: Path) -> str:
+        sealed = literal_sealed_tree(self.store, self.snapshot, actual)
+        if sealed is not None:
+            return sealed
         path = actual.expanduser().absolute()
         if (path.is_relative_to(self.store.root)
                 or any(self._in_resource(path, root, self.store.location_members[key])

@@ -12,7 +12,7 @@ from typing import Any
 from sciplot_core.foundation.source_locations import selected_source_resolver, source_location_scope
 from .errors import ProjectConflict, ProjectStoreError
 from .io import digest
-from .incoming_sources import expectation_payload, source_expectation_scope, without_source_expectations
+from .incoming_sources import expectation_payload, expectation_trees, source_expectation_scope, without_source_expectations
 from .candidate_resources import validate_resources_binding
 from .native_artifacts import artifact_payload, bound_native_artifacts, native_artifact_binding
 from .repository import FileProjectStore
@@ -146,7 +146,8 @@ def _worker_project_runtime(reference: dict[str, str] | None, argv: list[str]) -
     with bound_native_artifacts(value.get("native_artifacts"), argv, resolver):
         if "source_expectations" in value:
             mode, sources = expectation_payload(value["source_expectations"])
-            with source_expectation_scope(resolver.snapshot, mode, sources), source_location_scope(resolver):
+            trees = expectation_trees(value["source_expectations"])
+            with source_expectation_scope(resolver.snapshot, mode, sources, trees=trees, store=store), source_location_scope(resolver):
                 yield
         else:
             with source_location_scope(resolver):
