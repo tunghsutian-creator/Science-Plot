@@ -274,6 +274,8 @@ def test_recovery_replacement_failure_preserves_both_versions(recoverable, monke
     assert candidate.read_bytes() == before[1]
     if after_replace not in {"after_projection", "target_missing"}:
         assert document.read_bytes() == before[0]
+    if after_replace == "after_projection":
+        assert document.read_bytes() == before[1]
     assert not list(document.parent.glob(".document.delivery-*"))
     monkeypatch.setattr(state, "boundary", boundary)
     if after_replace == "target_missing":
@@ -286,6 +288,7 @@ def test_recovery_replacement_failure_preserves_both_versions(recoverable, monke
         assert pending["committed_generation"] == json.loads(committed_head)["generation"]
         with pytest.raises(ProjectRecoveryRequired, match="Outside bytes prevent generation recovery"):
             repository.recover()
+        assert repository.query(preview["command_key"])["phase"] != "complete"
         assert not document.exists()
         assert head_path.read_bytes() == committed_head
         assert candidate.read_bytes() == frozen_candidate.read_bytes() == before[1]
