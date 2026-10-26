@@ -47,6 +47,20 @@ resolve_runtime_path = resolve_source_path
 literal_runtime_path = literal_source_path
 
 
+def literal_runtime_project_root(original: str | Path) -> str:
+    """Locate an existing host resource root, without asserting its contents."""
+    from .candidate_runtime import ProjectCandidateResolver
+    from .errors import ProjectStoreError
+    from .physical_projection import literal_project_root
+
+    selected = selected_source_resolver()
+    if isinstance(selected, ProjectCandidateResolver):
+        raise ProjectStoreError("A private candidate cannot identify the current host project root.")
+    if isinstance(selected, ProjectSourceResolver):
+        return literal_project_root(selected.store, original, generation=selected.generation)
+    return literal_source_path(original)
+
+
 def projected_runtime_directory(original: str | Path) -> Path:
     """Observe visible delivery bytes through an existing selected host cap.
 
