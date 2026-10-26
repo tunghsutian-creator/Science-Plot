@@ -647,8 +647,23 @@ def test_studio_project_registry_type_owner_adds_mypy_once(path: str) -> None:
     }.issubset(type_owner["pytest_targets"])
     commands = [check["command"] for check in payload["checks"]]
     assert commands.count([sys.executable, "-m", "mypy"]) == 1
+    # These three paths now enter the shared project admission boundary;
+    # the unchanged registry-state reader keeps only its earlier type gate.
+    admission_owners = {
+        "src/sciplot_core/studio_core/prepare_existing.py": "studio_project_preparation",
+        "src/sciplot_core/studio_core/registry_writes.py": "native_project_commands",
+        "src/sciplot_core/studio_core/studio_prepare.py": "studio_project_preparation",
+    }
+    admission_owner = admission_owners.get(path)
+    if admission_owner is not None:
+        assert payload["owners"][0]["owner_id"] == admission_owner
+        target = ("tests/test_native_project_commands.py" if admission_owner == "native_project_commands"
+                  else "tests/test_studio_preparation_candidate.py")
+        selected = next(check["command"] for check in payload["checks"]
+                        if check["check_id"] == "pytest_changed_owners")
+        assert target in selected
     assert payload["required_later"] == {
-        "handoff": [],
+        "handoff": ["doctor"] if admission_owner is not None else [],
         "final_milestone": ["smoke"],
         "release": ["acceptance_rules", "full_pytest"],
     }
@@ -660,13 +675,14 @@ def test_studio_project_registry_type_owner_adds_mypy_once(path: str) -> None:
         (
             "src/sciplot_core/studio_core/publish_inventory.py",
             [
+                "native_project_commands",
                 "generic_terminal_preparation",
                 "studio_figure_set_publication_type",
             ],
         ),
         (
             "src/sciplot_core/studio_core/request_paths.py",
-            ["studio_figure_set_publication_type"],
+            ["selected_project_runtime_io", "studio_figure_set_publication_type"],
         ),
         (
             "src/sciplot_core/studio_core/figure_set_publication_scope.py",
@@ -675,6 +691,7 @@ def test_studio_project_registry_type_owner_adds_mypy_once(path: str) -> None:
         (
             "src/sciplot_core/studio_core/publish_finalize.py",
             [
+                "native_project_commands",
                 "generic_terminal_preparation",
                 "studio_figure_set_publication_type",
             ],
@@ -682,6 +699,7 @@ def test_studio_project_registry_type_owner_adds_mypy_once(path: str) -> None:
         (
             "src/sciplot_core/studio_core/publish_run.py",
             [
+                "native_project_commands",
                 "generic_terminal_preparation",
                 "studio_figure_set_publication_type",
             ],
@@ -711,8 +729,18 @@ def test_studio_figure_set_publication_paths_add_mypy_once(
     assert payload["unowned_paths"] == []
     commands = [check["command"] for check in payload["checks"]]
     assert commands.count([sys.executable, "-m", "mypy"]) == 1
+    # Current publication/admitted IO owners precede the preserved type owner.
+    # The isolated figure-set scope helper remains a type-only boundary.
+    if "native_project_commands" in expected_owner_ids:
+        assert "tests/test_native_project_commands.py" in next(
+            check["command"] for check in payload["checks"]
+            if check["check_id"] == "pytest_changed_owners")
+    if "selected_project_runtime_io" in expected_owner_ids:
+        assert "tests/test_project_runtime_locations.py" in next(
+            check["command"] for check in payload["checks"]
+            if check["check_id"] == "pytest_changed_owners")
     assert payload["required_later"] == {
-        "handoff": [],
+        "handoff": [] if path.endswith("/figure_set_publication_scope.py") else ["doctor"],
         "final_milestone": ["smoke"],
         "release": ["acceptance_rules", "full_pytest"],
     }
@@ -900,8 +928,17 @@ def test_studio_figure_set_lifecycle_type_owner_adds_mypy_once(path: str) -> Non
     }.issubset(type_owner["pytest_targets"])
     commands = [check["command"] for check in payload["checks"]]
     assert commands.count([sys.executable, "-m", "mypy"]) == 1
+    project_preparation = path in {
+        "src/sciplot_core/studio_core/figure_set_prepare.py",
+        "src/sciplot_core/studio_core/prepare_generated_transaction.py",
+    }
+    if project_preparation:
+        assert payload["owners"][0]["owner_id"] == "studio_project_preparation"
+        assert "tests/test_studio_preparation_candidate.py" in next(
+            check["command"] for check in payload["checks"]
+            if check["check_id"] == "pytest_changed_owners")
     assert payload["required_later"] == {
-        "handoff": [],
+        "handoff": ["doctor"] if project_preparation else [],
         "final_milestone": ["smoke"],
         "release": ["acceptance_rules", "full_pytest"],
     }
@@ -916,7 +953,7 @@ def test_studio_figure_set_lifecycle_type_owner_adds_mypy_once(path: str) -> Non
         ),
         (
             "src/sciplot_core/studio_core/prepare_generated_transaction.py",
-            ["generic_terminal_preparation", "studio_figure_set_lifecycle_type"],
+            ["studio_project_preparation", "generic_terminal_preparation", "studio_figure_set_lifecycle_type"],
         ),
         (
             "src/sciplot_core/studio_core/figure_set_storage.py",
@@ -1062,7 +1099,23 @@ def test_stage49_adjacent_untyped_paths_do_not_add_execution_mypy(path: str) -> 
         owner["owner_id"] != "studio_figure_set_execution_type"
         for owner in payload["owners"]
     )
-    assert all(check["check_id"] != "mypy_owned_scope" for check in payload["checks"])
+    if path == "src/sciplot_core/studio_core/impact_series.py":
+        # This retained stage-49 case is now a strict scientific-locator producer.
+        # It must not regain the unrelated figure-set execution owner.
+        assert [owner["owner_id"] for owner in payload["owners"]] == [
+            "scientific_source_artifact_identity", "scientific_transaction_type_gate",
+        ]
+        assert path in SCIENTIFIC_TRANSACTION_TYPE_PATHS
+        commands = [check["command"] for check in payload["checks"]]
+        assert commands.count([sys.executable, "-m", "mypy"]) == 1
+        assert "tests/test_source_artifact_literals.py" in next(
+            check["command"] for check in payload["checks"]
+            if check["check_id"] == "pytest_changed_owners")
+        assert payload["required_later"] == {
+            "handoff": ["doctor"], "final_milestone": ["smoke"], "release": ["full_pytest"],
+        }
+    else:
+        assert all(check["check_id"] != "mypy_owned_scope" for check in payload["checks"])
 
 
 def test_mypy_scope_configuration_adds_mypy_once() -> None:
