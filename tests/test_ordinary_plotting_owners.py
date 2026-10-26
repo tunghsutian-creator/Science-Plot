@@ -242,6 +242,7 @@ SOURCE_LOCATOR_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/source_tables/raw_readers.py',
         'src/sciplot_core/studio_core/source_snapshots.py',
         'src/sciplot_core/veusz_worker/cli.py',
+        "src/sciplot_core/source_coverage/derivation.py",
     }
 )
 NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
@@ -303,6 +304,12 @@ RHEOLOGY_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/workflow/rheology_tts_creation_inputs.py',
         'src/sciplot_core/workflow/rheology_tts_delivery_files.py',
         'src/sciplot_core/workflow/rheology_tts_saved_state.py',
+        "src/sciplot_core/workflow/native_suite_legacy_publication.py",
+        "src/sciplot_core/workflow/native_suite_preview.py",
+        "src/sciplot_core/workflow/native_suite_storage.py",
+        "src/sciplot_core/workflow/rheology_tts_publication_recovery.py",
+        "src/sciplot_core/workflow/rheology_tts_style_update.py",
+        "src/sciplot_core/workflow/rheology_tts_suite.py",
     }
 )
 WORKFLOW_PROJECT_STRICT_ADDITIONS = frozenset(
@@ -325,6 +332,9 @@ SOURCE_ARTIFACT_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/studio_render/scalar_series.py",
         "src/sciplot_core/studio_core/series_request.py",
         "src/sciplot_core/studio_core/impact_series.py",
+        "src/sciplot_core/studio_render/series_options.py",
+        "src/sciplot_core/task_paper_publication.py",
+        "src/sciplot_core/task_paper_selection.py",
     }
 )
 VERIFICATION_PROJECT_CORE_STRICT_ADDITIONS = frozenset(

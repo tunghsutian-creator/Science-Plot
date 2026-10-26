@@ -74,6 +74,8 @@ PROJECT_RUNTIME_TESTS = (
     'tests/test_native_artifact_runtime.py',
     'tests/test_sealed_source_tree_runtime.py',
     'tests/test_current_directory_reader_sources.py',
+    "tests/test_native_audit_source_versions.py",
+    "tests/test_snapshot_consumer_source_versions.py",
 )
 
 PROJECT_COMMAND_TESTS = (
@@ -110,6 +112,9 @@ NATIVE_PROJECT_COMMAND_TESTS = (
     'tests/test_project_query_source_versions.py',
     'tests/test_native_edit_receipt_result.py',
     'tests/test_source_pending_native.py',
+    "tests/test_native_audit_source_versions.py",
+    "tests/test_project_publication_source_versions.py",
+    "tests/test_saved_project_export_route.py",
 )
 
 STUDIO_PREPARATION_TESTS = (
@@ -138,6 +143,8 @@ NATIVE_SUITE_COMMAND_TESTS = (
     'tests/test_native_suite_project_commands.py',
     'tests/test_native_suite_generation_projection.py',
     'tests/test_native_suite_recognition.py',
+    "tests/test_native_suite_dependency_guards.py",
+    "tests/test_native_suite_legacy_publication.py",
 )
 
 SCIENTIFIC_ARTIFACT_TESTS = (

@@ -48,7 +48,8 @@ CATEGORICAL_TESTS = (
     "tests/test_segmented_summary_legend.py",
     "tests/test_segmented_summary_legend_native.py",
     "tests/test_zero_sd_bar_outline.py",
-)
+        "tests/test_grouped_bar_mark_contract.py",
+    )
 CATEGORICAL_EDIT_TESTS = (
     "tests/test_categorical_display.py",
     "tests/test_categorical_display_failures.py",
@@ -246,6 +247,7 @@ CATEGORICAL_SOURCE_OWNER = ChangedOwner(
         "tests/test_column_choice.py",
         "tests/test_rendering_contract.py",
         *ARCHITECTURE_CORE_TARGETS,
+        "tests/test_grouped_bar_mark_contract.py",
     ),
     mypy_required=True,
     handoff_gates=("doctor",),

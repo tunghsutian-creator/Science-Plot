@@ -543,6 +543,16 @@ files = [
   "src/sciplot_core/semantic_sources/prepare_rheology.py",
   "src/sciplot_core/semantic_sources/rheology_sweep_sources.py",
   "src/sciplot_core/semantic_sources/rheology_sweep_domain.py",
+  "src/sciplot_core/source_coverage/derivation.py",
+  "src/sciplot_core/studio_render/series_options.py",
+  "src/sciplot_core/task_paper_publication.py",
+  "src/sciplot_core/task_paper_selection.py",
+  "src/sciplot_core/workflow/native_suite_legacy_publication.py",
+  "src/sciplot_core/workflow/native_suite_preview.py",
+  "src/sciplot_core/workflow/native_suite_storage.py",
+  "src/sciplot_core/workflow/rheology_tts_publication_recovery.py",
+  "src/sciplot_core/workflow/rheology_tts_style_update.py",
+  "src/sciplot_core/workflow/rheology_tts_suite.py",
 ]
 mypy_path = "src"
 explicit_package_bases = true
