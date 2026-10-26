@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import stat
 from copy import deepcopy
 from pathlib import Path
 
@@ -197,7 +198,12 @@ def test_changed_preview_inputs_cannot_be_adopted(recoverable, changed):
     }
     paths[changed].write_bytes(paths[changed].read_bytes() + b"\n ")
     before = document.read_bytes(), candidate.read_bytes()
-    with pytest.raises(ValueError, match="stale or modified"):
+    reason = (
+        "^The canonical request differs from its admitted generation; external roots were not selected$"
+        if changed == "request"
+        else "stale or modified"
+    )
+    with pytest.raises(ValueError, match=reason):
         recovery.apply_delivery_recovery(project, preview)
     assert (document.read_bytes(), candidate.read_bytes()) == before
     assert not (project / ".recovery").exists()
@@ -234,15 +240,31 @@ def test_recovery_only_accepts_bound_primary_and_unchanged_sources(recoverable):
     assert not (project / ".recovery").exists()
 
 
-@pytest.mark.parametrize("after_replace", ["before_head", "before_projection", "after_projection"])
+@pytest.mark.parametrize("after_replace", ["before_head", "before_projection", "after_projection", "target_missing"])
 def test_recovery_replacement_failure_preserves_both_versions(recoverable, monkeypatch, after_replace):
+    from sciplot_core.project_store import ProjectRecoveryRequired
     from sciplot_core.project_store import state
     from sciplot_core.studio_core.project_command_scope import project_store
     project, document, candidate = recoverable
     preview = recovery.preview_delivery_recovery(project)
     before = document.read_bytes(), candidate.read_bytes()
+    original_mode = stat.S_IMODE(document.stat().st_mode)
+    repository = project_store(project)
+    record = repository.query(preview["command_key"])
+    assert record is not None
+    archive = Path(record["artifact_paths"]["before.vsz"])
+    frozen_candidate = Path(record["staged_paths"]["studio/document.vsz"])
+    assert archive.read_bytes() == before[0]
+    assert frozen_candidate.read_bytes() == before[1]
+    archive_mode = stat.S_IMODE(archive.stat().st_mode)
+    head_path = project / ".sciplot_store" / "head.json"
+    initial_head = head_path.read_bytes()
+    monkeypatch.setattr(recovery, "_audit_candidate", lambda *_args: pytest.fail("frozen recovery must not rerun native audit"))
     boundary = state.boundary
     def fail(name):
+        if after_replace == "target_missing" and name == "after_head":
+            document.unlink()
+            raise OSError("injected replacement failure")
         if name == after_replace:
             raise OSError("injected replacement failure")
         boundary(name)
@@ -250,14 +272,39 @@ def test_recovery_replacement_failure_preserves_both_versions(recoverable, monke
     with pytest.raises(OSError, match="injected replacement failure"):
         recovery.apply_delivery_recovery(project, preview)
     assert candidate.read_bytes() == before[1]
-    if after_replace != "after_projection":
+    if after_replace not in {"after_projection", "target_missing"}:
         assert document.read_bytes() == before[0]
     assert not list(document.parent.glob(".document.delivery-*"))
     monkeypatch.setattr(state, "boundary", boundary)
-    project_store(project).recover()
+    if after_replace == "target_missing":
+        assert not document.exists()
+        committed_head = head_path.read_bytes()
+        assert committed_head != initial_head
+        pending = repository.query(preview["command_key"])
+        assert pending is not None
+        assert pending["phase"] != "complete"
+        assert pending["committed_generation"] == json.loads(committed_head)["generation"]
+        with pytest.raises(ProjectRecoveryRequired, match="Outside bytes prevent generation recovery"):
+            repository.recover()
+        assert not document.exists()
+        assert head_path.read_bytes() == committed_head
+        assert candidate.read_bytes() == frozen_candidate.read_bytes() == before[1]
+        assert archive.read_bytes() == before[0]
+        assert stat.S_IMODE(archive.stat().st_mode) == archive_mode
+        # Only this test's synthetic, exact old preimage is explicitly restored.
+        # A missing active target is not permission to roll back a committed head.
+        document.write_bytes(before[0])
+        document.chmod(original_mode)
+        assert (document.read_bytes(), stat.S_IMODE(document.stat().st_mode)) == (before[0], original_mode)
+    repository.recover()
     result = recovery.apply_delivery_recovery(project, preview)
     assert document.read_bytes() == candidate.read_bytes() == before[1]
     assert Path(result["archive"]).read_bytes() == before[0]
+    assert archive.read_bytes() == before[0]
+    assert frozen_candidate.read_bytes() == before[1]
+    if after_replace == "target_missing":
+        assert head_path.read_bytes() == committed_head
+        assert result["project_command"]["generation"] == json.loads(committed_head)["generation"]
 
 
 def test_recovery_rejects_an_unbound_or_multiple_document_delivery(recoverable):
