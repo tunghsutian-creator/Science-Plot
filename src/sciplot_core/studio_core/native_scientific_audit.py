@@ -67,4 +67,3 @@ def audit_edited_document(
         raise ValueError("The observed native document changed during its exact scientific audit")
     return {**audit, "document_sha256": native_digest,
             "spec_sha256": hashlib.sha256(specification).hexdigest()}
-

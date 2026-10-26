@@ -160,5 +160,3 @@ def prepare_studio_export_run(
         delivery_dir=delivery_dir,
         delivery_root=delivery_root,
     )
-
-

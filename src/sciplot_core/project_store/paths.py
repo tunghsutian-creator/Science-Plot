@@ -131,4 +131,3 @@ def literal_path(store: LocatorStore, actual: Path, *, generation: str | None = 
                         raise ProjectConflict("The resolved source view changed.")
                     return str(entry["locator"])
         raise ProjectStoreError("The actual path has no exact preserved locator in this generation.")
-

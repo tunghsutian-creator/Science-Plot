@@ -88,4 +88,3 @@ def _publish_reviewed_exports(context: dict[str, Any], parent: dict[str, Any], c
         _check_sources(manifest["sources"])
         return mutation(store, updates, {"status": "ready", "exports": receipt["exports"]}, sources=manifest["sources"])
     return app.execute(command, prepare)
-

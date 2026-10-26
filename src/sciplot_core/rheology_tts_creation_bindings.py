@@ -42,4 +42,3 @@ def _context(spec: dict[str, Any], out: Path) -> tuple[list[str], list[dict[str,
     bindings = [{"out": _literal(out), "plan_sha256": plan_sha, "figure_id": identifier}
                 for identifier in identifiers]
     return identifiers, bindings, [_sidecar(spec, figure) for figure in spec["figures"]]
-

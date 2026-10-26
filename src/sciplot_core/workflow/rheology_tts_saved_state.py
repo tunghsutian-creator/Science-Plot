@@ -96,4 +96,3 @@ def _compiled_figures(manifest: dict[str, Any], *, figure_ids: tuple[str, ...] |
     if set(by_id) != selected:
         raise ValueError("Saved document identities disagree with compiled figure receipts.")
     return by_id
-

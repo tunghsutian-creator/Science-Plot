@@ -163,4 +163,3 @@ def project_store(project: Path, *, create_delivery: bool = False, with_snapshot
                 existing.path if existing is not None else project.parent, tuple(sorted(members)))
             repository = FileProjectStore(project, locations=selected_locations)
     return repository
-

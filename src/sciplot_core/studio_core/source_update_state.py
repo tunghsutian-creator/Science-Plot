@@ -39,5 +39,3 @@ def _applied_result(
         "ready_to_use": False,
         "next_action": "save_and_export",
     }
-
-

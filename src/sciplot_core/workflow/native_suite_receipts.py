@@ -132,4 +132,3 @@ def _public_current(context: dict[str, Any], record: dict[str, Any], *, replayed
                       next_step={"action": "plot.resume", "plot": context["plot"],
                                  "request": {key: saved["request"][key] for key in ("plot_id", "base_revision", "idempotency_key")}})
     return result
-

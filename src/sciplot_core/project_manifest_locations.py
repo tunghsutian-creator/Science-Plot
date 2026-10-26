@@ -85,4 +85,3 @@ def admitted_intake_manifest(project: Path, *, initial: dict[str, Any] | None = 
                 raise ValueError("The project manifest must be an object.")
             return value
     return None
-

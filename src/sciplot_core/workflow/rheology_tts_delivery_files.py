@@ -96,4 +96,3 @@ def _publish(stage: Path, delivery: Path, spec: dict[str, Any], native_result: d
         documents.append({"id": identifier, "path": str(native), "sha256": _sha(native), "exports": files})
         _launcher(delivery / "editable" / f"Open_{identifier}.command", ["studio", str(native)])
     return documents
-

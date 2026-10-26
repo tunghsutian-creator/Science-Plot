@@ -63,4 +63,3 @@ def _admit_wire_before_runtime(operation: str) -> Callable[[NativeHandler], Nati
             return function(target, value)
         return wrapped
     return decorate
-

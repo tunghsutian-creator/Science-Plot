@@ -7,4 +7,3 @@ def canonical_path(value: Path) -> Path:
     if any(member.is_symlink() for member in (path, *path.parents)):
         raise ValueError(f"Managed project queries cannot follow a symlink: {path}")
     return path.resolve()
-

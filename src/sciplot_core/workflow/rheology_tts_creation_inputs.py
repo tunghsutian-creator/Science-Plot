@@ -38,4 +38,3 @@ def _creation_binding(request: dict[str, Any], spec: dict[str, Any], compiled: d
         "prepared_input": {k: spec["source_binding"]["prepared_plan"][k] for k in ("path", "sha256")},
         "sources": spec["source_binding"]["sources"], "contract_sha256": contract_sha256,
         "compiled_sha256": canonical_json_sha256(compiled), "figure_ids": [f["id"] for f in compiled["figures"]]}
-

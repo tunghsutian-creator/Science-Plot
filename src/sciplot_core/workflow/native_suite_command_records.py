@@ -26,4 +26,3 @@ def _preview_export(app: ProjectCommands, parent: dict[str, Any]) -> dict[str, A
                and item["metadata"]["request"].get("parent") == parent["command_digest"]
                and item["phase"] == "complete"]
     return records[-1] if records else None
-

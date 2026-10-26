@@ -106,4 +106,3 @@ def _finish_saved_exports(store: Any, parent: Any, workspace: Path, sources: lis
             _seal_native_fact(store, parent, compiled, out, result, sources)
             return mutation(store, {}, {"export_status": "completed", "native_command": parent.key}, sources=sources)
         app.execute(command, prepare)
-

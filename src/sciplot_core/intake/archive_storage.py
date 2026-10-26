@@ -63,5 +63,3 @@ def _write_zip_snapshot_unlocked(project_root: Path, zip_path: Path) -> None:
         payload = {**payload, "project_slug": target.stem}
         data = _stage_snapshot(store, payload, {})
         publish_files(store, {"@snapshot/" + target.name: data}, kind="publish", result={"zip": str(target)})
-
-

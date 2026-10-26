@@ -202,4 +202,3 @@ def check_prepared_continuation(request_path: Path, request: dict[str, Any], spe
     else:
         check_native_continuation(compiled, workspace / "initial_render")
     return checkpoint
-

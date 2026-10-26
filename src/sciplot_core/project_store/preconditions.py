@@ -103,5 +103,3 @@ def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, 
             for entry in (before, after):
                 if projection_digest(io.get(entry), kind=item["kind"], key=item["key"]) != item["sha256"]:
                     raise ProjectConflict("The selected project membership or source projection changed.")
-
-

@@ -55,5 +55,3 @@ def relocate_metadata(value: Any, source: Path, target: Path) -> Any:
     ):
         return str(target / Path(value).relative_to(source))
     return value
-
-

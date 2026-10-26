@@ -62,4 +62,3 @@ def creation_inventory(workspace: Path, delivery: Path, native: dict[str, Any],
             if expected[visible] != exported["sha256"]:
                 raise ValueError("Visible export bytes differ from the exact audited export.")
     return expected
-

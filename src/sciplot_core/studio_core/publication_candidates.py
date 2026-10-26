@@ -36,5 +36,3 @@ def _stage_tree(root: Path, destination: str, writes: dict[str, bytes | Path | P
                 content = content.replace(str(old), str(new))
             path.write_text(content, encoding="utf-8")
         writes[(destination + "/" if destination else "") + path.relative_to(root).as_posix()] = path
-
-
