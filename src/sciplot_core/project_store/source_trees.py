@@ -36,7 +36,8 @@ def _selected(io: StoreIO, current: dict[str, Any], locator: str) -> tuple[str, 
     return matches[0] if matches else (locator, None)
 
 
-def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *, admit: bool = False) -> None:
+def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
+            admit: bool = False, _live: bool = False) -> None:
     values = record.get("metadata", {}).get("source_trees", [])
     if not isinstance(values, list):
         raise ProjectStoreError("Source trees require closed selected-source read witnesses.")
@@ -52,7 +53,7 @@ def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *, adm
         if not isinstance(locator, str) or locator in seen:
             raise ProjectStoreError("Source-tree reads require distinct canonical source locators.")
         seen.add(locator)
-        if not admit and record.get("draft") is not None:
+        if not admit and not _live and record.get("draft") is not None:
             from .prepared_inputs import tree_path
 
             if tree_path(io, current, record, locator=locator, tree_sha256=guard.tree_sha256) is not None:

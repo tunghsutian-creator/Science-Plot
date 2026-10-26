@@ -131,7 +131,7 @@ def current_preparation_runtime(store: FileProjectStore, snapshot: dict[str, Any
         mode = _current_external_scope(store, snapshot, expectations) if expectations else "incoming"
         if trees:
             mode = "sealed"
-        if mode == "sealed" and source is not None and files and literal not in files:
+        if source is not None and files and literal not in files:
             expected = (request.get("resolved_figure_plan") or {}).get("source_sha256")
             if not isinstance(expected, str):
                 raise ProjectConflict("The current source directory lacks its explicit complete composite version.")
@@ -144,8 +144,8 @@ def current_preparation_runtime(store: FileProjectStore, snapshot: dict[str, Any
                     or existing.get("trees", []) != [item.to_payload() for item in trees]):
                 raise ProjectConflict("Ordinary preparation cannot replace a different explicit source selection.")
         context = (nullcontext() if existing is not None or not (expectations or trees) else
-                   sealed_source_runtime(store, expectations, generation=generation, trees=trees) if mode == "sealed" or trees else
-                   incoming_source_runtime(store, expectations, generation=generation))
+                   sealed_source_runtime(store, expectations, generation=generation, trees=trees) if mode == "sealed" else
+                   incoming_source_runtime(store, expectations, generation=generation, trees=trees))
         with context:
             def verify() -> None:
                 if source is not None and files:

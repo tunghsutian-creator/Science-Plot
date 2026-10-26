@@ -84,8 +84,8 @@ def expectation_payload(value: Any) -> tuple[SourceReadMode, tuple[SourceExpecta
         raise ProjectStoreError("Invalid finite source expectation capability.")
     mode: SourceReadMode = "incoming" if value["mode"] == "incoming" else "sealed"
     trees = expectation_trees(value)
-    if not (value["sources"] or trees) or mode != "sealed" and trees:
-        raise ProjectStoreError("Complete imported tree witnesses belong only to the existing sealed source scope.")
+    if not (value["sources"] or trees):
+        raise ProjectStoreError("A source scope requires explicit file or complete tree witnesses.")
     return mode, tuple(SourceExpectation.from_payload(item) for item in value["sources"])
 
 
@@ -101,13 +101,16 @@ def source_expectation_scope(snapshot: dict[str, Any], mode: SourceReadMode,
             or len({item.literal for item in frozen}) != len(frozen)):
         raise ProjectStoreError("Source expectations must be finite and unambiguous by exact literal.")
     if (any(not isinstance(item, SealedSourceTree) for item in sealed_trees)
-            or sealed_trees and (mode != "sealed" or store is None)
+            or sealed_trees and store is None
             or len({item.tree.locator for item in sealed_trees}) != len(sealed_trees)
             or {item.tree.locator for item in sealed_trees} & {item.literal for item in frozen}):
-        raise ProjectStoreError("Sealed complete trees need one explicit store and unambiguous typed roots.")
+        raise ProjectStoreError("Complete trees need one explicit store and unambiguous typed roots.")
     for tree in sealed_trees:
         assert store is not None
-        tree.view(store)
+        if mode == "sealed":
+            tree.view(store)
+        else:
+            tree.live(store, generation=snapshot["generation"])
     for item in frozen:
         identities = {identity for identity, versions in snapshot["sources"].items()
                       if any(entry.get("locator") == item.literal for entry in versions.values())}
@@ -161,7 +164,8 @@ def resolve_expected_source(store: FileProjectStore, snapshot: dict[str, Any], o
     literal = str(original)
     matched = next((item for item in sources if item.literal == literal), None)
     if matched is None:
-        tree = resolve_tree_view(store, expectation_trees(payload), original, expected_sha256=expected_sha256)
+        tree = resolve_tree_view(store, expectation_trees(payload), original, expected_sha256=expected_sha256,
+                                 sealed=mode == "sealed", generation=snapshot["generation"])
         if tree is None:
             return None
         actual, origin, root = tree
@@ -200,7 +204,8 @@ def selected_sealed_view(store: FileProjectStore, snapshot: dict[str, Any], actu
 
 def literal_sealed_tree(store: FileProjectStore, snapshot: dict[str, Any], actual: Path) -> str | None:
     payload = selected_expectations(snapshot)
-    if payload is None or payload["mode"] != "sealed":
+    if payload is None:
         return None
-    tree = resolve_tree_view(store, expectation_trees(payload), actual)
+    tree = resolve_tree_view(store, expectation_trees(payload), actual,
+                             sealed=payload["mode"] == "sealed", generation=snapshot["generation"])
     return tree[1] if tree is not None else None

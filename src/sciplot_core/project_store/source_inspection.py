@@ -1,6 +1,7 @@
 """Observe pinned source facts without creating filesystem source views."""
 from dataclasses import dataclass
 import os
+import stat
 from pathlib import Path
 from collections.abc import Set
 from typing import Any
@@ -13,6 +14,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from .paths import LocatorStore
 from .root_bindings import require as require_roots
 from .source_tree_io import observe
+from .repository import FileProjectStore
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,35 @@ def inspect_invocation_file(store: LocatorStore, original: str | Path, *, expect
         if tree and fact is None and _scoped_parent(value, literal):
             raise ProjectStoreError("Invocation file scope cannot be replaced by the parent source directory.")
         return fact
+
+
+def inspect_invocation_tree(store: FileProjectStore, original: str | Path, *,
+                            generation: str | None = None, allowed: Set[str] | None = None) -> str | None:
+    """Only a declared whole-tree witness can expose its complete namespace."""
+    with store._locked() as (io, current):
+        value = state.reachable(io, current, generation) if generation else current
+        require_roots(io, current)
+        payload = selected_expectations(value)
+        if payload is None:
+            return None
+        mode, _sources = expectation_payload(payload)
+        literal = Path(original).expanduser().absolute()
+        for item in expectation_trees(payload):
+            actual = item.view(store) if mode == "sealed" else item.live(store, generation=value["generation"])
+            if literal not in {Path(item.tree.locator), actual}:
+                continue
+            # live()/view() already verified the exact admitted origin or bound
+            # imported census. Its sealed member facts also include empty dirs;
+            # a file-only caller must match the entire ordinary file set.
+            record = state.command(io, item.command_id, item.command_digest)
+            if record is None:
+                raise ProjectConflict("The complete tree lost its exact admitted command.")
+            proof = state.sealed_draft(io, record)["source_tree_origins"][item.tree.locator]
+            members = {name for name, entry in proof["members"].items() if stat.S_ISREG(entry["mode"])}
+            if allowed is not None and set(allowed) != members:
+                raise ProjectConflict("The requested complete tree differs from its exact admitted member set.")
+            return item.tree.tree_sha256
+        return None
 
 
 def physical_file(path: Path, expected_sha256: str | None = None) -> SourceFileObservation:

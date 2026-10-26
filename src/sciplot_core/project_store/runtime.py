@@ -30,9 +30,10 @@ def _source_runtime(store: FileProjectStore, sources: Sequence[SourceExpectation
 
 
 def incoming_source_runtime(store: FileProjectStore, sources: Sequence[SourceExpectation], *,
-                            generation: str | None = None) -> AbstractContextManager[ProjectSourceResolver]:
+                            generation: str | None = None,
+                            trees: Sequence[SealedSourceTree] = ()) -> AbstractContextManager[ProjectSourceResolver]:
     """Trusted host's explicit incoming version; no stored source version changes."""
-    return _source_runtime(store, sources, "incoming", generation)
+    return _source_runtime(store, sources, "incoming", generation, trees)
 
 
 def sealed_source_runtime(store: FileProjectStore, sources: Sequence[SourceExpectation], *,
@@ -121,12 +122,15 @@ def inspect_runtime_source_file(original: str | Path, *, expected_sha256: str | 
 def inspect_runtime_source_tree(original: str | Path, *, allowed: set[str] | None = None) -> str:
     """Observe a complete current namespace without resolving a cached view."""
     from .candidate_runtime import ProjectCandidateResolver
-    from .source_inspection import inspect_tree, inspect_invocation_file
+    from .source_inspection import inspect_tree, inspect_invocation_file, inspect_invocation_tree
     from .source_tree_io import observe
     from .io import digest
 
     selected = selected_source_resolver()
     if isinstance(selected, ProjectSourceResolver):
+        whole = inspect_invocation_tree(selected.store, original, generation=selected.generation, allowed=allowed)
+        if whole is not None:
+            return whole
         explicit = inspect_invocation_file(selected.store, original, generation=selected.generation, tree=True)
         if explicit is not None:
             return digest({"kind": "file", "content_sha256": explicit.sha256})
