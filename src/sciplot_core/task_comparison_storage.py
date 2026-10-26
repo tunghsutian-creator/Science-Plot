@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from hashlib import sha256
 import json
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.studio_core.document_edit_review import verified_document_edit_review
 from sciplot_core.studio_core.document_edit_state import check_artifact, preview_identity
+from sciplot_core.studio_core.project_command_scope import project_store
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_comparison_contract import candidate_request, comparison_request_schema
 from sciplot_core.task_contract import TaskControlError
@@ -56,14 +59,31 @@ def candidate_review(root: Path, state: dict[str, Any], item: dict[str, Any], ch
     if not isinstance(review, dict):
         raise TaskControlError("comparison_preview_changed", "候选预览记录不是完整对象。")
     signed = {k: v for k, v in review.items() if k != "review_path"}
-    if (signed.get("kind") != "sciplot_document_edit_preview" or signed.get("version") != 2 or signed.get("status") != "ready"
-            or signed.get("operation_id") != preview_identity(signed)
+    if (signed.get("kind") != "sciplot_document_edit_preview" or signed.get("status") != "ready"
             or signed.get("operation_id") != child.get("operation_id")
-            or signed.get("base_state") != state["baseline"]
             or signed.get("project") != state["request"]["project"]
             or signed.get("figure_id") != state["request"]["figure_id"]
             or signed.get("document_sha256") != state["request"]["expected_document_sha256"]
             or signed.get("scientific_audit", {}).get("status") != "passed"):
+        raise TaskControlError("comparison_preview_changed", "候选不再对应本次比较的原始基准。")
+    if type(signed.get("version")) is int and signed["version"] == 3:
+        verified, record = verified_document_edit_review(Path(state["request"]["project"]), signed)
+        if record["phase"] == "rejected" and child.get("edit_outcome", {}).get("status") != "unchanged":
+            raise TaskControlError("comparison_preview_changed", "已拒绝的候选不能被本次比较采用。")
+        baseline = state["baseline"]["project_files"]
+        if any(baseline.get(name) != digest or digest is None for name, digest in record["read_set"].items()):
+            raise TaskControlError("comparison_preview_changed", "候选读取的版本不属于本次比较的原始基准。")
+        store = project_store(Path(state["request"]["project"]))
+        for value in record["metadata"].get("projected_reads", []):
+            # The selected projection was captured from this complete baseline,
+            # even though a later unrelated figure may use a different head.
+            data = store.read_bytes(value["resource"], generation=record["generation"])
+            if sha256(data).hexdigest() != baseline.get(value["resource"]):
+                raise TaskControlError("comparison_preview_changed", "候选的图集成员基准已变化。")
+        return verified
+    if (type(signed.get("version")) is not int or signed["version"] != 2
+            or signed.get("operation_id") != preview_identity(signed)
+            or signed.get("base_state") != state["baseline"]):
         raise TaskControlError("comparison_preview_changed", "候选不再对应本次比较的原始基准。")
     for key in ("preview", "candidate", "candidate_spec"):
         if key in signed:

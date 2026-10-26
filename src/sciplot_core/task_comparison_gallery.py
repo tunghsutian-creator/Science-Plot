@@ -2,12 +2,50 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.studio_core.document_edit_review import verified_document_edit_review
+from sciplot_core.studio_core.project_command_scope import project_store
+from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_review_html import badge, copy_field, evidence_panel, image_href, image_link, text, write_page
+
+
+def _sealed_images(root: Path, result: dict[str, Any]) -> dict[str, str]:
+    """Embed only the exact Store-owned PNG, never an arbitrary off-root path."""
+    images = {}
+    for entry in result["candidates"]:
+        preview = entry.get("preview")
+        if not preview or canonical_path(Path(preview["path"])).is_relative_to(root):
+            continue
+        project = Path(result["project"])
+        review_path = canonical_path(root / "candidates" / entry["id"] / "review.json")
+        supplied = json.loads(review_path.read_text())
+        verified, record = verified_document_edit_review(project, supplied)
+        if entry["operation_id"] != record["command_id"] or preview != verified["preview"]:
+            raise ValueError("The comparison PNG differs from its exact sealed native review")
+        store = project_store(project)
+        with store._locked() as (io, _current):
+            data = io.get(record["draft"]["artifacts"]["candidate.png"])
+        if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise ValueError("The sealed native preview is not a PNG image")
+        images[preview["path"]] = "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+    return images
+
+
+def _image_href(root: Path, preview: dict[str, Any], images: dict[str, str]) -> str:
+    return images[preview["path"]] if preview["path"] in images else image_href(root, preview)
+
+
+def _image_link(root: Path, preview: dict[str, Any] | None, label: str, images: dict[str, str]) -> str:
+    if not preview or preview["path"] not in images:
+        return image_link(root, preview, label)
+    href = text(images[preview["path"]])
+    return (f'<a class="image" href="{href}" data-zoom aria-label="查看大图：{text(label)}">'
+            f'<img loading="lazy" src="{href}" alt="{text(label)}"></a>')
 
 
 def _value(value: Any) -> str:
@@ -38,7 +76,7 @@ def _selection_note(result: dict[str, Any], entry: dict[str, Any]) -> str:
             f'预期比较标识：{result["comparison_id"]}\n若已变化，请先展示当前状态，不要套用旧选择。')
 
 
-def _card(root: Path, result: dict[str, Any], entry: dict[str, Any]) -> str:
+def _card(root: Path, result: dict[str, Any], entry: dict[str, Any], images: dict[str, str]) -> str:
     selected = result.get("selection", {}).get("candidate_id") == entry["id"]
     historical = "selection" in result or result["status"] == "complete" or result.get("baseline_current") is False
     identifier = 'comparison-' + canonical_json_sha256(entry["id"])[:20]
@@ -51,7 +89,7 @@ def _card(root: Path, result: dict[str, Any], entry: dict[str, Any]) -> str:
     if selected:
         label = "当时保留原图" if entry["id"] == "baseline" and result["status"] == "complete" else (
             "当时采用" if result["status"] == "complete" else "已锁定选择 · 待完成")
-    body = [image_link(root, entry.get("preview"), entry["label"])]
+    body = [_image_link(root, entry.get("preview"), entry["label"], images)]
     if entry.get("rationale"):
         body.append(f'<p>{text(entry["rationale"])}</p>')
     if entry.get("error"):
@@ -70,15 +108,15 @@ def _card(root: Path, result: dict[str, Any], entry: dict[str, Any]) -> str:
             f'{"".join(body)}</article>')
 
 
-def _compare_view(root: Path, result: dict[str, Any]) -> str:
+def _compare_view(root: Path, result: dict[str, Any], images: dict[str, str]) -> str:
     candidates = [entry for entry in result["candidates"] if entry.get("preview")]
     if not result["baseline"].get("preview") or not candidates:
         return ""
-    options = ''.join(f'<option value="{text(entry["id"])}" data-image="{text(image_href(root, entry["preview"]))}">{text(entry["label"])}</option>' for entry in candidates)
+    options = ''.join(f'<option value="{text(entry["id"])}" data-image="{text(_image_href(root, entry["preview"], images))}">{text(entry["label"])}</option>' for entry in candidates)
     return ('<section class="compare-view" id="compare-view" hidden aria-labelledby="compare-title"><div class="toolbar">'
             '<h2 id="compare-title" tabindex="-1">并排比较</h2><label>查看候选<select id="candidate-picker">' + options + '</select></label>'
             '<button type="button" id="close-compare">收起并排比较</button></div><div class="pair">'
-            '<div><h3>比较时的原图</h3>' + image_link(root, result["baseline"]["preview"], "比较时的原图") + '</div>'
+            '<div><h3>比较时的原图</h3>' + _image_link(root, result["baseline"]["preview"], "比较时的原图", images) + '</div>'
             '<div><h3 id="pair-label"></h3><a class="image" id="pair-link" data-zoom><img id="pair-image" alt=""></a></div>'
             '</div><p class="muted">两侧均为比较时的预览，使用相同查看区域；选择下拉项只切换展示。</p></section>')
 
@@ -113,6 +151,7 @@ def _current_state(result: dict[str, Any]) -> str:
 
 
 def write_comparison_gallery(root: Path, result: dict[str, Any]) -> str:
+    images = _sealed_images(root, result)
     selected = result.get("selection", {}).get("candidate_id")
     message = "查看候选与差异。确定后展开并复制选择说明，交给 AI 继续；复制说明不会应用修改。"
     if selected:
@@ -121,8 +160,8 @@ def write_comparison_gallery(root: Path, result: dict[str, Any]) -> str:
         message = result["blocker"]["message"]
     elif not result.get("can_select"):
         message = "当前比较尚不可选择，请让 AI 查询并处理未完成的步骤。"
-    cards = ''.join(_card(root, result, entry) for entry in [result["baseline"], *result["candidates"]])
+    cards = ''.join(_card(root, result, entry, images) for entry in [result["baseline"], *result["candidates"]])
     return write_page(root, title=result["title"], kind="方案比较", intro=message,
                       queried_at=result["queried_at"], record="comparison.json",
                       content=f'<p class="summary-line">1 张原图 · {len(result["candidates"])} 个候选 · 比较快照</p>'
-                      + _current_state(result) + _compare_view(root, result) + '<div class="grid comparison-grid">' + cards + '</div>')
+                      + _current_state(result) + _compare_view(root, result, images) + '<div class="grid comparison-grid">' + cards + '</div>')

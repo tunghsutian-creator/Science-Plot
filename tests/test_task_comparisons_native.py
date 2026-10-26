@@ -11,6 +11,7 @@ import pytest
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.studio_core.document_edit_state import edit_state
+from sciplot_core.studio_core.document_edit_review import verified_document_edit_review
 from sciplot_core.task_storage import load_task
 from test_sample_style_presets_native import cli, task
 
@@ -44,7 +45,9 @@ def test_compare_native_alternatives_from_one_baseline_then_select_only_one(tmp_
         assert edit_state(project) == before
         for candidate in result['candidates']:
             review = json.loads(Path(candidate['review_path']).read_text())
-            assert review['base_state'] == before and review['document_sha256'] == figure['document_sha256']
+            verified, record = verified_document_edit_review(project, review)
+            assert all(before['project_files'][name] == digest for name, digest in record['read_set'].items())
+            assert verified['document_sha256'] == figure['document_sha256']
         return {'candidate_id': 'b', 'expected_comparison_id': result['comparison_id']}
 
     if transport == 'cli':
