@@ -32,7 +32,7 @@ def categorical_replicate_evidence(source: Path, binding: dict[str, Any]) -> dic
                 "source_columns": [value["index"]],
                 "missing_cells": [[cell["row_index"], cell["column_index"]] for cell in missing],
                 "data_start_row": selection["data_start_row"], "data_end_row": selection["data_end_row"]})
-    return {"version": 1, "source_sha256": source_tree_sha256(source),
+    return {"version": 1, "source_sha256": source_tree_sha256(source, expected_file_sha256=binding["source_sha256"]),
             "original_source": str(source.resolve()), "groups": groups}
 
 

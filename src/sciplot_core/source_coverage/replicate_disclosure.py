@@ -24,15 +24,20 @@ def verify_replicate_summary_request(request: dict[str, Any]) -> dict[str, Any] 
     if not isinstance(value, str) or not value.strip():
         raise ValueError("Replicate disclosure requires its explicit original source input, independent of prepared tables.")
     source = Path(value).expanduser().resolve()
-    snapshot = _stable_file_snapshot(source, label="original replicate disclosure source")
+    expected_file_sha256 = None
     if categorical:
-        from sciplot_core.categorical_disclosure import categorical_disclosure
         from sciplot_core.mapping_contract.categorical import validate_categorical_context
 
         validate_categorical_context(request)
-        binding = request["categorical_binding"]
         if Path(str(request.get("input", ""))).expanduser().resolve() != source:
             raise ValueError("Categorical disclosure source differs from its bound original table input.")
+        expected_file_sha256 = request["categorical_binding"]["source_sha256"]
+    snapshot = (_stable_file_snapshot(source, label="original replicate disclosure source")
+                if expected_file_sha256 is None else _stable_file_snapshot(
+                    source, label="original replicate disclosure source", expected_sha256=expected_file_sha256))
+    if categorical:
+        from sciplot_core.categorical_disclosure import categorical_disclosure
+        binding = request["categorical_binding"]
         if binding["mode"] != "mean_sample_sd_n":
             raise ValueError("Categorical valid-n disclosure requires its explicit replicate-summary mode.")
         disclosure = categorical_disclosure(source, binding, policy=declaration.get("missing_values"))
@@ -42,7 +47,7 @@ def verify_replicate_summary_request(request: dict[str, Any]) -> dict[str, Any] 
         from sciplot_core.semantic_sources.impact_replicate_disclosure import validate_replicate_disclosure
 
         disclosure = validate_replicate_disclosure(source, declaration)
-    _assert_snapshot_current(snapshot, label="original replicate disclosure source")
+    _assert_snapshot_current(snapshot, label="original replicate disclosure source", expected_sha256=snapshot["sha256"])
     return {"status": "passed", "original_source": str(source),
             "source_file_sha256": snapshot["sha256"], "source_sha256": disclosure["source_sha256"],
             "disclosure_sha256": canonical_json_sha256(disclosure, allow_nan=False)}
@@ -80,4 +85,4 @@ def verify_published_replicate_disclosures(request: dict[str, Any], documents: l
                 or canonical_json_sha256(source_request.get("replicate_summary_disclosure"), allow_nan=False) != canonical_json_sha256(request.get("replicate_summary_disclosure"), allow_nan=False)):
             raise ValueError("Replicate specification disclosure differs from the canonical publication request.")
         verify_replicate_summary_request(source_request)
-        _assert_snapshot_current(snapshot, label="replicate publication spec")
+        _assert_snapshot_current(snapshot, label="replicate publication spec", expected_sha256=snapshot["sha256"])

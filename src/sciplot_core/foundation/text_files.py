@@ -5,8 +5,9 @@ from pathlib import Path
 from sciplot_core.foundation.text_decoding import decode_text_file
 
 
-def decode_text(path: Path) -> str:
-    return decode_text_file(path)
+def decode_text(path: Path, *, expected_sha256: str | None = None) -> str:
+    return (decode_text_file(path) if expected_sha256 is None else
+            decode_text_file(path, expected_sha256=expected_sha256))
 
 
 class suppress_decode:

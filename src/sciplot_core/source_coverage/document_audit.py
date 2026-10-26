@@ -39,8 +39,8 @@ def _audit_exact_document_data(
         spec_path,
         label="Veusz specification",
     )
-    _assert_snapshot_current(document_snapshot, label="Veusz document")
-    _assert_snapshot_current(spec_snapshot, label="Veusz specification")
+    _assert_snapshot_current(document_snapshot, label="Veusz document", expected_sha256=document_snapshot["sha256"])
+    _assert_snapshot_current(spec_snapshot, label="Veusz specification", expected_sha256=spec_snapshot["sha256"])
     try:
         spec_payload = json.loads(spec_snapshot["bytes"].decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -98,8 +98,8 @@ def _audit_exact_document_data(
         raise ValueError(
             "Exact-current Veusz data-consumption audit has no closed unit inventory."
         )
-    _assert_snapshot_current(document_snapshot, label="Veusz document")
-    _assert_snapshot_current(spec_snapshot, label="Veusz specification")
+    _assert_snapshot_current(document_snapshot, label="Veusz document", expected_sha256=document_snapshot["sha256"])
+    _assert_snapshot_current(spec_snapshot, label="Veusz specification", expected_sha256=spec_snapshot["sha256"])
     payload["document"] = {
         "path": str(document_snapshot["path"]),
         "sha256": document_snapshot["sha256"],

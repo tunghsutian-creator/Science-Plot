@@ -58,7 +58,7 @@ def save_portable_copy(source: Path, target: Path, *, imports: Path) -> dict[str
             destination = imports / f"{index:03d}_{snapshot['sha256'][:16]}{path.suffix.lower()}"
             _write_private_snapshot(destination, snapshot["bytes"])
             linked.params.filename = str(destination)
-            _assert_snapshot_current(snapshot, label="paper linked native source")
+            _assert_snapshot_current(snapshot, label="paper linked native source", expected_sha256=snapshot["sha256"])
             imported.append({"source": str(path), "sha256": snapshot["sha256"],
                              "relative_path": str(destination.relative_to(target.parent.parent))})
         saved = atomic_save_veusz_document(document, target)
@@ -70,7 +70,7 @@ def save_portable_copy(source: Path, target: Path, *, imports: Path) -> dict[str
             linked = getattr(dataset, "linked", None)
             if linked is not None and not canonical_path(Path(linked.params.filename)).is_relative_to(imports):
                 raise ValueError("Portable VSZ still imports outside its selected data directory.")
-    _assert_snapshot_current(original, label="paper selected VSZ")
+    _assert_snapshot_current(original, label="paper selected VSZ", expected_sha256=original["sha256"])
     if before != after:
         raise ValueError("Native Save changed the selected document's complete state.")
     return {"kind": "sciplot_paper_portable_native", "version": 1, "status": "passed",
@@ -89,9 +89,9 @@ def inspect_linked_sources(source: Path) -> list[dict[str, Any]]:
             if linked is not None:
                 path = canonical_path(Path(linked.params.filename))
                 snapshot = stable_file_snapshot(path, label="paper linked native source")
-                _assert_snapshot_current(snapshot, label="paper linked native source")
+                _assert_snapshot_current(snapshot, label="paper linked native source", expected_sha256=snapshot["sha256"])
                 records[str(path)] = {"path": str(path), "sha256": snapshot["sha256"]}
-    _assert_snapshot_current(original, label="paper selected VSZ")
+    _assert_snapshot_current(original, label="paper selected VSZ", expected_sha256=original["sha256"])
     return [records[key] for key in sorted(records)]
 
 

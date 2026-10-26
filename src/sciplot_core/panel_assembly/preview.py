@@ -32,7 +32,11 @@ def _png(payload: bytes) -> bytes:
 
 
 def _image_preview(source: dict[str, Any]) -> bytes:
-    snapshot = stable_file_snapshot(Path(source["path"]), label="assembly image preview")
+    expected = source["binding"]["snapshot"]["sha256"]
+    try:
+        snapshot = stable_file_snapshot(Path(source["path"]), label="assembly image preview", expected_sha256=expected)
+    except (ValueError, OSError) as exc:
+        raise AssemblyError("assembly_source_stale", "The selected image changed before preview.") from exc
     if snapshot["sha256"] != source["binding"]["snapshot"]["sha256"]:
         raise AssemblyError("assembly_source_stale", "The selected image changed before preview.")
     if source["binding"]["media_type"] == "application/pdf":
@@ -45,7 +49,7 @@ def _image_preview(source: dict[str, Any]) -> bytes:
     else:
         payload = snapshot["bytes"]
     result = _png(payload)
-    _assert_snapshot_current(snapshot, label="assembly image preview")
+    _assert_snapshot_current(snapshot, label="assembly image preview", expected_sha256=expected)
     return result
 
 

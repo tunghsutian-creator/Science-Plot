@@ -72,7 +72,7 @@ def capture_publication(selection: dict[str, Any]) -> dict[str, Any]:
             raise TaskControlError("paper_publication_unsealed", "Exactly one sealed PDF and TIFF is required for the selected figure.")
         exports.append({key: matches[0][key] for key in ("format", "path", "sha256")})
     files = file_inventory(run)
-    _assert_snapshot_current(snapshot, label="paper sealed publication")
+    _assert_snapshot_current(snapshot, label="paper sealed publication", expected_sha256=snapshot["sha256"])
     return {"manifest": str(manifest_path), "manifest_sha256": snapshot["sha256"], "files": files,
             "exports": exports, "qa": {"status": "passed", "scope": "existing_current_sealed_publication",
                                        "evidence": str(manifest_path)}}

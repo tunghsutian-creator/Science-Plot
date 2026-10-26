@@ -91,7 +91,7 @@ def registered_task_snapshot_sources(
                 records=records,
                 groups=groups,
             )
-            _assert_snapshot_current(spec_snapshot, label="registered task spec")
+            _assert_snapshot_current(spec_snapshot, label="registered task spec", expected_sha256=spec_snapshot["sha256"])
             additions.extend(extra)
             continue
         if len(records) != 1 or len(extra) != 1:
@@ -126,8 +126,8 @@ def registered_task_snapshot_sources(
             )
         _verify_prepared_data(spec, [snapshot])
         _assert_snapshot_current(snapshot, label="registered task table", expected_sha256=records[source_path])
-        _assert_snapshot_current(input_snapshot, label="registered task input")
-        _assert_snapshot_current(spec_snapshot, label="registered task spec")
+        _assert_snapshot_current(input_snapshot, label="registered task input", expected_sha256=input_snapshot["sha256"])
+        _assert_snapshot_current(spec_snapshot, label="registered task spec", expected_sha256=spec_snapshot["sha256"])
         additions.append(source_path)
     return list(dict.fromkeys([*existing_sources, *additions]))
 
@@ -172,5 +172,5 @@ def _verify_registered_mapping_sources(
     _verify_prepared_data(spec, snapshots)
     for snapshot, digest in zip(snapshots, records.values(), strict=True):
         _assert_snapshot_current(snapshot, label="registered mapping group", expected_sha256=digest)
-    _assert_snapshot_current(input_snapshot, label="registered mapping input")
-    _assert_snapshot_current(effective_snapshot, label="registered mapping composite")
+    _assert_snapshot_current(input_snapshot, label="registered mapping input", expected_sha256=input_snapshot["sha256"])
+    _assert_snapshot_current(effective_snapshot, label="registered mapping composite", expected_sha256=effective_snapshot["sha256"])

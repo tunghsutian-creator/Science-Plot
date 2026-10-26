@@ -64,7 +64,8 @@ def _seal(service: DeliveryService, root: Path, state: dict[str, Any], selection
         raise EngineError("managed_delivery_export_changed", "A sealed original artifact is missing or changed; it was not regenerated or overwritten.")
     if exported.get("ir_hash") != head["binding"]["ir_hash"]:
         raise EngineError("managed_delivery_cache_stale", "The export cache does not identify this selected revision's exact PlotIR.")
-    ir_snapshot = stable_file_snapshot(Path(head["binding"]["ir_path"]), label="Managed delivery audited PlotIR")
+    ir_snapshot = stable_file_snapshot(Path(head["binding"]["ir_path"]), label="Managed delivery audited PlotIR",
+                                       expected_sha256=files.get(head["binding"]["ir_path"]))
     ir = json.loads(ir_snapshot["bytes"])
     document = head["document"]
     if (ir["ir_hash"], ir["scientific_hash"], ir["presentation_hash"]) != (
@@ -75,7 +76,7 @@ def _seal(service: DeliveryService, root: Path, state: dict[str, Any], selection
     # Packaging does not refresh compiler identity or mutate the original plot.
     # Use the existing scientific/publication owner on these exact saved bytes.
     inspected = inspect_managed_native(head["binding"])
-    _assert_snapshot_current(ir_snapshot, label="Managed delivery audited PlotIR")
+    _assert_snapshot_current(ir_snapshot, label="Managed delivery audited PlotIR", expected_sha256=ir_snapshot["sha256"])
     native_sha256 = files[str(native)]
     if inspected["document_sha256"] != native_sha256:
         raise EngineError("managed_delivery_native_changed", "The audited native bytes changed during delivery capture.")
@@ -94,14 +95,17 @@ def _seal(service: DeliveryService, root: Path, state: dict[str, Any], selection
     sources = []
     for source in head["document"]["scientific"]["data_sources"]:
         path = canonical_path(Path(source["path"]))
-        snapshot = stable_file_snapshot(path, label="Managed delivery original source")
+        try:
+            snapshot = stable_file_snapshot(path, label="Managed delivery original source", expected_sha256=source["sha256"])
+        except (ValueError, OSError) as exc:
+            raise EngineError("managed_delivery_source_changed", "An original source changed during delivery.") from exc
         if snapshot["sha256"] != source["sha256"]:
             raise EngineError("managed_delivery_source_changed", "An original source changed during delivery.")
         name = snapshot["sha256"] + path.suffix.lower()
         target = attempt / "data/originals" / name
         if not target.exists():
             target.write_bytes(snapshot["bytes"])
-        _assert_snapshot_current(snapshot, label="Managed delivery original source")
+        _assert_snapshot_current(snapshot, label="Managed delivery original source", expected_sha256=source["sha256"])
         sources.append({"source_id": source["source_id"], "original_name": path.name, "sha256": snapshot["sha256"],
                         "path": "data/originals/" + name})
     plotted_data = project_data(Path(head["binding"]["ir_path"]), attempt, item["stem"],
@@ -109,7 +113,7 @@ def _seal(service: DeliveryService, root: Path, state: dict[str, Any], selection
                                           "presentation_hash": document["presentation_hash"]})
     if plotted_data["ir"]["sha256"] != ir_snapshot["sha256"]:
         raise EngineError("managed_delivery_ir_changed", "The PlotIR changed between native audit and data serialization.")
-    _assert_snapshot_current(ir_snapshot, label="Managed delivery audited PlotIR")
+    _assert_snapshot_current(ir_snapshot, label="Managed delivery audited PlotIR", expected_sha256=ir_snapshot["sha256"])
     exports = result["exports"]
     for fmt, directory, suffix in (("pdf", "pdf", ".pdf"), ("tiff_300", "tiff", "_300dpi.tiff")):
         matches = [export for export in exports if export.get("format") == fmt]

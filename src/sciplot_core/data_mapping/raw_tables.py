@@ -129,7 +129,7 @@ def _read_original_cells(
             raise ValueError(
                 f"Text source {reference.relative_path} cannot select an Excel sheet."
             )
-        text = decode_text(path)
+        text = decode_text(path, expected_sha256=reference.sha256)
         delimiter = _detect_delimiter(text, reference)
         return pd.DataFrame(list(csv.reader(StringIO(text), delimiter=delimiter))) if preserve_cells or reference.data_start_row is not None else pd.read_csv(
             StringIO(text),

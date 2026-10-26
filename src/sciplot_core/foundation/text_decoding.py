@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 
 from sciplot_core.foundation.source_locations import resolve_source_path
 
@@ -66,10 +67,13 @@ def smart_decode(payload: bytes) -> tuple[str, str]:
     return payload.decode("latin-1"), "latin-1"
 
 
-def decode_text_file(path: str | Path) -> str:
+def decode_text_file(path: str | Path, *, expected_sha256: str | None = None) -> str:
     """Read and deterministically decode one text file."""
 
-    return smart_decode(resolve_source_path(path).read_bytes())[0]
+    payload = resolve_source_path(path, expected_sha256=expected_sha256).read_bytes()
+    if expected_sha256 is not None and hashlib.sha256(payload).hexdigest() != expected_sha256:
+        raise ValueError("The text source changed from its exact declared byte version.")
+    return smart_decode(payload)[0]
 
 
 def is_clean_utf8(payload: bytes) -> bool:

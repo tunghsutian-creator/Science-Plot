@@ -187,6 +187,7 @@ def verify_rendered_mapping_source_coverage(
         _assert_snapshot_current(
             snapshot,
             label=f"terminal plotted data snapshot {index}",
+            expected_sha256=snapshot["sha256"],
         )
     return {
         **coverage,

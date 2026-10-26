@@ -46,14 +46,14 @@ def _require_legacy_authority(project: Path, figure_id: str) -> None:
                             issues=[{"code": "use_managed_reference", "reference": reference}])
 
 
-def file_binding(path: Path) -> dict[str, Any]:
-    snapshot = stable_file_snapshot(path, label="assembly source")
+def file_binding(path: Path, *, expected_sha256: str | None = None) -> dict[str, Any]:
+    snapshot = stable_file_snapshot(path, label="assembly source", expected_sha256=expected_sha256)
     return {"path": str(snapshot["path"]), "sha256": snapshot["sha256"],
             "identity": {key: value for key, value in snapshot["identity"].items() if key != "ctime_ns"}}
 
 
-def _image(path: Path) -> dict[str, Any]:
-    snapshot = stable_file_snapshot(path, label="assembly image")
+def _image(path: Path, *, expected_sha256: str | None = None) -> dict[str, Any]:
+    snapshot = stable_file_snapshot(path, label="assembly image", expected_sha256=expected_sha256)
     if path.suffix.lower() == ".pdf":
         pymupdf: Any = import_module("pymupdf")
 
@@ -72,7 +72,7 @@ def _image(path: Path) -> dict[str, Any]:
             image.load()
             oriented = ImageOps.exif_transpose(image)
             width, height = oriented.size
-    _assert_snapshot_current(snapshot, label="assembly image")
+    _assert_snapshot_current(snapshot, label="assembly image", expected_sha256=snapshot["sha256"])
     bound = {"path": str(snapshot["path"]), "sha256": snapshot["sha256"],
              "identity": {key: value for key, value in snapshot["identity"].items() if key != "ctime_ns"}}
     return {"snapshot": bound, "media_type": media, "width": width, "height": height}
@@ -95,16 +95,17 @@ def managed_head(root: Path, plot_id: str) -> dict[str, Any]:
     return head
 
 
-def _managed(root: Path, plot_id: str) -> dict[str, Any]:
+def _managed(root: Path, plot_id: str, *, expected_files: dict[str, str] | None = None) -> dict[str, Any]:
     head = managed_head(root, plot_id)
     document = head["document"]
     paths = {root / "head.json", root / "revisions" / f"{document['revision']:08d}.json",
              Path(head["binding"]["canonical_document"])}
     paths.update(Path(name) for name in input_files(document))
     paths.update(Path(name) for name in head["binding"].get("scientific_content_files", {}))
+    known = {**input_files(document), **head["binding"].get("scientific_content_files", {}), **(expected_files or {})}
     return {"revision": document["revision"], "scientific_hash": document["scientific_hash"],
             "presentation_hash": document["presentation_hash"], "envelope_sha256": digest(head),
-            "files": [file_binding(path) for path in sorted(paths)]}
+            "files": [file_binding(path, expected_sha256=known.get(str(path))) for path in sorted(paths)]}
 
 
 def capture_source(reference: dict[str, Any]) -> dict[str, Any]:
@@ -161,12 +162,14 @@ def assert_source_current(source: dict[str, Any]) -> None:
             registry = Path(selection["project"]) / "studio/figure_set.json"
             if registry.exists():
                 paths.append(registry)
-            if [file_binding(item) for item in sorted(paths)] != binding["files"]:
+            expected_files = {item["path"]: item["sha256"] for item in binding["files"]}
+            if [file_binding(item, expected_sha256=expected_files.get(str(item))) for item in sorted(paths)] != binding["files"]:
                 raise ValueError("The native authority file identity or bytes changed.")
         elif kind == "managed":
-            if _managed(canonical_path(Path(source["project"])), source["plot_id"]) != binding:
+            if _managed(canonical_path(Path(source["project"])), source["plot_id"],
+                        expected_files={item["path"]: item["sha256"] for item in binding["files"]}) != binding:
                 raise ValueError("The managed document version or scientific sources changed.")
-        elif _image(canonical_path(Path(source["path"]))) != binding:
+        elif _image(canonical_path(Path(source["path"])), expected_sha256=binding["snapshot"]["sha256"]) != binding:
             raise ValueError("The selected image version changed.")
     except Exception as exc:
         if isinstance(exc, AssemblyError) and exc.code in {"assembly_source_stale", "assembly_managed_reference_required"}:

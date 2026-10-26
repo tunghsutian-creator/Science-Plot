@@ -112,7 +112,7 @@ def test_publication_uses_only_the_complete_imported_external_version(external_p
 
 @pytest.mark.parametrize("other_change", [None, "domain_pass", "spec", "foreign_member", "native_alias"])
 def test_existing_native_drift_preserves_categorical_domain_preflight(external_publication, monkeypatch, other_change):
-    from sciplot_core.studio_core import categorical_display_preflight, project_creation
+    from sciplot_core.studio_core import categorical_display_preflight, preparation_commands
     from sciplot_core.studio_core.categorical_display import KEY
     from sciplot_core.studio_core.categorical_display_errors import CategoricalPresentationConflict
 
@@ -156,11 +156,11 @@ def test_existing_native_drift_preserves_categorical_domain_preflight(external_p
     monkeypatch.setattr(categorical_display_preflight, "require_categorical_display_current", require_categorical_display_current)
     if other_change is None:
         with pytest.raises(CategoricalPresentationConflict):
-            project_creation.export_project(project)
+            preparation_commands.prepare_studio_generation(project)
         assert checked == [(native, project / "studio/spec.json")]
     else:
         with pytest.raises((ValueError, OSError)):
-            project_creation.export_project(project)
+            preparation_commands.prepare_studio_generation(project)
         assert checked == ([(native, project / "studio/spec.json")] if other_change == "domain_pass" else [])
     assert calls == []
     assert native.read_bytes() == changed

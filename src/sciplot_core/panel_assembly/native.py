@@ -155,11 +155,14 @@ def reflow_legacy(source: dict[str, Any], output: Path, width_mm: float, height_
     selection = source["binding"]["selection"]
     selected, spec = Path(selection["document"]), Path(selection["spec"])
     for key, path, name in (("document_sha256", selected, "source.vsz"), ("spec_sha256", spec, "source.spec.json")):
-        snapshot = stable_file_snapshot(path, label="assembly legacy authority")
+        try:
+            snapshot = stable_file_snapshot(path, label="assembly legacy authority", expected_sha256=selection["version"][key])
+        except (ValueError, OSError) as exc:
+            raise AssemblyError("assembly_source_stale", "The native authority changed before it could be frozen for export.") from exc
         if snapshot["sha256"] != selection["version"][key]:
             raise AssemblyError("assembly_source_stale", "The native authority changed before it could be frozen for export.")
         (output / name).write_bytes(snapshot["bytes"])
-        _assert_snapshot_current(snapshot, label="assembly legacy authority")
+        _assert_snapshot_current(snapshot, label="assembly legacy authority", expected_sha256=selection["version"][key])
     spec = output / "source.spec.json"
     before_audit = audit_spec_data(selected, spec, check_presentation=False)
     original = output / "original/document.vsz"

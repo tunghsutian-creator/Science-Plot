@@ -91,13 +91,16 @@ def _source_package(source: dict[str, Any], folder: Path) -> list[dict[str, Any]
     folder.mkdir()
     records = []
     for index, path in enumerate(sorted(set(files)), 1):
-        snapshot = stable_file_snapshot(path, label="assembly package source")
+        try:
+            snapshot = stable_file_snapshot(path, label="assembly package source", expected_sha256=expected[str(path)])
+        except (ValueError, OSError) as exc:
+            raise AssemblyError("assembly_source_stale", "A packaged source differs from the frozen selected bytes.") from exc
         if snapshot["sha256"] != expected[str(path)]:
             raise AssemblyError("assembly_source_stale", "A packaged source differs from the frozen selected bytes.")
         name = f"{index:03d}_{snapshot['sha256'][:16]}{path.suffix.lower()}"
         target = folder / name
         target.write_bytes(snapshot["bytes"])
-        _assert_snapshot_current(snapshot, label="assembly package source")
+        _assert_snapshot_current(snapshot, label="assembly package source", expected_sha256=expected[str(path)])
         records.append({"source": str(path), "relative_path": "sources/" + name, "sha256": snapshot["sha256"]})
     _json(folder / "index.json", records)
     return records
@@ -242,11 +245,15 @@ def export_document(document: dict[str, Any], out: str | Path, *, dpi: int = 300
                 folder.mkdir()
                 assert_source_current(source)
                 if source["kind"] == "image":
-                    snapshot = stable_file_snapshot(Path(source["path"]), label="assembly image composition")
+                    expected = source["binding"]["snapshot"]["sha256"]
+                    try:
+                        snapshot = stable_file_snapshot(Path(source["path"]), label="assembly image composition", expected_sha256=expected)
+                    except (ValueError, OSError) as exc:
+                        raise AssemblyError("assembly_source_stale", "The image changed before composition.") from exc
                     if snapshot["sha256"] != source["binding"]["snapshot"]["sha256"]:
                         raise AssemblyError("assembly_source_stale", "The image changed before composition.")
                     evidence = _place_image(page, panel, source, snapshot["bytes"])
-                    _assert_snapshot_current(snapshot, label="assembly image composition")
+                    _assert_snapshot_current(snapshot, label="assembly image composition", expected_sha256=expected)
                 else:
                     try:
                         evidence = _scientific(source, folder / "native", *panel["content_mm"][2:])

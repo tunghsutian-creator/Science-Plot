@@ -71,7 +71,7 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
                              "label": label, "expected_version": captured["version"]})
     group_sha256 = state["state_sha256"]
     group_title = state["request"]["title"]
-    _assert_snapshot_current(snapshot, label="paper current group selection")
+    _assert_snapshot_current(snapshot, label="paper current group selection", expected_sha256=snapshot["sha256"])
     request = {"version": 1, "title": title if title is not None else group_title, "out": str(out), "items": selected}
     result = start_paper(request, paper_dir=root, selection_origin={"request": origin, "group_state_sha256": group_sha256,
                                                                  "scope": "Frozen ordered registered figures, not a cross-plot edit."})

@@ -73,14 +73,14 @@ def read_raw_table(
                            lambda: _read_table(table_path, sheet_name, preserve_na_tokens=preserve_na_tokens), content_only=True)
 
 
-def read_sheet_names(path: Path) -> list[str]:
+def read_sheet_names(path: Path, *, expected_sha256: str | None = None) -> list[str]:
     """Reuse only byte-bound workbook structure within the active read session."""
-    path = resolve_source_path(path)
+    path = resolve_source_path(path, expected_sha256=expected_sha256)
     def read() -> pd.DataFrame:
         with pd.ExcelFile(path) as workbook:
             return pd.DataFrame({"name": workbook.sheet_names})
 
-    frame = read_table_once(path, ("workbook_sheet_names",), read, content_only=True)
+    frame = read_table_once(path, ("workbook_sheet_names",), read, expected_sha256=expected_sha256, content_only=True)
     return [str(name) for name in frame["name"]]
 
 

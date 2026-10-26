@@ -39,7 +39,7 @@ def project_data(ir_path: Path, root: Path, stem: str, *, expected: dict[str, st
                         "column_ids": list(columns), "columns": [{"id": key, "label": value["label"], "unit": value["unit"]}
                                                                   for key, value in columns.items()],
                         "header_rows": 1, "null_encoding": "empty_cell", "provenance_pointer": pointer + "/provenance"})
-    _assert_snapshot_current(snapshot, label="Managed delivery exact PlotIR")
+    _assert_snapshot_current(snapshot, label="Managed delivery exact PlotIR", expected_sha256=snapshot["sha256"])
     return {"ir": {"path": str(exact.relative_to(root)), "sha256": snapshot["sha256"],
                    "ir_hash": ir["ir_hash"], "schema_version": ir["schema_version"]},
             "datasets": records,

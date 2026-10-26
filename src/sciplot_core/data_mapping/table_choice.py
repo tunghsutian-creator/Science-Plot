@@ -69,7 +69,8 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
     source = Path(snapshot["source"])
     # Selection validates original evidence. Discovery/proposal callers retain
     # their rule-adapter eligibility gate in table_choice_snapshot itself.
-    fresh = source_table_snapshot(source, rule_id=snapshot["rule_id"], sheets=snapshot.get("observed_sheets"))
+    fresh = source_table_snapshot(source, rule_id=snapshot["rule_id"], sheets=snapshot.get("observed_sheets"),
+                                  expected_sha256=snapshot["file_sha256"])
     if fresh != snapshot:
         raise ValueError("Table-choice original evidence changed.")
     required = {"sheet", "header_rows", "data_start_row", "data_end_row"}

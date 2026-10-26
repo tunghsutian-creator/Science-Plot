@@ -19,7 +19,8 @@ from sciplot_core.source_tables.parsing import DECIMAL_ROUND_TRIP_ENCODING, SOUR
 def categorical_table_facts(source: Path, binding: dict[str, Any]) -> dict[str, Any]:
     """Return source evidence and metadata conflicts before allocating a project."""
     validate_categorical_binding(binding)
-    snapshot = source_table_snapshot(source, sheets=[binding["table_selection"]["sheet"]] if "table_selection" in binding else None)
+    snapshot = source_table_snapshot(source, sheets=[binding["table_selection"]["sheet"]] if "table_selection" in binding else None,
+                                     expected_sha256=binding.get("source_sha256"))
     if snapshot is None:
         raise StudioPreparationBlocked("categorical_source_unsupported", "Select one original CSV/TSV or Excel file.")
     if binding.get("source_sha256", snapshot["file_sha256"]) != snapshot["file_sha256"]:

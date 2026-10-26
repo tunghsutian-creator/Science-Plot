@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from sciplot_core.source_coverage.file_snapshots import (
     _canonical_sha256,
@@ -18,6 +18,10 @@ from sciplot_core.source_coverage.spec_units import render_data_unit_signature
 from sciplot_core.source_coverage.terminal_requests import (
     _authoritative_terminal_render_requests,
 )
+
+
+class _OriginOptions(TypedDict, total=False):
+    source_artifact_origins: dict[str, dict[str, str]]
 
 
 def _remap_derived_source_artifacts(
@@ -122,13 +126,16 @@ def _terminal_render_derivation(
                     f"Veusz specification {request_index} cites a source "
                     "outside the captured terminal snapshots."
                 )
+            origin_options: _OriginOptions = {}
+            if ((request.get("data_mapping_application") or {}).get("source_groups")
+                    or (request.get("categorical_binding") or {}).get("source_identity_version")):
+                origin_options["source_artifact_origins"] = private_to_original
             derived = derive_terminal_render_data_contract(
                 request=request,
                 terminal_sources=[
                     private_by_original[path] for path in expected_source_paths
                 ],
-                **({"source_artifact_origins": private_to_original} if ((request.get("data_mapping_application") or {}).get("source_groups")
-                    or (request.get("categorical_binding") or {}).get("source_identity_version")) else {}),
+                **origin_options,
             )
             if (
                 derived.get("kind") != "sciplot_terminal_render_data_contract"
@@ -190,6 +197,7 @@ def _terminal_render_derivation(
         _assert_snapshot_current(
             snapshot,
             label=f"terminal plotted data snapshot {index}",
+            expected_sha256=snapshot["sha256"],
         )
     return {
         "kind": "sciplot_terminal_render_data_derivation",

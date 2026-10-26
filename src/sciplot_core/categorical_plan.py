@@ -72,7 +72,7 @@ def build_categorical_preview(source: Path, *, request: dict[str, Any], current_
         options["replicate_summary_disclosure"] = disclosure
     elif "replicate_summary_disclosure" in request:
         raise StudioPreparationBlocked("categorical_disclosure_invalid", "A delivered valid-n disclosure requires mean_sample_sd_n mode.")
-    digest = source_tree_sha256(source)
+    digest = source_tree_sha256(source, expected_file_sha256=binding["source_sha256"])
     if digest is None:
         raise StudioPreparationBlocked("categorical_source_changed", "The categorical source disappeared during preflight.")
     payload: PlanPreviewPayload = {**_preview_base(source=source, rule_id=None, template=template),
