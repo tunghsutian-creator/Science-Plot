@@ -157,7 +157,8 @@ def _source_candidate(project, tmp_path, source):
     shutil.copytree(project, candidate)
     (candidate / "source/data.csv").write_bytes(b"fresh derived table")
     return candidate, {"kind": "sciplot_project_source_update", "version": 1, "status": "ready",
-        "source": str(source), "source_files": file_inventory(source),
+        "project": str(project), "source": str(source), "source_kind": "directory" if source.is_dir() else "file",
+        "source_files": file_inventory(source),
         "project_sha256": payload_hash(project_inventory(project)), "delivery_sha256": payload_hash(None),
         "changes": [], "styles": []}
 
@@ -209,6 +210,83 @@ def test_source_update_rejects_an_incoming_directory_member_added_at_before_head
     assert (project / "studio/document.vsz").read_bytes() == native
     assert (source / "chosen.csv").read_bytes() == b"explicitly selected original raw table"
     assert (source / "late.csv").read_bytes() == b"not in the confirmed directory"
+
+
+@pytest.mark.parametrize("directory", [False, True])
+def test_pending_source_preview_moves_with_its_exact_frozen_input_without_repreparing(project, tmp_path, monkeypatch, directory):
+    from sciplot_core.studio_core import source_update
+    from sciplot_core.studio_core.source_update_commands import stage_source_update
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    source = tmp_path / ("incoming-before-move" if directory else "incoming-before-move.csv")
+    if directory:
+        source.mkdir()
+        (source / "chosen.csv").write_bytes(b"confirmed incoming original version")
+        (source / "unused").mkdir()
+        (source / "unused/notes.txt").write_bytes(b"the whole source tree includes this unused member")
+        (source / "empty").mkdir()
+    else:
+        source.write_bytes(b"confirmed incoming original version")
+    candidate, review = _source_candidate(project, tmp_path, source)
+    raw = (project / "raw/instrument.csv").read_bytes()
+    saved = stage_source_update(project, candidate, review)
+    store = project_store(project, with_snapshot=True)
+    record = store.query(saved["command_key"])
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "pending-portable"), tmp_path / "pending-cold")
+    before = cold.snapshot()
+    for identity, versions in record["draft"]["sources"].items():
+        assert not set(versions).intersection(before["sources"].get(identity, {}))
+    project.rename(tmp_path / "project-offline")
+    source.rename(tmp_path / "source-offline.csv")
+    with monkeypatch.context() as malformed:
+        malformed.setattr(FileProjectStore, "prepared_tree_path", lambda *_a, **_kw: pytest.fail("forged review must not read prepared inputs"))
+        for key, value in (("decision_id", "a" * 64), ("source", str(tmp_path / "different-source.csv")), ("project", str(tmp_path / "different-project"))):
+            with pytest.raises(ValueError, match="unchanged stored"):
+                source_update.apply_project_source_update(cold.root, {**saved, key: value})
+    assert cold.snapshot()["sources"] == before["sources"]
+    monkeypatch.setattr(source_update, "prepare_candidate", lambda *_a, **_kw: pytest.fail("a moved frozen review must not prepare again"))
+    result = source_update.apply_project_source_update(cold.root, saved)
+    assert result["status"] == "updated"
+    assert (cold.root / "source/data.csv").read_bytes() == b"fresh derived table"
+    assert (cold.root / "raw/instrument.csv").read_bytes() == raw
+    assert not project.exists() and not source.exists()
+
+
+def test_source_head_commit_recovers_frozen_projection_after_the_original_raw_changes(project, tmp_path, monkeypatch):
+    from sciplot_core.project_store import state, ProjectRecoveryRequired
+    from sciplot_core.studio_core import source_update
+    from sciplot_core.studio_core.source_update_commands import stage_source_update
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    source = tmp_path / "incoming-before-head.csv"
+    source.write_bytes(b"admitted original version before head")
+    candidate, review = _source_candidate(project, tmp_path, source)
+    saved = stage_source_update(project, candidate, review)
+    store = project_store(project, with_snapshot=True)
+    record = store.query(saved["command_key"])
+    boundary = state.boundary
+    def stop(name):
+        if name == "after_head":
+            raise OSError("lost reply after authoritative source head")
+        boundary(name)
+    monkeypatch.setattr(state, "boundary", stop)
+    with pytest.raises(OSError, match="after authoritative source head"):
+        ProjectCommands(store).decide(ProjectCommand.from_payload(record["metadata"]), decision_id=saved["decision_id"], accept=True)
+    pending = store.query(saved["command_key"])
+    assert pending["committed_generation"] and pending["projection_pending"]
+    with pytest.raises(ProjectRecoveryRequired):
+        store.snapshot()
+    source.write_bytes(b"a newer external raw version after the committed head")
+    monkeypatch.setattr(state, "boundary", boundary)
+    monkeypatch.setattr(source_update, "prepare_candidate", lambda *_a, **_kw: pytest.fail("post-head recovery must not reprepare"))
+    from sciplot_core.studio_core import source_update_state
+    monkeypatch.setattr(source_update_state, "_check_external_state", lambda *_a, **_kw: pytest.fail("an owned committed generation must only recover its frozen view"))
+    result = source_update.apply_project_source_update(project, saved)
+    assert result["status"] == "updated" and result["ready_to_use"] is False
+    assert store.snapshot()["generation"] == pending["committed_generation"]
+    assert (project / "source/data.csv").read_bytes() == b"fresh derived table"
+    assert source.read_bytes() == b"a newer external raw version after the committed head"
+    assert len(store.commands()) == 1
 
 
 def test_actual_native_edit_accepts_independent_other_export_and_replays_without_render(edit):

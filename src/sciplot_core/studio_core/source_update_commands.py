@@ -126,14 +126,34 @@ def stage_source_update(project: Path, candidate: Path, review: dict[str, Any], 
 def decide_source_update(project: Path, supplied: dict[str, Any]) -> dict[str, Any]:
     from sciplot_core.studio_core.source_update_state import _applied_result, _check_external_state
 
-    app = ProjectCommands(project_store(project))
+    repository = project_store(project)
+    app = ProjectCommands(repository)
     record = query_for_apply(app, str(supplied.get("command_key") or ""))
-    if record is None or supplied != _public_review(project, record):
+    if (record is None or record.get("metadata", {}).get("kind") != "source_update"
+            or record.get("phase") not in {"needs_review", "accepted", "complete"}
+            or not isinstance(record.get("review"), dict)):
+        raise ValueError("A complete unchanged stored source-update preview is required")
+    original_root = record.get("review", {}).get("project") if record is not None else None
+    original_view = _public_review(Path(original_root), record) if isinstance(original_root, str) and record is not None else None
+    if record is None or supplied not in (_public_review(project, record), original_view):
         raise ValueError("A complete unchanged stored source-update preview is required")
     original = record["review"]
-    if record["phase"] != "complete":
-        _check_external_state(project, Path(original["source"]), original)
-    completed = app.decide(ProjectCommand.from_payload(record["metadata"]),
+    command = ProjectCommand.from_payload(record["metadata"])
+    if record["phase"] != "complete" and not record.get("committed_generation"):
+        source = Path(original["source"])
+        tree = next((item for item in command.source_trees if item.locator == str(source)), None)
+        selected = (repository.prepared_tree_path(command.key, command.command_digest, decision_id=record["decision_id"],
+                    locator=str(source), tree_sha256=tree.tree_sha256) if tree is not None else None)
+        delivery = repository.locations.get("delivery")
+        if delivery is None and isinstance(original_root, str):
+            from sciplot_core.output_contract import requested_delivery_root
+
+            request = json.loads((project / "plot_request.json").read_text())
+            declared = requested_delivery_root({"request": request}, run_output=project)
+            if declared.is_relative_to(Path(original_root)):
+                delivery = project / declared.relative_to(original_root)
+        _check_external_state(project, source, original, source_override=selected, delivery_override=delivery)
+    completed = app.decide(command,
                            decision_id=record["decision_id"], accept=True)
     archived = Path(completed["artifact_root"]) / "before"
     return {**_applied_result(project, supplied, archived,

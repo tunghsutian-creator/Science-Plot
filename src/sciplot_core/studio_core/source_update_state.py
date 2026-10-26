@@ -11,11 +11,12 @@ def _delivery_inventory(delivery: Path) -> dict[str, str] | None:
     return file_inventory(delivery) if delivery.exists() else None
 
 
-def _check_external_state(project: Path, source: Path, review: dict[str, Any]) -> None:
+def _check_external_state(project: Path, source: Path, review: dict[str, Any], *,
+                          source_override: Path | None = None, delivery_override: Path | None = None) -> None:
     request = json.loads((project / "plot_request.json").read_text())
-    delivery = requested_delivery_root({"request": request}, run_output=project)
+    delivery = delivery_override if delivery_override is not None else requested_delivery_root({"request": request}, run_output=project)
     if (
-        file_inventory(source) != review["source_files"]
+        file_inventory(source_override if source_override is not None else source) != review["source_files"]
         or payload_hash(_delivery_inventory(delivery)) != review["delivery_sha256"]
     ):
         raise ValueError(
