@@ -159,5 +159,3 @@ def mapping_immutable_reads(snapshot: dict[str, Any], readsets: Iterable[Mapping
                 raise ProjectConflict("A private preparation has conflicting metadata input identities.")
             result[item.resource] = item
     return tuple(result[name] for name in sorted(result))
-
-
