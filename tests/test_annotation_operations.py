@@ -434,53 +434,131 @@ def test_reference_line_exact_value_and_log_domain(spec):
 
 
 def test_spec_and_document_rollback_and_pending_recovery(tmp_path, monkeypatch):
-    project = tmp_path / "managed"
-    document = project / "studio/document.vsz"
-    document.parent.mkdir(parents=True)
-    document.write_bytes(b"old")
-    spec = document.with_name("spec.json")
-    spec.write_bytes(b"old spec")
-    (project / "plot_request.json").write_text(json.dumps({"input": str(project / "source")}))
-    candidate, new_spec = tmp_path / "new.vsz", tmp_path / "new.json"
-    candidate.write_bytes(b"new")
-    new_spec.write_bytes(b"new spec")
-    review = {"base_state": edit_state(project), "changes": []}
-    review["operation_id"] = preview_identity(review)
-    original = commit._replace_current_document
-    def fail(*_):
-        raise OSError("replace fault")
-    monkeypatch.setattr(commit, "_replace_current_document", fail)
-    with pytest.raises(OSError):
-        commit.commit_document_edit(project, document, candidate, review, spec=spec, candidate_spec=new_spec)
-    assert document.read_bytes() == b"old" and spec.read_bytes() == b"old spec"
-    monkeypatch.setattr(commit, "_replace_current_document", original)
-    commit.commit_document_edit(project, document, candidate, review, spec=spec, candidate_spec=new_spec)
-    root = history_directory(project, review["operation_id"])
-    record = json.loads((root / "outcome.json").read_text())
-    record["status"] = "pending"
-    (root / "outcome.json").write_text(json.dumps(record))
-    document.write_bytes(b"old")  # Stop after spec install but before VSZ replacement.
-    assert commit.prior_edit_result(project, review) is None
-    assert edit_state(project) == review["base_state"]
-    commit.commit_document_edit(project, document, candidate, review, spec=spec, candidate_spec=new_spec)
-    assert commit.prior_edit_result(project, review)["status"] == "already_applied"
-    spec.write_bytes(b"unexpected spec")
-    assert commit.read_edit_operation(project, review["operation_id"])["result_is_current"] is False
+    from pathlib import Path
+    from sciplot_core.project_store import FileProjectStore, ProjectRecoveryRequired, state
+
+    spec = {"template": "curve", "axes": {
+        "x": {"label": "Wavelength (nm)", "min": 400, "max": 500, "scale": "linear"},
+        "y": {"label": "Absorbance (a.u.)", "min": 0, "max": 5, "scale": "linear"}},
+        "series": [{"name": "series_1", "label": "A", "x_name": "x", "y_name": "y",
+                    "x_values": [400, 425, 450, 475, 500], "y_values": [1, 3, 1, 4, 2],
+                    "presentation_kind": "curve", "source_artifacts": []}]}
+    _, annotated, _ = compile_ops(spec, [note()])
+    assert {key: value for key, value in annotated.items() if key != "native_annotations"} == spec
+    before_spec, after_spec = json.dumps(spec).encode(), json.dumps(annotated).encode()
+    boundary = state.boundary
+    for fault in ("before_head", "after_head", "after_projection"):
+        project = tmp_path / fault
+        document = project / "studio/document.vsz"
+        document.parent.mkdir(parents=True)
+        document.write_bytes(b"old")
+        document.chmod(0o640)
+        companion = document.with_name("spec.json")
+        companion.write_bytes(before_spec)
+        companion.chmod(0o600)
+        source = project / "source/data.csv"
+        source.parent.mkdir()
+        source.write_bytes(b"x,y\n1,2\n")
+        (project / "plot_request.json").write_text(json.dumps({"input": str(source.parent)}))
+        candidate, new_spec = tmp_path / (fault + ".vsz"), tmp_path / (fault + ".json")
+        candidate.write_bytes(b"new")
+        new_spec.write_bytes(after_spec)
+        repository = FileProjectStore(project)
+        baseline = repository.snapshot(import_legacy=True)
+        review = {"base_state": edit_state(project), "changes": []}
+        review["operation_id"] = preview_identity(review)
+
+        def fail(name, expected=fault):
+            if name == expected:
+                raise OSError("publication fault: " + expected)
+            boundary(name)
+
+        with monkeypatch.context() as injected:
+            injected.setattr(state, "boundary", fail)
+            with pytest.raises(OSError, match="publication fault: " + fault):
+                commit.commit_document_edit(project, document, candidate, review,
+                                            spec=companion, candidate_spec=new_spec)
+        assert repository.query(review["operation_id"])["phase"] == "accepted"
+        physical = (document.read_bytes(), companion.read_bytes())
+        if fault == "before_head":
+            assert repository.snapshot()["generation"] == baseline["generation"]
+            assert repository.read_bytes("studio/document.vsz") == b"old"
+            assert repository.read_bytes("studio/spec.json") == before_spec
+            assert physical == (b"old", before_spec)
+            assert edit_state(project) == review["base_state"]
+        else:
+            # Inspect the sealed head, without materializing either active file.
+            with repository._locked(allow_pending=True) as (io, current):
+                assert current["generation"] != baseline["generation"]
+                assert io.get(current["files"]["studio/document.vsz"]) == b"new"
+                assert io.get(current["files"]["studio/spec.json"]) == after_spec
+            for read in (repository.snapshot,
+                         lambda owner=repository: owner.read_bytes("studio/spec.json"),
+                         lambda root=project: edit_state(root)):
+                with pytest.raises(ProjectRecoveryRequired):
+                    read()  # A pending materialization cannot expose a mixed pair.
+            if fault == "after_head":
+                assert physical == (b"old", before_spec)
+            else:
+                assert sum(value == old for value, old in zip(physical, (b"old", before_spec), strict=True)) == 1
+                companion.write_bytes(b"unexpected spec")
+                head = (project / ".sciplot_store/head.json").read_bytes()
+                with pytest.raises(ProjectRecoveryRequired, match="Outside bytes"):
+                    commit.prior_edit_result(project, review)
+                assert document.read_bytes() == physical[0]
+                assert companion.read_bytes() == b"unexpected spec"
+                assert (project / ".sciplot_store/head.json").read_bytes() == head
+                companion.write_bytes(physical[1])  # Restore only the test's exact pre-fault view.
+
+        def must_not_prepare(*args, **kwargs):
+            pytest.fail("Recovery must publish the frozen candidate without preparing again")
+
+        with monkeypatch.context() as recovery:
+            recovery.setattr(FileProjectStore, "mark_applying", must_not_prepare)
+            result = commit.prior_edit_result(project, review)
+            assert result["status"] == "already_applied"
+            assert document.read_bytes() == b"new" and companion.read_bytes() == after_spec
+            assert document.stat().st_mode & 0o777 == 0o640
+            assert companion.stat().st_mode & 0o777 == 0o600
+            assert source.read_bytes() == b"x,y\n1,2\n"
+            record = repository.query(review["operation_id"])
+            assert record["phase"] == "complete" and len(repository.commands()) == 1
+            assert Path(record["artifact_paths"]["before.vsz"]).read_bytes() == b"old"
+            assert Path(record["artifact_paths"]["before.spec.json"]).read_bytes() == before_spec
+            assert Path(record["artifact_paths"]["after.spec.json"]).read_bytes() == after_spec
+            assert not history_directory(project, review["operation_id"]).exists()
+            generation = repository.snapshot()["generation"]
+            candidate.unlink()
+            new_spec.unlink()
+            assert commit.commit_document_edit(project, document, candidate, review,
+                spec=companion, candidate_spec=new_spec)["status"] == "already_applied"
+            assert repository.snapshot()["generation"] == generation
+        companion.write_bytes(b"unexpected spec")
+        assert commit.read_edit_operation(project, review["operation_id"])["result_is_current"] is False
+        with pytest.raises(ValueError, match="since changed"):
+            commit.prior_edit_result(project, review)
+        assert companion.read_bytes() == b"unexpected spec" and document.read_bytes() == b"new"
 
 
 def test_source_update_rejects_invalid_annotation_scope_before_preparing(tmp_path, monkeypatch):
     from sciplot_core.studio_core import source_update
 
     project = tmp_path / "managed"
-    project.mkdir()
+    document = project / "studio/document.vsz"
+    document.parent.mkdir(parents=True)
+    document.write_bytes(b"saved canonical native")
     (project / "plot_request.json").write_text("{}")
-    spec = project / "spec.json"
+    spec = document.with_name("spec.json")
     spec.write_text(json.dumps({"native_annotations": {"version": 1, "items": [note()]}}))
     source = tmp_path / "new.csv"
     source.write_text("x,y\n1,2\n")
-    monkeypatch.setattr(source_update, "project_figures", lambda _: {"f": (project / "document.vsz", spec)})
+    before = {path: path.read_bytes() for path in (document, spec, project / "plot_request.json", source)}
     monkeypatch.setattr(source_update, "prepare_candidate", lambda *a, **k: pytest.fail("must not prepare source"))
     result = source_update.preview_project_source_update(project, source)
     assert result["status"] == "blocked"
     assert "Annotations currently require ordinary Cartesian curves" in result["reason"]
     assert json.loads(spec.read_text())["native_annotations"]["items"] == [note()]
+    assert {path: path.read_bytes() for path in before} == before
+    from sciplot_core.project_store import FileProjectStore
+
+    assert FileProjectStore(project).commands() == ()
