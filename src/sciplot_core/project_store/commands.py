@@ -14,6 +14,7 @@ from sciplot_core.foundation.json_values import json_safe
 from .errors import ProjectCommandConflict, ProjectConflict, ProjectStoreError
 from .io import StoreIO, digest, directory, install, parts, read_file, sha
 from .root_bindings import identities, scope_local_import
+from .committed_outcomes import require as committed_outcome
 import sciplot_core.project_store.state as state
 import sciplot_core.project_store.preconditions as preconditions
 
@@ -208,23 +209,10 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
            projection_pending: bool = False) -> dict[str, Any]:
     result = dict(record)
     current = state.head(io)
-    outcome = current["commands"].get(record["command_id"]) if current else None
-    if outcome is not None:
-        own_pending = record.get("phase") != "complete" and record.get("install_generation") == outcome["generation"]
-        bound = ("command_digest", "project_id", "result", "metadata", "read_set", "write_set")
-        if (any(record.get(key) != outcome.get(key) for key in bound)
-                or not own_pending and record.get("generation") != outcome["generation"]
-                or record.get("decision_id") != outcome.get("candidate_digest")):
-            raise ProjectConflict("A derived command receipt differs from its immutable generation outcome.")
-        if record.get("namespace_origins", {}) != outcome.get("namespace_origins", {}):
-            raise ProjectConflict("A semantic ownership receipt differs from its committed directory proof.")
-        if record.get("source_tree_origins", {}) != outcome.get("source_tree_origins", {}):
-            raise ProjectConflict("A selected source-tree receipt differs from its committed read proof.")
-        if own_pending:
-            result["committed_generation"] = outcome["generation"]
-            projection_pending = True
-    elif record["phase"] == "complete":
-        raise ProjectConflict("A command cannot claim completion without a committed generation outcome.")
+    committed = committed_outcome(io, current, record) if current else None
+    if committed is not None and record.get("phase") != "complete":
+        result["committed_generation"] = committed.generation["generation"]
+        projection_pending = True
     if result["phase"] == "applying":
         result["phase"] = "unknown"
     result["generation_sequence"] = state.reachable(io, current, result["generation"])["sequence"] if current else None

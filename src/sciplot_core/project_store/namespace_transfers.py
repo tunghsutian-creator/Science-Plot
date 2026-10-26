@@ -38,6 +38,13 @@ def values(record: dict[str, Any]) -> tuple[NamespaceTransfer, ...]:
     return tuple(result)
 
 
+def installed_members(record: dict[str, Any]) -> set[str]:
+    """Fixed fence/history observations already installed by the admitted protocol."""
+    prefixes = [prefix for transfer in values(record)
+                for prefix in (transfer.prefix, transfer.physical_backup_prefix) if prefix]
+    return {name for name in record["write_set"] if any(name.startswith(prefix + "/") for prefix in prefixes)}
+
+
 def _observed(transfer: NamespaceTransfer) -> dict[str, Any]:
     return {member.relative: {key: getattr(member, key) for key in ("sha256", "size", "mode")}
             for member in transfer.members}

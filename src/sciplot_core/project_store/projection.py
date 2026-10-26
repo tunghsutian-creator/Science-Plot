@@ -9,6 +9,7 @@ from .errors import ProjectConflict, ProjectRecoveryRequired
 from .io import StoreIO, directory, install, sha
 from .root_bindings import require as require_roots
 from .namespace_transfers import root_exemptions, verify_committed
+from .committed_outcomes import require as committed_outcome
 import sciplot_core.project_store.state as state
 
 
@@ -31,16 +32,19 @@ def pending(io: StoreIO, current: dict[str, Any]) -> bool:
 
 def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> None:
     """Finish only old-or-exact-new projections; never overwrite foreign bytes."""
+    committed = committed_outcome(io, current, record)
+    if committed is None:
+        raise ProjectRecoveryRequired("An unpublished candidate cannot materialize active project bytes.")
     require_roots(io, current, record)
     verify_committed(io, current, record)
-    old = state.generation(io, record["install_parent"])
-    names = record["install_files"]
+    old, names = committed.parent, committed.files
     # Validate the entire installation before the first replacement.
     for name in names:
-        before, after = old["files"].get(name), current["files"].get(name)
+        before, own, after = old["files"].get(name), committed.generation["files"].get(name), current["files"].get(name)
         physical = io.physical(name)
         actual = (sha(physical[0]), physical[1]) if physical else None
-        allowed = {(entry["sha256"], entry["mode"]) if entry else None for entry in (before, after)}
+        preimages = (after,) if name in committed.rewritten else (before, own, after)
+        allowed = {(entry["sha256"], entry["mode"]) if entry else None for entry in preimages}
         if actual not in allowed:
             raise ProjectRecoveryRequired(f"Outside bytes prevent generation recovery: {name}")
     for name in names:
@@ -56,7 +60,9 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
             current_physical = io.physical(name)
             actual = (sha(current_physical[0]), current_physical[1]) if current_physical else None
             before = old["files"].get(name)
-            if actual not in {(entry["sha256"], entry["mode"]) if entry else None for entry in (before, after)}:
+            own = committed.generation["files"].get(name)
+            preimages = (after,) if name in committed.rewritten else (before, own, after)
+            if actual not in {(entry["sha256"], entry["mode"]) if entry else None for entry in preimages}:
                 raise ProjectConflict("A derived view changed during generation materialization.")
             if after is None:
                 os.unlink(components[-1], dir_fd=parent)
@@ -67,32 +73,25 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
 
 
 def recover(io: StoreIO, current: dict[str, Any]) -> list[str]:
-    require_roots(io, current, exemptions=root_exemptions(io, current))
-    relocate(io, current)
-    recovered: list[str] = []
     try:
         with directory(io.fd, ("commands",)) as parent:
             names = sorted(name for name in os.listdir(parent) if name.endswith(".json"))
     except FileNotFoundError:
-        return recovered
+        names = []
+    pending_records = []
     for name in names:
         record = io.read("commands/" + name)
         assert record is not None
-        if record.get("install_generation") is None or record.get("phase") == "complete":
-            continue
-        installed = record["install_generation"]
-        if installed in current.get("commands", {}):
-            # This field is not an authoritative pointer; the head command map is.
-            raise ProjectRecoveryRequired("An invalid generation installation record was found.")
-        outcome = current["commands"].get(record["command_id"])
-        if outcome is None:
-            # Candidate was frozen but never published; no active bytes were touched.
-            continue
-        if outcome["command_digest"] != record["command_digest"]:
-            raise ProjectRecoveryRequired("Command and immutable generation evidence disagree.")
-        published = state.generation(io, installed)
-        project(io, record, published)
-        record.update(phase="complete", generation=installed, result=outcome["result"])
+        committed = committed_outcome(io, current, record)
+        if committed is not None and record.get("phase") != "complete":
+            pending_records.append((record, committed))
+    # Validate every derived record before relocation or any active replacement.
+    require_roots(io, current, exemptions=root_exemptions(io, current))
+    relocate(io, current)
+    recovered: list[str] = []
+    for record, committed in pending_records:
+        project(io, record, current)
+        record.update(phase="complete", generation=committed.generation["generation"], result=committed.outcome["result"])
         state.save_command(io, record)
         recovered.append(record["command_id"])
     return recovered
