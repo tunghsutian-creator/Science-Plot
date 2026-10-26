@@ -311,8 +311,14 @@ def test_recovery_replacement_failure_preserves_both_versions(recoverable, monke
 
 
 def test_recovery_rejects_an_unbound_or_multiple_document_delivery(recoverable):
+    from sciplot_core.project_commands import PreparedFile, ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.studio_core.project_command_scope import project_store
+
     project, document, candidate = recoverable
     root = candidate.parent.parent
+    protected = {path: path.read_bytes() for path in (
+        document, candidate, project / "source/sample.csv", project / "raw/sample.csv",
+        project / "studio/spec.json", project / "plot_request.json")}
     binding = DeliveryBinding(
         root=str(root),
         request=str(project / "plot_request.json"),
@@ -324,6 +330,8 @@ def test_recovery_rejects_an_unbound_or_multiple_document_delivery(recoverable):
     assert (
         recovery.preview_delivery_recovery(project)["reason_code"] == "multiple_figures"
     )
+    launcher = root / "Open_in_Veusz.command"
+    admitted_wire, mode = launcher.read_bytes(), stat.S_IMODE(launcher.stat().st_mode)
     binding = DeliveryBinding(
         root=str(root / "previous_location"),
         request=str(project / "plot_request.json"),
@@ -332,7 +340,25 @@ def test_recovery_rejects_an_unbound_or_multiple_document_delivery(recoverable):
         documents=((candidate.name, file_sha256(document)),),
     )
     write_delivery_launcher(root, binding=binding)
-    assert (
-        recovery.preview_delivery_recovery(project)["reason_code"] == "foreign_delivery"
-    )
+    foreign_wire = launcher.read_bytes()
+    changed = recovery.preview_delivery_recovery(project)
+    assert changed["reason_code"] == "recovery_validation_failed"
+    assert "registered source directory changed outside its generation" in changed["message"]
+    assert launcher.read_bytes() == foreign_wire
+    # Keep the outside-change refusal above, then admit this next adversarial
+    # fixture through the real owner so the foreign-binding domain check runs.
+    launcher.write_bytes(admitted_wire)
+    launcher.chmod(mode)
+    repository = project_store(project)
+    baseline = repository.snapshot()
+    logical = repository.logical_path(launcher)
+    command = ProjectCommand.create("publish", "fixture-foreign-delivery",
+        project_id=baseline["project_id"], expected_generation=baseline["generation"],
+        read_set={logical: baseline["files"][logical]["sha256"]}, write_set=[logical],
+        request={"fixture": "registered foreign launcher binding"})
+    ProjectCommands(repository).execute(command, lambda: ProjectMutation(
+        {logical: PreparedFile(foreign_wire, mode)}, {"fixture": "foreign"}))
+    assert launcher.read_bytes() == foreign_wire and stat.S_IMODE(launcher.stat().st_mode) == mode
+    assert recovery.preview_delivery_recovery(project)["reason_code"] == "foreign_delivery"
+    assert {path: path.read_bytes() for path in protected} == protected
     assert not (project / ".recovery").exists()

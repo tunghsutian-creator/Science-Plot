@@ -3,7 +3,8 @@
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
+from sciplot_core.foundation.source_locations import literal_source_path
+from sciplot_core.project_store.runtime import projected_runtime_artifact
 
 
 def path_identity(value: Path) -> Path:
@@ -19,4 +20,4 @@ def launcher_contract_identity(value: object) -> object:
 
 
 def recorded_path_exists(value: Any) -> bool:
-    return Path(resolve_source_path(str(value))).exists()
+    return projected_runtime_artifact(str(value)).exists()

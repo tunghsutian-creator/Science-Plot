@@ -198,3 +198,74 @@ def test_whole_delivery_child_does_not_widen_a_finite_snapshot_parent(tmp_path, 
         assert projected_runtime_directory(delivery) == delivery
         with pytest.raises(ValueError, match="finite file grant"):
             projected_runtime_directory(tmp_path)
+
+
+def test_project_inspection_never_materializes_delivery_as_a_source(tmp_path, monkeypatch):
+    from sciplot_core.project_store import directories
+
+    project, _delivery, _store = _project_and_delivery(tmp_path)
+    before = {str(path): (file_sha256(path), path.stat().st_mode, path.stat().st_mtime_ns)
+              for path in tmp_path.rglob("*") if path.is_file()}
+
+    def reject_source_view(*args, **kwargs):
+        pytest.fail("Read-only inspection must not materialize delivery source views")
+
+    monkeypatch.setattr(directories, "resolve", reject_source_view)
+    evidence = inspect_project(project)
+    assert evidence["delivery"]["binding_current"] is True
+    assert evidence["delivery"]["package_current"] is True
+    assert evidence["qa"]["current"] is True
+    assert {str(path): (file_sha256(path), path.stat().st_mode, path.stat().st_mtime_ns)
+            for path in tmp_path.rglob("*") if path.is_file()} == before
+
+
+def test_recorded_artifact_cannot_use_a_source_cache_as_current_physical_evidence(tmp_path):
+    from sciplot_core.delivery.runtime_evidence import recorded_path_exists
+
+    _project, delivery, store = _project_and_delivery(tmp_path)
+    with project_runtime(store):
+        cache = resolve_runtime_path(delivery)
+        assert cache.is_dir()
+        with pytest.raises(ValueError, match="source cache"):
+            recorded_path_exists(cache)
+
+
+def test_missing_physical_artifact_is_not_proved_by_its_surviving_source_cache(tmp_path):
+    from sciplot_core.delivery.runtime_evidence import recorded_path_exists
+
+    _project, delivery, store = _project_and_delivery(tmp_path)
+    with project_runtime(store):
+        cache = resolve_runtime_path(delivery)
+        launcher = delivery / "Open_in_Veusz.command"
+        launcher.unlink()
+        assert (cache / launcher.name).is_file()
+        with pytest.raises(ValueError):
+            recorded_path_exists(delivery)
+
+
+def test_recorded_artifact_keeps_exact_file_and_private_stage_io(tmp_path):
+    from sciplot_core.delivery.runtime_evidence import recorded_path_exists
+
+    _project, delivery, store = _project_and_delivery(tmp_path)
+    private = tmp_path / "host-private-stage"
+    private.mkdir()
+    metadata = private / "manifest.json"
+    metadata.write_text('{"private":true}')
+    with project_runtime(store):
+        assert recorded_path_exists(delivery / "Open_in_Veusz.command")
+        assert recorded_path_exists(private) and recorded_path_exists(metadata)
+        assert not recorded_path_exists(private / "missing.json")
+
+
+def test_physical_artifact_reader_preserves_the_explicit_private_candidate(tmp_path):
+    from test_project_candidate_runtime import fixture_candidate
+    from sciplot_core.project_store.runtime import project_candidate_runtime, projected_runtime_artifact
+
+    store, before, private = fixture_candidate(tmp_path)
+    candidate = private / "studio/document.vsz"
+    with project_candidate_runtime(store, private):
+        candidate.write_bytes(b"explicit private native candidate")
+        assert projected_runtime_artifact(store.root / "studio/document.vsz") == candidate
+        assert projected_runtime_artifact(store.root / "studio/document.vsz").read_bytes() == candidate.read_bytes()
+    assert (store.root / "studio/document.vsz").read_bytes() == b"native original"
+    assert store.snapshot()["generation"] == before["generation"]

@@ -64,6 +64,23 @@ def projected_runtime_directory(original: str | Path) -> Path:
     return Path(original)
 
 
+def projected_runtime_artifact(original: str | Path) -> Path:
+    """Keep current registered artifacts physical and private-stage IO unchanged."""
+    from .candidate_runtime import ProjectCandidateResolver
+    from .physical_projection import projected_artifact
+
+    selected = selected_source_resolver()
+    if isinstance(selected, ProjectCandidateResolver):
+        return resolve_source_path(original)
+    if isinstance(selected, ProjectSourceResolver):
+        physical = projected_artifact(selected.store, original, generation=selected.generation)
+        if physical is not None:
+            return physical
+    # This is the original port for nonregistered private stage paths, not a
+    # retry after failed ownership, member, hash, mode or source-cache checks.
+    return resolve_source_path(original)
+
+
 def selected_project_store() -> FileProjectStore | None:
     """Return only the currently host-bound concrete store, preserving its caps."""
     selected = selected_source_resolver()
