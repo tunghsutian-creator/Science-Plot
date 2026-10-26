@@ -30,6 +30,7 @@ def registered_task_snapshot_sources(
     documents: list[Path],
     existing_sources: list[Path],
     data_mapping_application: dict[str, Any] | None = None,
+    source_versions: dict[Path, str] | None = None,
 ) -> list[Path]:
     """Include task tables only after their persisted task and data checks.
 
@@ -41,6 +42,7 @@ def registered_task_snapshot_sources(
 
     plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
     additions: list[Path] = []
+    verified_versions: dict[Path, str] = {}
     root = Path(literal_source_path(project_dir))
     for document in documents:
         spec_path = (
@@ -51,12 +53,17 @@ def registered_task_snapshot_sources(
         spec_snapshot = _stable_file_snapshot(spec_path, label="registered task spec")
         spec = json.loads(spec_snapshot["bytes"])
         records = _source_records(spec)
+        for path, digest in records.items():
+            if path in verified_versions and verified_versions[path] != digest:
+                raise ValueError("Registered task documents disagree on a prepared source version.")
+            verified_versions[path] = digest
         extra = [
             path
             for path in records
             if not source_inventory_contains(path, existing_sources)
         ]
         if not extra:
+            _assert_snapshot_current(spec_snapshot, label="registered task spec", expected_sha256=spec_snapshot["sha256"])
             continue
         source_request = spec.get("source_request")
         if plan is None or not isinstance(source_request, dict):
@@ -129,6 +136,8 @@ def registered_task_snapshot_sources(
         _assert_snapshot_current(input_snapshot, label="registered task input", expected_sha256=input_snapshot["sha256"])
         _assert_snapshot_current(spec_snapshot, label="registered task spec", expected_sha256=spec_snapshot["sha256"])
         additions.append(source_path)
+    if source_versions is not None:
+        source_versions.update(verified_versions)
     return list(dict.fromkeys([*existing_sources, *additions]))
 
 

@@ -264,10 +264,22 @@ def test_legacy_pending_source_evidence_is_read_only_and_recovers_only_exact_kno
 @pytest.fixture
 def rendered_review(revisions, monkeypatch, tmp_path):
     project, candidate, source, review = revisions
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.studio_core.preparation_candidate import studio_preparation_candidate
+
+    # Only native generation is replaced. The callback now receives the real
+    # private-project capability and the old generation's source inventory.
+    (project / "studio/spec.json").write_text(json.dumps({"series": [{"source_artifacts": [{
+        "path": str(project / "source/data.csv"), "sha256": file_sha256(project / "source/data.csv")
+    }]}]}))
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
 
     def preview(_project, _source, *, worksheet, on_candidate):
         assert worksheet == "Data"
-        on_candidate(candidate, review)
+        with studio_preparation_candidate(store) as private:
+            private.write_member("studio/document.vsz", (candidate / "studio/document.vsz").read_bytes())
+            on_candidate(private.project_dir, review)
         return review
 
     def render(_command, document, _out, output):

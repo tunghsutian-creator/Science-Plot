@@ -54,7 +54,8 @@ def test_current_confirmed_mapping_native_expansion_and_offline_publication_keep
         assert cold.read_bytes("plot_request.json") == request
         current = cold.snapshot()
         assert current["generation"] != before["generation"] and current["sources"] == before["sources"]
-        record = cold.commands()[-1]
+        command_id = exported.run_payload["project_command"]["command_id"]
+        record = next(item for item in cold.commands() if item["command_id"] == command_id)
         assert record["phase"] == "complete" and record["generation"] == current["generation"]
         manifests = [name for name in record["draft"]["writes"] if name.startswith("runs/") and name.endswith("/manifest.json")]
         assert len(manifests) == 1

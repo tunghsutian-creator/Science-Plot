@@ -87,6 +87,13 @@ def _candidate(
             native_audit=result["document_audit"])
         return result
     validate_edit_science_policy(changes, spec)
+    return _audited_setting_candidate(document, spec, changes, output)
+
+
+def _audited_setting_candidate(
+    document: Path, spec: Path, changes: list[dict[str, Any]], output: Path,
+) -> dict[str, Any]:
+    """Execute a compiled batch with the shared native and exact-science audits."""
     change_path = output / "changes.json"
     change_path.write_text(
         json.dumps(changes, ensure_ascii=False, allow_nan=False), encoding="utf-8"

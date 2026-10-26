@@ -10,14 +10,16 @@ from sciplot_core.foundation.file_hashing import (
     existing_file_sha256,
 )
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
+from sciplot_core.source_coverage.file_snapshots import _assert_snapshot_current, _stable_file_snapshot
 from sciplot_core.project_manifest import (
     edit_intake_project_manifest,
 )
 from sciplot_core.materials_rules import (
     get_rule,
-    resolve_rule_template,
     semantic_payload_from_rule,
 )
+from sciplot_core.materials_rules.catalog import resolve_rule_template
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.presentation_identity import (
     SelectedPresentationIdentity,
@@ -68,7 +70,7 @@ def _apply_studio_request_overrides(
     pending_rule_review = bool(
         selected_rule is not None and selected_rule.fixture_status != "ready"
     )
-    if pending_rule_review and not requested_template:
+    if selected_rule is not None and pending_rule_review and not requested_template:
         raise ValueError(
             f"Material rule `{selected_rule.rule_id}` is not ready for "
             "production use; an explicit supported template is required for "
@@ -109,7 +111,7 @@ def _apply_studio_request_overrides(
             else:
                 request.pop("pending_rule_review", None)
             current_options = (
-                dict(request.get("render_options"))
+                dict(request["render_options"])
                 if isinstance(request.get("render_options"), dict)
                 else {}
             )
@@ -168,7 +170,7 @@ def _apply_studio_request_overrides(
                         else {}
                     )
                     current_options = (
-                        dict(request.get("render_options"))
+                        dict(request["render_options"])
                         if isinstance(request.get("render_options"), dict)
                         else {}
                     )
@@ -231,19 +233,13 @@ def _apply_studio_request_overrides(
         if selected_project_name:
             payload["project_name"] = selected_project_name
         if selected_template:
-            experiment = (
-                payload.get("experiment")
-                if isinstance(payload.get("experiment"), dict)
-                else {}
-            )
+            experiment_value = payload.get("experiment")
+            experiment = experiment_value if isinstance(experiment_value, dict) else {}
             experiment["template"] = selected_template
             experiment["chart"] = selected_template
             payload["experiment"] = experiment
-            plot_options = (
-                payload.get("plot_options")
-                if isinstance(payload.get("plot_options"), dict)
-                else {}
-            )
+            plot_options_value = payload.get("plot_options")
+            plot_options = plot_options_value if isinstance(plot_options_value, dict) else {}
             plot_options["template"] = selected_template
             payload["plot_options"] = plot_options
         if selected_rule is not None:
@@ -275,11 +271,8 @@ def _apply_studio_request_overrides(
                     }
                 )
             payload["recognition"] = recognition
-            experiment = (
-                payload.get("experiment")
-                if isinstance(payload.get("experiment"), dict)
-                else {}
-            )
+            experiment_value = payload.get("experiment")
+            experiment = experiment_value if isinstance(experiment_value, dict) else {}
             experiment["rule_id"] = selected_rule.rule_id
             experiment.setdefault("id", selected_rule.rule_id)
             experiment.setdefault("label", selected_rule.rule_id)
@@ -311,21 +304,33 @@ def _existing_document_payload(document_path: Path) -> dict[str, Any]:
 def _write_studio_data_snapshots(
     input_paths: list[Path],
     output_dir: Path,
+    *,
+    source_versions: dict[Path, str] | None = None,
 ) -> Path:
     processed_dir = output_dir / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     destination = processed_dir / "studio_export_data.xlsx"
+    captured = []
+    for input_path in input_paths:
+        try:
+            literal = Path(literal_source_path(input_path))
+            version = (source_versions or {}).get(literal)
+            actual = resolve_source_path(input_path, expected_sha256=version)
+            snapshot = (_stable_file_snapshot(input_path, label="Studio workbook source", expected_sha256=version)
+                        if version is not None else None)
+            frames = _read_source_frames(actual)
+            if snapshot is not None:
+                _assert_snapshot_current(snapshot, label="Studio workbook source", expected_sha256=version)
+            captured.append((input_path, frames))
+        except Exception as exc:
+            raise StudioPreparationBlocked(
+                "studio_data_snapshot_failed",
+                f"Studio could not create a data snapshot from {input_path}: {exc}",
+            ) from exc
     with pd.ExcelWriter(destination) as writer:
         used_names: set[str] = set()
         frame_index = 0
-        for source_index, input_path in enumerate(input_paths, start=1):
-            try:
-                frames = _read_source_frames(input_path)
-            except Exception as exc:
-                raise StudioPreparationBlocked(
-                    "studio_data_snapshot_failed",
-                    f"Studio could not create a data snapshot from {input_path}: {exc}",
-                ) from exc
+        for source_index, (input_path, frames) in enumerate(captured, start=1):
             for label, frame in frames:
                 frame_index += 1
                 qualified_label = (

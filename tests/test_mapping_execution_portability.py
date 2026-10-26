@@ -339,3 +339,55 @@ def test_metadata_permission_change_at_before_head_is_refused(tmp_path, monkeypa
     with pytest.raises(ProjectConflict, match="permissions"):
         ProjectCommands(store).execute(command, lambda: mutation)
     assert store.snapshot()["generation"] == before["generation"] and not (project / "ready.txt").exists()
+
+
+@pytest.mark.parametrize("when", ["complete", "after-render", "before-head"])
+def test_general_workflow_executes_with_the_same_sealed_mapping_witness_and_one_head(tmp_path, monkeypatch, publication, when):
+    from sciplot_core.project_store import state
+    from sciplot_core.project_store.worker_binding import native_mapping_binding
+    from sciplot_core.studio_core import preparation_commands
+    from sciplot_core.workflow.project_requests import run_project_request
+
+    project, _calls, _published = publication
+    _origin, project, store, request, execution = confirmed_project(tmp_path, monkeypatch, project_override=project)
+    before = store.snapshot()
+    confirmation = Path(execution["confirmation"])
+    seen = []
+
+    def drift():
+        confirmation.write_bytes(confirmation.read_bytes() + b" ")
+
+    def execute(**kwargs):
+        packet = native_mapping_binding()
+        assert packet["execution"] == request["data_mapping_execution"]
+        assert next(item for item in packet["files"] if item["path"] == str(confirmation))["sha256"] == file_sha256(confirmation)
+        seen.append("sealed before first render")
+        kwargs["output_dir"].mkdir(parents=True, exist_ok=True)
+        kwargs["staged_delivery"][0].mkdir(parents=True, exist_ok=True)
+        (kwargs["staged_delivery"][0] / "figure.pdf").write_bytes(b"controlled render")
+        if when == "after-render":
+            drift()
+        return {"delivery_package": {"complete": True}}
+
+    monkeypatch.setattr(preparation_commands, "prepare_studio_candidate", lambda candidate, **_kw:
+        {"document": str(candidate.project_dir / "studio/document.vsz")})
+    monkeypatch.setattr(preparation_commands, "audit_studio_candidate", lambda candidate, _payload:
+        ([], [item for reads in candidate.mapping_inputs.values() for item in reads.prepared_sources(candidate.snapshot)]))
+    boundary = state.boundary
+
+    def before_head(name):
+        if name == "before_head" and when == "before-head":
+            drift()
+        boundary(name)
+
+    monkeypatch.setattr(state, "boundary", before_head)
+    if when == "complete":
+        run_project_request(project / "plot_request.json", request, execute=execute, classifier=lambda **_kw: {},
+            new_creation=False, previous_request=None)
+        assert store.snapshot()["generation"] != before["generation"] and store.commands()[-1]["phase"] == "complete"
+    else:
+        with pytest.raises(ProjectConflict):
+            run_project_request(project / "plot_request.json", request, execute=execute, classifier=lambda **_kw: {},
+                new_creation=False, previous_request=None)
+        assert store.snapshot()["generation"] == before["generation"]
+    assert seen == ["sealed before first render"]

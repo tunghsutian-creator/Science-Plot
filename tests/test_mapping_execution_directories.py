@@ -12,7 +12,7 @@ from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
 from sciplot_core.data_mapping.execution_directories import mapping_execution_trees
 from sciplot_core.data_mapping import load_data_mapping_execution
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
-from sciplot_core.project_store import FileProjectStore
+from sciplot_core.project_store import FileProjectStore, ResourceRoot
 from sciplot_core.project_store.runtime import project_runtime, sealed_source_runtime
 from sciplot_core.project_store.incoming_sources import SourceExpectation
 
@@ -85,7 +85,7 @@ def test_explicit_raw_directory_rejects_foreign_or_incomplete_members_before_num
     assert execution["effective_input"] == execution["data_dir"]
 
 
-def registered_directory(tmp_path):
+def registered_directory(tmp_path, *, outputs_cap=False):
     origin, request, execution = directory_execution(tmp_path)
     reference = str(Path(execution["output_root"]) / "execution.json")
     with mapping_input_reads(reference) as reads:
@@ -93,7 +93,8 @@ def registered_directory(tmp_path):
     root = tmp_path / "project"
     root.mkdir()
     (root / "plot_request.json").write_text(json.dumps(request))
-    store = FileProjectStore(root)
+    store = FileProjectStore(root, locations={"mapped": ResourceRoot(Path(execution["data_dir"]),
+        tuple(Path(item["path"]).name for item in execution["outputs"]))} if outputs_cap else None)
     before = store.snapshot(import_legacy=True)
     mutation = ProjectMutation({}, {}, prepared_sources=reads.prepared_sources(before))
     command = ProjectCommand.create("figure_set", "certify-complete-mapping", project_id=before["project_id"],
@@ -101,6 +102,18 @@ def registered_directory(tmp_path):
         source_trees=tuple(reads.trees.values()))
     ProjectCommands(store).execute(command, lambda: mutation)
     return origin, root, store, request, execution, mutation.prepared_sources
+
+
+def test_complete_mapping_directory_in_finite_file_cap_replays_without_creating_views(tmp_path, monkeypatch):
+    from test_project_query_readonly_sources import inventory, no_views
+
+    _origin, _root, store, request, execution, _sources = registered_directory(tmp_path, outputs_cap=True)
+    before = inventory(tmp_path)
+    no_views(monkeypatch)
+    with project_runtime(store):
+        effective, application = resolve_data_mapping_request(request, base_dir=store.root)
+    assert effective["input"] == execution["data_dir"] and application["outputs_verified"] is True
+    assert inventory(tmp_path) == before
 
 
 def test_cold_directory_replay_uses_exact_committed_tree_author_and_original_literals(tmp_path):

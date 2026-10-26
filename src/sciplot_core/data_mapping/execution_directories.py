@@ -74,7 +74,13 @@ def mapping_directory_path(execution: dict[str, Any]) -> Path:
         if active is not None:
             active.sealed_trees[str(root)] = binding
     else:
-        actual = canonical_path(resolve_source_path(root))
+        # A finite file cap proves these exact actual members. When they share
+        # this one complete namespace, inspect it directly instead of creating
+        # a source directory cache during an otherwise readonly replay.
+        paths = {name: mapping_file_path(root / name, expected_sha256=expected) for name, expected in names.items()}
+        parents = {path.parent for path in paths.values()}
+        actual = (next(iter(parents)) if len(parents) == 1 and all(path.name == name for name, path in paths.items())
+                  else canonical_path(resolve_source_path(root)))
     actual_version, _observed = observe(str(actual), allowed=set(names))
     if actual_version != version:
         raise ProjectConflict("The complete mapping directory changed members or content hashes.")
@@ -82,6 +88,7 @@ def mapping_directory_path(execution: dict[str, Any]) -> Path:
         mapping_file_path(root / name, expected_sha256=expected)
     if active is not None:
         active.trees[str(root)] = tree
+        active.tree_actuals[str(root)] = actual
     return actual
 
 

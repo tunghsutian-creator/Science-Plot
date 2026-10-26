@@ -7,9 +7,10 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.studio_core.document_edit import _candidate
+from sciplot_core.studio_core.document_edit import _audited_setting_candidate
 from sciplot_core.studio_core.document_edit_state import run_document_worker
 from sciplot_core.studio_core.source_update_review import project_figures
+from sciplot_core.studio_core.preparation_candidate import require_preparation_candidate
 from sciplot_core.veusz_worker.style_projection import project_transferred_styles
 from sciplot_core.veusz_worker.style_transfer import _style_plan
 
@@ -30,6 +31,7 @@ def capture_project_styles(project: Path) -> dict[str, dict[str, Any]]:
 
 def transfer_project_styles(candidate: Path, baseline: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     """Apply the existing finite presentation plan to new private native bytes."""
+    require_preparation_candidate(candidate)
     changes: list[dict[str, Any]] = []
     for identity, (document, spec) in project_figures(candidate).items():
         if identity not in baseline:
@@ -49,8 +51,8 @@ def transfer_project_styles(candidate: Path, baseline: dict[str, dict[str, Any]]
                       "setting_path": item["current_widget"] + "/" + item["setting"],
                       "expected_value": item["before"], "value": item["after"]}
                      for item in applied[start:start + 100]]
-            with TemporaryDirectory(prefix="sciplot-source-style-") as directory:
-                result = _candidate(document, spec, batch, Path(directory))
+            with TemporaryDirectory(prefix=".sciplot-source-style-", dir=candidate / "studio") as directory:
+                result = _audited_setting_candidate(document, spec, batch, Path(directory))
                 document.write_bytes(Path(result["candidate"]["path"]).read_bytes())
         if applied:
             spec.write_text(json.dumps(project_transferred_styles(current, applied), ensure_ascii=False, indent=2, allow_nan=False))

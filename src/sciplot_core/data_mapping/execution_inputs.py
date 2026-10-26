@@ -45,6 +45,7 @@ class MappingInputReadSet:
     sealed: bool = False
     trees: dict[str, SourceTreeRead] = field(default_factory=dict)
     sealed_trees: dict[str, SealedSourceTree] = field(default_factory=dict)
+    tree_actuals: dict[str, Path] = field(default_factory=dict)
     metadata: set[str] = field(default_factory=set)
     committed_generation: str | None = None
 
@@ -77,7 +78,7 @@ class MappingInputReadSet:
         for literal, tree in self.trees.items():
             binding = self.sealed_trees.get(literal)
             actual = actuals.get(literal) or (binding.view(selected.store)
-                if binding is not None and isinstance(selected, ProjectSourceResolver) else resolve_source_path(literal))
+                if binding is not None and isinstance(selected, ProjectSourceResolver) else self.tree_actuals.get(literal) or resolve_source_path(literal))
             if observe(str(actual))[0] != tree.tree_sha256:
                 raise ProjectConflict("The confirmed mapping directory changed its complete membership.")
 
@@ -261,18 +262,21 @@ def require_mapping_original_source(root: Path, files: dict[str, str], seed: dic
     expected = active.expected_source if active is not None else None
     if expected is None:
         return
+    members = {mapping_literal(root / name): digest for name, digest in files.items()}
     if (not isinstance(seed.get("input"), str) or mapping_literal(Path(seed["input"])) != expected
-            or not files or expected != root and {mapping_literal(root / relative) for relative in files} != {expected}):
+            or not members or any(not path.is_relative_to(expected) for path in members)):
         raise ProjectConflict("The confirmed mapping does not bind the exact selected original task source.")
-    if expected == root:
+    if set(members) != {expected}:
         from sciplot_core.project_store.source_tree_io import observe
 
         version = canonical_json_sha256({"kind": "directory", "files": [
-            {"path": name, "content_sha256": digest} for name, digest in sorted(files.items())]}, allow_nan=False)
-        if observe(str(resolve_source_path(root)), allowed=set(files))[0] != version:
+            {"path": path.relative_to(expected).as_posix(), "content_sha256": digest}
+            for path, digest in sorted(members.items())]}, allow_nan=False)
+        allowed = {path.relative_to(expected).as_posix() for path in members}
+        if observe(str(resolve_source_path(expected)), allowed=allowed)[0] != version:
             raise ProjectConflict("The selected original directory differs from its complete confirmed member inventory.")
         assert active is not None
-        active.trees[str(root)] = SourceTreeRead(str(root), version)
+        active.trees[str(expected)] = SourceTreeRead(str(expected), version)
 
 
 def mapping_execution_header(path: Path, kind: str) -> dict[str, Any]:

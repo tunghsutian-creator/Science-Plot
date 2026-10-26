@@ -188,7 +188,8 @@ def _prepared_update_current(
             "worksheet": selected_sheet,
             "project_sha256": payload_hash(original_state),
             "source_files": source_state,
-            "source_tree_sha256": source_tree_sha256(source),
+            "source_tree_sha256": (source_tree_sha256(source, expected_file_sha256=next(iter(source_state.values())))
+                                   if source.is_file() else source_tree_sha256(source)),
             "annotation_decisions": annotation_decisions or [],
             "delivery_sha256": payload_hash(delivery_state),
             "changes": compare_figures(project, candidate),

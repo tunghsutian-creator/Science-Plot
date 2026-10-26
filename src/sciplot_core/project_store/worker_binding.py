@@ -229,7 +229,8 @@ def bound_mapping_inputs(value: dict[str, Any] | None) -> Iterator[None]:
             if observed.actual_mode != item["mode"]:
                 raise ProjectConflict("The worker mapping input changed its exact physical permissions.")
         execution = json.loads(active.files[active.execution].data)
-        roots = {str(Path(active.execution).parent / "data"), execution["source_root"]}
+        seed = json.loads(active.files[execution["request_seed"]].data)
+        roots = {str(Path(active.execution).parent / "data"), execution["source_root"], seed["input"]}
         if any(item["locator"] not in active.files and item["locator"] not in roots for item in value["trees"]):
             raise ProjectConflict("A worker mapping tree is not one of this exact execution's declared source/output roots.")
         active.trees = {item["locator"]: SourceTreeRead(**item) for item in value["trees"]}

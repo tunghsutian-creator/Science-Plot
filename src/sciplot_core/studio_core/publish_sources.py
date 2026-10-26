@@ -121,6 +121,7 @@ def prepare_studio_run_sources(
         project_dir=project_dir,
         transform_ledger=existing_ledger,
     )
+    source_versions: dict[Path, str] = {}
     if veusz_documents is not None:
         snapshot_sources = registered_task_snapshot_sources(
             request=request,
@@ -128,10 +129,11 @@ def prepare_studio_run_sources(
             documents=veusz_documents,
             existing_sources=snapshot_sources,
             data_mapping_application=data_mapping_application,
+            source_versions=source_versions,
         )
     snapshot_source = snapshot_sources[0] if snapshot_sources else None
     processed_source = (
-        _write_studio_data_snapshots(snapshot_sources, output_dir)
+        _write_studio_data_snapshots(snapshot_sources, output_dir, source_versions=source_versions)
         if snapshot_sources
         else None
     )

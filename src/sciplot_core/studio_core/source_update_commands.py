@@ -23,7 +23,10 @@ def source_mutation(project: Path, candidate: Path, review: dict[str, Any], *,
                     store: FileProjectStore | None = None, logical_paths_bound: bool = False) -> tuple[dict[str, bytes | Path | PreparedFile | None], dict[str, bytes | Path]]:
     names = sorted(path.name for path in candidate.iterdir()
                    if path.name not in {"runs", "delivery", ".sciplot_store", ".sciplot_resources"})
-    if not {"plot_request.json", "studio", "source", "raw"}.issubset(names):
+    before = expected if expected is not None else project_inventory(project)
+    required = {"plot_request.json", "studio"} | {name for name in ("raw", "source")
+        if any(member == name or member.startswith(name + "/") for member in before)}
+    if not required.issubset(names):
         raise ValueError("Prepared source update is missing required active project parts")
     for path in ([] if logical_paths_bound else [*candidate.glob("*.json"), *(candidate / "studio").rglob("*.json")]):
         value = json.loads(path.read_text())
@@ -37,7 +40,6 @@ def source_mutation(project: Path, candidate: Path, review: dict[str, Any], *,
         from sciplot_core.studio_core.launchers import _write_veusz_launcher
 
         _write_veusz_launcher(candidate, project / "studio/document.vsz")
-    before = expected if expected is not None else project_inventory(project)
     writes: dict[str, bytes | Path | PreparedFile | None] = {}
     artifacts: dict[str, bytes | Path] = {"review.json": json.dumps(review, ensure_ascii=False, allow_nan=False).encode()}
     for logical in before:

@@ -12,7 +12,7 @@ from collections.abc import Callable
 import pandas as pd
 
 from sciplot_core.data_mapping.contracts import _read_json
-from sciplot_core.data_mapping.execution_inputs import mapping_file_path, mapping_input_reads
+from sciplot_core.data_mapping.execution_inputs import mapping_file_path, mapping_file_sha256, mapping_input_reads
 from sciplot_core.data_mapping.curve_support import table_mapping_shape, supports_table_mapping
 from sciplot_core.data_mapping.execution_loading import load_data_mapping_execution
 from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_request
@@ -102,9 +102,12 @@ def _resolve_mapping_plan_request(source: Path, request: dict[str, Any], *,
     effective_input = Path(effective["input"]).expanduser().resolve()
     if source_tree_reader is None:
         original_hash = source_tree_sha256(source, expected_file_sha256=next(iter(raw_hashes)))
-        actual_input = (mapping_directory_path(execution) if execution["effective_input"] == execution["data_dir"]
-                        else mapping_file_path(effective_input))
-        effective_hash = source_tree_sha256(actual_input)
+        if execution["effective_input"] == execution["data_dir"]:
+            effective_hash = source_tree_sha256(mapping_directory_path(execution))
+        else:
+            version = mapping_file_sha256(effective_input)
+            actual_input = mapping_file_path(effective_input, expected_sha256=version)
+            effective_hash = source_tree_sha256(actual_input, expected_file_sha256=version)
     else:
         original_hash = source_tree_reader(source)
         effective_hash = source_tree_reader(effective_input)
