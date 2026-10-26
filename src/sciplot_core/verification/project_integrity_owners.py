@@ -94,6 +94,8 @@ PROJECT_INTEGRITY_OWNERS = (
             "tests/test_project_export_use_case.py",
             "tests/test_mechanical_figure_plan_activation.py",
             "tests/test_managed_document_science.py",
+            "tests/test_current_complete_tree_scope.py",
+            "tests/test_project_root_identity.py",
         "tests/test_project_publication_source_versions.py",
         "tests/test_saved_project_export_route.py",
     ),

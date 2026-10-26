@@ -89,6 +89,8 @@ PROJECT_RUNTIME_TESTS = (
     "tests/test_mapping_replicate_source_versions.py",
     "tests/test_mapping_worker_inputs.py",
     "tests/test_studio_snapshot_source_versions.py",
+    "tests/test_current_complete_tree_scope.py",
+    "tests/test_project_root_identity.py",
 )
 
 PROJECT_COMMAND_TESTS = (

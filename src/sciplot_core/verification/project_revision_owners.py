@@ -85,6 +85,8 @@ PROJECT_REVISION_OWNERS = (
             "tests/test_project_source_update_transaction.py",
             "tests/test_task_source_update.py",
             "tests/test_project_source_update_native.py",
+            "tests/test_current_complete_tree_scope.py",
+            "tests/test_project_root_identity.py",
             "tests/test_project_revision_cli.py",
             "tests/test_veusz_worker_thread_boundary.py",
             "tests/test_architecture_boundaries.py",
