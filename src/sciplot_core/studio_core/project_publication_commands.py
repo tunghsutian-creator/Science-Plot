@@ -14,7 +14,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_commands import NativeAdoption, ProjectCommands, ProjectMutation
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore
-from sciplot_core.project_store.runtime import project_runtime
+from sciplot_core.studio_core.preparation_source_runtime import current_preparation_runtime
 from sciplot_core.studio_core.project_command_scope import command_for_binding, project_store, source_versions, whole_memberships
 from sciplot_core.studio_core.request_paths import _canonical_publish_paths
 
@@ -81,7 +81,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
 
     delivery_before = _package_snapshot(delivery_root)
     writes: dict[str, bytes | Path | PreparedFile | None] = {}
-    with TemporaryDirectory(prefix="sciplot-publication-") as temporary, project_runtime(repository):
+    with TemporaryDirectory(prefix="sciplot-publication-") as temporary, current_preparation_runtime(repository, before) as verify_sources:
         from sciplot_core.studio_core.project_command_scope import figure_read_state
         from sciplot_core.studio_core.project_query_paths import project_snapshot
 
@@ -151,6 +151,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
                 canonical_json_sha256(manifest["result"]["scientific_data_verification"])))
         command = command_for_binding(repository, binding, kind="native_import" if adoptions else "publish",
             key=key, writes=list(writes), request=intent, native_adoptions=adoptions)
+        verify_sources()
         result = app.execute(command, lambda: ProjectMutation(writes, payload,
             sources=source_versions(binding, store=repository),
             artifacts={"publication.json": json.dumps(manifest, ensure_ascii=False, allow_nan=False).encode()}))
