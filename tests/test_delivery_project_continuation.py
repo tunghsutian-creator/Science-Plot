@@ -14,7 +14,7 @@ from sciplot_core.launchers import (
 from sciplot_core.launchers.delivery_binding import make_delivery_binding
 from sciplot_core.studio_core.delivery_target import resolve_delivery_target
 from sciplot_core.studio_core.studio_prepare import prepare_studio_document
-import sciplot_core.studio_core.studio_prepare as preparation
+import sciplot_core.studio_core.studio_prepare_core as preparation
 import sciplot_core.studio_core.studio_command as command
 
 
@@ -110,15 +110,34 @@ def test_continue_edit_then_export_uses_canonical_project_without_regeneration(
     tmp_path: Path, monkeypatch, capsys
 ):
     root, project, canonical, launcher = _linked_delivery(tmp_path, multiple=True)
-    calls = []
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store.adapters import publish_files
+    from sciplot_core.studio_core import project_publication_commands
+    from sciplot_core.studio_core.preparation_candidate import require_preparation_candidate
+
+    calls, reused = [], []
+    source = tmp_path / "source.csv"
+    raw_bytes = source.read_bytes()
+    request_path = project / "plot_request.json"
+    request_bytes = request_path.read_bytes()
+    visible_bytes = {path: path.read_bytes() for path in (root / "project").glob("*.vsz")}
 
     def reuse(**kwargs):
-        assert kwargs["document_path"] == canonical
+        private = kwargs["project_dir"]
+        assert require_preparation_candidate(private).logical_root == project
+        assert private != project
+        assert kwargs["document_path"] == private / canonical.relative_to(project)
+        assert kwargs["request_path"] == private / request_path.relative_to(project)
+        assert kwargs["document_path"].read_bytes() == canonical.read_bytes()
+        assert kwargs["request_path"].read_bytes() == request_bytes
+        reused.append(private)
         return {
             "mode": "project",
-            "project_dir": str(project),
-            "request": str(project / "plot_request.json"),
-            "document": str(canonical),
+            "project_dir": str(private),
+            "request": str(kwargs["request_path"]),
+            "document": str(kwargs["document_path"]),
+            "preserved_existing_document": True,
         }
 
     def forbidden(**kwargs):
@@ -128,34 +147,44 @@ def test_continue_edit_then_export_uses_canonical_project_without_regeneration(
     monkeypatch.setattr(preparation, "generate_studio_document", forbidden)
     prepared = prepare_studio_document(launcher)
     assert Path(prepared["document"]) == canonical
-    canonical.write_bytes(b"edited in the live managed document")
-
-    def export(document, *, formats):
-        calls.append(("export", document))
-        assert document.read_bytes() == b"edited in the live managed document"
-        return {"exports": [], "document_sha256": existing_file_sha256(document)}
+    store = project_store(project)
+    records = store.commands()
+    assert len(records) == 1 and records[0]["phase"] == "complete"
+    replayed = ProjectCommands(store).resume(ProjectCommand.from_payload(records[0]["metadata"]))
+    assert Path(replayed["result"]["document"]) == canonical and len(reused) == 1
+    edited = b"edited in the live managed document"
+    publish_files(store, {"studio/document.vsz": edited}, kind="save")
+    assert canonical.read_bytes() == edited
+    edited_sha = existing_file_sha256(canonical)
 
     def publish(**kwargs):
         calls.append(("publish", kwargs["document_path"]))
         assert kwargs["project_dir"] == project
-        assert kwargs["request_path"] == project / "plot_request.json"
-        assert kwargs["export_document_sha256"] == existing_file_sha256(canonical)
-        return {"ready_to_use": True, "exports": [], "scope": "project_delivery"}
+        assert kwargs["request_path"] == request_path
+        assert kwargs["formats"] == ["pdf", "tiff_300"]
+        assert kwargs["document_path"].read_bytes() == edited
+        assert existing_file_sha256(kwargs["document_path"]) == edited_sha
+        return {"ready_to_use": True, "exports": [], "scope": "project_delivery",
+                "document_sha256": edited_sha}
 
     monkeypatch.setattr(command, "maybe_reexec_with_qt_runtime", lambda *args: None)
-    monkeypatch.setattr(command, "export_studio_document", export)
-    monkeypatch.setattr(command, "publish_studio_export_run", publish)
+    monkeypatch.setattr(project_publication_commands, "publish_project_exports", publish)
     assert (
         command.run_studio_command(
             target=launcher, export="pdf,tiff_300", json_output=True
         )
         == 0
     )
-    assert calls == [("export", canonical), ("publish", canonical)]
+    assert calls == [("publish", canonical)] and len(reused) == 2
     payload = json.loads(capsys.readouterr().out)
+    assert Path(payload["document"]) == canonical
     assert payload["studio_run"]["ready_to_use"] is True
+    assert payload["studio_run"]["document_sha256"] == edited_sha
     assert "standalone_export" not in payload
+    assert canonical.read_bytes() == edited and source.read_bytes() == raw_bytes
+    assert request_path.read_bytes() == request_bytes
     assert (root / "project" / "primary.vsz").read_bytes() == b"canonical Veusz project"
+    assert {path: path.read_bytes() for path in visible_bytes} == visible_bytes
 
 
 def test_binding_is_inert_and_malformed_binding_does_not_pass_launcher_check(
