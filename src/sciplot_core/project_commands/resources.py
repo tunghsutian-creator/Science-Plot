@@ -32,6 +32,30 @@ def namespace_prefix(value: str) -> str:
         return value
     return resource_key(value)
 
+
+@dataclass(frozen=True)
+class InputRead:
+    resource: str
+    source_id: str
+    sha256: str
+
+    def __post_init__(self) -> None:
+        resource_key(self.resource)
+        if (not isinstance(self.source_id, str) or re.fullmatch(r"[a-f0-9]{32}", self.source_id) is None
+                or not _sha(self.sha256)):
+            raise ValueError("An immutable input read requires its exact source UUID and version.")
+
+    def to_payload(self) -> dict[str, str]:
+        self.__post_init__()
+        return {"resource": self.resource, "source_id": self.source_id, "sha256": self.sha256}
+
+    @classmethod
+    def from_payload(cls, value: Any) -> InputRead:
+        if not isinstance(value, dict) or set(value) != {"resource", "source_id", "sha256"}:
+            raise ValueError("An immutable input read requires exact closed fields.")
+        return cls(value["resource"], value["source_id"], value["sha256"])
+
+
 @dataclass(frozen=True)
 class ProjectionRead:
     resource: str

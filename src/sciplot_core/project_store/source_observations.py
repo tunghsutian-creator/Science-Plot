@@ -75,4 +75,7 @@ def adopt(io: StoreIO, current: dict[str, Any], value: dict[str, Any], record: d
         io.get(entry)
         before = current["files"][name]
         value["files"][name] = {**before, **{key: entry[key] for key in ("sha256", "size", "mode")}}
-    value["input_resources"] = sorted(set(current.get("input_resources", [])) | set(selected))
+    from .input_reads import require as require_inputs
+
+    immutable = require_inputs(io, current, record, observed=selected, frozen=frozen)
+    value["input_resources"] = sorted(set(current.get("input_resources", [])) | set(selected) | immutable)

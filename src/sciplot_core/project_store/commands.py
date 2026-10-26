@@ -139,7 +139,7 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
 
 def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | Path | PreparedFile | None],
           result: dict[str, Any], review: dict[str, Any], artifacts: Mapping[str, bytes | Path | PreparedFile] | None,
-          sources: Sequence[dict[str, Any]] | None) -> dict[str, Any]:
+          sources: Sequence[dict[str, Any]] | None, input_reads: Sequence[dict[str, str]] = ()) -> dict[str, Any]:
     if record["phase"] in {"needs_review", "accepted", "rejected", "complete"}:
         return record
     if record["phase"] not in {"reserved", "applying"}:
@@ -151,8 +151,12 @@ def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | P
     current = state.head(io)
     assert current is not None
     require_source_trees(io, current, record)
-    frozen = {"writes": state.import_writes(io, writes), "artifacts": state.import_writes(io, artifacts or {}),
+    frozen: dict[str, Any] = {"writes": state.import_writes(io, writes), "artifacts": state.import_writes(io, artifacts or {}),
               "sources": capture_sources(io, sources or review.get("source_versions")), "result": result, "review": review}
+    from .input_reads import values as input_values
+    declared = input_values(record, {"input_reads": list(input_reads)})
+    if declared:
+        frozen["input_reads"] = [item.to_payload() for item in declared]
     if record.get("source_tree_origins"):
         frozen["source_tree_origins"] = record["source_tree_origins"]
     for name in preconditions.native_adoptions(record):
@@ -169,6 +173,10 @@ def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | P
             prior = source_baseline["sources"].get(entry["source_id"], {}).get(entry["version"], {})
             if entry.get("produced_resource") is not None and not matched and prior.get("produced_resource") != entry["produced_resource"]:
                 raise ProjectConflict("A new produced source binding requires its exact same-command sealed output.")
+    from .input_reads import require as require_inputs
+    from .source_observations import observations
+
+    require_inputs(io, source_baseline, record, observed=observations(record), frozen=frozen)
     seal(io, record, frozen)
     from .namespace_transfers import require as require_namespaces
 

@@ -18,6 +18,7 @@ from .resources import PreparedFile as PreparedFile
 from .resources import SourceAdoption as SourceAdoption
 from .resources import NamespaceMember as NamespaceMember, NamespaceTransfer as NamespaceTransfer
 from .resources import SourceTreeRead as SourceTreeRead
+from .resources import InputRead as InputRead
 
 
 class CommandKind(StrEnum):
@@ -66,6 +67,7 @@ class ProjectCommand:
     source_adoptions: tuple[SourceAdoption, ...] = ()
     namespace_transfers: tuple[NamespaceTransfer, ...] = ()
     source_trees: tuple[SourceTreeRead, ...] = ()
+    input_reads: tuple[InputRead, ...] = ()
 
     def __post_init__(self) -> None:
         if (not isinstance(self.kind, CommandKind) or not isinstance(self.key, str) or not 1 <= len(self.key) <= 128
@@ -130,6 +132,7 @@ class ProjectCommand:
         if (any(not isinstance(item, SourceTreeRead) for item in self.source_trees)
                 or len({item.locator for item in self.source_trees}) != len(self.source_trees)):
             raise ValueError("Source tree reads must be typed and unique per exact locator.")
+        validate_input_reads(self.input_reads, self)
         request = json.loads(self.request_json)
         if not isinstance(request, dict) or "idempotency_key" in request and request["idempotency_key"] != self.key:
             raise ValueError("The original request must agree with its command key.")
@@ -146,7 +149,8 @@ class ProjectCommand:
                read_memberships: Sequence[MembershipRead] = (),
                source_adoptions: Sequence[SourceAdoption] = (),
                namespace_transfers: Sequence[NamespaceTransfer] = (),
-               source_trees: Sequence[SourceTreeRead] = ()) -> ProjectCommand:
+               source_trees: Sequence[SourceTreeRead] = (),
+               input_reads: Sequence[InputRead] = ()) -> ProjectCommand:
         return cls(CommandKind(kind), key, project_id, expected_generation,
                    tuple(sorted(read_set.items())), tuple(sorted(write_set)),
                    json.dumps(request, sort_keys=True, ensure_ascii=False, allow_nan=False),
@@ -157,13 +161,14 @@ class ProjectCommand:
                    tuple(sorted(read_memberships, key=lambda item: item.prefix)),
                    tuple(sorted(source_adoptions, key=lambda item: item.resource)),
                    tuple(sorted(namespace_transfers, key=lambda item: item.prefix)),
-                   tuple(sorted(source_trees, key=lambda item: item.locator)))
+                   tuple(sorted(source_trees, key=lambda item: item.locator)),
+                   validate_input_reads(input_reads))
 
     @classmethod
     def from_payload(cls, value: Any) -> ProjectCommand:
         keys = {"version", "kind", "key", "project_id", "expected_generation", "expected_revision",
                 "read_set", "write_set", "projected_reads", "projected_writes", "native_adoptions", "read_memberships", "source_adoptions", "namespace_transfers", "request"}
-        optional = {"source_trees"} if isinstance(value, dict) and "source_trees" in value else set()
+        optional = {name for name in ("source_trees", "input_reads") if isinstance(value, dict) and name in value}
         if (not isinstance(value, dict) or set(value) != keys | optional or type(value.get("version")) is not int
                 or value["version"] != 1 or not isinstance(value["read_set"], dict)
                 or not isinstance(value["write_set"], list) or not isinstance(value["request"], dict)):
@@ -210,16 +215,20 @@ class ProjectCommand:
                 raise ValueError("Saved observed namespace members require exact closed fields.")
             transfers.append(NamespaceTransfer(**{**item, "members": tuple(NamespaceMember(**member) for member in members)}))
         trees = value.get("source_trees", [])
-        if (not isinstance(trees, list) or optional and not trees
+        if (not isinstance(trees, list) or "source_trees" in optional and not trees
                 or any(not isinstance(item, dict) or set(item) != {"locator", "tree_sha256"} for item in trees)):
             raise ValueError("Saved source tree reads require exact closed nonempty fields.")
+        inputs = value.get("input_reads", [])
+        if not isinstance(inputs, list) or "input_reads" in optional and not inputs:
+            raise ValueError("Saved immutable input reads require a closed nonempty list.")
         return cls.create(value["kind"], value["key"], project_id=value["project_id"],
                           expected_generation=value["expected_generation"], read_set=value["read_set"],
                           write_set=value["write_set"], request=value["request"],
                           expected_revision=value["expected_revision"], projected_reads=selectors("projected_reads"),
                           projected_writes=selectors("projected_writes"), native_adoptions=adoptions,
                           read_memberships=memberships, source_adoptions=observations, namespace_transfers=transfers,
-                          source_trees=[SourceTreeRead(**item) for item in trees])
+                          source_trees=[SourceTreeRead(**item) for item in trees],
+                          input_reads=[InputRead.from_payload(item) for item in inputs])
 
     def to_payload(self) -> dict[str, Any]:
         self.__post_init__()
@@ -235,6 +244,8 @@ class ProjectCommand:
                 "request": json.loads(self.request_json)}
         if self.source_trees:
             result["source_trees"] = [item.to_payload() for item in self.source_trees]
+        if self.input_reads:
+            result["input_reads"] = [item.to_payload() for item in validate_input_reads(self.input_reads)]
         return result
 
     @property
@@ -250,6 +261,7 @@ class ProjectMutation:
     review: dict[str, Any] | None = None
     artifacts: Mapping[str, bytes | Path | PreparedFile] = field(default_factory=dict)
     prepared_sources: tuple[PreparedSource, ...] = ()
+    input_reads: tuple[InputRead, ...] = ()
 
     @property
     def prepared_digest(self) -> str:
@@ -270,11 +282,20 @@ class ProjectMutation:
                     raise ValueError("Prepared storage publication cannot resolve external IO.")
             return result
 
-        return canonical_json_sha256({"writes": entries(self.writes), "artifacts": entries(self.artifacts),
+        value = {"writes": entries(self.writes), "artifacts": entries(self.artifacts),
                                       "result": self.result, "review": self.review,
-                                      "sources": [source.descriptor() for source in self.prepared_sources]}, allow_nan=False)
+                                      "sources": [source.descriptor() for source in self.prepared_sources]}
+        if self.input_reads:
+            value["input_reads"] = [item.to_payload() for item in validate_input_reads(self.input_reads)]
+        return canonical_json_sha256(value, allow_nan=False)
 
     def validate_for(self, command: ProjectCommand) -> None:
+        validate_input_reads(self.input_reads, command)
+        combined = {item.resource: item for item in command.input_reads}
+        for declared in self.input_reads:
+            if declared.resource in combined and combined[declared.resource] != declared:
+                raise ValueError("The command and candidate disagree on an immutable input.")
+            combined[declared.resource] = declared
         if set(self.writes) != set(command.write_set):
             raise ValueError("A candidate must contain exactly its admitted writes and deletions.")
         for name, value in self.writes.items():
@@ -302,7 +323,31 @@ class ProjectMutation:
             source.__post_init__()
         declarations = [*self.sources] if self.sources is not None else []
         declarations.extend(source.to_storage_payload() for source in self.prepared_sources)
+        for declared in combined.values():
+            if not any(item.get("source_id") == declared.source_id and item.get("version") == declared.sha256
+                       for item in declarations):
+                raise ValueError("An immutable input needs its exact same-batch captured source version.")
         for observed in command.source_adoptions:
             if not any(item.get("source_id") == observed.source_id and item.get("version") == observed.observed_sha256
                        for item in declarations):
                 raise ValueError("A new raw observation must have its exact declared source version.")
+
+
+def validate_input_reads(values: Sequence[InputRead], command: ProjectCommand | None = None) -> tuple[InputRead, ...]:
+    declared: dict[str, InputRead] = {}
+    for item in values:
+        if not isinstance(item, InputRead):
+            raise ValueError("Immutable input reads must use their typed resource declaration.")
+        item.__post_init__()
+        if item.resource in declared and declared[item.resource] != item:
+            raise ValueError("Immutable input reads disagree on one resource identity/version.")
+        declared[item.resource] = item
+        if command is None:
+            continue
+        reads = dict(command.read_set)
+        adoption = next((value for value in command.source_adoptions if value.resource == item.resource), None)
+        expected = adoption.observed_sha256 if adoption else reads.get(item.resource)
+        if (item.resource in command.write_set or expected is None or expected != item.sha256
+                or adoption is not None and adoption.source_id != item.source_id):
+            raise ValueError("An immutable input must bind a guarded source read and cannot be an output.")
+    return tuple(declared[name] for name in sorted(declared))

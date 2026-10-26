@@ -58,6 +58,8 @@ def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, 
         raise ProjectConflict("The expected generation belongs to another project.")
     require_memberships(io, baseline, dict(current), dict(record), observed=namespaces.memberships)
     require_bindings(baseline, record)
+    from .input_reads import require as require_inputs
+    require_inputs(io, current, record, observed=sources)
     if set(record["write_set"]) & set(current.get("input_resources", [])):
         raise ProjectConflict("An observed original input cannot become a materialized output write.")
     if set(record["write_set"]) & set(current.get("history_resources", [])):

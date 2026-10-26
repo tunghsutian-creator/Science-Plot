@@ -18,6 +18,10 @@ class ProjectCommands:
         values = [*(candidate.sources or ()), *(source.to_storage_payload() for source in candidate.prepared_sources)]
         return values or None
 
+    @staticmethod
+    def _input_options(candidate: ProjectMutation) -> dict[str, Any]:
+        return {"input_reads": [item.to_payload() for item in candidate.input_reads]} if candidate.input_reads else {}
+
     def _bound(self, command: ProjectCommand, record: dict[str, Any]) -> dict[str, Any]:
         if record.get("command_digest") != command.command_digest:
             raise ProjectCommandError("project_command_key_conflict", "This key belongs to a different immutable command.")
@@ -68,7 +72,8 @@ class ProjectCommands:
             return candidate
         return self._bound(command, self.store.publish(
             command.key, command.command_digest, writes=candidate.writes,
-            result=candidate.result, sources=self._sources(candidate), artifacts=candidate.artifacts))
+            result=candidate.result, sources=self._sources(candidate), artifacts=candidate.artifacts,
+            **self._input_options(candidate)))
 
     def stage_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
         """Durably freeze bytes without accepting a later ownership transfer."""
@@ -89,7 +94,7 @@ class ProjectCommands:
                 command.key, command.command_digest, writes=candidate.writes, result=candidate.result,
                 review={"publication": "prepared_storage", "prepared_digest": expected,
                         "candidate_review": candidate.review}, artifacts=candidate.artifacts,
-                sources=self._sources(candidate)))
+                sources=self._sources(candidate), **self._input_options(candidate)))
         if record.get("phase") in {"needs_review", "accepted"}:
             review = record.get("review", {})
             if review.get("publication") != "prepared_storage" or review.get("prepared_digest") != expected:
@@ -114,7 +119,7 @@ class ProjectCommands:
         return self._bound(command, self.store.stage(
             command.key, command.command_digest, writes=candidate.writes,
             result=candidate.result, review=candidate.review or {}, artifacts=candidate.artifacts,
-            sources=self._sources(candidate)))
+            sources=self._sources(candidate), **self._input_options(candidate)))
 
     def decide(self, command: ProjectCommand, *, decision_id: str, accept: bool) -> dict[str, Any]:
         if type(accept) is not bool:
