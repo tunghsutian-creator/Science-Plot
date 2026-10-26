@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+from types import MappingProxyType
 
 from sciplot_core.project_commands.resources import PreparedFile
 from uuid import uuid4
@@ -29,7 +30,36 @@ def generation(io: StoreIO, identity: str) -> dict[str, Any]:
     return value
 
 
-def head(io: StoreIO) -> dict[str, Any] | None:
+_CHECKED_HEAD = object()
+
+
+class CheckedHead:
+    """A verified immutable parent chain, private to one live IO validation batch."""
+    def __init__(self, io: StoreIO, value: dict[str, Any], generations: dict[str, dict[str, Any]], *,
+                 _verification: object | None = None) -> None:
+        if _verification is not _CHECKED_HEAD:
+            raise ProjectConflict("Only a fully verified head may construct its local history proof.")
+        self.current = value
+        self._generations = MappingProxyType(generations)
+        self._io, self._fd, self._epoch = io, io.fd, io.validation_epoch
+        self._active = True
+
+    def require(self, io: StoreIO, current: dict[str, Any]) -> None:
+        if (not self._active or io is not self._io or io.fd != self._fd or io.fd < 0
+                or io.validation_epoch != self._epoch or current is not self.current):
+            raise ProjectConflict("A checked history cannot cross its IO, head or mutation boundary.")
+
+    def reachable(self, io: StoreIO, current: dict[str, Any], identity: str) -> dict[str, Any]:
+        self.require(io, current)
+        if identity not in self._generations:
+            raise ProjectConflict("The expected generation is not committed project history.")
+        return self._generations[identity]
+
+    def close(self) -> None:
+        self._active = False
+
+
+def checked_head(io: StoreIO) -> CheckedHead | None:
     pointer = io.read("head.json")
     if pointer is None:
         return None
@@ -43,18 +73,25 @@ def head(io: StoreIO) -> dict[str, Any] | None:
     for versions in value.get("sources", {}).values():
         for item in versions.values():
             io.get(item)
-    cursor, seen = value, {value["generation"]}
+    cursor, generations = value, {value["generation"]: value}
     while cursor.get("parent") is not None:
         parent = generation(io, cursor["parent"])
-        if (parent["generation"] in seen or cursor.get("parent_sha256") != digest(parent)
+        if (parent["generation"] in generations or cursor.get("parent_sha256") != digest(parent)
                 or parent["project_id"] != value["project_id"] or parent["sequence"] != cursor["sequence"] - 1):
             raise ProjectConflict("The immutable complete project history changed or split.")
-        seen.add(parent["generation"])
+        generations[parent["generation"]] = parent
         cursor = parent
-    return value
+    return CheckedHead(io, value, generations, _verification=_CHECKED_HEAD)
 
 
-def reachable(io: StoreIO, current: dict[str, Any], identity: str) -> dict[str, Any]:
+def head(io: StoreIO) -> dict[str, Any] | None:
+    checked = checked_head(io)
+    return checked.current if checked is not None else None
+
+
+def reachable(io: StoreIO, current: dict[str, Any], identity: str, *, checked: CheckedHead | None = None) -> dict[str, Any]:
+    if checked is not None:
+        return checked.reachable(io, current, identity)
     value = current
     while value["generation"] != identity:
         if value.get("parent") is None:

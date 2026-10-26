@@ -9,7 +9,7 @@ from .errors import ProjectConflict, ProjectRecoveryRequired
 from .io import StoreIO, directory, install, sha
 from .root_bindings import require as require_roots
 from .namespace_transfers import root_exemptions, verify_committed
-from .committed_outcomes import require as committed_outcome
+from .committed_outcomes import descendant_writes, require as committed_outcome
 import sciplot_core.project_store.state as state
 
 
@@ -26,18 +26,25 @@ def pending(io: StoreIO, current: dict[str, Any]) -> bool:
 
 def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> None:
     """Finish only old-or-exact-new projections; never overwrite foreign bytes."""
-    committed = committed_outcome(io, current, record)
+    if record.get("phase") == "complete":
+        raise ProjectRecoveryRequired("A completed receipt cannot reacquire active installation rights.")
+    checked = state.checked_head(io)
+    if checked is None or checked.current != current:
+        raise ProjectRecoveryRequired("The publication head changed before its projection admission.")
+    current = checked.current
+    committed = committed_outcome(io, current, record, checked=checked)
     if committed is None:
         raise ProjectRecoveryRequired("An unpublished candidate cannot materialize active project bytes.")
     require_roots(io, current, record)
     verify_committed(io, current, record)
     old, names = committed.parent, committed.files
+    rewritten = descendant_writes(io, current, committed.generation, checked=checked)
     # Validate the entire installation before the first replacement.
     for name in names:
         before, own, after = old["files"].get(name), committed.generation["files"].get(name), current["files"].get(name)
         physical = io.physical(name)
         actual = (sha(physical[0]), physical[1]) if physical else None
-        preimages = (after,) if name in committed.rewritten else (before, own, after)
+        preimages = (after,) if name in rewritten else (before, own, after)
         allowed = {(entry["sha256"], entry["mode"]) if entry else None for entry in preimages}
         if actual not in allowed:
             raise ProjectRecoveryRequired(f"Outside bytes prevent generation recovery: {name}")
@@ -47,6 +54,7 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
         if ((sha(physical[0]), physical[1]) if physical else None) == ((after["sha256"], after["mode"]) if after else None):
             continue
         state.boundary("before_projection")
+        checked.require(io, current)
         io.verify_roots()
         fd, components = io.split(name)
         with directory(fd, components[:-1], create=after is not None) as parent:
@@ -55,7 +63,7 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
             actual = (sha(current_physical[0]), current_physical[1]) if current_physical else None
             before = old["files"].get(name)
             own = committed.generation["files"].get(name)
-            preimages = (after,) if name in committed.rewritten else (before, own, after)
+            preimages = (after,) if name in rewritten else (before, own, after)
             if actual not in {(entry["sha256"], entry["mode"]) if entry else None for entry in preimages}:
                 raise ProjectConflict("A derived view changed during generation materialization.")
             if after is None:
@@ -66,10 +74,16 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
         state.boundary("after_projection")
 
 
-def recover(io: StoreIO, current: dict[str, Any]) -> list[str]:
+def recover(io: StoreIO, current: dict[str, Any], *, checked: state.CheckedHead | None = None) -> list[str]:
+    if checked is None:
+        checked = state.checked_head(io)
+        if checked is None or checked.current != current:
+            raise ProjectRecoveryRequired("Recovery must bind its exact checked head.")
+        current = checked.current
+    checked.require(io, current)
     pending_records = []
     for record in state.read_commands(io, expected=current["commands"]):
-        committed = committed_outcome(io, current, record)
+        committed = committed_outcome(io, current, record, checked=checked)
         if committed is not None and record.get("phase") != "complete":
             pending_records.append((record, committed))
     # Validate every derived record before relocation or any active replacement.

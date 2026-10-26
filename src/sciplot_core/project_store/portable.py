@@ -139,8 +139,11 @@ def import_bundle(bundle: Path, destination: Path, *,
                 bindings = io.read("local_native_work.json") or {"bindings": {}}
                 bindings["bindings"][digest(record["command_id"])] = identity
                 io.write("local_native_work.json", bindings)
+        checked = state.checked_head(io)
+        assert checked is not None
+        for record in records:
             if record.get("draft") is not None:
-                commands.public(io, record)
+                commands.public(io, record, checked=checked)
                 for source_id, versions in record["draft"].get("sources", {}).items():
                     for version, entry in versions.items():
                         try:

@@ -167,6 +167,7 @@ class StoreIO:
         self.namespace_backups = dict(namespace_backups or {})
         self.root_fds: dict[str, int] = {}
         self.fd = -1
+        self.validation_epoch = 0
 
     @contextmanager
     def locked(self, *, blocking: bool = False) -> Iterator[StoreIO]:
@@ -251,6 +252,7 @@ class StoreIO:
         return payload
 
     def write(self, name: str, payload: dict[str, Any], *, exclusive: bool = False) -> None:
+        self.validation_epoch += 1
         components = parts(name)
         with directory(self.fd, components[:-1], create=True) as parent:
             temporary = ".sciplot-json-" + uuid4().hex

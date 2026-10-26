@@ -62,6 +62,12 @@ class FileProjectStore:
     @contextmanager
     def _locked(self, *, import_legacy: bool = False, repair: bool = False,
                 allow_pending: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any]]]:
+        with self._checked_locked(import_legacy=import_legacy, repair=repair, allow_pending=allow_pending) as (io, current, _checked):
+            yield io, current
+
+    @contextmanager
+    def _checked_locked(self, *, import_legacy: bool = False, repair: bool = False,
+                        allow_pending: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any], state.CheckedHead]]:
         from .namespace_transfers import augment_controls
 
         active = owned_io(self.root)
@@ -70,17 +76,31 @@ class FileProjectStore:
             if active_head is not None:
                 augment_controls(active, active_head, self.location_members)
         with StoreIO(self.root, self.locations, self.location_members, self.namespace_backups).locked() as io:
-            current = state.head(io)
-            if current is None:
+            checked = state.checked_head(io)
+            if checked is None:
                 if not import_legacy:
                     raise ProjectRecoveryRequired("Explicit legacy import is required before project mutation.")
-                current = state.import_legacy(io)
-            augment_controls(io, current, self.location_members)
-            if repair:
-                projection.recover(io, current)
-            elif not allow_pending and projection.pending(io, current):
-                raise ProjectRecoveryRequired("A complete generation is committed; explicitly recover its derived files first.")
-            yield io, current
+                state.import_legacy(io)
+                checked = state.checked_head(io)
+            assert checked is not None
+            try:
+                current = checked.current
+                augment_controls(io, current, self.location_members)
+                if repair:
+                    epoch = io.validation_epoch
+                    projection.recover(io, current, checked=checked)
+                    if io.validation_epoch != epoch:
+                        checked.close()
+                        refreshed = state.checked_head(io)
+                        if refreshed is None:
+                            raise ProjectRecoveryRequired("Recovery lost its committed head; inspect the project before continuing.")
+                        checked = refreshed
+                        current = checked.current
+                elif not allow_pending and projection.pending(io, current):
+                    raise ProjectRecoveryRequired("A complete generation is committed; explicitly recover its derived files first.")
+                yield io, current, checked
+            finally:
+                checked.close()
 
     def snapshot(self, *, import_legacy: bool = False) -> dict[str, Any]:
         with self._locked(import_legacy=import_legacy) as (io, current):
@@ -198,19 +218,19 @@ class FileProjectStore:
                 renderer_dispatch_entered=renderer_dispatch_entered, owned_invocation_closed=owned_invocation_closed))
 
     def commands(self) -> tuple[dict[str, Any], ...]:
-        with self._locked(allow_pending=True) as (io, current):
+        with self._checked_locked(allow_pending=True) as (io, current, checked):
             records = state.read_commands(io, expected=current["commands"])
             pending = projection.pending(io, current)
-            return tuple(commands.public(io, record, projection_pending=pending) for record in records)
+            return tuple(commands.public(io, record, projection_pending=pending, checked=checked) for record in records)
 
     def recover(self) -> dict[str, Any]:
-        with self._locked(repair=True) as (io, current):
+        with self._checked_locked(repair=True) as (io, current, checked):
             unknown = []
             for record in state.read_commands(io, expected=current["commands"]):
                 if record["phase"] == "applying":
                     unknown.append(record["command_id"])
                 if record.get("draft") is not None:
-                    commands.public(io, record, create_views=True)
+                    commands.public(io, record, create_views=True, checked=checked)
             return {"phase": "unknown" if unknown else "complete", "project_id": current["project_id"],
                     "generation": current["generation"], "unknown_commands": sorted(unknown)}
 

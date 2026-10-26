@@ -15,14 +15,14 @@ class CommittedOutcome:
     generation: dict[str, Any]
     parent: dict[str, Any]
     files: tuple[str, ...]
-    rewritten: frozenset[str]
 
 
-def _descendant_writes(io: StoreIO, current: dict[str, Any], published: dict[str, Any]) -> frozenset[str]:
+def descendant_writes(io: StoreIO, current: dict[str, Any], published: dict[str, Any], *,
+                      checked: state.CheckedHead) -> frozenset[str]:
     """A later immutable author removes the older plan's right to install."""
     cursor, rewritten = current, set()
     while cursor["generation"] != published["generation"]:
-        parent = state.generation(io, cursor["parent"])
+        parent = state.reachable(io, current, cursor["parent"], checked=checked)
         for outcome in cursor["commands"].values():
             if outcome["generation"] == cursor["generation"]:
                 rewritten.update(outcome["write_set"])
@@ -35,8 +35,11 @@ def _descendant_writes(io: StoreIO, current: dict[str, Any], published: dict[str
     return frozenset(rewritten)
 
 
-def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any]) -> CommittedOutcome | None:
+def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
+            checked: state.CheckedHead | None = None) -> CommittedOutcome | None:
     """A mutable receipt may describe committed facts but cannot select them."""
+    if checked is not None:
+        checked.require(io, current)
     if (record.get("kind") != "sciplot_project_command" or record.get("version") != 1
             or record.get("project_id") != current["project_id"]
             or not isinstance(record.get("command_id"), str)
@@ -56,12 +59,12 @@ def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any]) -> Com
             or record.get("accepted") is not True
             or "pending_result" in record and record["pending_result"] != outcome.get("result")):
         raise ProjectConflict("A derived command receipt differs from its immutable generation outcome.")
-    published = state.reachable(io, current, outcome["generation"])
+    published = state.reachable(io, current, outcome["generation"], checked=checked)
     if (published["project_id"] != current["project_id"]
             or published["commands"].get(record["command_id"]) != outcome
             or published.get("parent") is None or outcome.get("phase") != "complete"):
         raise ProjectConflict("The command outcome is not bound to its committed publication generation.")
-    parent = state.reachable(io, current, published["parent"])
+    parent = state.reachable(io, current, published["parent"], checked=checked)
     if record["command_id"] in parent["commands"]:
         raise ProjectConflict("The command outcome must identify its first immutable publication.")
     draft = state.sealed_draft(io, record)
@@ -90,7 +93,7 @@ def require(io: StoreIO, current: dict[str, Any], record: dict[str, Any]) -> Com
         raise ProjectConflict("Only the exact accepted candidate may await committed projection recovery.")
     # This is an admission/read marker, never an installation parent. Concurrent
     # unrelated publications may have advanced the actual parent since reserve.
-    admitted = state.reachable(io, current, record["generation"])
+    admitted = state.reachable(io, current, record["generation"], checked=checked)
     if admitted["sequence"] > published["sequence"]:
         raise ProjectConflict("A receipt's generation marker cannot come from a later command.")
-    return CommittedOutcome(outcome, published, parent, files, _descendant_writes(io, current, published))
+    return CommittedOutcome(outcome, published, parent, files)

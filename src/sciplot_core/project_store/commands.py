@@ -206,16 +206,19 @@ def decide(io: StoreIO, record: dict[str, Any], decision_id: str, accept: bool) 
 
 
 def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
-           projection_pending: bool = False) -> dict[str, Any]:
+           projection_pending: bool = False, checked: state.CheckedHead | None = None) -> dict[str, Any]:
     result = dict(record)
-    current = state.head(io)
-    committed = committed_outcome(io, current, record) if current else None
+    checked = checked if checked is not None else state.checked_head(io)
+    current = checked.current if checked is not None else None
+    if checked is not None:
+        checked.require(io, checked.current)
+    committed = committed_outcome(io, current, record, checked=checked) if current else None
     if committed is not None and record.get("phase") != "complete":
         result["committed_generation"] = committed.generation["generation"]
         projection_pending = True
     if result["phase"] == "applying":
         result["phase"] = "unknown"
-    result["generation_sequence"] = state.reachable(io, current, result["generation"])["sequence"] if current else None
+    result["generation_sequence"] = state.reachable(io, current, result["generation"], checked=checked)["sequence"] if current else None
     result["projection_pending"] = projection_pending
     if record.get("native_workspace") is not None:
         import sciplot_core.project_store.native_work as native_work
@@ -254,6 +257,8 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
             result["artifact_root" if key == "artifacts" else "staged_root"] = (
                 str(io.root / ".sciplot_store" / "drafts" / digest(record["command_id"]) / expected / key)
                 if all_views else None)
+    if checked is not None:
+        checked.require(io, checked.current)
     return result
 
 
