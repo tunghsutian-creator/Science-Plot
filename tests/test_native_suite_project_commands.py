@@ -106,7 +106,13 @@ def test_cold_decision_and_reply_loss_never_repeat_native(bound):
     assert calls == ['patch', 'export']
     assert source.read_bytes() == raw
     store = FileProjectStore(workspace, locations={'delivery': delivery})
-    assert len(store.commands()) == 1 and store.commands()[0]['phase'] == 'complete'
+    records = store.commands()
+    assert len(records) == 2 and all(item['phase'] == 'complete' for item in records)
+    inspection, = [item for item in records if item['metadata']['request']['adapter'] == 'native_display_inspection']
+    candidate, = [item for item in records if item['metadata']['request']['adapter'] == 'native_display']
+    assert inspection['write_set'] == [] and candidate['metadata']['request']['inspection'] == inspection['command_digest']
+    assert candidate['expected_generation'] == inspection['generation']
+    assert inspection['metadata']['request']['request'] == candidate['metadata']['request']['request'] == req
     assert json.loads((workspace / 'suite.json').read_bytes()) == json.loads((delivery / 'data/delivery_manifest.json').read_bytes())
 
 
@@ -526,11 +532,13 @@ def test_sealed_legacy_preview_migrates_without_reapplying_native_and_keeps_deci
 
 
 def test_patch_inspects_native_only_after_exact_parent_admission(bound, monkeypatch):
+    from sciplot_core import rheology_tts_render as render
+
     events = []
     entered = FileProjectStore.mark_applying
     def mark(store, key, digest):
         result = entered(store, key, digest)
-        events.append(('admit', key))
+        events.append(('admit', key, store.query(key)['metadata']['request']['adapter']))
         return result
     capture = native.capture_object
     def inspect(context):
@@ -539,9 +547,21 @@ def test_patch_inspects_native_only_after_exact_parent_admission(bound, monkeypa
         return capture(context)
     monkeypatch.setattr(FileProjectStore, 'mark_applying', mark)
     monkeypatch.setattr(native, 'capture_object', inspect)
+    patch, export = render.patch_tts_display, render.export_tts_document
+    def mutate(*args, **kwargs):
+        assert events[-1][0] == 'admit' and events[-1][2] == 'native_display'
+        events.append(('patch',))
+        return patch(*args, **kwargs)
+    def publish(*args, **kwargs):
+        assert events[-1][0] == 'patch'
+        events.append(('export',))
+        return export(*args, **kwargs)
+    monkeypatch.setattr(render, 'patch_tts_display', mutate)
+    monkeypatch.setattr(render, 'export_tts_document', publish)
     path = Path(bound[3][0]['path'])
     native.patch_native(path, request(bound))
-    assert [item[0] for item in events] == ['admit', 'inspect']
+    assert [item[0] for item in events] == ['admit', 'inspect', 'admit', 'patch', 'export']
+    assert events[0][2] == 'native_display_inspection' and events[2][2] == 'native_display'
 
 
 def test_invalid_closed_patch_does_not_import_or_execute_native_even_after_manual_save(bound, monkeypatch):

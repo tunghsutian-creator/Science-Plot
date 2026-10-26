@@ -94,6 +94,8 @@ interface.Set('xPos', [.45]); interface.Set('yPos', [.25]); interface.Save(sys.a
 @pytest.mark.comprehensive
 def test_prepared_same_object_display_delta_preserves_science_native_and_optional(suite, monkeypatch):
     from sciplot_core import rheology_tts_render
+    from sciplot_core.foundation.json_hashing import canonical_json_sha256
+    from sciplot_core.project_store import FileProjectStore
 
     workspace, delivery, source, prepared, manifest = suite
     native, optional = [Path(item["path"]) for item in manifest["documents"]]
@@ -133,7 +135,18 @@ def test_prepared_same_object_display_delta_preserves_science_native_and_optiona
     assert len(result["exports"]) == 3
     assert patch_native_object(native, request)["replayed"] is True  # original base after commit
     assert decide_native_object(native, _accept(preview))["replayed"] is True
-    assert calls == [("display_state", "Main"), ("display_patch", "Main"), ("export", "Main")]
+    assert calls == [("audit", "Main"), ("display_state", "Main"), ("display_patch", "Main"), ("export", "Main")]
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    records = store.commands()
+    audited, = [item for item in records if item["metadata"]["request"].get("adapter") == "native_saved_audit"]
+    imported, = [item for item in records if item["metadata"]["request"].get("adapter") == "native_saved_import"]
+    assert audited["phase"] == imported["phase"] == "complete"
+    audit = audited["result"]["audit"]
+    assert audit["status"] == "passed" and audit["document_sha256"] == before
+    assert imported["metadata"]["native_adoptions"] == [{"resource": store.logical_path(native),
+        "before_sha256": audited["metadata"]["request"]["before"], "observed_sha256": before,
+        "audit_sha256": canonical_json_sha256(audit)}]
+    assert _saved_command(workspace, delivery, request)["read_set"][store.logical_path(native)] == before
     assert snapshot([Path(path) for path in protected]) == protected
     values = _native_settings(native, reads=["/page1/graph1/x/label", "/page1/graph1/key1/Text/size",
         "/page1/graph1/key1/horzPosn", "/page1/graph1/note_0/yPos", "/page1/graph1/note_0/label"])

@@ -14,6 +14,7 @@ from sciplot_core.workflow.native_suite_command_records import _application, _pr
 
 def _current_exports(context: dict[str, Any], native_sha: str) -> list[dict[str, Any]]:
     from sciplot_core.workflow.rheology_tts_saved_state import _export_receipts, _figure_folder
+    from sciplot_core.workflow.native_suite_runtime import current_store
 
     manifest, identifier = context["manifest"], context["figure_id"]
     receipt = _export_receipts(manifest).get(identifier)
@@ -39,6 +40,13 @@ def _current_exports(context: dict[str, Any], native_sha: str) -> list[dict[str,
         if Path(item["path"]) not in {origin_folder / name, origin_initial / name}:
             return []
         artifact = folder / name
+        store = current_store()
+        if store is not None:
+            try:
+                if store.projection_path(store.logical_path(artifact)) != artifact:
+                    return []
+            except (OSError, ValueError):
+                return []
         if (not artifact.is_file() or artifact.is_symlink() or file_sha256(artifact) != item["sha256"]
                 or ("exists" in item and item["exists"] is not True)
                 or ("size_bytes" in item and item["size_bytes"] != artifact.stat().st_size)):

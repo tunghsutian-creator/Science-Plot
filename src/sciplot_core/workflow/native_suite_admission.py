@@ -54,7 +54,7 @@ def _admit_wire_before_runtime(operation: str) -> Callable[[NativeHandler], Nati
                         saved_request = saved.get("request", {})
                         matches = (saved_request == value if operation == "patch" else
                                    all(saved_request.get(key) == item for key, item in value.items()))
-                        if saved.get("adapter") != "native_display" or saved.get("figure_id") != identifier or not matches:
+                        if saved.get("adapter") not in {"native_display", "native_display_inspection"} or saved.get("figure_id") != identifier or not matches:
                             raise EngineError("document_idempotency_conflict", "Use the command's exact original identity.")
                 # A new/unknown operation cannot repair another pending command.
                 # Legacy record discovery proceeds only while all views are current.

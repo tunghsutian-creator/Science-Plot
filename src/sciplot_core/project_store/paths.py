@@ -4,7 +4,7 @@ from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any, Protocol
 
-from .errors import ProjectConflict, ProjectStoreError
+from .errors import ProjectConflict, ProjectStoreError, ProjectSourceVersionMismatch
 from .io import STORE, StoreIO, parts, sha
 import sciplot_core.project_store.state as state
 import sciplot_core.project_store.native_work as native_work
@@ -85,7 +85,7 @@ def resolve_path(store: LocatorStore, original: str | Path, *, expected_sha256: 
         except OSError as exc:
             raise ProjectConflict("The exact registered original is missing; no same-name reconnection is allowed.") from exc
         if sha(data) != version:
-            raise ProjectConflict("The exact original source differs from its registered version.")
+            raise ProjectSourceVersionMismatch(literal, version, sha(data), "The exact original source differs from its registered version.")
         return source
 
 def literal_path(store: LocatorStore, actual: Path, *, generation: str | None = None) -> str:

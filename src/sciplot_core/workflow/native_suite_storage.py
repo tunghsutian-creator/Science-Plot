@@ -46,7 +46,7 @@ def pending_operation(context: dict[str, Any]) -> dict[str, Any] | None:
         for record in FileProjectStore(workspace, locations={"delivery": Path(context["delivery"])}).commands():
             migrated.add(record.get("review", {}).get("legacy_operation"))
             metadata = record.get("metadata", {}).get("request", {})
-            if (metadata.get("adapter") == "native_display" and metadata.get("figure_id") == context["figure_id"]
+            if (metadata.get("adapter") in {"native_display", "native_display_inspection"} and metadata.get("figure_id") == context["figure_id"]
                     and record["phase"] not in {"complete", "rejected"}):
                 matches.append({"request": metadata["request"], "phase": record["phase"]})
     for path in operation_paths(context):

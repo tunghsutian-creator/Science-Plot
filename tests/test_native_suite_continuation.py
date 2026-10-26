@@ -1,6 +1,5 @@
 """Native continuation binds existing selected audit files and visible artifacts."""
 
-import json
 from pathlib import Path
 
 import pytest
@@ -12,7 +11,8 @@ from sciplot_core.workflow.native_suite_operations import (
 )
 from sciplot_core.workflow.native_suite_storage import operation_path
 from sciplot_core.workflow.rheology_tts_style_storage import snapshot
-from test_native_suite_operations import suite as suite, _accept, _request
+from sciplot_core.project_store import FileProjectStore, ProjectConflict
+from test_native_suite_operations import suite as suite, _accept, _request, _saved_command
 
 
 @pytest.mark.comprehensive
@@ -48,8 +48,11 @@ def test_followup_edit_binds_existing_selected_audit_and_preserves_other_figures
     request = _request(described, key="followup-edit", changes=[{"op": "set", "target": ["legend:graph1"],
         "property": "legend.location", "value": "bottom-right"}])
     preview = patch_native_object(native, request)
-    record = json.loads(Path(preview["evidence"]).read_text())
-    assert record["baseline"][str(audit)] == file_sha256(audit)
+    record = _saved_command(workspace, delivery, request)
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    assert record["read_set"][store.logical_path(audit)] == file_sha256(audit)
+    assert record["decision_id"] == preview["decision_id"]
+    assert record["draft"]["artifacts"]["preview.json"]["sha256"] == file_sha256(Path(preview["evidence"]))
     result = decide_native_object(native, _accept(preview))
     assert result["status"] == "complete" and result["ready_to_use"] is True
     assert result["scientific_hash_changed"] is False and result["transform_execution"]["executed"] == []
@@ -69,12 +72,22 @@ def test_selected_audit_drift_is_closed_and_exact_restoration_can_resume(suite, 
     described = describe_native_object(native, description={"scope": "summary"})
     request = _request(described, key="selected-audit-drift")
     preview = patch_native_object(native, request)
+    frozen = _saved_command(workspace, delivery, request)
+    artifact_bytes = Path(preview["evidence"]).read_bytes()
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    head = (workspace / ".sciplot_store/head.json").read_bytes()
     audit.write_bytes(original + b"\ncontrolled drift")
-    with pytest.raises(ValueError, match="Stale presentation baseline"):
+    with pytest.raises(ProjectConflict, match="Outside bytes changed a declared project read: @delivery/panels/Main.native-audit.json"):
         decide_native_object(native, _accept(preview))
     assert snapshot([Path(name) for name in protected]) == protected
     assert not (Path(preview["evidence"]).parent / "applied.json").exists()
-    assert "accepted" not in json.loads(Path(preview["evidence"]).read_text())
+    rejected = _saved_command(workspace, delivery, request)
+    assert rejected["phase"] == "accepted" and rejected["accepted"] is True
+    assert (workspace / ".sciplot_store/head.json").read_bytes() == head
+    assert rejected["command_id"] not in store.snapshot()["commands"]
+    assert rejected["draft"] == frozen["draft"] and rejected["decision_id"] == frozen["decision_id"]
+    assert rejected["read_set"] == frozen["read_set"]
+    assert Path(preview["evidence"]).read_bytes() == artifact_bytes
     audit.write_bytes(original)
 
     def forbidden(_payload):

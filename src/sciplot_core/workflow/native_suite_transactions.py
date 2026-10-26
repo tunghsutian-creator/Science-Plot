@@ -10,7 +10,6 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 import json
 from sciplot_core.plot_document import validate_patch
-from sciplot_core.plot_document.validation import validate_wire
 from sciplot_core.plot_engine.contracts import validate_decide, validate_resume
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
@@ -18,7 +17,8 @@ from sciplot_core.project_store import FileProjectStore
 from sciplot_core.workflow.native_suite_generation import (
     command_for, json_bytes, mutation, saved_command, suite_paths,
 )
-from sciplot_core.workflow.native_suite_objects import capture_object, descriptor, require_object, native_identity, selected_spec
+from sciplot_core.workflow.native_suite_objects import capture_object, require_object, native_identity, selected_spec
+from sciplot_core.workflow.native_suite_patch_contract import _changes as _changes, _check_identity as _check_identity
 from sciplot_core.workflow.native_suite_runtime import native_runtime, suite_runtime
 
 
@@ -26,39 +26,10 @@ from sciplot_core.workflow.native_suite_admission import _admit_wire_before_runt
 from sciplot_core.workflow.native_suite_command_records import _application, _request, _key, _preview_export
 from sciplot_core.workflow.native_suite_receipts import _public, _legacy_result, _current_exports
 from sciplot_core.workflow.native_suite_review_exports import _resume_preview_export, _publish_reviewed_exports
-
-def _check_identity(context: dict[str, Any], request: dict[str, Any]) -> None:
-    if request["plot_id"] != context["plot_id"]:
-        raise EngineError("document_identity_conflict", "The request belongs to a different native figure.")
-    if request["base_revision"] != context["revision"]:
-        raise EngineError("document_revision_conflict", "Read the current object revision before changing it.",
-                          action="plot.describe", current_revision=context["revision"])
+from sciplot_core.workflow.native_suite_patch_phases import inspected_patch
 
 
-def _changes(context: dict[str, Any], request: dict[str, Any]) -> tuple[list[Any], list[Any]]:
-    if request["intent_class"] != "presentation":
-        raise EngineError("native_object_intent_unsupported", "This native adapter accepts presentation deltas only.")
-    targets, seen, diff, native = context["state"]["targets"], set(), [], []
-    for change in request["changes"]:
-        prop, value = change["property"], change["value"]
-        for identifier in change["target"]:
-            item = targets.get(identifier)
-            if item is None:
-                raise EngineError("document_unknown_target", "Choose an existing advertised target.")
-            if prop not in item["properties"]:
-                raise EngineError("document_unsupported_property", "This object does not advertise that property.")
-            if (identifier, prop) in seen:
-                raise EngineError("document_duplicate_change", "Set each target/property once per transaction.")
-            seen.add((identifier, prop))
-            validate_wire(value, descriptor(prop)["value_schema"], code="figure_edit_invalid_value")
-            before = item["properties"][prop]
-            if before == value:
-                continue
-            diff.append({"target": identifier, "property": prop, "before": deepcopy(before),
-                         "after": deepcopy(value), "risk": "presentation"})
-            native.append({"target": identifier, "property": prop, "value": deepcopy(value),
-                           "before_native": deepcopy(item["native_fields"])})
-    return diff, native
+
 
 
 def _prepare_requested(context: dict[str, Any], request: dict[str, Any], store: FileProjectStore) -> ProjectMutation:
@@ -97,6 +68,7 @@ def _prepare_current(context: dict[str, Any], captured: dict[str, Any], request:
     from sciplot_core.workflow.rheology_tts_style_update import publication_updates
     from sciplot_core.workflow.rheology_tts_saved_state import _check_sources
 
+    _check_sources(captured["manifest"]["sources"])
     with tempfile.TemporaryDirectory(prefix="sciplot-native-command-") as temporary:
         directory = Path(temporary).resolve()
         candidate = directory / Path(context["plot"]).name
@@ -235,6 +207,9 @@ def patch_native(target: Path, request: dict[str, Any]) -> dict[str, Any]:
     context = require_object(target, repair=True)
     store, app = _application(context)
     original = _request(context, request)
+    prior = app.query(_key(context, request))
+    if prior is not None and prior["metadata"]["request"].get("adapter") == "native_display_inspection":
+        return _public(context, inspected_patch(context, request, store, app, capture=capture_object, prepare=_prepare), replayed=True)
     command = saved_command(app, _key(context, request), original)
     if command is not None:
         record = app.query(command.key)
@@ -265,11 +240,7 @@ def patch_native(target: Path, request: dict[str, Any]) -> dict[str, Any]:
         for name, item in contract.items()}}}, request)
     from sciplot_core.workflow.native_suite_generation import adopt_saved_native
     adopt_saved_native(store, context["manifest"], (context["figure_id"],))
-    reads, writes = suite_paths(Path(context["workspace"]), context["manifest"], (context["figure_id"],), native_writes=True)
-    command = command_for(store, "native_patch", _key(context, request), request=original, reads=reads,
-                          writes=writes, figure_id=context["figure_id"], expected_revision=request["base_revision"])
-    record = app.preview(command, lambda: _prepare_requested(context, request, store))
-    return _public(context, _finish_preview(app, command, record))
+    return _public(context, inspected_patch(context, request, store, app, capture=capture_object, prepare=_prepare))
 
 
 @_admit_wire_before_runtime("resume")
@@ -288,6 +259,11 @@ def resume_native(target: Path, request: dict[str, Any]) -> dict[str, Any]:
                 return _legacy_result(context, legacy, path, replayed=True)
             return _public(context, _import_legacy_preview(context, legacy, path, store, app), replayed=True)
         raise EngineError("document_unknown_transaction", "No saved generation command matches this request.")
+    if record["metadata"]["request"].get("adapter") == "native_display_inspection":
+        original = record["metadata"]["request"]["request"]
+        record = inspected_patch(context, original, store, app, capture=capture_object, prepare=_prepare)
+        if record["metadata"]["request"].get("adapter") == "native_display_inspection":
+            return _public(context, record, replayed=True)
     command = ProjectCommand.from_payload(record["metadata"])
     original = command.to_payload()["request"]
     if original.get("adapter") != "native_display" or any(original["request"][key] != request[key] for key in request):

@@ -60,8 +60,10 @@ def saved_command(app: ProjectCommands, key: str, request: dict[str, Any]) -> Pr
 def command_for(store: FileProjectStore, kind: str, key: str, *, request: dict[str, Any],
                 reads: Iterable[Path], writes: Iterable[Path], figure_id: str | None = None,
                 expected_revision: int | None = None, whole: bool = False,
-                figure_ids: tuple[str, ...] | None = None) -> ProjectCommand:
-    current = store.snapshot()
+                figure_ids: tuple[str, ...] | None = None, generation: str | None = None) -> ProjectCommand:
+    with store._locked() as (io, head):
+        from sciplot_core.project_store.state import reachable
+        current = reachable(io, head, generation) if generation is not None else head
     read_set = {}
     write_set = [store.logical_path(path) for path in writes]
     selectors = figure_ids or ((figure_id,) if figure_id else ())
@@ -71,7 +73,7 @@ def command_for(store: FileProjectStore, kind: str, key: str, *, request: dict[s
         if logical not in manifest_names:
             read_set[logical] = current["files"].get(logical, {}).get("sha256")
     selected = [ProjectionRead(name, "native_suite_figure_v1", identifier,
-                projection_digest(store.read_bytes(name), kind="native_suite_figure_v1", key=identifier))
+                projection_digest(store.read_bytes(name, generation=current["generation"]), kind="native_suite_figure_v1", key=identifier))
                 for name in sorted(manifest_names) for identifier in selectors]
     return ProjectCommand.create(kind, key, project_id=current["project_id"],
         expected_generation=current["generation"], read_set=read_set, write_set=write_set,

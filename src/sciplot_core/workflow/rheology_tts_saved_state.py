@@ -33,9 +33,16 @@ def _bound_sources(request: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _check_sources(sources: list[dict[str, Any]]) -> None:
+    from sciplot_core.foundation.source_errors import SourceVersionMismatch
+
     for source in sources:
         from sciplot_core.project_store.runtime import resolve_runtime_path
-        path = resolve_runtime_path(source["path"], expected_sha256=source["sha256"], source_id=source.get("source_id"))
+        try:
+            path = resolve_runtime_path(source["path"], expected_sha256=source["sha256"], source_id=source.get("source_id"))
+        except SourceVersionMismatch as exc:
+            if (exc.literal, exc.expected_sha256) != (source["path"], source["sha256"]):
+                raise
+            raise ValueError(f"Original source changed: {source['path']}; a new analysis is required.") from exc
         if not path.is_file() or _sha(path) != source["sha256"]:
             raise ValueError(f"Original source changed: {path}; a new analysis is required.")
 
