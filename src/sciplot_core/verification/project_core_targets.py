@@ -39,6 +39,7 @@ PROJECT_STORE_TESTS = (
     'tests/test_project_prepared_inputs.py',
     'tests/test_project_store.py',
     'tests/test_project_store_faults.py',
+    'tests/test_project_derived_directories.py',
     'tests/test_project_store_preconditions.py',
     'tests/test_project_source_observations.py',
     'tests/test_project_native_work.py',
