@@ -58,7 +58,7 @@ def literal_runtime_project_root(original: str | Path) -> str:
         raise ProjectStoreError("A private candidate cannot identify the current host project root.")
     if isinstance(selected, ProjectSourceResolver):
         return literal_project_root(selected.store, original, generation=selected.generation)
-    return literal_source_path(original)
+    return literal_source_path(Path(original))
 
 
 def projected_runtime_directory(original: str | Path) -> Path:
