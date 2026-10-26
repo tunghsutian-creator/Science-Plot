@@ -15,8 +15,8 @@ from sciplot_core.figure_plan import (
     source_tree_sha256,
 )
 from sciplot_core.materials_rules import get_rule
+from sciplot_core.studio import prepare_studio_document
 from sciplot_core.studio_core.export_execution import export_studio_document
-from sciplot_core.studio_core.prepare_generated import generate_studio_document
 from sciplot_core.studio_core.publish_run import publish_studio_export_run
 import sciplot_core.studio_core.prepare_generated_transaction as prepare_transaction_module
 import sciplot_core.workflow.single_task_bundle as single_task_bundle_module
@@ -81,13 +81,7 @@ def _snapshot(root: Path) -> dict[str, bytes]:
 def test_dsc_studio_activates_exact_single_task_registry(tmp_path: Path) -> None:
     project_dir, request_path = _write_project(tmp_path)
 
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
-        rule_id=None,
-        template=None,
-        project_name=None,
-    )
+    prepared = prepare_studio_document(request_path, regenerate_generated=True)
 
     request = json.loads(request_path.read_text(encoding="utf-8"))
     plan = ResolvedFigurePlan.from_payload(request["resolved_figure_plan"])
@@ -112,13 +106,7 @@ def test_dsc_studio_activates_exact_single_task_registry(tmp_path: Path) -> None
 @pytest.mark.comprehensive
 def test_dsc_studio_publication_delivers_exact_single_figure(tmp_path: Path) -> None:
     project_dir, request_path = _write_project(tmp_path)
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
-        rule_id=None,
-        template=None,
-        project_name=None,
-    )
+    prepared = prepare_studio_document(request_path, regenerate_generated=True)
     document = Path(str(prepared["document"]))
     exported = export_studio_document(document, formats=["pdf", "tiff_300"])
 
@@ -156,13 +144,7 @@ def test_dsc_studio_render_failure_rolls_back_request_and_documents(
     monkeypatch.setattr(prepare_transaction_module, "_write_veusz_document", reject_render)
 
     with pytest.raises(RuntimeError, match="DSC Studio render failure"):
-        generate_studio_document(
-            project_dir=project_dir,
-            request_path=request_path,
-            rule_id=None,
-            template=None,
-            project_name=None,
-        )
+        prepare_studio_document(request_path, regenerate_generated=True)
 
     assert request_path.read_bytes() == original_request
     assert not (project_dir / "studio" / "document.vsz").exists()
