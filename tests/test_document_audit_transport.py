@@ -9,6 +9,7 @@ import pytest
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.source_coverage import document_audit as audit
 from sciplot_core.studio_core import delivery_recovery
+from sciplot_core.studio_core import native_scientific_audit
 
 
 @pytest.fixture
@@ -105,7 +106,7 @@ def test_returned_native_audit_does_not_skip_prepared_source_verification(candid
     def prepared(specification, snapshots):
         calls.append((specification, snapshots))
         raise ValueError("prepared scientific values changed")
-    monkeypatch.setattr(delivery_recovery, "_verify_prepared_data", prepared)
+    monkeypatch.setattr(native_scientific_audit, "_verify_prepared_data", prepared)
     with pytest.raises(ValueError, match="prepared scientific values changed"):
         delivery_recovery._audit_candidate(document, spec, native_audit=evidence(document, spec))
     assert len(calls) == 1
@@ -113,7 +114,7 @@ def test_returned_native_audit_does_not_skip_prepared_source_verification(candid
 
 @pytest.mark.parametrize("fault", [None, "live_document", "live_spec", "snapshot_document", "snapshot_spec"])
 def test_export_audit_rebinding_requires_identical_live_and_snapshot_bytes(candidate, tmp_path, monkeypatch, fault):
-    from sciplot_core.studio_core.publish_run import _snapshot_native_audit
+    from sciplot_core.studio_core.publication_prepare import _snapshot_native_audit
 
     document, spec = candidate
     # Managed non-primary document names use sibling .spec.json.

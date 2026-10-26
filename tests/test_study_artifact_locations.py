@@ -1,7 +1,6 @@
 """Host delivery addresses survive private cleanup; audit observations stay true."""
 
 from copy import deepcopy
-import errno
 from pathlib import Path
 import shutil
 
@@ -14,7 +13,7 @@ from sciplot_core.figure_plan.execution import (
 )
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.project_store import FileProjectStore
+from sciplot_core.project_store import FileProjectStore, ProjectConflict
 from sciplot_core.project_store.runtime import project_candidate_runtime
 from sciplot_core.study_model.run_artifacts import attach_run_artifacts_to_study_model
 from sciplot_core.terminal_request import project_terminal_render_request
@@ -134,13 +133,17 @@ def test_terminal_outcome_producers_share_one_literal_plan_and_strict_artifact_g
 
 def test_artifact_scope_refuses_alias_and_missing_output_without_rewriting_science(tmp_path):
     _project, _source, store, _snapshot, private, output, artifacts, plan, model = seed(tmp_path)
+    before = deepcopy(model), _source.read_bytes(), store.snapshot()
     alias = output / 'figures/alias.pdf'
     with project_candidate_runtime(store, private):
         alias.symlink_to(artifacts[1])
         assert not artifact_is_file(alias)
-        with pytest.raises(OSError) as refused:
-            attach_run_artifacts_to_study_model(model, output_dir=output, figures=[str(alias)])
-        assert refused.value.errno == errno.ELOOP
+        try:
+            with pytest.raises(ProjectConflict, match="cannot traverse aliases"):
+                attach_run_artifacts_to_study_model(model, output_dir=output, figures=[str(alias)])
+        finally:
+            alias.unlink()  # Remove only this test's rejected alias before scope revalidation.
         missing = finalize_figure_plan_result(plan, {'outputs': [str(output / 'missing.pdf')]})
         assert missing is not None and not missing.complete
         assert missing.outcomes[0].artifacts == ()
+    assert (model, _source.read_bytes(), store.snapshot()) == before

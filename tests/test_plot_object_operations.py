@@ -91,7 +91,7 @@ def native_owner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     target = tmp_path / "suite" / "editable" / "Figure_main.vsz"
     calls: list[tuple] = []
 
-    def resolve(path: Path, figure_id: str | None = None) -> dict:
+    def resolve(path: Path, figure_id: str | None = None, *, repair: bool = True) -> dict:
         calls.append(("resolve", path, figure_id))
         return {"plot": str(target)}
 
@@ -147,7 +147,7 @@ def test_native_object_uses_same_spine_without_semantic_import(native_owner, tmp
 def test_recognized_invalid_native_object_never_falls_through(native_owner) -> None:
     owner, target, calls = native_owner
 
-    def stale(*_):
+    def stale(*_, repair: bool = True):
         raise EngineError("native_source_changed", "The bound original source changed.")
 
     owner.resolve_native_object = stale

@@ -16,10 +16,9 @@ from sciplot_core.figure_plan import (
 )
 from sciplot_core.figure_plan.performance_resolution import resolve_performance_plan
 from sciplot_core.figure_plan.terminal_binding import bind_terminal_figure_evidence
-from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.studio import prepare_studio_document, read_studio_figure_set
-from sciplot_core.studio_core.export_execution import export_studio_document
-from sciplot_core.studio_core.prepare_generated import generate_studio_document
+from sciplot_core.studio import export_native_document_artifacts
 from sciplot_core.studio_core.publish_run import publish_studio_export_run
 from sciplot_core.studio_core.registry_state import _veusz_spec_path
 from sciplot_core.studio_render.models import StudioPreparationBlocked
@@ -61,9 +60,8 @@ def _prepare_performance_project(
         request["explicit_template_selection"] = True
     request_path = project_dir / "plot_request.json"
     _write_json(request_path, request)
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepared = prepare_studio_document(
+        project_dir,
         rule_id=None,
         template=None,
         project_name=None,
@@ -75,6 +73,18 @@ def _read_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert isinstance(payload, dict)
     return payload
+
+
+def _publish_registry_fixture(project: Path, writes: dict[str, bytes | None]) -> None:
+    """Admit an intentionally invalid domain fixture without a physical CAS race."""
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store.adapters import publish_files
+
+    store = project_store(project, with_snapshot=True)
+    before = store.snapshot()
+    publish_files(store, writes, kind="figure_set", baseline={"project_id": before["project_id"],
+        "generation": before["generation"], "files": {name: before["files"].get(name, {}).get("sha256") for name in writes}})
+    assert store.snapshot()["sequence"] == before["sequence"] + 1
 
 
 def test_default_studio_performance_plan_installs_mixed_task_registry(
@@ -135,7 +145,7 @@ def test_exact_current_performance_reuses_one_validated_registry_snapshot(
 
     def count_registry_read(path: Path) -> dict[str, Any]:
         nonlocal registry_reads
-        if path.resolve() == registry_path:
+        if Path(literal_source_path(path)) == registry_path:
             registry_reads += 1
         return read_json(path)
 
@@ -172,6 +182,10 @@ def test_exact_current_performance_registry_hash_detects_manual_primary_edit(
         if item["figure_id"] == registry["primary_figure_id"]
     )
     document.write_bytes(document.read_bytes() + b"\n# manual edit\n")
+    from sciplot_core.studio_core.project_command_scope import adopt_saved_native
+    from sciplot_core.studio_core.project_query import resolve_project_figure
+
+    adopt_saved_native(project_dir, resolve_project_figure(project_dir))
 
     prepared = prepare_studio_document(project_dir)
 
@@ -185,8 +199,10 @@ def test_exact_current_performance_rejects_split_generated_hash_projection(
 ) -> None:
     project_dir, _request_path, generated = _prepare_performance_project(tmp_path)
     document = Path(generated["document"])
-    document.write_bytes(document.read_bytes() + b"\n# manual edit\n")
-    edited_hash = existing_file_sha256(document)
+    from hashlib import sha256
+
+    edited_native = document.read_bytes() + b"\n# manual edit\n"
+    edited_hash = sha256(edited_native).hexdigest()
     assert edited_hash is not None
     registry_path = project_dir / "studio" / "figure_set.json"
     registry = _read_json(registry_path)
@@ -197,7 +213,8 @@ def test_exact_current_performance_rejects_split_generated_hash_projection(
     )
     assert primary["document_state"]["generated_hash"] != edited_hash
     primary["generated_hash"] = edited_hash
-    _write_json(registry_path, registry)
+    _publish_registry_fixture(project_dir, {"studio/document.vsz": edited_native,
+        "studio/figure_set.json": json.dumps(registry).encode()})
 
     with pytest.raises(StudioPreparationBlocked) as exc_info:
         prepare_studio_document(project_dir)
@@ -214,9 +231,10 @@ def test_required_plan_registry_failure_blocks_before_metadata_writes(
     project_dir, request_path, _generated = _prepare_performance_project(tmp_path)
     registry_path = project_dir / "studio" / "figure_set.json"
     if registry_state == "missing":
-        registry_path.unlink()
+        replacement = None
     else:
-        registry_path.write_text("{not-json", encoding="utf-8")
+        replacement = b"{not-json"
+    _publish_registry_fixture(project_dir, {registry_path.relative_to(project_dir).as_posix(): replacement})
     request_before = request_path.read_bytes()
     metadata_writes: list[str] = []
 
@@ -254,7 +272,7 @@ def test_default_studio_exact_current_publish_exports_both_tasks(
 ) -> None:
     project_dir, request_path, prepared = _prepare_performance_project(tmp_path)
     document = Path(prepared["document"])
-    exported = export_studio_document(
+    exported = export_native_document_artifacts(
         document,
         formats=["pdf", "tiff_300"],
     )

@@ -18,8 +18,7 @@ from sciplot_core.readiness import semantic_contract_sha256
 from sciplot_core.studio import prepare_studio_document
 from sciplot_core.studio_core import publish_finalize as finalize_module
 from sciplot_core.studio_core import publish_inventory as inventory_module
-from sciplot_core.studio_core.export_execution import export_studio_document
-from sciplot_core.studio_core.prepare_generated import generate_studio_document
+from sciplot_core.studio import export_native_document_artifacts
 from sciplot_core.studio_core.publish_evidence import StudioPublicationEvidence
 from sciplot_core.studio_core.publish_inventory import StudioExportInventory
 from sciplot_core.studio_core.publish_manifest import (
@@ -83,9 +82,8 @@ def _performance_project(
         request["explicit_template_selection"] = True
     request_path = project_dir / "plot_request.json"
     _write_json(request_path, request)
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepared = prepare_studio_document(
+        project_dir,
         rule_id=None,
         template=None,
         project_name=None,
@@ -177,9 +175,8 @@ def test_unsupported_performance_template_fails_before_document_write(
     )
 
     with pytest.raises(ValueError, match="is not supported by material rule"):
-        generate_studio_document(
-            project_dir=project_dir,
-            request_path=request_path,
+        prepare_studio_document(
+            project_dir,
             rule_id=None,
             template=None,
             project_name=None,
@@ -207,9 +204,8 @@ def test_malformed_present_template_fails_before_document_write(
     )
 
     with pytest.raises(ValueError):
-        generate_studio_document(
-            project_dir=project_dir,
-            request_path=request_path,
+        prepare_studio_document(
+            project_dir,
             rule_id=None,
             template=None,
             project_name=None,
@@ -647,7 +643,7 @@ def test_explicit_alternate_survives_real_studio_publication(
     project_dir = Path(prepared["project_dir"])
     request_path = Path(prepared["request"])
     document_path = Path(prepared["document"])
-    exported = export_studio_document(
+    exported = export_native_document_artifacts(
         document_path,
         formats=["pdf", "tiff_300"],
     )

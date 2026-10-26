@@ -789,15 +789,29 @@ def test_prior_legacy_registry_cannot_override_current_task_document_stem(
         },
     )
 
-    registry = _prepare_studio_figure_set(
-        project_dir=project_dir,
-        request_path=request_path,
-        request=json.loads(request_path.read_text(encoding="utf-8")),
-        primary_document=project_dir / "studio" / "document.vsz",
-        preserve_existing=True,
-        queue_override=queue,
-        figure_plan=plan,
-    )
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.adapters import publish_files
+    from sciplot_core.studio_core.preparation_candidate import studio_preparation_candidate
+
+    store = FileProjectStore(project_dir)
+    before = store.snapshot(import_legacy=True)
+    with studio_preparation_candidate(store) as candidate:
+        registry = _prepare_studio_figure_set(
+            project_dir=candidate.project_dir,
+            request_path=candidate.project_dir / "plot_request.json",
+            request=json.loads(candidate.read_member("plot_request.json").data),
+            primary_document=candidate.project_dir / "studio/document.vsz",
+            preserve_existing=True,
+            queue_override=queue,
+            figure_plan=plan,
+        )
+        registry = candidate.project_payload({"figure_set": registry})["figure_set"]
+        candidate.finalize()
+        writes = candidate.capture()
+        assert store.snapshot()["generation"] == before["generation"]
+        publish_files(store, writes, kind="figure_set", baseline={"project_id": before["project_id"],
+            "generation": before["generation"], "files": {name: before["files"].get(name, {}).get("sha256") for name in writes}})
+    assert store.snapshot()["sequence"] == before["sequence"] + 1
 
     assert registry is not None
     secondary = registry["figures"][1]

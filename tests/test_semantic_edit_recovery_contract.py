@@ -11,6 +11,8 @@ from sciplot_core import task_common_edits as edits
 from sciplot_core.plot_engine import compat
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.storage import digest, load_head, read, write
+from sciplot_core.project_lifecycle.target_adapter import FilesystemProjectTargets
+from sciplot_core.project_lifecycle.targets import StoredTarget
 
 
 @pytest.fixture
@@ -21,6 +23,7 @@ def semantic(tmp_path, monkeypatch):
     class Owner:
         repository = service.repository
         capabilities = service.capabilities
+        targets = service.targets
 
         def patch(self, plot, request):
             calls["patch"].append((plot, deepcopy(request)))
@@ -42,15 +45,14 @@ def style(root, entry, **changes):
 
 
 def test_style_replay_uses_original_binding_before_resolving_entrypoint(semantic, tmp_path, monkeypatch):
-    _, root, backend, source, native, calls = semantic
+    service, root, backend, source, native, calls = semantic
     target, entry = tmp_path / "delivery", tmp_path / "style"
     target.mkdir()
-    monkeypatch.setattr(compat, "resolve_project_figure", lambda *_a: {"project": str(tmp_path), "figure_id": "primary"})
-    monkeypatch.setattr(compat, "document_root", lambda *_a: root)
+    monkeypatch.setattr(service.targets, "resolve_open", lambda *_a: StoredTarget(root))
     before = source.read_bytes(), native.read_bytes()
     assert style(target, entry)["status"] == "complete"
     saved = (entry / "semantic-style.json").read_bytes()
-    monkeypatch.setattr(compat, "resolve_project_figure", lambda *_a: pytest.fail("rebound original request to today's entrypoint"))
+    monkeypatch.setattr(service.targets, "resolve_open", lambda *_a: pytest.fail("rebound original request to today's entrypoint"))
     replay = style(target, entry)
     assert replay["replayed"] is True and replay["revision"] == 1
     assert calls["close"] == 2 and backend.native_writes == 1
@@ -124,7 +126,7 @@ def test_old_style_record_replays_literal_request_without_inventing_new_intent(t
             calls.append("closed")
 
     monkeypatch.setattr(compat, "PlotService", Owner)
-    monkeypatch.setattr(compat, "resolve_project_figure", lambda *_a: pytest.fail("queried current target for original root"))
+    monkeypatch.setattr(FilesystemProjectTargets, "resolve_open", lambda *_a: pytest.fail("queried current target for original root"))
     result = style(root, entry, samples=None, all_samples=True, style={"width": "0.7pt"})
     assert result["next_step"] == {"action": "recover_original"}
     assert calls == [(root, request), "closed"]
@@ -150,7 +152,7 @@ def test_new_style_checkpoint_retains_original_caller_and_rejects_rebinding(sema
     entry = tmp_path / "stable-entry"
     style(root, entry)
     original = (entry / "semantic-style.json").read_bytes()
-    monkeypatch.setattr(compat, "resolve_project_figure", lambda *_a: pytest.fail("resolved changed caller before checkpoint comparison"))
+    monkeypatch.setattr(FilesystemProjectTargets, "resolve_open", lambda *_a: pytest.fail("resolved changed caller before checkpoint comparison"))
     target = tmp_path / "other" if change == "target" else root
     changes = {"figure_id": "secondary"} if change == "figure_id" else (
         {"samples": ["Modulus"]} if change == "samples" else (
@@ -285,7 +287,7 @@ def test_malformed_checkpoint_retains_its_owner_and_cannot_be_rebound(tmp_path, 
     name = "semantic-style.json" if command == "style" else "semantic-edit.json"
     write(entry / name, {"intent": [], "request": None})
     before = (entry / name).read_bytes()
-    monkeypatch.setattr(compat, "resolve_project_figure", lambda *_a: pytest.fail("resolved corrupted checkpoint as new edit"))
+    monkeypatch.setattr(FilesystemProjectTargets, "resolve_open", lambda *_a: pytest.fail("resolved corrupted checkpoint as new edit"))
     monkeypatch.setattr(edits, "doctor_payload", lambda: pytest.fail("rebound corrupted checkpoint"))
     with pytest.raises(EngineError) as failed:
         if command == "style":
@@ -316,7 +318,7 @@ def test_legacy_task_route_remains_its_own_authority_but_mixed_bindings_reject(t
     entry = tmp_path / "legacy-task"
     write(entry / "task.json", {"literal": "old-task-owner"})
     original = (entry / "task.json").read_bytes()
-    monkeypatch.setattr(compat, "resolve_project_figure", lambda *_a: pytest.fail("rediscovered a legacy task"))
+    monkeypatch.setattr(FilesystemProjectTargets, "resolve_open", lambda *_a: pytest.fail("rediscovered a legacy task"))
     assert style(tmp_path / "target", entry) is None
     write(entry / "semantic-style.json", {"literal": "second-owner"})
     with pytest.raises(EngineError) as failed:

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
 
@@ -88,7 +87,7 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import sciplot_core.studio_core.publish_evidence as evidence_module
-    import sciplot_core.studio_core.publish_run as publish_run_module
+    import sciplot_core.studio_core.publication_prepare as publish_run_module
 
     plan, (document, pdf, tiff) = _completed_impact_plan(tmp_path)
     output_dir = tmp_path / "run"
@@ -267,12 +266,14 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
         lambda **kwargs: kwargs["manifest"],
     )
 
-    manifest = publish_run_module.publish_studio_export_run(
+    manifest = publish_run_module.prepare_studio_export_run(
         project_dir=project_dir,
         request_path=inventory.request_path,
         document_path=document,
         exports=[],
         export_document_sha256="test-hash",
+        output_dir=output_dir, secondary_output_dir=output_dir / "secondary",
+        delivery_dir=tmp_path / "private-delivery", delivery_root=tmp_path / "visible",
     )
 
     run = manifest["study_model"]["run"]
@@ -294,81 +295,58 @@ def test_workflow_projects_completed_plan_into_intake_top_level_and_last_run(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import sciplot_core.intake.packaging as intake_packaging
-    import sciplot_core.workflow.project_state as project_state
+    import json
+    import zipfile
+    from sciplot_core import project_manifest as manifest_owner
+    from sciplot_core.studio_core import preparation_commands
+    from sciplot_core.workflow import project_requests, project_state, run_projection
+    from test_intake_atomic_packaging import _build_project
 
     plan, (_document, pdf, tiff) = _completed_impact_plan(tmp_path)
     plan_payload = plan.to_payload()
-    project_dir = tmp_path / "project"
-    project_dir.mkdir()
+    created = _build_project(tmp_path / "projects", b"x,y\n1,2\n")
+    project_dir = Path(created["project_dir"])
     request_path = project_dir / "plot_request.json"
-    project_manifest: dict[str, Any] = {"kind": "sciplot_intake_project"}
+    store = manifest_owner._manifest_store(project_dir)
+    before = store.snapshot()
     calls: list[str] = []
 
-    def prepare_studio(_project_dir: Path) -> None:
+    def prepare_studio(candidate, **_kwargs):
         calls.append("prepare")
-        project_manifest["resolved_figure_plan"] = {"status": "planned"}
-        project_manifest["figure_outcomes"] = []
+        with manifest_owner.edit_intake_project_manifest(candidate.project_dir, require_existing=True) as value:
+            value["resolved_figure_plan"] = {"status": "planned"}
+            value["figure_outcomes"] = []
+        return {}
 
-    @contextmanager
-    def edit_manifest(
-        _project_dir: Path,
-        *,
-        require_existing: bool = False,
-        **_kwargs: Any,
-    ) -> Iterator[dict[str, Any]]:
-        assert require_existing is True
+    project = run_projection._project_manifest_after_run
+    stage = project_requests.stage_intake_project_manifest
+    def edit_manifest(existing, completed):
         calls.append("edit")
-        yield project_manifest
-
-    def refresh_zip(_project_dir: Path) -> Path:
+        return project(existing, completed)
+    def refresh_zip(*args, **kwargs):
         calls.append("zip")
-        return tmp_path / "project.zip"
+        return stage(*args, **kwargs)
 
-    monkeypatch.setattr(
-        project_state,
-        "read_intake_project_manifest",
-        lambda _project_dir: project_manifest,
-    )
-    monkeypatch.setattr(
-        project_state,
-        "edit_intake_project_manifest",
-        edit_manifest,
-    )
-    monkeypatch.setattr(
-        intake_packaging,
-        "_prepare_studio_project_package",
-        prepare_studio,
-    )
-    monkeypatch.setattr(
-        intake_packaging,
-        "refresh_intake_project_zip",
-        refresh_zip,
-    )
-    run_manifest = {
-        "created_at": "2026-07-30T00:00:00+00:00",
-        "output": str(tmp_path / "run"),
-        "figures": [str(pdf), str(tiff)],
-        "result": {},
-        "resolved_figure_plan": plan_payload,
-    }
-
+    monkeypatch.setattr(preparation_commands, "prepare_studio_candidate", prepare_studio)
+    monkeypatch.setattr(preparation_commands, "audit_studio_candidate", lambda *_a: ([], []))
+    monkeypatch.setattr(run_projection, "_project_manifest_after_run", edit_manifest)
+    monkeypatch.setattr(project_requests, "stage_intake_project_manifest", refresh_zip)
+    run_manifest = {"created_at": "2026-07-30T00:00:00+00:00", "output": str(tmp_path / "run"),
+                    "figures": [str(pdf), str(tiff)], "result": {}, "resolved_figure_plan": plan_payload}
     project_state._update_intake_project_after_run(request_path, run_manifest)
-
+    project_manifest = manifest_owner.read_intake_project_manifest(project_dir)
     assert calls == ["prepare", "edit", "zip"]
     assert project_manifest["resolved_figure_plan"] == plan_payload
     assert "figure_outcomes" not in project_manifest
     assert project_manifest["last_run"]["resolved_figure_plan"] == plan_payload
     assert "figure_outcomes" not in project_manifest["last_run"]
-
-    legacy_manifest = {
-        "created_at": "2026-07-30T00:01:00+00:00",
-        "output": str(tmp_path / "legacy-run"),
-        "figures": [],
-        "result": {},
-    }
+    assert store.snapshot()["sequence"] == before["sequence"] + 1
+    with zipfile.ZipFile(project_dir.with_suffix(".zip")) as archive:
+        assert json.loads(archive.read(project_dir.name + "/intake_manifest.json")) == project_manifest
+    legacy_manifest = {"created_at": "2026-07-30T00:01:00+00:00", "output": str(tmp_path / "legacy-run"),
+                       "figures": [], "result": {}}
     project_state._update_intake_project_after_run(request_path, legacy_manifest)
-
+    project_manifest = manifest_owner.read_intake_project_manifest(project_dir)
     assert "resolved_figure_plan" not in project_manifest
     assert "figure_outcomes" not in project_manifest
     assert "resolved_figure_plan" not in project_manifest["last_run"]
@@ -379,43 +357,36 @@ def test_studio_registration_replaces_and_removes_plan_projection_atomically(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import sciplot_core.intake.packaging as intake_packaging
-    import sciplot_core.studio_core.registry_writes as registry_writes
+    from sciplot_core import project_manifest
+    from sciplot_core.project_store.adapters import publish_files
+    from sciplot_core.studio_core.preparation_candidate import studio_preparation_candidate
+    from sciplot_core.studio_core import registry_writes
+    from test_intake_atomic_packaging import _build_project
 
     plan, _artifacts = _completed_impact_plan(tmp_path)
-    payload: dict[str, Any] = {
-        "resolved_figure_plan": {"stale": True},
-        "figure_outcomes": [{"stale": True}],
-    }
+    project = Path(_build_project(tmp_path / "projects", b"x,y\n1,2\n")["project_dir"])
+    with project_manifest.edit_intake_project_manifest(project, require_existing=True) as payload:
+        payload.update(resolved_figure_plan={"stale": True}, figure_outcomes=[{"stale": True}])
+    store = project_manifest._manifest_store(project)
+    def register(block):
+        before = store.snapshot()
+        with studio_preparation_candidate(store) as candidate:
+            registry_writes._register_studio_block(candidate.project_dir, block)
+            payload = project_manifest.read_intake_project_manifest(candidate.project_dir)
+            assert store.snapshot()["generation"] == before["generation"]
+            candidate.finalize()
+            writes = dict(candidate.capture())
+            writes.update(project_manifest.stage_intake_project_manifest(project, payload, store=store,
+                project_writes={name: value for name, value in writes.items() if not name.startswith("@")}))
+            publish_files(store, writes, kind="figure_set", baseline={"project_id": before["project_id"],
+                "generation": before["generation"], "files": {name: before["files"].get(name, {}).get("sha256") for name in writes}})
+        assert store.snapshot()["sequence"] == before["sequence"] + 1
+        return project_manifest.read_intake_project_manifest(project)
 
-    @contextmanager
-    def edit_manifest(
-        _project_dir: Path,
-        **_kwargs: Any,
-    ) -> Iterator[dict[str, Any]]:
-        yield payload
-
-    monkeypatch.setattr(
-        registry_writes,
-        "edit_intake_project_manifest",
-        edit_manifest,
-    )
-    monkeypatch.setattr(
-        intake_packaging,
-        "converge_intake_project_launchers",
-        lambda _project_dir: None,
-    )
-
-    registry_writes._register_studio_block(
-        tmp_path,
-        {"resolved_figure_plan": plan.to_payload()},
-    )
-
+    payload = register({"resolved_figure_plan": plan.to_payload()})
     assert payload["resolved_figure_plan"] == plan.to_payload()
     assert "figure_outcomes" not in payload
-
-    registry_writes._register_studio_block(tmp_path, {})
-
+    payload = register({})
     assert "resolved_figure_plan" not in payload
     assert "figure_outcomes" not in payload
 

@@ -18,8 +18,7 @@ from sciplot_core.figure_plan.performance_resolution import (
     resolve_performance_plan,
 )
 from sciplot_core.render import render_to_dir
-from sciplot_core.studio import read_studio_figure_set
-from sciplot_core.studio_core.prepare_generated import generate_studio_document
+from sciplot_core.studio import prepare_studio_document, read_studio_figure_set
 from sciplot_core.studio_core.registry_state import _veusz_spec_path
 
 
@@ -150,9 +149,8 @@ def test_explicit_performance_studio_prepare_installs_one_task_registry(
         },
     )
 
-    prepared = generate_studio_document(
-        project_dir=project_dir,
-        request_path=request_path,
+    prepared = prepare_studio_document(
+        project_dir,
         rule_id=None,
         template=None,
         project_name=None,
