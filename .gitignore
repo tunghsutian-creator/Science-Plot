@@ -43,6 +43,7 @@ ftir_output/
 !/docs/DESIGN_FIGURE_GRAMMAR.md
 !/docs/DESIGN_PANEL_ASSEMBLY.md
 !/docs/DESIGN_PROJECT_LIFECYCLE.md
+!/docs/DESIGN_PROJECT_CORE_MIGRATION.md
 !/docs/licenses/
 /docs/licenses/*
 !/docs/licenses/POLISH_SCI_FIGURES_MIT.txt
