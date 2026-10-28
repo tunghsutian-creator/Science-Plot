@@ -78,6 +78,22 @@ def _produced_resource(candidate: StudioPreparationCandidate, actual: Path, vers
     return logical
 
 
+def _generated_preparation_sources(candidate: StudioPreparationCandidate) -> list[PreparedSource]:
+    sources = []
+    for relative, captured in candidate.generated_inputs.items():
+        if candidate.read_member(relative) != captured:
+            raise ProjectConflict("A generated preparation input changed after its producer completed.")
+        actual = candidate.project_dir / relative
+        literal, version = candidate.logical_path(str(actual)), sha(captured.data)
+        produced = _produced_resource(candidate, actual, version, captured.mode)
+        if produced is None:
+            raise ProjectConflict("A generated preparation input lacks its exact new output resource.")
+        identity = source_identity_for_locator(candidate.snapshot, literal)
+        sources.append(PreparedSource(identity, literal, version, captured.data, (), captured.mode,
+                                      produced_resource=produced))
+    return sources
+
+
 def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[str, Any], *,
                            check_presentation: bool | None = None) -> tuple[list[dict[str, Any]], list[PreparedSource]]:
     """Audit real saved native bytes and freeze their exact scientific inputs."""
@@ -93,6 +109,8 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
     figures = registry.get("figures", []) if isinstance(registry, dict) else [
         {"status": "ready", "document": payload["document"], "spec": str(candidate.project_dir / "studio/spec.json")}]
     audits, sources = [], {}
+    for generated_source in _generated_preparation_sources(candidate):
+        sources[(generated_source.source_id, generated_source.version)] = generated_source
     for baseline_source in candidate.mapping_baseline_sources:
         sources[(baseline_source.source_id, baseline_source.version)] = baseline_source
     for relative in candidate.request_members:

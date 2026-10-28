@@ -23,6 +23,7 @@ from sciplot_core.studio_core.figure_task_evidence import figure_queue_item_from
 from sciplot_core.studio_core.mechanical_task_source_lifecycle import (
     _private_figure_task_source_root,
 )
+from sciplot_core.studio_core.preparation_generated_inputs import record_generated_preparation_inputs
 
 
 def validated_impact_plan_snapshot(
@@ -106,6 +107,9 @@ def materialize_impact_condition_sources(
                     "presentation_data_shape": "categorical_replicates",
                 }
             )
+        record_generated_preparation_inputs(
+            project_dir, (Path(item["condition_source"]) for item in queue)
+        )
     except BaseException:
         shutil.rmtree(output_dir, ignore_errors=True)
         raise

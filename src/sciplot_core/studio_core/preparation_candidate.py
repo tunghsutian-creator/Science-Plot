@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -22,33 +21,8 @@ from sciplot_core.project_store import FileProjectStore, ProjectConflict
 from sciplot_core.project_store.io import directory, install, read_file, sha
 from sciplot_core.data_mapping.execution_inputs import MappingInputReadSet
 from sciplot_core.studio_core.preparation_original_sources import OriginalPreparationInput
-_ACTIVE: ContextVar[StudioPreparationCandidate | None] = ContextVar("studio_preparation_candidate", default=None)
-
-
-def _files(root: Path, *, descriptor: int | None = None) -> dict[str, PreparedFile]:
-    """Capture ordinary members through directory descriptors, never aliases."""
-    def visit(fd: int, prefix: str) -> dict[str, PreparedFile]:
-        result = {}
-        for name in sorted(os.listdir(fd)):
-            info = os.stat(name, dir_fd=fd, follow_symlinks=False)
-            logical = prefix + name
-            if stat.S_ISDIR(info.st_mode):
-                with directory(fd, (name,)) as child:
-                    result.update(visit(child, logical + "/"))
-            elif stat.S_ISREG(info.st_mode):
-                data, mode = read_file(fd, name, owned=True)
-                result[logical] = PreparedFile(data, mode)
-            else:
-                raise ProjectConflict("A private Studio candidate contains an aliased or special member.")
-        return result
-
-    if descriptor is not None:
-        return visit(descriptor, "")
-    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        return visit(fd, "")
-    finally:
-        os.close(fd)
+from sciplot_core.studio_core.preparation_candidate_files import _files as _files
+from sciplot_core.studio_core.preparation_generated_inputs import _ACTIVE
 
 
 @dataclass
@@ -60,6 +34,7 @@ class StudioPreparationCandidate:
     request_members: set[str] = field(default_factory=lambda: {"plot_request.json"})
     mapping_inputs: dict[str, MappingInputReadSet] = field(default_factory=dict)
     original_inputs: dict[str, OriginalPreparationInput] = field(default_factory=dict)
+    generated_inputs: dict[str, PreparedFile] = field(default_factory=dict)
     mapping_baseline_sources: tuple[PreparedSource, ...] = ()
     mapping_baseline_trees: tuple[SourceTreeRead, ...] = ()
     mapping_baseline_roles: tuple[InputRead, ...] = ()
@@ -262,7 +237,7 @@ class StudioPreparationCandidate:
 
 def active_preparation_candidate(project: Path) -> StudioPreparationCandidate | None:
     selected = _ACTIVE.get()
-    return selected if selected is not None and project.expanduser().resolve() == selected.project_dir else None
+    return selected if isinstance(selected, StudioPreparationCandidate) and project.expanduser().resolve() == selected.project_dir else None
 
 
 def require_preparation_candidate(project: Path) -> StudioPreparationCandidate:
