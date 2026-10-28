@@ -54,6 +54,7 @@ CATEGORICAL_EDIT_TESTS = (
     "tests/test_categorical_display.py",
     "tests/test_categorical_display_failures.py",
     "tests/test_categorical_display_native.py",
+    "tests/test_categorical_display_admission.py",
 )
 
 ORDINARY_CURVE_OWNER = ChangedOwner(
@@ -241,6 +242,7 @@ CATEGORICAL_SOURCE_OWNER = ChangedOwner(
     ),
     owned_test_paths=frozenset(CATEGORICAL_TESTS),
     pytest_targets=(
+        *CATEGORICAL_EDIT_TESTS,
         *CATEGORICAL_TESTS,
         "tests/test_source_numeric_encodings.py::test_component_numeric_encoding_preserves_its_original_v1_pipeline",
         *REPLICATE_TESTS,
@@ -284,6 +286,7 @@ CATEGORICAL_PRESENTATION_EDIT_OWNER = ChangedOwner(
     ),
     owned_test_paths=frozenset(CATEGORICAL_EDIT_TESTS),
     pytest_targets=(
+        'tests/test_native_setting_admission.py',
         *CATEGORICAL_EDIT_TESTS,
         *CATEGORICAL_TESTS,
         "tests/test_annotation_operations.py",

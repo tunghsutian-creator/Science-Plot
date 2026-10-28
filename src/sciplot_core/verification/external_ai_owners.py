@@ -1,6 +1,7 @@
 """Focused evidence for external project control and first-run plan binding."""
 
 from sciplot_core.verification.owner_model import ChangedOwner
+from sciplot_core.verification.ordinary_plotting_owners import CATEGORICAL_EDIT_TESTS
 from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
 EXTERNAL_AI_OWNERS = (
@@ -140,6 +141,7 @@ EXTERNAL_AI_OWNERS = (
         ),
         owned_test_paths=frozenset(
             {
+                'tests/test_native_setting_admission.py',
                 "tests/test_document_edit.py",
                 "tests/test_document_edit_native.py",
                 "tests/test_document_edit_policy.py",
@@ -151,6 +153,8 @@ EXTERNAL_AI_OWNERS = (
             }
         ),
         pytest_targets=(
+            'tests/test_native_setting_admission.py',
+            *CATEGORICAL_EDIT_TESTS,
             "tests/test_document_edit.py",
             "tests/test_document_edit_native.py",
             "tests/test_document_edit_policy.py",
@@ -209,6 +213,8 @@ EXTERNAL_AI_OWNERS = (
             {"tests/test_project_control_cli.py", "tests/test_project_create_cli.py"}
         ),
         pytest_targets=(
+            'tests/test_native_setting_admission.py',
+            *CATEGORICAL_EDIT_TESTS,
             "tests/test_project_control_cli.py",
             "tests/test_project_create_cli.py",
             "tests/test_project_query.py",

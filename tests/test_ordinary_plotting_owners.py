@@ -300,6 +300,8 @@ NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
 )
 STUDIO_PREPARATION_STRICT_ADDITIONS = frozenset(
     {
+        'src/sciplot_core/studio_core/preparation_candidate_files.py',
+        'src/sciplot_core/studio_core/preparation_generated_inputs.py',
         'src/sciplot_core/studio_core/figure_member_prepare.py',
         'src/sciplot_core/studio_core/preparation_artifacts.py',
         'src/sciplot_core/studio_core/preparation_candidate.py',

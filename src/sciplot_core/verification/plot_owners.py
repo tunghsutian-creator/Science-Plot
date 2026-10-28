@@ -127,7 +127,7 @@ PLOT_OWNER = ChangedOwner(
     excluded_paths=frozenset({APPEND_IDENTITY_LEAF_PATH, "src/sciplot_core/plot_engine/typed_intent.py",
                               "tests/test_plot_typed_intent.py", "tests/test_plot_typed_intent_recovery.py"}),
     owned_test_paths=frozenset(PLOT_TEST_PATHS),
-    pytest_targets=(*PLOT_TEST_PATHS, "tests/test_current_native_observation.py",
+    pytest_targets=('tests/test_native_setting_admission.py', *PLOT_TEST_PATHS, "tests/test_current_native_observation.py",
                     "tests/test_template_prepared_generation.py", "tests/test_initial_request_source_capture.py",
                     "tests/test_initial_request_source_capture_native.py", *ARCHITECTURE_CORE_TARGETS),
     mypy_required=True,

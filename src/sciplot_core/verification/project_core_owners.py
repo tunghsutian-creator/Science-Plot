@@ -4,6 +4,7 @@ Shared command/store contracts retain their real semantic and native consumers.
 Generated inputs and lifecycle tier are recorded separately in the exact manifest.
 """
 from sciplot_core.verification.owner_model import ChangedOwner
+from sciplot_core.verification.ordinary_plotting_owners import CATEGORICAL_EDIT_TESTS
 from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
 from sciplot_core.verification.project_core_paths import (
@@ -43,7 +44,7 @@ PROJECT_CORE_OWNERS = (
     ),
     ChangedOwner(
         owner_id="studio_project_preparation",
-        exact_paths=frozenset({"src/sciplot_core/studio_core/preparation_candidate.py",
+        exact_paths=frozenset({'src/sciplot_core/studio_core/preparation_candidate_files.py', 'src/sciplot_core/studio_core/preparation_generated_inputs.py', "src/sciplot_core/studio_core/preparation_candidate.py",
                               "src/sciplot_core/studio_core/preparation_commands.py",
                               "src/sciplot_core/foundation/private_project_manifest.py",
                               "src/sciplot_core/studio_core/studio_prepare.py",
@@ -101,7 +102,7 @@ PROJECT_CORE_OWNERS = (
         owner_id="native_project_commands",
         exact_paths=NATIVE_PROJECT_PATHS,
         owned_test_paths=frozenset(NATIVE_PROJECT_COMMAND_TESTS),
-        pytest_targets=(*NATIVE_PROJECT_COMMAND_TESTS, *NATIVE_PROJECT_CONSUMERS,
+        pytest_targets=('tests/test_native_setting_admission.py', *CATEGORICAL_EDIT_TESTS, *NATIVE_PROJECT_COMMAND_TESTS, *NATIVE_PROJECT_CONSUMERS,
                         "tests/test_current_complete_tree_scope.py", "tests/test_project_root_identity.py",
                         "tests/test_native_save_generations.py", "tests/test_plot_backend.py",
                         "tests/test_annotation_operations.py", "tests/test_current_preparation_sources_native.py",
@@ -216,7 +217,7 @@ PROJECT_CORE_OWNERS = (
         "tests/test_project_root_identity.py",
         "tests/test_gui_source_currentness.py", "tests/test_gui_mapping_source_currentness.py",
     }),
-        pytest_targets=(*PROJECT_RUNTIME_TESTS, *SCIENTIFIC_ARTIFACT_TESTS, *ATTACHED_PROJECT_TESTS,
+        pytest_targets=('tests/test_native_setting_admission.py', *PROJECT_RUNTIME_TESTS, *SCIENTIFIC_ARTIFACT_TESTS, *ATTACHED_PROJECT_TESTS,
                         "tests/test_managed_sources.py", "tests/test_managed_source_reconfirmation.py",
                         "tests/test_task_source_control.py", *NATIVE_PROJECT_CONSUMERS,
                         "tests/test_preparation_input_roots.py", "tests/test_preparation_input_roots_native.py",

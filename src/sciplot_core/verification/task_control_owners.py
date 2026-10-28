@@ -1,7 +1,7 @@
 """Verification ownership for local tasks, native annotations and distribution."""
 
 from sciplot_core.verification.owner_model import ChangedOwner
-from sciplot_core.verification.ordinary_plotting_owners import ORDINARY_TASK_LEAF_PATHS
+from sciplot_core.verification.ordinary_plotting_owners import CATEGORICAL_EDIT_TESTS, ORDINARY_TASK_LEAF_PATHS
 from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
 
@@ -133,7 +133,7 @@ TASK_CONTROL_OWNERS = (
         owned_test_paths=frozenset({"tests/test_task_common_edits.py", "tests/test_task_common_edits_native.py",
                                    "tests/test_semantic_edit_recovery_contract.py",
                                    "tests/test_series_display.py", "tests/test_series_display_native.py"}),
-        pytest_targets=("tests/test_task_common_edits.py", "tests/test_task_common_edits_native.py",
+        pytest_targets=('tests/test_native_setting_admission.py', "tests/test_task_common_edits.py", "tests/test_task_common_edits_native.py",
                         "tests/test_semantic_edit_recovery_contract.py",
                         "tests/test_series_display.py", "tests/test_series_display_native.py",
                         "tests/test_product_task_entries.py", "tests/test_task_shortcuts.py",
@@ -256,7 +256,7 @@ TASK_CONTROL_OWNERS = (
         "tests/test_task_comparison_store.py",
         "tests/test_template_prepared_generation.py",
     }),
-        pytest_targets=(*SEMANTIC_TASK_TESTS, *RAW_REPLICATE_TESTS, "tests/test_task_saved_work.py", "tests/test_task_saved_work_native.py", "tests/test_task_papers.py", "tests/test_task_papers_native.py", "tests/test_product_task_entries.py", "tests/test_task_prepared_creation.py", "tests/test_task_protocol_repair.py", "tests/test_task_initial_mapping.py", "tests/test_task_result_projection.py", "tests/test_task_review_gallery.py", "tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_discovery.py",
+        pytest_targets=('tests/test_native_setting_admission.py', *CATEGORICAL_EDIT_TESTS, *SEMANTIC_TASK_TESTS, *RAW_REPLICATE_TESTS, "tests/test_task_saved_work.py", "tests/test_task_saved_work_native.py", "tests/test_task_papers.py", "tests/test_task_papers_native.py", "tests/test_product_task_entries.py", "tests/test_task_prepared_creation.py", "tests/test_task_protocol_repair.py", "tests/test_task_initial_mapping.py", "tests/test_task_result_projection.py", "tests/test_task_review_gallery.py", "tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_discovery.py",
                         "tests/test_task_revision_guards.py", "tests/test_task_groups.py", "tests/test_task_groups_native.py",
                         "tests/test_task_comparisons.py", "tests/test_task_comparisons_native.py",
                         "tests/test_project_create_cli.py", "tests/test_task_column_mapping.py", "tests/test_task_column_mapping_native.py",
@@ -289,7 +289,7 @@ TASK_CONTROL_OWNERS = (
             "src/sciplot_core/veusz_worker/spec_audit/overlays.py",
         }),
         owned_test_paths=frozenset({"tests/test_annotation_operations.py", "tests/test_annotation_operations_native.py", "tests/test_annotation_validation.py", "tests/test_sample_style_presets.py", "tests/test_sample_style_presets_native.py"}),
-        pytest_targets=("tests/test_annotation_operations.py", "tests/test_annotation_operations_native.py", "tests/test_annotation_validation.py",
+        pytest_targets=('tests/test_native_setting_admission.py', *CATEGORICAL_EDIT_TESTS, "tests/test_annotation_operations.py", "tests/test_annotation_operations_native.py", "tests/test_annotation_validation.py",
                         "tests/test_axis_data_visibility_contract.py",
                         "tests/test_sample_style_presets.py", "tests/test_sample_style_presets_native.py",
                         "tests/test_document_edit.py", "tests/test_document_edit_native.py",
@@ -301,7 +301,7 @@ TASK_CONTROL_OWNERS = (
         owner_id="mcp_control_adapter", path_prefixes=("src/sciplot_core/mcp_server/",),
         exact_paths=frozenset({"src/sciplot_core/studio_core/control_results.py"}),
         owned_test_paths=frozenset({"tests/test_mcp_server.py", "tests/test_mcp_stdio.py", "tests/test_mcp_task_choices.py", "tests/test_product_task_entries.py"}),
-        pytest_targets=("tests/test_mcp_server.py", "tests/test_mcp_stdio.py", "tests/test_mcp_task_choices.py", "tests/test_product_task_entries.py", "tests/test_plot_protocol.py", *ARCHITECTURE_CORE_TARGETS),
+        pytest_targets=('tests/test_native_setting_admission.py', *CATEGORICAL_EDIT_TESTS, "tests/test_mcp_server.py", "tests/test_mcp_stdio.py", "tests/test_mcp_task_choices.py", "tests/test_product_task_entries.py", "tests/test_plot_protocol.py", *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",),
         final_milestone_gates=("smoke",), release_gates=("full_pytest",),
     ),

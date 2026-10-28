@@ -153,6 +153,7 @@ NATIVE_PROJECT_COMMAND_TESTS = (
 )
 
 STUDIO_PREPARATION_TESTS = (
+    'tests/test_preparation_generated_inputs.py',
     'tests/test_initial_request_source_capture.py',
     'tests/test_initial_request_source_capture_native.py',
     'tests/test_current_preparation_sources.py',

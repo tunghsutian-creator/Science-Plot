@@ -66,6 +66,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
         }
     ),
     pytest_targets=(
+        'tests/test_native_setting_admission.py',
         "tests/test_render_worker_rejection.py",
         "tests/test_generic_prepared_terminal_source.py",
         "tests/test_artifact_raster_visibility.py",

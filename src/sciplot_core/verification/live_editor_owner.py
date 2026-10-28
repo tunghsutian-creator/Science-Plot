@@ -11,7 +11,7 @@ LIVE_EDITOR_OWNER = ChangedOwner(
                            "src/sciplot_core/cli/parsers/interfaces.py",
                            "src/sciplot_core/cli/dispatch/interfaces.py"}),
     owned_test_paths=frozenset({"tests/test_live_editor.py", "tests/test_live_native_session.py", "tests/test_live_editor_entry.py"}),
-    pytest_targets=("tests/test_live_editor.py", "tests/test_live_native_session.py", "tests/test_live_editor_entry.py",
+    pytest_targets=('tests/test_native_setting_admission.py', "tests/test_live_editor.py", "tests/test_live_native_session.py", "tests/test_live_editor_entry.py",
                     "tests/test_document_edit.py", "tests/test_document_edit_policy.py",
                     "tests/test_project_export_use_case.py", "tests/test_frontend_topology.py",
                     *ARCHITECTURE_CORE_TARGETS),

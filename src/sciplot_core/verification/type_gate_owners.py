@@ -292,6 +292,7 @@ STUDIO_FIGURE_SET_EXECUTION_TYPE_OWNER = ChangedOwner(
     owner_id="studio_figure_set_execution_type",
     exact_paths=STUDIO_FIGURE_SET_EXECUTION_TYPE_PATHS,
     pytest_targets=(
+        'tests/test_preparation_generated_inputs.py',
         "tests/test_resolved_frequency_figure_plan.py",
         "tests/test_impact_condition_figure_set.py",
         "tests/test_mechanical_studio_task_sources.py",
