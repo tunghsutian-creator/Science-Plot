@@ -114,6 +114,7 @@ def test_registry_geometry_legacy_fallback_requires_an_absent_spec(
         json.dumps({"size_mm": ["60", 55.0]}),
         json.dumps({"size_mm": [10**400, 55.0]}),
     ],
+    ids=[None, None, None, None, None, None, None, None, "overflowing-integer-width"],
 )
 def test_registry_geometry_rejects_an_existing_malformed_spec(
     tmp_path: Path,

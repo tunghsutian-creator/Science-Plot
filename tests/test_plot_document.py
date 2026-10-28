@@ -289,7 +289,7 @@ def test_unchanged_semantic_color_is_a_noop_but_changed_color_stays_protected():
     assert unchanged == value and not diff and risk == "presentation"
 
 
-@pytest.mark.parametrize("text", ["", "   ", "x" * 501])
+@pytest.mark.parametrize("text", ["", "   ", "x" * 501], ids=[None, None, "title-over-500-characters"])
 def test_backend_advertised_text_bounds_fail_before_native_work(text):
     value = document()
     value["presentation"]["objects"]["title-1"]["capabilities"]["title.text"].update(

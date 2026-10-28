@@ -277,6 +277,7 @@ def test_managed_mapping_checks_every_figure_and_confirmed_source(
             "axis labels",
         ),
     ],
+    ids=[None, "replacement-dataset-binding", None, None, None, None, None, None, None, None, None],
 )
 def test_current_audit_rejects_scientific_changes(
     tmp_path: Path, change: str, message: str

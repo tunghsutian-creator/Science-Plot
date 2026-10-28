@@ -379,6 +379,7 @@ def test_finalize_returns_snapshot_bound_exports_from_durable_result(
             "binding. Reprepare it with the current certified rule before handoff.",
         ),
     ],
+    ids=["missing-canonical-rule", "missing-prepare-time-rule-contract"],
 )
 def test_finalize_blocks_rule_prerequisites_after_all_artifact_gates_pass(
     tmp_path: Path,

@@ -104,7 +104,7 @@ def test_title_hide_and_restore_compiles_same_annotation_record(imported):
     assert undo == [original]
 
 
-@pytest.mark.parametrize("text", ["", "   ", "x" * 501])
+@pytest.mark.parametrize("text", ["", "   ", "x" * 501], ids=[None, None, "title-over-500-characters"])
 def test_imported_title_advertises_native_text_limits_before_render(imported, text):
     document, _, _, _ = imported
     with pytest.raises(DocumentError) as failure:

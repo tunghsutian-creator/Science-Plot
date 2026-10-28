@@ -261,6 +261,7 @@ def test_torque_minutes_are_converted_before_second_based_curation(
         ("Time", "s", "", "Torque response unit is missing"),
         ("Time", "s", "lbf.ft", "Unsupported torque response unit"),
     ),
+    ids=[None, None, None, "non-finite-index-cadence", "index-hours-overflow-seconds", None, None, None, None, None],
 )
 def test_torque_prepare_rejects_unverified_units_before_processed_write(
     tmp_path: Path,

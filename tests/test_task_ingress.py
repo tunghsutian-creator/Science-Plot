@@ -70,7 +70,7 @@ def test_every_parser_disables_implicit_option_abbreviations():
                        for child in action.choices.values())
 
 
-@pytest.mark.parametrize("value", ["0pt", "-1pt", "nanpt", "infpt", "0.7", "0.7PT", "1e3pt", "abc", "9" * 400 + "pt"])
+@pytest.mark.parametrize("value", ["0pt", "-1pt", "nanpt", "infpt", "0.7", "0.7PT", "1e3pt", "abc", "9" * 400 + "pt"], ids=[None, None, None, None, None, None, None, None, "overflowing-point-width"])
 def test_invalid_width_uses_same_preflight_and_native_grammar(value):
     with pytest.raises(ValueError):
         validate_physical_size(value)
