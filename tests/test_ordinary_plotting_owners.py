@@ -250,6 +250,7 @@ SOURCE_LOCATOR_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/veusz_worker/cli.py',
         "src/sciplot_core/source_coverage/derivation.py",
         "src/sciplot_core/data_mapping/contracts.py",
+        "src/sciplot_core/data_mapping/execution_candidate.py",
         "src/sciplot_core/data_mapping/execution_loading.py",
         "src/sciplot_core/data_mapping/execution_inputs.py",
         "src/sciplot_core/data_mapping/numeric_readset_proof.py",
