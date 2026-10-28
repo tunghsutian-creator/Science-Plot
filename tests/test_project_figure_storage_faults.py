@@ -1,9 +1,10 @@
 """Actual figure-set adapter hard exits never expose an unmarked mixed set."""
 
 import json
-import multiprocessing
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 
 import pytest
@@ -57,11 +58,10 @@ def test_actual_figure_adapter_hard_exit_recovers_one_complete_generation(tmp_pa
     (studio / "figure_set.json").write_text(json.dumps({"kind": "sciplot_studio_figure_set", "version": 1,
         "figures": [], "generation": "old"}))
     FileProjectStore(root).snapshot(import_legacy=True)
-    process = multiprocessing.get_context("spawn").Process(target=_install, args=(str(root), point))
-    process.start()
-    process.join(10)
-    assert not process.is_alive()
-    assert process.exitcode == 73
+    program = "import runpy,sys;runpy.run_path(sys.argv[1])['_install'](*sys.argv[2:])"
+    process = subprocess.run([sys.executable, "-c", program, str(Path(__file__).resolve()), str(root), point],
+                             capture_output=True, text=True, check=False, timeout=10)
+    assert process.returncode == 73, (process.stdout, process.stderr)
     observed = [(studio / name).read_bytes() for name in ("document.vsz", "spec.json")]
     if point == "after_projection":
         assert observed == [b"new native", b'{"old":true}']
