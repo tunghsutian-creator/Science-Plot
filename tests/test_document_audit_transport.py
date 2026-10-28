@@ -125,6 +125,35 @@ def test_native_artifact_snapshot_does_not_erase_an_unbound_file_alias(candidate
         native_document_snapshot(alias, label="native artifact")
 
 
+def test_bound_private_document_keeps_artifact_identity_without_becoming_a_source(tmp_path):
+    from sciplot_core.foundation.source_locations import resolve_source_path
+    from sciplot_core.project_store import ProjectStoreError
+    from sciplot_core.project_store.native_artifacts import NativeArtifactInput, native_artifact_runtime
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.source_coverage.native_file_snapshots import native_document_snapshot, assert_native_document_current
+    from test_project_store import fixture_store
+
+    store, before = fixture_store(tmp_path)
+    document = store.root / ".sciplot_store/workspaces" / ("d" * 64) / "candidate" / "Main.vsz"
+    document.parent.mkdir(parents=True, mode=0o700)
+    document.write_bytes(b"exact private candidate document")
+    document.chmod(0o600)
+    version = file_sha256(document)
+    argv = ["inspect-document-state", str(document)]
+    with project_runtime(store):
+        with pytest.raises(ProjectStoreError):
+            native_document_snapshot(document, label="unbound private document")
+        with native_artifact_runtime(argv, inputs=[NativeArtifactInput("document", document, version, 0o600)]):
+            snapshot = native_document_snapshot(document, label="bound private document")
+            assert snapshot["path"] == document and snapshot["native_argument"] == str(document)
+            assert snapshot["sha256"] == version
+            assert_native_document_current(snapshot, label="bound private document")
+            with pytest.raises(ProjectStoreError):
+                resolve_source_path(document, expected_sha256=version)
+    assert store.snapshot()["generation"] == before["generation"]
+    assert not store.commands()
+
+
 @pytest.mark.parametrize("fault", ["document_bytes", "spec_bytes", "document_path", "scope", "status", "units", "count"])
 def test_stale_or_incomplete_inline_audit_cannot_pass(candidate, fault):
     document, spec = candidate

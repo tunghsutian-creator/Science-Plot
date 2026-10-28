@@ -18,9 +18,9 @@ def logical_for_literal(value: dict[str, Any], original: str) -> str | None:
         root = Path(prefix)
         if path.is_relative_to(root) and path != root:
             relative = path.relative_to(root).as_posix()
-            parts(relative)
             logical = f"@{key}/{relative}" if key else relative
             if logical in value["files"]:
+                parts(relative)
                 matches.append(logical)
     if len(set(matches)) > 1:
         raise ProjectConflict("The preserved locator has ambiguous registered resource roots.")

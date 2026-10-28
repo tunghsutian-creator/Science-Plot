@@ -22,10 +22,12 @@ def native_document_snapshot(path: Path, *, label: str, expected_sha256: str | N
         literal = resolver.literal_path(actual)
     elif isinstance(resolver, ProjectSourceResolver):
         logical = logical_for_literal(resolver.snapshot, literal)
-        if logical is None and (actual.is_relative_to(resolver.store.root)
-                or any(actual.is_relative_to(root) for root in resolver.store.locations.values())):
-            member = resolver.store.logical_path(actual)
-            logical = member if member in resolver.snapshot["files"] else None
+        if logical is None:
+            # Only registered members have a preserved generation locator.
+            # Exact role-bound private artifacts retain their physical identity.
+            physical_view = {**resolver.snapshot, "locators": {
+                key: str(root) for key, root in {"": resolver.store.root, **resolver.store.locations}.items()}}
+            logical = logical_for_literal(physical_view, str(actual))
         if logical is not None:
             literal = original_for_logical(resolver.snapshot, logical)
     return {**_physical_file_snapshot(actual, literal=Path(literal),
