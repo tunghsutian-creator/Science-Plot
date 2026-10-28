@@ -528,3 +528,46 @@ def test_probe_producer_revisions_preserve_selected_editing_read_guards(
         assert result["phase"] == "complete"
         assert store.snapshot()["generation"] != selected["generation"]
     assert (copied / "studio/document.vsz").read_bytes() == native
+
+
+@pytest.mark.parametrize("change", ["valid", "scope", "not-current", "not-verified", "revision-missing",
+    "revision-drift", "revision-extra", "revision-blank", "execution-drift", "execution-missing",
+    "confirmation-drift", "confirmation-missing", "proposal-drift", "proposal-missing"])
+def test_gui_finite_mapping_currentness_requires_the_same_complete_observation(tmp_path, change):
+    from copy import deepcopy
+    from sciplot_gui.studio_project_status.provenance_status import _provenance_status
+
+    revision = {"project_id": "project", "generation": "generation", "request_sha256": "a" * 64}
+    source = {"audit_status": "matches_confirmed_mapping_sources", "scope": "mapping_selected_files",
+        "selected_files_current": True, "observation_revision": revision,
+        "mapping_execution": "/exact/execution.json", "confirmation_id": "confirmation", "proposal_sha256": "b" * 64}
+    mapping = {"status": "verified", "observation_revision": deepcopy(revision),
+        "execution": source["mapping_execution"], "confirmation_id": source["confirmation_id"],
+        "proposal_sha256": source["proposal_sha256"]}
+    if change == "scope":
+        source["scope"] = "whole_directory"
+    elif change == "not-current":
+        source["selected_files_current"] = False
+    elif change == "not-verified":
+        mapping["status"] = "audit_pending"
+    elif change == "revision-missing":
+        source.pop("observation_revision")
+    elif change == "revision-drift":
+        mapping["observation_revision"]["generation"] = "other"
+    elif change == "revision-extra":
+        source["observation_revision"]["unknown"] = "extra"
+        mapping["observation_revision"]["unknown"] = "extra"
+    elif change == "revision-blank":
+        source["observation_revision"]["generation"] = ""
+        mapping["observation_revision"]["generation"] = ""
+    elif change != "valid":
+        field, mutation = change.split("-")
+        key = {"execution": "mapping_execution", "confirmation": "confirmation_id", "proposal": "proposal_sha256"}[field]
+        if mutation == "missing":
+            source.pop(key)
+        else:
+            source[key] = "different"
+    result = _provenance_status(project_dir=tmp_path, latest_path=None, latest_run={},
+        transform_status="not_run", raw_archive_path=None, package={}, delivery={}, mapping=mapping, qa={}, source=source)
+    assert result["source_current"] is (change == "valid")
+    assert result["complete"] is False

@@ -90,7 +90,8 @@ def _provenance_status(
         "not_applied",
         "verified",
     }
-    source_current = source.get("audit_status") == "matches_last_run_lineage"
+    source_current = (source.get("audit_status") == "matches_last_run_lineage"
+                      or _confirmed_mapping_sources_current(source, mapping))
     current_evidence = bool(
         run_evidence_complete
         and source_current
@@ -174,3 +175,24 @@ def _provenance_status(
         ),
         "full_project_delivery_current": bool(delivery_current and full_project_scope),
     }
+
+
+def _confirmed_mapping_sources_current(source: dict[str, Any], mapping: dict[str, Any]) -> bool:
+    """One verified invocation may prove finite raw files, never a whole tree."""
+    if (source.get("audit_status") != "matches_confirmed_mapping_sources"
+            or source.get("scope") != "mapping_selected_files"
+            or source.get("selected_files_current") is not True
+            or mapping.get("status") != "verified"):
+        return False
+    revision = source.get("observation_revision")
+    if (not isinstance(revision, dict) or set(revision) != {"project_id", "generation", "request_sha256"}
+            or any(not isinstance(value, str) or not value.strip() for value in revision.values())
+            or revision != mapping.get("observation_revision")):
+        return False
+    for source_key, mapping_key in (("mapping_execution", "execution"),
+                                    ("confirmation_id", "confirmation_id"),
+                                    ("proposal_sha256", "proposal_sha256")):
+        value = source.get(source_key)
+        if not isinstance(value, str) or not value.strip() or value != mapping.get(mapping_key):
+            return False
+    return True
