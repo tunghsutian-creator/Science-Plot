@@ -19,8 +19,12 @@ authority. Incomplete searches and invalid records remain explicit. `--limit`
 changes only the displayed result count; it does not remove ambiguity.
 
 The source hash only filters candidates. A candidate identifies its saved
-request, figures, native/specification hashes, scientific-source state, existing
-semantic document identity and any historical task. A filename or similar title
+request, figures, native/specification hashes, scientific-source state and any
+historical task. A known stale source, visible-edit recovery or foreign delivery
+owner can retain a blocked candidate before semantic evaluation. In that case
+`semantic_documents_evaluated=false` does not certify a semantic revision or its
+currentness, and does not authorize editing. A potentially usable candidate must
+still pass the complete current-authority checks. A filename or similar title
 cannot bind a project. Multiple projects, including identical copies, require an
 exact target selection.
 
@@ -42,10 +46,12 @@ uses the saved VSZ, actual native inspection and the existing native scientific
 audit. It returns a current `task.start` edit request template and `task.style`
 target arguments. Fill the template's operations with the authorized edit; the
 existing preview, acceptance, revision and export owners perform the change.
-An older Legacy shadow can remain stale after legitimate native saves. Discovery
+An older Legacy semantic revision can remain stale after legitimate native saves. Discovery
 may establish saved-VSZ continuation from a complete applied edit chain, checking
 each reviewed identity, native/spec archive and unchanged source baseline. It
-reports that evidence separately and leaves the shadow and its revision unchanged.
+reports that evidence separately and leaves that revision unchanged. Attached
+semantic evidence comes from the current project generation; an obsolete physical
+shadow cannot replace a missing or invalid attachment.
 Missing, pending, tampered or discontinuous history cannot establish that bridge.
 For a ManagedPlot it checks the sealed head, canonical model, complete recorded
 input closure and pending transaction, then returns `plot.open` arguments for

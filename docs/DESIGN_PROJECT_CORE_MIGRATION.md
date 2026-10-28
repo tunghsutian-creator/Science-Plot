@@ -322,6 +322,19 @@ Read-only queries do not repair or replace active native files. Resume validates
 the original key, project and command binding before recovery. Invalid target
 membership must fail before import, recovery or any other write.
 
+Saved-work discovery separates a blocked subject from usable current authority.
+Known stale sources, visible-edit recovery and a known foreign delivery owner
+remain discoverable with semantic evaluation explicitly false; no editing right
+follows from that match. Potentially usable subjects still require the complete
+root, generation, source, attachment and content checks. A fresh generation read
+closes either query phase. An attached semantic query reads a frozen view of the
+same sealed Core members, including its typed field projections; the old physical
+shadow is not a fallback for a missing or transferred owner. Genuine unattached
+historical documents retain their existing owner checks. Managed fingerprinting
+observes selected source bytes without materializing a source view, and its three
+disposable native/build/intent inputs have finite read-only snapshots. It neither
+adopts a save nor repairs history or artifacts.
+
 A sealed unaccepted native preview is evidence awaiting a decision, not an
 unfinished execution effect. Only the complete verified command/draft/review
 binding can establish that distinction. Accepted, applying, unknown or corrupt
