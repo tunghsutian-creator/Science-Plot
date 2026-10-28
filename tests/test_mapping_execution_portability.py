@@ -108,14 +108,19 @@ def test_every_confirmed_mapping_input_is_rechecked_after_before_head(tmp_path, 
     from sciplot_core.project_store import state
 
     _origin, project, store, request, execution = confirmed_project(tmp_path, monkeypatch)
-    target = Path(request["data_mapping_execution"] if field == "execution" else
+    # The editable candidate is a destination, not a sealed science input.
+    # Its active-project preimage is guarded by the actual publisher's CAS.
+    target = project / "plot_request.json" if field == "request_candidate" else Path(
+        request["data_mapping_execution"] if field == "execution" else
         execution["outputs"][0]["path"] if field == "mapped_output" else execution[field])
     before = store.snapshot()
     with project_runtime(store), mapping_input_reads(request["data_mapping_execution"]) as readset:
         load_data_mapping_execution(readset.execution)
         sources = readset.prepared_sources(before)
     command = ProjectCommand.create("figure_set", "mapping-drift-" + field, project_id=before["project_id"],
-        expected_generation=before["generation"], read_set={"witness.txt": None}, write_set=["witness.txt"], request={"field": field})
+        expected_generation=before["generation"],
+        read_set={**{name: entry["sha256"] for name, entry in before["files"].items()}, "witness.txt": None},
+        write_set=["witness.txt"], request={"field": field})
     boundary = state.boundary
 
     def drift(name):

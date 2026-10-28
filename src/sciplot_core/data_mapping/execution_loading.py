@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sciplot_core.data_mapping.execution_directories import mapping_directory_path
+from sciplot_core.data_mapping.execution_candidate import require_mapping_candidate
 from sciplot_core.data_mapping.numeric_readset_proof import numeric_input_digest
 
 from copy import deepcopy
@@ -57,10 +58,8 @@ from sciplot_core.data_mapping.raw_tables import (
     MappingNumericContract, MappingNumericRejected,
 )
 
-
 class MappingReplayMismatch(ValueError):
     """An admitted historical pipeline does not reproduce the recorded output."""
-
 
 def load_data_mapping_execution(
     path_or_dir: str | Path,
@@ -75,7 +74,6 @@ def load_data_mapping_execution(
             readset.seal()
             readset.numeric_inputs_sha256 = numeric_input_digest(readset) if result.get("handoff_allowed") is True else None
         return result
-
 
 def _load_data_mapping_execution(path: Path, *, verify: bool) -> dict[str, Any]:
     payload = mapping_execution_header(path, DATA_MAPPING_EXECUTION_KIND)
@@ -113,7 +111,9 @@ def _verify_mapping_execution(path: Path, payload: dict[str, Any], *,
         recorded = Path(str(payload.get(field) or "")).expanduser().resolve()
         if recorded != expected_path.resolve():
             raise ValueError(f"Data mapping execution {field} path is not canonical.")
-        if not mapping_file_path(mark_mapping_metadata(expected_path)).is_file():
+        if field == "request_candidate":
+            require_mapping_candidate(path, expected_path)
+        elif not mapping_file_path(mark_mapping_metadata(expected_path)).is_file():
             raise FileNotFoundError(
                 f"Data mapping execution {field} is missing: {expected_path}"
             )
