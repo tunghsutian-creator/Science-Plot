@@ -171,12 +171,6 @@ def _document_evidence(root: Path, *, head: dict[str, Any] | None = None,
 def project_evidence(project: Path, source: Path, source_sha256: str | None,
                      *, receipt_sha256: str | None = None,
                      receipt_source: Path | None = None) -> dict[str, Any] | None:
-    store = None
-    if (project / ".sciplot_store/head.json").is_file():
-        from sciplot_core.project_host_factory import project_store
-
-        store = project_store(project)
-    snapshot = store.snapshot() if store is not None else None
     request = read_object(project / "plot_request.json")
     recorded = record_path(request.get("input"), base=project)
     expected = (request.get("resolved_figure_plan") or {}).get("source_sha256")
@@ -205,35 +199,15 @@ def project_evidence(project: Path, source: Path, source_sha256: str | None,
                     break
     if relation is None:
         return None
+    from sciplot_core.project_manifest_locations import admitted_project_generation
+
+    generation = None
+    if (project / ".sciplot_store/head.json").is_file():
+        with admitted_project_generation(project) as (_primary, _io, current):
+            generation = current['generation']
     query = inspect_project(project, native=False)
-    documents = []
-    index = read_index(store, snapshot) if store is not None else None
-    for figure in query["figures"]:
-        entries = [entry for entry in index["attachments"].values()
-                   if entry["figure_id"] == figure["figure_id"]] if index is not None else []
-        if len(entries) > 1:
-            raise ValueError("One figure has competing current semantic attachments.")
-        if entries:
-            assert store is not None and snapshot is not None
-            attachment = Attachment(store, entries[0])
-            documents.append(document_evidence(attachment.root, attachment=attachment, snapshot=snapshot))
-        else:
-            root = document_root(project, figure["figure_id"])
-            require_local_owner(root)
-            if snapshot is not None and index is not None:
-                prefixes = tuple(item['namespace'] + '/' for item in index['attachments'].values())
-                if any(name.startswith('.sciplot_semantic/') and name != '.sciplot_semantic/index.json'
-                       and not name.startswith(prefixes) for name in snapshot['files']):
-                    raise ValueError("Semantic attachment resources cannot fall back to an unindexed historical writer.")
-            if (root / "head.json").exists():
-                historical = document_evidence(root)
-                if historical['project'] != str(project) or historical['figure_id'] != figure['figure_id']:
-                    raise ValueError("The unattached historical shadow belongs to another project or figure.")
-                documents.append(historical)
     source_current = query["source"]["current"]
     selected_source_current = source_sha256 == matched_sha if source_sha256 and matched_sha else None
-    stale = [item for item in documents if not item["current"]
-             and not (item.get("native_continuation") or {}).get("current")]
     delivery_owner = None
     visible_conflict = False
     delivery_path = (query.get("delivery") or {}).get("path")
@@ -251,17 +225,61 @@ def project_evidence(project: Path, source: Path, source_sha256: str | None,
     # A known foreign publication owner is an explicit copy conflict regardless
     # of that copy's source currentness. Source repair cannot transfer delivery
     # ownership and must not be offered as a way around this conflict.
-    state = ("project_output_conflict" if delivery_owner is not None and delivery_owner != project else
+    blocked_state = ("project_output_conflict" if delivery_owner is not None and delivery_owner != project else
              "source_revision_required" if source_current is False or selected_source_current is False else
              "visible_edits_require_recovery" if visible_conflict else
              "source_evidence_missing" if source_current is None else
-             "document_conflict" if stale else "saved_project")
+             None)
+    # Discovery retains already blocked candidates without claiming a current
+    # semantic document or borrowing executable host/resource capabilities.
+    # Only an actionable candidate enters the complete current authority read.
+    evaluated = blocked_state is None
+    store, snapshot = None, None
+    documents = []
+    if evaluated:
+        if generation is not None:
+            from sciplot_core.project_host_factory import project_store
+
+            store = project_store(project)
+            snapshot = store.snapshot()
+            if snapshot['generation'] != generation:
+                raise ValueError("The project generation changed during saved-work discovery.")
+        index = read_index(store, snapshot) if store is not None else None
+        for figure in query["figures"]:
+            entries = [entry for entry in index["attachments"].values()
+                       if entry["figure_id"] == figure["figure_id"]] if index is not None else []
+            if len(entries) > 1:
+                raise ValueError("One figure has competing current semantic attachments.")
+            if entries:
+                assert store is not None and snapshot is not None
+                attachment = Attachment(store, entries[0])
+                documents.append(document_evidence(attachment.root, attachment=attachment, snapshot=snapshot))
+            else:
+                root = document_root(project, figure["figure_id"])
+                require_local_owner(root)
+                if snapshot is not None and index is not None:
+                    prefixes = tuple(item['namespace'] + '/' for item in index['attachments'].values())
+                    if any(name.startswith('.sciplot_semantic/') and name != '.sciplot_semantic/index.json'
+                           and not name.startswith(prefixes) for name in snapshot['files']):
+                        raise ValueError("Semantic attachment resources cannot fall back to an unindexed historical writer.")
+                if (root / "head.json").exists():
+                    historical = document_evidence(root)
+                    if historical['project'] != str(project) or historical['figure_id'] != figure['figure_id']:
+                        raise ValueError("The unattached historical shadow belongs to another project or figure.")
+                    documents.append(historical)
+    stale = [item for item in documents if not item["current"]
+             and not (item.get("native_continuation") or {}).get("current")]
+    state = blocked_state or ('document_conflict' if stale else 'saved_project')
     figures = [{key: item[key] for key in ("figure_id", "title", "document", "document_sha256",
                 "spec", "spec_sha256")} for item in query["figures"]]
     identity = {"request_sha256": query["request_sha256"], "figures": figures,
-                "documents": documents, "source": query["source"]}
-    if store is not None and snapshot is not None and store.snapshot()["generation"] != snapshot["generation"]:
-        raise ValueError("The project generation changed during saved-work discovery.")
+                "documents": documents, "source": query["source"],
+                "semantic_documents_evaluated": evaluated,
+                "delivery_owner": str(delivery_owner) if delivery_owner else None}
+    if generation is not None:
+        with admitted_project_generation(project) as (_primary, _io, current):
+            if current['generation'] != generation:
+                raise ValueError("The project generation changed during saved-work discovery.")
     return {"target": str(project), "kind": "project", "state": state,
             "source_relation": relation, "recorded_source": str(recorded),
             "recorded_source_sha256": matched_sha,
@@ -269,6 +287,7 @@ def project_evidence(project: Path, source: Path, source_sha256: str | None,
             "selected_source_current": selected_source_current,
             "delivery_owner": str(delivery_owner) if delivery_owner else None,
             "source": query["source"], "figures": figures, "documents": documents,
+            "semantic_documents_evaluated": evaluated,
             "primary_figure_id": query["primary_figure_id"],
             "identity_sha256": canonical_json_sha256(identity, allow_nan=False),
             "authority": "saved_vsz", "continuation_available": state == "saved_project",

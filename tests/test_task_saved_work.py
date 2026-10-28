@@ -233,7 +233,65 @@ def test_known_foreign_delivery_owner_stays_the_explicit_copy_conflict(tmp_path,
     monkeypatch.setattr(evidence, "bound_delivery_project", known_owner)
     result = evidence.project_evidence(copied, source, source_tree_sha256(source))
     assert result["state"] == "project_output_conflict" and not result["continuation_available"]
+    assert result['semantic_documents_evaluated'] is False and result['documents'] == []
+    assert result['source']['current'] is current
     assert result["delivery_owner"] == str(owner)
+    assert inventory(tmp_path) == before
+
+
+@pytest.mark.parametrize('current', [False, None], ids=['stale', 'unknown'])
+def test_blocked_discovery_keeps_candidates_without_claiming_current_semantic_authority(tmp_path, monkeypatch, current):
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_store import FileProjectStore
+
+    source = tmp_path / 'original.csv'
+    source.write_text('x,y\n1,2\n')
+    project = legacy(tmp_path / 'project', source)
+    FileProjectStore(project).snapshot(import_legacy=True)
+    monkeypatch.setattr(evidence, 'inspect_project', lambda *_a, **_k: {'figures': [],
+        'source': {'current': current}, 'request_sha256': file_sha256(project / 'plot_request.json'), 'primary_figure_id': 'curve'})
+    monkeypatch.setattr(evidence, 'document_evidence', lambda *_a, **_k: pytest.fail('An already blocked candidate requested semantic authority.'))
+    before = inventory(tmp_path)
+    result = evidence.project_evidence(project, source, source_tree_sha256(source))
+    assert result['state'] == ('source_revision_required' if current is False else 'source_evidence_missing')
+    assert not result['continuation_available'] and result['semantic_documents_evaluated'] is False
+    assert result['documents'] == [] and result['source']['current'] is current
+    assert result['ready_to_use'] is None and not result['readiness_evaluated']
+    assert inventory(tmp_path) == before
+
+
+def test_actionable_project_cannot_downgrade_a_corrupt_semantic_seal_to_discovery_evidence(tmp_path, monkeypatch):
+    from test_attached_semantic_repository import application
+    from managed_plot_helpers import request_for_source
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.project_lifecycle.attachment_index import read_index
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core import task_saved_work_evidence as evidence
+
+    source = tmp_path / 'original.csv'
+    source.write_text('x,y\n1,2\n')
+    project = legacy(tmp_path / 'project', source)
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    with project_runtime(store):
+        application().create(request_for_source(project))
+    snapshot = store.snapshot()
+    entry = next(iter(read_index(store, snapshot)['attachments'].values()))
+    logical = entry['namespace'] + '/head.json'
+    mutation = ProjectMutation({logical: b'{"revision":0,"sha256":"wrong"}\n'}, {})
+    command = ProjectCommand.create('semantic_record', 'corrupt-seal-control', project_id=snapshot['project_id'],
+        expected_generation=snapshot['generation'], read_set={logical: snapshot['files'][logical]['sha256']},
+        write_set=[logical], request={'prepared_digest': mutation.prepared_digest})
+    ProjectCommands(store).publish_prepared(command, mutation)
+    figure = {'figure_id': entry['figure_id'], 'title': 'Figure', 'document': str(project / 'studio/document.vsz'),
+              'document_sha256': file_sha256(project / 'studio/document.vsz'),
+              'spec': str(project / 'studio/spec.json'), 'spec_sha256': file_sha256(project / 'studio/spec.json')}
+    monkeypatch.setattr(evidence, 'inspect_project', lambda *_a, **_k: {'figures': [figure], 'source': {'current': True},
+        'request_sha256': file_sha256(project / 'plot_request.json'), 'primary_figure_id': entry['figure_id']})
+    before = inventory(tmp_path)
+    with pytest.raises(ValueError, match='committed pointer'):
+        evidence.project_evidence(project, source, source_tree_sha256(source))
     assert inventory(tmp_path) == before
 
 
