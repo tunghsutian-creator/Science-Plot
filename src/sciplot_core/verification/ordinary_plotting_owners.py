@@ -302,7 +302,43 @@ CATEGORICAL_PRESENTATION_EDIT_OWNER = ChangedOwner(
     release_gates=("acceptance_rules", "full_pytest"),
 )
 
+DIRECT_LABEL_LAYOUT_TESTS = (
+    "tests/test_direct_label_layout.py", "tests/test_direct_label_layout_native.py",
+)
+DIRECT_LABEL_LAYOUT_OWNER = ChangedOwner(
+    owner_id="automatic_direct_label_layout",
+    exact_paths=frozenset({
+        "src/sciplot_core/foundation/rectangle_geometry.py",
+        "src/sciplot_core/studio_render/direct_label_layout.py",
+        "src/sciplot_core/studio_core/current_direct_label_review.py",
+        "src/sciplot_core/veusz_audit/direct_label_geometry.py",
+        "src/sciplot_core/studio_render/axes_spec.py",
+        "src/sciplot_core/studio_render/terminal_contract.py",
+        "src/sciplot_core/studio_core/prepare_generated.py",
+        "src/sciplot_core/studio_core/veusz_spec_builder.py",
+        "src/sciplot_core/studio_core/veusz_spec_labels.py",
+        "src/sciplot_core/studio_core/review_artifacts.py",
+        "src/sciplot_core/veusz_audit/legend_geometry.py",
+        "src/sciplot_core/veusz_audit/segmented_legend_geometry.py",
+        "src/sciplot_core/veusz_audit/document.py",
+    }),
+    owned_test_paths=frozenset(DIRECT_LABEL_LAYOUT_TESTS),
+    pytest_targets=(
+        *DIRECT_LABEL_LAYOUT_TESTS,
+        "tests/test_rendering_contract.py", "tests/test_template_override_contract.py",
+        "tests/test_style_template_contract.py", "tests/test_source_replay_presentation.py",
+        "tests/test_current_layout_review.py", "tests/test_current_layout_review_native.py",
+        "tests/test_segmented_summary_legend.py", "tests/test_segmented_summary_legend_native.py",
+        *ARCHITECTURE_CORE_TARGETS,
+    ),
+    mypy_required=True,
+    handoff_gates=("doctor",),
+    final_milestone_gates=("smoke",),
+    release_gates=("full_pytest",),
+)
+
 ORDINARY_PLOTTING_OWNERS = (
+    DIRECT_LABEL_LAYOUT_OWNER,
     ORDINARY_CURVE_OWNER,
     REPLICATE_DISCLOSURE_OWNER,
     PERFORMANCE_SELECTION_OWNER,

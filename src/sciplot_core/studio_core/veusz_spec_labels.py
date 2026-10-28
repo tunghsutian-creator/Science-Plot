@@ -35,6 +35,7 @@ def build_veusz_direct_labels(
     style: _VeuszStyleContract,
     show_direct_labels: bool,
     categorical_contract: dict[str, Any] | None,
+    automatic_layout_version: Any = None,
 ) -> list[dict[str, Any]]:
     """Combine curve labels and categorical axis labels in paint order."""
 
@@ -44,6 +45,7 @@ def build_veusz_direct_labels(
         axis_contract=axis_contract,
         style=style,
         show_direct_labels=show_direct_labels,
+        automatic_layout_version=automatic_layout_version,
     )
     label_specs.extend(
         _categorical_axis_label_contracts(

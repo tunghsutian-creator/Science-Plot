@@ -226,9 +226,15 @@ def _direct_label_contracts(
     axis_contract: _VeuszAxisContract,
     style: _VeuszStyleContract,
     show_direct_labels: bool,
+    automatic_layout_version: Any = None,
 ) -> list[dict[str, Any]]:
     """Derive the complete, source-bound native direct-label inventory."""
 
+    if automatic_layout_version is not None:
+        from sciplot_core.studio_render.direct_label_layout import DIRECT_LABEL_LAYOUT_VERSION
+
+        if automatic_layout_version != DIRECT_LABEL_LAYOUT_VERSION:
+            raise ValueError("Unknown persisted direct-label layout version.")
     if not show_direct_labels:
         return []
     side = str(render_options.get("series_label_side") or "auto").strip().casefold()
@@ -263,9 +269,18 @@ def _direct_label_contracts(
         )
     if valign == "center":
         valign = "centre"
+    automatic_anchors = None
+    if automatic_layout_version is not None:
+        from sciplot_core.studio_render.direct_label_layout import DIRECT_LABEL_LAYOUT_VERSION, automatic_label_boxes
+
+        if automatic_layout_version != DIRECT_LABEL_LAYOUT_VERSION:
+            raise ValueError("Unknown persisted direct-label layout version.")
+        automatic_anchors = automatic_label_boxes(series, render_options=render_options,
+            axis=axis_contract, style=style, side=side)
+        valign = "top"
     labels: list[dict[str, Any]] = []
     for index, item in enumerate(series, start=1):
-        anchor = _series_label_anchor(
+        anchor = automatic_anchors[index-1] if automatic_anchors is not None else _series_label_anchor(
             item,
             reverse_x=reverse_x,
             side=side,
@@ -273,7 +288,7 @@ def _direct_label_contracts(
         if anchor is None:
             continue
         x_pos, y_pos = anchor
-        y_pos += y_offset
+        y_pos += y_offset if automatic_anchors is None else 0.0
         labels.append(
             {
                 "name": f"label_{index}",

@@ -88,6 +88,12 @@ CATEGORICAL_EDIT_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/source_coverage/document_audit.py",
     }
 )
+DIRECT_LABEL_LAYOUT_STRICT_ADDITIONS = frozenset({
+    "src/sciplot_core/studio_render/direct_label_layout.py",
+    "src/sciplot_core/studio_core/current_direct_label_review.py",
+    "src/sciplot_core/veusz_audit/direct_label_geometry.py",
+})
+
 SUMMARY_LEGEND_STRICT_ADDITIONS = frozenset(
     {
         "src/sciplot_core/studio_render/component_legend.py",
@@ -378,6 +384,7 @@ VERIFICATION_PROJECT_CORE_STRICT_ADDITIONS = frozenset(
 FINAL_STRICT_ADDITIONS = (
     ROUND2_STRICT_ADDITIONS
     | CATEGORICAL_EDIT_STRICT_ADDITIONS
+    | DIRECT_LABEL_LAYOUT_STRICT_ADDITIONS
     | SUMMARY_LEGEND_STRICT_ADDITIONS
     | ZERO_SD_STRICT_ADDITIONS
     | SOURCE_FACT_STRICT_ADDITIONS
@@ -603,6 +610,7 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
     additions = (
         ROUND2_STRICT_ADDITIONS,
         CATEGORICAL_EDIT_STRICT_ADDITIONS,
+        DIRECT_LABEL_LAYOUT_STRICT_ADDITIONS,
         SUMMARY_LEGEND_STRICT_ADDITIONS,
         ZERO_SD_STRICT_ADDITIONS,
         SOURCE_FACT_STRICT_ADDITIONS,
@@ -691,3 +699,13 @@ def test_project_core_unknown_neighbor_does_not_inherit_an_empty_type_only_plan(
     blocked = _plan([unknown])
     assert blocked["status"] == "failed" and blocked["unowned_paths"] == [unknown]
     assert blocked["checks"] == []
+
+
+def test_direct_label_geometry_extends_the_already_owned_foundation_strict_scope():
+    path = "src/sciplot_core/foundation/rectangle_geometry.py"
+    configured = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["mypy"]["files"]
+    assert configured.count(path) == 1
+    assert path not in SCIENTIFIC_TRANSACTION_TYPE_PATHS
+    owners = [owner for owner in CHANGED_OWNERS if owner.matches(path)]
+    assert any(owner.owner_id == "typed_core_contracts" and owner.mypy_required for owner in owners)
+    assert any(owner.owner_id == "automatic_direct_label_layout" and owner.mypy_required for owner in owners)

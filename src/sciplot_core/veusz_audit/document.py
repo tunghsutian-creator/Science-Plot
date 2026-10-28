@@ -14,6 +14,7 @@ from sciplot_core.veusz_audit.categories import collect_categorical_graphs
 from sciplot_core.veusz_audit.labels import collect_semantic_labels
 from sciplot_core.veusz_audit.layout import collect_layout_inventory
 from sciplot_core.veusz_audit.legend_geometry import collect_legend_geometry
+from sciplot_core.veusz_audit.direct_label_geometry import collect_direct_label_geometry
 from sciplot_core.veusz_audit.segmented_legend_geometry import collect_segmented_legend_geometry
 from sciplot_core.veusz_audit.pages import collect_page_geometry
 from sciplot_core.veusz_audit.series import collect_series_inventory
@@ -45,6 +46,7 @@ def _audit_document(path: Path) -> dict[str, Any]:
     )
     categorical_graphs = collect_categorical_graphs(graphs, ordered_widgets)
     legend_geometry = collect_legend_geometry(ordered_widgets, state_by_path)
+    direct_geometry = collect_direct_label_geometry(ordered_widgets, state_by_path)
     segmented_geometry = collect_segmented_legend_geometry(ordered_widgets, state_by_path)
     (
         semantic_labels,
@@ -140,6 +142,7 @@ def _audit_document(path: Path) -> dict[str, Any]:
         },
         "series": series,
         "legend_geometry": legend_geometry,
+        "direct_label_geometry": direct_geometry,
         "segmented_legend_geometry": segmented_geometry,
         "performance_comparison": performance_document,
         "color_scales": color_scales,

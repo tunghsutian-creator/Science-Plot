@@ -34,6 +34,9 @@ def _current_layout_issues(spec: dict[str, Any], *, document_path: Path | None =
     from sciplot_core.studio_core.current_layout_review import current_segmented_legend_issues
 
     issues = current_segmented_legend_issues(issues, spec, document_path, native_audit)
+    from sciplot_core.studio_core.current_direct_label_review import current_direct_label_issues
+
+    issues = current_direct_label_issues(issues, spec, document_path, native_audit)
     if (document_path is not None and ordinary_curve_paths(spec)
             and isinstance(legend, dict)
             and (legend.get("show") is True or any(item.get("id") == "legend_curve_clearance_below_target"

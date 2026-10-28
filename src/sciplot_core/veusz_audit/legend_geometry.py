@@ -6,38 +6,10 @@ from typing import Any
 from sciplot_core.veusz_audit.measurements import _distance_pt, _setting_hidden
 
 
-def _clip(a: tuple[float, float], b: tuple[float, float], box: list[float]) -> tuple[Any, Any] | None:
-    low, high = 0.0, 1.0
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    for p, q in ((-dx, a[0] - box[0]), (dx, box[2] - a[0]),
-                 (-dy, a[1] - box[1]), (dy, box[3] - a[1])):
-        if p == 0:
-            if q < 0:
-                return None
-        elif p < 0:
-            low = max(low, q / p)
-        else:
-            high = min(high, q / p)
-        if low > high:
-            return None
-    return (a[0] + low * dx, a[1] + low * dy), (a[0] + high * dx, a[1] + high * dy)
-
-
-def _point_box(point: tuple[float, float], box: list[float]) -> float:
-    return math.hypot(max(box[0] - point[0], 0, point[0] - box[2]),
-                      max(box[1] - point[1], 0, point[1] - box[3]))
-
-
-def _segment_box(a: tuple[float, float], b: tuple[float, float], box: list[float]) -> float:
-    if _clip(a, b, box) is not None:
-        return 0.0
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    length = dx * dx + dy * dy
-    distances = [_point_box(a, box), _point_box(b, box)]
-    for x, y in ((box[0], box[1]), (box[0], box[3]), (box[2], box[1]), (box[2], box[3])):
-        t = min(1.0, max(0.0, ((x - a[0]) * dx + (y - a[1]) * dy) / length)) if length else 0.0
-        distances.append(math.hypot(x - a[0] - t * dx, y - a[1] - t * dy))
-    return min(distances)
+from sciplot_core.foundation.rectangle_geometry import (
+    clip_segment as _clip, point_box_distance as _point_box,
+    segment_box_distance as _segment_box,
+)
 
 
 def _curve_distance(widget: Any, state: dict[str, Any], box: list[float]) -> float:

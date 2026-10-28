@@ -5,7 +5,8 @@ import math
 from importlib import import_module
 from typing import Any
 
-from sciplot_core.veusz_audit.legend_geometry import _point_box, _segment_box
+from sciplot_core.veusz_audit.legend_geometry import _segment_box
+from sciplot_core.foundation.rectangle_geometry import rectangle_distance as _rectangle_distance
 from sciplot_core.veusz_audit.measurements import _distance_pt, _setting_hidden
 
 
@@ -30,12 +31,6 @@ def _painted_box(widget: Any, state: dict[str, Any], *, allow_empty: bool = Fals
         raise ValueError("Component bounds must be positive and finite.")
     return box
 
-
-def _rectangle_distance(a: list[float], b: list[float]) -> float:
-    corners = [(a[0], a[1]), (a[2], a[1]), (a[2], a[3]), (a[0], a[3])]
-    # Include containment as well as intersecting rectangle edges.
-    return min([_point_box((b[0], b[1]), a),
-        *[_segment_box(corners[index], corners[(index+1) % 4], b) for index in range(4)]])
 
 
 def collect_segmented_legend_geometry(ordered: list[tuple[str, Any]],

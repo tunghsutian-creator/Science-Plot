@@ -7,6 +7,7 @@ from sciplot_core.studio_render.source_artifacts import literal_source_artifact
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from sciplot_core.studio_render.direct_label_layout import active_direct_label_layout
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.source_tables.parsing import DECIMAL_ROUND_TRIP_ENCODING
 from sciplot_core.scalar_visual import (
@@ -269,6 +270,7 @@ def derive_terminal_render_data_contract(
         axis_contract=axis_contract,
         style=style,
         show_direct_labels=show_direct_labels,
+        automatic_layout_version=active_direct_label_layout(request),
     )
     direct_labels.extend(
         _categorical_axis_label_contracts(

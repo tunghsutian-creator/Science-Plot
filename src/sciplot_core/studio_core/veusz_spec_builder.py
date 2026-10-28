@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from sciplot_core.studio_render.direct_label_layout import active_direct_label_layout
 from sciplot_core.mapping_contract.categorical_identity import category_ids_from_bindings
 
 from sciplot_core.source_tables.parsing import (
@@ -96,6 +97,7 @@ def _build_veusz_plot_spec(
         style=style,
         show_direct_labels=show_direct_labels,
         categorical_contract=categorical,
+        automatic_layout_version=active_direct_label_layout(request),
     )
     legend, factor_legend = build_veusz_legend_spec(
         series=series,
