@@ -38,7 +38,7 @@ PROJECT_REVISION_OWNERS = (
             "tests/test_studio_project_context.py",
             "tests/test_studio_project_status.py",
             "tests/test_architecture_boundaries.py",
-            "tests/test_gui_source_currentness.py",
+            "tests/test_gui_source_currentness.py", "tests/test_gui_mapping_source_currentness.py",
             "tests/test_task_mapping_review.py",
         ),
         handoff_gates=("doctor",),

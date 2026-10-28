@@ -334,7 +334,7 @@ CHANGED_OWNERS = (
             *ARCHITECTURE_CORE_TARGETS,
             "tests/test_semantic_path_authority.py",
             "tests/test_studio_figure_set_probe_native.py",
-            "tests/test_gui_source_currentness.py",
+            "tests/test_gui_source_currentness.py", "tests/test_gui_mapping_source_currentness.py",
             "tests/test_studio_project_status.py",
         ),
         final_milestone_gates=("smoke",),
