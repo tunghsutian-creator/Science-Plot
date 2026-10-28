@@ -14,6 +14,17 @@ from sciplot_core.workflow.rheology_tts_suite import _compiled_figures, _publish
 from sciplot_core.workflow.rheology_tts_tables import write_json
 
 
+def _style_record(workspace, preview):
+    from sciplot_core.project_commands import ProjectCommands
+    from sciplot_core.workflow.native_suite_runtime import read_bound_store
+
+    store = read_bound_store(workspace)
+    record = ProjectCommands(store).query_decision(preview["decision_id"])
+    assert record["artifact_paths"]["preview.json"] == preview["preview"]
+    assert record["review"]["adapter"] == "suite_style"
+    return store, record
+
+
 def _saved_legacy_style(tmp_path):
     source = tmp_path / "raw.csv"
     source.write_text("original evidence\n")
@@ -74,28 +85,48 @@ def test_preview_preserves_delivery_apply_updates_only_styles_and_retries_once(t
 
 @pytest.mark.parametrize("target", ["source", "candidate", "receipt", "hidden_analysis", "visible_analysis"])
 @pytest.mark.comprehensive
-def test_stale_or_modified_preview_is_rejected_without_delivery_changes(tmp_path, target):
+def test_stale_or_modified_preview_is_rejected_without_delivery_changes(tmp_path, monkeypatch, target):
     workspace, delivery, source, manifest = _saved_legacy_style(tmp_path)
     preview = preview_suite_style(workspace)
     before = snapshot([Path(d["path"]) for d in manifest["documents"]])
     path = Path(preview["preview"])
     receipt = json.loads(path.read_text())
+    store, record = _style_record(workspace, preview)
+    head = (workspace / ".sciplot_store/head.json").read_bytes()
+    protected = snapshot([workspace / "suite.json", workspace / "figure_plan.json",
+        delivery / "data/delivery_manifest.json", delivery / "data/figure_plan.json",
+        *(Path(p) for document in manifest["documents"] for p in document["exports"])])
+    faults = []
     if target == "source":
         source.write_text("changed source\n")
     elif target == "candidate":
-        candidate = Path(receipt["candidates"][0]["export"]["exports"][0]["path"])
-        candidate.write_bytes(b"changed export")
+        from sciplot_core.project_store.io import StoreIO
+
+        entry = next(entry for name, entry in record["draft"]["writes"].items() if name.endswith(".pdf"))
+        read = StoreIO.get
+        def changed_candidate(io, supplied):
+            data = read(io, supplied)
+            if io.root == store.root and supplied == entry:
+                faults.append("changed export")
+                return b"changed export"
+            return data
+        monkeypatch.setattr(StoreIO, "get", changed_candidate)
     elif target in {"hidden_analysis", "visible_analysis"}:
         analysis = workspace / "analysis.json" if target == "hidden_analysis" else delivery / "data/analysis.json"
         analysis.write_text("changed analysis\n")
     else:
         changed = deepcopy(receipt)
-        changed["baseline"] = {}
+        changed["candidate_files"] = {}
+        path = tmp_path / "changed-preview.json"
         write_json(path, changed)
-    with pytest.raises(ValueError, match="changed|Stale"):
+    with pytest.raises(ValueError, match="changed|Stale|conflicting bytes|exact sealed generation preview"):
         apply_suite_style(workspace, path)
     assert snapshot([Path(p) for p in before]) == before
+    assert snapshot([Path(p) for p in protected]) == protected
+    assert (workspace / ".sciplot_store/head.json").read_bytes() == head
+    assert bool(faults) is (target == "candidate")
     assert not (path.parent / "applied.json").exists()
+    assert not (Path(preview["preview"]).parent / "applied.json").exists()
 
 
 def test_partial_publication_rolls_back_all_applied_files(tmp_path, monkeypatch):
@@ -224,7 +255,9 @@ def test_prepared_suite_display_update_without_analysis_preserves_science(tmp_pa
 
     receipt = json.loads(Path(preview["preview"]).read_text())
     assert preview["changed_figures"] == 1
-    assert not any(str(path) in receipt["baseline"] for path in analysis_paths)
+    store, record = _style_record(workspace, preview)
+    assert receipt["version"] == 2
+    assert not any(store.logical_path(path) in record["read_set"] for path in analysis_paths)
     applied = apply_suite_style(workspace, Path(preview["preview"]))
     assert applied["status"] == "ready" and applied["numerical_refit"] is False
     assert not any(path.exists() for path in analysis_paths)
@@ -241,17 +274,32 @@ def test_prepared_suite_display_update_without_analysis_preserves_science(tmp_pa
     assert apply_suite_style(workspace, Path(preview["preview"]))["already_applied"] is True
 
     # Optional scientific evidence, when actually supplied, remains a stale gate.
-    write_json(analysis_paths[0], {"caller_evidence": "must remain bound"})
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.project_store import ProjectConflict
+
+    current = store.snapshot()
+    report = store.logical_path(analysis_paths[0])
+    evidence = json.dumps({"caller_evidence": "must remain bound"}).encode()
+    supply = ProjectCommand.create("save", "supplied-optional-analysis", project_id=current["project_id"],
+        expected_generation=current["generation"], read_set={report: None}, write_set=[report],
+        request={"caller_evidence": report})
+    ProjectCommands(store).execute(supply, lambda: ProjectMutation({report: evidence}, {"supplied": report}))
     supplied["figures"][0]["panels"][0]["series"][0]["label"] = "Reference sample"
     write_json(presentation, supplied)
     second = preview_suite_style(workspace, presentation_plan=presentation)
-    second_receipt = json.loads(Path(second["preview"]).read_text())
-    assert second_receipt["baseline"][str(analysis_paths[0])] == file_sha256(analysis_paths[0])
+    store, second_receipt = _style_record(workspace, second)
+    assert second_receipt["read_set"][store.logical_path(analysis_paths[0])] == file_sha256(analysis_paths[0])
     delivered = snapshot([native, *(Path(p) for p in manifest["documents"][0]["exports"])])
+    head = (workspace / ".sciplot_store/head.json").read_bytes()
     analysis_paths[0].unlink()
-    with pytest.raises(ValueError, match="Stale presentation baseline"):
+    with pytest.raises(ProjectConflict, match="whole-set membership changed"):
         apply_suite_style(workspace, Path(second["preview"]))
     assert snapshot([Path(path) for path in delivered]) == delivered
+    assert (workspace / ".sciplot_store/head.json").read_bytes() == head
+    refused = store.query(second_receipt["command_id"])
+    assert refused["phase"] == "accepted" and refused["accepted"] is True
+    assert refused["decision_id"] == second_receipt["decision_id"]
+    assert "committed_generation" not in refused
 
 
 @pytest.mark.parametrize("change", ["coordinates", "ledger", "stale_plan"])

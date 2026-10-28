@@ -279,9 +279,14 @@ def preview_suite_style(workspace: Path, *, presentation_plan: Path | None = Non
             else:
                 prepared_updates = publication_updates(workspace, manifest, preview, directory, spec_targets=specs)
                 updates.update(prepared_updates)
-                artifacts = {"preview.json": json_bytes({"kind": preview["kind"], "version": 1,
+                # V1 describes temporary native candidates. This sealed review
+                # retains their actual edit evidence without executable old paths;
+                # Core owns the read set, candidate bytes and decision/replay.
+                artifacts = {"preview.json": json_bytes({"kind": preview["kind"], "version": 2,
                     "figures": list(specs), "contract_sha256": preview["contract_sha256"],
-                    "sources": preview["sources"], "candidate_files": {store.logical_path(path): canonical_sha(data)
+                    "sources": preview["sources"], "candidates": [{"id": item["id"],
+                        "edit": {"changes": item["edit"]["changes"]}} for item in preview["candidates"]],
+                    "candidate_files": {store.logical_path(path): canonical_sha(data)
                     for path, data in prepared_updates.items()}})}
                 for candidate in preview["candidates"]:
                     image = next(item["path"] for item in candidate["export"]["exports"] if item["format"] == "png_300")

@@ -140,6 +140,114 @@ def test_plan_dependency_change_blocks_apply_before_publication(tmp_path, monkey
     assert not (Path(preview["preview"]).parent / "backup").exists()
 
 
+def test_sealed_style_review_versions_actual_changes_without_temporary_candidate_paths(tmp_path, monkeypatch):
+    import stat
+    from sciplot_core.project_store import FileProjectStore
+
+    fixture, _manifest, preview, _external = _sealed_style_preview(tmp_path, monkeypatch)
+    workspace, delivery, *_ = fixture
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    record, = store.commands()
+    path = Path(preview["preview"])
+    review = json.loads(path.read_bytes())
+    assert review["kind"] == "sciplot_rheology_style_preview" and review["version"] == 2
+    assert review["candidates"] == [{"id": "A", "edit": {"changes": [{"field": "legend"}]}}]
+    assert all(record["draft"]["writes"][name]["sha256"] == digest
+               for name, digest in review["candidate_files"].items())
+    assert record["read_set"] == record["metadata"]["read_set"]
+    assert "baseline" not in review and "plan" not in review
+    assert stat.S_IMODE(path.stat().st_mode) == 0o400
+    assert not (workspace / "style_previews").exists()
+
+
+@pytest.mark.parametrize("target", ["candidate_bytes", "review_bytes", "whole_draft"])
+def test_corrupted_core_style_evidence_is_refused_before_repair_or_publication(tmp_path, monkeypatch, target):
+    from sciplot_core.project_store import FileProjectStore, ProjectConflict
+    from sciplot_core.project_store.io import StoreIO
+    from sciplot_core.workflow.rheology_tts_style_storage import snapshot
+
+    fixture, _manifest, preview, _external = _sealed_style_preview(tmp_path, monkeypatch)
+    workspace, delivery, source, documents, *_ = fixture
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    record, = store.commands()
+    group, suffix = ("writes", ".pdf") if target == "candidate_bytes" else ("artifacts", "preview.json")
+    entry = next(value for name, value in record["draft"][group].items() if name.endswith(suffix))
+    protected = snapshot([source, workspace / "suite.json", workspace / "figure_plan.json",
+        delivery / "data/delivery_manifest.json", delivery / "data/figure_plan.json",
+        *(Path(document["path"]) for document in documents),
+        *(Path(path) for document in documents for path in document["exports"])])
+    head = (workspace / ".sciplot_store/head.json").read_bytes()
+    faults, repairs = [], []
+    read, get = StoreIO.read, StoreIO.get
+
+    def corrupt_read(io, name):
+        value = read(io, name)
+        if io.root == workspace and name.startswith("drafts/") and name.endswith(".json"):
+            faults.append(name)
+            value = deepcopy(value)
+            value["result"]["numerical_refit"] = True
+        return value
+
+    def corrupt_bytes(io, supplied):
+        data = get(io, supplied)
+        if io.root == workspace and supplied == entry:
+            faults.append(supplied["sha256"])
+            return data + b":changed after review"
+        return data
+
+    def forbidden_repair(_store):
+        repairs.append("repair")
+        pytest.fail("Corrupt style evidence must be refused before project repair")
+
+    with monkeypatch.context() as fault:
+        fault.setattr(StoreIO, "read" if target == "whole_draft" else "get",
+                      corrupt_read if target == "whole_draft" else corrupt_bytes)
+        fault.setattr(FileProjectStore, "recover", forbidden_repair)
+        with pytest.raises(ProjectConflict, match="sealed command candidate changed|sealed candidate view has conflicting bytes"):
+            apply_suite_style(workspace, Path(preview["preview"]))
+    assert faults and not repairs
+    assert (workspace / ".sciplot_store/head.json").read_bytes() == head
+    assert snapshot([Path(path) for path in protected]) == protected
+    assert store.query(record["command_id"])["phase"] == "needs_review"
+    assert fixture[5] == ["export"]
+    assert not (Path(preview["preview"]).parent / "applied.json").exists()
+
+
+def test_optional_report_loss_retains_only_the_accepted_decision_without_native_retry(tmp_path, monkeypatch):
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.project_store import FileProjectStore, ProjectConflict
+    from sciplot_core.workflow.rheology_tts_style_storage import snapshot
+    from sciplot_core.workflow.rheology_tts_style_update import preview_suite_style
+
+    fixture, _manifest, _first, _external = _sealed_style_preview(tmp_path, monkeypatch)
+    workspace, delivery, source, documents, *_ = fixture
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    current = store.snapshot()
+    supply = ProjectCommand.create("save", "supplied-report", project_id=current["project_id"],
+        expected_generation=current["generation"], read_set={"analysis.json": None}, write_set=["analysis.json"],
+        request={"caller_evidence": "analysis.json"})
+    ProjectCommands(store).execute(supply, lambda: ProjectMutation({"analysis.json": b"caller report"}, {}))
+    second = preview_suite_style(workspace)
+    record = ProjectCommands(store).query_decision(second["decision_id"])
+    report = workspace / "analysis.json"
+    assert record["read_set"]["analysis.json"] == file_sha256(report)
+    protected = snapshot([source, workspace / "suite.json", delivery / "data/delivery_manifest.json",
+        *(Path(document["path"]) for document in documents),
+        *(Path(path) for document in documents for path in document["exports"])])
+    head = (workspace / ".sciplot_store/head.json").read_bytes()
+    report.unlink()
+    calls = list(fixture[5])
+    for _attempt in range(2):
+        with pytest.raises(ProjectConflict, match="whole-set membership changed"):
+            apply_suite_style(workspace, Path(second["preview"]))
+        refused = store.query(record["command_id"])
+        assert refused["phase"] == "accepted" and refused["accepted"] is True
+        assert refused["decision_id"] == record["decision_id"] and "committed_generation" not in refused
+        assert (workspace / ".sciplot_store/head.json").read_bytes() == head
+        assert snapshot([Path(path) for path in protected]) == protected
+        assert fixture[5] == calls
+
+
 def test_public_cli_and_capabilities_advertise_and_forward_explicit_plan(tmp_path, monkeypatch):
     from sciplot_core.cli.dispatch.rheology import dispatch_rheology
     from sciplot_core.workflow import rheology_tts_style_update as update
