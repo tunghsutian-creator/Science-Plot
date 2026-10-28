@@ -5,6 +5,7 @@ from sciplot_core.verification.ordinary_plotting_owners import APPEND_IDENTITY_L
 from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
 PLOT_TEST_PATHS = (
+    "tests/test_veusz_identity_source_versions.py",
     "tests/test_project_lifecycle.py",
     "tests/test_project_lifecycle_contracts.py",
     "tests/test_project_lifecycle_native.py",
@@ -126,7 +127,9 @@ PLOT_OWNER = ChangedOwner(
     excluded_paths=frozenset({APPEND_IDENTITY_LEAF_PATH, "src/sciplot_core/plot_engine/typed_intent.py",
                               "tests/test_plot_typed_intent.py", "tests/test_plot_typed_intent_recovery.py"}),
     owned_test_paths=frozenset(PLOT_TEST_PATHS),
-    pytest_targets=(*PLOT_TEST_PATHS, *ARCHITECTURE_CORE_TARGETS),
+    pytest_targets=(*PLOT_TEST_PATHS, "tests/test_current_native_observation.py",
+                    "tests/test_template_prepared_generation.py", "tests/test_initial_request_source_capture.py",
+                    "tests/test_initial_request_source_capture_native.py", *ARCHITECTURE_CORE_TARGETS),
     mypy_required=True,
     handoff_gates=("doctor",),
     final_milestone_gates=("smoke",),

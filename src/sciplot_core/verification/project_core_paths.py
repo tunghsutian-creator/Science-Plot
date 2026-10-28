@@ -114,6 +114,7 @@ NATIVE_PROJECT_PATHS = frozenset({
     'src/sciplot_core/studio_core/native_export_adapter.py',
     'src/sciplot_core/studio_core/native_export_commands.py',
     'src/sciplot_core/studio_core/native_scientific_audit.py',
+    'src/sciplot_core/studio_core/observed_figure_binding.py',
     'src/sciplot_core/studio_core/project_command_scope.py',
     'src/sciplot_core/studio_core/project_export.py',
     'src/sciplot_core/studio_core/project_publication_commands.py',

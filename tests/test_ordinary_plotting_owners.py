@@ -166,6 +166,7 @@ PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/project_commands/application.py",
         "src/sciplot_core/project_commands/contracts.py",
         "src/sciplot_core/project_commands/errors.py",
+        "src/sciplot_core/project_commands/generated_outputs.py",
         "src/sciplot_core/project_commands/native_suite_projections.py",
         "src/sciplot_core/project_commands/ports.py",
         "src/sciplot_core/project_commands/read_projections.py",
@@ -187,6 +188,8 @@ PROJECT_STORAGE_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/project_store/committed_outcomes.py',
         'src/sciplot_core/project_store/directories.py',
         'src/sciplot_core/project_store/errors.py',
+        'src/sciplot_core/project_store/generated_output_owners.py',
+        'src/sciplot_core/project_store/generated_outputs.py',
         'src/sciplot_core/project_store/incoming_sources.py',
         'src/sciplot_core/project_store/io.py',
         'src/sciplot_core/project_store/locators.py',
@@ -258,6 +261,7 @@ NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
     {
         'src/sciplot_core/studio_core/delivery_recovery_commands.py',
         'src/sciplot_core/studio_core/document_edit_commands.py',
+        'src/sciplot_core/studio_core/observed_figure_binding.py',
         'src/sciplot_core/studio_core/document_edit_review.py',
         'src/sciplot_core/task_native_edit.py',
         'src/sciplot_core/studio_core/document_edit_legacy.py',
@@ -292,6 +296,7 @@ STUDIO_PREPARATION_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/studio_core/preparation_candidate.py',
         'src/sciplot_core/studio_core/preparation_commands.py',
         'src/sciplot_core/studio_core/preparation_lineage.py',
+        'src/sciplot_core/studio_core/preparation_original_sources.py',
         'src/sciplot_core/studio_core/preparation_source_runtime.py',
         'src/sciplot_core/studio_core/studio_prepare_core.py',
     }

@@ -36,6 +36,8 @@ ATTACHED_PROJECT_TESTS = (
 )
 
 PROJECT_STORE_TESTS = (
+    'tests/test_missing_generated_outputs.py',
+    'tests/test_missing_generated_output_recovery.py',
     'tests/test_project_prepared_inputs.py',
     'tests/test_project_store.py',
     'tests/test_project_store_faults.py',
@@ -63,6 +65,7 @@ PROJECT_STORE_TESTS = (
 )
 
 PROJECT_RUNTIME_TESTS = (
+    'tests/test_veusz_identity_source_versions.py',
     'tests/test_project_runtime_locations.py',
     'tests/test_project_delivery_runtime.py',
     'tests/test_project_runtime_locations_native.py',
@@ -121,6 +124,8 @@ NATIVE_PROJECT_CONSUMERS = (
 )
 
 NATIVE_PROJECT_COMMAND_TESTS = (
+    'tests/test_missing_generated_output_consumers.py',
+    'tests/test_current_native_observation.py',
     'tests/test_document_edit_review.py',
     'tests/test_native_project_commands.py',
     'tests/test_native_project_commands_native.py',
@@ -148,6 +153,8 @@ NATIVE_PROJECT_COMMAND_TESTS = (
 )
 
 STUDIO_PREPARATION_TESTS = (
+    'tests/test_initial_request_source_capture.py',
+    'tests/test_initial_request_source_capture_native.py',
     'tests/test_current_preparation_sources.py',
     'tests/test_private_project_manifest.py',
     'tests/test_studio_preparation_candidate.py',
@@ -171,6 +178,7 @@ WORKFLOW_PROJECT_TESTS = (
 )
 
 NATIVE_SUITE_COMMAND_TESTS = (
+    'tests/test_native_suite_missing_export.py',
     'tests/test_native_suite_project_commands.py',
     'tests/test_native_suite_generation_projection.py',
     'tests/test_native_suite_recognition.py',
