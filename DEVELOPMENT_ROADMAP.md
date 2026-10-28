@@ -37,6 +37,10 @@ numeric-witness design that bound only the execution file while its read set
 could change. Keep original inputs, produced artifacts and namespace metadata
 distinct. An expert schema's broad shape must not advertise an unsupported
 scientific-adapter cross-product; trace the actual capability gate as well.
+Include existence checks that accidentally capture a mutable destination as an
+immutable scientific input. Classify every file role before selecting its IO
+helper, and verify both same-root and cold-import lifecycles with the task
+offline. A containing resource root cannot substitute for an exact finite grant.
 
 Then measure the remaining runtime cost on the same task, inputs and environment.
 Separate necessary native computation, repeated initialization and validation;

@@ -68,6 +68,16 @@ source-root namespace metadata without reading that parent or authenticating a
 historical whole-directory digest. Actual original trees still require their
 full observed proof. This witness creates no additional source or writer authority.
 
+The mapping's editable request candidate is a destination, not an immutable
+numeric input. Its canonical ordinary-file structure and admitted namespace are
+checked without capturing its bytes in that witness. The active request keeps
+the publisher's exact preimage and generation CAS; the separate request seed,
+raw files, ledger and numeric outputs retain their immutable checks. An explicit
+cold import replays its registered inputs without requiring an obsolete external
+destination to exist. Finite resource admission uses the existing exact member
+predicate, never just a containing directory. No Core input-protection bypass or
+automatic historical role repair follows from this distinction.
+
 NativeArtifactInput owns an exact document argument, invocation, physical identity,
 mode and content hash. Registered documents can retain their preserved logical
 locator; a private candidate keeps its artifact identity. Neither case turns it

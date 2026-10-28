@@ -1344,6 +1344,11 @@ metadata census before content IO and the same finite membership on recheck.
 to its exact inputs; it neither authenticates an old namespace-directory digest
 nor grants filesystem access. All preparation callers publish those admitted
 source facts through the existing Core mutation.
+`data_mapping/execution_candidate.py` checks the mutable mapping destination's
+structure separately from immutable seed and numerical inputs. It reuses the
+selected resolver's exact namespace admission. Current requests remain guarded
+by ordinary publisher preimage/CAS checks; an imported historical execution does
+not claim that its obsolete external destination is still physically present.
 Provider-neutral capability admission owns AI command scope. GUI
 changeset/native selection/Undo remains a separate identity domain. Adapters may
 resolve intent into those contracts but cannot mint a competing state authority.
