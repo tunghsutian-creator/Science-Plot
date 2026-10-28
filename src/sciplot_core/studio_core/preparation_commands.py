@@ -145,6 +145,21 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
             with mapping_input_scope(audit_readset):
                 audit, spec_payload = _audit_exact_document_data(document_path=document, spec_path=spec,
                     check_presentation=presentation)
+            from sciplot_core.studio_core.current_layout_review import segmented_summary_legend
+
+            if presentation and segmented_summary_legend(spec_payload):
+                from sciplot_core.studio_core.review_artifacts import _current_layout_issues
+                from sciplot_core.studio_render.models import StudioPreparationBlocked
+
+                native_document = audit.get("document")
+                native_layout = ({**native_document, "segmented_legend_geometry": audit.get("segmented_legend_geometry")}
+                    if isinstance(native_document, dict) else {})
+                critical = [item for item in _current_layout_issues(spec_payload, document_path=document,
+                    native_audit=native_layout) if item.get("severity") == "critical"]
+                if critical:
+                    raise StudioPreparationBlocked("generated_native_layout_invalid",
+                        "Generated native layout must pass before preparation publication: "
+                        + ", ".join(sorted({str(item["id"]) for item in critical})))
             audits.append(audit)
         for source, expected in source_records(spec_payload).items():
             literal = str(source)

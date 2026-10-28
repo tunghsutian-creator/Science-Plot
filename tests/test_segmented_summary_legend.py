@@ -103,3 +103,83 @@ def test_actual_summary_qa_requires_matching_bytes_complete_marks_and_no_overlap
     if mutation in {"clear", "overlap"}:
         assert issues[0]["id"] == LEGEND_ISSUE
         assert issues[0]["measurement_scope"] == "exact_current_native"
+
+
+@pytest.mark.parametrize("case", ["clear", "outside", "overlap", "missing", "stale", "other-critical",
+                                  "science-only", "non-summary", "unchanged-native"])
+def test_generated_summary_layout_is_admitted_before_preparation_publication(tmp_path, monkeypatch, case):
+    import json
+    import subprocess
+
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.source_coverage import document_audit
+    from sciplot_core.studio_core import preparation_commands
+    from sciplot_core.studio_core.guide_contracts import categorical_line_contracts
+    from sciplot_core.studio_core.legend_contracts import (
+        categorical_component_legend_label_contracts, categorical_component_legend_rect_contracts,
+        categorical_grouped_bar_fill_rect_contracts,
+    )
+    from sciplot_core.studio_core.preparation_candidate import studio_preparation_candidate
+    from sciplot_core.studio_render.models import StudioPreparationBlocked
+
+    def no_native_process(*_args, **_kwargs):
+        pytest.fail("This controlled host-admission counter must not start a native process.")
+
+    monkeypatch.setattr(subprocess, "Popen", no_native_process)
+    source, request, series, _, options = summary_case(tmp_path)
+    original = source.read_bytes()
+    categorical = _replicate_distribution_contract(series, template_id="bar", render_options=options)
+    legend = component_legend_spec(categorical, style=_veusz_style_contract(options))
+    spec = {"template": "bar", "source_request": request, "legend": {"show": True, **legend},
+        "categorical": categorical, "style": {"axis_linewidth_pt": .8},
+        "axes": {"x": {"min": .5, "max": 2.5}, "y": {"min": 0, "max": 5}},
+        "series": [{"source_artifacts": [{"path": str(source), "sha256": file_sha256(source)}]}]}
+    paths = ["/page1/graph1/" + item["name"] for item in
+        categorical_component_legend_label_contracts(spec) + categorical_component_legend_rect_contracts(spec)]
+    data = ["/page1/graph1/" + item["name"] for item in
+        categorical_grouped_bar_fill_rect_contracts(spec) + categorical_line_contracts(spec)]
+    geometry = {"coverage_complete": True, "data_paths": data, "outside_plot_paths": [],
+        "legends": [{"path": path, "graph_path": "/page1/graph1",
+                     "minimum_curve_clearance_mm": 0.0 if case == "overlap" else 3.0} for path in paths]}
+    if case in {"outside", "science-only", "non-summary", "unchanged-native"}:
+        geometry["outside_plot_paths"] = [paths[0]]
+    if case == "other-critical":
+        spec["layout_issues"] = [{"id": "visual_extent_outside_explicit_axis", "axis": "y",
+                                  "severity": "critical", "message": "Controlled generated axis conflict."}]
+    elif case == "non-summary":
+        spec["source_request"]["categorical_binding"]["mode"] = "given_values"
+    project, delivery = tmp_path / "project", tmp_path / "visible"
+    (project / "studio").mkdir(parents=True)
+    (project / "plot_request.json").write_text(json.dumps({"input": str(source), "delivery_output": str(delivery)}))
+    (project / "studio/spec.json").write_text(json.dumps(spec))
+    (project / "studio/document.vsz").write_bytes(b"Controlled native input; its scientific audit is replaced in this pure host counter.")
+    store = FileProjectStore(project)
+    before = store.snapshot(import_legacy=True)
+    members = {name: store.read_bytes(name) for name in before["files"]}
+    calls = []
+
+    def scientific_audit(*, document_path, spec_path, check_presentation):
+        calls.append(check_presentation)
+        value = {"status": "passed", "document": {"path": str(document_path),
+            "sha256": "0" * 64 if case == "stale" else file_sha256(document_path)}}
+        if case != "missing":
+            value["segmented_legend_geometry"] = geometry
+        return value, json.loads(spec_path.read_bytes())
+
+    monkeypatch.setattr(document_audit, "_audit_exact_document_data", scientific_audit)
+    with studio_preparation_candidate(store, snapshot=before) as candidate:
+        payload = {"document": str(candidate.project_dir / "studio/document.vsz")}
+        if case == "unchanged-native":
+            payload["preserved_existing_document"] = True
+        expected_block = case in {"outside", "overlap", "missing", "stale", "other-critical"}
+        if expected_block:
+            with pytest.raises(StudioPreparationBlocked):
+                preparation_commands.audit_studio_candidate(candidate, payload)
+        else:
+            preparation_commands.audit_studio_candidate(candidate, payload,
+                **({"check_presentation": False} if case == "science-only" else {}))
+    assert calls == ([] if case == "unchanged-native" else [case != "science-only"])
+    assert not candidate.project_dir.exists() and not delivery.exists()
+    assert source.read_bytes() == original
+    assert store.snapshot()["generation"] == before["generation"] and not store.commands()
+    assert {name: (project / name).read_bytes() for name in before["files"]} == members

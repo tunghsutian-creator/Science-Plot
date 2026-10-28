@@ -11,6 +11,16 @@ from sciplot_core.policy.frame_export import DEFAULT_LEGEND_CURVE_CLEARANCE_MM
 LEGEND_ISSUE = "legend_curve_clearance_below_target"
 
 
+def segmented_summary_legend(spec: dict[str, Any]) -> bool:
+    """Select the existing source-bound ordinary summary geometry contract."""
+    source_request, legend = spec.get("source_request"), spec.get("legend")
+    binding = source_request.get("categorical_binding") if isinstance(source_request, dict) else None
+    return (isinstance(binding, dict) and spec.get("template") == "bar"
+        and binding.get("mode") in {"mean_sample_sd", "mean_sample_sd_n"}
+        and isinstance(legend, dict) and legend.get("show") is True
+        and legend.get("presentation_kind") == "segmented_component")
+
+
 def current_legend_issues(issues: list[dict[str, Any]], document: Path,
                           audit: dict[str, Any], *, geometry_key: str = "legend_geometry",
                           expected_paths: set[str] | None = None) -> list[dict[str, Any]]:
@@ -73,15 +83,10 @@ def current_legend_issues(issues: list[dict[str, Any]], document: Path,
 def current_segmented_legend_issues(issues: list[dict[str, Any]], spec: dict[str, Any],
                                    document_path: Path | None, native_audit: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Consume only source-bound ordinary grouped summaries and exact native marks."""
-    legend = spec.get("legend")
     source_request = spec.get("source_request", {})
     if not isinstance(source_request, dict):
         return issues
-    binding = source_request.get("categorical_binding")
-    if (document_path is not None and isinstance(binding, dict) and spec.get("template") == "bar"
-            and binding.get("mode") in {"mean_sample_sd", "mean_sample_sd_n"}
-            and isinstance(legend, dict) and legend.get("show") is True
-            and legend.get("presentation_kind") == "segmented_component"):
+    if document_path is not None and segmented_summary_legend(spec):
         from sciplot_core.mapping_contract.categorical import validate_categorical_context
         from sciplot_core.studio_core.guide_contracts import categorical_line_contracts
         from sciplot_core.studio_core.legend_contracts import (

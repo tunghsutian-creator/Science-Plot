@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
@@ -49,9 +50,9 @@ def audit_spec_data(
     app = existing_app or QtWidgets.QApplication([])
     try:
         ensure_veusz_loader_compat()
-        from veusz import dataimport, document, widgets
-
-        _ = dataimport, widgets
+        import_module("veusz.dataimport")
+        document = import_module("veusz.document")
+        import_module("veusz.widgets")
         loaded_document = document.Document()
         loaded_document.load(str(resolved_document))
         from sciplot_core.studio_core.veusz_numeric_persistence import FLOAT64_ENCODING, NUMERIC_ENCODING_KEY
@@ -87,6 +88,19 @@ def audit_spec_data(
             allowed_scalar_dataset=allowed_scalar_dataset,
             allowed_polygon_paths=allowed_polygon_paths,
         )
+        from sciplot_core.studio_core.current_layout_review import segmented_summary_legend
+
+        layout: dict[str, Any] = {}
+        if check_presentation and segmented_summary_legend(visible_spec):
+            from sciplot_core.veusz_audit.pages import collect_page_geometry
+            from sciplot_core.veusz_audit.segmented_legend_geometry import collect_segmented_legend_geometry
+            from sciplot_core.veusz_audit.widget_tree import _iter_widgets
+
+            # Reuse this audited Document and worker. Exact painted geometry is
+            # additional evidence; numerical/settings inspection does not paint.
+            _widgets, ordered = _iter_widgets(loaded_document)
+            states, _pages = collect_page_geometry(loaded_document, import_module("veusz.document.painthelper").PaintHelper)
+            layout["segmented_legend_geometry"] = collect_segmented_legend_geometry(ordered, states)
         return {
             "kind": "sciplot_veusz_spec_data_audit",
             "version": 1,
@@ -106,6 +120,7 @@ def audit_spec_data(
             "unit_count": len(inventory.units),
             "series_encodings": inventory.series_encoding_evidence,
             "series_encoding_count": len(inventory.series_encoding_evidence),
+            **layout,
         }
     finally:
         if existing_app is None:
