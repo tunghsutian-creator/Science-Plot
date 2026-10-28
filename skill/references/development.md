@@ -288,6 +288,12 @@ original tiers; unknown, stale, duplicate or omitted nodes block before bodies.
 Public scopes enforce CPython private-path and child-startup guards and use
 generated behavior inputs. Clean public CI has no local private corpus;
 neither condition certifies native filesystem observation or real science.
+Collected case names are also a cross-runtime contract. Give long data,
+command or diagnostic-message parameters short explicit semantic IDs instead
+of depending on pytest's automatic string-ID policy. Preserve the parameter
+values, assertions and tiers, and record an exact case mapping when IDs migrate.
+Pytest 9.1 and 9.2 have different defaults for strings longer than 100 characters;
+the supported versions must collect the same reviewed case identities.
 Generated-only public durable checks explicitly bind raw and golden as not
 applicable before discovery; actual public raw fixtures retain declared byte
 bindings. The manifest, exact profile/command/selection and public tests/helper
