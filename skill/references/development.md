@@ -36,7 +36,8 @@ when its exact content and scope bindings remain valid. This workflow changes
 feedback cost, never scientific assertions or acceptance requirements.
 
 For that integrated preflight, keep the existing cheap import-boundary and
-owner/type contracts alongside the exact affected behavior controls. An actual
+owner/type contracts alongside the exact affected behavior controls. Run the
+complete configured type gate, not just an explicit list of newly added files. An actual
 native success does not prove an acyclic dependency graph. Persisted presentation
 selectors must survive the shared minimal terminal request and reconstruction,
 not just initial creation or exact-current export. Native text control bounds

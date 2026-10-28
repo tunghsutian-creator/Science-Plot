@@ -5,8 +5,10 @@ import math
 from importlib import import_module
 from typing import Any
 
-from sciplot_core.veusz_audit.legend_geometry import _segment_box
-from sciplot_core.foundation.rectangle_geometry import rectangle_distance as _rectangle_distance
+from sciplot_core.foundation.rectangle_geometry import (
+    rectangle_distance as _rectangle_distance,
+    segment_box_distance as _segment_box,
+)
 from sciplot_core.veusz_audit.measurements import _distance_pt, _setting_hidden
 
 
