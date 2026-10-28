@@ -96,7 +96,9 @@ def test_stale_native_legend_leaves_no_unknown_and_allows_review_then_cold_expor
         assert (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns) == original[path]
 
 
-@pytest.mark.parametrize("fault", ["missing_key", "missing_field", "wrong_document", "wrong_hash"])
+@pytest.mark.parametrize("fault", ["missing_key", "missing_field", "wrong_document", "wrong_hash",
+    "bool_columns", "fractional_columns", "nan_columns", "infinite_columns", "zero_columns",
+    "excess_columns", "horizontal_enum", "vertical_enum"])
 def test_native_precondition_requires_complete_exact_selected_descriptor(admitted, tmp_path, monkeypatch, fault):
     project, document, _spec, store, initial, current, effects, _inspections, _exports = admitted
     inspect = project_query._inspect_document
@@ -109,13 +111,24 @@ def test_native_precondition_requires_complete_exact_selected_descriptor(admitte
             result["widgets"]["/page1/graph1/key1"]["settings"].pop("columns")
         elif fault == "wrong_document":
             result["document"]["path"] = str(project / "foreign.vsz")
-        else:
+        elif fault == "wrong_hash":
             result["document"]["sha256"] = "a" * 64
+        else:
+            field, value = {
+                "bool_columns": ("columns", True), "fractional_columns": ("columns", 1.5),
+                "nan_columns": ("columns", float("nan")), "infinite_columns": ("columns", float("inf")),
+                "zero_columns": ("columns", 0), "excess_columns": ("columns", 13),
+                "horizontal_enum": ("horzPosn", "outside"), "vertical_enum": ("vertPosn", "outside"),
+            }[fault]
+            result["widgets"]["/page1/graph1/key1"]["settings"][field] = value
         return result
 
     monkeypatch.setattr(project_query, "_inspect_document", malformed)
+    operation = legend(current)
+    if fault == "bool_columns":
+        operation["legend"]["expected"]["columns"] = 1
     with pytest.raises(ValueError):
-        preview(admitted, tmp_path, legend(current), "invalid-descriptor")
+        preview(admitted, tmp_path, operation, "invalid-descriptor")
     assert not effects and not store.commands()
     assert store.snapshot()["generation"] == initial["generation"]
 

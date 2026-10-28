@@ -158,6 +158,9 @@ def require_native_display_preconditions(
         fields = ("columns", "horzPosn", "vertPosn")
         if not isinstance(settings, dict) or any(field not in settings for field in fields):
             raise AnnotationOperationError("stale_categorical_legend", "Inspect the complete current native legend before editing it.")
+        expected_schema = operation_schemas()[1]["properties"]["legend"]["properties"]["expected"]
+        validate_wire({field: settings[field] for field in fields}, expected_schema,
+                      code="stale_categorical_legend")
         legend = context(spec, widgets)["legend"]
         if legend is None or legend["current"] != change["expected_legend"]:
             raise AnnotationOperationError("stale_categorical_legend", "Use the current native legend's complete expected placement and columns.")
