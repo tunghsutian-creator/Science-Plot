@@ -32,6 +32,11 @@ producer to the actual write boundary. Decide whether typed value contracts and
 explicit transaction inputs should replace the remaining loosely shaped
 intermediate dictionaries and ambient dependencies. Do not infer architectural
 closure from isolated tests or add another per-entry workaround.
+Include the registered-directory/file-table mismatch and the rejected first
+numeric-witness design that bound only the execution file while its read set
+could change. Keep original inputs, produced artifacts and namespace metadata
+distinct. An expert schema's broad shape must not advertise an unsupported
+scientific-adapter cross-product; trace the actual capability gate as well.
 
 Then measure the remaining runtime cost on the same task, inputs and environment.
 Separate necessary native computation, repeated initialization and validation;

@@ -1337,6 +1337,13 @@ the same Core publication, including early content/index writes. It does not
 hold a project writer lease across native work or create another checkpoint
 authority. Read-only native observation keeps the observed document fingerprint
 separate from the prior canonical version required for a later audited adoption.
+`studio_core/preparation_original_sources.py` owns preparation's selected-input
+observation. Registered directories use their exact file namespace, with a
+metadata census before content IO and the same finite membership on recheck.
+`data_mapping/numeric_readset_proof.py` binds only one successful numerical replay
+to its exact inputs; it neither authenticates an old namespace-directory digest
+nor grants filesystem access. All preparation callers publish those admitted
+source facts through the existing Core mutation.
 Provider-neutral capability admission owns AI command scope. GUI
 changeset/native selection/Undo remains a separate identity domain. Adapters may
 resolve intent into those contracts but cannot mint a competing state authority.

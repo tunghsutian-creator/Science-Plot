@@ -51,6 +51,23 @@ members and empty directories. Native bindings carry original file byte versions
 separately from directory/composite fingerprints, without changing the scientific
 data-source projection merely to repair runtime IO.
 
+An admitted project directory is represented by its registered file descendants,
+not a synthetic directory entry in `snapshot.files`. Private preparation first
+checks that namespace's complete member shape and modes without reading content,
+then uses the same exact member capability for observation and later rechecks.
+An unregistered neighbour, alias, empty directory or finite-file capability's
+parent cannot become an original source. Private or produced inputs retain their
+existing artifact owner and are not promoted by this directory classification.
+
+Confirmed mapping keeps one invocation-local numeric verification witness over
+all exact file bytes/modes, metadata membership and complete trees. A sealed
+read set or the execution file hash alone does not prove that replay. Only the
+successful full numeric loader may establish the witness; later read-set changes
+invalidate it. An unchanged verified mapping step can retain its historical
+source-root namespace metadata without reading that parent or authenticating a
+historical whole-directory digest. Actual original trees still require their
+full observed proof. This witness creates no additional source or writer authority.
+
 NativeArtifactInput owns an exact document argument, invocation, physical identity,
 mode and content hash. Registered documents can retain their preserved logical
 locator; a private candidate keeps its artifact identity. Neither case turns it
