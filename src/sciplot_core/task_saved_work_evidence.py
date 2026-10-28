@@ -10,9 +10,11 @@ from sciplot_core.plot_engine.current import changed_inputs
 from sciplot_core.plot_engine.managed_state import read_canonical
 from sciplot_core.plot_engine.storage import active, document_root, load_head
 from sciplot_core.project_lifecycle.context import content_sha256, repository_scope
-from sciplot_core.project_lifecycle.attachment_index import Attachment, read_index
+from sciplot_core.project_lifecycle.attachment_index import Attachment, read_index, require_local_owner
 from sciplot_core.project_lifecycle.attachment_projection import derived_relative, metadata_view
 from sciplot_core.project_lifecycle.frozen_namespace import FrozenNamespaceRepository
+from sciplot_core.project_lifecycle.file_content import read_snapshot
+from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.plot_backends.veusz import VeuszBackend
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_query_paths import bound_delivery_project, canonical_path, read_object
@@ -42,7 +44,18 @@ def record_path(value: Any, *, base: Path | None = None) -> Path:
 def document_evidence(root: Path, *, attachment: Attachment | None = None,
                       snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     if attachment is None:
-        return _document_evidence(root)
+        if root.parent.name != '.sciplot_semantic':
+            require_local_owner(root)
+            return _document_evidence(root)
+        from sciplot_core.project_lifecycle.store_composition import existing_store
+
+        store = existing_store(root.parent.parent)
+        snapshot = store.snapshot()
+        index = read_index(store, snapshot)
+        entry = index['attachments'].get(root.name)
+        if entry is None or Attachment(store, entry).root != root:
+            raise ValueError("The selected semantic namespace lacks its exact current project attachment.")
+        attachment = Attachment(store, entry)
     assert snapshot is not None
     prefix = attachment.entry["namespace"] + "/"
     members = {name.removeprefix(prefix): attachment.store.read_bytes(name, generation=snapshot["generation"])
@@ -66,7 +79,25 @@ def document_evidence(root: Path, *, attachment: Attachment | None = None,
 
             saved_command(pending)
         pending = metadata_view(pending, attachment) if pending else None
+    artifacts: dict[Path, dict[str, Any] | None] = {}
+    artifact_roots: tuple[Path, ...] = ()
+    if head['document'].get('plot_type') == 'ManagedPlot':
+        native = Path(head['binding']['document'])
+        output = attachment.output
+        if output is None or not native.is_relative_to(output) or head['binding']['output'] != str(output):
+            raise ValueError("The managed cache does not belong to its exact selected output role.")
+        artifact_roots = (native.parent,)
+        for path in (native, native.parent / 'build.json', native.parent / 'compile-intent.json'):
+            artifacts[path] = read_snapshot(path) if path.exists() or path.is_symlink() else None
+        captured = FrozenNamespaceRepository(attachment.origin, attachment.root, members,
+            artifacts={path: fact['bytes'] for path, fact in artifacts.items() if fact is not None},
+            artifact_roots=artifact_roots)
+    with repository_scope(captured), project_runtime(attachment.store, generation=snapshot['generation']):
         result = _document_evidence(root, head=head, pending=pending, attached=True)
+    for path, before in artifacts.items():
+        after = read_snapshot(path) if path.exists() or path.is_symlink() else None
+        if before != after:
+            raise ValueError("The selected disposable managed artifact changed during discovery.")
     if attachment.store.snapshot()["generation"] != snapshot["generation"]:
         raise ValueError("The project generation changed during saved-work discovery.")
     return result
@@ -84,9 +115,17 @@ def _document_evidence(root: Path, *, head: dict[str, Any] | None = None,
     for group in ("files", "source_trees", "scientific_content_files"):
         for name in binding.get(group, {}):
             record_path(name)
-    for group in binding["fingerprint"].values():
-        for name in group:
-            record_path(name)
+    for kind, group in binding["fingerprint"].items():
+        if kind == "projections":
+            from sciplot_core.project_commands.resources import ProjectionRead
+
+            reads = [ProjectionRead(**item) for item in binding.get('projected_reads', [])]
+            expected = {item.resource + ':' + item.kind + ':' + item.key: item.sha256 for item in reads}
+            if len(expected) != len(reads) or group != expected:
+                raise ValueError("The native fingerprint projections differ from their exact typed read witnesses.")
+        else:
+            for name in group:
+                record_path(name)
     for name in binding.get("scientific_content_files", {}):
         record_path(name)
     if doc.get("plot_type") == "ManagedPlot":
@@ -180,8 +219,17 @@ def project_evidence(project: Path, source: Path, source_sha256: str | None,
             documents.append(document_evidence(attachment.root, attachment=attachment, snapshot=snapshot))
         else:
             root = document_root(project, figure["figure_id"])
+            require_local_owner(root)
+            if snapshot is not None and index is not None:
+                prefixes = tuple(item['namespace'] + '/' for item in index['attachments'].values())
+                if any(name.startswith('.sciplot_semantic/') and name != '.sciplot_semantic/index.json'
+                       and not name.startswith(prefixes) for name in snapshot['files']):
+                    raise ValueError("Semantic attachment resources cannot fall back to an unindexed historical writer.")
             if (root / "head.json").exists():
-                documents.append(document_evidence(root))
+                historical = document_evidence(root)
+                if historical['project'] != str(project) or historical['figure_id'] != figure['figure_id']:
+                    raise ValueError("The unattached historical shadow belongs to another project or figure.")
+                documents.append(historical)
     source_current = query["source"]["current"]
     selected_source_current = source_sha256 == matched_sha if source_sha256 and matched_sha else None
     stale = [item for item in documents if not item["current"]

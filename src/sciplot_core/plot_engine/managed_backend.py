@@ -38,7 +38,7 @@ class ManagedBackend:
 
     def fingerprint(self, binding: dict[str, Any]) -> dict[str, Any]:
         canonical = read_canonical(binding) if "canonical_document" in binding else None
-        files = {name: existing_file_sha256(source_input_path(canonical, name, sha) if canonical is not None else Path(name))
+        files = {name: self._source_hash(canonical, name, sha)
                  for name, sha in fingerprint_for_read(binding)["files"].items()}
         native = Path(binding["document"])
         expected = binding["ir_hash"]
@@ -51,6 +51,28 @@ class ManagedBackend:
                 if record.get("ir_hash") != binding["ir_hash"] or record.get("document_sha256") != file_sha256(native):
                     expected = binding["ir_hash"] if self._owned_intent(binding) else "external_native_mutation"
         return {"files": files, "artifacts": {str(native): expected}}
+
+    @staticmethod
+    def _source_hash(canonical: dict[str, Any] | None, name: str, sha: str) -> str | None:
+        from sciplot_core.foundation.source_locations import selected_source_resolver
+        from sciplot_core.project_store.runtime import ProjectSourceResolver, inspect_runtime_source_file
+        from sciplot_core.project_store.errors import ProjectStoreError
+
+        sources = [item for item in canonical['scientific']['data_sources'] if item['path'] == name] if canonical else []
+        resolver = selected_source_resolver()
+        if sources and isinstance(resolver, ProjectSourceResolver) and not getattr(resolver, 'pending', ()):
+            # Currentness observes an explicitly selected version without
+            # materializing its disposable source view. An in-flight declared
+            # source still belongs to its original admission/compile path.
+            try:
+                values = {inspect_runtime_source_file(name, expected_sha256=sha, source_id=item['source_id']).sha256
+                          for item in sources}
+            except (OSError, ProjectStoreError):
+                return None
+            if len(values) != 1:
+                raise EngineError('managed_source_locator_conflict', 'One sealed source has conflicting observed versions.')
+            return next(iter(values))
+        return existing_file_sha256(source_input_path(canonical, name, sha) if canonical is not None else Path(name))
 
     def _ensure(self, binding: dict[str, Any]) -> tuple[dict[str, Any], Path]:
         canonical = read_canonical(binding)

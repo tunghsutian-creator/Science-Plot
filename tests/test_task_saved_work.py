@@ -237,9 +237,9 @@ def test_known_foreign_delivery_owner_stays_the_explicit_copy_conflict(tmp_path,
     assert inventory(tmp_path) == before
 
 
-@pytest.mark.parametrize("state", ["current", "pending", "missing-revision", "foreign-plot", "generation-race", "source-drift"])
+@pytest.mark.parametrize("state", ["current", "pending", "missing-revision", "foreign-plot", "generation-race", "source-drift", "unindexed"])
 def test_saved_work_reads_the_current_attachment_without_materializing_or_adopting_history(tmp_path, monkeypatch, state):
-    from test_attached_semantic_repository import application, SourceAwareManagedBackend
+    from test_attached_semantic_repository import application
     from managed_plot_helpers import patch, request_for_source
     from sciplot_core.project_store import FileProjectStore
     from sciplot_core.project_store.runtime import project_runtime
@@ -262,12 +262,27 @@ def test_saved_work_reads_the_current_attachment_without_materializing_or_adopti
         app.rollback(root, {'base_revision': 1, 'target_revision': 0, 'idempotency_key': 'pending-undo'})
     snapshot = store.snapshot()
     entry = next(iter(read_index(store, snapshot)['attachments'].values()))
+    # The pure creation adapter writes synthetic native bytes without a real
+    # compiler marker. This control selects the documented missing-disposable
+    # case; untracked/mutated existing bytes are tested separately below.
+    output = Attachment(store, entry).output
+    assert output is not None
+    for product in output.glob('artifacts/*/document.vsz'):
+        product.unlink()
     if state == 'missing-revision':
         name = entry['namespace'] + '/revisions/00000000.json'
         mutation = ProjectMutation({name: None}, {})
         command = ProjectCommand.create('semantic_record', 'missing-control', project_id=snapshot['project_id'],
             expected_generation=snapshot['generation'], read_set={name: snapshot['files'][name]['sha256']},
             write_set=[name], request={'prepared_digest': mutation.prepared_digest})
+        ProjectCommands(store).publish_prepared(command, mutation)
+        snapshot = store.snapshot()
+    if state == 'unindexed':
+        from sciplot_core.project_lifecycle.attachment_index import INDEX
+        mutation = ProjectMutation({INDEX: None}, {})
+        command = ProjectCommand.create('semantic_record', 'unindexed-control', project_id=snapshot['project_id'],
+            expected_generation=snapshot['generation'], read_set={INDEX: snapshot['files'][INDEX]['sha256']},
+            write_set=[INDEX], request={'prepared_digest': mutation.prepared_digest})
         ProjectCommands(store).publish_prepared(command, mutation)
         snapshot = store.snapshot()
     if state == 'foreign-plot':
@@ -280,23 +295,198 @@ def test_saved_work_reads_the_current_attachment_without_materializing_or_adopti
     shell.mkdir(parents=True, exist_ok=True)
     (shell / 'head.json').write_text('{"read_only_history":true}')
     before = inventory(tmp_path)
-    class ReadBackend(SourceAwareManagedBackend):
-        def close(self):
-            pass
-    monkeypatch.setattr(evidence, 'BackendRouter', lambda *_a: ReadBackend())
     monkeypatch.setattr(AttachedProjectRepository, '_materialize_history', lambda *_a: pytest.fail('Discovery materialized history.'))
     monkeypatch.setattr(subprocess, 'run', lambda *_a, **_k: pytest.fail('Discovery launched a native worker.'))
     if state == 'generation-race':
         monkeypatch.setattr(store, 'snapshot', lambda: {**snapshot, 'generation': 'later-generation'})
-    if state in {'missing-revision', 'foreign-plot', 'generation-race'}:
+    if state in {'missing-revision', 'foreign-plot', 'generation-race', 'unindexed'}:
         with pytest.raises((OSError, ValueError, EngineError)):
-            evidence.document_evidence(root, attachment=Attachment(store, entry), snapshot=snapshot)
+            if state == 'unindexed':
+                evidence.document_evidence(root)
+            else:
+                evidence.document_evidence(root, attachment=Attachment(store, entry), snapshot=snapshot)
     else:
-        result = evidence.document_evidence(root, attachment=Attachment(store, entry), snapshot=snapshot)
+        result = evidence.document_evidence(root)  # Direct Managed discovery uses the same Core reader.
         assert result['plot_id'] == created['plot_id']
         assert (result['pending'] is not None) == (state == 'pending')
         assert result['current'] is (state == 'current')
     assert inventory(tmp_path) == before
+
+
+@pytest.mark.parametrize('ownership', ['unattached', 'retired', 'unindexed'])
+def test_core_project_discovery_distinguishes_unattached_history_from_retired_or_unindexed_state(tmp_path, monkeypatch, ownership):
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_lifecycle.attachment_index import OWNER
+    from sciplot_core.plot_engine.storage import document_root
+    from test_plot_engine import FakeBackend
+
+    source = tmp_path / 'original.csv'
+    source.write_text('x,y\n1,2\n')
+    project = legacy(tmp_path / 'project', source)
+    if ownership == 'unindexed':
+        orphan = project / '.sciplot_semantic' / ('a' * 32)
+        orphan.mkdir(parents=True)
+        (orphan / 'head.json').write_text('{"unindexed":true}')
+    FileProjectStore(project).snapshot(import_legacy=True)
+    root = document_root(project, 'curve')
+    class ReadBackend(FakeBackend):
+        def close(self):
+            pass
+    backend = ReadBackend(tmp_path / 'fake-native')
+    document, binding = backend.initial()
+    binding.update(project=str(project), figure_id='curve')
+    commit(root, document, binding, 'unattached-history')
+    if ownership == 'retired':
+        (root / OWNER).write_text(json.dumps({'kind': 'sciplot_semantic_owner', 'version': 1,
+            'origin_root': str(root), 'project': str(project), 'project_id': 'owned-project', 'attachment_id': 'b' * 32}))
+    monkeypatch.setattr(evidence, 'BackendRouter', lambda *_a: backend)
+    figure = {'figure_id': 'curve', 'title': 'Curve', 'document': str(project / 'studio/document.vsz'),
+              'document_sha256': file_sha256(project / 'studio/document.vsz'),
+              'spec': str(project / 'studio/spec.json'), 'spec_sha256': file_sha256(project / 'studio/spec.json')}
+    monkeypatch.setattr(evidence, 'inspect_project', lambda *_a, **_k: {'figures': [figure],
+        'source': {'current': True}, 'request_sha256': file_sha256(project / 'plot_request.json'), 'primary_figure_id': 'curve'})
+    before = inventory(tmp_path)
+    if ownership == 'unattached':
+        result = evidence.project_evidence(project, source, source_tree_sha256(source))
+        assert result['state'] == 'saved_project' and len(result['documents']) == 1
+    else:
+        with pytest.raises(ValueError):
+            evidence.project_evidence(project, source, source_tree_sha256(source))
+    assert inventory(tmp_path) == before
+
+
+@pytest.mark.parametrize('projection', ['valid', 'unsupported-kind', 'mismatched-digest', 'duplicate'])
+def test_saved_native_projection_id_is_a_typed_read_witness_not_a_file_path(tmp_path, monkeypatch, projection):
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_commands.read_projections import projection_digest
+    from test_plot_engine import FakeBackend
+
+    project = tmp_path / 'native'
+    project.mkdir()
+    registry = project / 'studio/figure_set.json'
+    registry.parent.mkdir()
+    registry.write_text(json.dumps({'kind': 'sciplot_studio_figure_set', 'version': 1,
+        'primary_figure_id': 'curve', 'figures': [{'figure_id': 'curve', 'status': 'ready'}]}))
+    key = 'studio/figure_set.json:studio_figure_v1:curve'
+    digest = projection_digest(registry.read_bytes(), kind='studio_figure_v1', key='curve')
+    class ReadBackend(FakeBackend):
+        def close(self):
+            pass
+        def fingerprint(self, binding):
+            return {**super().fingerprint(binding), 'projections': {key:
+                projection_digest(registry.read_bytes(), kind='studio_figure_v1', key='curve')}}
+    backend = ReadBackend(project)
+    document, binding = backend.initial()
+    binding['projected_reads'] = [{'resource': 'studio/figure_set.json', 'kind': 'studio_figure_v1', 'key': 'curve', 'sha256': digest}]
+    binding['fingerprint']['projections'] = {key: digest}
+    if projection == 'unsupported-kind':
+        binding['projected_reads'][0]['kind'] = 'arbitrary_selector'
+    elif projection == 'mismatched-digest':
+        binding['fingerprint']['projections'][key] = 'a' * 64
+    elif projection == 'duplicate':
+        binding['projected_reads'].append(dict(binding['projected_reads'][0]))
+    root = tmp_path / 'semantic'
+    commit(root, document, binding, 'native-with-projection')
+    monkeypatch.setattr(evidence, 'BackendRouter', lambda *_a: backend)
+    before = inventory(tmp_path)
+    if projection == 'valid':
+        assert evidence.document_evidence(root)['current'] is True
+    else:
+        with pytest.raises(ValueError):
+            evidence.document_evidence(root)
+    assert inventory(tmp_path) == before
+
+
+@pytest.mark.parametrize('cache', ['absent', 'current-marker', 'mutated-native', 'missing-marker', 'owned-intent', 'alias'])
+def test_real_managed_fingerprint_reads_only_its_finite_disposable_cache(tmp_path, monkeypatch, cache):
+    from test_attached_semantic_repository import application
+    from managed_plot_helpers import request_for_source
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.project_lifecycle.attachment_index import Attachment, read_index
+    from sciplot_core.project_lifecycle.attachment_projection import metadata_view
+    from sciplot_core.project_lifecycle.frozen_namespace import FrozenNamespaceRepository
+    from sciplot_core.plot_backends.managed import compiler_identity
+    from sciplot_core import task_saved_work_evidence as evidence
+
+    project = tmp_path / 'project'
+    project.mkdir()
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    app = application()
+    with project_runtime(store):
+        created = app.create(request_for_source(project))
+    root = Path(created['plot'])
+    snapshot = store.snapshot()
+    entry = next(iter(read_index(store, snapshot)['attachments'].values()))
+    attachment = Attachment(store, entry)
+    prefix = entry['namespace'] + '/'
+    members = {name.removeprefix(prefix): store.read_bytes(name) for name in snapshot['files'] if name.startswith(prefix)}
+    original = FrozenNamespaceRepository(attachment.origin, root, members).load_head(attachment.origin)
+    binding = metadata_view(original, attachment)['binding']
+    native = Path(binding['document'])
+    native.unlink(missing_ok=True)  # Discard only the pure adapter's synthetic output.
+    if cache != 'absent':
+        native.parent.mkdir(parents=True, exist_ok=True)
+        native.write_bytes(b'generated currentness-only native artifact; not a native scientific audit')
+        if cache != 'missing-marker':
+            (native.parent / 'build.json').write_text(json.dumps({'ir_hash': binding['ir_hash'], 'document_sha256': file_sha256(native)}))
+        if cache == 'mutated-native':
+            native.write_bytes(native.read_bytes() + b' external change')
+        if cache == 'owned-intent':
+            (native.parent / 'build.json').unlink()
+            (native.parent / 'compile-intent.json').write_text(json.dumps({'ir_hash': binding['ir_hash'],
+                'canonical_sha256': binding['canonical_sha256'], 'compiler_identity': compiler_identity(), 'compile_id': 'owned-control'}))
+        if cache == 'alias':
+            other = tmp_path / 'unselected-marker.json'
+            (native.parent / 'build.json').rename(other)
+            (native.parent / 'build.json').symlink_to(other)
+    before = inventory(tmp_path)
+    monkeypatch.setattr(subprocess, 'run', lambda *_a, **_k: pytest.fail('Currentness launched native compilation.'))
+    if cache == 'alias':
+        with pytest.raises(ValueError):
+            evidence.document_evidence(root)
+    else:
+        result = evidence.document_evidence(root)
+        assert result['current'] is (cache in {'absent', 'current-marker', 'owned-intent'})
+    assert inventory(tmp_path) == before
+    assert store.snapshot()['generation'] == snapshot['generation']
+
+
+def test_real_managed_cold_source_currentness_does_not_materialize_a_source_view(tmp_path, monkeypatch):
+    from test_attached_semantic_repository import application
+    from managed_plot_helpers import request_for_source
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.project_lifecycle.attachment_index import Attachment, read_index
+    from sciplot_core import task_saved_work_evidence as evidence
+
+    project = tmp_path / 'project'
+    project.mkdir()
+    external = tmp_path / 'original-sources'
+    external.mkdir()
+    wire = request_for_source(external)
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    with project_runtime(store):
+        created = application().create(wire)
+    bundle = store.export_bundle(tmp_path / 'bundle')
+    project.rename(tmp_path / 'old-project')
+    external.rename(tmp_path / 'offline-source')
+    cold = FileProjectStore.import_bundle(bundle, tmp_path / 'cold-project')
+    snapshot = cold.snapshot()
+    entry = next(iter(read_index(cold, snapshot)['attachments'].values()))
+    output = Attachment(cold, entry).output
+    assert output is not None
+    for product in output.glob('artifacts/*/document.vsz'):
+        product.unlink()  # Query the canonical authority with disposable output absent.
+    before = inventory(tmp_path)
+    monkeypatch.setattr(subprocess, 'run', lambda *_a, **_k: pytest.fail('Discovery started a native process.'))
+    result = evidence.document_evidence(cold.root / entry['namespace'])
+    assert result['current'] and result['plot_id'] == created['plot_id']
+    assert inventory(tmp_path) == before
+    assert cold.snapshot()['generation'] == snapshot['generation']
 
 
 def test_project_directory_names_do_not_hide_candidates(tmp_path):
