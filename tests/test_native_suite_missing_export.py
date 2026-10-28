@@ -134,10 +134,10 @@ def test_real_native_missing_output_rebuilds_after_complete_without_repeating_re
     artifact.unlink()
     rebuilt = native.export_native(plot)
     assert first["ready_to_use"] is True and rebuilt["ready_to_use"] is True
-    assert rebuilt["generation"] != first["generation"] and calls == ["export"]
+    assert rebuilt["generation"] != first["generation"] and calls == ["export_batch"]
     assert next(item for item in rebuilt["exports"] if item["format"] == "pdf")["sha256"] == file_sha256(artifact)
     assert rebuilt["transform_execution"]["executed"] == []
-    assert native.export_native(plot)["generation"] == rebuilt["generation"] and calls == ["export"]
+    assert native.export_native(plot)["generation"] == rebuilt["generation"] and calls == ["export_batch"]
     assert store.query(original["command_id"]) == original
     assert snapshot([Path(path) for path in protected]) == protected
 
