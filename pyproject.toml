@@ -469,6 +469,7 @@ files = [
   "src/sciplot_gui/studio_project_status/provenance_status.py",
   "src/sciplot_core/studio_core/delivery_recovery_commands.py",
   "src/sciplot_core/studio_core/document_edit_commands.py",
+  "src/sciplot_core/studio_core/native_adoption.py",
   "src/sciplot_core/studio_core/observed_figure_binding.py",
   "src/sciplot_core/studio_core/preparation_original_sources.py",
   "src/sciplot_core/studio_core/document_edit_review.py",

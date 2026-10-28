@@ -270,6 +270,7 @@ NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
     {
         'src/sciplot_core/studio_core/delivery_recovery_commands.py',
         'src/sciplot_core/studio_core/document_edit_commands.py',
+        'src/sciplot_core/studio_core/native_adoption.py',
         'src/sciplot_core/studio_core/observed_figure_binding.py',
         'src/sciplot_core/studio_core/document_edit_review.py',
         'src/sciplot_core/task_native_edit.py',
