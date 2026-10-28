@@ -14,6 +14,7 @@ from sciplot_core.studio_core.project_command_scope import command_for_binding, 
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.project_store.io import read_file, sha
+from sciplot_core.studio_core.preparation_original_sources import OriginalPreparationInput, checked_original_sources
 from sciplot_core.studio_core.source_update_files import project_inventory, relocate_metadata
 
 
@@ -195,7 +196,8 @@ def stage_source_update(project: Path, candidate: Path, review: dict[str, Any], 
                         relocate_companion: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
                         prepared_sources: tuple[PreparedSource, ...] = (), logical_paths_bound: bool = False,
                         before_snapshot: dict[str, Any] | None = None,
-                        input_reads: tuple[InputRead, ...] = ()) -> dict[str, Any]:
+                        input_reads: tuple[InputRead, ...] = (),
+                        original_inputs: tuple[OriginalPreparationInput, ...] = ()) -> dict[str, Any]:
     repository = project_store(project, with_snapshot=True)
     snapshot = before_snapshot if before_snapshot is not None else repository.snapshot(import_legacy=True)
     before = project_inventory(project)
@@ -252,7 +254,7 @@ def stage_source_update(project: Path, candidate: Path, review: dict[str, Any], 
         sources.append({"source_id": identity, "path": literal, "locator": literal, "version": digest})
     record = ProjectCommands(repository).preview(command, lambda: ProjectMutation(writes,
         {"status": "updated", "project": str(project), "review": review}, sources=sources,
-        review=review, artifacts=artifacts, prepared_sources=prepared_sources, input_reads=input_reads))
+        review=review, artifacts=artifacts, prepared_sources=checked_original_sources(original_inputs, prepared_sources), input_reads=input_reads))
     return _public_review(project, record)
 
 

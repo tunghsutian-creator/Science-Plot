@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.source_locations import selected_source_resolver
+from sciplot_core.project_commands import ProjectCommand, SourceTreeRead
+from sciplot_core.project_store import FileProjectStore, ProjectConflict
 from sciplot_core.project_store.runtime import (
     ProjectSourceResolver, inspect_runtime_source_file, inspect_runtime_source_tree,
 )
@@ -43,6 +46,13 @@ def current_source_files(project: Path, source: Path, figures: list[dict[str, An
         for artifact in step.get("input_artifacts", []):
             if artifact.get("kind") == "file" and artifact.get("sha256"):
                 add(artifact["path"], artifact["sha256"])
+    if any(artifact.get("kind") == "directory" and artifact.get("path") == literal
+           for step in request.get("transform_ledger", {}).get("steps", []) for artifact in step.get("input_artifacts", [])):
+        expected = (request.get("resolved_figure_plan") or {}).get("source_sha256")
+        if not isinstance(expected, str):
+            raise ProjectConflict("The current original directory lacks its canonical complete tree version.")
+        for member_literal, digest in _original_directory_members(store, snapshot, SourceTreeRead(literal, expected)).items():
+            add(member_literal, digest)
     if request.get("categorical_binding", {}).get("source_sha256"):
         add(literal, request["categorical_binding"]["source_sha256"])
     for figure in figures:
@@ -82,7 +92,7 @@ def current_source_tree(source: Path, files: dict[str, str], identities: dict[st
             raise ValueError("The current file input changed from its exact admitted source version")
         return observed
     rows, roots, sealed = [], set(), []
-    for literal, digest in sorted(files.items()):
+    for literal, digest in sorted(files.items(), key=lambda item: Path(item[0])):
         relative = Path(literal).relative_to(source).as_posix()
         fact = inspect_runtime_source_file(literal, expected_sha256=digest, source_id=identities.get(literal))
         observed = canonical_json_sha256({"kind": "file", "content_sha256": fact.sha256}, allow_nan=False)
@@ -175,3 +185,85 @@ def mapping_sources_sealed(files: dict[str, str], identities: dict[str, str], fi
     facts = [inspect_runtime_source_file(path, expected_sha256=digest, source_id=identities.get(path))
              for path, digest in selected.items()]
     return any(fact.physical is None for fact in facts)
+
+
+def current_tree_record(store: FileProjectStore, snapshot: dict[str, Any], tree: SourceTreeRead) -> dict[str, Any]:
+    """Follow the exact current request/review writer, never command-list order."""
+    from sciplot_core.project_store import commands, state
+    from sciplot_core.project_store.io import digest
+
+    with store._checked_locked() as (io, head, checked):
+        cursor = state.reachable(io, head, snapshot["generation"], checked=checked)
+        anchor = "plot_request.json"
+        if "source_update.json" in cursor["files"]:
+            review = json.loads(io.get(cursor["files"]["source_update.json"]))
+            if review.get("source") == tree.locator:
+                anchor = "source_update.json"
+        entry = cursor["files"].get(anchor)
+        if cursor["project_id"] != snapshot["project_id"] or entry is None:
+            raise ProjectConflict("The current source directory has no admitted review author.")
+        while True:
+            parent = state.reachable(io, head, cursor["parent"], checked=checked) if cursor.get("parent") else None
+            if parent is not None and (cursor["parent_sha256"] != digest(parent)
+                    or cursor["project_id"] != parent["project_id"] or cursor["sequence"] != parent["sequence"] + 1):
+                raise ProjectConflict("The current source review has an invalid generation parent chain.")
+            previous = parent["commands"] if parent is not None else {}
+            added = [value for key, value in cursor["commands"].items() if previous.get(key) != value]
+            if any(value["generation"] != cursor["generation"] or value["command_id"] in previous for value in added):
+                raise ProjectConflict("The current source review has changed committed command identities.")
+            writers = [value for value in added if anchor in value.get("write_set", [])]
+            if writers:
+                if len(writers) != 1:
+                    raise ProjectConflict("The current source review has multiple authors in one generation.")
+                outcome = writers[0]
+                record = state.command(io, outcome["command_id"], outcome["command_digest"])
+                if record is None:
+                    raise ProjectConflict("The current source review's admitted command receipt is missing.")
+                record = commands.public(io, record, checked=checked)
+                command = ProjectCommand.from_payload(record["metadata"])
+                written = record.get("draft", {}).get("writes", {}).get(anchor)
+                if (record.get("phase") != "complete" or record["generation"] != cursor["generation"]
+                        or record["project_id"] != cursor["project_id"]
+                        or record["metadata"] != outcome["metadata"]
+                        or command.key != record["command_id"] or command.project_id != cursor["project_id"]
+                        or command.command_digest != record["command_digest"]
+                        or dict(command.read_set) != record["read_set"] or list(command.write_set) != record["write_set"]
+                        or record.get("decision_id") != outcome.get("candidate_digest")
+                        or outcome["metadata"].get("kind") not in ({"source_update"} if anchor == "source_update.json" else {"figure_set", "publish"})
+                        or tree.to_payload() not in outcome["metadata"].get("source_trees", [])
+                        or written is None or any(written.get(key) != entry.get(key) for key in ("sha256", "size", "mode"))):
+                    raise ProjectConflict("The current source review author lacks its exact complete tree binding.")
+                return record
+            if parent is None or cursor["files"].get(anchor) != parent["files"].get(anchor):
+                raise ProjectConflict("The current source review lacks a committed exact write authority.")
+            cursor = parent
+
+
+
+def _current_tree_command(store: FileProjectStore, snapshot: dict[str, Any], tree: SourceTreeRead) -> tuple[str, str, str, SourceTreeRead]:
+    record = current_tree_record(store, snapshot, tree)
+    return record["command_id"], record["command_digest"], record["decision_id"], tree
+
+
+def _original_directory_members(store: FileProjectStore, snapshot: dict[str, Any], tree: SourceTreeRead) -> dict[str, str]:
+    record = current_tree_record(store, snapshot, tree)
+    origin = record["source_tree_origins"].get(tree.locator)
+    if not isinstance(origin, dict) or not stat.S_ISDIR(origin["root"]["mode"]):
+        raise ProjectConflict("The current original directory lost its complete ordinary member proof.")
+    captured = [entry for versions in record["draft"]["sources"].values() for entry in versions.values()]
+    result = {}
+    for name, member in origin["members"].items():
+        if not stat.S_ISREG(member["mode"]):
+            continue
+        literal = str(Path(tree.locator) / name)
+        entries = [entry for entry in captured if entry["locator"] == literal]
+        if (len(entries) != 1 or entries[0]["mode"] != stat.S_IMODE(member["mode"])
+                or snapshot["sources"].get(entries[0]["source_id"], {}).get(entries[0]["version"]) != entries[0]):
+            raise ProjectConflict("The current original directory lacks one exact registered version for every member.")
+        result[literal] = entries[0]["sha256"]
+    observed = canonical_json_sha256({"kind": "directory", "files": [
+        {"path": Path(path).relative_to(tree.locator).as_posix(), "content_sha256": digest}
+        for path, digest in sorted(result.items(), key=lambda item: Path(item[0]))]}, allow_nan=False)
+    if observed != tree.tree_sha256:
+        raise ProjectConflict("The current original directory differs from its complete captured composite.")
+    return result

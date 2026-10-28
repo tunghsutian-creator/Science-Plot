@@ -21,7 +21,7 @@ from sciplot_core.project_commands.resources import resource_key
 from sciplot_core.project_store import FileProjectStore, ProjectConflict
 from sciplot_core.project_store.io import directory, install, read_file, sha
 from sciplot_core.data_mapping.execution_inputs import MappingInputReadSet
-
+from sciplot_core.studio_core.preparation_original_sources import OriginalPreparationInput
 _ACTIVE: ContextVar[StudioPreparationCandidate | None] = ContextVar("studio_preparation_candidate", default=None)
 
 
@@ -59,6 +59,7 @@ class StudioPreparationCandidate:
     resources: Path
     request_members: set[str] = field(default_factory=lambda: {"plot_request.json"})
     mapping_inputs: dict[str, MappingInputReadSet] = field(default_factory=dict)
+    original_inputs: dict[str, OriginalPreparationInput] = field(default_factory=dict)
     mapping_baseline_sources: tuple[PreparedSource, ...] = ()
     mapping_baseline_trees: tuple[SourceTreeRead, ...] = ()
     mapping_baseline_roles: tuple[InputRead, ...] = ()

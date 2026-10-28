@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sciplot_core.studio_core.preparation_original_sources import original_tree_reads
+
 from sciplot_core.data_mapping.execution_directories import mapping_tree_reads, mapping_immutable_reads
 
 import json
@@ -200,8 +202,11 @@ def _prepared_update_current(
         if mapping_request is not None:
             review["mapping_request"] = mapping_request
             review["mapping"] = json.loads((candidate / "plot_request.json").read_text())["data_mapping_plan_binding"]
-        if mapping_tree_reads(private.mapping_inputs.values(), private.mapping_baseline_trees):
-            review["mapping_source_trees"] = [tree.to_payload() for tree in mapping_tree_reads(private.mapping_inputs.values(), private.mapping_baseline_trees)]
+        extra_trees = [tree for tree in original_tree_reads(private.original_inputs.values(),
+            mapping_tree_reads(private.mapping_inputs.values(), private.mapping_baseline_trees))
+            if tree.locator != review["source"] or tree.tree_sha256 != review["source_tree_sha256"]]
+        if extra_trees:
+            review["mapping_source_trees"] = [tree.to_payload() for tree in extra_trees]
         if annotations:
             review["annotation_review"] = annotations
             review["annotation_decisions"] = annotation_decisions or []
@@ -238,6 +243,7 @@ def preview_project_source_update(
             return stage_source_update(Path(preview["project"]), candidate, preview,
                 relocate_companion=relocate_annotation_evidence if preview.get("annotation_review") else None,
                 prepared_sources=prepared_sources, logical_paths_bound=True, before_snapshot=before_snapshot,
+                original_inputs=tuple(require_preparation_candidate(candidate).original_inputs.values()),
                 input_reads=mapping_immutable_reads(require_preparation_candidate(candidate).snapshot, require_preparation_candidate(candidate).mapping_inputs.values(), require_preparation_candidate(candidate).mapping_baseline_roles))
     except (ValueError, OSError, RuntimeError) as exc:
         return {

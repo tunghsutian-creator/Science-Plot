@@ -14,50 +14,9 @@ from sciplot_core.project_store.incoming_sources import SourceExpectation, selec
 from sciplot_core.project_store.locators import logical_for_literal
 from sciplot_core.project_store.runtime import incoming_source_runtime, project_runtime, sealed_source_runtime
 from sciplot_core.project_store.sealed_source_trees import SealedSourceTree
-from sciplot_core.studio_core.project_query_sources import current_source_files, current_source_tree
-
-
-def _current_tree_command(store: FileProjectStore, snapshot: dict[str, Any], tree: SourceTreeRead) -> tuple[str, str, str, SourceTreeRead]:
-    """Follow generation writes to the current review's actual committed author."""
-    from sciplot_core.project_store import commands, state
-    from sciplot_core.project_store.io import digest
-
-    with store._locked() as (io, head):
-        cursor = state.reachable(io, head, snapshot["generation"])
-        entry = cursor["files"].get("source_update.json")
-        if cursor["project_id"] != snapshot["project_id"] or entry is None:
-            raise ProjectConflict("The current source directory has no admitted review author.")
-        while True:
-            parent = state.generation(io, cursor["parent"]) if cursor.get("parent") else None
-            if parent is not None and (cursor["parent_sha256"] != digest(parent)
-                    or cursor["project_id"] != parent["project_id"] or cursor["sequence"] != parent["sequence"] + 1):
-                raise ProjectConflict("The current source review has an invalid generation parent chain.")
-            previous = parent["commands"] if parent is not None else {}
-            added = [value for key, value in cursor["commands"].items() if previous.get(key) != value]
-            if any(value["generation"] != cursor["generation"] or value["command_id"] in previous for value in added):
-                raise ProjectConflict("The current source review has changed committed command identities.")
-            writers = [value for value in added if "source_update.json" in value.get("write_set", [])]
-            if writers:
-                if len(writers) != 1:
-                    raise ProjectConflict("The current source review has multiple authors in one generation.")
-                outcome = writers[0]
-                record = state.command(io, outcome["command_id"], outcome["command_digest"])
-                if record is None:
-                    raise ProjectConflict("The current source review's admitted command receipt is missing.")
-                record = commands.public(io, record)
-                written = record.get("draft", {}).get("writes", {}).get("source_update.json")
-                if (record.get("phase") != "complete" or record["generation"] != cursor["generation"]
-                        or record["project_id"] != cursor["project_id"]
-                        or record["metadata"] != outcome["metadata"]
-                        or record.get("decision_id") != outcome.get("candidate_digest")
-                        or outcome["metadata"].get("kind") != "source_update"
-                        or tree.to_payload() not in outcome["metadata"].get("source_trees", [])
-                        or written is None or any(written.get(key) != entry.get(key) for key in ("sha256", "size", "mode"))):
-                    raise ProjectConflict("The current source review author lacks its exact complete tree binding.")
-                return record["command_id"], record["command_digest"], record["decision_id"], tree
-            if parent is None or cursor["files"].get("source_update.json") != parent["files"].get("source_update.json"):
-                raise ProjectConflict("The current source review lacks a committed exact write authority.")
-            cursor = parent
+from sciplot_core.studio_core.project_query_sources import (
+    current_source_files, current_source_tree, _current_tree_command as _current_tree_command,
+)
 
 
 def _current_external_scope(store: FileProjectStore, snapshot: dict[str, Any],

@@ -20,18 +20,12 @@ from sciplot_core.studio_core.preparation_candidate import (
     StudioPreparationCandidate, require_preparation_candidate, studio_preparation_candidate,
 )
 from sciplot_core.terminal_source_binding import SealedTerminalSourceBinding
+from sciplot_core.studio_core.preparation_original_sources import (
+    capture_original_input, verify_original_ledger, original_tree_reads, checked_original_sources,
+    source_identity_for_locator as source_identity_for_locator,
+)
 from sciplot_core.studio_core.preparation_source_runtime import current_preparation_runtime
 from sciplot_core.data_mapping.execution_inputs import mapping_input_reads, mapping_execution_path, mapping_input_scope
-
-
-def source_identity_for_locator(snapshot: dict[str, Any], locator: str) -> str:
-    """Versions advance one exact source identity; a basename cannot reconnect it."""
-    known = [identity for identity, versions in snapshot["sources"].items()
-             if any(entry.get("locator") == locator for entry in versions.values())]
-    if len(known) > 1:
-        raise ValueError("The native source literal has ambiguous project identities.")
-    return known[0] if known else canonical_json_sha256(
-        {"project_id": snapshot["project_id"], "locator": locator})[:32]
 
 
 def prepare_studio_candidate(candidate: StudioPreparationCandidate, *, request_target: bool = False,
@@ -52,6 +46,9 @@ def prepare_studio_candidate(candidate: StudioPreparationCandidate, *, request_t
     candidate.request_members.add(request_relative)
     request = json.loads(candidate.read_member(request_relative).data)
     reference = request.get("data_mapping_execution")
+    original = capture_original_input(request, base_dir=candidate.project_dir, snapshot=candidate.snapshot)
+    if original is not None:
+        candidate.original_inputs[request_relative] = original
     with mapping_input_reads(reference) as readset:
         if readset is not None:
             from sciplot_core.data_mapping.execution_loading import load_data_mapping_execution
@@ -144,6 +141,13 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
             identity = source_identity_for_locator(candidate.snapshot, literal)
             sources[(identity, expected)] = PreparedSource(identity, literal, expected, data, (), mode,
                 produced_resource=_produced_resource(candidate, actual, expected, mode))
+    if any(item.get("status") != "not_evaluated" for item in audits):
+        for original in candidate.original_inputs.values():
+            for item in original.prepared:
+                sources[(item.source_id, item.version)] = item
+        for relative in candidate.request_members:
+            verify_original_ledger(json.loads(candidate.read_member(relative).data), candidate.original_inputs.values(),
+                                   prepared_sources=sources.values())
     return audits, list(sources.values())
 
 
@@ -216,10 +220,11 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
             expected_generation=before["generation"], read_set=reads, write_set=sorted(writes), request=request,
             read_memberships=[MembershipRead.capture(before["files"], prefix)
                               for prefix in ("", *("@" + name for name in sorted(store.locations)))],
-            source_trees=mapping_tree_reads(candidate.mapping_inputs.values(), candidate.mapping_baseline_trees))
+            source_trees=original_tree_reads(candidate.original_inputs.values(),
+                mapping_tree_reads(candidate.mapping_inputs.values(), candidate.mapping_baseline_trees)))
         verify_sources()
         record = ProjectCommands(store).execute(command, lambda: ProjectMutation(writes, result,
-            prepared_sources=tuple(sources), input_reads=mapping_immutable_reads(candidate.snapshot, candidate.mapping_inputs.values(), candidate.mapping_baseline_roles),
+            prepared_sources=checked_original_sources(candidate.original_inputs.values(), sources), input_reads=mapping_immutable_reads(candidate.snapshot, candidate.mapping_inputs.values(), candidate.mapping_baseline_roles),
             artifacts={"native-audits.json": json.dumps(audits, ensure_ascii=False, allow_nan=False).encode()}))
         return {**record["result"], "project_command": {field: record[field]
             for field in ("command_id", "command_digest", "project_id", "generation", "phase")}}
