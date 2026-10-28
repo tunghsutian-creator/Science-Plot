@@ -287,7 +287,7 @@ def test_mapping_admission_refuses_physical_request_drift_before_new_source_io(t
 
 @pytest.mark.parametrize("entry", ["public", "staging", "explicit-old-snapshot"])
 def test_current_mapping_admission_cannot_be_replaced_by_a_legal_historical_runtime(tmp_path, monkeypatch, publication, entry):
-    from sciplot_core.studio_core import project_command_scope, source_update, source_update_staging
+    from sciplot_core.studio_core import native_adoption, source_update, source_update_staging
     from sciplot_core.task_storage import load_task
 
     origin, project, store, request, _execution = confirmed_project(tmp_path, monkeypatch, project_override=publication[0])
@@ -311,7 +311,7 @@ def test_current_mapping_admission_cannot_be_replaced_by_a_legal_historical_runt
     assert json.loads((project / "plot_request.json").read_bytes()) == request
     command_ids = [item["command_id"] for item in store.commands()]
     replacement, staging = tmp_path / "unread-new.xlsx", tmp_path / "unallocated"
-    monkeypatch.setattr(project_command_scope, "adopt_saved_native", lambda *_a, **_k: pytest.fail("historical intent admitted a native write"))
+    monkeypatch.setattr(native_adoption, "adopt_saved_native", lambda *_a, **_k: pytest.fail("historical intent admitted a native write"))
     monkeypatch.setattr(source_update, "file_inventory", lambda *_a: pytest.fail("historical intent read the incoming source"))
     monkeypatch.setattr(source_update_staging, "_worksheet_confirmation", lambda *_a: pytest.fail("historical intent inspected a new worksheet"))
     monkeypatch.setattr(source_update_staging, "_build_source_candidate", lambda *_a, **_k: pytest.fail("historical intent allocated a private candidate"))

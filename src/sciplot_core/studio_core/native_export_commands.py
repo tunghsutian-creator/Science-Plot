@@ -11,8 +11,9 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_commands import ProjectCommands, ProjectMutation, MissingGeneratedOutput
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store.runtime import project_runtime
+from sciplot_core.studio_core.native_adoption import adopt_saved_native
 from sciplot_core.studio_core.project_command_scope import (
-    adopt_saved_native, command_for_binding, project_command_runtime, project_store, source_versions,
+    command_for_binding, project_command_runtime, project_store, source_versions,
 )
 from sciplot_core.studio_core.project_query import resolve_project_figure
 from sciplot_core.studio_core.export_projection import export_projection

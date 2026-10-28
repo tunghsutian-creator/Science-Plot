@@ -46,7 +46,8 @@ from sciplot_core.studio_core.source_update_state import (
 def _prepared_update(project_dir: Path, source_path: Path, worksheet: str | None,
                      mapping_request: dict[str, Any] | None = None,
                      annotation_decisions: list[dict[str, Any]] | None = None) -> Iterator[tuple[Path, dict[str, Any], tuple[PreparedSource, ...], dict[str, Any]]]:
-    from sciplot_core.studio_core.project_command_scope import project_store, adopt_saved_native
+    from sciplot_core.studio_core.native_adoption import adopt_saved_native
+    from sciplot_core.studio_core.project_command_scope import project_store
     from sciplot_core.studio_core.project_query_paths import project_snapshot
     from sciplot_core.project_store.runtime import project_runtime
     from sciplot_core.studio_core.source_update_sources import baseline_scope

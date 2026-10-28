@@ -385,7 +385,7 @@ def run_studio_figure_set_probe(
     )
     from sciplot_core.project_host_factory import project_store
     from sciplot_core.project_store.runtime import project_runtime, logical_runtime_resource, selected_project_store
-    from sciplot_core.studio_core.project_command_scope import adopt_saved_native
+    from sciplot_core.studio_core.native_adoption import adopt_saved_native
 
     with project_runtime(project_store(synthetic_project)):
         adopt_saved_native(synthetic_project, next(entry for entry in synthetic["registry"]["figures"]

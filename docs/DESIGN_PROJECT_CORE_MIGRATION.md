@@ -110,6 +110,14 @@ read-only: its semantic fingerprint binds the observed bytes, while the project
 read witness retains the prior canonical version for a later audited
 NativeAdoption. Default strict figure binding remains unchanged.
 
+`studio_core/project_command_scope.py` owns read witnesses and command composers;
+it cannot invoke observation or native adoption. The explicit mutation use case
+is `studio_core/native_adoption.py`, above that primitive owner and the read-only
+`observed_figure_binding.py`. Native session, edit, source-update, saved reuse,
+export and probe callers enter that one use case. Its prior scope-level mutation
+entry is retired, while the existing ProjectCommands/Store remains the sole
+durable writer.
+
 Live native Save As preserves the original editing generation, native/spec/request
 reads, projected membership and source versions. Only its explicit destination
 preimage is added through the existing command composer; it never refreshes the

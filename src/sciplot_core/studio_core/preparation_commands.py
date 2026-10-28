@@ -230,7 +230,8 @@ def _admit_saved_native_reuse(store: FileProjectStore, before: dict[str, Any]) -
     if any(record["phase"] not in {"complete", "rejected"} for record in store.commands()):
         raise ProjectConflict("Resolve the existing native command before registering another saved baseline.")
     from sciplot_core.studio_core.project_query_paths import project_snapshot
-    from sciplot_core.studio_core.project_command_scope import adopt_saved_native, figure_read_state
+    from sciplot_core.studio_core.native_adoption import adopt_saved_native
+    from sciplot_core.studio_core.project_command_scope import figure_read_state
 
     _request, _primary, figures = project_snapshot(store.root)
     selected = [figure for figure in figures if figure.get("primary") is True and figure.get("status") == "ready"

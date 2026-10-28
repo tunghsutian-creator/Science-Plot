@@ -27,7 +27,8 @@ class _ScopedNativeSession:
 
 def _capture_binding(project: Path, target: Path) -> dict[str, Any] | None:
     from sciplot_core.studio_core.project_query import resolve_project_figure
-    from sciplot_core.studio_core.project_command_scope import adopt_saved_native, project_store
+    from sciplot_core.studio_core.native_adoption import adopt_saved_native
+    from sciplot_core.studio_core.project_command_scope import project_store
     from sciplot_core.project_store.errors import ProjectStoreError
     from sciplot_core.project_store.runtime import project_runtime
 

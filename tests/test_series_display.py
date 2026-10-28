@@ -357,7 +357,8 @@ def test_invalid_display_delta_does_not_register_a_saved_native_baseline(tmp_pat
 def test_saved_native_mutation_refuses_unbound_baselines_without_registering(tmp_path, monkeypatch, failure):
     from sciplot_core.foundation.file_hashing import file_sha256
     from sciplot_core.studio_core import native_scientific_audit
-    from sciplot_core.studio_core.project_command_scope import adopt_saved_native, figure_read_state
+    from sciplot_core.studio_core.native_adoption import adopt_saved_native
+    from sciplot_core.studio_core.project_command_scope import figure_read_state
     from sciplot_core.studio_core.project_query import resolve_project_figure
     import json
 
@@ -391,7 +392,7 @@ def test_saved_native_mutation_refuses_unbound_baselines_without_registering(tmp
 
 def test_saved_native_mutation_retains_existing_registry_selection_contract(tmp_path, monkeypatch):
     from sciplot_core.foundation.file_hashing import file_sha256
-    from sciplot_core.studio_core.project_command_scope import adopt_saved_native
+    from sciplot_core.studio_core.native_adoption import adopt_saved_native
     import json
 
     project, store, before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)

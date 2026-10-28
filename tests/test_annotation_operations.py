@@ -571,7 +571,7 @@ def test_source_update_annotation_admission_uses_exact_current_specs_before_mapp
     from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
     from sciplot_core.project_store import FileProjectStore, ProjectConflict
     from sciplot_core.project_store.runtime import project_runtime
-    from sciplot_core.studio_core import project_command_scope, source_update, source_update_staging
+    from sciplot_core.studio_core import native_adoption, source_update, source_update_staging
 
     project = tmp_path / "project"
     document = project / "studio/document.vsz"
@@ -597,7 +597,7 @@ def test_source_update_annotation_admission_uses_exact_current_specs_before_mapp
         request_path.write_text("{}")
     before = {path: path.read_bytes() for path in (document, spec_path, request_path)}
     replacement = tmp_path / "unread-new.xlsx"
-    monkeypatch.setattr(project_command_scope, "adopt_saved_native", lambda *_a, **_k: pytest.fail("annotation admission wrote native"))
+    monkeypatch.setattr(native_adoption, "adopt_saved_native", lambda *_a, **_k: pytest.fail("annotation admission wrote native"))
     monkeypatch.setattr(source_update, "file_inventory", lambda *_a: pytest.fail("annotation admission read incoming data"))
     monkeypatch.setattr(source_update_staging, "_worksheet_confirmation", lambda *_a: pytest.fail("annotation admission read a worksheet"))
     monkeypatch.setattr(source_update_staging, "_build_source_candidate", lambda *_a, **_k: pytest.fail("annotation admission allocated a candidate"))

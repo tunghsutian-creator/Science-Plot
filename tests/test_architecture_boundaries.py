@@ -161,6 +161,21 @@ def test_first_party_import_graph_is_acyclic() -> None:
     assert _strongly_connected_components(graph) == []
 
 
+def test_native_adoption_stays_above_read_witness_and_command_primitives() -> None:
+    paths = {_module_name(path): path for path in _source_files()}
+    scope = "sciplot_core.studio_core.project_command_scope"
+    observation = "sciplot_core.studio_core.observed_figure_binding"
+    adoption = "sciplot_core.studio_core.native_adoption"
+    assert not {observation, adoption} & _import_targets(scope, paths[scope], set(paths))
+    assert {scope, observation}.issubset(_import_targets(adoption, paths[adoption], set(paths)))
+    # No compatibility export may keep the retired mutation owner available.
+    namespace = ast.parse(paths[scope].read_text(encoding="utf-8"))
+    assert not any(isinstance(node, (ast.FunctionDef, ast.ImportFrom)) and (
+        node.name == "adopt_saved_native" if isinstance(node, ast.FunctionDef)
+        else any(alias.name == "adopt_saved_native" for alias in node.names)
+    ) for node in ast.walk(namespace))
+
+
 def test_studio_entry_modules_import_in_fresh_interpreters() -> None:
     for module in (
         "sciplot_core.studio",
