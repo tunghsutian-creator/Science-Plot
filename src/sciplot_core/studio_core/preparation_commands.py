@@ -270,7 +270,7 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
     _preflight_observed_native(store, before)
     if (not request_target and request_relative == "plot_request.json" and delivery_root is None
             and rule_id is None and template is None and project_name is None and not regenerate_generated
-            and figure_set_path_replacer is None and _terminal_source_binding is None
+            and _terminal_source_binding is None
             and not _terminal_source_prepared and not _new_creation):
         before = _admit_saved_native_reuse(store, before)
     with current_preparation_runtime(store, before) as verify_sources, studio_preparation_candidate(store, snapshot=before) as candidate:

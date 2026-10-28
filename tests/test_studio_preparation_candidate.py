@@ -233,7 +233,7 @@ def test_explicit_scientific_audit_scope_still_executes_the_native_audit(tmp_pat
             commands.audit_studio_candidate(candidate, payload, check_presentation=False)
 
 
-@pytest.mark.parametrize("case", ["saved", "source", "spec", "request", "other-member", "second-native",
+@pytest.mark.parametrize("case", ["saved", "public-facade", "old-runtime", "source", "spec", "request", "other-member", "second-native",
                                   "unknown", "regenerate", "rule-override", "request-target", "delivery-override"])
 def test_saved_native_reopen_preparation_admits_only_the_explicit_reuse_baseline(tmp_path, monkeypatch, case):
     import subprocess
@@ -286,9 +286,19 @@ def test_saved_native_reopen_preparation_admits_only_the_explicit_reuse_baseline
 
     monkeypatch.setattr(subprocess, "Popen", no_process)
     monkeypatch.setattr(commands, "prepare_studio_candidate", prepared)
-    if case == "saved":
+    if case in {"saved", "public-facade", "old-runtime"}:
         with pytest.raises(PreparedReached, match="reconciled exact-current"):
-            commands.prepare_studio_generation(root, **options)
+            if case == "public-facade":
+                from sciplot_core.studio import prepare_studio_document
+
+                prepare_studio_document(root)
+            elif case == "old-runtime":
+                from sciplot_core.project_store.runtime import project_runtime
+
+                with project_runtime(store, generation=before["generation"]):
+                    commands.prepare_studio_generation(root)
+            else:
+                commands.prepare_studio_generation(root, **options)
         assert len(reached) == 1 and reached[0] != before["generation"]
         assert len(store.commands()) == 1 and store.commands()[0]["metadata"]["kind"] == "native_import"
         assert store.commands()[0]["phase"] == "complete"
