@@ -173,6 +173,7 @@ PERFORMANCE_SELECTION_OWNER = ChangedOwner(
         "tests/test_performance_veusz.py",
         "tests/test_resolved_figure_plan.py",
         *ARCHITECTURE_CORE_TARGETS,
+        "tests/test_semantic_path_authority.py",
     ),
     mypy_required=True,
     handoff_gates=("doctor",),

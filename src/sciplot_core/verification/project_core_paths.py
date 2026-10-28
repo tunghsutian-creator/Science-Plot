@@ -84,6 +84,7 @@ SOURCE_LOCATOR_PATHS = frozenset({
     'src/sciplot_core/studio_core/request_overrides.py',
     'src/sciplot_core/studio_core/request_paths.py',
     'src/sciplot_core/studio_core/source_snapshots.py',
+    "src/sciplot_core/studio_core/source_content_observation.py",
     'src/sciplot_core/veusz_worker/cli.py',
     'src/sciplot_core/workflow/project_requests.py',
     "src/sciplot_core/project_store/source_inspection.py",

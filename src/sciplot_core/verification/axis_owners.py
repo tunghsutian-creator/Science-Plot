@@ -80,6 +80,7 @@ GENERIC_AXIS_OWNERS = (
             "tests/test_spectral_axis_display_native.py",
             "tests/test_studio_request_overrides.py",
             "tests/test_temperature_figure_plan_activation.py",
+            "tests/test_semantic_path_authority.py",
         ),
         release_gates=("full_pytest",),
     ),

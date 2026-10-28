@@ -103,6 +103,7 @@ SOURCE_FACT_STRICT_ADDITIONS = frozenset(
     {
         "src/sciplot_core/data_mapping/plan_binding.py",
         "src/sciplot_core/data_mapping/original_tables.py",
+        "src/sciplot_core/materials_rules/catalog.py",
         "src/sciplot_core/semantic_sources/instrument_regions.py",
         "src/sciplot_core/semantic_sources/numeric_separators.py",
     }
@@ -247,6 +248,12 @@ SOURCE_LOCATOR_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/source_coverage/verify.py',
         'src/sciplot_core/source_tables/raw_readers.py',
         'src/sciplot_core/studio_core/source_snapshots.py',
+        "src/sciplot_core/studio_core/source_content_observation.py",
+        "src/sciplot_gui/studio_project/status_adapter.py",
+        "src/sciplot_gui/studio_project_status/builder.py",
+        "src/sciplot_gui/studio_project_status/mapping_status.py",
+        "src/sciplot_gui/studio_project_status/source_status.py",
+        "src/sciplot_gui/studio_project_status/provenance_status.py",
         'src/sciplot_core/veusz_worker/cli.py',
         "src/sciplot_core/source_coverage/derivation.py",
         "src/sciplot_core/data_mapping/contracts.py",

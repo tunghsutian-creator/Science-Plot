@@ -121,6 +121,7 @@ CHANGED_OWNERS = (
                 "tests/test_semantic_preparation_dispatch.py",
                 "tests/test_style_template_contract.py",
                 "tests/test_workflow_bundle_dispatch.py",
+                "tests/test_semantic_path_authority.py",
             }
         ),
         pytest_targets=(
@@ -139,6 +140,7 @@ CHANGED_OWNERS = (
             "tests/test_style_template_contract.py::test_autoplot_preserves_an_explicit_rule_and_supported_presentation_template",
             "tests/test_style_template_contract.py::test_autoplot_rejects_an_empty_explicit_rule_before_project_creation",
             *ARCHITECTURE_CORE_TARGETS,
+            "tests/test_semantic_path_authority.py",
         ),
         handoff_gates=("doctor",),
         final_milestone_gates=("smoke",),
@@ -293,6 +295,7 @@ CHANGED_OWNERS = (
                 "tests/test_tga_scientific_transform.py",
                 "tests/test_table_read_session.py",
                 "tests/test_torque_source_contract.py",
+                "tests/test_studio_figure_set_probe_native.py",
             }
         ),
         pytest_targets=(
@@ -329,6 +332,10 @@ CHANGED_OWNERS = (
             "tests/test_intake_review_recovery.py",
             "tests/test_torque_source_contract.py",
             *ARCHITECTURE_CORE_TARGETS,
+            "tests/test_semantic_path_authority.py",
+            "tests/test_studio_figure_set_probe_native.py",
+            "tests/test_gui_source_currentness.py",
+            "tests/test_studio_project_status.py",
         ),
         final_milestone_gates=("smoke",),
         release_gates=("acceptance_rules", "full_pytest"),
