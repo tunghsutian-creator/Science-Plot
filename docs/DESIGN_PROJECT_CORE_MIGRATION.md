@@ -69,6 +69,20 @@ Completed receipts never regain installation rights. This contract grants no
 automatic repair of raw inputs, specs, native authority, QA/manifest/ZIP evidence,
 immutable runs or unproven legacy aggregates.
 
+Prepared template adoption carries a specific invocation-scoped baseline through
+every AttachedProjectRepository storage batch, including early content interning
+and attachment-index writes. The domain owner
+project_lifecycle/prepared_admission.py validates that baseline under the
+selected Store's short lock and supplies the complete current read set,
+membership and original tree witnesses to the ordinary Core command. Standard
+reservation and before-head validation therefore reject an intervening native,
+source, mode or membership change before semantic publication. A postcheck alone
+cannot establish this guarantee. Authorized final adoption selects the existing
+request's complete delivery capability before capturing the attachment; invalid
+checkpoints are rejected before creating that output. Read-only status does not
+create delivery roots. The legacy no-Store path retains its existing exclusion
+with both checks inside the lease.
+
 A recorded source-root namespace composes preserved file locators; it does not
 request a read of every file in that directory. Each actual file read retains
 its own exact identity, byte version and alias checks. Conversely, observing a

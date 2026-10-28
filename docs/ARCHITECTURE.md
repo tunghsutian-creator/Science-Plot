@@ -1330,6 +1330,13 @@ and native content identity have separate meanings. A standalone semantic
 aggregate retains its existing repository owner and format. The
 `PlotService` compatibility facade constructs concrete ports and routes separate
 native-project aggregates; it contains no competing semantic state machine.
+Prepared template adoption is an invocation-scoped read constraint in
+`project_lifecycle/prepared_admission.py`. Every attached storage batch carries
+its validated project reads, memberships and original source-tree witnesses into
+the same Core publication, including early content/index writes. It does not
+hold a project writer lease across native work or create another checkpoint
+authority. Read-only native observation keeps the observed document fingerprint
+separate from the prior canonical version required for a later audited adoption.
 Provider-neutral capability admission owns AI command scope. GUI
 changeset/native selection/Undo remains a separate identity domain. Adapters may
 resolve intent into those contracts but cannot mint a competing state authority.
