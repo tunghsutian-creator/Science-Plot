@@ -12,6 +12,7 @@ from zipfile import ZipFile
 import pandas as pd
 
 from sciplot_core.data_mapping.column_choice import _original_text
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.source_tables.read_session import read_table_once
 
 
@@ -25,14 +26,15 @@ def _coordinate(value: str) -> tuple[int, int]:
     return int(match[2]), column
 
 
-def merged_metadata_ranges(source: Path, sheet: str | None) -> list[dict[str, int]]:
+def merged_metadata_ranges(source: Path, sheet: str | None, *, expected_sha256: str | None = None) -> list[dict[str, int]]:
     if source.suffix.casefold() not in {".xlsx", ".xlsm"}:
         return []
+    actual = resolve_source_path(source, expected_sha256=expected_sha256)
 
     def read() -> pd.DataFrame:
         main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
         rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-        with ZipFile(source) as archive:
+        with ZipFile(actual) as archive:
             book = ET.fromstring(archive.read("xl/workbook.xml"))
             sheets = book.findall(f"{{{main}}}sheets/{{{main}}}sheet")
             selected = next((item for item in sheets if item.get("name") == sheet), None)
@@ -56,7 +58,7 @@ def merged_metadata_ranges(source: Path, sheet: str | None) -> list[dict[str, in
                     element.clear()
         return pd.DataFrame(records)
 
-    frame = read_table_once(source, ("merged_metadata", sheet), read)
+    frame = read_table_once(actual, ("merged_metadata", sheet), read, expected_sha256=expected_sha256)
     return [{str(key): int(value) for key, value in row.items()} for row in frame.to_dict("records")]
 
 

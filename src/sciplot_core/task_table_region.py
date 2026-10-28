@@ -43,7 +43,7 @@ def inspect_table_region(task: Path, query: dict[str, Any]) -> dict[str, Any]:
     rows = [{"row_index": row, "cells": [
         {"column_index": column, "text": _original_text(frame.iat[row, column])}
         for column in range(cs, ce)]} for row in range(rs, re)]
-    merges = [item for item in merged_metadata_ranges(source, query["sheet"])
+    merges = [item for item in merged_metadata_ranges(source, query["sheet"], expected_sha256=digest)
               if item["row_start"] < re and rs < item["row_end"]
               and item["column_start"] < ce and cs < item["column_end"]]
     if file_sha256(source) != digest:

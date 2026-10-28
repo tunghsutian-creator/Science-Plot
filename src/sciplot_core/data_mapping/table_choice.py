@@ -113,7 +113,8 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
         from sciplot_core.data_mapping.merged_metadata import merged_metadata_ranges, selected_metadata_cells
 
         expanded, anchors, associations = selected_metadata_cells(
-            frame, metadata, ranges=merged_metadata_ranges(source, selection["sheet"]), data_start=start)
+            frame, metadata, ranges=merged_metadata_ranges(source, selection["sheet"],
+                expected_sha256=snapshot["file_sha256"]), data_start=start)
     numeric_summary = _numeric_summary(source, selection["sheet"], snapshot["file_sha256"], frame, start, end,
                                        numeric_contract=numeric_contract)
     columns = []

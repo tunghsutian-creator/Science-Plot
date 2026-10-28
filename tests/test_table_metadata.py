@@ -82,6 +82,80 @@ def test_merged_metadata_cannot_expand_into_measurements(tmp_path):
         select_table(table_choice_snapshot(source, "uvvis_spectrum"), selection)
 
 
+def _registered_merged_source(tmp_path):
+    from sciplot_core.project_commands import PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.project_store import FileProjectStore
+
+    source, selection = merged_numeric_source(tmp_path)
+    snapshot = table_choice_snapshot(source, "uvvis_spectrum")
+    project = tmp_path / "project"
+    project.mkdir()
+    store = FileProjectStore(project)
+    current = store.snapshot(import_legacy=True)
+    identity, digest = "a" * 32, file_sha256(source)
+    command = ProjectCommand.create("save", "original-metadata", project_id=current["project_id"],
+        expected_generation=current["generation"], read_set={}, write_set=[], request={"source": str(source)})
+    ProjectCommands(store).execute(command, lambda: ProjectMutation({}, {}, prepared_sources=(
+        PreparedSource(identity, str(source), digest, source.read_bytes()),)))
+    return source, selection, snapshot, store, identity, digest
+
+
+@pytest.mark.parametrize("cold", [False, True], ids=["live", "explicit-cold"])
+def test_merged_metadata_replay_uses_the_exact_registered_source_bytes(tmp_path, monkeypatch, cold):
+    from sciplot_core.data_mapping import merged_metadata
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.source_tables.read_session import table_read_session
+
+    source, selection, snapshot, store, identity, digest = _registered_merged_source(tmp_path)
+    expected = select_table(snapshot, selection)
+    actual = source
+    if cold:
+        store = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "cold")
+        source.rename(tmp_path / "offline-original.xlsx")
+        actual = store.resolve_source(identity, digest)  # Explicitly establish the imported read view.
+    before = {str(path): (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+              for path in tmp_path.rglob("*") if path.is_file()}
+    opened = []
+    archive = merged_metadata.ZipFile
+    def checked_archive(path, *args, **kwargs):
+        opened.append(path)
+        assert Path(path) == actual
+        return archive(path, *args, **kwargs)
+    monkeypatch.setattr(merged_metadata, "ZipFile", checked_archive)
+    with project_runtime(store), table_read_session():
+        observed = select_table(snapshot, selection)
+    assert observed == expected
+    assert opened == [actual]
+    assert observed["columns"][1]["sample"] == "8" and observed["columns"][3]["sample"] == "009"
+    assert {str(path): (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+            for path in tmp_path.rglob("*") if path.is_file()} == before
+
+
+@pytest.mark.parametrize("binding", ["missing", "wrong", "changed-after-read"])
+def test_merged_metadata_never_infers_a_source_version_or_reuses_changed_bytes(tmp_path, monkeypatch, binding):
+    from sciplot_core.data_mapping import merged_metadata
+    from sciplot_core.project_store import ProjectStoreError
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.source_tables.read_session import table_read_session
+
+    source, _selection, _snapshot, store, _identity, digest = _registered_merged_source(tmp_path)
+    with project_runtime(store), table_read_session():
+        if binding == "changed-after-read":
+            assert len(merged_metadata.merged_metadata_ranges(source, "Measured", expected_sha256=digest)) == 2
+            source.write_bytes(source.read_bytes() + b"changed after the first exact read")
+        expected = None if binding == "missing" else "0" * 64 if binding == "wrong" else digest
+        before = {str(path): (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+                  for path in tmp_path.rglob("*") if path.is_file()}
+        def forbidden_archive(*_args, **_kwargs):
+            pytest.fail("Unbound, wrong or changed source bytes must be refused before XML parsing")
+        monkeypatch.setattr(merged_metadata, "ZipFile", forbidden_archive)
+        with pytest.raises(ProjectStoreError):
+            merged_metadata.merged_metadata_ranges(source, "Measured", expected_sha256=expected)
+        assert {str(path): (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+                for path in tmp_path.rglob("*") if path.is_file()} == before
+
+
 @pytest.mark.comprehensive
 def test_native_merged_numeric_samples_and_cold_export_preserve_exact_values(tmp_path):
     from test_project_source_update_native import _native
