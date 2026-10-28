@@ -324,8 +324,10 @@ def test_authorized_new_source_intent_can_leave_older_sealed_previews_untouched(
             output_root=proof_root / "mappings")
         assert mapping_request["data_mapping_execution"] == str(old_output / "execution.json")
         assert fresh["proposal_sha256"] != execution["proposal_sha256"]
-    monkeypatch.setattr(native_scientific_audit, "audit_edited_document", lambda document, _spec:
-        {"document_sha256": file_sha256(document), "scientific_data_verification": {"status": "passed"}})
+    # Stub only the native candidate auditor. The real saved-document producer
+    # must snapshot document/spec/source bytes and emit its exact binding contract.
+    monkeypatch.setattr(native_scientific_audit, "audit_native_candidate", lambda *_args, **_kwargs:
+        {"status": "passed"})
     monkeypatch.setattr(source_update, "_audit_exact_document_data", lambda **_kwargs: {})
     monkeypatch.setattr(source_update, "capture_project_styles", lambda *_args: {})
     reached = []
@@ -354,3 +356,75 @@ def test_authorized_new_source_intent_can_leave_older_sealed_previews_untouched(
         after = store.query(key)
         assert after["decision_id"] == original["decision_id"] and after["draft"] == original["draft"]
         assert after["metadata"] == original["metadata"] and after["phase"] == "needs_review"
+
+
+@pytest.mark.parametrize("problem", [
+    "missing-status", "failed-status", "missing-document", "wrong-document", "missing-spec", "wrong-spec",
+])
+def test_new_source_preview_refuses_incomplete_native_audit_before_preparation(project, tmp_path, monkeypatch, problem):
+    from pathlib import Path
+    import stat
+
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core import native_scientific_audit
+
+    (project / "studio/figure_set.json").unlink()
+    request = project / "plot_request.json"
+    request.write_text(json.dumps({**json.loads(request.read_bytes()), "rule_id": "uvvis_spectrum", "template": "curve"}))
+    candidate, source, review = prepared(project, tmp_path)
+    source.write_text("Wavelength (nm),Absorbance (a.u.)\n400,0.3\n450,0.4\n500,0.5\n")
+    review.update(source_files=file_inventory(source), source_tree_sha256=source_tree_sha256(source))
+    saved = stage_source_update(project, candidate, review)
+    store = project_store(project)
+    original = store.query(saved["command_key"])
+    document = project / "studio/document.vsz"
+    document.write_bytes(b"scientifically unchanged external native style save")
+    before = {p.relative_to(project): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+              for p in project.rglob("*") if p.is_file()}
+    source_before = source.read_bytes(), source.stat().st_mode, source.stat().st_mtime_ns
+    snapshot = store.snapshot()
+    monkeypatch.setattr(native_scientific_audit, "audit_native_candidate", lambda *_args, **_kwargs:
+        {"status": "passed"})
+    audit = native_scientific_audit.audit_edited_document
+    produced = []
+
+    def incomplete(document, spec):
+        result = audit(document, spec)
+        produced.append(dict(result))
+        key = "document_sha256" if "document" in problem else "spec_sha256" if "spec" in problem else "status"
+        if problem.startswith("missing-"):
+            result.pop(key)
+        else:
+            result[key] = "failed" if key == "status" else "0" * 64
+        return result
+
+    monkeypatch.setattr(native_scientific_audit, "audit_edited_document", incomplete)
+    monkeypatch.setattr(source_update, "prepare_candidate", lambda *_args, **_kwargs:
+        pytest.fail("Incomplete native audit entered new source preparation"))
+    monkeypatch.setattr(source_update, "_audit_exact_document_data", lambda **_kwargs:
+        pytest.fail("Incomplete native audit entered baseline source replay"))
+    result = source_update.preview_project_source_update(project, source)
+    assert result["status"] == "blocked"
+    assert ("does not bind these exact observed bytes" if "document" in problem else
+            "requires the exact passed native and spec audit") in result["reason"]
+    assert len(produced) == 1 and produced[0]["status"] == "passed"
+    assert produced[0]["document_sha256"] == file_sha256(document)
+    assert produced[0]["spec_sha256"] == file_sha256(project / "studio/spec.json")
+    assert store.snapshot()["generation"] == snapshot["generation"]
+    assert store.query(saved["command_key"]) == original and len(store.commands()) == 1
+    after = {p.relative_to(project): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+             for p in project.rglob("*") if p.is_file()}
+    assert {name: after[name] for name in before} == before
+    # Explicit preparation may materialize only this selected immutable source
+    # view; that disposable read artifact is not a generation or native adoption.
+    baseline_source = project / "source/data.csv"
+    digest = file_sha256(baseline_source)
+    owners = [identity for identity, versions in snapshot["sources"].items()
+              if versions.get(digest, {}).get("locator") == str(baseline_source)]
+    assert len(owners) == 1
+    cache = Path(".sciplot_store/sources") / owners[0] / digest / baseline_source.name
+    assert set(after) - set(before) == {cache}
+    assert not (project / cache).is_symlink()
+    assert after[cache][0] == before[Path("source/data.csv")][0]
+    assert stat.S_IMODE(after[cache][1]) == 0o400
+    assert (source.read_bytes(), source.stat().st_mode, source.stat().st_mtime_ns) == source_before
