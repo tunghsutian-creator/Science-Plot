@@ -43,6 +43,32 @@ checks the captured version and identity again; generic initial discovery does
 not invent an expected hash. Physical delivery existence uses its selected host
 resource capability, not an immutable scientific directory cache.
 
+Initial request preparation captures the explicitly admitted original input as
+well as generated scientific tables. Its original UUID/version facts are staged
+in the same ProjectMutation. A ledger can select or check those captured facts;
+it cannot grant access to a new path. Complete directory witnesses retain unused
+members and empty directories. Native bindings carry original file byte versions
+separately from directory/composite fingerprints, without changing the scientific
+data-source projection merely to repair runtime IO.
+
+NativeArtifactInput owns an exact document argument, invocation, physical identity,
+mode and content hash. Registered documents can retain their preserved logical
+locator; a private candidate keeps its artifact identity. Neither case turns it
+into an immutable scientific source. Observing a human-saved Legacy document is
+read-only: its semantic fingerprint binds the observed bytes, while the project
+read witness retains the prior canonical version for a later audited
+NativeAdoption. Default strict figure binding remains unchanged.
+
+Explicit recovery of a missing rendered PDF, TIFF or PNG uses one typed
+MissingGeneratedOutput declaration in the existing command. Its current complete
+producer or fixed admitted catalog proves the output role and prior registered
+version. Logical reads retain that prior version; physical absence is a separate
+preimage checked at admission and commit. The new committed command may install
+into exact absence, using exclusive creation and the bound parent identity.
+Completed receipts never regain installation rights. This contract grants no
+automatic repair of raw inputs, specs, native authority, QA/manifest/ZIP evidence,
+immutable runs or unproven legacy aggregates.
+
 A recorded source-root namespace composes preserved file locators; it does not
 request a read of every file in that directory. Each actual file read retains
 its own exact identity, byte version and alias checks. Conversely, observing a

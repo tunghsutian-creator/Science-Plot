@@ -91,6 +91,11 @@ def test_native_semantic_engine_cases_a_to_g(tmp_path, monkeypatch):
         values = list(map(str, args))
         if "sciplot_core.veusz_worker" in values:
             position = values.index("sciplot_core.veusz_worker") + 1
+            if values[position] == "--project-runtime":
+                assert values[position + 3] == "--"
+                assert Path(values[position + 1]).is_absolute()
+                assert len(values[position + 2]) == 64
+                position += 4
             native_processes[values[position]] += 1
         return actual_run(args, *a, **kw)
 

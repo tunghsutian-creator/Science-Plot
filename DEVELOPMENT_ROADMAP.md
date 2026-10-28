@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-26. External AI is the task interface. Current behavior belongs
+Status: 2026-10-28. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -22,6 +22,16 @@ freshness, and physical staging versus persistent logical identity. Check the
 real effects of deferred/context-managed test entry points and select returned
 command receipts explicitly; a constructed context or unordered final list item
 does not prove that the intended operation ran or completed.
+
+Use the retained end-to-end failures to test the proposed foundation: original
+raw facts omitted from a binding that retained processed sources; a file-byte
+version confused with a composite tree fingerprint; role-bound private native
+artifacts sent through scientific-resource lookup; and a prepared postcheck that
+rejected only after an attachment had committed. Follow each field from its
+producer to the actual write boundary. Decide whether typed value contracts and
+explicit transaction inputs should replace the remaining loosely shaped
+intermediate dictionaries and ambient dependencies. Do not infer architectural
+closure from isolated tests or add another per-entry workaround.
 
 Then measure the remaining runtime cost on the same task, inputs and environment.
 Separate necessary native computation, repeated initialization and validation;
