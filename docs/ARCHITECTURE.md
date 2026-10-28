@@ -195,6 +195,14 @@ values, category coordinates, source bindings and unknown fields remain exact;
 the replay check neither erases saved styles nor relaxes native presentation
 audit.
 
+Saved Studio metadata refresh is an explicit mutation. Canonical-project reuse
+without overrides or regeneration may admit one registered ready primary VSZ
+through `adopt_saved_native`, then select its fresh generation before cloning.
+Other outside members, secondary or multiple native saves, and unresolved commands
+block save admission until explicitly reconciled. Direct VSZ reads
+and saved-project queries do not adopt bytes; Managed artifacts retain their
+existing semantic/backend authority.
+
 Information loss is permitted only in a named projection. Full physical rows,
 missing positions and original numeric values remain in source/mapping evidence;
 finite raw display points do not replace that domain. Recorded conversions and

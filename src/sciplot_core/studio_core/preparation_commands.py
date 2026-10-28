@@ -218,6 +218,39 @@ def _preflight_observed_native(store: FileProjectStore, before: dict[str, Any]) 
         require_categorical_display_current(store.root / "studio/document.vsz", spec)
 
 
+def _admit_saved_native_reuse(store: FileProjectStore, before: dict[str, Any]) -> dict[str, Any]:
+    """Admit one canonical Legacy save for explicit metadata refresh only."""
+    changes = before.get("outside_changes", {})
+    if not changes and not before.get("outside_metadata"):
+        return before
+    if (set(changes) != {"studio/document.vsz"} or changes["studio/document.vsz"] is None
+            or before.get("outside_metadata")
+            or not {"plot_request.json", "studio/document.vsz", "studio/spec.json"}.issubset(before["files"])):
+        raise ProjectConflict("Saved-native reuse requires one canonical VSZ save and no other outside changes.")
+    if any(record["phase"] not in {"complete", "rejected"} for record in store.commands()):
+        raise ProjectConflict("Resolve the existing native command before registering another saved baseline.")
+    from sciplot_core.studio_core.project_query_paths import project_snapshot
+    from sciplot_core.studio_core.project_command_scope import adopt_saved_native, figure_read_state
+
+    _request, _primary, figures = project_snapshot(store.root)
+    selected = [figure for figure in figures if figure.get("primary") is True and figure.get("status") == "ready"
+                and Path(figure["document"]) == store.root / "studio/document.vsz"]
+    if len(selected) != 1:
+        raise ProjectConflict("Saved-native reuse requires the exact registered ready canonical primary.")
+    reads = figure_read_state(store.root, selected[0])
+    binding = {"project_id": before["project_id"], "files": reads["project_files"],
+               "projected_reads": reads["projected_reads"], "source_files": reads["source_files"]}
+    current = store.snapshot()
+    if (current["generation"] != before["generation"] or current.get("outside_changes") != changes
+            or current.get("outside_metadata") != before.get("outside_metadata")):
+        raise ProjectConflict("The saved-native reuse baseline changed during admission.")
+    admitted = adopt_saved_native(store.root, selected[0], expected_binding=binding)
+    current = store.snapshot()
+    if current["generation"] != admitted["generation"] or current.get("outside_changes") or current.get("outside_metadata"):
+        raise ProjectConflict("The saved-native reuse baseline changed after its exact admission.")
+    return current
+
+
 def prepare_studio_generation(project: Path, *, request_target: bool = False,
                               request_relative: str = "plot_request.json",
                               delivery_root: Path | None = None, rule_id: str | None = None,
@@ -235,6 +268,11 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
     store = selected if selected is not None and selected.root == root else project_store(root, with_snapshot=True)
     before = store.snapshot(import_legacy=True)
     _preflight_observed_native(store, before)
+    if (not request_target and request_relative == "plot_request.json" and delivery_root is None
+            and rule_id is None and template is None and project_name is None and not regenerate_generated
+            and figure_set_path_replacer is None and _terminal_source_binding is None
+            and not _terminal_source_prepared and not _new_creation):
+        before = _admit_saved_native_reuse(store, before)
     with current_preparation_runtime(store, before) as verify_sources, studio_preparation_candidate(store, snapshot=before) as candidate:
         payload = prepare_studio_candidate(candidate, request_target=request_target, request_relative=request_relative, delivery_root=delivery_root,
             rule_id=rule_id, template=template, project_name=project_name,

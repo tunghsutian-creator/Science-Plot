@@ -233,6 +233,115 @@ def test_explicit_scientific_audit_scope_still_executes_the_native_audit(tmp_pat
             commands.audit_studio_candidate(candidate, payload, check_presentation=False)
 
 
+@pytest.mark.parametrize("case", ["saved", "source", "spec", "request", "other-member", "second-native",
+                                  "unknown", "regenerate", "rule-override", "request-target", "delivery-override"])
+def test_saved_native_reopen_preparation_admits_only_the_explicit_reuse_baseline(tmp_path, monkeypatch, case):
+    import subprocess
+
+    from test_series_display import _saved_native_baseline
+    from sciplot_core.foundation.source_locations import selected_source_resolver
+    from sciplot_core.project_commands import ProjectCommand
+
+    root, store, before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)
+    saved = document.read_bytes()
+    options = {}
+    if case in {"source", "spec", "request", "other-member", "second-native"}:
+        member = {"source": "source/data.csv", "spec": "studio/spec.json", "request": "plot_request.json",
+                  "other-member": "unregistered-note.txt", "second-native": "studio/figures/second.vsz"}[case]
+        path = root / member
+        path.write_bytes((path.read_bytes() if path.exists() else b"") + b" changed outside")
+    elif case == "unknown":
+        command = ProjectCommand.create("style", "unknown-preparation-baseline", project_id=before["project_id"],
+            expected_generation=before["generation"], read_set={}, write_set=[], request={})
+        store.reserve(command.key, command.command_digest, expected_generation=before["generation"],
+                      read_set={}, write_set=[], metadata=command.to_payload())
+        store.mark_applying(command.key, command.command_digest)
+    elif case == "regenerate":
+        options["regenerate_generated"] = True
+    elif case == "rule-override":
+        options["rule_id"] = "uvvis_spectrum"
+    elif case == "request-target":
+        options["request_target"] = True
+    elif case == "delivery-override":
+        options["delivery_root"] = tmp_path / "different-visible"
+    records = store.commands()
+    physical = {str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*")
+                if path.is_file() and ".sciplot_store" not in path.relative_to(root).parts}
+    reached = []
+
+    class PreparedReached(RuntimeError):
+        pass
+
+    def no_process(*_args, **_kwargs):
+        pytest.fail("This host admission counter must not start a native process.")
+
+    def prepared(candidate, **_kwargs):
+        current = store.snapshot()
+        assert not current["outside_changes"]
+        assert candidate.snapshot["generation"] == selected_source_resolver().snapshot["generation"] == current["generation"]
+        assert candidate.read_member("studio/document.vsz").data == saved
+        assert len(audits) == 1
+        reached.append(current["generation"])
+        raise PreparedReached("reconciled exact-current private preparation")
+
+    monkeypatch.setattr(subprocess, "Popen", no_process)
+    monkeypatch.setattr(commands, "prepare_studio_candidate", prepared)
+    if case == "saved":
+        with pytest.raises(PreparedReached, match="reconciled exact-current"):
+            commands.prepare_studio_generation(root, **options)
+        assert len(reached) == 1 and reached[0] != before["generation"]
+        assert len(store.commands()) == 1 and store.commands()[0]["metadata"]["kind"] == "native_import"
+        assert store.commands()[0]["phase"] == "complete"
+        after = store.snapshot()
+        for name in before["files"]:
+            if name != "studio/document.vsz":
+                assert after["files"][name] == before["files"][name]
+    else:
+        with pytest.raises((ValueError, OSError)):
+            commands.prepare_studio_generation(root, **options)
+        assert not reached and not audits and store.commands() == records
+        assert store.snapshot()["generation"] == before["generation"]
+    assert document.read_bytes() == saved
+    assert {str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*")
+            if path.is_file() and ".sciplot_store" not in path.relative_to(root).parts} == physical
+
+
+def test_real_managed_binding_artifact_cannot_acquire_saved_studio_admission(tmp_path, monkeypatch):
+    import subprocess
+    from pathlib import Path
+
+    from test_managed_source_append import bound_document
+    from test_series_display import _saved_native_baseline
+    from sciplot_core.plot_engine.managed_state import make_binding
+    from sciplot_core.studio_core import request_overrides, studio_prepare
+
+    def no_process(*_args, **_kwargs):
+        pytest.fail("This managed-routing counter must not start a native process.")
+
+    monkeypatch.setattr(subprocess, "Popen", no_process)
+    root, store, before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)
+    managed_source = tmp_path / "managed-source"
+    managed_source.mkdir()
+    managed = bound_document(managed_source)
+    binding = make_binding(managed_source / "store", managed, output=root / "managed-output")
+    assert managed["plot_type"] == "ManagedPlot" and binding["kind"] == "sciplot_managed_binding"
+    native = Path(binding["document"])
+    native.parent.mkdir(parents=True)
+    native.write_bytes(binding["ir_hash"].encode())  # Existing lifecycle fixture's synthetic native adapter.
+    original_source = (managed_source / "figure.csv").read_bytes()
+    saved = document.read_bytes()
+    # The existing whole-set guard may reject this owned output before the
+    # narrower saved-primary admission; neither path may register its bytes.
+    with pytest.raises(ProjectConflict):
+        commands.prepare_studio_generation(root)
+    monkeypatch.setattr(request_overrides, "upstream_status", lambda: {"veusz": {"fixture": True}})
+    readonly = studio_prepare.prepare_studio_document(native)
+    assert readonly["mode"] == "vsz" and readonly["document"] == str(native)
+    assert not store.commands() and not audits and store.snapshot()["generation"] == before["generation"]
+    assert document.read_bytes() == saved and native.read_bytes() == binding["ir_hash"].encode()
+    assert (managed_source / "figure.csv").read_bytes() == original_source
+
+
 def test_source_identity_is_stable_across_versions_and_never_reconnected_by_name():
     from copy import deepcopy
 
