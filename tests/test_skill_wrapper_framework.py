@@ -238,11 +238,16 @@ def test_public_wrapper_rejects_foreign_source_before_runtime_probe(tmp_path: Pa
 def test_public_cli_help_bootstraps_actual_selected_python_without_inherited_dyld(
     tmp_path: Path, symlink_alias: bool,
 ) -> None:
-    selected = Path(sys.executable).resolve()
+    # Keep the selected environment's entry point: resolving a venv executable
+    # selects its base Python, whose site-packages need not contain SciPlot deps.
+    selected = Path(sys.executable)
     if symlink_alias:
-        alias = tmp_path / "selected-python"
-        alias.symlink_to(selected)
-        selected = alias
+        # Alias the bin directory so Python can still discover that environment;
+        # a standalone executable alias changes its pyvenv.cfg search location.
+        alias = tmp_path / "selected-python-bin"
+        alias.symlink_to(selected.parent, target_is_directory=True)
+        selected = alias / selected.name
+    assert selected.resolve() == Path(sys.executable).resolve()
     environment = {**os.environ, "SCIPLOT_REPO": str(REPO_ROOT),
                    "SCIPLOT_SOURCE_ROOT": str(REPO_ROOT / "src"), "SCIPLOT_PYTHON": str(selected),
                    "PYTHONDONTWRITEBYTECODE": "1"}
