@@ -46,7 +46,7 @@ def _interrupt_after_native_projection(project: Path, exit_process) -> None:
 
 
 @pytest.mark.comprehensive
-def test_killed_native_source_install_resumes_through_public_task(tmp_path):
+def test_killed_native_source_install_resumes_through_public_task(tmp_path, monkeypatch):
     import sys
     from sciplot_core.project_store import ProjectRecoveryRequired
     from sciplot_core.studio_core.project_command_scope import project_store
@@ -90,6 +90,8 @@ resume_task(task, {'accept_source_update': True, 'expected_revision_id': sys.arg
     # materialization. A receipt-only or pre-acceptance exit cannot satisfy this.
     assert document.read_bytes() != previous["studio/document.vsz"]
     assert spec.read_bytes() == previous["studio/spec.json"]
+    assert file_sha256(document) == interrupted["draft"]["writes"]["studio/document.vsz"]["sha256"]
+    assert file_sha256(spec) != interrupted["draft"]["writes"]["studio/spec.json"]["sha256"]
     with pytest.raises(ProjectRecoveryRequired):
         store.snapshot()
     resumed = _cli("task", "resume", task, "--response", _write(tmp_path / "retry.json", {"retry": True}))
@@ -110,6 +112,15 @@ resume_task(task, {'accept_source_update': True, 'expected_revision_id': sys.arg
     assert not (project.parent / ".source_update_history").exists()
     assert (old_source.read_bytes(), new_source.read_bytes()) == raw_before
     before_repeat = _files(project), _files(archive)
+    from sciplot_core.studio_core import source_update
+
+    with monkeypatch.context() as guard:
+        def forbid_reprepare(*args, **kwargs):
+            pytest.fail("completed source recovery must not prepare another native candidate")
+
+        guard.setattr(task_source_execution, "prepare_source_update_review", forbid_reprepare)
+        guard.setattr(source_update, "prepare_candidate", forbid_reprepare)
+        assert task_control.resume_task(task, {"retry": True})["status"] == "complete"
     assert _cli("task", "resume", task, "--response", tmp_path / "retry.json")["status"] == "complete"
     assert (_files(project), _files(archive)) == before_repeat
     records = [record for record in store.commands() if record["metadata"]["kind"] == "source_update"]
