@@ -111,6 +111,7 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
     source = tmp_path / "UVvis.csv"
     source.write_text("Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\nE2,E2,E4,E4\n"
                       "400,1,400,2\n450,2,450,3\n500,3,500,4\n")
+    source_bytes = source.read_bytes()
     request = template_request(source)
     if not style_change:
         request.pop("theme")
@@ -123,7 +124,11 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
     def measured_run(args, *a, **kw):
         values = list(map(str, args))
         if "sciplot_core.veusz_worker" in values:
-            workers[values[values.index("sciplot_core.veusz_worker") + 1]] += 1
+            position = values.index("sciplot_core.veusz_worker") + 1
+            if values[position] == "--project-runtime":
+                assert len(values) > position + 4 and values[position + 3] == "--", values
+                position += 4
+            workers[values[position]] += 1
         return actual_run(args, *a, **kw)
 
     monkeypatch.setattr(subprocess, "run", measured_run)
@@ -131,11 +136,38 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
     first = service.create(request)
     assert first["status"] == "complete" and first["ready_to_use"] is True, first
     assert workers["export-document"] == 1, workers
-    assert sum(workers[name] for name in ("edit-document", "edit-annotations", "preview-document")) == (2 if style_change else 0), workers
+    # Version 3 freezes one audited candidate; accepting it only publishes those
+    # bytes. The retired version-2 path rendered again during apply.
+    assert sum(workers[name] for name in ("edit-document", "edit-annotations", "preview-document")) == (1 if style_change else 0), workers
+    if style_change:
+        from sciplot_core.project_commands import ProjectCommands
+        from sciplot_core.project_host_factory import project_store
+
+        before_proof = workers.copy()
+        semantic = json.loads(Path(first["evidence"]).read_bytes())
+        head = load_head(Path(first["plot"]))
+        store = project_store(Path(head["binding"]["project"]))
+        review = semantic["review"]
+        record = ProjectCommands(store).query(review["operation_id"])
+        assert record is not None and record["phase"] == "complete"
+        assert record["metadata"]["kind"] == "document_edit" and record["accepted"] is True
+        assert record["decision_id"] == review["decision_id"]
+        assert review["version"] == 3 and review["scientific_audit"]["status"] == "passed"
+        logical = record["result"]["document_relative"]
+        frozen = record["draft"]["writes"][logical]
+        native = Path(head["binding"]["document"])
+        assert frozen["sha256"] == record["result"]["result_sha256"] == review["scientific_audit"]["document_sha256"] == file_sha256(native)
+        assert frozen["mode"] == native.stat().st_mode & 0o777
+        assert all(store.snapshot()["files"][logical][field] == frozen[field] for field in ("sha256", "size", "mode"))
+        assert store.read_bytes(logical, generation=record["generation"]) == native.read_bytes() == Path(record["artifact_paths"]["after.vsz"]).read_bytes()
+        assert review["scientific_audit"]["spec_sha256"] == file_sha256(Path(head["binding"]["spec"]))
+        assert first["scientific_hash_changed"] is False
+        assert workers == before_proof
     original_workers = workers.copy()
     repeated = service.create(request)
     assert repeated["status"] == "complete" and repeated["revision"] == first["revision"]
     assert workers == original_workers, (original_workers, workers)
+    assert source.read_bytes() == source_bytes
     state = json.loads(Path(first["creation_evidence"]).read_text())
     prepared = json.loads((Path(first["creation_evidence"]).parent / "task/task.json").read_text())
     assert prepared["phase"] == "prepared" and prepared["result"]["ready_to_use"] is False

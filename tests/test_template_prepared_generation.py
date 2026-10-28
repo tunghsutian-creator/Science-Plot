@@ -28,7 +28,8 @@ def prepared(tmp_path):
     (project / 'studio').mkdir(parents=True)
     (project / 'studio/document.vsz').write_bytes(b'prepared native')
     (project / 'studio/spec.json').write_bytes(b'{"series":[]}')
-    (project / 'plot_request.json').write_text(json.dumps({'input': str(source)}))
+    (project / 'plot_request.json').write_text(json.dumps({'input': str(source),
+        'delivery_output': str(tmp_path / 'visible-delivery')}))
     store = FileProjectStore(project)
     store.snapshot(import_legacy=True)
     task = tmp_path / 'task'
@@ -196,3 +197,162 @@ def test_legacy_preparation_is_checked_after_its_lease_is_entered(prepared, monk
         with prepared_admission(state):
             calls.append('must not adopt an unchecked new native baseline')
     assert calls == []
+
+
+def attached_service(tmp_path, source, project, monkeypatch):
+    from test_plot_engine import FakeBackend
+    from sciplot_core.plot_engine.service import PlotService
+
+    backend = FakeBackend(tmp_path / 'backend')
+    backend.native, backend.raw = project / 'studio/document.vsz', source / 'a.csv'
+    original = backend.import_project
+
+    def imported(*args, **kwargs):
+        document, binding = original(*args, **kwargs)
+        return document, {**binding, 'project': str(project)}
+
+    monkeypatch.setattr(backend, 'import_project', imported)
+    return PlotService(backend, resolve_figure=lambda *_: {'project': str(project), 'figure_id': 'primary'})
+
+
+def test_prepared_generation_conflict_is_rejected_before_attachment_publication(prepared, tmp_path, monkeypatch):
+    source, project, store, _task, state = prepared
+    service = attached_service(tmp_path, source, project, monkeypatch)
+    later = None
+    try:
+        with pytest.raises(ValueError):
+            with prepared_admission(state):
+                publish(store, kind='native_patch', name='studio/document.vsz', data=b'legal later native generation')
+                later = store.snapshot()
+                service.open(project)
+    finally:
+        service.close()
+    assert later is not None
+    assert store.snapshot() == later
+    assert INDEX not in store.snapshot()['files']
+
+
+def test_template_lifecycle_store_keeps_its_authorized_delivery_identity(prepared):
+    from sciplot_core.output_contract import requested_delivery_root
+    from sciplot_core.project_host_factory import project_store
+
+    _source, project, _store, task, task_state = prepared
+    request = json.loads((project / 'plot_request.json').read_bytes())
+    delivery = requested_delivery_root({'request': request}, run_output=project)
+    assert not delivery.exists()
+    selected = []
+
+    class Service:
+        def open_created(self, _target, **_kwargs):
+            owner = selected_project_store()
+            assert owner is not None
+            selected.append(owner)
+            attach(owner)
+            return {'status': 'current', 'plot': str(project / '.sciplot_semantic/selected')}
+
+    creation = {'request': {'template_definition': {}, 'data_binding': {'slots': {}}}}
+    _open_prepared(Service(), task.parent, creation, task_state)
+    publication = project_store(project, create_delivery=True)
+    identity = (delivery.stat().st_dev, delivery.stat().st_ino)
+    publish(publication, kind='export', name='@delivery/figure.pdf', data=b'owned derived PDF')
+    assert selected[0].snapshot()['projection_status'] == 'current'
+    assert selected[0].locations['delivery'] == delivery
+    assert (delivery.stat().st_dev, delivery.stat().st_ino) == identity
+
+
+@pytest.mark.parametrize('when', ['before_batch', 'after_batch', 'before_head'])
+@pytest.mark.parametrize('changed', ['source_bytes', 'source_mode', 'phantom', 'native_commit'])
+def test_prepared_publications_keep_original_science_and_membership_at_each_boundary(prepared, tmp_path, monkeypatch, when, changed):
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_lifecycle.attached_repository import AttachedProjectRepository
+    from sciplot_core.project_store import state as store_state
+
+    source, project, _store, _task, state = prepared
+    service = attached_service(tmp_path, source, project, monkeypatch)
+    applied, later = [], []
+
+    def change():
+        if applied:
+            return
+        applied.append(changed)
+        owner = selected_project_store()
+        assert owner is not None
+        if changed == 'source_bytes':
+            (source / 'a.csv').write_bytes(b'foreign source version')
+        elif changed == 'source_mode':
+            path = source / 'a.csv'
+            path.chmod(0o600 if path.stat().st_mode & 0o777 != 0o600 else 0o644)
+        elif changed == 'phantom':
+            (project / 'unregistered.csv').write_bytes(b'foreign member')
+        else:
+            publish(owner, kind='native_patch', name='studio/document.vsz', data=b'legal later native generation')
+        later.append(owner.snapshot())
+
+    original_flush, original_boundary = AttachedProjectRepository._flush, store_state.boundary
+
+    def flush(owner, batch):
+        if when == 'after_batch':
+            change()
+        return original_flush(owner, batch)
+
+    def boundary(name):
+        original_boundary(name)
+        if name == 'before_head' and when == 'before_head':
+            change()
+
+    monkeypatch.setattr(AttachedProjectRepository, '_flush', flush)
+    monkeypatch.setattr(store_state, 'boundary', boundary)
+    try:
+        with pytest.raises(ValueError):
+            with prepared_admission(state):
+                if when == 'before_batch':
+                    change()
+                service.open(project)
+    finally:
+        service.close()
+    assert applied == [changed]
+    assert project_store(project).snapshot() == later[0]
+    assert INDEX not in project_store(project).snapshot()['files']
+
+
+@pytest.mark.parametrize('changed', ['foreign', 'alias', 'replaced'])
+def test_template_delivery_capability_never_accepts_unknown_or_replaced_roots(prepared, monkeypatch, changed):
+    from sciplot_core.output_contract import requested_delivery_root
+
+    _source, project, _store, task, state = prepared
+    delivery = requested_delivery_root({'request': json.loads((project / 'plot_request.json').read_bytes())}, run_output=project)
+    calls = []
+    if changed == 'alias':
+        delivery.symlink_to(project, target_is_directory=True)
+    elif changed == 'foreign':
+        delivery.mkdir()
+        (delivery / 'foreign.pdf').write_bytes(b'keep foreign bytes')
+
+    class Service:
+        def open_created(self, _target, **_kwargs):
+            owner = selected_project_store()
+            assert owner is not None
+            attach(owner)
+            calls.append('opened')
+            delivery.rename(delivery.parent / 'preserved-delivery')
+            delivery.mkdir()
+            return {'status': 'current', 'plot': str(project / '.sciplot_semantic/selected')}
+
+    with pytest.raises(ValueError):
+        _open_prepared(Service(), task.parent, {'request': {'template_definition': {}, 'data_binding': {'slots': {}}}}, state)
+    assert calls == (['opened'] if changed == 'replaced' else [])
+    if changed == 'foreign':
+        assert (delivery / 'foreign.pdf').read_bytes() == b'keep foreign bytes'
+
+
+@pytest.mark.parametrize('changed', ['source', 'native'])
+def test_invalid_checkpoint_refuses_before_allocating_template_delivery(prepared, changed):
+    from sciplot_core.output_contract import requested_delivery_root
+
+    source, project, _store, _task, state = prepared
+    delivery = requested_delivery_root({'request': json.loads((project / 'plot_request.json').read_bytes())}, run_output=project)
+    (source / 'a.csv' if changed == 'source' else project / 'studio/document.vsz').write_bytes(b'foreign revision')
+    with pytest.raises(ValueError):
+        with prepared_admission(state):
+            pytest.fail('invalid preparation entered adoption')
+    assert not delivery.exists()

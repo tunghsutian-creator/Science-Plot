@@ -10,7 +10,8 @@ from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_storage import save_task
-from sciplot_core.task_prepared_store import prepared_store, capture, require
+from sciplot_core.project_commands import SourceTreeRead
+from sciplot_core.project_lifecycle.prepared_admission import prepared_store, capture, require, publication_scope
 
 
 def is_prepared(state: dict[str, Any]) -> bool:
@@ -54,7 +55,10 @@ def prepared_admission(state: dict[str, Any]) -> Iterator[None]:
         from sciplot_core.project_store.runtime import project_runtime
 
         require_prepared_current(state)
-        with project_runtime(store):
+        store = prepared_store(project, create_delivery=True)
+        assert store is not None
+        tree = SourceTreeRead(str(canonical_path(Path(state['request']['source']))), state['prepared_creation']['source_sha256'])
+        with publication_scope(store, state['prepared_creation'], tree), project_runtime(store):
             yield
         require_prepared_current(state)
 

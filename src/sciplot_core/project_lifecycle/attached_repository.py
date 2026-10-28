@@ -20,6 +20,7 @@ from .attachment_sources import AttachmentSourceResolver, prepared_sources, reco
 from .errors import EngineError
 from .journal_identity import saved_command
 from .repository import FileProjectRepository
+from .prepared_admission import PreparedReads, prepared_batch
 
 
 @dataclass
@@ -27,6 +28,7 @@ class _Batch:
     snapshot: dict[str, Any]
     writes: dict[str, bytes | None] = field(default_factory=dict)
     reads: dict[str, str | None] = field(default_factory=dict)
+    prepared: PreparedReads | None = None
 
 
 class AttachedProjectRepository(FileProjectRepository):
@@ -122,7 +124,9 @@ class AttachedProjectRepository(FileProjectRepository):
         if self._batch.get() is not None:
             yield
             return
-        batch = _Batch(self.attachment.store.snapshot())
+        prepared = prepared_batch(self.attachment.store)
+        batch = (_Batch(prepared[0], prepared=prepared[1]) if prepared is not None
+                 else _Batch(self.attachment.store.snapshot()))
         token = self._batch.set(batch)
         try:
             yield
@@ -175,6 +179,11 @@ class AttachedProjectRepository(FileProjectRepository):
             before = batch.snapshot["files"][logical]["sha256"]
             batch.reads[logical] = before
             observations[logical] = SourceAdoption(logical, source.source_id, before, item["sha256"])
+        if batch.prepared is not None:
+            for name, expected in batch.prepared.files:
+                if name in batch.reads and batch.reads[name] != expected:
+                    raise EngineError("prepared_project_changed", "Semantic adoption differs from its prepared publication reads.")
+                batch.reads[name] = expected
         mutation = ProjectMutation(writes, {"attachment_id": identity, "resources": sorted(writes)}, prepared_sources=captured)
         publication = canonical_json_sha256({"prepared": mutation.prepared_digest,
             "generation": batch.snapshot["generation"], "reads": batch.reads}, allow_nan=False)
@@ -182,7 +191,15 @@ class AttachedProjectRepository(FileProjectRepository):
         command = ProjectCommand.create("semantic_record", key, project_id=batch.snapshot["project_id"],
             expected_generation=batch.snapshot["generation"], read_set=batch.reads,
             write_set=sorted(writes), request={"prepared_digest": mutation.prepared_digest, "attachment_id": identity},
-            source_adoptions=tuple(observations.values()))
+            source_adoptions=tuple(observations.values()),
+            read_memberships=batch.prepared.memberships if batch.prepared is not None else (),
+            source_trees=(batch.prepared.source,) if batch.prepared is not None else ())
+        if batch.prepared is not None:
+            admitted = self.attachment.store.reserve(command.key, command.command_digest,
+                expected_generation=command.expected_generation, read_set=dict(command.read_set),
+                write_set=command.write_set, metadata=command.to_payload())
+            if admitted.get('source_tree_origins', {}).get(batch.prepared.source.locator) != batch.prepared.source_origin:
+                raise EngineError('source_changed', 'The prepared source changed before its exact Core admission.')
         ProjectCommands(self.attachment.store).publish_prepared(command, mutation)
         if resolver is not None:
             resolver.refresh()
