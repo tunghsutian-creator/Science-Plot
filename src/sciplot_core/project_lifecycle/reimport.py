@@ -101,7 +101,7 @@ def reimport_native(root: Path, request: dict[str, Any], backend: PlotBackend) -
     binding = capture_baseline(root, binding)
     require_current(backend, binding)
     txid = digest(key)
-    rendered = backend.render(binding, root / "transactions" / txid / "reimport-preview")
+    rendered = backend.render(binding, root / "transactions" / txid / "preview-reimport")
     require_current(backend, binding)
     tx = {"id": txid, "mode": "reimport", "request": {"idempotency_key": key, "base_revision": old["revision"]},
           "reimport_request": request, "request_hash": digest(request), "before": old, "document": document,

@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import json
 import tempfile
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.foundation.source_locations import selected_source_resolver
+from sciplot_core.project_store.native_artifacts import (
+    NativeArtifactInput, NativeArtifactOutput, native_artifact_binding, native_artifact_runtime,
+)
+from sciplot_core.project_store.source_resolver import ProjectSourceResolver
+from sciplot_core.source_coverage.native_file_snapshots import observed_native_document
 from sciplot_core.studio_core.document_edit_commit import (
     commit_document_edit,
     prior_edit_result,
@@ -38,9 +45,15 @@ def preview_project_document(
     document = Path(selected["document"])
     state = figure_read_state(project, selected)
     output = new_preview_directory(project, output_dir)
-    rendered = run_document_worker(
-        "preview-document", document, "--out", output / "current.png"
-    )
+    arguments = ["preview-document", str(document), "--out", str(output / "current.png")]
+    resolver = selected_source_resolver()
+    context: AbstractContextManager[None] = nullcontext()
+    if isinstance(resolver, ProjectSourceResolver) and native_artifact_binding(arguments, resolver) is None:
+        context = native_artifact_runtime(arguments,
+            inputs=[NativeArtifactInput("document", document, selected["document_sha256"], document.stat().st_mode & 0o777)],
+            outputs=[NativeArtifactOutput("out", output / "current.png")])
+    with context, observed_native_document(arguments, document, expected_sha256=selected["document_sha256"]):
+        rendered = run_document_worker("preview-document", document, "--out", output / "current.png")
     identity = {
         "path": str(document),
         "sha256": state["project_files"][str(document.relative_to(project))],

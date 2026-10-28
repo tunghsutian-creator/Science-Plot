@@ -10,6 +10,7 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.source_tables.read_session import with_table_reads
+from sciplot_core.source_coverage.native_file_snapshots import observed_native_document
 from sciplot_core.studio_core.document_edit_policy import filter_editable_fields
 from sciplot_core.studio_core.sample_style import sample_style_targets
 from sciplot_core.studio_core.project_query_evidence import (
@@ -36,19 +37,15 @@ def resolve_project_figure(
 
 
 def _inspect_document(document: Path) -> dict[str, Any]:
-    completed = run_worker(
-        [
-            sys.executable,
-            "-m",
-            "sciplot_core.veusz_worker",
-            "inspect-document-state",
-            str(document),
-        ],
-        env=veusz_worker_environment(), cold_runner=subprocess.run,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    arguments = ["inspect-document-state", str(document)]
+    with observed_native_document(arguments, document):
+        completed = run_worker(
+            [sys.executable, "-m", "sciplot_core.veusz_worker", *arguments],
+            env=veusz_worker_environment(), cold_runner=subprocess.run,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
     if completed.returncode:
         raise RuntimeError(
             f"Cannot inspect the saved Veusz document: {completed.stderr.strip()}"
