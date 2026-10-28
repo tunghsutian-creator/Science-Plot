@@ -133,6 +133,11 @@ def stage_veusz_document(
     requested = target.expanduser()
     if not requested.is_absolute():
         requested = Path.cwd() / requested
+    binding = getattr(document, "_sciplot_project_read_set", None)
+    if isinstance(binding, dict) and "project_id" in binding:
+        from sciplot_core.foundation.canonical_paths import canonical_path
+
+        canonical_path(requested)  # Validate the user's exact path before resolving its parent.
     parent = requested.parent.resolve(strict=True)
     if not parent.is_dir():
         raise NotADirectoryError(parent)

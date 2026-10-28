@@ -63,7 +63,41 @@ def publish_native_save(document: Any, target: Path, staged: Path, *, result: di
     if not isinstance(store, FileProjectStore) or store.root != root:
         raise ProjectConflict("The selected native store does not belong to this project.")
     logical = store.logical_path(target)
-    outcome = publish_files(store, {logical: staged}, kind="save", baseline=binding, result=result)
+    editing_target = Path(str(getattr(document, "filename", ""))).expanduser().absolute()
+    if logical in binding["files"] and editing_target == target:
+        outcome = publish_files(store, {logical: staged}, kind="save", baseline=binding, result=result)
+    else:
+        from uuid import uuid4
+        from sciplot_core.project_commands import ProjectCommands, ProjectMutation
+        from sciplot_core.project_store.locators import logical_for_literal
+        from sciplot_core.studio_core.project_command_scope import command_for_binding
+
+        if context is None or Path(context["project_dir"]) != root:
+            raise ProjectConflict("A project Save As requires a recognized native project destination.")
+        current = store.snapshot()
+        protected = set(current.get("input_resources", [])) | set(current.get("history_resources", []))
+        protected.update(entry.get("logical") for versions in current["sources"].values()
+                         for entry in versions.values())
+        protected.update(logical_for_literal(current, entry["locator"])
+                         for versions in current["sources"].values() for entry in versions.values()
+                         if isinstance(entry.get("locator"), str))
+        if logical in protected:
+            raise ProjectConflict("A project Save As cannot replace a scientific source or immutable history.")
+        if logical in binding["files"]:
+            from sciplot_core.studio_core.project_query import resolve_project_figure
+
+            try:
+                selected = resolve_project_figure(target)
+            except (ValueError, OSError, KeyError) as exc:
+                raise ProjectConflict("A project Save As cannot replace another original editing read resource.") from exc
+            if selected["project"] != str(root) or selected["document"] != str(target):
+                raise ProjectConflict("A project Save As requires an exact registered native destination.")
+        # Only the explicit destination is added. The original edit generation,
+        # native/spec/request, projected membership and source witness stay put.
+        # Core checks this preimage against old, current and physical state.
+        command = command_for_binding(store, binding, kind="save", key=uuid4().hex,
+            writes=[logical], request={"family": "native_save_as", "resource": logical})
+        outcome = ProjectCommands(store).execute(command, lambda: ProjectMutation({logical: staged}, result))
     document._sciplot_project_read_set = {**binding, "generation": outcome["generation"],
         "files": {**binding["files"], logical: file_sha256(staged)}}
     return outcome
