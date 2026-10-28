@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager
 from dataclasses import replace
 import json
+import os
 import shutil
+import stat
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -14,7 +18,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_commands import NativeAdoption, ProjectCommands, ProjectMutation
 from sciplot_core.project_commands.resources import PreparedFile
-from sciplot_core.project_store import FileProjectStore
+from sciplot_core.project_store import FileProjectStore, ResourceRoot
 from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.studio_core.preparation_source_runtime import current_preparation_runtime
 from sciplot_core.studio_core.project_command_scope import command_for_binding, project_store, source_versions, whole_memberships
@@ -29,7 +33,81 @@ from sciplot_core.studio_core.publication_candidates import (
 
 
 def _publication_store(project: Path) -> FileProjectStore:
-    return project_store(project, create_delivery=True, with_snapshot=True)
+    return project_store(project, with_snapshot=True)
+
+
+def _delivery_identity(root: Path) -> dict[Path, tuple[int, int, int] | None]:
+    from sciplot_core.foundation.canonical_paths import canonical_path
+
+    canonical_path(root)
+    result: dict[Path, tuple[int, int, int] | None] = {}
+    for path in (root, *root.parents):
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            result[path] = None
+        else:
+            if not stat.S_ISDIR(info.st_mode):
+                raise ValueError("The visible delivery requires ordinary directory ancestors")
+            result[path] = (info.st_dev, info.st_ino, info.st_mode)
+    return result
+
+
+def _create_delivery_root(root: Path, expected: dict[Path, tuple[int, int, int] | None]) -> tuple[int, int, int]:
+    """After successful QA, create only the exact previously absent namespace."""
+    if _delivery_identity(root) != expected or expected[root] is not None:
+        raise ValueError("The visible delivery root changed before publication admission")
+    ancestor = next(path for path, identity in expected.items() if identity is not None)
+    descriptor = os.open(ancestor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    installed = dict(expected)
+    try:
+        info = os.fstat(descriptor)
+        if (info.st_dev, info.st_ino, info.st_mode) != expected[ancestor]:
+            raise ValueError("The visible delivery ancestor changed during publication admission")
+        current = ancestor
+        for name in root.relative_to(ancestor).parts:
+            os.mkdir(name, mode=0o755, dir_fd=descriptor)
+            following = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = following
+            current = current / name
+            info = os.fstat(descriptor)
+            installed[current] = (info.st_dev, info.st_ino, info.st_mode)
+        if _delivery_identity(root) != installed:
+            raise ValueError("The created delivery root lost its exact directory identity")
+        return (info.st_dev, info.st_ino, info.st_mode)
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def _admit_delivery_root(repository: FileProjectStore, root: Path, before: dict[str, Any],
+                         identity: dict[Path, tuple[int, int, int] | None], *,
+                         missing: frozenset[str]) -> Iterator[FileProjectStore]:
+    """Extend host capabilities only after QA and the original read guards pass."""
+    if "delivery" in repository.locations or root.is_relative_to(repository.root):
+        yield repository
+        return
+    from sciplot_core.project_store.membership import require_memberships
+
+    current = repository.snapshot()
+    if (current["generation"] != before["generation"] or current["outside_changes"] != before["outside_changes"]
+            or current["outside_metadata"] != before["outside_metadata"]):
+        raise ValueError("The project changed before delivery root admission")
+    with repository._locked() as (io, current):
+        require_memberships(io, before, current, {"metadata": {
+            "read_memberships": whole_memberships(repository, before)}}, missing=missing)
+    created = _create_delivery_root(root, identity)
+    locations = {key: ResourceRoot(path, repository.location_members[key])
+                 for key, path in repository.locations.items()}
+    locations["delivery"] = ResourceRoot(root)
+    selected = FileProjectStore(repository.root, locations=locations, namespace_backups=repository.namespace_backups)
+    with selected._locked() as (io, _current):
+        info = os.fstat(io.root_fds["delivery"])
+        if (info.st_dev, info.st_ino, info.st_mode) != created:
+            raise ValueError("The delivery root changed before its Core identity was captured")
+        selected.snapshot()  # Preserve the original generation and every existing root identity.
+        yield selected
 
 
 def _next_run(files: dict[str, Any]) -> str:
@@ -85,18 +163,23 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         return dict(app.resume(ProjectCommand.from_payload(prior["metadata"]))["result"])
     run_relative = _next_run(before["files"])
     final_run = project / run_relative
-    delivery_root = repository.locations.get("delivery", project / "delivery")
+    canonical_request = json.loads(repository.read_bytes(repository.logical_path(request), generation=before["generation"]))
+    from sciplot_core.output_contract import requested_delivery_root
+
+    delivery_root = repository.locations.get("delivery", project / "delivery" if
+        (project / ".sciplot_store/local_locations.json").exists() else
+        requested_delivery_root({"request": canonical_request}, run_output=project))
     from sciplot_core.delivery.package_transaction import (
         _package_snapshot, _preserve_finder_metadata, _protect_editable_documents,
     )
 
     delivery_before = _package_snapshot(delivery_root)
+    delivery_identity = _delivery_identity(delivery_root)
     writes: dict[str, bytes | Path | PreparedFile | None] = {}
-    canonical_request = json.loads(repository.read_bytes(repository.logical_path(request), generation=before["generation"]))
     with TemporaryDirectory(prefix="sciplot-publication-") as temporary, \
             project_runtime(repository, generation=before["generation"]), \
             mapping_input_reads(canonical_request.get("data_mapping_execution")) as mapping_reads, \
-            current_preparation_runtime(repository, before) as verify_sources:
+            current_preparation_runtime(repository, before) as verify_sources, ExitStack() as publication_scope:
         if mapping_reads is not None:
             load_data_mapping_execution(mapping_reads.execution)
             mapping_reads.seal()
@@ -138,8 +221,18 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
             payload = relocate_candidate(payload, {delivery: failed_delivery})
             value = relocate_candidate(json.loads((run / "manifest.json").read_text()), {delivery: failed_delivery})
             (run / "manifest.json").write_text(json.dumps(value, ensure_ascii=False, indent=2))
-        if _package_snapshot(delivery_root) != delivery_before:
+        if (_delivery_identity(delivery_root) != delivery_identity
+                or _package_snapshot(delivery_root) != delivery_before):
             raise ValueError("The visible delivery changed during private publication preparation")
+        verify_sources()
+        verify_publication_sources = verify_sources
+        if delivery_complete:
+            repository = publication_scope.enter_context(_admit_delivery_root(repository, delivery_root, before,
+                delivery_identity, missing=frozenset(missing_names)))
+            publication_scope.enter_context(project_runtime(repository, generation=before["generation"]))
+            verify_publication_sources = publication_scope.enter_context(current_preparation_runtime(repository, before))
+            app = ProjectCommands(repository)
+            binding["read_memberships"] = whole_memberships(repository, before)
         roots = {run: final_run, primary: project / "studio/exports",
                  secondary: project / "studio/exports/figure_set", delivery: delivery_root}
         payload = relocate_candidate(payload, roots)
@@ -178,7 +271,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
             from sciplot_core.data_mapping.execution_directories import mapping_live_trees
 
             command = replace(command, source_trees=mapping_live_trees(mapping_reads))
-        verify_sources()
+        verify_publication_sources()
         mapping_sources = mapping_reads.prepared_sources(before) if mapping_reads is not None else ()
         result = app.execute(command, lambda: ProjectMutation(writes, payload,
             sources=source_versions(binding, store=repository),

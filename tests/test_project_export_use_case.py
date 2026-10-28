@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import pytest
 
@@ -174,3 +175,160 @@ def test_intake_creates_one_prepared_document_then_exports_it_once(
     assert result["last_run"]["ready_to_use"] is True
     assert Path(result["last_run"]["output"]).name == "studio_001"
     assert result.get("run_failed") is not True
+
+
+def _visible_publication(publication, tmp_path, monkeypatch, *, complete=True, existing=False, during=None, visible=None):
+    from sciplot_core.studio_core import publication_prepare, native_export_adapter
+
+    project, calls, published = publication
+    visible = visible or tmp_path / "visible"
+    if existing:
+        visible.mkdir()
+    request = project / "plot_request.json"
+    request.write_text(json.dumps({**json.loads(request.read_text()), "delivery_output": str(visible)}))
+    prepare, export = publication_prepare.prepare_studio_export_run, native_export_adapter.export_studio_document
+
+    def render(*args, **kwargs):
+        assert visible.exists() is existing
+        return export(*args, **kwargs)
+
+    def finish(**kwargs):
+        assert kwargs["delivery_root"] == visible and visible.exists() is existing
+        result = prepare(**kwargs)
+        result.update(ready_to_use=complete, state="ready" if complete else "blocked",
+                      manifest=str(kwargs["output_dir"] / "manifest.json"))
+        result["delivery_package"]["complete"] = complete
+        if during is not None:
+            during(project, visible)
+        return result
+
+    monkeypatch.setattr(native_export_adapter, "export_studio_document", render)
+    monkeypatch.setattr(publication_prepare, "prepare_studio_export_run", finish)
+    return project, visible, calls, published
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_failed_publication_keeps_diagnostics_without_allocating_or_removing_visible_root(publication, tmp_path, monkeypatch, existing):
+    from sciplot_core.project_host_factory import project_store
+
+    project, visible, calls, _published = _visible_publication(
+        publication, tmp_path, monkeypatch, complete=False, existing=existing)
+    identity = visible.stat().st_ino if existing else None
+    result = export_project_document(project_dir=project, formats=["pdf"])
+    assert not result.ready_to_use and visible.exists() is existing
+    assert (visible.stat().st_ino if existing else None) == identity
+    assert not existing or list(visible.iterdir()) == []
+    assert (project / "runs/studio_001/failed_delivery/delivered.pdf").read_bytes() == b"controlled delivery"
+    assert Path(result.run_payload["manifest"]).is_file()
+    snapshot = project_store(project).snapshot()
+    assert ("delivery" in snapshot["resource_roots"]) is existing
+    assert not any(name.startswith("@delivery/") for name in snapshot["files"])
+    assert [call[0] for call in calls] == ["export", "publish"]
+
+
+def test_successful_publication_binds_new_delivery_once_and_retains_finite_snapshot_cap(publication, tmp_path, monkeypatch):
+    from sciplot_core.project_store import FileProjectStore, ResourceRoot
+    from sciplot_core.studio_core import project_publication_commands
+
+    project, visible, calls, _published = _visible_publication(publication, tmp_path, monkeypatch)
+    archive = tmp_path / "historic.zip"
+    archive.write_bytes(b"previous finite snapshot")
+    store = FileProjectStore(project, locations={"snapshot": ResourceRoot(tmp_path, (archive.name,))})
+    before = store.snapshot(import_legacy=True)
+    monkeypatch.setattr(project_publication_commands, "_publication_store", lambda _project: store)
+    result = export_project_document(project_dir=project, formats=["pdf"])
+    reopened = FileProjectStore(project, locations={"snapshot": ResourceRoot(tmp_path, (archive.name,)), "delivery": visible})
+    after = reopened.snapshot()
+    assert result.ready_to_use and (visible / "delivered.pdf").read_bytes() == b"controlled delivery"
+    assert after["resource_roots"]["snapshot"] == before["resource_roots"]["snapshot"]
+    assert after["files"]["@snapshot/historic.zip"] == before["files"]["@snapshot/historic.zip"]
+    assert after["resource_roots"]["delivery"]["inode"] == visible.stat().st_ino
+    assert [call[0] for call in calls] == ["export", "publish"]
+
+
+@pytest.mark.parametrize("change", ["empty", "foreign", "alias", "existing_replaced", "ancestor", "source", "request", "spec"])
+def test_publication_refuses_late_root_or_source_changes_before_new_root_registration(publication, tmp_path, monkeypatch, change):
+    from sciplot_core.project_host_factory import project_store
+
+    def during(project, visible):
+        if change == "source":
+            (project / "source/data.csv").write_bytes(b"changed scientific input")
+        elif change in {"request", "spec"}:
+            path = project / ("plot_request.json" if change == "request" else "studio/spec.json")
+            path.write_text(path.read_text() + "\n")
+        elif change == "ancestor":
+            visible.parent.rename(tmp_path / "original-parent")
+            visible.parent.mkdir()
+        elif change == "alias":
+            foreign = tmp_path / "foreign"
+            foreign.mkdir()
+            visible.symlink_to(foreign, target_is_directory=True)
+        else:
+            if change == "existing_replaced":
+                visible.rename(tmp_path / "original-visible")
+            visible.mkdir()
+            if change == "foreign":
+                (visible / "unrelated.txt").write_bytes(b"user content")
+
+    target = tmp_path / "visible"
+    if change == "ancestor":
+        parent = tmp_path / "delivery-parent"
+        parent.mkdir()
+        target = parent / "visible"
+    project, visible, _calls, _published = _visible_publication(publication, tmp_path, monkeypatch,
+        existing=change == "existing_replaced", during=during, visible=target)
+    store = project_store(project)
+    before = store.snapshot(import_legacy=True)
+    with pytest.raises(ValueError):
+        export_project_document(project_dir=project, formats=["pdf"])
+    assert not store.commands()
+    if change in {"source", "request", "spec", "ancestor"}:
+        assert not visible.exists()
+    elif change == "foreign":
+        assert (visible / "unrelated.txt").read_bytes() == b"user content"
+    elif change == "alias":
+        assert visible.is_symlink() and list((tmp_path / "foreign").iterdir()) == []
+    else:
+        assert visible.is_dir() and list(visible.iterdir()) == []
+    assert not (project / "runs").exists()
+    assert json.loads((project / ".sciplot_store/head.json").read_text())["generation"] == before["generation"]
+
+
+def test_created_delivery_identity_cannot_be_substituted_before_core_registration(publication, tmp_path, monkeypatch):
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.studio_core import project_publication_commands
+
+    project, visible, _calls, _published = _visible_publication(publication, tmp_path, monkeypatch)
+    original_store = project_publication_commands.FileProjectStore
+
+    def substitute(*args, **kwargs):
+        visible.rename(tmp_path / "created-original")
+        visible.mkdir()
+        return original_store(*args, **kwargs)
+
+    monkeypatch.setattr(project_publication_commands, "FileProjectStore", substitute)
+    with pytest.raises(ValueError, match="Core identity"):
+        export_project_document(project_dir=project, formats=["pdf"])
+    assert list(visible.iterdir()) == list((tmp_path / "created-original").iterdir()) == []
+    assert not project_store(project).commands() and not (project / "runs").exists()
+
+
+def test_new_delivery_root_uses_existing_frozen_recovery_after_committed_head(publication, tmp_path, monkeypatch):
+    from sciplot_core.project_store import state
+    from sciplot_core.project_host_factory import project_store
+
+    project, visible, calls, _published = _visible_publication(publication, tmp_path, monkeypatch)
+
+    def interrupted(boundary):
+        if boundary == "before_projection":
+            raise OSError("controlled committed publication")
+
+    monkeypatch.setattr(state, "boundary", interrupted)
+    with pytest.raises(OSError, match="committed publication"):
+        export_project_document(project_dir=project, formats=["pdf"])
+    identity = visible.stat().st_ino
+    monkeypatch.setattr(state, "boundary", lambda _boundary: None)
+    project_store(project).recover()
+    assert visible.stat().st_ino == identity
+    assert (visible / "delivered.pdf").read_bytes() == b"controlled delivery"
+    assert [call[0] for call in calls] == ["export", "publish"]
