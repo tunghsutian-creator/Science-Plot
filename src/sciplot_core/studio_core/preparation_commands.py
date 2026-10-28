@@ -150,10 +150,18 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
             if presentation and segmented_summary_legend(spec_payload):
                 from sciplot_core.studio_core.review_artifacts import _current_layout_issues
                 from sciplot_core.studio_render.models import StudioPreparationBlocked
+                from sciplot_core.source_coverage.native_file_snapshots import native_document_snapshot
 
                 native_document = audit.get("document")
-                native_layout = ({**native_document, "segmented_legend_geometry": audit.get("segmented_legend_geometry")}
-                    if isinstance(native_document, dict) else {})
+                native_snapshot = native_document_snapshot(document, label="Generated native layout")
+                expected_native = {"path": str(native_snapshot["path"]), "sha256": native_snapshot["sha256"]}
+                if native_document != expected_native:
+                    raise StudioPreparationBlocked("generated_native_layout_invalid",
+                        "The generated layout audit does not bind this exact private document.")
+                # The science snapshot retains logical identity. Only after
+                # checking it, project its geometry onto these same private bytes.
+                native_layout = {"path": str(document), "sha256": expected_native["sha256"],
+                                 "segmented_legend_geometry": audit.get("segmented_legend_geometry")}
                 critical = [item for item in _current_layout_issues(spec_payload, document_path=document,
                     native_audit=native_layout) if item.get("severity") == "critical"]
                 if critical:

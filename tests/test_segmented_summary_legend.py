@@ -105,13 +105,14 @@ def test_actual_summary_qa_requires_matching_bytes_complete_marks_and_no_overlap
         assert issues[0]["measurement_scope"] == "exact_current_native"
 
 
-@pytest.mark.parametrize("case", ["clear", "outside", "overlap", "missing", "stale", "other-critical",
+@pytest.mark.parametrize("case", ["clear", "relocated", "outside", "overlap", "missing", "stale", "foreign", "other-critical",
                                   "science-only", "non-summary", "unchanged-native"])
 def test_generated_summary_layout_is_admitted_before_preparation_publication(tmp_path, monkeypatch, case):
     import json
     import subprocess
 
     from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.foundation.source_locations import literal_source_path
     from sciplot_core.source_coverage import document_audit
     from sciplot_core.studio_core import preparation_commands
     from sciplot_core.studio_core.guide_contracts import categorical_line_contracts
@@ -155,23 +156,34 @@ def test_generated_summary_layout_is_admitted_before_preparation_publication(tmp
     (project / "studio/document.vsz").write_bytes(b"Controlled native input; its scientific audit is replaced in this pure host counter.")
     store = FileProjectStore(project)
     before = store.snapshot(import_legacy=True)
+    if case == "relocated":
+        store = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "cold")
+        project = store.root
+        before = store.snapshot()
+        assert before["locators"][""] != str(project)
     members = {name: store.read_bytes(name) for name in before["files"]}
     calls = []
 
     def scientific_audit(*, document_path, spec_path, check_presentation):
         calls.append(check_presentation)
-        value = {"status": "passed", "document": {"path": str(document_path),
+        value = {"status": "passed", "document": {"path": literal_source_path(document_path),
             "sha256": "0" * 64 if case == "stale" else file_sha256(document_path)}}
+        if case == "foreign":
+            foreign = tmp_path / "same-bytes-foreign.vsz"
+            foreign.write_bytes(document_path.read_bytes())
+            value["document"]["path"] = str(foreign)
         if case != "missing":
             value["segmented_legend_geometry"] = geometry
         return value, json.loads(spec_path.read_bytes())
 
     monkeypatch.setattr(document_audit, "_audit_exact_document_data", scientific_audit)
     with studio_preparation_candidate(store, snapshot=before) as candidate:
+        if case != "unchanged-native":
+            candidate.write_member("studio/document.vsz", b"Distinct private generated native bytes for this controlled audit.")
         payload = {"document": str(candidate.project_dir / "studio/document.vsz")}
         if case == "unchanged-native":
             payload["preserved_existing_document"] = True
-        expected_block = case in {"outside", "overlap", "missing", "stale", "other-critical"}
+        expected_block = case in {"outside", "overlap", "missing", "stale", "foreign", "other-critical"}
         if expected_block:
             with pytest.raises(StudioPreparationBlocked):
                 preparation_commands.audit_studio_candidate(candidate, payload)
