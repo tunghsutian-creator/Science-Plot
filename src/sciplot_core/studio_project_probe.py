@@ -720,7 +720,7 @@ def run_studio_project_probe(
             return (QtWidgets.QMessageBox.StandardButton.Ok if buttons == QtWidgets.QMessageBox.StandardButton.Ok
                     else QtWidgets.QMessageBox.StandardButton.Cancel)
 
-        setattr(QtWidgets.QMessageBox, "critical", probe_critical)
+        QtWidgets.QMessageBox.critical = probe_critical
 
         from sciplot_core import studio as studio_module
         from sciplot_core.studio import _create_veusz_window, _ensure_veusz_on_path
@@ -1636,10 +1636,9 @@ def run_studio_project_probe(
                     Path(str(light_pdf["path"])),
                     light_evidence.parent,
                 )
-                and resolved_path_is_within(
-                    Path(str(light_delivery["path"])),
-                    light_evidence.parent,
-                ),
+                and baseline_light_status["provenance"]["delivery_verification"]["passed"] is True
+                and Path(str(light_delivery["path"])).resolve()
+                == Path(baseline_light_status["provenance"]["delivery_verification"]["expected_root"]).resolve(),
                 baseline_light_status,
             )
         )
@@ -3123,7 +3122,7 @@ def run_studio_project_probe(
             _close_window(standalone_window)
         finally:
             if original_critical is not None:
-                setattr(QtWidgets.QMessageBox, "critical", original_critical)
+                QtWidgets.QMessageBox.critical = original_critical
 
     if critical_dialogs:
         checks.append(_check(

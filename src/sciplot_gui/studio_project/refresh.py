@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 from sciplot_gui.studio_project_status import (
     _bind_mapping_to_artifact_qa,
@@ -9,7 +10,6 @@ from sciplot_gui.studio_project_status import (
     _live_document_payload,
     _qa_display_status,
     _status_text,
-    _workflow_status,
 )
 
 from sciplot_gui.studio_project.services import (
@@ -22,19 +22,16 @@ class RefreshMixin:
     def _audit_failure_status(self, exc: Exception) -> dict[str, Any]:
         if self.status_snapshot:
             status = {
-                **self.status_snapshot,
+                **deepcopy(self.status_snapshot),
                 "audit_error": {
                     "type": type(exc).__name__,
                     "message": str(exc),
                 },
             }
-            workflow = (
-                dict(status.get("workflow"))
-                if isinstance(status.get("workflow"), dict)
-                else _workflow_status(status)
-            )
-            workflow["audit_state"] = "failed"
-            status["workflow"] = workflow
+            qa = status.get("qa")
+            if isinstance(qa, dict):
+                previous = qa.get("last_validated_qa", deepcopy(qa))
+                qa["last_validated_qa"] = previous
         else:
             status = {
                 "kind": "sciplot_studio_project_status",
@@ -72,6 +69,27 @@ class RefreshMixin:
                     "message": str(exc),
                 },
             }
+        # Previous saved evidence remains historical, never a successful current
+        # observation after this refresh failed (including canonical CAS refusal).
+        for group in ("project", "source", "mapping", "provenance", "qa"):
+            value = status.get(group)
+            if not isinstance(value, dict):
+                continue
+            for key in tuple(value):
+                if (key in {"current", "complete", "ready_to_use"} or key.startswith("current_")
+                        or key.endswith(("_current", "_complete"))):
+                    value[key] = False
+            if group != "project":
+                value["status"] = "audit_failed"
+        status["source"]["audit_status"] = "audit_failed"
+        status["source"]["exists"] = False
+        artifacts = status["qa"].get("export_artifacts")
+        if isinstance(artifacts, dict):
+            artifacts["current"] = False
+        for value in status.get("results", {}).values():
+            if isinstance(value, dict):
+                value.update(current=False, available=False)
+        status = _finalize_status(status)
         self.status_snapshot = status
         self.status_view.setPlainText(
             f"{_status_text(status)}\n\nAudit error: {type(exc).__name__}: {exc}"

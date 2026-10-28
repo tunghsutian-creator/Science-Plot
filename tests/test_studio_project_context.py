@@ -379,6 +379,112 @@ def test_probe_positive_legacy_setup_explicitly_admits_before_its_single_publica
     assert (original / "plot_request.json").read_bytes() == request
 
 
+def test_refresh_canonical_request_refusal_cannot_reuse_previously_current_provenance(tmp_path):
+    from types import SimpleNamespace
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_gui.studio_project.refresh import RefreshMixin
+
+    project = _copyable_project(tmp_path)
+    request = project / "plot_request.json"
+    payload = json.loads(request.read_bytes())
+    payload["input"] = payload.pop("source")
+    request.write_text(json.dumps(payload))
+    store = FileProjectStore(project)
+    before = store.snapshot(import_legacy=True)
+    request.write_bytes(request.read_bytes() + b" ")
+    inventory = {str(p): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                 for p in project.rglob("*") if p.is_file()}
+    class Bridge(RefreshMixin):
+        def handle_document_context_changed(self):
+            return None
+        def _update_controls(self, _status):
+            pass
+        def _publish_status(self, status):
+            self.status_snapshot = status
+            return status
+    bridge = Bridge()
+    bridge.mode = "project"
+    bridge.document_path = project / "studio/document.vsz"
+    bridge.project_dir, bridge.request_path = project, request
+    bridge.document = SimpleNamespace(changeset=1, isModified=lambda: False)
+    bridge.status_view = _StatusView()
+    bridge.statusChanged = SimpleNamespace(emit=lambda _status: None)
+    bridge.status_snapshot = {
+        "mode": "project", "document": {"path": str(bridge.document_path), "revision": 1, "modified": False},
+        "source": {"audit_status": "matches_last_run_lineage"}, "mapping": {"status": "not_applied"},
+        "provenance": {"status": "current_full_project_evidence", "complete": True,
+            "full_project_evidence_current": True, "primary_figure_evidence_current": True,
+            "project_delivery_current": True, "source_current": True, "delivery_scope_known": True},
+        "qa": {"status": "passed_for_current_document", "ready_to_use": True,
+            "artifact_qa_current": True, "current_document": True,
+            "export_artifacts": {"current": True}, "evidence": "previous-saved-artifacts"},
+        "workflow": {"state": "ready", "audit_state": "current"},
+        "results": {"pdf": {"available": True, "current": True, "path": "previous.pdf"}},
+    }
+    result = bridge.refresh(audit_source=True)
+    assert result["audit_error"]["type"] == "ProjectConflict"
+    assert result["provenance"]["complete"] is False
+    assert result["provenance"]["full_project_evidence_current"] is False
+    assert result["provenance"]["project_delivery_current"] is False
+    assert result["workflow"]["audit_state"] == "failed"
+    assert result["workflow"]["result_ready"] is False
+    assert result["results"]["pdf"]["available"] is False
+    assert result["qa"]["status"] == "audit_failed"
+    assert result["qa"]["current_document"] is False
+    assert result["qa"]["export_artifacts"]["current"] is False
+    assert result["qa"]["last_validated_qa"]["status"] == "passed_for_current_document"
+    assert store.snapshot()["generation"] == before["generation"]
+    assert {str(p): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+            for p in project.rglob("*") if p.is_file()} == inventory
+    request.write_bytes(request.read_bytes()[:-1])
+    from sciplot_core.studio import observe_studio_source_content
+    current = observe_studio_source_content(project / "source/prepared.csv",
+        project_dir=project, request_path=request, audit_source=True)
+    assert current["exists"] is True
+    assert current["content"]["sha256"] == file_sha256(project / "source/prepared.csv")
+    restored = bridge.refresh(audit_source=True)
+    assert "audit_error" not in restored
+    assert restored["project"]["request_status"] == "loaded"
+
+
+@pytest.mark.parametrize("previous", [False, True], ids=["no-prior-evidence", "historical-saved-evidence"])
+def test_unexpected_refresh_failure_never_claims_current_and_keeps_history_immutable(tmp_path, previous):
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from sciplot_gui.studio_project.refresh import RefreshMixin
+
+    document = tmp_path / "document.vsz"
+    document.write_bytes(b"saved native")
+    bridge = RefreshMixin()
+    bridge.mode = "project"
+    bridge.document_path = document
+    bridge.document = SimpleNamespace(changeset=1, isModified=lambda: False)
+    bridge.status_view = _StatusView()
+    bridge.statusChanged = SimpleNamespace(emit=lambda _status: None)
+    bridge._update_controls = lambda _status: None
+    old = {"mode": "project", "document": {"path": str(document), "modified": False, "revision": 1},
+        "source": {"audit_status": "matches_last_run_lineage"}, "mapping": {"status": "verified"},
+        "provenance": {"complete": True, "full_project_evidence_current": True,
+            "project_delivery_current": True, "delivery_scope_known": True},
+        "qa": {"status": "passed_for_current_document", "artifact_qa_current": True,
+            "ready_to_use": True, "evidence": "historical.json"},
+        "results": {"pdf": {"current": True, "available": True, "path": "historical.pdf"}}}
+    preserved = deepcopy(old)
+    bridge.status_snapshot = old if previous else {}
+    result = bridge._audit_failure_status(RuntimeError("unexpected observer failure"))
+    assert result["audit_error"] == {"type": "RuntimeError", "message": "unexpected observer failure"}
+    assert result["provenance"]["complete"] is False
+    assert result["qa"]["artifact_qa_current"] is False
+    assert result["workflow"]["result_ready"] is False
+    assert all(item["available"] is False for item in result["results"].values())
+    assert old == preserved
+    if previous:
+        assert result["qa"]["last_validated_qa"] == preserved["qa"]
+        again = bridge._audit_failure_status(RuntimeError("still unavailable"))
+        assert again["qa"]["last_validated_qa"] == preserved["qa"]
+    assert document.read_bytes() == b"saved native"
+
+
 @pytest.mark.parametrize("change", ["equivalent_restore", "unrelated", "request", "mode"])
 def test_probe_producer_revisions_preserve_selected_editing_read_guards(
     tmp_path: Path, change: str,
