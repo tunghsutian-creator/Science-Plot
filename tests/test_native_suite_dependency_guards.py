@@ -86,7 +86,17 @@ def test_foreign_native_save_before_head_cannot_mint_a_committed_revision(bound,
     assert path.read_bytes() == foreign
     assert (workspace / ".sciplot_store/head.json").read_bytes() == head
     assert all(item.read_bytes() == data for item, data in protected.items())
-    record, = FileProjectStore(workspace, locations={"delivery": delivery}).commands()
+    records = FileProjectStore(workspace, locations={"delivery": delivery}).commands()
+    assert len(records) == 2
+    inspection, = [item for item in records
+                   if item["metadata"]["request"]["adapter"] == "native_display_inspection"
+                   and item["metadata"]["request"]["request"] == req]
+    record, = [item for item in records
+               if item["metadata"]["request"]["adapter"] == "native_display"
+               and item["metadata"]["request"]["request"] == req]
+    assert inspection["phase"] == "complete" and inspection["write_set"] == []
+    assert record["metadata"]["request"]["inspection"] == inspection["command_digest"]
+    assert record["expected_generation"] == inspection["generation"]
     assert record["phase"] == "accepted" and record["accepted"] is True
     assert record["result"]["presentation_hash"] != file_sha256(path)
     assert calls == ["patch", "export"]
