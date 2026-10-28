@@ -153,6 +153,34 @@ def test_pdf_baseline_follows_only_the_closed_current_native_owner(tmp_path: Pat
         extract_house_contract(tmp_path)
 
 
+def test_pdf_baseline_rejects_changed_observed_export_edge(tmp_path: Path) -> None:
+    copy_contract_sources(tmp_path)
+    adapter = tmp_path / "src/sciplot_core/studio_core/native_export_adapter.py"
+    original = adapter.read_text()
+    delegate = "return _export_studio_document(document_path, formats=formats, output_dir=output_dir, audit_spec_path=audit_spec_path)"
+    changes = {
+        "wrong_callee": original.replace(delegate, delegate.replace("_export_studio_document", "_other_export")),
+        "duplicate_call": original.replace(delegate, delegate.removeprefix("return ") + "\n        " + delegate),
+        "dynamic_callee": original.replace(delegate, delegate.replace("_export_studio_document", 'globals()["_export_studio_document"]')),
+        "overridden_formats": original.replace(delegate, delegate.replace("formats=formats", 'formats=["pdf"]')),
+        "overridden_document": original.replace(delegate, delegate.replace("(document_path,", '(Path("other.vsz"),')),
+        "missing_observation": original.replace("with observed_native_document(arguments, document_path):", "if True:"),
+        "foreign_observation": original.replace("from sciplot_core.source_coverage.native_file_snapshots import observed_native_document",
+                                                "from untrusted import observed_native_document"),
+        "helper_rebound": original + "\n_export_studio_document = object()\n",
+        "helper_imported": original.replace("def _export_studio_document(", "def _unused_export(")
+                           + "\nfrom untrusted import _export_studio_document\n",
+        "duplicate_helper": original + "\ndef _export_studio_document():\n    pass\n",
+        "decorated_helper": original.replace("def _export_studio_document(", "@untrusted\ndef _export_studio_document("),
+        "decoy_wrapper_dpi": original.replace(delegate, 'kwargs["pdfdpi"] = 72\n        ' + delegate),
+    }
+    for change, changed in changes.items():
+        assert changed != original, change
+        adapter.write_text(changed)
+        with pytest.raises(ValueError, match="PDF native export baseline changed structure"):
+            extract_house_contract(tmp_path)
+
+
 def test_composition_policy_is_distinct_and_never_claims_legacy_multi_panel_equivalence() -> None:
     composition = load_contract(COMPOSITION_CONTRACT_ID)
     assert composition == extract_composition_contract()

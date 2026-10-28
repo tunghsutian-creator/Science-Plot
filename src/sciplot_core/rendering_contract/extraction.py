@@ -168,12 +168,48 @@ def extract_house_contract(root: Path) -> dict[str, Any]:
                           "properties": props})
 
 
+def _binds_name(node: ast.AST, name: str) -> bool:
+    return (isinstance(node, ast.Name) and node.id == name and isinstance(node.ctx, (ast.Store, ast.Del))
+            or isinstance(node, ast.alias) and (node.asname or node.name.split(".")[0]) == name
+            or isinstance(node, ast.arg) and node.arg == name
+            or isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == name
+            or isinstance(node, ast.ExceptHandler) and node.name == name
+            or isinstance(node, (ast.Global, ast.Nonlocal)) and name in node.names
+            or isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name == name
+            or isinstance(node, ast.MatchMapping) and node.rest == name)
+
+
+def _observed_export_owner(reader: SourceReader, filename: str, public: ast.FunctionDef) -> ast.FunctionDef:
+    """Admit only the current same-file export edge inside its observation scope."""
+    expected = ast.parse('''
+from sciplot_core.source_coverage.native_file_snapshots import observed_native_document
+arguments = ["export-document", str(document_path), "--formats", ",".join(normalize_export_formats(formats, default=()))]
+if output_dir is not None:
+    arguments.extend(["--out", str(output_dir.expanduser().resolve())])
+if audit_spec_path is not None:
+    arguments.extend(["--audit-spec", str(audit_spec_path)])
+with observed_native_document(arguments, document_path):
+    return _export_studio_document(document_path, formats=formats, output_dir=output_dir, audit_spec_path=audit_spec_path)
+''')
+    body = ast.Module(body=public.body, type_ignores=[])
+    name = "_export_studio_document"
+    implementations = [node for node in reader.tree(filename).body
+                       if isinstance(node, ast.FunctionDef) and node.name == name]
+    if ast.dump(body) != ast.dump(expected) or len(implementations) != 1 or public.decorator_list:
+        raise ValueError("PDF native export baseline changed structure.")
+    implementation = implementations[0]
+    if implementation.decorator_list or any(node is not implementation and _binds_name(node, name)
+                                           for node in ast.walk(reader.tree(filename))):
+        raise ValueError("PDF native export baseline changed structure.")
+    return implementation
+
+
 def _pdf_export_default(reader: SourceReader) -> Any:
     """Follow only the public export symbol's closed native adapter edge.
 
     v1 source_file/source_symbol identify the original public entry. Its current
-    facade still forwards that symbol, while the actual kwargs assignment lives
-    in native_export_adapter. Keep this provenance identity; audit real bytes.
+    facade forwards that symbol through the observed native adapter to its
+    same-file implementation. Keep this provenance identity; audit real bytes.
     """
     public_file = STUDIO + "export_execution.py"
 
@@ -216,13 +252,7 @@ def _pdf_export_default(reader: SourceReader) -> Any:
     if imported_aliases != [imports[0].names[0]]:
         raise ValueError("PDF native export baseline changed structure.")
     for node in ast.walk(public):
-        if (isinstance(node, ast.Name) and node.id == alias and isinstance(node.ctx, (ast.Store, ast.Del))
-                or isinstance(node, ast.arg) and node.arg == alias
-                or isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == alias
-                or isinstance(node, ast.ExceptHandler) and node.name == alias
-                or isinstance(node, (ast.Global, ast.Nonlocal)) and alias in node.names
-                or isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name == alias
-                or isinstance(node, ast.MatchMapping) and node.rest == alias):
+        if node is not imports[0].names[0] and _binds_name(node, alias):
             raise ValueError("PDF native export baseline changed structure.")
     calls = [node for node in ast.walk(public) if isinstance(node, ast.Call)
              and isinstance(node.func, ast.Name) and node.func.id == "export_private"]
@@ -232,7 +262,8 @@ def _pdf_export_default(reader: SourceReader) -> Any:
             or {key.arg for key in calls[0].keywords} != {"formats", "output_dir", "audit_spec_path"}
             or any(not isinstance(key.value, ast.Name) or key.value.id != key.arg for key in calls[0].keywords)):
         raise ValueError("PDF native export baseline changed structure.")
-    actual = assignments(owner(STUDIO + "native_export_adapter.py"))
+    adapter_file = STUDIO + "native_export_adapter.py"
+    actual = assignments(_observed_export_owner(reader, adapter_file, owner(adapter_file)))
     if len(actual) != 1:
         raise ValueError("PDF native export baseline changed structure.")
     return ast.literal_eval(actual[0].value)
