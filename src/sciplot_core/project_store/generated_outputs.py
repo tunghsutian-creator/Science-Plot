@@ -186,6 +186,31 @@ def require_projection_parent(io: StoreIO, record: dict[str, Any], name: str) ->
         _absent(io, name, item.parent_identity)
 
 
+def _unaccepted_preview(app: Any, record: dict[str, Any]) -> bool:
+    """A Core-verified private proposal has no accepted installation effect."""
+    if record.get("phase") != "needs_review":
+        return False
+    command = ProjectCommand.from_payload(record["metadata"])
+    # query reuses Core's immutable-history and sealed-draft/object validation;
+    # a phase string from an unverified command scan cannot grant this exception.
+    current = app.query(command.key)
+    if (current is None or current != record or command.key != current["command_id"]
+            or command.command_digest != current["command_digest"]
+            or command.project_id != current["project_id"]
+            or command.expected_generation != current["expected_generation"]
+            or dict(command.read_set) != current["read_set"] or list(command.write_set) != current["write_set"]
+            or [item.to_payload() for item in command.projected_reads] != current.get("projected_reads", [])):
+        raise ProjectConflict("A private proposal differs from its exact verified command.")
+    if ("accepted" in current or current.get("projection_pending")
+            or any(key in current for key in ("install_generation", "install_parent", "install_files",
+                                             "committed_generation", "pending_result"))):
+        return False
+    draft = current.get("draft")
+    return (isinstance(draft, dict) and isinstance(current.get("decision_id"), str)
+            and set(draft.get("writes", {})) == set(command.write_set)
+            and current.get("result") == draft.get("result") and current.get("review") == draft.get("review"))
+
+
 def pending_barrier(app: Any, resources: Sequence[str], *, document: str | None = None) -> None:
     """Existing admitted effects cannot be hidden by a new absence/formats key."""
     from sciplot_core.project_commands import ProjectCommandUnknown
@@ -194,6 +219,8 @@ def pending_barrier(app: Any, resources: Sequence[str], *, document: str | None 
             continue
         request = record["metadata"].get("request", {})
         if set(record["write_set"]) & set(resources) or document is not None and request.get("document") == document:
+            if _unaccepted_preview(app, record):
+                continue
             resumed = app.resume(ProjectCommand.from_payload(record["metadata"]))
             if resumed["phase"] != "complete":
                 raise ProjectCommandUnknown()

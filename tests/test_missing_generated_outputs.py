@@ -9,7 +9,7 @@ from sciplot_core.project_commands import ProjectCommand, ProjectCommands, Proje
 from sciplot_core.project_commands import ProjectCommandUnknown
 from sciplot_core.project_store import FileProjectStore, ProjectConflict
 from sciplot_core.project_store import ProjectRecoveryRequired
-from sciplot_core.project_store.generated_outputs import discover
+from sciplot_core.project_store.generated_outputs import discover, pending_barrier
 from sciplot_core.project_store import state
 
 
@@ -54,6 +54,148 @@ def candidate(generated):
     store, _original, _missing = generated
     return ProjectMutation({"figure.pdf": b"fresh native export"}, {"document": str(store.root / "document.vsz"),
         "exports": [{"format": "pdf", "path": str(store.root / "figure.pdf"), "sha256": sha(b"fresh native export")}]})
+
+
+def pending_preview(generated):
+    store, _, _ = generated
+    before = store.snapshot()
+    command = ProjectCommand.create("document_edit", "unselected-alternative", project_id=before["project_id"],
+        expected_generation=before["generation"],
+        read_set={"document.vsz": before["files"]["document.vsz"]["sha256"]},
+        write_set=["document.vsz"], request={"document_relative": "document.vsz", "alternative": True})
+    app = ProjectCommands(store)
+    preview = app.preview(command, lambda: ProjectMutation({"document.vsz": b"private unselected candidate"},
+        {"alternative": True}, review={"requires_decision": True}))
+    return store, app, command, preview
+
+
+def test_pending_private_preview_does_not_block_export_or_receive_a_decision(generated, monkeypatch):
+    store, app, command, preview = pending_preview(generated)
+    before = store.snapshot()
+    files = {str(path): path.read_bytes() for path in store.root.rglob("*") if path.is_file()}
+    resumed = []
+    original = app.resume
+
+    def resume(command):
+        resumed.append(command.key)
+        return original(command)
+
+    monkeypatch.setattr(app, "resume", resume)
+    pending_barrier(app, ["document.vsz"], document="document.vsz")
+    assert resumed == []
+    assert app.query(command.key)["phase"] == "needs_review"
+    assert app.query(command.key)["decision_id"] == preview["decision_id"]
+    assert "accepted" not in app.query(command.key)
+    assert store.snapshot() == before
+    assert {str(path): path.read_bytes() for path in store.root.rglob("*") if path.is_file()} == files
+
+
+@pytest.mark.parametrize("phase", ["reserved", "applying", "unknown"])
+def test_pending_effects_keep_the_existing_unknown_outcome_barrier(generated, phase):
+    store, _, _ = generated
+    before = store.snapshot()
+    command = ProjectCommand.create("native_export", "uncertain", project_id=before["project_id"],
+        expected_generation=before["generation"], read_set={"document.vsz": before["files"]["document.vsz"]["sha256"]},
+        write_set=["document.vsz"], request={"document": "document.vsz", "formats": ["tiff_300"]})
+    store.reserve(command.key, command.command_digest, expected_generation=command.expected_generation,
+        read_set=dict(command.read_set), write_set=command.write_set, metadata=command.to_payload())
+    if phase != "reserved":
+        store.mark_applying(command.key, command.command_digest)
+    if phase == "unknown":
+        with store._locked(allow_pending=True) as (io, _):
+            record = state.command(io, command.key)
+            record["phase"] = "unknown"
+            state.save_command(io, record)
+    files = {str(path): path.read_bytes() for path in store.root.rglob("*") if path.is_file()}
+    with pytest.raises(ProjectCommandUnknown):
+        pending_barrier(ProjectCommands(store), ["document.vsz"], document="document.vsz")
+    assert store.snapshot() == before
+    assert {str(path): path.read_bytes() for path in store.root.rglob("*") if path.is_file()} == files
+
+
+@pytest.mark.parametrize("fault", ["accepted_true", "accepted_false", "install_generation", "install_parent",
+    "install_files", "committed_generation", "pending_result", "missing_draft", "missing_decision",
+    "result", "review", "metadata", "draft", "object"])
+def test_pending_preview_exception_rejects_unsealed_or_contradictory_records(generated, fault):
+    store, app, command, preview = pending_preview(generated)
+    with store._locked(allow_pending=True) as (io, current):
+        record = state.command(io, command.key)
+        if fault.startswith("accepted_"):
+            record["accepted"] = fault == "accepted_true"
+        elif fault in {"install_generation", "install_parent", "committed_generation"}:
+            record[fault] = current["generation"]
+        elif fault == "install_files":
+            record[fault] = ["document.vsz"]
+        elif fault == "pending_result":
+            record[fault] = record["result"]
+        elif fault == "missing_draft":
+            record.pop("draft")
+        elif fault == "missing_decision":
+            record.pop("decision_id")
+        elif fault in {"result", "review"}:
+            record[fault] = {"foreign": True}
+        elif fault == "metadata":
+            record["metadata"]["request"]["foreign"] = True
+        elif fault == "draft":
+            record["draft"]["result"] = {"foreign": True}
+        else:
+            digest = preview["draft"]["writes"]["document.vsz"]["sha256"]
+            path = store.root / ".sciplot_store/objects" / digest[:2] / digest
+            path.chmod(0o600)
+            path.write_bytes(b"corrupt sealed candidate")
+        state.save_command(io, record)
+    files = {str(path): path.read_bytes() for path in store.root.rglob("*") if path.is_file()}
+    with pytest.raises((ProjectConflict, ProjectCommandUnknown)):
+        pending_barrier(app, ["document.vsz"], document="document.vsz")
+    assert {str(path): path.read_bytes() for path in store.root.rglob("*") if path.is_file()} == files
+
+
+def test_pending_preview_exception_requeries_the_core_instead_of_trusting_scan_phase(generated, monkeypatch):
+    store, app, command, preview = pending_preview(generated)
+    with store._locked(allow_pending=True) as (io, _):
+        record = state.command(io, command.key)
+        record["phase"] = "applying"
+        state.save_command(io, record)
+    monkeypatch.setattr(app, "commands", lambda: (preview,))
+    with pytest.raises(ProjectConflict, match="exact verified command"):
+        pending_barrier(app, ["document.vsz"], document="document.vsz")
+    assert app.query(command.key)["phase"] == "unknown"
+    assert (store.root / "document.vsz").read_bytes() == b"original saved native authority"
+
+
+def test_pending_accepted_candidate_keeps_the_existing_exact_resume_flow(generated, monkeypatch):
+    store, app, command, preview = pending_preview(generated)
+    store.decide(command.key, command.command_digest, decision_id=preview["decision_id"], accept=True)
+    assert app.query(command.key)["phase"] == "accepted"
+    before = store.snapshot()
+    resumed = []
+    original = app.resume
+
+    def resume(command):
+        resumed.append(command.key)
+        return original(command)
+
+    monkeypatch.setattr(app, "resume", resume)
+    pending_barrier(app, ["document.vsz"], document="document.vsz")
+    assert resumed == [command.key]
+    assert app.query(command.key)["phase"] == "complete"
+    assert store.snapshot()["generation"] != before["generation"]
+    assert (store.root / "document.vsz").read_bytes() == b"private unselected candidate"
+    pending_barrier(app, ["document.vsz"], document="document.vsz")
+    assert resumed == [command.key]
+
+
+def test_pending_preview_phase_cannot_disguise_an_already_committed_outcome(generated):
+    store, app, command, preview = pending_preview(generated)
+    app.decide(command, decision_id=preview["decision_id"], accept=True)
+    with store._locked(allow_pending=True) as (io, _):
+        record = state.command(io, command.key)
+        record["phase"] = "needs_review"
+        state.save_command(io, record)
+    files = {str(path): path.read_bytes() for path in store.root.rglob("*") if path.is_file()}
+    with pytest.raises(ProjectConflict):
+        pending_barrier(app, ["document.vsz"], document="document.vsz")
+    assert {str(path): path.read_bytes() for path in store.root.rglob("*") if path.is_file()} == files
 
 
 def test_optional_contract_keeps_old_payload_and_digest_and_requires_exact_declared_output(generated):
