@@ -113,7 +113,8 @@ def test_public_default_spectrum_create_cold_export_has_clear_complete_inline_te
     # Unsupported explicit current-native typography is never reported as a
     # complete automatic glyph proof. The saved copies remain unmodified by QA.
     unsupported_cases = []
-    for index, (setting, value) in enumerate((("angle", 15.), ("Text/underline", True)), 1):
+    for index, (setting, value) in enumerate((("angle", 15.), ("Text/underline", True),
+            ("label", veusz_literal_text("unresolved_\U0010ffff"))), 1):
         probe = tmp_path / f"unsupported_glyph_probe_{index}.vsz"
         with loaded_native_document(document) as loaded:
             interface = CommandInterface(loaded)

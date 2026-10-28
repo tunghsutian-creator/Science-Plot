@@ -12,6 +12,18 @@ import math
 from typing import Any
 
 
+# Qt's PDF font engine translates glyph origins through QFixed::fromReal
+# (truncate(x*64)/64). Keep both actual floating and exported fixed origins;
+# clearance/frame thresholds never receive a tolerance or relaxation.
+# Matching implementation: qt/qtbase v6.11.2 qpdf.cpp:3255-3260,
+# qfontengine.cpp:242-254 and qfixed_p.h:24-39 (official Qt source).
+PDF_FIXED_SCALE = 64
+
+
+def qt_pdf_origin(value: float) -> float:
+    return math.trunc(value*PDF_FIXED_SCALE)/PDF_FIXED_SCALE
+
+
 def painted_label_ink_bounds(widget: Any, state: dict[str, Any]) -> list[float]:
     qt: Any = import_module("veusz.qtall")
     helper = state["helper"]
@@ -65,6 +77,8 @@ def painted_label_ink_bounds(widget: Any, state: dict[str, Any]) -> list[float]:
                         raise ValueError("unresolved_native_glyphs")
                     spaces = {glyph for glyph in face.glyphIndexesForString(" \u00a0\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000") if glyph != 0}
                     for index, position in zip(indexes, positions, strict=True):
+                        if index == 0:
+                            raise ValueError("unresolved_native_glyph_notdef")
                         path = face.pathForGlyph(index)
                         if path.isEmpty():
                             if index not in spaces:
@@ -72,9 +86,12 @@ def painted_label_ink_bounds(widget: Any, state: dict[str, Any]) -> list[float]:
                             continue
                         # Native glyph metrics complement the outline's numerical
                         # bounding rectangle; neither is a guessed text padding.
-                        box = path.boundingRect().united(face.boundingRect(index))
-                        box.translate(point.x()+position.x(), point.y()+position.y()-line.ascent())
-                        self.bounds.append(self.transform.mapRect(box))
+                        glyph = path.boundingRect().united(face.boundingRect(index))
+                        offset_x, offset_y = position.x(), position.y()-line.ascent()
+                        native = glyph.translated(point.x()+offset_x, point.y()+offset_y)
+                        exported = glyph.translated(qt_pdf_origin(point.x())+offset_x,
+                                                    qt_pdf_origin(point.y())+offset_y)
+                        self.bounds.append(self.transform.mapRect(native.united(exported)))
             except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
                 self.unsupported.append(str(exc))
 

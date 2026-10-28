@@ -89,6 +89,7 @@ CATEGORICAL_EDIT_STRICT_ADDITIONS = frozenset(
     }
 )
 DIRECT_LABEL_LAYOUT_STRICT_ADDITIONS = frozenset({
+    "src/sciplot_core/terminal_request.py",
     "src/sciplot_core/veusz_audit/direct_label_ink.py",
     "src/sciplot_core/studio_render/direct_label_layout.py",
     "src/sciplot_core/studio_core/current_direct_label_review.py",

@@ -163,17 +163,19 @@ def test_exact_current_qa_is_new_auto_only_and_missing_measurement_fails_closed(
     assert issue[0]["severity"] == "critical" and issue[0]["measurement_scope"] == "unverified_current_native"
 
 
-@pytest.mark.parametrize("defect", ["none", "stale", "unsupported", "missing_curve", "outside", "collision", "label_collision"])
+@pytest.mark.parametrize("defect", ["none", "stale", "unsupported", "missing_curve", "outside", "collision", "label_collision", "old_control_box_measurement"])
 def test_actual_qa_requires_complete_bound_text_frame_and_all_visible_curves(tmp_path, defect):
     from sciplot_core.foundation.file_hashing import file_sha256
     document = tmp_path / "plot.vsz"
     document.write_text("native bytes")
     spec = {"source_request": {KEY: VERSION}, "direct_labels": [{"name": "label_1"}, {"name": "label_2"}], "series": [{"name": "curve_1"}]}
-    geometry = {"kind": "sciplot_native_direct_label_geometry", "version": 1, "coverage_complete": True,
+    geometry = {"kind": "sciplot_native_direct_label_geometry", "version": 2, "coverage_complete": True,
         "labels": [{"path": "/page1/graph1/label_"+str(i), "graph_path": "/page1/graph1",
                     "minimum_curve_clearance_mm": 2.1, "minimum_label_clearance_mm": 2.1} for i in (1, 2)],
         "hidden_labels": [], "data_paths": ["/page1/graph1/curve_1"], "hidden_data_paths": [], "outside_plot_paths": []}
     audit = {"path": str(document), "sha256": file_sha256(document), "direct_label_geometry": geometry}
+    if defect == "old_control_box_measurement":
+        geometry["version"] = 1
     if defect == "stale":
         audit["sha256"] = "0"*64
     if defect == "unsupported":
@@ -188,3 +190,23 @@ def test_actual_qa_requires_complete_bound_text_frame_and_all_visible_curves(tmp
         geometry["labels"][0]["minimum_label_clearance_mm"] = 0.
     result = current_direct_label_issues([], spec, document, audit)
     assert result[0]["severity"] == ("info" if defect == "none" else "critical")
+
+
+@pytest.mark.parametrize("value", [0., .001, -.001, 1.02, -1.02, 3.15625])
+def test_pdf_origin_quantization_has_a_derived_one_grid_unit_bound(value):
+    from sciplot_core.veusz_audit.direct_label_ink import PDF_FIXED_SCALE, qt_pdf_origin
+    actual = qt_pdf_origin(value)
+    assert actual*PDF_FIXED_SCALE == math.trunc(value*PDF_FIXED_SCALE)
+    assert abs(actual-value) < 1/PDF_FIXED_SCALE
+
+
+def test_terminal_projection_and_normalization_preserve_the_recorded_layout_selector():
+    from sciplot_core.terminal_request import authoritative_terminal_render_request, normalize_terminal_render_request
+    request = {"template": "stacked_curve", "render_options": {"series_label_mode": "inline"}, KEY: VERSION}
+    projected = authoritative_terminal_render_request(request)
+    assert projected[KEY] == VERSION
+    assert normalize_terminal_render_request(projected, label="layout replay") == projected
+    historical = {key: value for key, value in request.items() if key != KEY}
+    assert KEY not in authoritative_terminal_render_request(historical)
+    with pytest.raises(ValueError, match="Unknown persisted"):
+        authoritative_terminal_render_request({**request, KEY: None})

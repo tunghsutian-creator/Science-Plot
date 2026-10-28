@@ -35,7 +35,7 @@ TASK_TERMINAL_RENDER_REQUEST_FIELDS = frozenset(
 )
 TERMINAL_RENDER_REQUEST_FIELDS = (
     LEGACY_TERMINAL_RENDER_REQUEST_FIELDS | TASK_TERMINAL_RENDER_REQUEST_FIELDS
-    | {"categorical_binding", "data_mapping_application", "missing_values"}
+    | {"categorical_binding", "data_mapping_application", "missing_values", "direct_label_layout_version"}
 )
 
 
@@ -71,11 +71,8 @@ def _terminal_metric_pair(
 ) -> tuple[str | None, str | None]:
     x_metric = _clean_metric(request.get("x_metric"))
     y_metric = _clean_metric(request.get("y_metric"))
-    study_model = (
-        request.get("study_model")
-        if isinstance(request.get("study_model"), dict)
-        else {}
-    )
+    raw_study_model = request.get("study_model")
+    study_model = raw_study_model if isinstance(raw_study_model, dict) else {}
     figure_queue = (
         study_model.get("figure_queue")
         if isinstance(study_model.get("figure_queue"), list)
@@ -142,6 +139,13 @@ def project_terminal_render_request(
         raise ValueError("A terminal render request needs a template.")
     if not isinstance(request_context, dict):
         return request
+    from sciplot_core.studio_render.direct_label_layout import DIRECT_LABEL_LAYOUT_KEY, active_direct_label_layout
+
+    if DIRECT_LABEL_LAYOUT_KEY in request_context:
+        # Keep the persisted selector through materialization/replay. Validation
+        # refuses unknown versions; explicit placements still retain priority.
+        active_direct_label_layout(request_context)
+        request[DIRECT_LABEL_LAYOUT_KEY] = request_context[DIRECT_LABEL_LAYOUT_KEY]
     if (request_context.get("categorical_binding") or {}).get("source_identity_version") == 1:
         request["categorical_binding"] = json_safe(request_context["categorical_binding"])
         if "missing_values" in request_context:

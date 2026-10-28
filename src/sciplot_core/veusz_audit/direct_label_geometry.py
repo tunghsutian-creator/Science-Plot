@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from sciplot_core.foundation.rectangle_geometry import rectangle_distance
-from sciplot_core.veusz_audit.direct_label_ink import painted_label_ink_bounds
+from sciplot_core.veusz_audit.direct_label_ink import PDF_FIXED_SCALE, painted_label_ink_bounds
 from sciplot_core.veusz_audit.legend_geometry import _curve_distance
 from sciplot_core.veusz_audit.measurements import _setting_hidden
 from sciplot_core.veusz_audit.segmented_legend_geometry import _painted_box
@@ -62,8 +62,10 @@ def collect_direct_label_geometry(ordered: list[tuple[str, Any]],
                 "minimum_label_clearance_mm": min(peers) if peers else None})
         except (AttributeError, KeyError, TypeError, ValueError) as exc:
             unsupported.append({"path": path, "reason": str(exc)})
-    return {"kind": "sciplot_native_direct_label_geometry", "version": 1,
+    return {"kind": "sciplot_native_direct_label_geometry", "version": 2,
         "coverage_complete": not unsupported, "labels": records, "hidden_labels": sorted(hidden),
         "outside_plot_paths": sorted(outside), "data_paths": sorted(path for path, _ in curves),
         "hidden_data_paths": sorted(path for path, _ in hidden_curves), "unsupported": unsupported,
-        "envelope": "unclipped_native_text_run_glyph_paths_and_glyph_metrics_with_complete_visible_xy_geometry"}
+        "pdf_origin_quantization_device_pixel": 1/PDF_FIXED_SCALE,
+        "coordinate_dpi": 72,
+        "envelope": "unclipped_native_and_qt_pdf_origins_with_glyph_paths_metrics_and_complete_visible_xy_geometry"}

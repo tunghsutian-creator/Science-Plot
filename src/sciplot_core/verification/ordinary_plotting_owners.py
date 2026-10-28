@@ -312,6 +312,7 @@ DIRECT_LABEL_LAYOUT_OWNER = ChangedOwner(
         "src/sciplot_core/studio_render/direct_label_layout.py",
         "src/sciplot_core/studio_core/current_direct_label_review.py",
         "src/sciplot_core/veusz_audit/direct_label_geometry.py",
+        "src/sciplot_core/terminal_request.py",
         "src/sciplot_core/veusz_audit/direct_label_ink.py",
         "src/sciplot_core/studio_render/axes_spec.py",
         "src/sciplot_core/studio_render/terminal_contract.py",
@@ -326,6 +327,7 @@ DIRECT_LABEL_LAYOUT_OWNER = ChangedOwner(
     owned_test_paths=frozenset(DIRECT_LABEL_LAYOUT_TESTS),
     pytest_targets=(
         *DIRECT_LABEL_LAYOUT_TESTS,
+        "tests/test_terminal_request_literals.py",
         "tests/test_rendering_contract.py", "tests/test_template_override_contract.py",
         "tests/test_style_template_contract.py", "tests/test_source_replay_presentation.py",
         "tests/test_current_layout_review.py", "tests/test_current_layout_review_native.py",

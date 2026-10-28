@@ -307,7 +307,11 @@ change data, axis ranges, fonts or figure dimensions to force feasibility.
 `veusz_audit/direct_label_ink.py` replays each label's existing native paint record
 into a finite read-only glyph measuring device: the actual text-run font,
 paint-device DPI, shaped glyphs, fallback faces and transform own its unclipped
-ink envelope. Upstream ascent-only control boxes cannot certify descenders.
+ink envelope. The envelope also includes Qt PDF's QFixed 26.6 truncated glyph
+origin, whose coordinate conversion error is less than one 1/64 device pixel;
+this does not relax the frame or curve-clearance target. Terminal materialization
+retains and validates the recorded selector rather than dropping it from its
+minimal request. Upstream ascent-only control boxes cannot certify descenders.
 Actual glyph metrics/path bounds and native visible XY stroke/marker geometry
 are consumed by `studio_core/current_direct_label_review.py` only for the recorded
 automatic contract. Missing, stale, unsupported or infeasible geometry blocks
