@@ -85,6 +85,37 @@ def test_source_identity_and_entire_read_witness_are_part_of_the_normalized_inte
     assert source_review_binding(store, newer, review)[2] != key
 
 
+@pytest.mark.parametrize("normalized", [False, True], ids=["fresh-intent", "normalized-intent"])
+def test_source_preview_replay_uses_the_current_canonical_witness_without_accepting_supplied_drift(
+    project, tmp_path, normalized,
+):
+    from sciplot_core.project_store import ProjectConflict
+    from sciplot_core.studio_core.source_update_commands import verified_source_preview
+
+    candidate, source, review = prepared(project, tmp_path)
+    saved = stage_source_update(project, candidate, review)
+    store = project_store(project)
+    snapshot = store.snapshot()
+    _binding, intent, _key = source_review_binding(store, snapshot, review)
+    supplied = dict(intent)
+    if not normalized:
+        del supplied["read_witness"]  # The ordinary fresh-admission caller has not normalized it yet.
+    before, records = project_inventory(project), store.commands()
+    record = verified_source_preview(store, snapshot, supplied)
+    assert record["decision_id"] == saved["decision_id"]
+    assert record["metadata"]["request"] == intent
+    assert supplied == (intent if normalized else {key: value for key, value in intent.items() if key != "read_witness"})
+    for changed in ({**supplied, "read_witness": "0" * 64}, {**supplied, "unknown_witness": "0" * 64}):
+        with pytest.raises(ProjectConflict, match="command identity"):
+            verified_source_preview(store, snapshot, changed)
+    assert project_inventory(project) == before and store.commands() == records
+    original = source.read_bytes()
+    source.write_bytes(original + b" changed after the reviewed observation")
+    with pytest.raises(ProjectConflict):
+        verified_source_preview(store, snapshot, supplied)
+    assert project_inventory(project) == before and store.commands() == records
+
+
 @pytest.mark.parametrize("mismatch", ["kind", "intent"])
 def test_exact_source_preview_key_cannot_replay_a_different_command_kind(project, tmp_path, mismatch):
     from dataclasses import replace

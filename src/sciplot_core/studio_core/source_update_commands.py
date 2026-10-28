@@ -93,12 +93,18 @@ def verified_source_preview(repository: FileProjectStore, snapshot: dict[str, An
     record = prior_source_preview(repository, snapshot, intent)
     if record is None:
         return None
+    normalized_intent = source_review_binding(repository, snapshot, intent)[1]
+    # Fresh admission has not added this field yet. An explicitly supplied
+    # witness and every other supplied field must still match current intent.
+    supplied_intent = dict(intent)
+    supplied_intent.setdefault("read_witness", normalized_intent["read_witness"])
     command = ProjectCommand.from_payload(record["metadata"])
-    if (command.kind != "source_update" or json.loads(command.request_json) != intent or command.key != record["command_id"]
+    if (supplied_intent != normalized_intent or command.kind != "source_update"
+            or json.loads(command.request_json) != normalized_intent or command.key != record["command_id"]
             or command.project_id != snapshot["project_id"] or command.command_digest != record["command_digest"]):
         raise ProjectConflict("The saved source preview has inconsistent command identity.")
     review = record.get("review")
-    if not isinstance(review, dict) or source_review_binding(repository, snapshot, review)[1:] != (intent, command.key):
+    if not isinstance(review, dict) or source_review_binding(repository, snapshot, review)[1:] != (normalized_intent, command.key):
         raise ProjectConflict("The frozen source review differs from its exact normalized command.")
     if snapshot.get("outside_changes"):
         raise ProjectConflict("The saved source preview's current project read witness changed.")
@@ -109,7 +115,7 @@ def verified_source_preview(repository: FileProjectStore, snapshot: dict[str, An
     from sciplot_core.studio_core.source_update_review import payload_hash
 
     with repository._locked() as (io, current):
-        if source_review_binding(repository, current, review)[1:] != (intent, command.key):
+        if source_review_binding(repository, current, review)[1:] != (normalized_intent, command.key):
             raise ProjectConflict("The saved source preview's current project read witness changed.")
         if not any(tree.locator == str(source) for tree in command.source_trees):
             raise ProjectConflict("The saved source preview has no exact incoming source-tree declaration.")
