@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from sciplot_gui.studio_project_status import (
+from sciplot_gui.studio_project_status.builder import build_studio_project_status as _build_studio_project_status
+from sciplot_gui.studio_project_status.figure_set_scope import (
     _resolve_figure_set_export_scope as _resolve_status_figure_set_export_scope,
-    build_studio_project_status as _build_studio_project_status,
 )
+
+from sciplot_core.studio import observe_studio_source_content, resolve_studio_mapping_application
 
 from sciplot_gui.studio_project.services import (
     _studio_figure_set_export_scope,
@@ -38,6 +40,20 @@ def build_studio_project_status(
     audit_source: bool = False,
     _figure_set_scope_resolver: Any = _resolve_figure_set_export_scope,
 ) -> dict[str, Any]:
+    revision = None
+    if project_dir is not None and request_path is not None:
+        revision = observe_studio_source_content(None, project_dir=project_dir, request_path=request_path, audit_source=False)
+
+    def source_observer(path: Path | None, *, audit_source: bool) -> dict[str, Any] | None:
+        assert project_dir is not None and request_path is not None
+        return observe_studio_source_content(path, project_dir=project_dir,
+            request_path=request_path, audit_source=audit_source, expected_revision=revision)
+
+    def mapping_resolver(request: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        assert project_dir is not None and request_path is not None
+        return resolve_studio_mapping_application(request, project_dir=project_dir,
+            request_path=request_path, expected_revision=revision)
+
     return _build_studio_project_status(
         document_path=document_path,
         document=document,
@@ -46,4 +62,6 @@ def build_studio_project_status(
         render_sha256=render_sha256,
         audit_source=audit_source,
         _figure_set_scope_resolver=_figure_set_scope_resolver,
+        _source_content_observer=source_observer if project_dir is not None else None,
+        _mapping_application_resolver=mapping_resolver if project_dir is not None else None,
     )

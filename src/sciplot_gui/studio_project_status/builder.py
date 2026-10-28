@@ -57,6 +57,8 @@ def build_studio_project_status(
     render_sha256: str | None = None,
     audit_source: bool = False,
     _figure_set_scope_resolver: Any = None,
+    _source_content_observer: Any = None,
+    _mapping_application_resolver: Any = None,
 ) -> dict[str, Any]:
     _validate_project_request_pair(project_dir, request_path)
     resolved_document = document_path.expanduser().resolve()
@@ -221,6 +223,7 @@ def build_studio_project_status(
         request_error=request_error,
         artifact_qa_current=qa.get("artifact_qa_current") is True,
         audit_mapping=audit_source,
+        _mapping_resolver=_mapping_application_resolver,
     )
     try:
         source_path = _request_path_value(
@@ -243,11 +246,8 @@ def build_studio_project_status(
         if isinstance(latest_run.get("transform_ledger"), dict)
         else {}
     )
-    raw_archive = (
-        latest_run.get("raw_archive")
-        if isinstance(latest_run.get("raw_archive"), dict)
-        else {}
-    )
+    raw_archive_value = latest_run.get("raw_archive")
+    raw_archive = raw_archive_value if isinstance(raw_archive_value, dict) else {}
     try:
         raw_archive_path = _request_path_value(
             raw_archive.get("path"),
@@ -277,6 +277,7 @@ def build_studio_project_status(
             source_path,
             transform_ledger=transform_ledger,
             audit_source=audit_source,
+            _content_observer=_source_content_observer,
         ),
         "effective_input": mapping.get("effective_input"),
     }

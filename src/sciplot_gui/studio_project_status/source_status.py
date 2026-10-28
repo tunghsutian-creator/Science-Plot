@@ -12,34 +12,29 @@ def _source_reference(
     source_path: Path | None,
     *,
     transform_ledger: object,
+    preserved_identity: bool = False,
 ) -> dict[str, Any] | None:
     if source_path is None or not isinstance(transform_ledger, dict):
         return None
     try:
-        resolved_source = source_path.expanduser().resolve()
+        resolved_source = source_path.expanduser().absolute() if preserved_identity else source_path.expanduser().resolve()
     except (OSError, RuntimeError, ValueError):
         return None
-    steps = (
-        transform_ledger.get("steps")
-        if isinstance(transform_ledger.get("steps"), list)
-        else []
-    )
+    supplied_steps = transform_ledger.get("steps")
+    steps = supplied_steps if isinstance(supplied_steps, list) else []
     records: list[dict[str, Any]] = []
     for step in steps:
         if not isinstance(step, dict):
             continue
-        inputs = (
-            step.get("input_artifacts")
-            if isinstance(step.get("input_artifacts"), list)
-            else []
-        )
+        supplied_inputs = step.get("input_artifacts")
+        inputs = supplied_inputs if isinstance(supplied_inputs, list) else []
         records.extend(item for item in inputs if isinstance(item, dict))
     for record in records:
         value = record.get("path")
         if not isinstance(value, str):
             continue
         try:
-            referenced_path = Path(value).expanduser().resolve()
+            referenced_path = Path(value).expanduser().absolute() if preserved_identity else Path(value).expanduser().resolve()
         except (OSError, RuntimeError, ValueError):
             continue
         if referenced_path == resolved_source:
@@ -81,6 +76,7 @@ def _source_status(
     *,
     transform_ledger: object,
     audit_source: bool,
+    _content_observer: Any = None,
 ) -> dict[str, Any]:
     if source_path is None:
         return {
@@ -89,6 +85,26 @@ def _source_status(
             "exists": False,
             "audit_status": "not_available",
         }
+    observation = None
+    if _content_observer is not None:
+        try:
+            observation = _content_observer(source_path, audit_source=audit_source)
+        except Exception as exc:
+            return {"status": "audit_failed", "path": None, "identity_path": str(source_path),
+                    "exists": False, "audit_status": "audit_failed", "audit_error": f"{type(exc).__name__}: {exc}"}
+    if observation is not None:
+        base = {key: value for key, value in observation.items() if key != 'content'}
+        base['audit_status'] = 'not_computed' if observation.get('exists') else 'not_currently_observed'
+        if not audit_source or not observation.get('exists'):
+            return base
+        current = observation['content']
+        reference = _source_reference(Path(observation['identity_path']), transform_ledger=transform_ledger, preserved_identity=True)
+        reference_hash = reference.get('sha256') if isinstance(reference, dict) else None
+        current_hash = current.get('sha256')
+        return {**base, 'kind': current.get('kind'), 'size_bytes': current.get('size_bytes'),
+                'member_count': current.get('member_count'), 'sha256': current_hash, 'reference_sha256': reference_hash,
+                'audit_status': ('matches_last_run_lineage' if reference_hash and current_hash == reference_hash else
+                                 'changed_since_last_run' if reference_hash else 'current_hash_not_bound_to_a_run')}
     try:
         resolved = source_path.expanduser().resolve()
         exists = resolved.exists()

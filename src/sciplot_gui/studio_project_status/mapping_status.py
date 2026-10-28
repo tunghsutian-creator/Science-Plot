@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from sciplot_core.data_mapping import resolve_data_mapping_request
+from sciplot_core.studio import CurrentMappingObservationUnavailable
 
 from sciplot_gui.studio_project_status.project_runs import (
     _canonical_json_sha256,
@@ -17,9 +18,8 @@ def _mapping_application_from_run(
     application = latest_run.get("data_mapping_application")
     if isinstance(application, dict):
         return application
-    result = (
-        latest_run.get("result") if isinstance(latest_run.get("result"), dict) else {}
-    )
+    supplied_result = latest_run.get("result")
+    result = supplied_result if isinstance(supplied_result, dict) else {}
     application = result.get("data_mapping_application")
     return application if isinstance(application, dict) else {}
 
@@ -30,9 +30,8 @@ def _mapping_coverage_from_run(
     coverage = latest_run.get("data_mapping_coverage")
     if isinstance(coverage, dict):
         return coverage
-    result = (
-        latest_run.get("result") if isinstance(latest_run.get("result"), dict) else {}
-    )
+    supplied_result = latest_run.get("result")
+    result = supplied_result if isinstance(supplied_result, dict) else {}
     coverage = result.get("data_mapping_coverage")
     return coverage if isinstance(coverage, dict) else {}
 
@@ -51,6 +50,7 @@ def _bind_mapping_to_artifact_qa(
         "not_applied",
         "invalid",
         "audit_pending",
+        "not_evaluated",
     }:
         updated["status"] = "verified" if evidence_current else "unverified"
     return updated
@@ -64,6 +64,7 @@ def _mapping_status(
     request_error: str | None,
     artifact_qa_current: bool,
     audit_mapping: bool,
+    _mapping_resolver: Any = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if request_error is not None:
         return (
@@ -105,10 +106,12 @@ def _mapping_status(
             request,
         )
     try:
-        effective, application = resolve_data_mapping_request(
-            request,
-            base_dir=request_path.parent,
-        )
+        effective, application = (_mapping_resolver(request) if _mapping_resolver is not None else
+            resolve_data_mapping_request(request, base_dir=request_path.parent))
+    except CurrentMappingObservationUnavailable as exc:
+        return ({'status': 'not_evaluated', 'coverage_status': 'not_evaluated', 'reason': str(exc),
+                 'verification_base_valid': False, 'artifact_qa_current': bool(artifact_qa_current),
+                 'evidence_current': False}, request)
     except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
         return (
             {

@@ -83,6 +83,11 @@ from sciplot_core.studio_core.delivery_recovery import (
     preview_delivery_recovery as preview_delivery_recovery,
     apply_delivery_recovery as apply_delivery_recovery,
 )
+from sciplot_core.studio_core.source_content_observation import (
+    CurrentMappingObservationUnavailable as CurrentMappingObservationUnavailable,
+    observe_studio_source_content as observe_studio_source_content,
+    resolve_studio_mapping_application as resolve_studio_mapping_application,
+)
 from sciplot_core.studio_core.source_update import (
     preview_project_source_update as preview_project_source_update,
     apply_project_source_update as apply_project_source_update,
@@ -265,6 +270,9 @@ __all__ = [
     "maybe_reexec_with_qt_runtime",
     "migrate_studio_document_unit_labels",
     "prepare_studio_document",
+    "observe_studio_source_content",
+    "CurrentMappingObservationUnavailable",
+    "resolve_studio_mapping_application",
     "preview_veusz_series_revision",
     "publish_standalone_export_receipt",
     "publish_studio_export_run",
