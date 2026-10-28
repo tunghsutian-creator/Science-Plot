@@ -143,7 +143,7 @@ def current_tree_digest(source: Path, files: dict[str, str], identities: dict[st
     if members:
         expected = canonical_json_sha256({"kind": "directory", "files": [
             {"path": Path(path).relative_to(literal).as_posix(), "content_sha256": digest}
-            for path, digest in sorted(members.items())]}, allow_nan=False)
+            for path, digest in sorted(members.items(), key=lambda item: Path(item[0]))]}, allow_nan=False)
         observed = current_source_tree(source, members, identities, expected=expected)
         if observed is None:
             raise ValueError("The verified mapping has no complete source-tree observation")

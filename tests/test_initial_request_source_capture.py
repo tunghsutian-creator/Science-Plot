@@ -198,6 +198,9 @@ def test_initial_directory_captures_unused_members_and_complete_cold_tree(prepar
         actual = resolve_source_path(directory)
         assert (actual / 'empty').is_dir()
         assert {name: (actual / name).read_bytes() for name in inventory} == inventory
+        from sciplot_core.studio_core.project_query_sources import current_source_files, current_tree_digest
+        files, identities = current_source_files(cold.root, directory, [{'status': 'ready', 'spec': str(cold.root / 'studio/spec.json')}])
+        assert current_tree_digest(directory, files, identities) == json.loads(cold.read_bytes('plot_request.json'))['resolved_figure_plan']['source_sha256']
     prepare_studio_document(cold.root, regenerate_generated=True)
     assert json.loads(cold.read_bytes('plot_request.json'))['input'] == str(directory)
     assert not directory.exists()
