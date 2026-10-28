@@ -291,6 +291,29 @@ cache or new authority.
 
 ### Semantic document engine
 
+Actual new ordinary `stacked_curve` creation records
+`direct_label_layout_version: physical-clearance-v1` before FigureTask requests
+are frozen. `studio_render/direct_label_layout.py` owns that selection and the
+shared deterministic physical placement used by both native spec generation and
+source reconstruction. Explicit side, vertical alignment or offset retains user
+ownership. A saved request without the version retains the sealed legacy anchor;
+an unknown version is refused. Managed intent and exact-current native export do
+not acquire a new creation default. The retained 24-file layout-v1 compiler pin
+and historical visual baselines are not rewritten.
+
+The new planner reserves whole text footprints against complete visible curve
+segments and marker envelopes inside the existing physical frame. It does not
+change data, axis ranges, fonts or figure dimensions to force feasibility.
+`veusz_audit/direct_label_ink.py` replays each label's existing native paint record
+into a finite read-only glyph measuring device: the actual text-run font,
+paint-device DPI, shaped glyphs, fallback faces and transform own its unclipped
+ink envelope. Upstream ascent-only control boxes cannot certify descenders.
+Actual glyph metrics/path bounds and native visible XY stroke/marker geometry
+are consumed by `studio_core/current_direct_label_review.py` only for the recorded
+automatic contract. Missing, stale, unsupported or infeasible geometry blocks
+that contract. QA never rearranges current native labels; unversioned historical
+and explicitly placed labels do not acquire this new refusal policy.
+
 The implemented authority boundary is specified in [Managed plot design](DESIGN_MANAGED_PLOTS.md).
 `LegacyPlot` retains native authority; `ManagedPlot` owns its complete supported
 state and compiles through backend-neutral resolved PlotIR. Public CLI creation

@@ -66,4 +66,4 @@ def collect_direct_label_geometry(ordered: list[tuple[str, Any]],
         "coverage_complete": not unsupported, "labels": records, "hidden_labels": sorted(hidden),
         "outside_plot_paths": sorted(outside), "data_paths": sorted(path for path, _ in curves),
         "hidden_data_paths": sorted(path for path, _ in hidden_curves), "unsupported": unsupported,
-        "envelope": "unclipped_actual_native_text_run_glyph_paths_and_complete_visible_xy_geometry"}
+        "envelope": "unclipped_native_text_run_glyph_paths_and_glyph_metrics_with_complete_visible_xy_geometry"}

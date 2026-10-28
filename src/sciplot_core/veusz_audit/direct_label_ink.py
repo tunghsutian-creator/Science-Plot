@@ -56,17 +56,25 @@ def painted_label_ink_bounds(widget: Any, state: dict[str, Any]) -> list[float]:
                     raise ValueError("unshaped_text")
                 line.setLineWidth(1e100)
                 layout.endLayout()
+                if not math.isclose(float(line.horizontalAdvance()), float(item.width()), rel_tol=1e-8, abs_tol=1e-8):
+                    raise ValueError("native_text_run_shaping_mismatch")
                 for run in layout.glyphRuns():
                     face = run.rawFont()
                     indexes, positions = run.glyphIndexes(), run.positions()
                     if not face.isValid() or len(indexes) != len(positions):
                         raise ValueError("unresolved_native_glyphs")
+                    spaces = {glyph for glyph in face.glyphIndexesForString(" \u00a0\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000") if glyph != 0}
                     for index, position in zip(indexes, positions, strict=True):
                         path = face.pathForGlyph(index)
                         if path.isEmpty():
-                            continue  # Spaces have advances but no painted ink.
-                        path.translate(point.x()+position.x(), point.y()+position.y()-line.ascent())
-                        self.bounds.append(self.transform.map(path).boundingRect())
+                            if index not in spaces:
+                                raise ValueError("non_space_glyph_without_vector_outline")
+                            continue
+                        # Native glyph metrics complement the outline's numerical
+                        # bounding rectangle; neither is a guessed text padding.
+                        box = path.boundingRect().united(face.boundingRect(index))
+                        box.translate(point.x()+position.x(), point.y()+position.y()-line.ascent())
+                        self.bounds.append(self.transform.mapRect(box))
             except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
                 self.unsupported.append(str(exc))
 

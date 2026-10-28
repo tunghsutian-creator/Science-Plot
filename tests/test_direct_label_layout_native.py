@@ -110,9 +110,27 @@ def test_public_default_spectrum_create_cold_export_has_clear_complete_inline_te
         assert record["ink_bounds_mm"][3] > record["bounds_mm"][3]
         glyph_cases.append({"text": text, "document": str(probe), "document_sha256": file_sha256(probe),
                             "geometry": probe_geometry})
+    # Unsupported explicit current-native typography is never reported as a
+    # complete automatic glyph proof. The saved copies remain unmodified by QA.
+    unsupported_cases = []
+    for index, (setting, value) in enumerate((("angle", 15.), ("Text/underline", True)), 1):
+        probe = tmp_path / f"unsupported_glyph_probe_{index}.vsz"
+        with loaded_native_document(document) as loaded:
+            interface = CommandInterface(loaded)
+            interface.Set(f"/page1/graph1/label_1/{setting}", value)
+            interface.Save(str(probe))
+        before_probe = file_sha256(probe)
+        probe_audit, error = _run_veusz_audit([probe])
+        assert error is None
+        native_probe = probe_audit["documents"][0]
+        assert native_probe["direct_label_geometry"]["coverage_complete"] is False
+        assert any(issue["severity"] == "critical" for issue in _current_layout_issues(spec, document_path=probe, native_audit=native_probe))
+        assert file_sha256(probe) == before_probe
+        unsupported_cases.append({"setting": setting, "value": value, "document": str(probe),
+                                  "geometry": native_probe["direct_label_geometry"]})
     (tmp_path / "native-evidence.json").write_text(json.dumps({"project": str(project),
         "source": str(source), "source_sha256": file_sha256(source), "document": str(document),
         "spec": str(spec_path), "before_after_sha256": before, "created": created, "exported": exported,
-        "geometry": geometry, "glyph_cases": glyph_cases, "counterexample_document": str(bad), "counterexample_geometry": actual_bad["direct_label_geometry"],
+        "geometry": geometry, "glyph_cases": glyph_cases, "unsupported_glyph_cases": unsupported_cases, "counterexample_document": str(bad), "counterexample_geometry": actual_bad["direct_label_geometry"],
         "raw_numeric_and_source_replay": "passed", "fixed_frame_and_typography": "passed",
         "claim": "public synthetic regression, not private scientific acceptance"}, indent=2)+"\n")
