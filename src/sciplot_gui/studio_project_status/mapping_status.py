@@ -65,6 +65,7 @@ def _mapping_status(
     artifact_qa_current: bool,
     audit_mapping: bool,
     _mapping_resolver: Any = None,
+    _observation_revision: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if request_error is not None:
         return (
@@ -172,6 +173,10 @@ def _mapping_status(
         "application_status": application_status,
         "coverage_status": coverage_status,
         "proposal_id": application_payload.get("proposal_id"),
+        "execution": application_payload.get("execution"),
+        "proposal_sha256": application_payload.get("proposal_sha256"),
+        "confirmation_id": application_payload.get("confirmation_id"),
+        "observation_revision": _observation_revision,
         "source_root": application_payload.get("source_root"),
         "source_audit_path": source_audit_path,
         "effective_input": application_payload.get("effective_input"),

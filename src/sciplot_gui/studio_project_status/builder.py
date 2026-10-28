@@ -59,6 +59,7 @@ def build_studio_project_status(
     _figure_set_scope_resolver: Any = None,
     _source_content_observer: Any = None,
     _mapping_application_resolver: Any = None,
+    _observation_revision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     _validate_project_request_pair(project_dir, request_path)
     resolved_document = document_path.expanduser().resolve()
@@ -224,6 +225,7 @@ def build_studio_project_status(
         artifact_qa_current=qa.get("artifact_qa_current") is True,
         audit_mapping=audit_source,
         _mapping_resolver=_mapping_application_resolver,
+        _observation_revision=_observation_revision,
     )
     try:
         source_path = _request_path_value(

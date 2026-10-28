@@ -44,15 +44,21 @@ def build_studio_project_status(
     if project_dir is not None and request_path is not None:
         revision = observe_studio_source_content(None, project_dir=project_dir, request_path=request_path, audit_source=False)
 
+    revision = ({key: revision[key] for key in ('project_id', 'generation', 'request_sha256')} if revision is not None else None)
+    verified_mapping: Any = None
+    def retain_mapping(observed: Any) -> None:
+        nonlocal verified_mapping
+        verified_mapping = observed
+
     def source_observer(path: Path | None, *, audit_source: bool) -> dict[str, Any] | None:
         assert project_dir is not None and request_path is not None
         return observe_studio_source_content(path, project_dir=project_dir,
-            request_path=request_path, audit_source=audit_source, expected_revision=revision)
+            request_path=request_path, audit_source=audit_source, expected_revision=revision, mapping_inputs=verified_mapping)
 
     def mapping_resolver(request: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
         assert project_dir is not None and request_path is not None
         return resolve_studio_mapping_application(request, project_dir=project_dir,
-            request_path=request_path, expected_revision=revision)
+            request_path=request_path, expected_revision=revision, on_verified_mapping=retain_mapping)
 
     return _build_studio_project_status(
         document_path=document_path,
@@ -64,4 +70,5 @@ def build_studio_project_status(
         _figure_set_scope_resolver=_figure_set_scope_resolver,
         _source_content_observer=source_observer if project_dir is not None else None,
         _mapping_application_resolver=mapping_resolver if project_dir is not None else None,
+        _observation_revision=revision,
     )

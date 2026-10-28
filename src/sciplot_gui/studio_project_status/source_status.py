@@ -94,10 +94,12 @@ def _source_status(
                     "exists": False, "audit_status": "audit_failed", "audit_error": f"{type(exc).__name__}: {exc}"}
     if observation is not None:
         base = {key: value for key, value in observation.items() if key != 'content'}
-        base['audit_status'] = 'not_computed' if observation.get('exists') else 'not_currently_observed'
+        base['audit_status'] = observation.get('audit_status', 'not_computed' if observation.get('exists') else 'not_currently_observed')
         if not audit_source or not observation.get('exists'):
             return base
         current = observation['content']
+        if observation.get('scope') == 'mapping_selected_files':
+            return {**base, **current}
         reference = _source_reference(Path(observation['identity_path']), transform_ledger=transform_ledger, preserved_identity=True)
         reference_hash = reference.get('sha256') if isinstance(reference, dict) else None
         current_hash = current.get('sha256')

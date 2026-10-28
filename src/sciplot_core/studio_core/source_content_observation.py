@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import stat
 from typing import Any
+from collections.abc import Callable
 
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.project_host_factory import project_store
@@ -18,6 +19,9 @@ from sciplot_core.project_store.source_resolver import ProjectSourceResolver
 from sciplot_core.project_store.source_inspection import inspect_file
 from sciplot_core.project_store.physical_projection import projected_directory
 from sciplot_core.project_store.source_tree_io import _files, _stamp
+from sciplot_core.data_mapping.execution_inputs import MappingInputReadSet, mapping_input_reads, mapping_input_scope
+from sciplot_core.data_mapping.numeric_readset_proof import numeric_input_digest
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_manifest_locations import admitted_project_generation
 
 
@@ -86,7 +90,8 @@ def _selected_input(request: dict[str, Any], current: dict[str, Any], identity: 
 
 def observe_studio_source_content(path: Path | None, *, project_dir: Path,
                                   request_path: Path, audit_source: bool,
-                                  expected_revision: dict[str, Any] | None = None) -> dict[str, Any] | None:
+                                  expected_revision: dict[str, Any] | None = None,
+                                  mapping_inputs: MappingInputReadSet | None = None) -> dict[str, Any] | None:
     """None explicitly means a legacy project; known-store failures never retry legacy IO."""
     project = canonical_path(project_dir)
     if canonical_path(request_path) != project / 'plot_request.json':
@@ -110,6 +115,12 @@ def observe_studio_source_content(path: Path | None, *, project_dir: Path,
         _require_revision(current, request_entry, expected_revision)
         request = json.loads(io.get(request_entry))
         supplied = path.expanduser().absolute()
+        if request.get('data_mapping_execution'):
+            if not audit_source or mapping_inputs is None:
+                return {'path': None, 'identity_path': str(supplied), 'exists': False, 'status': 'not_observed',
+                        'scope': 'mapping_selected_files',
+                        'audit_status': 'not_computed' if not audit_source else 'not_currently_observed'}
+            return _mapped_source(store, io, current, request, supplied, mapping_inputs)
         if STORE in supplied.parts or any(part in {'.', '..'} for part in supplied.parts):
             raise ProjectStoreError('Source status cannot observe a source cache or ambiguous locator.')
         logical = locators.logical_for_literal(current, str(supplied))
@@ -246,7 +257,8 @@ class _CurrentMappingResolver(ProjectSourceResolver):
 
 def resolve_studio_mapping_application(request: dict[str, Any], *, project_dir: Path,
                                        request_path: Path,
-                                       expected_revision: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+                                       expected_revision: dict[str, Any] | None = None,
+                                       on_verified_mapping: Callable[[MappingInputReadSet], None] | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Revalidate a current mapping without reading the old clone origin or creating views."""
     from sciplot_core.data_mapping import resolve_data_mapping_request
     from sciplot_core.foundation.source_locations import source_location_scope
@@ -263,5 +275,51 @@ def resolve_studio_mapping_application(request: dict[str, Any], *, project_dir: 
         if request != json.loads(io.get(entry)):
             raise ProjectConflict('The mapping status request is not this current canonical generation.')
         resolver = _CurrentMappingResolver(store, current['generation'])
-        with source_location_scope(resolver):
-            return resolve_data_mapping_request(request, base_dir=project)
+        with source_location_scope(resolver), mapping_input_reads(request.get('data_mapping_execution')) as observed:
+            result = resolve_data_mapping_request(request, base_dir=project)
+            if observed is not None and on_verified_mapping is not None:
+                observed.require_current()
+                on_verified_mapping(observed)
+            return result
+
+
+def _mapped_source(store: FileProjectStore, io: StoreIO, current: dict[str, Any], request: dict[str, Any],
+                   selected: Path, observed: MappingInputReadSet) -> dict[str, Any]:
+    """A verified finite source set never grants its namespace directory."""
+    from sciplot_core.foundation.source_locations import source_location_scope
+    from sciplot_core.data_mapping.execution_inputs import mapping_execution_path
+
+    with source_location_scope(_CurrentMappingResolver(store, current['generation'])):
+        if (not isinstance(observed, MappingInputReadSet) or not observed.sealed
+                or observed.execution != str(mapping_execution_path(request['data_mapping_execution']))
+                or observed.numeric_inputs_sha256 is None or observed.numeric_inputs_sha256 != numeric_input_digest(observed)):
+            raise ProjectConflict('Source status lacks this canonical mapping numeric read witness.')
+        execution = json.loads(observed.files[observed.execution].data)
+        raw = {str(Path(execution['source_root']) / name): version for name, version in execution['source_hashes'].items()}
+        if str(selected) not in {*raw, execution['source_root'], str(request['input'])}:
+            raise ProjectConflict('Source status cannot widen the confirmed mapping source set.')
+        with mapping_input_scope(observed):
+            observed.require_current()
+            rows = []
+            for literal, version in sorted(raw.items()):
+                item = observed.files.get(literal)
+                owners = [(identity, entry) for identity, versions in current['sources'].items()
+                    for digest, entry in versions.items() if digest == version and entry.get('locator') == literal]
+                if item is None or item.sha256 != version or len(owners) != 1 or owners[0][1]['mode'] != item.mode:
+                    raise ProjectConflict('A confirmed mapping source lacks its exact registered identity and bytes.')
+                rows.append({'identity_path': literal, 'path': str(item.actual), 'source_id': owners[0][0],
+                             'sha256': version, 'size_bytes': len(item.data)})
+    io.verify_roots()
+    revision = {key: current[key] for key in ('project_id', 'generation')}
+    revision['request_sha256'] = current['files']['plot_request.json']['sha256']
+    binding = {'observation_revision': revision, 'mapping_execution': observed.execution,
+               'confirmation_id': execution['confirmation_id'], 'proposal_sha256': execution['proposal_sha256']}
+    if len(rows) == 1 and str(selected) == rows[0]['identity_path']:
+        row = rows[0]
+        return {**binding, 'path': row['path'], 'identity_path': row['identity_path'], 'exists': True, 'status': 'present',
+                'scope': 'mapping_source_file', 'content': {key: row[key] for key in ('sha256', 'size_bytes')} | {'kind': 'file'}}
+    return {**binding, 'path': None, 'identity_path': str(selected), 'exists': True, 'status': 'present',
+            'scope': 'mapping_selected_files', 'selected_files_current': True,
+            'audit_status': 'matches_confirmed_mapping_sources', 'selected_files': rows,
+            'content': {'kind': 'selected_files', 'member_count': len(rows), 'size_bytes': sum(row['size_bytes'] for row in rows),
+                        'selected_files_sha256': canonical_json_sha256(rows)}}
