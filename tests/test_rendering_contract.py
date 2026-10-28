@@ -154,6 +154,8 @@ def test_pdf_baseline_follows_only_the_closed_current_native_owner(tmp_path: Pat
 
 
 def test_pdf_baseline_rejects_changed_observed_export_edge(tmp_path: Path) -> None:
+    import ast
+
     copy_contract_sources(tmp_path)
     adapter = tmp_path / "src/sciplot_core/studio_core/native_export_adapter.py"
     original = adapter.read_text()
@@ -173,7 +175,19 @@ def test_pdf_baseline_rejects_changed_observed_export_edge(tmp_path: Path) -> No
         "duplicate_helper": original + "\ndef _export_studio_document():\n    pass\n",
         "decorated_helper": original.replace("def _export_studio_document(", "@untrusted\ndef _export_studio_document("),
         "decoy_wrapper_dpi": original.replace(delegate, 'kwargs["pdfdpi"] = 72\n        ' + delegate),
+        "module_globals_rebind": original + '\ndef _other_export(*args, **kwargs):\n    return {"replacement": True}\n'
+                                 + '\nglobals()["_export_studio_document"] = _other_export\n',
+        "module_dynamic_call": original + '\nglobals().update({"_export_studio_document": object()})\n',
+        "module_conditional_patch": original + '\nif True:\n    globals()["_export_studio_document"] = object()\n',
+        "unrelated_decorator": original.replace("def _count_veusz_series(", "@untrusted\ndef _count_veusz_series("),
+        "positional_default_expression": original + '\ndef _other_export(value=globals().update({"patched": True})):\n    pass\n',
+        "keyword_default_expression": original + '\ndef _other_export(*, value=globals().update({"patched": True})):\n    pass\n',
+        "eager_annotations": original.replace("from __future__ import annotations", ""),
+        "star_import": original + '\nfrom untrusted import *\n',
+        "module_class": original + '\nclass Patch:\n    pass\n',
     }
+    if "type_params" in ast.FunctionDef._fields:
+        changes["generic_function"] = original + '\ndef _other_export[T]():\n    pass\n'
     for change, changed in changes.items():
         assert changed != original, change
         adapter.write_text(changed)

@@ -179,8 +179,32 @@ def _binds_name(node: ast.AST, name: str) -> bool:
             or isinstance(node, ast.MatchMapping) and node.rest == name)
 
 
+def _require_static_export_module(tree: ast.Module) -> None:
+    """Support the current adapter composition, not arbitrary module execution.
+
+    Imports remain source-closure dependencies. Deferred annotations and literal
+    None defaults keep function declarations free of executable expressions.
+    """
+    future = ast.parse("from __future__ import annotations").body[0]
+    if len(tree.body) < 2 or ast.get_docstring(tree) is None or ast.dump(tree.body[1]) != ast.dump(future):
+        raise ValueError("PDF native export baseline changed structure.")
+    for node in tree.body[2:]:
+        if isinstance(node, ast.Import):
+            continue
+        if isinstance(node, ast.ImportFrom) and all(alias.name != "*" for alias in node.names):
+            continue
+        if isinstance(node, ast.FunctionDef):
+            defaults = (*node.args.defaults, *node.args.kw_defaults)
+            if (not node.decorator_list and not getattr(node, "type_params", [])
+                    and all(value is None or isinstance(value, ast.Constant) and value.value is None
+                            for value in defaults)):
+                continue
+        raise ValueError("PDF native export baseline changed structure.")
+
+
 def _observed_export_owner(reader: SourceReader, filename: str, public: ast.FunctionDef) -> ast.FunctionDef:
     """Admit only the current same-file export edge inside its observation scope."""
+    _require_static_export_module(reader.tree(filename))
     expected = ast.parse('''
 from sciplot_core.source_coverage.native_file_snapshots import observed_native_document
 arguments = ["export-document", str(document_path), "--formats", ",".join(normalize_export_formats(formats, default=()))]
