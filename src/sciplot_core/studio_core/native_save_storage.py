@@ -74,8 +74,14 @@ def publish_native_save(document: Any, target: Path, staged: Path, *, result: di
 
         if context is None or Path(context["project_dir"]) != root:
             raise ProjectConflict("A project Save As requires a recognized native project destination.")
+        # Match the existing Save As serializer formats. This is only a format
+        # constraint: scientific, historical and projected metadata roles below
+        # still refuse a destination even if it has a native-looking suffix.
+        if target.suffix.casefold() not in {".vsz", ".vszh5"}:
+            raise ProjectConflict("A project Save As requires a native serialization destination.")
         current = store.snapshot()
         protected = set(current.get("input_resources", [])) | set(current.get("history_resources", []))
+        protected.update(item["resource"] for item in binding.get("projected_reads", []))
         protected.update(entry.get("logical") for versions in current["sources"].values()
                          for entry in versions.values())
         protected.update(logical_for_literal(current, entry["locator"])

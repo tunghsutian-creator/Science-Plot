@@ -282,6 +282,54 @@ def test_bound_native_save_as_cannot_write_real_transferred_history(tmp_path, mo
     assert store.snapshot()["generation"] == before["generation"]
 
 
+@pytest.mark.parametrize("name", ["studio/figure_set.json", "studio/unselected.spec.json"])
+def test_bound_native_save_as_cannot_overwrite_unselected_registered_metadata(tmp_path, monkeypatch, name):
+    root, _target, _destination, document, store = save_as_document(tmp_path, monkeypatch)
+    publish_files(store, {name: b'{"kind":"registered-metadata"}'}, kind="publish")
+    before = store.snapshot()
+    # This exact editing baseline is captured after fixture creation, before
+    # the synthetic user edit; the metadata is intentionally not an edit read.
+    document.modified = False
+    document._sciplot_project_read_set = {**document._sciplot_project_read_set,
+        "generation": before["generation"]}
+    binding = document._sciplot_project_read_set.copy()
+    document.modified = True
+    assert name not in binding["files"]
+    original = (root / name).read_bytes()
+    with pytest.raises(ProjectConflict):
+        document.save(str(root / name))
+    assert store.snapshot()["generation"] == before["generation"]
+    assert (root / name).read_bytes() == original
+    assert document._sciplot_project_read_set == binding
+
+
+def test_bound_native_save_as_native_format_never_authorizes_a_registered_source(tmp_path, monkeypatch):
+    from sciplot_core.project_commands import PreparedSource, ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.foundation.file_hashing import file_sha256
+
+    root, _target, _destination, document, store = save_as_document(tmp_path, monkeypatch)
+    name = "studio/original-source.vsz"
+    path = root / name
+    publish_files(store, {name: b"scientific input with a native suffix"}, kind="publish")
+    current = store.snapshot()
+    source = PreparedSource("a" * 32, str(path), file_sha256(path), path.read_bytes(),
+        mode=current["files"][name]["mode"])
+    mutation = ProjectMutation({}, {}, prepared_sources=(source,))
+    command = ProjectCommand.create("semantic_record", "source-role", project_id=current["project_id"],
+        expected_generation=current["generation"], read_set={name: source.version}, write_set=[],
+        request={"prepared_digest": mutation.prepared_digest})
+    ProjectCommands(store).execute(command, lambda: mutation)
+    before = store.snapshot()
+    document.modified = False
+    document._sciplot_project_read_set = {**document._sciplot_project_read_set,
+        "generation": before["generation"]}
+    document.modified = True
+    with pytest.raises(ProjectConflict, match="scientific source"):
+        document.save(str(path))
+    assert path.read_bytes() == source.data
+    assert store.snapshot()["generation"] == before["generation"]
+
+
 @pytest.mark.parametrize("concurrent_save,declared_delivery", [(False, False), (True, False), (False, True)],
                          ids=["current", "concurrent-save", "declared-delivery"])
 def test_unit_migration_captures_the_generation_before_loading_native_bytes(tmp_path, monkeypatch, concurrent_save, declared_delivery):
