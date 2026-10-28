@@ -41,4 +41,3 @@ def _changes(context: dict[str, Any], request: dict[str, Any]) -> tuple[list[Any
             native.append({"target": identifier, "property": prop, "value": deepcopy(value),
                            "before_native": deepcopy(item["native_fields"])})
     return diff, native
-

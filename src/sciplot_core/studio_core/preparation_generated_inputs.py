@@ -47,4 +47,3 @@ def record_generated_preparation_inputs(project: Path, sources: Iterable[Path]) 
             raise ProjectConflict("A generated preparation input changed after its producer completed.")
         captured[relative] = value
     candidate.generated_inputs.update(captured)
-

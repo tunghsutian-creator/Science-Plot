@@ -35,4 +35,3 @@ def _files(root: Path, *, descriptor: int | None = None) -> dict[str, PreparedFi
         return visit(fd, "")
     finally:
         os.close(fd)
-

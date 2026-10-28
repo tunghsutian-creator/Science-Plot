@@ -146,4 +146,3 @@ def require(store: FileProjectStore, checkpoint: dict[str, Any]) -> dict[str, An
             raise EngineError('prepared_project_changed', 'The generation added resources outside its admitted semantic attachments.')
         _physical(store, io, current)
         return deepcopy(current)
-
