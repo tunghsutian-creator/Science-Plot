@@ -10,7 +10,7 @@ from typing import Any
 
 from sciplot_core.project_lifecycle.context import external_project_session
 from sciplot_core.task_control import inspect_task, resume_task, start_task
-from sciplot_core.task_prepared_creation import require_prepared_current
+from sciplot_core.task_prepared_creation import prepared_admission
 from sciplot_core.task_storage import load_task
 
 from sciplot_core.plot_engine.backend import PlotCreator
@@ -57,10 +57,8 @@ def _export(service: PlotCreator, root: Path, state: dict[str, Any]) -> dict[str
 def _open_prepared(service: PlotCreator, root: Path, state: dict[str, Any], task: dict[str, Any]) -> dict[str, Any]:
     prepared = load_task(root / "task")
     project = Path(task["project"])
-    with external_project_session(project):
-        require_prepared_current(prepared)
+    with prepared_admission(prepared):
         result = _TemplateOpener(service, state).open(project)
-        require_prepared_current(prepared)
     if result["status"] != "current":
         raise EngineError("prepared_project_changed", "The prepared project was not current at semantic adoption.")
     return result

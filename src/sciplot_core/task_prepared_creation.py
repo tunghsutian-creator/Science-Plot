@@ -1,6 +1,8 @@
 """An internal source/native checkpoint for template creation before publication."""
 
 from pathlib import Path
+from contextlib import contextmanager
+from collections.abc import Iterator
 from typing import Any
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
@@ -8,6 +10,7 @@ from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_storage import save_task
+from sciplot_core.task_prepared_store import prepared_store, capture, require
 
 
 def is_prepared(state: dict[str, Any]) -> bool:
@@ -22,8 +25,38 @@ def require_prepared_current(state: dict[str, Any]) -> None:
     if source_tree_sha256(source) != checkpoint["source_sha256"]:
         raise TaskControlError("source_changed", "The original source changed after native preparation; do not rebuild or adopt this checkpoint.")
     project = canonical_path(Path(checkpoint["project"]))
-    if not project.is_dir() or file_inventory(project) != checkpoint["files"]:
+    store = prepared_store(project)
+    if store is not None:
+        require(store, checkpoint)
+    elif checkpoint.get('store_binding') is not None or not project.is_dir() or file_inventory(project) != checkpoint["files"]:
         raise TaskControlError("prepared_project_changed", "The prepared native project changed before template adoption; preserve it and resolve the conflict.")
+
+
+@contextmanager
+def prepared_admission(state: dict[str, Any]) -> Iterator[None]:
+    """Share host Store selection; each read/publication owns its short lease.
+
+    A native child must never run under an independent lifetime project EX.
+    The complete original resource/source guards run before and after adoption.
+    """
+    if not is_prepared(state):
+        require_prepared_current(state)
+    project = Path(state['prepared_creation']['project'])
+    store = prepared_store(project)
+    if store is None:
+        from sciplot_core.studio_core.project_session import external_project_session
+
+        with external_project_session(project):
+            require_prepared_current(state)
+            yield
+            require_prepared_current(state)
+    else:
+        from sciplot_core.project_store.runtime import project_runtime
+
+        require_prepared_current(state)
+        with project_runtime(store):
+            yield
+        require_prepared_current(state)
 
 
 def checkpoint_prepared(root: Path, state: dict[str, Any], prepared: dict[str, Any]) -> None:
@@ -36,8 +69,10 @@ def checkpoint_prepared(root: Path, state: dict[str, Any], prepared: dict[str, A
         if not path.is_file() or not path.is_relative_to(project):
             raise TaskControlError("prepared_project_invalid", "The prepared native document and request must exist within their bound project.")
     state["project"] = str(project)
-    state["prepared_creation"] = {"project": str(project), "source_sha256": state["source_sha256"],
-                                  "files": file_inventory(project)}
+    store = prepared_store(project)
+    files, binding = capture(store) if store is not None else (file_inventory(project), None)
+    state["prepared_creation"] = {"project": str(project), "source_sha256": state["source_sha256"], "files": files,
+                                  **({'store_binding': binding} if binding is not None else {})}
     state["result"] = {"kind": "sciplot_project_prepared_result", "version": 1, "status": "prepared",
                        **{key: prepared[key] for key in ("project_dir", "document", "request")},
                        "ready_to_use": False, "export_performed": False,
