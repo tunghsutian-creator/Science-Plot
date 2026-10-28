@@ -330,6 +330,37 @@ def test_bound_native_save_as_native_format_never_authorizes_a_registered_source
     assert store.snapshot()["generation"] == before["generation"]
 
 
+def test_bound_save_as_never_reclassifies_a_parent_swap_as_standalone(tmp_path, monkeypatch):
+    from sciplot_core.foundation import canonical_paths
+
+    root, _target, _destination, document, store = save_as_document(tmp_path, monkeypatch)
+    parent = root / "studio/save-copies"
+    parent.mkdir()
+    destination = parent / "copy.vsz"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    external = outside / destination.name
+    external.write_bytes(b"foreign destination preimage")
+    before = store.snapshot()
+    original = canonical_paths.canonical_path
+    swapped = False
+    def replace_parent_after_validation(value):
+        nonlocal swapped
+        result = original(value)
+        if Path(value) == destination and not swapped:
+            swapped = True
+            parent.rename(root / "studio/original-save-copies")
+            parent.symlink_to(outside, target_is_directory=True)
+        return result
+    monkeypatch.setattr(canonical_paths, "canonical_path", replace_parent_after_validation)
+    with pytest.raises((ProjectConflict, ValueError, OSError)):
+        document.save(str(destination))
+    assert swapped is True
+    assert external.read_bytes() == b"foreign destination preimage"
+    assert store.snapshot()["generation"] == before["generation"]
+    assert document.isModified()
+
+
 @pytest.mark.parametrize("concurrent_save,declared_delivery", [(False, False), (True, False), (False, True)],
                          ids=["current", "concurrent-save", "declared-delivery"])
 def test_unit_migration_captures_the_generation_before_loading_native_bytes(tmp_path, monkeypatch, concurrent_save, declared_delivery):

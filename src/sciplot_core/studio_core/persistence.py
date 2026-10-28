@@ -137,8 +137,12 @@ def stage_veusz_document(
     if isinstance(binding, dict) and "project_id" in binding:
         from sciplot_core.foundation.canonical_paths import canonical_path
 
-        canonical_path(requested)  # Validate the user's exact path before resolving its parent.
-    parent = requested.parent.resolve(strict=True)
+        if canonical_path(requested) != requested:
+            raise ValueError("A bound native save must retain its exact requested path.")
+        # Keep the lexical project role: late aliases must reach Core, not become standalone.
+        parent = requested.parent
+    else:
+        parent = requested.parent.resolve(strict=True)
     if not parent.is_dir():
         raise NotADirectoryError(parent)
     resolved_target = parent / requested.name
