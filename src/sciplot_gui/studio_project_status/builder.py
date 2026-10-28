@@ -290,6 +290,7 @@ def build_studio_project_status(
         latest_run=latest_run,
     )
     provenance = _provenance_status(
+        project_dir=resolved_project,
         latest_path=latest_path,
         latest_run=latest_run,
         transform_status=transform_status,

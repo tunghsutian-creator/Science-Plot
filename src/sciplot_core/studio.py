@@ -78,6 +78,7 @@ from sciplot_core.studio_core.runtime import (
 )
 from sciplot_core.studio_core.project_export import (
     export_project_document as export_project_document,
+    verify_project_delivery as verify_project_delivery,
 )
 from sciplot_core.studio_core.delivery_recovery import (
     preview_delivery_recovery as preview_delivery_recovery,
@@ -257,6 +258,7 @@ __all__ = [
     "preview_project_source_update",
     "apply_project_source_update",
     "export_project_document",
+    "verify_project_delivery",
     "atomic_save_veusz_document",
     "apply_veusz_series_revision",
     "build_studio_figure_set_export_scope",
