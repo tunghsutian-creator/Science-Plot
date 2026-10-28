@@ -65,4 +65,29 @@ def export_project_document(
     )
 
 
-__all__ = ["ProjectExportResult", "export_project_document"]
+def verify_project_delivery(
+    project_dir: Path, delivery: object, *, expected_manifest: dict[str, Any],
+) -> dict[str, Any]:
+    """Review the Studio publisher's exact host delivery without creating views.
+
+    Studio publishes beside the project, rather than below each run. A managed
+    relocation keeps recorded locators and uses only its already-bound host cap.
+    """
+    from sciplot_core.delivery import verify_delivery_package
+    from sciplot_core.foundation.canonical_paths import canonical_path
+    from sciplot_core.output_contract import requested_delivery_root
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store.runtime import project_runtime
+
+    project = canonical_path(project_dir)
+    if not (project / ".sciplot_store").exists():
+        return verify_delivery_package(delivery, expected_manifest=expected_manifest,
+            expected_root=requested_delivery_root(expected_manifest, run_output=project))
+    store = project_store(project)
+    snapshot = store.snapshot()
+    with project_runtime(store, generation=snapshot["generation"]):
+        return verify_delivery_package(delivery, expected_manifest=expected_manifest,
+            expected_root=store.locations.get("delivery", project / "delivery"))
+
+
+__all__ = ["ProjectExportResult", "export_project_document", "verify_project_delivery"]

@@ -5,8 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.delivery import verify_delivery_package
-from sciplot_core.output_contract import requested_delivery_root
+from sciplot_core import studio
 from sciplot_core.studio_figure_set_contract import (
     is_primary_figure_set_export_scope as _is_primary_figure_set_export_scope,
 )
@@ -37,6 +36,7 @@ def _nonempty_evidence_path(
 
 def _provenance_status(
     *,
+    project_dir: Path,
     latest_path: Path | None,
     latest_run: dict[str, Any],
     transform_status: str,
@@ -67,15 +67,16 @@ def _provenance_status(
         if evidence_root is not None
         else {"passed": False, "failed_checks": ["evidence_root_missing"]}
     )
-    delivery_verification = (
-        verify_delivery_package(
-            delivery,
-            expected_root=requested_delivery_root(latest_run, run_output=evidence_root),
-            expected_manifest=latest_run,
+    try:
+        delivery_verification = (
+            studio.verify_project_delivery(
+                project_dir, delivery, expected_manifest=latest_run,
+            )
+            if evidence_root is not None
+            else {"passed": False, "failed_checks": ["evidence_root_missing"]}
         )
-        if evidence_root is not None
-        else {"passed": False, "failed_checks": ["evidence_root_missing"]}
-    )
+    except (OSError, ValueError, KeyError) as exc:
+        delivery_verification = {"passed": False, "failed_checks": ["project_delivery_not_current"], "error": str(exc)}
     package_current = package_verification.get("passed") is True
     delivery_current = delivery_verification.get("passed") is True
     run_evidence_complete = bool(
