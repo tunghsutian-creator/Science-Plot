@@ -220,6 +220,12 @@ Unknown mapping evidence does not become readiness. Raw/prepared bytes, artifact
 existence and QA remain independent observations; an actual edit or export keeps
 its own complete scientific admission and validation.
 
+Historical source-only requests keep their declared ledger/spec source evidence.
+The original-workbook FigurePlan fallback applies only to a request with its
+canonical `input`, selecting the exact registered literal and sealed byte version.
+An absent `input` neither invalidates existing source evidence nor authorizes
+guessing an original from a `source` field, equal bytes or registration order.
+
 GUI source and mapping observations pin the same canonical project/generation/
 request revision. Light refresh does not scan a mapped namespace or claim a
 numeric audit. An audited mapping reuses only that invocation's successfully

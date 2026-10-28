@@ -362,6 +362,41 @@ def test_probe_source_drift_control_selects_exact_cloned_source_not_original(tmp
     assert _source_mutation_target(str(foreign), project_dir=copied) is None
 
 
+@pytest.mark.parametrize("spec_evidence", [True, False], ids=["sealed-spec", "no-source-evidence"])
+def test_legacy_source_only_query_requires_its_declared_exact_evidence(tmp_path: Path, spec_evidence: bool) -> None:
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.studio_core.project_query_sources import current_source_files
+
+    original = _copyable_project(tmp_path)
+    FileProjectStore(original).snapshot(import_legacy=True)
+    copied = _copy_project_fixture(original, tmp_path / "probe")
+    store = project_store(copied)
+    before = store.snapshot()
+    inventory = {p.relative_to(copied): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                 for p in copied.rglob("*") if p.is_file()}
+    source = original / "source/prepared.csv"
+    digest = file_sha256(source)
+    assert json.loads(store.read_bytes("plot_request.json")) == {"source": str(source)}
+    owners = [identity for identity, versions in before["sources"].items()
+              if versions.get(digest, {}).get("locator") == str(source)]
+    assert len(owners) == 1
+    figures = [{"status": "ready", "spec": str(copied / "studio/spec.json")}] if spec_evidence else []
+    with project_runtime(store):
+        files, identities = current_source_files(copied, source, figures)
+        assert files == ({str(source): digest} if spec_evidence else {})
+        assert identities == ({str(source): owners[0]} if spec_evidence else {})
+        # A same-byte foreign file is neither a locator alias nor selected input.
+        foreign = tmp_path / "foreign.csv"
+        foreign.write_bytes(source.read_bytes())
+        assert current_source_files(copied, foreign, figures) == ({}, {})
+    assert store.snapshot()["generation"] == before["generation"]
+    assert {p.relative_to(copied): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+            for p in copied.rglob("*") if p.is_file()} == inventory
+    assert (copied / "source/prepared.csv").read_bytes() == source.read_bytes()
+
+
 def test_probe_positive_legacy_setup_explicitly_admits_before_its_single_publication(tmp_path):
     from sciplot_core.project_host_factory import project_store
     from sciplot_core.studio_project_probe import _publish_fixture_setup

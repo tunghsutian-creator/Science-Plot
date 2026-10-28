@@ -67,10 +67,12 @@ def current_source_files(project: Path, source: Path, figures: list[dict[str, An
     # FigurePlan while the ledger/spec describe only its produced tables. The
     # plan's file-tree seal selects an exact registered byte version; neither
     # registration order nor another literal with identical bytes is authority.
-    original_input = Path(request["input"])
-    if not original_input.is_absolute():
+    # Historical source-only requests still supply their exact evidence through
+    # the ledger/spec above; absence of the newer input field grants no fallback.
+    original_input = Path(request["input"]) if "input" in request else None
+    if original_input is not None and not original_input.is_absolute():
         original_input = project / original_input
-    if literal not in values and resolver.literal_path(original_input) == literal:
+    if original_input is not None and literal not in values and resolver.literal_path(original_input) == literal:
         originals = [(identity, version) for identity, versions in snapshot["sources"].items()
                      for version, entry in versions.items() if entry.get("locator") == literal]
         if originals:
