@@ -11,7 +11,7 @@ from sciplot_core.studio_core.current_direct_label_review import current_direct_
 from sciplot_core.studio_render.axes_spec import _direct_label_contracts
 from sciplot_core.studio_render.direct_label_layout import (
     DIRECT_LABEL_LAYOUT_KEY as KEY, DIRECT_LABEL_LAYOUT_VERSION as VERSION,
-    NATIVE_TEXT_GUARD_MM as GUARD, active_direct_label_layout, automatic_label_boxes, _text_width,
+    DIRECT_LABEL_EDGE_PADDING_MM as GUARD, active_direct_label_layout, automatic_label_boxes, _text_width,
     freeze_new_direct_label_layout,
 )
 from sciplot_core.studio_render.models import StudioPreparationBlocked, StudioSeries, _VeuszAxisContract, _VeuszStyleContract

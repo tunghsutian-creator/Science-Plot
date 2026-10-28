@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from sciplot_core.foundation.rectangle_geometry import rectangle_distance
-from sciplot_core.studio_render.direct_label_layout import NATIVE_TEXT_GUARD_MM
+from sciplot_core.veusz_audit.direct_label_ink import painted_label_ink_bounds
 from sciplot_core.veusz_audit.legend_geometry import _curve_distance
 from sciplot_core.veusz_audit.measurements import _setting_hidden
 from sciplot_core.veusz_audit.segmented_legend_geometry import _painted_box
@@ -37,8 +37,7 @@ def collect_direct_label_geometry(ordered: list[tuple[str, Any]],
             box = _painted_box(widget, state)
             if not _setting_hidden(widget.settings.Border) or not _setting_hidden(widget.settings.Background):
                 raise ValueError("Automatic inline text clearance requires its recorded transparent undecorated label.")
-            guard = NATIVE_TEXT_GUARD_MM
-            reserved = [box[0]-guard, box[1]-guard, box[2]+guard, box[3]+guard]
+            reserved = painted_label_ink_bounds(widget, state)
             labels.append((path, widget, state, box, reserved))
         except (AttributeError, KeyError, TypeError, ValueError) as exc:
             unsupported.append({"path": path, "reason": str(exc)})
@@ -58,7 +57,7 @@ def collect_direct_label_geometry(ordered: list[tuple[str, Any]],
             peers = [rectangle_distance(reserved, other_box) for other_path, other, _, _, other_box in labels
                      if other_path != path and other.parent is widget.parent]
             records.append({"path": path, "graph_path": str(widget.parent.path), "page": state["page"],
-                "bounds_mm": box, "guarded_bounds_mm": reserved,
+                "bounds_mm": box, "ink_bounds_mm": reserved,
                 "minimum_curve_clearance_mm": min(distances),
                 "minimum_label_clearance_mm": min(peers) if peers else None})
         except (AttributeError, KeyError, TypeError, ValueError) as exc:
@@ -67,5 +66,4 @@ def collect_direct_label_geometry(ordered: list[tuple[str, Any]],
         "coverage_complete": not unsupported, "labels": records, "hidden_labels": sorted(hidden),
         "outside_plot_paths": sorted(outside), "data_paths": sorted(path for path, _ in curves),
         "hidden_data_paths": sorted(path for path, _ in hidden_curves), "unsupported": unsupported,
-        "text_guard_mm": NATIVE_TEXT_GUARD_MM,
-        "envelope": "native_text_renderer_bounds_with_overhang_guard_and_complete_visible_xy_geometry"}
+        "envelope": "unclipped_actual_native_text_run_glyph_paths_and_complete_visible_xy_geometry"}

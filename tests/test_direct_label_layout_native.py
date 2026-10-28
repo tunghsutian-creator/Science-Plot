@@ -57,11 +57,14 @@ def test_public_default_spectrum_create_cold_export_has_clear_complete_inline_te
     assert geometry["outside_plot_paths"] == []
     assert geometry["labels"][0]["minimum_curve_clearance_mm"] >= 2.
     assert not any(issue["severity"] == "critical" for issue in _current_layout_issues(spec, document_path=document, native_audit=audited))
-    before = {str(path): file_sha256(path) for path in (source, document, spec_path)}
+    request_path = project / "plot_request.json"
+    assert json.loads(request_path.read_text())[KEY] == VERSION
+    assert geometry["labels"][0]["ink_bounds_mm"][3] > geometry["labels"][0]["bounds_mm"][3]
+    before = {str(path): file_sha256(path) for path in (source, document, spec_path, request_path)}
     exported = _cli("studio", project, "--export", "pdf,tiff_300")
     assert exported["studio_run"]["ready_to_use"] is True, exported
     assert exported["studio_run"]["qa"]["studio_layout"]["status"] == "passed"
-    assert before == {str(path): file_sha256(path) for path in (source, document, spec_path)}
+    assert before == {str(path): file_sha256(path) for path in (source, document, spec_path, request_path)}
 
     # The original counterexample's legacy anchor intersects the descending
     # segment. Only this owned native copy is changed; no source/golden is edited.
@@ -86,10 +89,30 @@ def test_public_default_spectrum_create_cold_export_has_clear_complete_inline_te
     # documents into a new publication refusal or a silent automatic rearrange.
     assert _current_layout_issues(legacy_spec, document_path=bad, native_audit=actual_bad) == legacy_spec["layout_issues"]
     assert source.read_bytes() == original
-    assert before == {str(path): file_sha256(path) for path in (source, document, spec_path)}
+    assert before == {str(path): file_sha256(path) for path in (source, document, spec_path, request_path)}
+    # Exercise actual glyph descenders, native font fallback, and literal
+    # escaped markup on owned copies. These copies are geometry probes, not
+    # new scientific figures or accepted source-bound label edits.
+    from sciplot_core.studio_core.series_request import veusz_literal_text
+    glyph_cases = []
+    for index, text in enumerate(("gy_pq", "光谱_μ", r"\alpha_{g_p}"), 1):
+        probe = tmp_path / f"glyph_probe_{index}.vsz"
+        with loaded_native_document(document) as loaded:
+            interface = CommandInterface(loaded)
+            interface.Set("/page1/graph1/label_1/label", veusz_literal_text(text))
+            interface.Save(str(probe))
+        probe_audit, error = _run_veusz_audit([probe])
+        assert error is None
+        probe_geometry = probe_audit["documents"][0]["direct_label_geometry"]
+        assert probe_geometry["coverage_complete"], probe_geometry
+        assert not probe_geometry["outside_plot_paths"]
+        record = probe_geometry["labels"][0]
+        assert record["ink_bounds_mm"][3] > record["bounds_mm"][3]
+        glyph_cases.append({"text": text, "document": str(probe), "document_sha256": file_sha256(probe),
+                            "geometry": probe_geometry})
     (tmp_path / "native-evidence.json").write_text(json.dumps({"project": str(project),
         "source": str(source), "source_sha256": file_sha256(source), "document": str(document),
         "spec": str(spec_path), "before_after_sha256": before, "created": created, "exported": exported,
-        "geometry": geometry, "counterexample_document": str(bad), "counterexample_geometry": actual_bad["direct_label_geometry"],
+        "geometry": geometry, "glyph_cases": glyph_cases, "counterexample_document": str(bad), "counterexample_geometry": actual_bad["direct_label_geometry"],
         "raw_numeric_and_source_replay": "passed", "fixed_frame_and_typography": "passed",
         "claim": "public synthetic regression, not private scientific acceptance"}, indent=2)+"\n")

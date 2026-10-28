@@ -20,8 +20,8 @@ from sciplot_core.studio_render.value_parsing import _size_mm
 DIRECT_LABEL_LAYOUT_VERSION = "physical-clearance-v1"
 DIRECT_LABEL_LAYOUT_KEY = "direct_label_layout_version"
 _PLACEMENT_OPTIONS = {"series_label_side", "series_label_offset_fraction", "series_label_vertical_align"}
-# Extra guard covers normal-font glyph overhang beyond the native text metrics.
-NATIVE_TEXT_GUARD_MM = 0.25
+# Deterministic planning edge padding; actual glyph paths establish delivery QA.
+DIRECT_LABEL_EDGE_PADDING_MM = 0.25
 
 
 def freeze_new_direct_label_layout(request: dict[str, Any], *, template: str) -> dict[str, Any]:
@@ -78,7 +78,7 @@ def automatic_label_boxes(series: list[StudioSeries], *, render_options: dict[st
     width = figure_width - style.left_margin_mm - style.right_margin_mm
     height = figure_height - style.top_margin_mm - style.bottom_margin_mm
     gap = DEFAULT_LEGEND_CURVE_CLEARANCE_MM
-    edge = NATIVE_TEXT_GUARD_MM
+    edge = DIRECT_LABEL_EDGE_PADDING_MM
     if width <= 2*edge or height <= 2*edge:
         raise StudioPreparationBlocked("direct_label_layout_infeasible", "The fixed graph frame cannot contain automatic labels.")
 
@@ -168,7 +168,7 @@ def automatic_label_boxes(series: list[StudioSeries], *, render_options: dict[st
         _, x, y = best
         occupied.append([x, y, x+label_width, y+label_height])
         # The reserve box is larger than native glyphs. Its top-left/right
-        # anchor is inset so actual text has the native overhang guard.
+        # anchor is inset by the recorded physical planning edge padding.
         xp = x+edge if side == "left" else x+label_width-edge
         yp = y+edge
         fraction = xp/width
