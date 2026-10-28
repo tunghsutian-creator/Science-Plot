@@ -17,6 +17,14 @@ read-only materialization and directory-projection failures to distinguish desig
 defects from missing migration coverage. Decide which boundaries need redesign;
 require an explicit complete caller migration, old-path retirement and recovery
 contract for each proposed replacement, rather than adding another policy layer.
+Include the late GUI failures in that review: full-path text was reused as
+scientific rule evidence; positive probes still wrote through retired transaction
+seams; copied projects mixed immutable generations with rebased active files;
+source-status code confused a mapping namespace with a complete original tree;
+failed refreshes retained old currentness; and Save As could lose its requested
+project role after path resolution. Trace actual positive and refusal paths through
+the shared owners before choosing another replacement. A test selector must name
+an existing collected module; an owner message or prepared draft is not coverage.
 Include namespace metadata versus read capability, host identity versus content
 freshness, and physical staging versus persistent logical identity. Check the
 real effects of deferred/context-managed test entry points and select returned

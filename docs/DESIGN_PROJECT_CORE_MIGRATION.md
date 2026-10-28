@@ -86,6 +86,16 @@ read-only: its semantic fingerprint binds the observed bytes, while the project
 read witness retains the prior canonical version for a later audited
 NativeAdoption. Default strict figure binding remains unchanged.
 
+Live native Save As preserves the original editing generation, native/spec/request
+reads, projected membership and source versions. Only its explicit destination
+preimage is added through the existing command composer; it never refreshes the
+whole editing baseline. Known project destinations retain their original lexical
+role through staging, so a later parent alias cannot reclassify them as standalone
+saves. The existing native serialization formats, source/input/history roles and
+projected metadata reads remain distinct constraints. An explicitly selected
+standalone destination keeps its independent save owner. This is not OS-wide
+atomic isolation against arbitrary filesystem mutation.
+
 Explicit recovery of a missing rendered PDF, TIFF or PNG uses one typed
 MissingGeneratedOutput declaration in the existing command. Its current complete
 producer or fixed admitted catalog proves the output role and prior registered
@@ -185,6 +195,22 @@ Read-only mapping evidence has these finite states; it never repairs admission:
 Unknown mapping evidence does not become readiness. Raw/prepared bytes, artifact
 existence and QA remain independent observations; an actual edit or export keeps
 its own complete scientific admission and validation.
+
+GUI source and mapping observations pin the same canonical project/generation/
+request revision. Light refresh does not scan a mapped namespace or claim a
+numeric audit. An audited mapping reuses only that invocation's successfully
+verified finite read set and freshly checks its currentness. A single original
+file retains its historical byte-hash comparison; multiple selected files expose
+an explicitly qualified finite scope, not whole-directory authentication. Current
+mapping, execution, confirmation and proposal bindings must agree before that
+scope can support provenance. Cold sealed inputs remain unobserved or pending;
+read-only status never materializes source views or retries an old clone origin.
+
+A failed refresh invalidates current source, mapping, QA and delivery readiness
+instead of copying old true flags into the failure. A previous validated QA
+summary is separately labelled history and cannot authorize current export.
+Delivery verification uses the selected project's admitted physical resource
+capability and existing package verifier, independently of scientific source IO.
 
 Source-update review keeps the old selected generation and new private candidate
 in separate version scopes. Each external review image uses the existing exact
