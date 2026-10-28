@@ -638,6 +638,10 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
         for other in additions[index + 1 :]
     )
     assert len(configured) == len(set(configured))
+    configured_paths = [ROOT / path for path in configured]
+    directories = [path for path in configured_paths if path.is_dir()]
+    assert not [(path, parent) for path in configured_paths for parent in directories
+                if path != parent and path.is_relative_to(parent)]
     assert ROUND2_STRICT_ADDITIONS <= SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert FINAL_STRICT_ADDITIONS <= SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert all(configured.count(path) == 1 for path in FINAL_STRICT_ADDITIONS)
@@ -706,7 +710,9 @@ def test_project_core_unknown_neighbor_does_not_inherit_an_empty_type_only_plan(
 def test_direct_label_geometry_extends_the_already_owned_foundation_strict_scope():
     path = "src/sciplot_core/foundation/rectangle_geometry.py"
     configured = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["mypy"]["files"]
-    assert configured.count(path) == 1
+    parent = "src/sciplot_core/foundation"
+    assert configured.count(parent) == 1 and path not in configured
+    assert (ROOT / path).is_file() and (ROOT / path).is_relative_to(ROOT / parent)
     assert path not in SCIENTIFIC_TRANSACTION_TYPE_PATHS
     owners = [owner for owner in CHANGED_OWNERS if owner.matches(path)]
     assert any(owner.owner_id == "typed_core_contracts" and owner.mypy_required for owner in owners)
