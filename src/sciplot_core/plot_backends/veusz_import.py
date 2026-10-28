@@ -18,10 +18,12 @@ from sciplot_core.source_coverage.managed_documents import source_records as _so
 from sciplot_core.studio_core.annotation_operations import require_edit_source_current
 from sciplot_core.studio_core.document_edit_state import audit_edited_document
 from sciplot_core.studio_core.document_edit_policy import ordinary_curve_paths
-from sciplot_core.studio_core.project_command_scope import figure_binding, project_command_runtime
+from sciplot_core.studio_core.project_command_scope import project_command_runtime
+from sciplot_core.studio_core.observed_figure_binding import observed_figure_binding
 from sciplot_core.project_commands import ProjectionRead
 from sciplot_core.project_commands.read_projections import projection_digest
 from sciplot_core.studio_core.project_query import inspect_project
+from sciplot_core.studio_core.project_query_sources import current_source_files
 
 
 def _object(kind: str, label: str) -> dict[str, Any]:
@@ -144,6 +146,13 @@ def import_project(project: Path, figure_id: str | None, plot_id: str | None) ->
                 files[source["raw_path"]] = source["sha256"]
     sources = [{"path": path, "sha256": digest, "kind": "recorded_file"}
                for path, digest in sorted(files.items())]
+    input_source = (query.get("source") or {}).get("input") or {}
+    if input_source.get("path"):
+        original_files, _identities = current_source_files(root, Path(input_source["path"]), [selected])
+        for path, digest in original_files.items():
+            if path in files and files[path] != digest:
+                raise changed_error("The original source version disagrees with the selected native sources.", [path])
+            files[path] = digest
     files.update({str(document_path): selected["document_sha256"],
                   str(spec_path): selected["spec_sha256"],
                   str(root / "plot_request.json"): query["request_sha256"]})
@@ -151,7 +160,6 @@ def import_project(project: Path, figure_id: str | None, plot_id: str | None) ->
     projected_reads = ([ProjectionRead("studio/figure_set.json", "studio_figure_v1", selected["figure_id"],
         projection_digest(registry.read_bytes(), kind="studio_figure_v1", key=selected["figure_id"])).to_payload()]
         if registry.is_file() else [])
-    input_source = (query.get("source") or {}).get("input") or {}
     source_trees = {input_source["path"]: input_source["sha256"]} if input_source.get("path") else {}
     objects, targets = _presentation(selected, spec)
     audit = audit_edited_document(document_path, spec_path)
@@ -159,7 +167,7 @@ def import_project(project: Path, figure_id: str | None, plot_id: str | None) ->
         "kind": "sciplot_veusz_binding", "version": 1, "project": str(root),
         "figure_id": selected["figure_id"], "document": str(document_path), "spec": str(spec_path),
         "files": files, "source_trees": source_trees, "targets": targets, "projected_reads": projected_reads,
-        "project_read_set": figure_binding(root, selected),
+        "project_read_set": observed_figure_binding(root, selected, audit),
         "source_status_at_import": query["source"], "native_audit_at_import": audit,
         "font_configuration": {
             "kind": "native_requested_font_families",
