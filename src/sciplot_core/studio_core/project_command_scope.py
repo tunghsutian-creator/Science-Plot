@@ -96,8 +96,9 @@ def figure_binding(project: Path, selected: dict[str, Any], *, store: FileProjec
             "source_files": reads["source_files"]}
 
 
-def adopt_saved_native(project: Path, selected: dict[str, Any]) -> dict[str, Any]:
-    """Register one domain-audited external Legacy save without replacing bytes."""
+def adopt_saved_native(project: Path, selected: dict[str, Any], *,
+                       expected_binding: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Register one audited Legacy save; retain an explicit mutation's read witness."""
     from sciplot_core.project_commands import ProjectMutation
     from sciplot_core.studio_core.native_scientific_audit import audit_edited_document
 
@@ -108,20 +109,28 @@ def adopt_saved_native(project: Path, selected: dict[str, Any]) -> dict[str, Any
     logical = repository.logical_path(document)
     expected = before["files"].get(logical, {}).get("sha256")
     observed = file_sha256(document)
+    if (selected.get("document_sha256", observed) != observed
+            or selected.get("spec_sha256", reads["project_files"][repository.logical_path(Path(selected["spec"]))])
+            != reads["project_files"][repository.logical_path(Path(selected["spec"]))]):
+        raise ValueError("The selected saved native or specification revision is stale")
+    if expected_binding is not None and (
+        expected_binding["project_id"] != before["project_id"]
+        or expected_binding["files"] != reads["project_files"]
+        or expected_binding.get("projected_reads", []) != reads["projected_reads"]
+        or expected_binding.get("source_files", {}) != reads["source_files"]
+    ):
+        raise ValueError("The saved native baseline changed before mutation admission")
     if expected == observed:
         return figure_binding(project, selected, store=repository)
     if expected is None:
         raise ValueError("An unknown native member cannot be adopted as a saved Legacy figure")
-    for name, digest in reads["project_files"].items():
-        if name != logical and before["files"].get(name, {}).get("sha256") != digest:
-            raise ValueError("External native adoption cannot change source, spec, or membership")
     audit = audit_edited_document(document, Path(selected["spec"]))
     if audit.get("document_sha256") != observed:
         raise ValueError("The saved Legacy native audit does not bind these exact observed bytes")
+    from sciplot_core.studio_core.observed_figure_binding import observed_figure_binding
+
+    binding = observed_figure_binding(project, {**selected, "document_sha256": observed}, audit)
     audit_hash = canonical_json_sha256(audit)
-    files = {**reads["project_files"], logical: expected}
-    binding = {"project_id": before["project_id"], "generation": before["generation"], "files": files,
-               "projected_reads": reads["projected_reads"], "source_files": reads["source_files"]}
     request = {"family": "saved_legacy_native", "resource": logical,
                "before_sha256": expected, "observed_sha256": observed, "audit_sha256": audit_hash}
     key = canonical_json_sha256({"project_id": before["project_id"], "request": request})

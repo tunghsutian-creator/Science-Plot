@@ -17,7 +17,7 @@ from sciplot_core.studio_core.document_edit_review import (
     reviewed_edit as reviewed_edit, rebind_document_edit_review as rebind_document_edit_review,
 )
 from sciplot_core.studio_core.project_command_scope import (
-    command_for_binding, figure_binding, project_command_runtime, project_store, query_for_apply, source_versions,
+    adopt_saved_native, command_for_binding, figure_read_state, project_command_runtime, project_store, query_for_apply, source_versions,
 )
 from sciplot_core.studio_core.project_query import resolve_project_figure, resolve_project_path
 
@@ -50,7 +50,11 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
     else:
         validate_edit_science_policy(changes, spec)
     repository = project_store(project)
-    binding = figure_binding(project, selected, store=repository)
+    snapshot = repository.snapshot()
+    reads = figure_read_state(project, selected)
+    binding = {"project_id": snapshot["project_id"], "generation": snapshot["generation"],
+               "files": reads["project_files"], "projected_reads": reads["projected_reads"],
+               "source_files": reads["source_files"]}
     relative = repository.logical_path(document)
     if binding["files"][relative] != expected_document_sha256:
         raise ValueError("The native document changed while capturing its selected read witness")
@@ -74,11 +78,14 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
 
             raise ProjectCommandUnknown()
         return reviewed_edit(prior, project)
-    command = command_for_binding(repository, binding, kind="document_edit", key=key,
-                                   writes=writes, request=intent)
     if operations is None or setting_changes:
         validate_settings(document, spec, setting_changes, expected_document_sha256=expected_document_sha256,
                           expected_spec_sha256=binding["files"][repository.logical_path(spec)])
+    # An explicit, new edit may continue the exact audited human-saved Legacy
+    # baseline. Queries and replays above never register outside native bytes.
+    binding = adopt_saved_native(project, selected, expected_binding=binding)
+    command = command_for_binding(repository, binding, kind="document_edit", key=key,
+                                   writes=writes, request=intent)
     output = new_preview_directory(project, output_dir)
 
     def prepare() -> ProjectMutation:
@@ -108,7 +115,10 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
         artifacts["preview.json"] = json.dumps(review, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()
         return ProjectMutation(installed, result, sources=source_versions(binding, store=repository), review=review, artifacts=artifacts)
 
-    record = app.preview(command, prepare)
+    from sciplot_core.project_store.runtime import project_runtime
+
+    with project_runtime(repository, generation=binding["generation"]):
+        record = app.preview(command, prepare)
     result = reviewed_edit(record, project)
     path = output / "edit-preview.json"
     atomic_write_json(path, result)

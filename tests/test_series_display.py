@@ -268,3 +268,161 @@ def test_shared_series_selector_preserves_each_entrys_existing_correction_contra
     assert style.value.reason_code == "document_ambiguous_style_target"
     assert style.value.repair["label"] == "unknown"
     assert style.value.repair["allowed"] == ["layer:modulus"]
+
+
+def _saved_native_baseline(tmp_path, monkeypatch):
+    from test_project_query import project as legacy_project
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core import native_scientific_audit
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    project = legacy_project.__wrapped__(tmp_path)
+    store = project_store(project)
+    before = store.snapshot(import_legacy=True)
+    document = project / "studio/document.vsz"
+    document.write_bytes(b"complete human-saved native presentation")
+    audits = []
+
+    def audit(document, spec):
+        audits.append(file_sha256(document))
+        return {"status": "passed", "document_sha256": file_sha256(document),
+                "spec_sha256": file_sha256(spec)}
+
+    monkeypatch.setattr(native_scientific_audit, "audit_edited_document", audit)
+    return project, store, before, document, audits
+
+
+def test_explicit_display_edit_registers_audited_saved_baseline_after_validation(tmp_path, monkeypatch):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core.document_edit_commands import preview_native_edit
+
+    project, store, before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)
+    saved = document.read_bytes()
+    calls = []
+
+    def validate(*_args, **_kwargs):
+        assert store.snapshot()["generation"] == before["generation"]
+        assert not store.commands() and not audits
+        calls.append("validate")
+
+    def candidate(document, spec, changes, output, **_kwargs):
+        from sciplot_core.foundation.source_locations import selected_source_resolver
+
+        kinds = {record["metadata"]["kind"]: record["phase"] for record in store.commands()}
+        assert kinds == {"native_import": "complete", "document_edit": "unknown"}
+        assert store.snapshot()["files"]["studio/document.vsz"]["sha256"] == file_sha256(document)
+        assert selected_source_resolver().snapshot["generation"] == store.snapshot()["generation"]
+        assert document.read_bytes() == saved and len(audits) == 1
+        calls.append("candidate")
+        native, image = output / "candidate.vsz", output / "candidate.png"
+        native.write_bytes(saved + b"; explicit display delta")
+        image.write_bytes(b"controlled preview")
+        return {"changes": changes, "candidate": {"path": str(native), "sha256": file_sha256(native)},
+                "preview": {"path": str(image), "sha256": file_sha256(image)},
+                "scientific_audit": {"status": "passed"}}
+
+    arguments = dict(output_dir=tmp_path / "review", figure_id="first",
+        expected_document_sha256=file_sha256(document), operations=None,
+        expected_spec_sha256=file_sha256(project / "studio/spec.json"), candidate_builder=candidate,
+        audit_document=lambda *_args: {"status": "passed"}, validate_settings=validate)
+    reviewed = preview_native_edit(project, [], **arguments)
+    after = store.snapshot()
+    assert calls == ["validate", "candidate"] and document.read_bytes() == saved
+    assert after["files"]["source/data.csv"] == before["files"]["source/data.csv"]
+    assert after["files"]["studio/spec.json"] == before["files"]["studio/spec.json"]
+    assert preview_native_edit(project, [], **arguments) == {
+        key: value for key, value in reviewed.items() if key != "review_path"}
+    assert calls == ["validate", "candidate"] and store.snapshot() == after
+
+
+def test_invalid_display_delta_does_not_register_a_saved_native_baseline(tmp_path, monkeypatch):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core.document_edit_commands import preview_native_edit
+
+    project, store, before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)
+
+    def invalid(*_args, **_kwargs):
+        raise ValueError("invalid physical legend bounds")
+
+    with pytest.raises(ValueError, match="physical legend bounds"):
+        preview_native_edit(project, [], output_dir=tmp_path / "invalid", figure_id="first",
+            expected_document_sha256=file_sha256(document), expected_spec_sha256=None, operations=None,
+            candidate_builder=lambda *_args, **_kwargs: pytest.fail("invalid edit reached its effect"),
+            audit_document=lambda *_args: {"status": "passed"}, validate_settings=invalid)
+    assert not store.commands() and not audits
+    assert store.snapshot()["generation"] == before["generation"]
+
+
+@pytest.mark.parametrize("failure", ["audit", "mode", "membership", "raw", "witness", "native_revision", "spec_revision"])
+def test_saved_native_mutation_refuses_unbound_baselines_without_registering(tmp_path, monkeypatch, failure):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core import native_scientific_audit
+    from sciplot_core.studio_core.project_command_scope import adopt_saved_native, figure_read_state
+    from sciplot_core.studio_core.project_query import resolve_project_figure
+    import json
+
+    project, store, before, document, _audits = _saved_native_baseline(tmp_path, monkeypatch)
+    selected = resolve_project_figure(project, "first")
+    reads = figure_read_state(project, selected)
+    expected = {"project_id": before["project_id"], "files": reads["project_files"],
+                "projected_reads": reads["projected_reads"], "source_files": reads["source_files"]}
+    if failure == "audit":
+        monkeypatch.setattr(native_scientific_audit, "audit_edited_document", lambda native, spec: {
+            "status": "failed", "document_sha256": file_sha256(native), "spec_sha256": file_sha256(spec)})
+    elif failure == "mode":
+        document.chmod((document.stat().st_mode & 0o777) ^ 0o200)
+    elif failure == "membership":
+        registry = project / "studio/figure_set.json"
+        payload = json.loads(registry.read_text())
+        payload["figures"][0]["title"] = "changed selected identity"
+        registry.write_text(json.dumps(payload))
+    elif failure == "raw":
+        (project / "source/data.csv").write_bytes(b"x,y\n1,99\n")
+    elif failure == "witness":
+        expected["files"]["studio/document.vsz"] = before["files"]["studio/document.vsz"]["sha256"]
+    else:
+        selected["document_sha256" if failure == "native_revision" else "spec_sha256"] = "0" * 64
+    native_bytes = document.read_bytes()
+    with pytest.raises(ValueError):
+        adopt_saved_native(project, selected, expected_binding=expected)
+    assert not store.commands() and store.snapshot()["generation"] == before["generation"]
+    assert document.read_bytes() == native_bytes
+
+
+def test_saved_native_mutation_retains_existing_registry_selection_contract(tmp_path, monkeypatch):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core.project_command_scope import adopt_saved_native
+    import json
+
+    project, store, before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)
+    selected = json.loads((project / "studio/figure_set.json").read_text())["figures"][0]
+    selected.update(document=str(document), spec=str(project / "studio/spec.json"))
+    saved = document.read_bytes()
+    binding = adopt_saved_native(project, selected)
+    assert binding["files"]["studio/document.vsz"] == file_sha256(document)
+    assert store.snapshot()["generation"] != before["generation"] and len(audits) == 1
+    assert len(store.commands()) == 1 and document.read_bytes() == saved
+
+
+def test_unknown_display_edit_key_cannot_register_a_later_native_save(tmp_path, monkeypatch):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core.document_edit_commands import preview_native_edit
+
+    project, store, _before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)
+
+    def unknown(*_args, **_kwargs):
+        raise RuntimeError("unknown candidate effect")
+
+    arguments = dict(output_dir=tmp_path / "review", figure_id="first", operations=None,
+        expected_document_sha256=file_sha256(document), expected_spec_sha256=None,
+        candidate_builder=unknown, audit_document=lambda *_args: {"status": "passed"},
+        validate_settings=lambda *_args, **_kwargs: None, request_id="a" * 64)
+    with pytest.raises(RuntimeError, match="unknown candidate effect"):
+        preview_native_edit(project, [], **arguments)
+    before = store.snapshot()
+    document.write_bytes(b"a later external native save")
+    arguments["expected_document_sha256"] = file_sha256(document)
+    with pytest.raises(ValueError, match="another business request"):
+        preview_native_edit(project, [], **arguments)
+    assert len(audits) == 1 and store.snapshot()["generation"] == before["generation"]
+    assert len(store.commands()) == 2 and document.read_bytes() == b"a later external native save"
