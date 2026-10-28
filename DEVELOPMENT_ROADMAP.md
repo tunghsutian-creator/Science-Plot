@@ -9,76 +9,51 @@ snapshot's acceptance.
 
 ## Next bounded architecture work
 
-After the integrated project-core milestone passes its complete acceptance,
-independently review the final foundation before adding features. Trace logical
-source identity, byte version, host IO location, operation phase and file role
-across every supported producer and consumer. Use the retained path-serialization,
-read-only materialization and directory-projection failures to distinguish design
-defects from missing migration coverage. Decide which boundaries need redesign;
-require an explicit complete caller migration, old-path retirement and recovery
-contract for each proposed replacement, rather than adding another policy layer.
-Include the late GUI failures in that review: full-path text was reused as
-scientific rule evidence; positive probes still wrote through retired transaction
-seams; copied projects mixed immutable generations with rebased active files;
-source-status code confused a mapping namespace with a complete original tree;
-failed refreshes retained old currentness; and Save As could lose its requested
-project role after path resolution. Trace actual positive and refusal paths through
-the shared owners before choosing another replacement. A test selector must name
-an existing collected module; an owner message or prepared draft is not coverage.
-Include namespace metadata versus read capability, host identity versus content
-freshness, and physical staging versus persistent logical identity. Check the
-real effects of deferred/context-managed test entry points and select returned
-command receipts explicitly; a constructed context or unordered final list item
-does not prove that the intended operation ran or completed.
-Include the retained full-run failures in which known native expectations or
-geometry were checked only after effect reservation, and a successful producer
-left an intermediate ledger input uncaptured. Review admissibility, discardable
-observation and genuinely unknown effects as separate phases. The NativeSuite
-foreign-save control also exposed a migration test that still assumed a single
-command after read-only inspection became explicit; preserve its original
-foreign bytes, head and scientific-resource assertions while selecting the
-actual command by identity. Neither more tests nor a broader unknown-state
-exception repairs these ownership boundaries.
+Finish the exact-candidate project-core acceptance first. Implementation of the
+shared generation writer, retained operators and host grants does not close all
+original architecture findings. Independently review the final source before
+adding features; use the existing migration contract and retained failure records
+rather than another policy or state registry.
 
-Include the migration consumers that interpreted an attached semantic history
-through its retired physical shadow, and previews that confused an undecided
-proposal with an unfinished effect. Trace logical state, observed physical bytes
-and presentation copies separately. A private QA failure must not allocate a
-new visible delivery root; explicit save admission and later preparation must
-not be described as one rollback transaction when they are separate commands.
-Positive fault tests also need the real owned startup and original wait of each
-child, not merely a passing recovery assertion. Keep generated input witnesses
-alive through capture review: a shared pytest temporary-root cleanup can destroy
-otherwise valid source proofs after the test body finishes. Distinguish that
-lifetime violation from unsupported process registration and software failures.
+1. **Close resource roles and query effects.** Separate scientific UUID, original
+   locator, file-byte version, tree scope, host location, sealed readable content
+   and materializable/executable artifacts. Enumerate their producers and all
+   prepare/query/commit/export/cold-reopen consumers. Replace the remaining open
+   dictionary/string projection at those boundaries, migrate every target caller
+   and retire its old path. Queries must not silently attach a legacy namespace,
+   write history caches or recover effects; explicit migrate/recover/materialize
+   operations retain their own authority. Test same bytes with different UUIDs,
+   exact versions after relocation, complete directories, no physical path,
+   foreign native saves and zero-write read-only queries. Require a field-role
+   census for NativeSuite projection extensions. Current source hashes cannot
+   authenticate missing historical provenance.
+2. **Measure and remove same-operation repeated work.** Use one representative
+   complete task and SavedWork read with fixed source, environment, input and
+   history size. Measure file reads/bytes, hashes, JSON parsing, native starts,
+   waits and end-to-end time. In particular, trace per-member reads that may
+   revalidate the entire generation/history chain. If measurement confirms the
+   amplification, reuse one existing owner-bound read proof for that finite
+   batch, recheck generation at exit and invalidate on mutation. Migrate all
+   target loops, retain fresh refusal controls and avoid holding the storage
+   lock across rendering. No cross-operation PASS cache; report matched before/
+   after evidence rather than extrapolating a microbenchmark to full CI.
+3. **Close the remaining independent contracts.** Move lifecycle use cases off
+   direct legacy-engine dependencies through concrete domain ports and adapters,
+   retiring each replaced call path. State the supported numerical runtime for
+   retained scientific operators without claiming a hermetic interpreter or
+   dynamic-library environment. Separately define AI outbound field/image
+   disclosure and retain actual provider usage; host grants do not control
+   disclosure, and payload bytes do not measure tokens or fees. Keep these finite
+   responsibilities separate from new product features.
 
-Use the retained end-to-end failures to test the proposed foundation: original
-raw facts omitted from a binding that retained processed sources; a file-byte
-version confused with a composite tree fingerprint; role-bound private native
-artifacts sent through scientific-resource lookup; and a prepared postcheck that
-rejected only after an attachment had committed. Follow each field from its
-producer to the actual write boundary. Decide whether typed value contracts and
-explicit transaction inputs should replace the remaining loosely shaped
-intermediate dictionaries and ambient dependencies. Do not infer architectural
-closure from isolated tests or add another per-entry workaround.
-Include the registered-directory/file-table mismatch and the rejected first
-numeric-witness design that bound only the execution file while its read set
-could change. Keep original inputs, produced artifacts and namespace metadata
-distinct. An expert schema's broad shape must not advertise an unsupported
-scientific-adapter cross-product; trace the actual capability gate as well.
-Include existence checks that accidentally capture a mutable destination as an
-immutable scientific input. Classify every file role before selecting its IO
-helper, and verify both same-root and cold-import lifecycles with the task
-offline. A containing resource root cannot substitute for an exact finite grant.
-
-Then measure the remaining runtime cost on the same task, inputs and environment.
-Separate necessary native computation, repeated initialization and validation;
-do not extrapolate the measured locked-history improvement to whole CI. Tighten
-remaining historical package dependencies and test-owner impact selection using
-actual call edges, while retaining every release case and strict assertion.
-Historical open scientific aggregates and real AI outbound disclosure/cost need
-separate finite contracts. Host execution grants do not close outbound privacy,
-and generated/local byte counts are not real-client token or cost telemetry.
+The late failures expose two migration hazards: a consumer can lose a field's
+version/role before the final write boundary, and a read-looking helper can hide
+materialization or stale currentness. The closure matrix must trace the actual
+positive and refusal paths, including returned receipts and original child waits,
+not just interface names. Keep cheap whole-project import/owner/type contracts in
+the integrated preflight, then run the complete frozen release once. Preserve all
+historical failures and assertions; test counts alone prove neither architecture
+closure nor complete private-corpus coverage.
 
 ## Scientific authority convergence
 

@@ -35,6 +35,17 @@ integrated or critical milestone that requires it; reuse unchanged evidence only
 when its exact content and scope bindings remain valid. This workflow changes
 feedback cost, never scientific assertions or acceptance requirements.
 
+For that integrated preflight, keep the existing cheap import-boundary and
+owner/type contracts alongside the exact affected behavior controls. An actual
+native success does not prove an acyclic dependency graph. Persisted presentation
+selectors must survive the shared minimal terminal request and reconstruction,
+not just initial creation or exact-current export. Native text control bounds
+are not whole-glyph evidence; retain actual painted-geometry refusal controls.
+Finish source, configuration, documentation and local development-log updates
+before freezing a long run. During that run, place progress only outside its
+bound inputs, such as the existing output destination or /tmp; do not invalidate
+the original run by updating a bound log.
+
 Run the smallest relevant tests while iterating, then:
 
 ```bash

@@ -1425,6 +1425,14 @@ one command/generation boundary, preserving their distinct scientific/native
 authorities and old-history readers. Fixed refusal shells retire transferred old
 semantic writers; preserving an immutable backup does not create another head.
 
+`studio_core/project_command_scope.py` owns finite read witnesses and command
+builders. The complete saved-native admission use case belongs to
+`studio_core/native_adoption.py`, above those primitives and the observed-native
+binding owner. Every native-save, edit, preparation, export and probe caller uses
+that one use case; the lower scope does not retain or re-export the old mutation
+function. Native audit, source/spec fences, CAS and generation publication still
+use the sole ProjectCommands/FileProjectStore writer.
+
 Builtin scientific execution selects an immutable per-operator implementation and
 its actual numerical dependency closure. Historical descriptors resolve retained
 implementations without rewriting old seals; an unrelated operator upgrade cannot
