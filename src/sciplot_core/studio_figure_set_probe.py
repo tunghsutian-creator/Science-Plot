@@ -122,6 +122,27 @@ def _registry_summary(project_dir: Path) -> dict[str, Any]:
     return {"registry": registry, "figures": summaries}
 
 
+
+def _register_probe_spec_whitespace(project: Path, spec: Path) -> None:
+    """Make the byte-only spec perturbation through its actual project owner."""
+    from sciplot_core.project_commands import PreparedFile, ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.foundation.json_hashing import canonical_json_sha256
+
+    store = project_store(project)
+    before = store.snapshot()
+    logical = store.logical_path(spec)
+    previous = store.read_bytes(logical)
+    data = previous + b"\n"
+    assert json.loads(data) == json.loads(previous)
+    request = {"family": "figure_set_probe_spec_bytes", "resource": logical}
+    command = ProjectCommand.create("figure_set", canonical_json_sha256({"generation": before["generation"], "request": request}),
+        project_id=before["project_id"], expected_generation=before["generation"],
+        read_set={logical: before["files"][logical]["sha256"]}, write_set=[logical], request=request)
+    ProjectCommands(store).execute(command, lambda: ProjectMutation(
+        {logical: PreparedFile(data, before["files"][logical]["mode"])}, {}))
+
+
 def run_studio_figure_set_probe(
     *,
     output_root: Path,
@@ -362,7 +383,14 @@ def run_studio_figure_set_probe(
         transactional_document.read_bytes()
         + b"\n# SciPlot failed-transaction manual edit probe\n"
     )
-    transactional_spec.write_bytes(transactional_spec.read_bytes() + b"\n")
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store.runtime import project_runtime, logical_runtime_resource, selected_project_store
+    from sciplot_core.studio_core.project_command_scope import adopt_saved_native
+
+    with project_runtime(project_store(synthetic_project)):
+        adopt_saved_native(synthetic_project, next(entry for entry in synthetic["registry"]["figures"]
+            if entry["figure_id"] == synthetic_loss["figure_id"]))
+    _register_probe_spec_whitespace(synthetic_project, transactional_spec)
     canonical_before = {
         path: path.read_bytes()
         for path in (
@@ -383,8 +411,12 @@ def run_studio_figure_set_probe(
     original_replace = studio_module._replace_studio_figure_set_path
 
     def _fail_secondary_spec_replace(source: Path, target: Path) -> None:
-        replace_calls.append({"source": str(source), "target": str(target)})
-        if target == transactional_spec:
+        selected = selected_project_store()
+        logical = logical_runtime_resource(target, private_only=True)
+        bound_target = (synthetic_project / logical if logical is not None and selected is not None
+                        and selected.root == synthetic_project else target)
+        replace_calls.append({"source": str(source), "target": str(bound_target), "actual_target": str(target)})
+        if bound_target == transactional_spec:
             raise OSError("injected Studio preparation replace failure")
         original_replace(source, target)
 
@@ -441,11 +473,14 @@ def run_studio_figure_set_probe(
         )
     )
     synthetic_loss_hash = existing_file_sha256(transactional_document)
+    original_source_files = {path: path.read_bytes() for path in (synthetic_project / "source").rglob("*.csv")}
+    incoming = run_root / "incoming_missing_loss"
+    incoming.mkdir()
     for index, source_path in enumerate(
         sorted((synthetic_project / "source").rglob("*.csv")),
         start=1,
     ):
-        source_path.write_text(
+        (incoming / source_path.name).write_text(
             _synthetic_export(
                 source_path.stem,
                 1.0 + index * 0.1,
@@ -453,10 +488,10 @@ def run_studio_figure_set_probe(
             ),
             encoding="utf-8",
         )
-    prepare_studio_document(
-        synthetic_project,
-        regenerate_generated=True,
-    )
+    source_review = studio_module.preview_project_source_update(synthetic_project, incoming)
+    if source_review.get("status") != "ready":
+        raise ValueError(f"The explicit missing-metric source update could not be reviewed: {source_review}")
+    studio_module.apply_project_source_update(synthetic_project, source_review)
     missing_after_regeneration = _registry_summary(synthetic_project)
     missing_loss_entries = [
         item
@@ -472,6 +507,7 @@ def run_studio_figure_set_probe(
                 synthetic_loss_hash is not None
                 and not missing_loss_entries
                 and preserved_loss_document_hash == synthetic_loss_hash
+                and all(path.read_bytes() == data for path, data in original_source_files.items())
             ),
             {
                 "prior_hash": synthetic_loss_hash,
@@ -576,6 +612,9 @@ def run_studio_figure_set_probe(
             encoding="utf-8",
         )
         manual_hash = existing_file_sha256(editable_document)
+        with project_runtime(project_store(copied_real)):
+            adopt_saved_native(copied_real, next(entry for entry in real_summary["registry"]["figures"]
+                if entry["figure_id"] == editable["figure_id"]))
         prepare_studio_document(copied_real)
         preserved_summary = _registry_summary(copied_real)
         preserved_entry = next(
