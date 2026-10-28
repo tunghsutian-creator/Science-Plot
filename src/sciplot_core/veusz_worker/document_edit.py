@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from importlib import import_module
 import math
+import json
 from pathlib import Path
 from typing import Any
 
@@ -179,6 +180,29 @@ def edit_document(
     return {"kind": "sciplot_document_edit", "version": 1, "status": "passed",
             "document": identity, "candidate": _identity(candidate),
             "changes": actual, "preview": preview}
+
+
+def validate_document_settings(document_path: Path, spec: Path, changes_path: Path) -> dict[str, Any]:
+    """Validate actual native expectations and bounds with no durable outputs.
+
+    The fresh loaded document owns every temporary operation. Its destruction
+    discards them; the ordinary candidate worker repeats all checks later.
+    """
+    path = document_path.expanduser().resolve()
+    identity, specification = _identity(path), _identity(spec)
+    changes_bytes = changes_path.read_bytes()
+    changes = json.loads(changes_bytes)
+    with loaded_native_document(path) as loaded:
+        operations, actual = prepare_setting_batch(loaded, changes)
+        OperationMultiple = import_module("veusz.document.operations").OperationMultiple
+        loaded.applyOperation(OperationMultiple(operations, descr="SciPlot read-only setting validation"))
+        _check_legend_sample_bounds(loaded, actual)
+    if _identity(path) != identity or _identity(spec) != specification or changes_path.read_bytes() != changes_bytes:
+        raise ValueError("The exact native validation inputs changed during their observation.")
+    from hashlib import sha256
+
+    return {"kind": "sciplot_native_setting_validation", "version": 1, "status": "passed",
+            "document": identity, "spec": specification, "changes_sha256": sha256(changes_bytes).hexdigest()}
 
 
 def _check_legend_sample_bounds(loaded: Any, actual: list[dict[str, Any]]) -> None:

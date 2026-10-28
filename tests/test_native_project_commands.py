@@ -34,6 +34,7 @@ def edit(project, tmp_path, monkeypatch):
                 "scientific_audit": {"status": "passed"}}
 
     monkeypatch.setattr(native, "_candidate", candidate)
+    monkeypatch.setattr(native, "_validate_settings", lambda *_a, **_kw: None)
     monkeypatch.setattr(native, "audit_edited_document", lambda *_args: {"status": "passed"})
     document = project / "studio/document.vsz"
     changes = [{"object_path": "/page1/graph1/x", "setting_path": "/page1/graph1/x/Label/size",
@@ -71,6 +72,7 @@ def test_candidate_native_failure_after_private_write_is_unknown_and_never_retri
         raise RuntimeError("controlled native failure after private write")
     monkeypatch.setattr(native, "audit_edited_document", lambda *_args: {"status": "passed"})
     monkeypatch.setattr(native, "_candidate", fail_after_write)
+    monkeypatch.setattr(native, "_validate_settings", lambda *_a, **_kw: None)
     arguments = dict(output_dir=tmp_path / "failed-preview", figure_id="first",
                      expected_document_sha256=file_sha256(project / "studio/document.vsz"))
     with pytest.raises(RuntimeError, match="controlled native failure"):
@@ -314,6 +316,7 @@ def test_pending_native_preview_moves_through_explicit_host_projection_only(edit
     cold = FileProjectStore.import_bundle(bundle, tmp_path / "pending-moved")
     project.rename(tmp_path / "original-offline")
     monkeypatch.setattr(native, "_candidate", lambda *_args, **_kwargs: pytest.fail("frozen preview rerendered"))
+    monkeypatch.setattr(native, "_validate_settings", lambda *_a, **_kw: None)
     with pytest.raises(ValueError, match="unchanged stored"):
         native.apply_document_edit(cold.root, review)
     forged = json.loads(json.dumps(review))

@@ -29,6 +29,7 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
                         expected_spec_sha256: str | None,
                         candidate_builder: Callable[..., dict[str, Any]],
                         audit_document: Callable[..., dict[str, Any]],
+                        validate_settings: Callable[..., None],
                         request_id: str | None = None) -> dict[str, Any]:
 
     project = resolve_project_path(project)
@@ -38,12 +39,13 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
         raise ValueError("The document revision is stale. Inspect its current objects first.")
     if expected_spec_sha256 is not None and file_sha256(spec) != expected_spec_sha256:
         raise ValueError("The sample mapping changed during style resolution; inspect again.")
+    setting_changes = changes
     if operations is not None:
         if changes:
             raise ValueError("Use either native changes or semantic operations in one preview.")
         from sciplot_core.studio_core.annotation_batch import compile_annotation_operations
 
-        compile_annotation_operations(json.loads(spec.read_text()), operations,
+        setting_changes, _revised, _actual = compile_annotation_operations(json.loads(spec.read_text()), operations,
                                       document_sha256=expected_document_sha256, figure_id=selected["figure_id"])
     else:
         validate_edit_science_policy(changes, spec)
@@ -66,10 +68,17 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
         if prior["metadata"]["request"] != intent:
             raise ValueError("The native edit key already belongs to another business request")
         if prior["phase"] not in {"needs_review", "accepted", "complete"}:
-            app.resume(ProjectCommand.from_payload(prior["metadata"]))
+            prior = app.resume(ProjectCommand.from_payload(prior["metadata"]))
+        if not isinstance(prior.get("draft"), dict):
+            from sciplot_core.project_commands import ProjectCommandUnknown
+
+            raise ProjectCommandUnknown()
         return reviewed_edit(prior, project)
     command = command_for_binding(repository, binding, kind="document_edit", key=key,
                                    writes=writes, request=intent)
+    if operations is None or setting_changes:
+        validate_settings(document, spec, setting_changes, expected_document_sha256=expected_document_sha256,
+                          expected_spec_sha256=binding["files"][repository.logical_path(spec)])
     output = new_preview_directory(project, output_dir)
 
     def prepare() -> ProjectMutation:

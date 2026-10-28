@@ -40,6 +40,7 @@ def native_task(project, tmp_path, monkeypatch):
                 "scientific_audit": {"status": "passed", "document_sha256": file_sha256(rendered),
                                      "spec_sha256": file_sha256(companion)}}
     monkeypatch.setattr(document_edit, "_candidate", candidate)
+    monkeypatch.setattr(document_edit, "_validate_settings", lambda *_a, **_kw: None)
     monkeypatch.setattr(document_edit, "audit_edited_document", lambda *_a: {"status": "passed"})
     monkeypatch.setattr(subprocess, "Popen", lambda *_a, **_k: pytest.fail("Pure native lifecycle must not spawn."))
     monkeypatch.setattr(subprocess, "run", lambda *_a, **_k: pytest.fail("Pure native lifecycle must not spawn."))

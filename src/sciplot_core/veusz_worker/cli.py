@@ -84,6 +84,11 @@ def _build_parser() -> argparse.ArgumentParser:
     edit_parser.add_argument("--output-document", required=True, type=Path)
     edit_parser.add_argument("--preview-png", required=True, type=Path)
     edit_parser.add_argument("--audit-spec", type=Path)
+    validation_parser = subparsers.add_parser("validate-document-settings", allow_abbrev=False,
+        help="Validate a complete setting batch in an isolated document without saving or previewing.")
+    validation_parser.add_argument("document", type=Path)
+    validation_parser.add_argument("spec", type=Path)
+    validation_parser.add_argument("--changes", required=True, type=Path)
     annotation_parser = subparsers.add_parser("edit-annotations")
     annotation_parser.add_argument("document", type=Path)
     annotation_parser.add_argument("spec", type=Path)
@@ -116,6 +121,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _execute(argv: list[str] | None = None) -> int:
+    supplied = argv if argv is not None else sys.argv[1:]
+    if supplied and supplied[0] == "validate-document-settings":
+        from sciplot_core.native_process.protocol import validate_request
+
+        validate_request({"id": "native-setting-validation", "argv": supplied})
     args = _build_parser().parse_args(argv)
     from sciplot_core.foundation.source_locations import resolve_source_path
     from sciplot_core.project_store.native_artifacts import require_native_artifact_command, resolve_native_artifact
@@ -179,6 +189,10 @@ def _execute(argv: list[str] | None = None) -> int:
         from sciplot_core.veusz_worker.document_edit import preview_document
 
         payload = preview_document(args.document, output_png=args.out)
+    elif args.command == "validate-document-settings":
+        from sciplot_core.veusz_worker.document_edit import validate_document_settings
+
+        payload = validate_document_settings(args.document, args.spec, args.changes)
     elif args.command == "edit-document":
         from sciplot_core.veusz_worker.document_edit import edit_document
 

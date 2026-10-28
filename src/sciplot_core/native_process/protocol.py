@@ -8,7 +8,7 @@ MAX_STDOUT_BYTES = 16 * 1024 * 1024
 MAX_STDERR_BYTES = 1024 * 1024
 MAX_RESPONSE_BYTES = 20 * 1024 * 1024
 ALLOWED_COMMANDS = frozenset({"inspect-document-state", "audit-documents", "audit-spec-data",
-                              "preview-document", "edit-document", "edit-annotations", "export-document",
+                              "preview-document", "edit-document", "edit-annotations", "export-document", "validate-document-settings",
                               "compile-plot-ir", "inspect-plot-ir", "font-families"})
 
 
@@ -48,6 +48,8 @@ def validate_request(value: dict[str, Any]) -> tuple[str, list[str]]:
         raise ValueError("Unsupported internal native command or argument shape.")
     if argv[0] == "font-families" and len(argv) != 1:
         raise ValueError("The native font catalog command accepts no arguments.")
+    if argv[0] == "validate-document-settings" and (len(argv) != 5 or argv[3] != "--changes"):
+        raise ValueError("Read-only native validation requires exactly document, spec and one changes input.")
     return value["id"], argv
 
 

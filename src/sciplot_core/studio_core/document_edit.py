@@ -13,9 +13,11 @@ from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.project_store.native_artifacts import (
     NativeArtifactInput, NativeArtifactOutput, native_artifact_binding, native_artifact_runtime,
+    resolve_native_artifact,
 )
 from sciplot_core.project_store.source_resolver import ProjectSourceResolver
 from sciplot_core.source_coverage.native_file_snapshots import observed_native_document
+from sciplot_core.source_coverage.file_snapshots import _physical_file_snapshot, _require_snapshot_identity
 from sciplot_core.studio_core.document_edit_commit import (
     commit_document_edit,
     prior_edit_result,
@@ -146,7 +148,41 @@ def preview_document_edit(
     return preview_native_edit(project, changes, output_dir=output_dir, figure_id=figure_id,
         expected_document_sha256=expected_document_sha256, operations=operations,
         expected_spec_sha256=expected_spec_sha256, candidate_builder=_candidate, audit_document=audit_edited_document,
+        validate_settings=_validate_settings,
         request_id=request_id)
+
+
+def _validate_settings(document: Path, spec: Path, changes: list[dict[str, Any]], *,
+                       expected_document_sha256: str, expected_spec_sha256: str) -> None:
+    """Compose one finite read-only worker observation before effect admission."""
+    from hashlib import sha256
+
+    native = _physical_file_snapshot(document, literal=document, label="Native setting preflight",
+                                     expected_sha256=expected_document_sha256)
+    if file_sha256(spec) != expected_spec_sha256:
+        raise ValueError("The specification changed before native setting validation.")
+    with tempfile.TemporaryDirectory(prefix="sciplot-setting-validation-") as temporary:
+        path = Path(temporary).resolve() / "changes.json"
+        data = json.dumps(changes, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()
+        path.write_bytes(data)
+        path.chmod(0o400)
+        argv = ["validate-document-settings", str(document), str(spec), "--changes", str(path)]
+        inputs = [NativeArtifactInput("document", document, native["sha256"], native["identity"]["mode"] & 0o777),
+                  NativeArtifactInput("changes", path, sha256(data).hexdigest(), 0o400)]
+        with native_artifact_runtime(argv, inputs=inputs), observed_native_document(argv, document,
+                expected_sha256=expected_document_sha256):
+            result = run_document_worker(*argv)
+            resolve_native_artifact(path, role="changes", expected_sha256=sha256(data).hexdigest())
+        expected = {"kind": "sciplot_native_setting_validation", "version": 1, "status": "passed",
+                    "document": {"path": str(document), "sha256": expected_document_sha256},
+                    "spec": {"path": str(spec), "sha256": expected_spec_sha256}, "changes_sha256": sha256(data).hexdigest()}
+        if result != expected or type(result.get("version")) is not int:
+            raise ValueError("The read-only native validation response differs from its exact input batch.")
+    current = _physical_file_snapshot(document, literal=document, label="Native setting preflight",
+                                      expected_sha256=expected_document_sha256)
+    _require_snapshot_identity(native, current, label="Native setting preflight")
+    if file_sha256(spec) != expected_spec_sha256:
+        raise ValueError("The specification changed during native setting validation.")
 
 
 def apply_document_edit(project: Path, preview: dict[str, Any]) -> dict[str, Any]:

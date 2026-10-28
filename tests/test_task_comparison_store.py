@@ -57,7 +57,7 @@ def stored_comparison(project, tmp_path, monkeypatch):
         review = preview_native_edit(project, [], output_dir=task_dir / 'native', figure_id='first',
             expected_document_sha256=request['expected_document_sha256'], operations=request['operations'],
             expected_spec_sha256=file_sha256(spec), candidate_builder=candidate,
-            audit_document=lambda *_args: {'status': 'passed'})
+            audit_document=lambda *_args: {'status': 'passed'}, validate_settings=lambda *_a, **_kw: None)
         (task_dir / 'review.json').write_text(json.dumps(review))
         child = {'kind': 'sciplot_task', 'version': 1, 'task_dir': str(task_dir), 'request': request,
                  'project': str(project), 'status': 'needs_review', 'phase': 'review',
