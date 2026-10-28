@@ -31,6 +31,19 @@ Semantic FileProjectRepository retains its validation and logical revision model
 when attached to a project its physical head/journal/CAS writes use the same
 generation owner. A namespace backup is read-only evidence, never another head.
 
+Known native-edit admissibility precedes durable effect reservation. Categorical
+legend expectations use the same inspected native object and its closed setting
+schema; a matching specification alone cannot authenticate Legacy visual state.
+Raw setting batches, including compiled semantic style operations, use one finite
+read-only worker observation of the complete batch against exact document,
+specification and changes bytes. It applies only to a discarded loaded document,
+checks the existing expected-value and physical legend bounds, and cannot save,
+render a preview or publish. Existing command query/recovery precedes that new
+observation. The actual candidate worker repeats its checks for intervening
+changes. An invalid new request therefore need not become an unknown effect;
+a genuinely unknown earlier effect still blocks overlapping writes and is never
+cleared or rerun by this admission check.
+
 The source location port is explicit per request and resets on every exit.
 Cold and pooled native requests bind the trusted selected project/generation and
 finite resource roots. Stored specs, scientific source IDs and historical hashes
@@ -50,6 +63,17 @@ it cannot grant access to a new path. Complete directory witnesses retain unused
 members and empty directories. Native bindings carry original file byte versions
 separately from directory/composite fingerprints, without changing the scientific
 data-source projection merely to repair runtime IO.
+
+The producer also owns capture of its generated intermediate inputs. For Impact
+workbook conditions, the whole successful materialization records the exact new
+candidate members before scientific audit. Their logical locator, bytes and mode
+enter the same candidate and ProjectMutation as produced resources; publication
+freshly checks them through the existing output seal. Downstream tables with the
+same bytes do not authenticate another locator. A ledger cannot discover or
+authorize a missing input, and a failed producer cannot publish a partial capture.
+The invocation retains one preparation context and one candidate payload, with no
+additional registry or durable writer. Direct CSV and point-line inputs retain
+their existing source admission.
 
 An admitted project directory is represented by its registered file descendants,
 not a synthetic directory entry in `snapshot.files`. Private preparation first

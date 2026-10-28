@@ -30,6 +30,15 @@ freshness, and physical staging versus persistent logical identity. Check the
 real effects of deferred/context-managed test entry points and select returned
 command receipts explicitly; a constructed context or unordered final list item
 does not prove that the intended operation ran or completed.
+Include the retained full-run failures in which known native expectations or
+geometry were checked only after effect reservation, and a successful producer
+left an intermediate ledger input uncaptured. Review admissibility, discardable
+observation and genuinely unknown effects as separate phases. The NativeSuite
+foreign-save control also exposed a migration test that still assumed a single
+command after read-only inspection became explicit; preserve its original
+foreign bytes, head and scientific-resource assertions while selecting the
+actual command by identity. Neither more tests nor a broader unknown-state
+exception repairs these ownership boundaries.
 
 Use the retained end-to-end failures to test the proposed foundation: original
 raw facts omitted from a binding that retained processed sources; a file-byte
