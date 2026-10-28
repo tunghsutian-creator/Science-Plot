@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from test_native_project_commands import edit as edit
+from test_project_query import project as project
+
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.task_contract import TaskControlError
@@ -18,6 +21,151 @@ from sciplot_core._paths import REPO_ROOT
 
 
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
+
+
+def _sealed_group_review(edit, tmp_path, monkeypatch):
+    from sciplot_core.studio_core.project_query import inspect_project
+
+    selected, document, signed, calls = edit
+    root, task = tmp_path / 'group', tmp_path / 'group/child'
+    task.mkdir(parents=True)
+    supplied = copy.deepcopy(signed)
+    supplied['review_path'] = str(task / 'review.json')
+    Path(supplied['review_path']).write_text(json.dumps(supplied))
+    request = {'version': 1, 'action': 'edit', 'project': str(selected),
+        'figure_id': signed['figure_id'], 'expected_document_sha256': signed['document_sha256'],
+        'operations': [{'op': 'set_style', **change} for change in signed['changes']], 'export': False}
+    child = {'kind': 'sciplot_task', 'version': 1, 'task_dir': str(task), 'request': request,
+        'project': str(selected), 'status': 'needs_review', 'phase': 'review',
+        'operation_id': signed['operation_id'], 'preview': {'image': signed['preview'],
+            'review_path': supplied['review_path'], 'changes': signed['actual_changes'],
+            'scientific_audit': signed['scientific_audit']}}
+    save_task(task, child)
+    item = {'id': 'selected', 'label': 'Selected', 'status': 'needs_review',
+        'steps': [{'name': 'style_001', 'task_dir': str(task), 'request': request}]}
+    state = {'request': {'title': 'Sealed review'}, 'updated_at': '2026-10-28T00:00:00+00:00', 'items': [item]}
+    def current(path):
+        result = inspect_project(path)
+        result['figures'] = [figure for figure in result['figures'] if figure['figure_id'] == signed['figure_id']]
+        return result
+    monkeypatch.setattr(review, 'inspect_project', current)
+    return root, state, child, document, calls
+
+
+def test_group_gallery_uses_the_current_sealed_v3_candidate_without_native_or_repair(edit, tmp_path, monkeypatch):
+    from sciplot_core.project_store import FileProjectStore
+
+    root, state, child, document, calls = _sealed_group_review(edit, tmp_path, monkeypatch)
+    head = (document.parents[1] / '.sciplot_store/head.json').read_bytes()
+    before = document.read_bytes()
+    monkeypatch.setattr(FileProjectStore, 'recover', lambda *_args: pytest.fail('Gallery cannot repair a project'))
+    result = review.group_overview(root, state)
+    assert result['counts'] == {'needs_review': 1}, result
+    assert len(result['previews']) == 1 and result['previews'][0]['scope'] == 'candidate'
+    projected = result['previews'][0]['preview']
+    assert Path(projected['path']).is_relative_to(root)
+    assert {key: value for key, value in projected.items() if key != 'path'} == {
+        key: value for key, value in child['preview']['image'].items() if key != 'path'}
+    assert Path(projected['path']).read_bytes() == Path(child['preview']['image']['path']).read_bytes()
+    assert result['next_step']['responses_template'] == [{'item_id': 'selected', 'task_dir': child['task_dir'],
+        'response': {'accept_preview': True, 'expected_operation_id': child['operation_id']}}]
+    assert document.read_bytes() == before and len(calls) == 1
+    assert (document.parents[1] / '.sciplot_store/head.json').read_bytes() == head
+
+
+@pytest.mark.parametrize('change', ['native', 'spec', 'decision', 'intent', 'version', 'downgrade', 'legacy_hint', 'different_image', 'accepted', 'rejected', 'complete'])
+def test_group_gallery_never_offers_a_stale_or_decided_v3_candidate(edit, tmp_path, monkeypatch, change):
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    root, state, child, document, calls = _sealed_group_review(edit, tmp_path, monkeypatch)
+    supplied = json.loads(Path(child['preview']['review_path']).read_text())
+    if change in {'accepted', 'rejected', 'complete'}:
+        store = project_store(document.parents[1])
+        record = store.query(supplied['operation_id'])
+        if change == 'accepted':
+            store.decide(record['command_id'], record['command_digest'], decision_id=record['decision_id'], accept=True)
+        else:
+            ProjectCommands(store).decide(ProjectCommand.from_payload(record['metadata']),
+                decision_id=record['decision_id'], accept=change == 'complete')
+    elif change == 'native':
+        document.write_bytes(document.read_bytes() + b'outside native save')
+    elif change == 'spec':
+        spec = document.with_name('spec.json')
+        value = json.loads(spec.read_text())
+        value['outside_change'] = True
+        spec.write_text(json.dumps(value))
+    elif change == 'different_image':
+        image = root / 'different.png'
+        image.write_bytes(Path(child['preview']['image']['path']).read_bytes())
+        child['preview']['image'] = {**child['preview']['image'], 'path': str(image)}
+        save_task(Path(child['task_dir']), child)
+    else:
+        if change == 'decision':
+            supplied['decision_id'] = 'f' * 64
+        elif change in {'version', 'downgrade'}:
+            supplied['version'] = 3.0 if change == 'version' else 2
+            supplied['base_state'] = {'project_files': {'studio/spec.json': file_sha256(document.with_name('spec.json'))}}
+            if change == 'downgrade':
+                supplied.pop('decision_id')
+        elif change == 'legacy_hint':
+            supplied['base_state'] = 'invalid v3 legacy hint'
+        else:
+            supplied['actual_changes'][0]['value'] = '99pt'
+        Path(child['preview']['review_path']).write_text(json.dumps(supplied))
+    before = document.read_bytes()
+    head = (document.parents[1] / '.sciplot_store/head.json').read_bytes()
+    monkeypatch.setattr(FileProjectStore, 'recover', lambda *_args: pytest.fail('Gallery cannot repair a project'))
+    result = review.group_overview(root, state)
+    assert result['previews'] == [] and result['next_step']['responses_template'] == []
+    assert result['items'][0]['task']['next_step']['action'] == 'resolve_preview_evidence'
+    assert document.read_bytes() == before and len(calls) == 1
+    assert (document.parents[1] / '.sciplot_store/head.json').read_bytes() == head
+
+
+@pytest.mark.parametrize('change', ['symlink', 'parent_replaced'])
+def test_group_candidate_asset_projection_refuses_alias_or_replaced_parent(edit, tmp_path, monkeypatch, change):
+    root, state, _child, document, calls = _sealed_group_review(edit, tmp_path, monkeypatch)
+    foreign = tmp_path / 'foreign-assets'
+    foreign.mkdir()
+    (foreign / 'keep').write_bytes(b'foreign unchanged')
+    if change == 'symlink':
+        (root / 'previews').symlink_to(foreign, target_is_directory=True)
+    else:
+        opened = review.os.open
+        def replace_parent(name, flags, *args, **kwargs):
+            if flags & review.os.O_WRONLY and str(name).endswith('.png') and 'dir_fd' in kwargs:
+                (root / 'previews').rename(root / 'preserved-assets')
+                (root / 'previews').mkdir()
+            return opened(name, flags, *args, **kwargs)
+        monkeypatch.setattr(review.os, 'open', replace_parent)
+    before = document.read_bytes()
+    result = review.group_overview(root, state)
+    assert result['previews'] == [] and result['next_step']['responses_template'] == []
+    assert {path.name: path.read_bytes() for path in foreign.iterdir()} == {'keep': b'foreign unchanged'}
+    if change == 'parent_replaced':
+        assert list((root / 'previews').iterdir()) == []
+    assert document.read_bytes() == before and len(calls) == 1
+
+
+def test_group_candidate_projection_preserves_corrupt_display_copy_and_sealed_source(edit, tmp_path, monkeypatch):
+    root, state, child, document, calls = _sealed_group_review(edit, tmp_path, monkeypatch)
+    before = document.read_bytes()
+    first = review.group_overview(root, state)
+    cached = Path(first['previews'][0]['preview']['path'])
+    sealed = Path(child['preview']['image']['path'])
+    original = sealed.read_bytes()
+    cached.unlink()
+    cached.write_bytes(b'altered disposable gallery copy')
+    second = review.group_overview(root, state)
+    current = Path(second['previews'][0]['preview']['path'])
+    assert current != cached and current.is_relative_to(root)
+    assert current.read_bytes() == original == sealed.read_bytes()
+    assert cached.read_bytes() == b'altered disposable gallery copy'
+    assert current.stat().st_mode & 0o777 == 0o400
+    assert child['preview']['image']['path'] == str(sealed) and len(calls) == 1
+    assert document.read_bytes() == before
 
 
 @pytest.fixture

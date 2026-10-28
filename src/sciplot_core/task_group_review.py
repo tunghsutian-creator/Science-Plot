@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 from subprocess import TimeoutExpired
 from typing import Any
@@ -13,6 +14,7 @@ from uuid import uuid4
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.foundation.writer_lease import exclusive_directory_lease
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.studio_core.document_edit import preview_project_document
 from sciplot_core.studio_core.project_query import inspect_project
@@ -25,6 +27,34 @@ from sciplot_core.task_next_step import task_next_step
 def _valid_image(image: dict[str, Any]) -> bool:
     path = canonical_path(Path(image["path"]))
     return path.is_file() and file_sha256(path) == image["sha256"]
+
+
+def _candidate_image(root: Path, image: dict[str, Any]) -> dict[str, Any]:
+    """Project verified Core pixels into the gallery's existing local assets."""
+    source = canonical_path(Path(image["path"]))
+    root = canonical_path(root)
+    with exclusive_directory_lease(root) as owner:
+        folder = canonical_path(root / "previews")
+        folder.mkdir(mode=0o700, exist_ok=True)
+        with exclusive_directory_lease(folder) as assets:
+            owner.verify()
+            target = canonical_path(folder / ("candidate-" + image["sha256"] + ".png"))
+            if target.exists() and file_sha256(target) != image["sha256"]:
+                target = target.with_name(target.stem + "-" + uuid4().hex + ".png")
+            if not target.exists():
+                opened = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                with os.fdopen(opened, "rb") as stream:
+                    data = stream.read()
+                created = os.open(target.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                  0o400, dir_fd=assets.fd)
+                with os.fdopen(created, "wb") as output:
+                    output.write(data)
+            assets.verify()
+            owner.verify()
+            projected = {**image, "path": str(canonical_path(target))}
+            if not _valid_image(image) or not _valid_image(projected):
+                raise ValueError("The sealed native candidate image changed during gallery projection.")
+    return projected
 
 
 def _saved_preview(root: Path, project: str, figure: dict[str, Any]) -> dict[str, Any]:
@@ -101,10 +131,27 @@ def _item_overview(root: Path, item: dict[str, Any]) -> dict[str, Any]:
                 image = child["preview"]["image"]
                 signed = json.loads(canonical_path(Path(child["preview"]["review_path"])).read_text())
                 spec_relative = str(Path(figure["spec"]).relative_to(project))
+                project_files = {}
+                sealed = False
+                if isinstance(signed, dict) and (signed.get("version") == 3 or (Path(project) / ".sciplot_store/head.json").is_file()):
+                    from sciplot_core.studio_core.document_edit_review import verified_document_edit_review
+
+                    signed, record = verified_document_edit_review(Path(project), signed)
+                    if record["phase"] != "needs_review" or record.get("accepted") is not None or signed["preview"] != image:
+                        raise ValueError("The candidate is not the current undecided native review image.")
+                    project_files = record["draft"]["result"]["base_files"]
+                    if signed["document_sha256"] != figure["document_sha256"] or signed["figure_id"] != figure["figure_id"]:
+                        raise ValueError("The saved figure changed after this native review.")
+                    sealed = True
+                elif isinstance(signed, dict):
+                    baseline = signed.get("base_state", {})
+                    project_files = baseline.get("project_files", {}) if isinstance(baseline, dict) else {}
                 if (not isinstance(signed, dict) or signed.get("operation_id") != child["operation_id"]
-                        or signed.get("base_state", {}).get("project_files", {}).get(spec_relative) != figure["spec_sha256"]
+                        or project_files.get(spec_relative) != figure["spec_sha256"]
                         or child["request"]["expected_document_sha256"] != figure["document_sha256"] or not _valid_image(image)):
                     raise ValueError("待审预览与当前文档不一致，请查询并重新生成该预览。")
+                if sealed:
+                    image = _candidate_image(root, image)
                 preview.update(scope="candidate", preview=image, operation_id=child["operation_id"])
             else:
                 preview["preview"] = _saved_preview(root, project, figure)
