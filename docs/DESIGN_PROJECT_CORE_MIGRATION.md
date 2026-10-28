@@ -322,6 +322,23 @@ Read-only queries do not repair or replace active native files. Resume validates
 the original key, project and command binding before recovery. Invalid target
 membership must fail before import, recovery or any other write.
 
+A sealed unaccepted native preview is evidence awaiting a decision, not an
+unfinished execution effect. Only the complete verified command/draft/review
+binding can establish that distinction. Accepted, applying, unknown or corrupt
+records retain their recovery barriers. A group gallery may copy those verified
+pixels into its own view assets; that copy cannot authorize an edit or replace
+the original decision evidence.
+
+Saved-primary admission and later metadata preparation are distinct commands.
+Explicit canonical Legacy reuse may register the one audited saved primary
+before private preparation; failure of that preparation does not undo the
+already admitted human save. Publication likewise distinguishes private QA from
+visible namespace admission. Failed QA preserves its diagnostics without making
+a new visible delivery directory. Successful QA may admit the exact previously
+absent namespace under the existing resource and generation checks before Core
+content publication. This does not promise rollback of an empty directory after
+every later error or a single filesystem transaction across rendering and roots.
+
 The committed outcome also owns its materialization plan: installation generation,
 parent and complete member set are derived from immutable reachable history.
 Mutable receipt hints must match, and a later resource writer removes an older

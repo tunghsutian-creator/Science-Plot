@@ -40,6 +40,18 @@ foreign bytes, head and scientific-resource assertions while selecting the
 actual command by identity. Neither more tests nor a broader unknown-state
 exception repairs these ownership boundaries.
 
+Include the migration consumers that interpreted an attached semantic history
+through its retired physical shadow, and previews that confused an undecided
+proposal with an unfinished effect. Trace logical state, observed physical bytes
+and presentation copies separately. A private QA failure must not allocate a
+new visible delivery root; explicit save admission and later preparation must
+not be described as one rollback transaction when they are separate commands.
+Positive fault tests also need the real owned startup and original wait of each
+child, not merely a passing recovery assertion. Keep generated input witnesses
+alive through capture review: a shared pytest temporary-root cleanup can destroy
+otherwise valid source proofs after the test body finishes. Distinguish that
+lifetime violation from unsupported process registration and software failures.
+
 Use the retained end-to-end failures to test the proposed foundation: original
 raw facts omitted from a binding that retained processed sources; a file-byte
 version confused with a composite tree fingerprint; role-bound private native
