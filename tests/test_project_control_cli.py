@@ -155,7 +155,17 @@ def test_edit_preview_requires_a_saved_document_revision():
 def test_all_headless_studio_writes_exclude_native_sessions_without_loading_gui(
     tmp_path, monkeypatch, flags
 ):
+    from sciplot_core.studio_core import studio_command
+
+    # This in-process case tests session exclusion. Real macOS exec handoff is
+    # covered in a separate observed child, where it cannot replace pytest.
+    monkeypatch.setattr(studio_command, "maybe_reexec_with_qt_runtime", lambda _argv: None)
     (tmp_path / "plot_request.json").write_text("{}")
+    # The saved-export route requires a canonical saved document. Its bytes
+    # must never be opened by a renderer while this native session is held.
+    (tmp_path / "studio").mkdir()
+    (tmp_path / "studio/document.vsz").write_bytes(b"opaque saved native")
+    (tmp_path / "studio/spec.json").write_text("{}")
 
     def forbidden():
         pytest.fail("headless Studio loaded GUI presentation")
