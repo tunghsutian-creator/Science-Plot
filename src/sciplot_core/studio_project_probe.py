@@ -83,6 +83,22 @@ def _source_mutation_target(
 ) -> Path | None:
     if not isinstance(source_path, str) or not source_path.strip():
         return None
+    if (project_dir / ".sciplot_store").exists():
+        from sciplot_core.project_host_factory import project_store
+        from sciplot_core.project_store.runtime import inspect_runtime_source_file, project_runtime
+        from sciplot_core.studio_core.project_query_sources import current_source_files
+
+        store = project_store(project_dir)
+        with project_runtime(store):
+            files, identities = current_source_files(project_dir, Path(source_path), [
+                {"status": "ready", "spec": str(project_dir / "studio/spec.json")},
+            ])
+            for literal, digest in sorted(files.items()):
+                fact = inspect_runtime_source_file(literal, expected_sha256=digest,
+                                                  source_id=identities.get(literal))
+                if fact.physical is not None and resolved_path_is_within(fact.physical, project_dir):
+                    return fact.physical
+        return None
     source = Path(source_path).expanduser().resolve()
     candidates = [source] if source.is_file() else sorted(source.rglob("*"))
     for candidate in candidates:
@@ -229,6 +245,26 @@ def _copy_project_fixture(
 ) -> Path:
     source_project = source_project.expanduser().resolve()
     copied_project = run_root / "project"
+    if (source_project / ".sciplot_store").exists():
+        from sciplot_core.project_host_factory import project_store
+        from sciplot_core.project_store import FileProjectStore, ProjectConflict
+
+        # This is an explicit isolated clone, not a raw directory move. Keep
+        # admitted scientific locators, source UUIDs/history and native bytes;
+        # the existing import owns registration of the new physical roots.
+        original = project_store(source_project)
+        before = original.snapshot()
+        if before["projection_status"] != "current":
+            raise ProjectConflict("The probe cannot clone unadmitted project changes.")
+        run_root.mkdir(parents=True, exist_ok=True)
+        bundle = original.export_bundle(run_root / "project.bundle")
+        after = original.snapshot()
+        if after["generation"] != before["generation"] or after["projection_status"] != "current":
+            raise ProjectConflict("The probe cannot clone unadmitted project changes.")
+        clone = FileProjectStore.import_bundle(bundle, copied_project)
+        if clone.snapshot()["generation"] != before["generation"]:
+            raise ProjectConflict("The probe clone differs from its selected generation.")
+        return clone.root
     shutil.copytree(
         source_project,
         copied_project,
@@ -291,6 +327,33 @@ def _copy_project_fixture(
             encoding="utf-8",
         )
     return copied_project.resolve()
+
+
+def _publish_fixture_setup(project: Path, writes: dict[Path, bytes | None], *,
+                           modes: dict[Path, int] | None = None) -> None:
+    """Publish the probe's intentional producer state through the sole writer.
+
+    Deliberate outside-edit refusal controls do not use this helper. Scientific
+    inputs and native user edits retain their existing source/save owners.
+    """
+    from sciplot_core.project_commands.resources import PreparedFile
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_store.adapters import publish_files
+
+    legacy = not (project / ".sciplot_store").exists()
+    store = project_store(project)
+    snapshot = store.snapshot(import_legacy=legacy)
+    logical = {store.logical_path(path): data for path, data in writes.items()}
+    permissions = {store.logical_path(path): mode for path, mode in (modes or {}).items()}
+    observed = {name: entry["sha256"] for name, entry in snapshot["files"].items()}
+    for name in logical:
+        observed.setdefault(name, None)
+    publish_files(store, {
+        name: PreparedFile(data, permissions.get(name, snapshot["files"].get(name, {}).get("mode", 0o600)))
+        if data is not None else None for name, data in logical.items()
+    }, kind="publish", result={"probe": "studio_project_fixture_setup"}, baseline={
+        "project_id": snapshot["project_id"], "generation": snapshot["generation"], "files": observed,
+    })
 
 
 def _native_identity(window: Any) -> dict[str, object]:
@@ -395,6 +458,8 @@ def run_studio_project_probe(
     standalone_window: Any | None = None
     figure_window: Any | None = None
     context_window: Any | None = None
+    critical_dialogs: list[dict[str, str]] = []
+    original_critical: Any | None = None
 
     try:
         from sciplot_core.intake.packaging import _project_package_info
@@ -408,10 +473,7 @@ def run_studio_project_probe(
         )
 
         legacy_launcher = copied_project / "Open_SciPlot_Project.command"
-        legacy_launcher.write_text(
-            "#!/bin/zsh\nsciplot workbench .\n",
-            encoding="utf-8",
-        )
+        fixture_setup: dict[Path, bytes | None] = {legacy_launcher: b"#!/bin/zsh\nsciplot workbench .\n"}
         manifest_paths = [
             copied_project / "intake_manifest.json",
             *sorted(copied_project.glob("*.sciplot.json")),
@@ -442,10 +504,11 @@ def run_studio_project_probe(
                 }
             )
             manifest["studio"] = studio
-            manifest_path.write_text(
-                json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
+            fixture_setup[manifest_path] = json.dumps(
+                json_safe(manifest), indent=2, ensure_ascii=False,
+            ).encode("utf-8")
+
+        _publish_fixture_setup(copied_project, fixture_setup)
 
         prepare_launcher_repair = prepare_studio_document(copied_project)
         launcher_contract = inspect_project_launcher_contract(copied_project)
@@ -545,6 +608,7 @@ def run_studio_project_probe(
         )
         primary_launcher_path = copied_project / "Open_in_SciPlot_Studio.command"
         canonical_primary_launcher = primary_launcher_path.read_text(encoding="utf-8")
+        canonical_launcher_manifest = launcher_manifest_path.read_bytes()
         primary_launcher_path.write_text(
             "\n".join(
                 [
@@ -586,7 +650,12 @@ def run_studio_project_probe(
         )
         primary_launcher_path.chmod(0o755)
         probe_zip = copied_project.parent / f"{copied_project.name}.zip"
-        probe_zip.write_bytes(b"launcher contract probe")
+        from sciplot_core.project_host_factory import project_store
+
+        # A parser-only package fixture outside the registered archive cap. Use
+        # the genuine admitted snapshot bytes, never overwrite it with a dummy.
+        archive_name = f"{launcher_manifest.get('project_slug') or copied_project.name}.zip"
+        probe_zip.write_bytes(project_store(copied_project).read_bytes(f"@snapshot/{archive_name}"))
         canonical_package = _project_package_info(
             copied_project,
             project_slug=copied_project.name,
@@ -636,20 +705,22 @@ def run_studio_project_probe(
         )
         primary_launcher_path.chmod(0o755)
         launcher_contract = inspect_project_launcher_contract(copied_project)
-        _restored_manifest = _read_json_object(launcher_manifest_path)
-        _restored_manifest["launcher_contract"] = json_safe(launcher_contract)
-        _restored_manifest["launcher"] = str(primary_launcher_path.resolve())
-        launcher_manifest_path.write_text(
-            json.dumps(
-                json_safe(_restored_manifest),
-                indent=2,
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
+        launcher_manifest_path.write_bytes(canonical_launcher_manifest)
 
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PyQt6 import QtCore, QtWidgets
+
+        original_critical = QtWidgets.QMessageBox.critical
+
+        def probe_critical(_parent: Any, title: str, message: str, *args: Any, **kwargs: Any) -> Any:
+            critical_dialogs.append({"title": str(title), "message": str(message)})
+            buttons = args[0] if args else kwargs.get("buttons", QtWidgets.QMessageBox.StandardButton.Ok)
+            # Dismiss only an error notification. Never approve an unknown
+            # business choice, overwrite prompt, Save, Yes or arbitrary action.
+            return (QtWidgets.QMessageBox.StandardButton.Ok if buttons == QtWidgets.QMessageBox.StandardButton.Ok
+                    else QtWidgets.QMessageBox.StandardButton.Cancel)
+
+        setattr(QtWidgets.QMessageBox, "critical", probe_critical)
 
         from sciplot_core import studio as studio_module
         from sciplot_core.studio import _create_veusz_window, _ensure_veusz_on_path
@@ -748,6 +819,7 @@ def run_studio_project_probe(
         canonical_request = _read_json_object(request_path)
         registry_path = copied_project / "studio" / "figure_set.json"
         registry_bytes = registry_path.read_bytes() if registry_path.is_file() else None
+        registry_mode = registry_path.stat().st_mode & 0o777 if registry_bytes is not None else None
         frequency_scope_before = _studio_figure_set_export_scope(
             copied_project,
             request=canonical_request,
@@ -788,7 +860,6 @@ def run_studio_project_probe(
             ],
         }
         try:
-            registry_path.unlink(missing_ok=True)
             for rule_id, figure_queue in multifigure_plans.items():
                 request = json.loads(json.dumps(canonical_request))
                 request["rule_id"] = rule_id
@@ -799,10 +870,10 @@ def run_studio_project_probe(
                 )
                 study_model["figure_queue"] = figure_queue
                 request["study_model"] = study_model
-                request_path.write_text(
-                    json.dumps(json_safe(request), indent=2, ensure_ascii=False),
-                    encoding="utf-8",
-                )
+                _publish_fixture_setup(copied_project, {
+                    request_path: json.dumps(json_safe(request), indent=2, ensure_ascii=False).encode("utf-8"),
+                    registry_path: None,
+                })
                 core_scope = _studio_figure_set_export_scope(
                     copied_project,
                     request=request,
@@ -845,11 +916,12 @@ def run_studio_project_probe(
                 )
             )
         finally:
-            request_path.write_bytes(canonical_request_bytes)
-            if registry_bytes is None:
-                registry_path.unlink(missing_ok=True)
-            else:
-                registry_path.write_bytes(registry_bytes)
+            # Undo only this probe's deliberately unregistered damaged file;
+            # restoration of the valid producer state is a new CAS mutation.
+            registry_path.unlink(missing_ok=True)
+            _publish_fixture_setup(copied_project, {
+                request_path: canonical_request_bytes, registry_path: registry_bytes,
+            }, modes={registry_path: registry_mode} if registry_mode is not None else None)
             project_bridge._populate_figure_list()
             project_bridge._update_controls(project_bridge.status_snapshot)
 
@@ -1774,14 +1846,9 @@ def run_studio_project_probe(
             try:
                 missing_scope_manifest = _read_json_object(updated_manifest_path)
                 missing_scope_manifest.pop("figure_set_export_scope", None)
-                updated_manifest_path.write_text(
-                    json.dumps(
-                        json_safe(missing_scope_manifest),
-                        indent=2,
-                        ensure_ascii=False,
-                    ),
-                    encoding="utf-8",
-                )
+                _publish_fixture_setup(copied_project, {updated_manifest_path: json.dumps(
+                    json_safe(missing_scope_manifest), indent=2, ensure_ascii=False,
+                ).encode("utf-8")})
                 missing_scope_status = project_bridge.refresh(
                     capture_render=True,
                     audit_source=True,
@@ -1792,14 +1859,9 @@ def run_studio_project_probe(
                     "scope": "project_delivery",
                     "full_figure_set_delivery_complete": False,
                 }
-                updated_manifest_path.write_text(
-                    json.dumps(
-                        json_safe(malformed_scope_manifest),
-                        indent=2,
-                        ensure_ascii=False,
-                    ),
-                    encoding="utf-8",
-                )
+                _publish_fixture_setup(copied_project, {updated_manifest_path: json.dumps(
+                    json_safe(malformed_scope_manifest), indent=2, ensure_ascii=False,
+                ).encode("utf-8")})
                 malformed_scope_status = project_bridge.refresh(
                     capture_render=True,
                     audit_source=True,
@@ -1816,7 +1878,7 @@ def run_studio_project_probe(
                 studio_project_module._studio_figure_set_export_scope = (
                     original_scope_helper
                 )
-                updated_manifest_path.write_bytes(scope_manifest_bytes)
+                _publish_fixture_setup(copied_project, {updated_manifest_path: scope_manifest_bytes})
             project_bridge.refresh(capture_render=True, audit_source=True)
             checks.append(
                 _check(
@@ -2470,7 +2532,7 @@ def run_studio_project_probe(
         atomic_existing_hash = file_sha256(context_document)
         atomic_save_as_target = context_project / "studio" / "failed_atomic_save_as.vsz"
         atomic_save_errors: list[dict[str, Any]] = []
-        original_context_document_save = context_window.document.save
+        original_context_document_save = context_window.document.saveToFile
         original_save_error_handler = getattr(
             context_window,
             "_sciplot_save_error_handler",
@@ -2487,13 +2549,11 @@ def run_studio_project_probe(
             and bool(context_window.document.isModified()) == atomic_original_modified
         )
 
-        def staged_partial_save(filename: str, mode: str = "vsz") -> None:
-            Path(filename).write_bytes(
-                b"# SciPlot staged partial write; this must never replace a target.\\n"
-            )
-            raise OSError(f"synthetic staged {mode} write failure")
+        def staged_partial_save(handle: Any) -> None:
+            handle.write("# SciPlot staged partial write; this must never replace a target.\\n")
+            raise OSError("synthetic staged vsz write failure")
 
-        context_window.document.save = staged_partial_save
+        context_window.document.saveToFile = staged_partial_save
         context_window._sciplot_save_error_handler = atomic_save_errors.append
         atomic_bridge_export: dict[str, Any] = {}
         native_atomic_save = True
@@ -2508,7 +2568,7 @@ def run_studio_project_probe(
             )
             native_atomic_save_as = bool(context_window.slotFileSaveAs())
         finally:
-            context_window.document.save = original_context_document_save
+            context_window.document.saveToFile = original_context_document_save
             context_window.fileSaveDialog = original_atomic_file_save_dialog
             if original_save_error_handler is None:
                 try:
@@ -3056,10 +3116,22 @@ def run_studio_project_probe(
             )
         )
     finally:
-        _close_window(figure_window)
-        _close_window(project_window)
-        _close_window(context_window)
-        _close_window(standalone_window)
+        try:
+            _close_window(figure_window)
+            _close_window(project_window)
+            _close_window(context_window)
+            _close_window(standalone_window)
+        finally:
+            if original_critical is not None:
+                setattr(QtWidgets.QMessageBox, "critical", original_critical)
+
+    if critical_dialogs:
+        checks.append(_check(
+            "studio_project_probe_modal_error",
+            "An unhandled critical error is recorded and cannot become a successful probe",
+            False,
+            critical_dialogs,
+        ))
 
     status = (
         "passed"
@@ -3087,6 +3159,7 @@ def run_studio_project_probe(
             "summary": str(summary_path),
         },
         "error": error,
+        "modal_errors": critical_dialogs,
         "limitations": [
             "The GUI lifecycle uses isolated copies and synthetic smoke inputs; "
             "it proves host behavior, not real-data evidence.",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core import studio
 from sciplot_core.studio_figure_set_contract import (
@@ -98,7 +98,7 @@ def _provenance_status(
         and qa.get("artifact_qa_current") is True
     )
     normalized_figure_scope = (
-        dict(figure_set_export_scope)
+        dict(cast(dict[str, Any], figure_set_export_scope))
         if _is_primary_figure_set_export_scope(figure_set_export_scope)
         else None
     )

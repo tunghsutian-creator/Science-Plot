@@ -21,12 +21,14 @@ from sciplot_core.project_store.runtime import project_runtime, projected_runtim
 from sciplot_core.studio_core.project_query import inspect_project
 
 
-def _project_and_delivery(tmp_path: Path, *, foreign_binding: str | None = None, snapshot: bool = False):
+def _project_and_delivery(tmp_path: Path, *, foreign_binding: str | None = None, snapshot: bool = False,
+                          internal: bool = False):
     project = legacy_project.__wrapped__(tmp_path)
-    delivery = tmp_path / "visible"
+    delivery = project / "delivery" if internal else tmp_path / "visible"
     request_path = project / "plot_request.json"
     request = json.loads(request_path.read_bytes())
-    request["delivery_output"] = str(delivery)
+    if not internal:
+        request["delivery_output"] = str(delivery)
     request_path.write_text(json.dumps(request))
     registry_path = project / "studio/figure_set.json"
     registry = json.loads(registry_path.read_bytes())
@@ -75,7 +77,7 @@ def _project_and_delivery(tmp_path: Path, *, foreign_binding: str | None = None,
         assert verify_delivery_package(record, expected_root=delivery, expected_manifest=manifest)["passed"]
     manifest["delivery_package"] = record
     manifest_path.write_text(json.dumps(manifest))
-    locations = {"delivery": delivery}
+    locations = {} if internal else {"delivery": delivery}
     if snapshot:
         archive = tmp_path / (project.name + ".zip")
         with ZipFile(archive, "w") as output:
