@@ -137,6 +137,32 @@ def compile_display(spec: dict[str, Any], operation: dict[str, Any]) -> tuple[di
                     **({"expected_legend": operation["legend"]["expected"]} if "legend" in operation else {})}
 
 
+def require_native_display_preconditions(
+    spec: dict[str, Any], operations: list[dict[str, Any]], widgets: dict[str, Any],
+) -> None:
+    """Reject known stale expectations before admitting a native effect.
+
+    Category and series expectations use the same compiler as the candidate.
+    Legend placement is current native presentation, observed by the caller's
+    exact-document inspection; generated spec defaults cannot attest it.
+    """
+    revised = spec
+    for operation in operations:
+        if operation.get("op") not in OPS:
+            continue
+        revised, change = compile_display(revised, operation)
+        if "expected_legend" not in change:
+            continue
+        key = widgets.get("/page1/graph1/key1", {})
+        settings = key.get("settings", {}) if isinstance(key, dict) else {}
+        fields = ("columns", "horzPosn", "vertPosn")
+        if not isinstance(settings, dict) or any(field not in settings for field in fields):
+            raise AnnotationOperationError("stale_categorical_legend", "Inspect the complete current native legend before editing it.")
+        legend = context(spec, widgets)["legend"]
+        if legend is None or legend["current"] != change["expected_legend"]:
+            raise AnnotationOperationError("stale_categorical_legend", "Use the current native legend's complete expected placement and columns.")
+
+
 def effective_presentation(spec: dict[str, Any]) -> dict[str, Any]:
     if KEY not in spec:
         return spec

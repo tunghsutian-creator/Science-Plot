@@ -95,7 +95,11 @@ def preview_document_operations(
         if spec_sha != selected["spec_sha256"]:
             raise AnnotationOperationError("stale_revision", "The sample mapping changed; inspect again.")
         spec = json.loads(raw)
-        if not category_edit:
+        if category_edit:
+            from sciplot_core.studio_core.categorical_display import require_native_display_preconditions
+
+            require_native_display_preconditions(spec, operations, selected["objects"])
+        else:
             operations = expand_sample_styles(spec, selected["objects"], expand_style_presets(spec, operations))
         return preview_document_edit(project, [], output_dir=output_dir, figure_id=selected["figure_id"],
                                      expected_document_sha256=expected_document_sha256,
