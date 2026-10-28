@@ -147,7 +147,7 @@ def audit_studio_candidate(candidate: StudioPreparationCandidate, payload: dict[
                 sources[(item.source_id, item.version)] = item
         for relative in candidate.request_members:
             verify_original_ledger(json.loads(candidate.read_member(relative).data), candidate.original_inputs.values(),
-                                   prepared_sources=sources.values())
+                                   prepared_sources=sources.values(), mapping_inputs=candidate.mapping_inputs.values())
     return audits, list(sources.values())
 
 

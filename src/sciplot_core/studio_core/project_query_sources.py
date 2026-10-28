@@ -246,6 +246,17 @@ def _current_tree_command(store: FileProjectStore, snapshot: dict[str, Any], tre
 
 
 def _original_directory_members(store: FileProjectStore, snapshot: dict[str, Any], tree: SourceTreeRead) -> dict[str, str]:
+    from sciplot_core.project_store import directories
+
+    with store._checked_locked() as (io, head, checked):
+        value = checked.reachable(io, head, snapshot["generation"])
+        if value["project_id"] != snapshot["project_id"]:
+            raise ProjectConflict("The current directory belongs to another project generation.")
+        registered = directories._prefix(value, Path(tree.locator), {"": store.root, **store.locations})
+        if registered is not None:
+            prefix, original = registered
+            return {str(Path(original) / name[len(prefix):]): entry["sha256"]
+                    for name, entry in value["files"].items() if name.startswith(prefix)}
     record = current_tree_record(store, snapshot, tree)
     origin = record["source_tree_origins"].get(tree.locator)
     if not isinstance(origin, dict) or not stat.S_ISDIR(origin["root"]["mode"]):

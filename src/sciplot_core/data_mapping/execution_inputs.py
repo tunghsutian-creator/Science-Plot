@@ -48,7 +48,7 @@ class MappingInputReadSet:
     tree_actuals: dict[str, Path] = field(default_factory=dict)
     metadata: set[str] = field(default_factory=set)
     committed_generation: str | None = None
-
+    numeric_inputs_sha256: str | None = None
     def publication_complete(self, receipt: dict[str, Any]) -> None:
         """Stop post-commit live checks only after this publisher returns its durable complete receipt."""
         if receipt.get("phase") != "complete" or not isinstance(receipt.get("generation"), str):

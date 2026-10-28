@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sciplot_core.data_mapping.execution_directories import mapping_directory_path
+from sciplot_core.data_mapping.numeric_readset_proof import numeric_input_digest
 
 from copy import deepcopy
 from pathlib import Path
@@ -72,6 +73,7 @@ def load_data_mapping_execution(
         result = _load_data_mapping_execution(path, verify=verify)
         if readset is not None and verify:
             readset.seal()
+            readset.numeric_inputs_sha256 = numeric_input_digest(readset) if result.get("handoff_allowed") is True else None
         return result
 
 
