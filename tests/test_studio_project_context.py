@@ -478,10 +478,12 @@ def test_unexpected_refresh_failure_never_claims_current_and_keeps_history_immut
     assert result["workflow"]["result_ready"] is False
     assert all(item["available"] is False for item in result["results"].values())
     assert old == preserved
+    again = bridge._audit_failure_status(RuntimeError("still unavailable"))
     if previous:
         assert result["qa"]["last_validated_qa"] == preserved["qa"]
-        again = bridge._audit_failure_status(RuntimeError("still unavailable"))
         assert again["qa"]["last_validated_qa"] == preserved["qa"]
+    else:
+        assert "last_validated_qa" not in again["qa"]
     assert document.read_bytes() == b"saved native"
 
 

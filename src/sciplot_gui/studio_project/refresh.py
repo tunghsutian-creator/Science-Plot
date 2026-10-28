@@ -29,9 +29,8 @@ class RefreshMixin:
                 },
             }
             qa = status.get("qa")
-            if isinstance(qa, dict):
-                previous = qa.get("last_validated_qa", deepcopy(qa))
-                qa["last_validated_qa"] = previous
+            if isinstance(qa, dict) and "last_validated_qa" not in qa and qa.get("evidence") is not None:
+                qa["last_validated_qa"] = deepcopy(qa)
         else:
             status = {
                 "kind": "sciplot_studio_project_status",
