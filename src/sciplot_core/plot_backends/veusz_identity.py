@@ -10,6 +10,7 @@ from sciplot_core.plot_document import DocumentError
 from sciplot_core.project_store.errors import ProjectStoreError
 from sciplot_core.project_store.runtime import project_runtime, resolve_runtime_path
 from sciplot_core.project_commands.read_projections import projection_digest
+from sciplot_core.source_coverage.native_file_snapshots import observed_native_document
 
 
 def fingerprint(binding: dict[str, Any]) -> dict[str, Any]:
@@ -21,7 +22,11 @@ def fingerprint(binding: dict[str, Any]) -> dict[str, Any]:
         files = {}
         for path, expected in binding["files"].items():
             try:
-                files[path] = existing_file_sha256(resolve_runtime_path(path, expected_sha256=expected))
+                if path == binding["document"]:
+                    with observed_native_document(["inspect-document-state", path], Path(path)):
+                        files[path] = existing_file_sha256(Path(path))
+                else:
+                    files[path] = existing_file_sha256(resolve_runtime_path(path, expected_sha256=expected))
             except ProjectStoreError:
                 files[path] = None
         projections = {read["resource"] + ":" + read["kind"] + ":" + read["key"]:
