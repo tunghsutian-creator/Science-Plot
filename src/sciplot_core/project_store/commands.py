@@ -155,8 +155,11 @@ def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | P
     current = state.head(io)
     assert current is not None
     require_source_trees(io, current, record)
+    from .generated_outputs import require as require_missing, validate_writes
+    require_missing(io, current, record)
     frozen: dict[str, Any] = {"writes": state.import_writes(io, writes), "artifacts": state.import_writes(io, artifacts or {}),
               "sources": capture_sources(io, sources or review.get("source_versions")), "result": result, "review": review}
+    validate_writes(record, frozen["writes"])
     from .input_reads import values as input_values
     declared = input_values(record, {"input_reads": list(input_reads)})
     if declared:

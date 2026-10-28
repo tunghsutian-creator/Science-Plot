@@ -32,6 +32,8 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
     writes = dict(frozen["writes"])
     if set(writes) != set(record["write_set"]):
         raise ProjectConflict("Publication does not cover the exact reserved write set.")
+    from .generated_outputs import validate_writes
+    validate_writes(record, writes)
     for name, adoption in preconditions.native_adoptions(record).items():
         if (writes[name] is None or writes[name]["sha256"] != adoption["observed_sha256"]
                 or writes[name]["mode"] != record["adoption_modes"][name]):

@@ -177,26 +177,39 @@ def export_suite(workspace: Path, *, figure_ids: tuple[str, ...] | None = None) 
 def _export_saved_suite(workspace: Path, *, figure_ids: tuple[str, ...] | None = None,
                         command_key: str | None = None) -> dict[str, Any]:
     from sciplot_core.project_commands import ProjectCommands
-    from sciplot_core.workflow.native_suite_generation import command_for, command_key as make_key, open_store, saved_command, suite_paths
+    from sciplot_core.workflow.native_suite_generation import command_for, command_key as make_key, open_store, saved_command, selected_catalogs, suite_paths
     from sciplot_core.workflow.rheology_tts_style_update import _load
 
     workspace, manifest = _load(workspace, native_display=True, repair=True)
     store = open_store(workspace, delivery_path(manifest))
+    from sciplot_core.project_store.generated_outputs import pending_barrier
+    from sciplot_core.project_commands import MissingGeneratedOutput
+    reads, writes = suite_paths(workspace, manifest, figure_ids)
+    pending_barrier(ProjectCommands(store), [store.logical_path(path) for path in [*reads, *writes]
+        if path.name not in {"suite.json", "delivery_manifest.json"}])
     from sciplot_core.workflow.native_suite_generation import adopt_saved_native
     adopt_saved_native(store, manifest, figure_ids)
     request = {"adapter": "native_suite_export", "figures": list(figure_ids) if figure_ids else None,
                "native": {item["id"]: _sha(native_path(manifest, item)) for item in _selected_documents(manifest, figure_ids)}}
-    key = command_key or make_key("native_export", request)
     app = ProjectCommands(store)
-    command = saved_command(app, key, request)
-    if command is not None:
-        app.resume(command)  # Publish an already sealed immediate candidate without export replay.
-    if command is None:
-        reads, writes = suite_paths(workspace, manifest, figure_ids)
-        command = command_for(store, "native_export", key, request=request, reads=reads, writes=writes,
-                              figure_ids=figure_ids, whole=figure_ids is None)
-    with tempfile.TemporaryDirectory(prefix="sciplot-native-export-") as temporary:
-        record = app.execute(command, lambda: _prepare_saved_export(workspace, figure_ids=figure_ids, store=store, stage=Path(temporary).resolve()))
+    from sciplot_core.studio_core.export_replay import current_export
+    identifiers = figure_ids or tuple(item["id"] for item in manifest["documents"])
+    prior, automatic = current_export(app, store, request, kind="native_export",
+        output_resources=[store.logical_path(path) for path in writes], catalogs=selected_catalogs(store, store.snapshot(), identifiers))
+    request.update(automatic)
+    key = command_key or make_key("native_export", request)
+    record = prior
+    if record is None:
+        command = saved_command(app, key, request)
+        if command is not None:
+            app.resume(command)  # Publish an already sealed immediate candidate without export replay.
+        else:
+            reads, writes = suite_paths(workspace, manifest, figure_ids)
+            command = command_for(store, "native_export", key, request=request, reads=reads, writes=writes,
+                                  figure_ids=identifiers, whole=figure_ids is None,
+                                  missing_outputs=tuple(MissingGeneratedOutput.from_payload(item) for item in automatic.get("missing_outputs", [])))
+        with tempfile.TemporaryDirectory(prefix="sciplot-native-export-") as temporary:
+            record = app.execute(command, lambda: _prepare_saved_export(workspace, figure_ids=figure_ids, store=store, stage=Path(temporary).resolve()))
     from copy import deepcopy
     public = deepcopy(record["result"])
     public["delivery"] = str(delivery_path(manifest))

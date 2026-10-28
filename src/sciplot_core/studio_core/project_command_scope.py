@@ -10,7 +10,7 @@ from typing import Any, ParamSpec, TypeVar, cast
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.project_commands import MembershipRead, NativeAdoption, ProjectCommand, ProjectCommands, ProjectionRead
+from sciplot_core.project_commands import MembershipRead, NativeAdoption, ProjectCommand, ProjectCommands, ProjectionRead, MissingGeneratedOutput
 from sciplot_core.project_commands.read_projections import projection_digest
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.project_host_factory import (
@@ -135,7 +135,8 @@ def adopt_saved_native(project: Path, selected: dict[str, Any]) -> dict[str, Any
 def command_for_binding(store: FileProjectStore, binding: dict[str, Any], *, kind: str, key: str,
                         writes: list[str], request: dict[str, Any],
                         projected_writes: list[ProjectionRead] | None = None,
-                        native_adoptions: list[NativeAdoption] | None = None) -> ProjectCommand:
+                        native_adoptions: list[NativeAdoption] | None = None,
+                        missing_outputs: tuple[MissingGeneratedOutput, ...] = ()) -> ProjectCommand:
     reads = dict(binding["files"])
     snapshot = store.snapshot()
     for logical in writes:
@@ -148,7 +149,8 @@ def command_for_binding(store: FileProjectStore, binding: dict[str, Any], *, kin
             "projected_reads": binding.get("projected_reads", []), "source_files": binding.get("source_files", {})}),
         projected_reads=[ProjectionRead(**item) for item in binding.get("projected_reads", [])],
         projected_writes=projected_writes or (), native_adoptions=native_adoptions or (),
-        read_memberships=[MembershipRead(**item) for item in binding.get("read_memberships", [])])
+        read_memberships=[MembershipRead(**item) for item in binding.get("read_memberships", [])],
+        missing_outputs=missing_outputs)
 
 
 def whole_memberships(store: FileProjectStore, snapshot: dict[str, Any]) -> list[dict[str, str]]:

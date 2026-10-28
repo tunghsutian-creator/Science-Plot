@@ -48,7 +48,8 @@ def legacy_case(suite, monkeypatch, evidence_kind, *, installed=True, accepted=T
         decided = native.decide_native(target, {**preview["next_step"]["request"], "accept": installed})
         assert decided["status"] == ("complete" if installed else "rejected")
     store = FileProjectStore(workspace, locations={"delivery": delivery})
-    saved, = [item for item in store.commands() if item["metadata"]["request"].get("request") == request]
+    saved, = [item for item in store.commands() if item["metadata"]["request"].get("adapter") == "native_display"
+              and item["metadata"]["request"].get("request") == request]
     historical_request = {**request, "idempotency_key": "genuine-legacy-pending"}
     path = operation_path(context, historical_request["idempotency_key"])
     path.parent.mkdir(parents=True)

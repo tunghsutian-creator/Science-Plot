@@ -4,7 +4,8 @@ from .application import ProjectCommands
 from .contracts import CommandKind, NativeAdoption, ProjectCommand, ProjectMutation, ProjectionRead
 from .errors import ProjectCommandError, ProjectCommandUnknown
 from .resources import InputRead, MembershipRead, NamespaceMember, NamespaceTransfer, PreparedFile, PreparedSource, SourceAdoption, SourceTreeRead
+from .generated_outputs import MissingGeneratedOutput
 
 __all__ = ["CommandKind", "NativeAdoption", "ProjectCommand", "ProjectCommands", "ProjectMutation",
            "ProjectionRead", "MembershipRead", "NamespaceMember", "NamespaceTransfer", "PreparedFile", "PreparedSource", "SourceAdoption",
-           "ProjectCommandError", "ProjectCommandUnknown", "SourceTreeRead", "InputRead"]
+           "ProjectCommandError", "ProjectCommandUnknown", "SourceTreeRead", "InputRead", "MissingGeneratedOutput"]

@@ -55,6 +55,12 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         request_path=request_path, document_path=document_path)
     repository = _publication_store(project)
     before = repository.snapshot(import_legacy=True)
+    from sciplot_core.project_store.generated_outputs import discover, pending_barrier
+    app = ProjectCommands(repository)
+    pending_barrier(app, list(before["files"]), document=repository.logical_path(document))
+    before = repository.snapshot()
+    missing = discover(repository, [name for name, actual in before.get("outside_changes", {}).items() if actual is None])
+    missing_names = {item.resource for item in missing}
     reads = {name: entry["sha256"] for name, entry in before["files"].items()}
     binding = {"project_id": before["project_id"], "generation": before["generation"], "files": reads,
                "read_memberships": whole_memberships(repository, before)}
@@ -66,11 +72,12 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
     native_hash = file_sha256(document)
     if export_document_sha256 is not None and export_document_sha256 != native_hash:
         raise ValueError("The publication native revision is stale")
-    intent = {"document": repository.logical_path(document), "document_sha256": native_hash,
+    intent: dict[str, Any] = {"document": repository.logical_path(document), "document_sha256": native_hash,
               "formats": formats or sorted({str(item["format"]) for item in exports or []}),
               "read_files": reads, "selected_read_witness": expected_binding}
+    if missing:
+        intent.update(missing_outputs=[item.to_payload() for item in missing], output_generation=before["generation"])
     key = canonical_json_sha256({"kind": "studio_publish", "project_id": before["project_id"], "request": intent})
-    app = ProjectCommands(repository)
     prior = app.query(key)
     if prior is not None:
         from sciplot_core.project_commands import ProjectCommand
@@ -148,6 +155,8 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
             _stage_tree(delivery, delivery_prefix, writes, roots)
         adoptions = []
         for name, actual in before.get("outside_changes", {}).items():
+            if name in missing_names:
+                continue  # Only the same authenticated typed absence is admitted by Core again below.
             if not name.endswith(".vsz") or not name.startswith("studio/") or actual is None:
                 raise ValueError("Publication found unregistered outside changes beyond audited native documents")
             # Scientific verification above audited the exact current native
@@ -164,7 +173,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
                 project_writes={name: value for name, value in writes.items() if not name.startswith("@")},
                 native_adoptions=adoptions))
         command = command_for_binding(repository, binding, kind="native_import" if adoptions else "publish",
-            key=key, writes=list(writes), request=intent, native_adoptions=adoptions)
+            key=key, writes=list(writes), request=intent, native_adoptions=adoptions, missing_outputs=missing)
         if mapping_reads is not None:
             from sciplot_core.data_mapping.execution_directories import mapping_live_trees
 

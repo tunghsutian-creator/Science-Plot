@@ -9,7 +9,7 @@ from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.project_commands import MembershipRead, ProjectCommand, ProjectCommands, ProjectMutation
+from sciplot_core.project_commands import MembershipRead, ProjectCommand, ProjectCommands, ProjectMutation, MissingGeneratedOutput
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.project_store.runtime import project_runtime
@@ -101,7 +101,8 @@ def export_external_native(document: Path, *, formats: list[str], output_root: P
             reads = {name: before["files"].get(name, {}).get("sha256") for name in writes}
             command = ProjectCommand.create("export", key, project_id=before["project_id"],
                 expected_generation=before["generation"], read_set=reads, write_set=list(writes), request=request,
-                read_memberships=[MembershipRead.capture(before["files"])])
+                read_memberships=[MembershipRead.capture(before["files"])],
+                missing_outputs=tuple(MissingGeneratedOutput.from_payload(item) for item in automatic.get("missing_outputs", [])))
             record = app.execute(command, lambda: ProjectMutation(writes, payload))
             _current_output(root, record)
             if figure_read_state(project, selected) != witness:

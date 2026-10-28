@@ -19,6 +19,7 @@ from .resources import SourceAdoption as SourceAdoption
 from .resources import NamespaceMember as NamespaceMember, NamespaceTransfer as NamespaceTransfer
 from .resources import SourceTreeRead as SourceTreeRead
 from .resources import InputRead as InputRead
+from .generated_outputs import MissingGeneratedOutput as MissingGeneratedOutput
 
 
 class CommandKind(StrEnum):
@@ -68,6 +69,7 @@ class ProjectCommand:
     namespace_transfers: tuple[NamespaceTransfer, ...] = ()
     source_trees: tuple[SourceTreeRead, ...] = ()
     input_reads: tuple[InputRead, ...] = ()
+    missing_outputs: tuple[MissingGeneratedOutput, ...] = ()
 
     def __post_init__(self) -> None:
         if (not isinstance(self.kind, CommandKind) or not isinstance(self.key, str) or not 1 <= len(self.key) <= 128
@@ -133,6 +135,17 @@ class ProjectCommand:
                 or len({item.locator for item in self.source_trees}) != len(self.source_trees)):
             raise ValueError("Source tree reads must be typed and unique per exact locator.")
         validate_input_reads(self.input_reads, self)
+        if (any(not isinstance(item, MissingGeneratedOutput) for item in self.missing_outputs)
+                or len({item.resource for item in self.missing_outputs}) != len(self.missing_outputs)
+                or self.missing_outputs and self.kind not in {CommandKind.NATIVE_EXPORT, CommandKind.EXPORT,
+                                                             CommandKind.PUBLISH, CommandKind.NATIVE_IMPORT}):
+            raise ValueError("Only an explicit export can rebuild uniquely declared missing generated outputs.")
+        for missing in self.missing_outputs:
+            missing.__post_init__()
+            if (reads.get(missing.resource) != missing.before_sha256 or missing.resource not in self.write_set
+                    or missing.resource in {*adopted, *observed, *(item.resource for item in self.input_reads)}
+                    or missing.catalog is not None and missing.catalog not in self.projected_reads):
+                raise ValueError("A missing output keeps its old read guard, output write and disjoint input/native roles.")
         request = json.loads(self.request_json)
         if not isinstance(request, dict) or "idempotency_key" in request and request["idempotency_key"] != self.key:
             raise ValueError("The original request must agree with its command key.")
@@ -150,7 +163,8 @@ class ProjectCommand:
                source_adoptions: Sequence[SourceAdoption] = (),
                namespace_transfers: Sequence[NamespaceTransfer] = (),
                source_trees: Sequence[SourceTreeRead] = (),
-               input_reads: Sequence[InputRead] = ()) -> ProjectCommand:
+               input_reads: Sequence[InputRead] = (),
+               missing_outputs: Sequence[MissingGeneratedOutput] = ()) -> ProjectCommand:
         return cls(CommandKind(kind), key, project_id, expected_generation,
                    tuple(sorted(read_set.items())), tuple(sorted(write_set)),
                    json.dumps(request, sort_keys=True, ensure_ascii=False, allow_nan=False),
@@ -162,13 +176,13 @@ class ProjectCommand:
                    tuple(sorted(source_adoptions, key=lambda item: item.resource)),
                    tuple(sorted(namespace_transfers, key=lambda item: item.prefix)),
                    tuple(sorted(source_trees, key=lambda item: item.locator)),
-                   validate_input_reads(input_reads))
+                   validate_input_reads(input_reads), tuple(sorted(missing_outputs, key=lambda item: item.resource)))
 
     @classmethod
     def from_payload(cls, value: Any) -> ProjectCommand:
         keys = {"version", "kind", "key", "project_id", "expected_generation", "expected_revision",
                 "read_set", "write_set", "projected_reads", "projected_writes", "native_adoptions", "read_memberships", "source_adoptions", "namespace_transfers", "request"}
-        optional = {name for name in ("source_trees", "input_reads") if isinstance(value, dict) and name in value}
+        optional = {name for name in ("source_trees", "input_reads", "missing_outputs") if isinstance(value, dict) and name in value}
         if (not isinstance(value, dict) or set(value) != keys | optional or type(value.get("version")) is not int
                 or value["version"] != 1 or not isinstance(value["read_set"], dict)
                 or not isinstance(value["write_set"], list) or not isinstance(value["request"], dict)):
@@ -221,6 +235,9 @@ class ProjectCommand:
         inputs = value.get("input_reads", [])
         if not isinstance(inputs, list) or "input_reads" in optional and not inputs:
             raise ValueError("Saved immutable input reads require a closed nonempty list.")
+        missing = value.get("missing_outputs", [])
+        if not isinstance(missing, list) or "missing_outputs" in optional and not missing:
+            raise ValueError("Saved missing generated outputs require a closed nonempty list.")
         return cls.create(value["kind"], value["key"], project_id=value["project_id"],
                           expected_generation=value["expected_generation"], read_set=value["read_set"],
                           write_set=value["write_set"], request=value["request"],
@@ -228,7 +245,8 @@ class ProjectCommand:
                           projected_writes=selectors("projected_writes"), native_adoptions=adoptions,
                           read_memberships=memberships, source_adoptions=observations, namespace_transfers=transfers,
                           source_trees=[SourceTreeRead(**item) for item in trees],
-                          input_reads=[InputRead.from_payload(item) for item in inputs])
+                          input_reads=[InputRead.from_payload(item) for item in inputs],
+                          missing_outputs=[MissingGeneratedOutput.from_payload(item) for item in missing])
 
     def to_payload(self) -> dict[str, Any]:
         self.__post_init__()
@@ -246,6 +264,8 @@ class ProjectCommand:
             result["source_trees"] = [item.to_payload() for item in self.source_trees]
         if self.input_reads:
             result["input_reads"] = [item.to_payload() for item in validate_input_reads(self.input_reads)]
+        if self.missing_outputs:
+            result["missing_outputs"] = [item.to_payload() for item in self.missing_outputs]
         return result
 
     @property
@@ -298,6 +318,8 @@ class ProjectMutation:
             combined[declared.resource] = declared
         if set(self.writes) != set(command.write_set):
             raise ValueError("A candidate must contain exactly its admitted writes and deletions.")
+        if any(self.writes[item.resource] is None for item in command.missing_outputs):
+            raise ValueError("A missing generated output requires a real non-deleted fresh candidate.")
         for name, value in self.writes.items():
             resource_key(name)
             if value is not None and not isinstance(value, (bytes, Path, PreparedFile)):

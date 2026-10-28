@@ -118,6 +118,8 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
     require_roots(io, current, record)
     verify_committed(io, current, record)
     old, names = committed.parent, committed.files
+    from .generated_outputs import projection_names, require_projection_parent
+    missing = projection_names(record, committed.outcome)
     rewritten = descendant_writes(io, current, committed.generation, checked=checked)
     retired = _retired_source_directories(io, old, current, set(names))
     # Validate the entire installation before the first replacement.
@@ -125,7 +127,9 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
         before, own, after = old["files"].get(name), committed.generation["files"].get(name), current["files"].get(name)
         physical = io.physical(name)
         actual = (sha(physical[0]), physical[1]) if physical else None
-        preimages = (after,) if name in rewritten else (before, own, after)
+        if name in missing and actual is None and after is not None:
+            require_projection_parent(io, record, name)
+        preimages = (after,) if name in rewritten else (None, own, after) if name in missing else (before, own, after)
         allowed = {(entry["sha256"], entry["mode"]) if entry else None for entry in preimages}
         if actual not in allowed:
             raise ProjectRecoveryRequired(f"Outside bytes prevent generation recovery: {name}")
@@ -144,14 +148,16 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
             actual = (sha(current_physical[0]), current_physical[1]) if current_physical else None
             before = old["files"].get(name)
             own = committed.generation["files"].get(name)
-            preimages = (after,) if name in rewritten else (before, own, after)
+            preimages = (after,) if name in rewritten else (None, own, after) if name in missing else (before, own, after)
             if actual not in {(entry["sha256"], entry["mode"]) if entry else None for entry in preimages}:
                 raise ProjectConflict("A derived view changed during generation materialization.")
             if after is None:
                 os.unlink(components[-1], dir_fd=parent)
                 os.fsync(parent)
             else:
-                install(parent, components[-1], io.get(after), mode=after["mode"])
+                if name in missing and actual is None:
+                    require_projection_parent(io, record, name)
+                install(parent, components[-1], io.get(after), mode=after["mode"], exclusive=name in missing and actual is None)
         state.boundary("after_projection")
     checked.require(io, current)
     _retire_source_directories(io, retired, current, checked)

@@ -22,8 +22,10 @@ class ProjectCommands:
     @staticmethod
     def _input_options(command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
         inputs = (*command.input_reads, *candidate.input_reads)
-        return {"input_reads": [item.to_payload() for item in inputs],
-                "expected_metadata": command.to_payload()} if inputs else {}
+        result: dict[str, Any] = {"input_reads": [item.to_payload() for item in inputs]} if inputs else {}
+        if inputs or command.missing_outputs:
+            result["expected_metadata"] = command.to_payload()
+        return result
 
     def _bound(self, command: ProjectCommand, record: dict[str, Any]) -> dict[str, Any]:
         if record.get("command_digest") != command.command_digest:

@@ -51,7 +51,7 @@ def physical_names(io: StoreIO, prefix: str) -> set[str]:
 
 
 def require_memberships(io: StoreIO, baseline: dict[str, Any], current: dict[str, Any], record: dict[str, Any],
-                        *, observed: dict[str, set[str]] | None = None) -> None:
+                        *, observed: dict[str, set[str]] | None = None, missing: frozenset[str] = frozenset()) -> None:
     values = record.get("metadata", {}).get("read_memberships", [])
     seen = set()
     for supplied in values:
@@ -68,5 +68,5 @@ def require_memberships(io: StoreIO, baseline: dict[str, Any], current: dict[str
                 expected_physical.update(names)
         if (MembershipRead.capture(baseline["files"], guard.prefix) != guard
                 or MembershipRead.capture(current["files"], guard.prefix) != guard
-                or membership_digest(physical_names(io, guard.prefix)) != membership_digest(expected_physical)):
+                or membership_digest(physical_names(io, guard.prefix)) != membership_digest(expected_physical - missing)):
             raise ProjectConflict("A declared whole-set membership changed inside or outside the generation.")

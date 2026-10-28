@@ -56,7 +56,10 @@ def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, 
     baseline = state.reachable(io, dict(current), record["expected_generation"])
     if baseline["project_id"] != current["project_id"]:
         raise ProjectConflict("The expected generation belongs to another project.")
-    require_memberships(io, baseline, dict(current), dict(record), observed=namespaces.memberships)
+    from .generated_outputs import require as require_missing
+    missing = require_missing(io, dict(current), dict(record))
+    require_memberships(io, baseline, dict(current), dict(record), observed=namespaces.memberships,
+                        missing=frozenset(missing))
     require_bindings(baseline, record)
     from .input_reads import require as require_inputs
     require_inputs(io, current, record, observed=sources)
@@ -77,7 +80,7 @@ def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, 
             and name not in current.get("input_resources", []) and name not in current.get("history_resources", []))
         actual = sha(physical[0]) if physical else None
         namespace_observation = namespaces.physical.get(name)
-        observed = (namespace_observation["sha256"] if namespace_observation else None) if name in namespaces.physical else (
+        observed = None if name in missing else (namespace_observation["sha256"] if namespace_observation else None) if name in namespaces.physical else (
             adoptions[name]["observed_sha256"] if name in adoptions
                     else sources[name].observed_sha256 if name in sources else expected)
         if actual != observed:

@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.project_commands import ProjectCommands, ProjectMutation
+from sciplot_core.project_commands import ProjectCommands, ProjectMutation, MissingGeneratedOutput
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.studio_core.project_command_scope import (
@@ -26,20 +26,26 @@ def export_saved_native(document: Path, *, formats: list[str], audit_spec_path: 
     selected = resolve_project_figure(document)
     project = Path(selected["project"])
     repository = project_store(project)
+    from sciplot_core.project_store.generated_outputs import pending_barrier
+    app = ProjectCommands(repository)
+    pending_barrier(app, [repository.logical_path(document), repository.logical_path(Path(selected["spec"]))],
+                    document=repository.logical_path(document))
     binding = adopt_saved_native(project, selected)
     request = {"figure_id": selected["figure_id"], "document": repository.logical_path(document),
                "formats": formats, "standalone_receipt": standalone_receipt, "input_files": binding["files"],
                "projected_reads": binding["projected_reads"], "source_files": binding["source_files"]}
     from sciplot_core.studio_core.export_replay import current_export
-    app = ProjectCommands(repository)
-    prior, automatic = current_export(app, repository, request, kind="native_export")
+    destination = (document.parent / "exports" / ("" if selected["primary"] else document.stem) if standalone_receipt
+                   else project / "studio/exports" / ("" if selected["primary"] else "figure_set"))
+    prefix = repository.logical_path(destination) + "/"
+    current = repository.snapshot()
+    prior, automatic = current_export(app, repository, request, kind="native_export",
+        output_resources=[name for name in current["files"] if name.startswith(prefix)])
     if prior is not None:
         return export_projection(prior, repository)
     binding["generation"] = repository.snapshot()["generation"]
     request.update(automatic)
     key = canonical_json_sha256({"kind": "native_export", "project_id": binding["project_id"], "request": request})
-    destination = (document.parent / "exports" / ("" if selected["primary"] else document.stem) if standalone_receipt
-                   else project / "studio/exports" / ("" if selected["primary"] else "figure_set"))
     with TemporaryDirectory(prefix="sciplot-native-export-") as temporary, project_runtime(repository):
         private = Path(temporary).resolve() / "artifacts"
         candidate = export_studio_document(document, formats=formats, output_dir=private / "figures" if standalone_receipt else private,
@@ -61,7 +67,8 @@ def export_saved_native(document: Path, *, formats: list[str], audit_spec_path: 
         if log is not None:
             artifacts["native_export_stderr.log"] = Path(log)
         command = command_for_binding(repository, binding, kind="native_export", key=key,
-                                      writes=list(writes), request=request)
+                                      writes=list(writes), request=request,
+            missing_outputs=tuple(MissingGeneratedOutput.from_payload(item) for item in automatic.get("missing_outputs", [])))
         record = app.execute(command, lambda: ProjectMutation(writes, payload,
             sources=source_versions(binding, store=repository), artifacts=artifacts))
         return export_projection(record, repository)

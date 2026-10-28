@@ -16,6 +16,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation, ProjectionRead, MembershipRead, PreparedFile
 from sciplot_core.project_commands.read_projections import projection_digest
 from sciplot_core.project_store import FileProjectStore
+from sciplot_core.project_commands import MissingGeneratedOutput
 
 
 def json_bytes(value: Any) -> bytes:
@@ -57,10 +58,18 @@ def saved_command(app: ProjectCommands, key: str, request: dict[str, Any]) -> Pr
     return command
 
 
+def selected_catalogs(store: FileProjectStore, current: dict[str, Any],
+                      identifiers: tuple[str, ...]) -> tuple[ProjectionRead, ...]:
+    return tuple(ProjectionRead(name, "native_suite_figure_v1", identifier,
+        projection_digest(store.read_bytes(name, generation=current["generation"]), kind="native_suite_figure_v1", key=identifier))
+        for name in ("@delivery/data/delivery_manifest.json", "suite.json") for identifier in identifiers)
+
+
 def command_for(store: FileProjectStore, kind: str, key: str, *, request: dict[str, Any],
                 reads: Iterable[Path], writes: Iterable[Path], figure_id: str | None = None,
                 expected_revision: int | None = None, whole: bool = False,
-                figure_ids: tuple[str, ...] | None = None, generation: str | None = None) -> ProjectCommand:
+                figure_ids: tuple[str, ...] | None = None, generation: str | None = None,
+                missing_outputs: tuple[MissingGeneratedOutput, ...] = ()) -> ProjectCommand:
     with store._locked() as (io, head):
         from sciplot_core.project_store.state import reachable
         current = reachable(io, head, generation) if generation is not None else head
@@ -72,13 +81,12 @@ def command_for(store: FileProjectStore, kind: str, key: str, *, request: dict[s
         logical = store.logical_path(path)
         if logical not in manifest_names:
             read_set[logical] = current["files"].get(logical, {}).get("sha256")
-    selected = [ProjectionRead(name, "native_suite_figure_v1", identifier,
-                projection_digest(store.read_bytes(name, generation=current["generation"]), kind="native_suite_figure_v1", key=identifier))
-                for name in sorted(manifest_names) for identifier in selectors]
+    selected = selected_catalogs(store, current, selectors)
     return ProjectCommand.create(kind, key, project_id=current["project_id"],
         expected_generation=current["generation"], read_set=read_set, write_set=write_set,
         projected_reads=selected, projected_writes=[item for item in selected if item.resource in write_set],
         expected_revision=expected_revision, request=request,
+        missing_outputs=missing_outputs,
         read_memberships=[MembershipRead.capture(current["files"], prefix) for prefix in ("", "@delivery")] if whole else ())
 
 
