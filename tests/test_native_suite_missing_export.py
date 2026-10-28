@@ -81,6 +81,36 @@ def test_complete_export_keeps_its_receipt_and_fresh_absence_gets_one_new_export
     assert snapshot([Path(name) for name in protected]) == protected
 
 
+def test_audited_saved_native_and_missing_creation_catalog_output_keep_distinct_authorities(bound, exporter, monkeypatch):
+    from sciplot_core import rheology_tts_render
+
+    workspace, delivery, source, documents, _capture, calls, _render = bound
+    plot, artifact = Path(documents[0]["path"]), Path(documents[0]["exports"][0])
+    store = open_store(workspace, delivery)
+    assert store.commands() == ()
+    protected = snapshot([source, workspace / "A.spec.json", Path(documents[1]["path"]),
+                          *(Path(path) for path in documents[1]["exports"])])
+    plot.write_bytes(plot.read_bytes() + b":audited manual save")
+    saved = plot.read_bytes()
+    audits = []
+
+    def audit(path, figure):
+        audits.append((str(path), figure["id"]))
+        return {"status": "passed", "document": str(path), "document_sha256": file_sha256(path)}
+
+    monkeypatch.setattr(rheology_tts_render, "audit_tts_document", audit)
+    artifact.unlink()
+    result = native.export_native(plot)
+    records = store.commands()
+    reconstructed, = [item for item in records if item["metadata"].get("missing_outputs")]
+    assert result["ready_to_use"] is True and len(records) == 3
+    assert reconstructed["metadata"]["missing_outputs"][0]["catalog"]["key"] == "A"
+    assert [item["metadata"]["kind"] for item in records].count("native_import") == 1
+    assert audits == [(str(plot), "A")] and exporter == [[str(plot)]] and calls == ["export"]
+    assert plot.read_bytes() == saved and artifact.read_bytes() == saved + b"pdf"
+    assert snapshot([Path(path) for path in protected]) == protected
+
+
 @pytest.mark.comprehensive
 def test_real_native_missing_output_rebuilds_after_complete_without_repeating_retry(suite, monkeypatch):
     from sciplot_core import rheology_tts_render

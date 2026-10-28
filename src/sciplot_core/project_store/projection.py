@@ -142,7 +142,7 @@ def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> Non
         checked.require(io, current)
         io.verify_roots()
         fd, components = io.split(name)
-        with directory(fd, components[:-1], create=after is not None) as parent:
+        with directory(fd, components[:-1], create=after is not None and name not in missing) as parent:
             # Check again at this physical boundary, after staging predecessor IO.
             current_physical = io.physical(name)
             actual = (sha(current_physical[0]), current_physical[1]) if current_physical else None

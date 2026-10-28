@@ -164,3 +164,26 @@ def test_a_descendant_delete_never_needs_the_old_missing_outputs_parent(generate
     assert store.recover()["phase"] == "complete"
     assert not (store.root / missing.resource).parent.exists()
     assert (store.root / ".sciplot_store/head.json").read_bytes() == head
+
+
+@pytest.mark.parametrize("generated", ["exports/figure.pdf"], indirect=True)
+def test_parent_disappearing_after_preflight_is_not_recreated_by_missing_output_install(generated, monkeypatch, tmp_path):
+    store, _original, missing = generated
+    before = store.snapshot()
+    command = ProjectCommand.create("native_export", "lost-parent", project_id=before["project_id"],
+        expected_generation=before["generation"], read_set={missing.resource: missing.before_sha256},
+        write_set=[missing.resource], request={"parent_must_survive": True}, missing_outputs=[missing])
+    parent = (store.root / missing.resource).parent
+    preserved = tmp_path / "original-parent"
+    actual = state.boundary
+
+    def remove_parent(name):
+        if name == "before_projection":
+            parent.rename(preserved)
+        actual(name)
+
+    monkeypatch.setattr(state, "boundary", remove_parent)
+    with pytest.raises((ProjectConflict, OSError)):
+        ProjectCommands(store).execute(command, lambda: ProjectMutation({missing.resource: b"fresh output"}, {}))
+    assert not parent.exists() and list(preserved.iterdir()) == []
+    assert (store.root / "document.vsz").read_bytes() == b"original saved native authority"
