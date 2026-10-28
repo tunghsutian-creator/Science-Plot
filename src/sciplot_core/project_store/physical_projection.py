@@ -10,28 +10,40 @@ from .paths import LocatorStore
 from .root_bindings import require as require_roots
 
 
-def literal_project_root(store: LocatorStore, original: str | Path, *,
-                         generation: str | None = None) -> str:
-    """Identify one bound host root without certifying its mutable members.
-
-    Only the exact physical project root or a whole-directory resource root
-    already declared by this generation can supply its preserved identity.
-    This neither resolves scientific inputs nor asserts current delivery bytes.
-    """
+def _project_root(store: LocatorStore, original: str | Path, *,
+                  generation: str | None, preserved: bool) -> tuple[Path, str]:
     literal = Path(original).expanduser().absolute()
     if not (store.root / STORE / "head.json").is_file():
         raise ProjectStoreError("Project identity requires an existing registered generation.")
     with store._locked() as (io, current):
         value = state.reachable(io, current, generation) if generation else current
         require_roots(io, current)
-        matches = [key for key, root in {"": io.root, **io.locations}.items() if literal == root]
+        matches = [(key, root) for key, root in {"": io.root, **io.locations}.items()
+                   if literal == root or preserved and key in value["locators"]
+                   and literal == Path(value["locators"][key])]
         if len(matches) != 1:
             raise ProjectStoreError("Project identity requires an exact bound physical resource root.")
-        key = matches[0]
+        key, root = matches[0]
         if (key not in value["resource_roots"] or key not in value["locators"]
                 or io.location_members.get(key) is not None):
             raise ProjectStoreError("Project identity requires a generation-bound whole-directory root.")
-        return str(value["locators"][key])
+        return root, str(value["locators"][key])
+
+
+def literal_project_root(store: LocatorStore, original: str | Path, *,
+                         generation: str | None = None) -> str:
+    """Identify an exact physical host root without certifying mutable members."""
+    return _project_root(store, original, generation=generation, preserved=False)[1]
+
+
+def projected_project_root(store: LocatorStore, original: str | Path, *,
+                           generation: str | None = None) -> Path:
+    """Locate an exact whole host root from its physical or preserved identity.
+
+    This selects only an already-bound root, including an official cold import.
+    Its members still require the separate strict physical-evidence projection.
+    """
+    return _project_root(store, original, generation=generation, preserved=True)[0]
 
 
 def _directory(io: StoreIO, value: dict[str, Any], literal: Path,

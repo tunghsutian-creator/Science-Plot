@@ -12,7 +12,7 @@ from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.project_store.runtime import (
     inspect_runtime_source_file, inspect_runtime_source_tree, literal_runtime_path,
-    projected_runtime_directory, projected_runtime_artifact,
+    projected_runtime_directory, projected_runtime_artifact, projected_runtime_project_root,
 )
 from sciplot_core.source_coverage.managed_documents import source_records
 from sciplot_core.studio_core.project_query_paths import (
@@ -331,12 +331,16 @@ def publication_indicators(
         qa_current=qa["current"],
     )
     if isinstance(value, str) and value:
+        binding_current = False
+        delivery_path = value
         try:
             root = Path(value).expanduser()
             if not root.is_absolute():
                 root = project / root
-            root = canonical_path(projected_runtime_directory(root))
+            root = canonical_path(projected_runtime_project_root(root))
+            delivery_path = str(root)
             binding_current = bound_delivery_project(root) == project
+            root = canonical_path(projected_runtime_directory(root))
             for member in root.rglob("*"):
                 canonical_path(member)
             verification = verify_delivery_package(
@@ -370,8 +374,8 @@ def publication_indicators(
         except (OSError, ValueError, TypeError, KeyError) as exc:
             delivery = _indicator(
                 False,
-                path=value,
-                binding_current=False,
+                path=delivery_path,
+                binding_current=binding_current,
                 package_current=False,
                 source_current=source["current"],
                 qa_current=qa["current"],

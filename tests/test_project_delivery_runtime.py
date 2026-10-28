@@ -17,7 +17,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
 from sciplot_core.launchers.delivery_inspection import inspect_delivery_launcher_contract
 from sciplot_core.project_store import FileProjectStore, ResourceRoot
-from sciplot_core.project_store.runtime import project_runtime, projected_runtime_directory, resolve_runtime_path
+from sciplot_core.project_store.runtime import project_runtime, projected_runtime_directory, projected_runtime_project_root, resolve_runtime_path
 from sciplot_core.studio_core.project_query import inspect_project
 
 
@@ -156,6 +156,102 @@ def test_current_delivery_refuses_mode_hash_membership_and_alias_drift(tmp_path,
     evidence = inspect_project(project)["delivery"]
     assert evidence["current"] is False, evidence
     assert evidence["package_current"] is False, evidence
+
+
+@pytest.mark.parametrize("mutation", ["pdf_hash", "pdf_missing", "native_hash", "extra"])
+def test_changed_delivery_members_keep_verified_ownership_but_fail_package_projection(tmp_path, mutation):
+    project, delivery, store = _project_and_delivery(tmp_path)
+    generation = store.snapshot()["generation"]
+    if mutation == "extra":
+        (delivery / "unregistered.txt").write_bytes(b"outside the published package")
+    else:
+        member = next((delivery / ("project" if mutation == "native_hash" else "figures")).glob(
+            "*.vsz" if mutation == "native_hash" else "*.pdf"))
+        if mutation == "pdf_missing":
+            member.unlink()
+        else:
+            member.write_bytes(member.read_bytes() + b"visible external change")
+    before = {str(path): (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+              for path in tmp_path.rglob("*") if path.is_file()}
+    evidence = inspect_project(project)
+    assert evidence["delivery"]["binding_current"] is True, evidence["delivery"]
+    assert evidence["delivery"]["current"] is False
+    assert evidence["delivery"]["package_current"] is False
+    assert evidence["qa"]["current"] is True
+    with project_runtime(store), pytest.raises(ValueError):
+        projected_runtime_directory(delivery)
+    assert store.snapshot()["generation"] == generation and store.commands() == ()
+    assert {str(path): (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+            for path in tmp_path.rglob("*") if path.is_file()} == before
+
+
+def test_cold_changed_delivery_keeps_its_imported_root_and_original_binding(tmp_path):
+    project, delivery, store = _project_and_delivery(tmp_path)
+    bundle = store.export_bundle(tmp_path / "bundle")
+    project.rename(tmp_path / "offline-project")
+    delivery.rename(tmp_path / "offline-delivery")
+    moved = FileProjectStore.import_bundle(bundle, tmp_path / "moved")
+    # An old absolute name is not the selected imported physical delivery.
+    shutil.copytree(tmp_path / "offline-delivery", delivery)
+    current = moved.locations["delivery"]
+    pdf = next((current / "figures").glob("*.pdf"))
+    pdf.write_bytes(b"changed imported visible artifact")
+    before = {str(path): (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+              for path in tmp_path.rglob("*") if path.is_file()}
+    evidence = inspect_project(moved.root)
+    assert evidence["delivery"]["path"] == str(current)
+    assert evidence["delivery"]["binding_current"] is True, evidence["delivery"]
+    assert evidence["delivery"]["package_current"] is False
+    assert evidence["delivery"]["current"] is False
+    assert evidence["qa"]["current"] is True
+    with project_runtime(moved), pytest.raises(ValueError):
+        projected_runtime_directory(delivery)
+    assert {str(path): (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+            for path in tmp_path.rglob("*") if path.is_file()} == before
+
+
+@pytest.mark.parametrize("mutation", ["launcher_hash", "launcher_missing", "root_replaced"])
+def test_changed_binding_or_replaced_root_cannot_retain_delivery_ownership(tmp_path, mutation):
+    project, delivery, _store = _project_and_delivery(tmp_path)
+    if mutation == "root_replaced":
+        delivery.rename(tmp_path / "original-delivery")
+        shutil.copytree(tmp_path / "original-delivery", delivery)
+    else:
+        launcher = delivery / "Open_in_Veusz.command"
+        if mutation == "launcher_missing":
+            launcher.unlink()
+        else:
+            launcher.write_bytes(launcher.read_bytes() + b"\n# changed binding bytes\n")
+    evidence = inspect_project(project)["delivery"]
+    assert evidence["binding_current"] is False, evidence
+    assert evidence["current"] is False and evidence["package_current"] is False
+
+
+@pytest.mark.parametrize("kind", ["foreign", "alias", "child", "finite", "unregistered", "missing", "replaced"])
+def test_projected_root_identity_retains_the_exact_host_capability_limits(tmp_path, kind):
+    project, delivery, store = _project_and_delivery(tmp_path)
+    selected = delivery
+    if kind == "foreign":
+        selected = tmp_path / "foreign"
+        shutil.copytree(delivery, selected)
+    elif kind == "alias":
+        selected = tmp_path / "alias"
+        selected.symlink_to(delivery, target_is_directory=True)
+    elif kind == "child":
+        selected = delivery / "project"
+    elif kind == "finite":
+        store = FileProjectStore(project, locations={"delivery": ResourceRoot(delivery, ("Open_in_Veusz.command",))})
+    elif kind == "unregistered":
+        selected = tmp_path / "unregistered"
+        selected.mkdir()
+        store = FileProjectStore(project, locations={"delivery": delivery, "other": selected})
+    else:
+        delivery.rename(tmp_path / "preserved-delivery")
+        if kind == "replaced":
+            shutil.copytree(tmp_path / "preserved-delivery", delivery)
+    error = FileNotFoundError if kind == "missing" else ValueError
+    with pytest.raises(error), project_runtime(store):
+        projected_runtime_project_root(selected)
 
 
 @pytest.mark.parametrize("foreign_binding", ["root", "project"])
