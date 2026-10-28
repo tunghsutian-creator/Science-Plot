@@ -29,14 +29,33 @@ def _write(path: Path, value: dict) -> Path:
     return path
 
 
+def _interrupt_after_native_projection(project: Path, exit_process) -> None:
+    """Fault only after this owned native member has really been installed."""
+    from sciplot_core.project_store import state
+
+    document = project / "studio/document.vsz"
+    before = document.read_bytes()
+    original = state.boundary
+
+    def after_projection(name):
+        original(name)
+        if name == "after_projection" and document.read_bytes() != before:
+            exit_process(91)
+
+    state.boundary = after_projection
+
+
 @pytest.mark.comprehensive
 def test_killed_native_source_install_resumes_through_public_task(tmp_path):
     import sys
+    from sciplot_core.project_store import ProjectRecoveryRequired
+    from sciplot_core.studio_core.project_command_scope import project_store
     from sciplot_core.veusz_runtime import veusz_worker_environment
 
     old_source, new_source = tmp_path / "old.csv", tmp_path / "new.csv"
     _source(old_source)
     _source(new_source, changed=True)
+    raw_before = old_source.read_bytes(), new_source.read_bytes()
     created = task_control.start_task({"version": 1, "action": "create", "source": str(old_source),
                                       "rule_id": "uvvis_spectrum"}, task_dir=tmp_path / "create")
     assert created["status"] == "complete", created
@@ -45,30 +64,61 @@ def test_killed_native_source_install_resumes_through_public_task(tmp_path):
     review = task_control.start_task({"version": 1, "action": "update_source", "project": str(project),
                                       "source": str(new_source)}, task_dir=task)
     assert review["status"] == "needs_review", review
+    store = project_store(project)
+    before = store.snapshot()
+    previous = _files(project)
+    document, spec = project / "studio/document.vsz", project / "studio/spec.json"
     code = """
-import json, os, sys
+import os, sys
 from pathlib import Path
 from sciplot_core.task_control import resume_task
+from test_task_source_control_native import _interrupt_after_native_projection
 project, task = map(Path, sys.argv[1:3])
-replace = os.replace
-def kill_after_archive(source, target):
-    replace(source, target)
-    if Path(source) == project / 'source' and '.source_update_history' in Path(target).parts:
-        os._exit(91)
-os.replace = kill_after_archive
+_interrupt_after_native_projection(project, os._exit)
 resume_task(task, {'accept_source_update': True, 'expected_revision_id': sys.argv[3]})
 """
     killed = subprocess.run([sys.executable, "-c", code, str(project), str(task), review["revision_id"]],
                             env=veusz_worker_environment(), capture_output=True, text=True, timeout=60)
     assert killed.returncode == 91, killed.stdout + killed.stderr
-    assert not (project / "source").exists()
+    records = [record for record in store.commands() if record["metadata"]["kind"] == "source_update"]
+    assert len(records) == 1
+    interrupted = records[0]
+    assert interrupted["accepted"] is True and interrupted["phase"] == "accepted"
+    assert interrupted["projection_pending"] is True
+    assert interrupted["committed_generation"] != before["generation"]
+    # The real native install happened, but later project members still await
+    # materialization. A receipt-only or pre-acceptance exit cannot satisfy this.
+    assert document.read_bytes() != previous["studio/document.vsz"]
+    assert spec.read_bytes() == previous["studio/spec.json"]
+    with pytest.raises(ProjectRecoveryRequired):
+        store.snapshot()
     resumed = _cli("task", "resume", task, "--response", _write(tmp_path / "retry.json", {"retry": True}))
     assert resumed["status"] == "complete", resumed
     assert all(resumed["current_project"][key]["current"] for key in ("source", "qa", "delivery"))
     assert _native(project / "studio/document.vsz")["series"]["A"]["y"] == [8, 9, 10]
-    history = project.parent / ".source_update_history" / project.name
-    assert len(list(history.glob("*.rollback.json"))) == 1
-    assert len(list(history.glob("*.interrupted"))) == 1
+    completed = store.query(interrupted["command_id"])
+    assert completed["phase"] == "complete" and completed["projection_pending"] is False
+    assert completed["generation"] == interrupted["committed_generation"]
+    assert completed["decision_id"] == interrupted["decision_id"]
+    assert completed["command_digest"] == interrupted["command_digest"]
+    archive = Path(completed["artifact_root"]) / "before"
+    assert _files(archive) == {name.removeprefix("before/"): Path(path).read_bytes()
+                            for name, path in interrupted["artifact_paths"].items() if name.startswith("before/")}
+    for name in ("raw", "source", "studio"):
+        assert {key: value for key, value in _files(archive).items() if key.startswith(name + "/")} == {
+            key: value for key, value in previous.items() if key.startswith(name + "/")}
+    assert not (project.parent / ".source_update_history").exists()
+    assert (old_source.read_bytes(), new_source.read_bytes()) == raw_before
+    before_repeat = _files(project), _files(archive)
+    assert _cli("task", "resume", task, "--response", tmp_path / "retry.json")["status"] == "complete"
+    assert (_files(project), _files(archive)) == before_repeat
+    records = [record for record in store.commands() if record["metadata"]["kind"] == "source_update"]
+    assert len(records) == 1 and records[0]["generation"] == completed["generation"]
+    assert load_task(task)["preview_attempt"] == 1
+    assert store.snapshot()["project_id"] == before["project_id"]
+    # The verified immutable parent keeps every scientific byte and mode seal.
+    parent = json.loads((project / ".sciplot_store/generations" / (before["generation"] + ".json")).read_text())
+    assert parent["files"] == before["files"]
 
 
 @pytest.mark.comprehensive

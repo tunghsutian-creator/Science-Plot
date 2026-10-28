@@ -36,6 +36,29 @@ def _install(project, candidate, review, **kwargs):
     )
 
 
+@pytest.mark.parametrize("boundary", ["before_head", "after_head", "before_projection", "after_projection"])
+def test_owned_native_fault_waits_for_the_real_member_install(tmp_path, monkeypatch, boundary):
+    from sciplot_core.project_store import state
+    from test_task_source_control_native import _interrupt_after_native_projection
+
+    project, foreign = tmp_path / "project", tmp_path / "foreign"
+    for root in (project, foreign):
+        (root / "studio").mkdir(parents=True)
+        (root / "studio/document.vsz").write_bytes(b"old exact native")
+    observed, exits = [], []
+    monkeypatch.setattr(state, "boundary", observed.append)
+    _interrupt_after_native_projection(project, exits.append)
+    state.boundary(boundary)
+    assert exits == []
+    (foreign / "studio/document.vsz").write_bytes(b"foreign native installed")
+    state.boundary(boundary)
+    assert exits == []
+    (project / "studio/document.vsz").write_bytes(b"owned native installed")
+    state.boundary(boundary)
+    assert exits == ([91] if boundary == "after_projection" else [])
+    assert observed == [boundary] * 3
+
+
 def test_source_update_recovery_verifies_current_project_and_old_archive(revisions):
     project, candidate, _, review = revisions
     archive = _install(project, candidate, review)
