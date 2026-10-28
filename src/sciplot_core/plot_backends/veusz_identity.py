@@ -33,7 +33,10 @@ def fingerprint(binding: dict[str, Any]) -> dict[str, Any]:
             projection_digest((project / read["resource"]).read_bytes(), kind=read["kind"], key=read["key"])
             for read in binding.get("projected_reads", [])}
         return {"files": files,
-            "source_trees": {path: source_tree_sha256(Path(path)) for path in binding["source_trees"]},
+            # A file's tree seal wraps its byte SHA; it is never itself a file
+            # version. Directories retain their explicit complete-tree scope.
+            "source_trees": {path: source_tree_sha256(Path(path), expected_file_sha256=binding["files"].get(path))
+                             for path in binding["source_trees"]},
             "projections": projections}
 
 
