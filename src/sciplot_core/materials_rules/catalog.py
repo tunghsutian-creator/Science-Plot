@@ -159,6 +159,11 @@ def match_rule(
     for rule in RULES:
         if not _is_ready_rule(rule):
             continue
+        # This structured contract is detected from its required table headers
+        # by classify_source before text matching. Path prose and individual
+        # column words cannot establish a material/role/metric comparison.
+        if rule.rule_id == "performance_comparison":
+            continue
         score = 0
         if vendor_model and vendor_model in rule.vendor_models:
             score += 100
