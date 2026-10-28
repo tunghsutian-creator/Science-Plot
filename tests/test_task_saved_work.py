@@ -213,6 +213,92 @@ def test_multiple_same_source_projects_are_not_deduplicated_or_auto_selected(tmp
     assert selected["reason_code"] == "source_evidence_missing"  # No full raw-tree creation evidence.
 
 
+@pytest.mark.parametrize("current", [True, False, None], ids=['current', 'stale', 'unknown'])
+def test_known_foreign_delivery_owner_stays_the_explicit_copy_conflict(tmp_path, monkeypatch, current):
+    from sciplot_core import task_saved_work_evidence as evidence
+
+    source = tmp_path / "raw.csv"
+    source.write_text("x,y\n1,2\n")
+    owner = legacy(tmp_path / "owner", source)
+    copied = tmp_path / "copied"
+    shutil.copytree(owner, copied)
+    package = delivery(tmp_path / "visible", source, owner)
+    before = inventory(tmp_path)
+    monkeypatch.setattr(evidence, "inspect_project", lambda *_a, **_k: {
+        "figures": [], "source": {"current": current}, "delivery": {"path": str(package)},
+        "request_sha256": file_sha256(copied / "plot_request.json"), "primary_figure_id": "curve"})
+    def known_owner(root):
+        assert root == package
+        return owner
+    monkeypatch.setattr(evidence, "bound_delivery_project", known_owner)
+    result = evidence.project_evidence(copied, source, source_tree_sha256(source))
+    assert result["state"] == "project_output_conflict" and not result["continuation_available"]
+    assert result["delivery_owner"] == str(owner)
+    assert inventory(tmp_path) == before
+
+
+@pytest.mark.parametrize("state", ["current", "pending", "missing-revision", "foreign-plot", "generation-race", "source-drift"])
+def test_saved_work_reads_the_current_attachment_without_materializing_or_adopting_history(tmp_path, monkeypatch, state):
+    from test_attached_semantic_repository import application, SourceAwareManagedBackend
+    from managed_plot_helpers import patch, request_for_source
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.project_lifecycle.attachment_index import Attachment, read_index
+    from sciplot_core.project_lifecycle.attached_repository import AttachedProjectRepository
+    from sciplot_core.project_lifecycle.errors import EngineError
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core import task_saved_work_evidence as evidence
+
+    project = tmp_path / 'project'
+    project.mkdir()
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    app = application()
+    with project_runtime(store):
+        created = app.create(request_for_source(project))
+    root = Path(created['plot'])
+    if state == 'pending':
+        app.patch(root, patch(created, 'first', 'style.line.width', '1.2pt', 'series:A'))
+        app.rollback(root, {'base_revision': 1, 'target_revision': 0, 'idempotency_key': 'pending-undo'})
+    snapshot = store.snapshot()
+    entry = next(iter(read_index(store, snapshot)['attachments'].values()))
+    if state == 'missing-revision':
+        name = entry['namespace'] + '/revisions/00000000.json'
+        mutation = ProjectMutation({name: None}, {})
+        command = ProjectCommand.create('semantic_record', 'missing-control', project_id=snapshot['project_id'],
+            expected_generation=snapshot['generation'], read_set={name: snapshot['files'][name]['sha256']},
+            write_set=[name], request={'prepared_digest': mutation.prepared_digest})
+        ProjectCommands(store).publish_prepared(command, mutation)
+        snapshot = store.snapshot()
+    if state == 'foreign-plot':
+        entry = {**entry, 'plot_id': 'foreign-plot'}
+    if state == 'source-drift':
+        (project / 'A.csv').write_text('Time,Signal\ns,V\n0,99\n1,88\n')
+    # Even a physical refusal shell cannot replace missing Core members.
+    from sciplot_core.plot_engine.storage import document_root
+    shell = document_root(project, entry['figure_id'])
+    shell.mkdir(parents=True, exist_ok=True)
+    (shell / 'head.json').write_text('{"read_only_history":true}')
+    before = inventory(tmp_path)
+    class ReadBackend(SourceAwareManagedBackend):
+        def close(self):
+            pass
+    monkeypatch.setattr(evidence, 'BackendRouter', lambda *_a: ReadBackend())
+    monkeypatch.setattr(AttachedProjectRepository, '_materialize_history', lambda *_a: pytest.fail('Discovery materialized history.'))
+    monkeypatch.setattr(subprocess, 'run', lambda *_a, **_k: pytest.fail('Discovery launched a native worker.'))
+    if state == 'generation-race':
+        monkeypatch.setattr(store, 'snapshot', lambda: {**snapshot, 'generation': 'later-generation'})
+    if state in {'missing-revision', 'foreign-plot', 'generation-race'}:
+        with pytest.raises((OSError, ValueError, EngineError)):
+            evidence.document_evidence(root, attachment=Attachment(store, entry), snapshot=snapshot)
+    else:
+        result = evidence.document_evidence(root, attachment=Attachment(store, entry), snapshot=snapshot)
+        assert result['plot_id'] == created['plot_id']
+        assert (result['pending'] is not None) == (state == 'pending')
+        assert result['current'] is (state == 'current')
+    assert inventory(tmp_path) == before
+
+
 def test_project_directory_names_do_not_hide_candidates(tmp_path):
     source = tmp_path / "raw.csv"
     source.write_text("x,y\n1,2\n")

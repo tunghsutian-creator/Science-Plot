@@ -43,7 +43,21 @@ def test_cold_mapped_continuation_retains_two_applied_edits_without_adopting_sha
     finally:
         service.close()
     root = document_root(project, figure_id)
-    head = (root / "head.json").read_bytes()
+    from sciplot_core.project_host_factory import project_store
+    from sciplot_core.project_lifecycle.attachment_index import read_index
+
+    store = project_store(project)
+    index = read_index(store)
+    attachments = [item for item in index["attachments"].values() if item["figure_id"] == figure_id]
+    assert len(attachments) == 1
+    namespace = attachments[0]["namespace"] + "/"
+    def semantic_state():
+        snapshot = store.snapshot()
+        return {name: (store.read_bytes(name, generation=snapshot["generation"]), item["mode"])
+                for name, item in snapshot["files"].items() if name.startswith(namespace)}
+    head = semantic_state()
+    assert namespace + "head.json" in head
+    old_namespace = {str(path): path.read_bytes() for path in root.rglob("*") if path.is_file()}
 
     def cli(*arguments):
         result = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), *map(str, arguments), "--json"],
@@ -72,7 +86,8 @@ def test_cold_mapped_continuation_retains_two_applied_edits_without_adopting_sha
     shadow = continued["selected"]["documents"][0]
     assert shadow["current"] is False and len(shadow["native_continuation"]["operation_ids"]) == 2
     assert shadow["native_continuation"]["authority"] == "saved_vsz"
-    assert (root / "head.json").read_bytes() == head
+    assert semantic_state() == head
+    assert {str(path): path.read_bytes() for path in root.rglob("*") if path.is_file()} == old_namespace
     current = inspect_project(project, figure_id=figure_id, native=True)
     objects = current["selected_figure"]["objects"]
     spec = json.loads(Path(current["selected_figure"]["spec"]).read_text())
@@ -93,7 +108,7 @@ def test_cold_mapped_continuation_retains_two_applied_edits_without_adopting_sha
     authority = inventory()
     replay, replayed = cli(*arguments)
     assert replay == reply and replayed["status"] == "complete"
-    assert inventory() == authority and (root / "head.json").read_bytes() == head
+    assert inventory() == authority and semantic_state() == head
     # The saved chain cannot justify an unrelated native save or changed raw/effective inputs.
     document = Path(current["selected_figure"]["document"])
     saved_native = document.read_bytes()

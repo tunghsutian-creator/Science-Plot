@@ -58,6 +58,47 @@ def test_public_initial_json_captures_original_uuid_and_version_in_native_genera
         assert current_source_tree(source, files, identities, expected=None)
 
 
+@pytest.mark.parametrize('evidence', ['exact', 'missing-seal', 'wrong-seal', 'foreign-literal', 'ambiguous-uuid', 'later-version'])
+def test_canonical_original_file_seal_supplies_only_its_exact_registered_version(prepared_request, monkeypatch, evidence):
+    from copy import deepcopy
+    from sciplot_core.studio_core.project_query_sources import current_source_files
+    from sciplot_core.project_store import ProjectConflict
+
+    project, source, request_path = prepared_request
+    prepare_studio_document(request_path)
+    store = project_store(project)
+    digest = file_sha256(source)
+    request = json.loads(store.read_bytes('plot_request.json'))
+    # Multi-condition recipes retain the original in the FigurePlan while
+    # their numerical ledger and specs describe separately produced CSVs.
+    request.pop('transform_ledger', None)
+    if evidence == 'missing-seal':
+        request['resolved_figure_plan'].pop('source_sha256')
+    elif evidence == 'wrong-seal':
+        request['resolved_figure_plan']['source_sha256'] = 'a' * 64
+    original_read = store.read_bytes
+    monkeypatch.setattr(store, 'read_bytes', lambda name, **kw: json.dumps(request).encode() if name == 'plot_request.json' else original_read(name, **kw))
+    with project_runtime(store) as resolver:
+        resolver.snapshot = deepcopy(resolver.snapshot)
+        owner = next(identity for identity, versions in resolver.snapshot['sources'].items()
+                     if versions.get(digest, {}).get('locator') == str(source))
+        if evidence == 'foreign-literal':
+            resolver.snapshot['sources'][owner][digest]['locator'] = str(source.with_name('unselected.csv'))
+        elif evidence == 'ambiguous-uuid':
+            resolver.snapshot['sources']['f' * 32] = deepcopy(resolver.snapshot['sources'][owner])
+        elif evidence == 'later-version':
+            entry = deepcopy(resolver.snapshot['sources'][owner][digest])
+            entry.update(version='b' * 64, sha256='b' * 64)
+            resolver.snapshot['sources'][owner]['b' * 64] = entry
+        if evidence in {'missing-seal', 'wrong-seal', 'ambiguous-uuid'}:
+            with pytest.raises(ProjectConflict, match='exact registered identity'):
+                current_source_files(project, source, [])
+        else:
+            files, identities = current_source_files(project, source, [])
+            assert files == ({} if evidence == 'foreign-literal' else {str(source): digest})
+            assert identities == ({} if evidence == 'foreign-literal' else {str(source): owner})
+
+
 def test_initial_json_original_is_portable_and_keeps_one_uuid_on_reopen(prepared_request, tmp_path):
     from sciplot_core.project_store import FileProjectStore
     from sciplot_core.foundation.source_locations import resolve_source_path

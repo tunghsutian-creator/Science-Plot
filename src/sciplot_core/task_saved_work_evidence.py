@@ -9,6 +9,10 @@ from sciplot_core.plot_engine.backend_router import BackendRouter
 from sciplot_core.plot_engine.current import changed_inputs
 from sciplot_core.plot_engine.managed_state import read_canonical
 from sciplot_core.plot_engine.storage import active, document_root, load_head
+from sciplot_core.project_lifecycle.context import content_sha256, repository_scope
+from sciplot_core.project_lifecycle.attachment_index import Attachment, read_index
+from sciplot_core.project_lifecycle.attachment_projection import derived_relative, metadata_view
+from sciplot_core.project_lifecycle.frozen_namespace import FrozenNamespaceRepository
 from sciplot_core.plot_backends.veusz import VeuszBackend
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_query_paths import bound_delivery_project, canonical_path, read_object
@@ -35,10 +39,44 @@ def record_path(value: Any, *, base: Path | None = None) -> Path:
     return canonical_path(path)
 
 
-def document_evidence(root: Path) -> dict[str, Any]:
+def document_evidence(root: Path, *, attachment: Attachment | None = None,
+                      snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    if attachment is None:
+        return _document_evidence(root)
+    assert snapshot is not None
+    prefix = attachment.entry["namespace"] + "/"
+    members = {name.removeprefix(prefix): attachment.store.read_bytes(name, generation=snapshot["generation"])
+               for name in snapshot["files"] if name.startswith(prefix)}
+    for relative, logical in attachment.entry.get("archived_derivatives", {}).items():
+        if (not logical.startswith(prefix + "archive/") or str(Path(relative)) != relative
+                or Path(relative).is_absolute() or ".." in Path(relative).parts or not derived_relative(Path(relative))):
+            raise ValueError("The attached document has an invalid immutable history resource.")
+        members[relative] = attachment.store.read_bytes(logical, generation=snapshot["generation"])
+    captured = FrozenNamespaceRepository(attachment.origin, attachment.root, members)
+    with repository_scope(captured):
+        # Validate the original sealed envelope before projecting runtime paths.
+        head = metadata_view(captured.load_head(attachment.origin), attachment)
+        if (head["document"]["plot_id"] != attachment.entry["plot_id"]
+                or head["binding"].get("project", str(attachment.store.root)) != str(attachment.store.root)
+                or head["binding"].get("figure_id", attachment.entry["figure_id"]) != attachment.entry["figure_id"]):
+            raise ValueError("The current semantic attachment does not identify this project figure.")
+        pending = captured.active(attachment.origin)
+        if pending is not None:
+            from sciplot_core.project_lifecycle.journal_identity import saved_command
+
+            saved_command(pending)
+        pending = metadata_view(pending, attachment) if pending else None
+        result = _document_evidence(root, head=head, pending=pending, attached=True)
+    if attachment.store.snapshot()["generation"] != snapshot["generation"]:
+        raise ValueError("The project generation changed during saved-work discovery.")
+    return result
+
+
+def _document_evidence(root: Path, *, head: dict[str, Any] | None = None,
+                       pending: dict[str, Any] | None = None, attached: bool = False) -> dict[str, Any]:
     """Use the document owner, including content seals and native mutation guards."""
-    head_sha = existing_file_sha256(root / "head.json")
-    head = load_head(root)
+    head_sha = content_sha256(root / "head.json")
+    head = head if head is not None else load_head(root)
     doc, binding = head["document"], head["binding"]
     # A copied authority must not silently operate on the original absolute binding.
     if doc.get("plot_type") == "ManagedPlot" and record_path(binding["root"]) != root:
@@ -61,13 +99,13 @@ def document_evidence(root: Path) -> dict[str, Any]:
         changed = changed_inputs(backend, binding)
     finally:
         backend.close()
-    pending = active(root)
+    pending = pending if attached else active(root)
     pending = pending if pending and pending["phase"] not in {"complete", "rejected"} else None
     native_continuation: dict[str, Any] | None = None
     if doc.get("plot_type", "LegacyPlot") == "LegacyPlot" and changed and pending is None:
         project = record_path(binding["project"])
         document, spec = record_path(binding["document"]), record_path(binding["spec"])
-        if document_root(project, binding["figure_id"]) == root and set(changed) <= {str(document), str(spec)}:
+        if (attached or document_root(project, binding["figure_id"]) == root) and set(changed) <= {str(document), str(spec)}:
             from sciplot_core.studio_core.document_edit_commit import applied_native_edit_chain
 
             try:
@@ -79,7 +117,7 @@ def document_evidence(root: Path) -> dict[str, Any]:
                         "spec_sha256": existing_file_sha256(spec), "native_audit_evaluated": False}
             except (OSError, ValueError, TypeError, KeyError) as exc:
                 native_continuation = {"current": False, "authority": "saved_vsz", "error": str(exc)}
-    if existing_file_sha256(root / "head.json") != head_sha:
+    if content_sha256(root / "head.json") != head_sha:
         raise ValueError("The document revision changed during discovery.")
     return {"plot": str(root), "plot_id": doc["plot_id"], "revision": doc["revision"],
             "plot_type": doc.get("plot_type", "LegacyPlot"),
@@ -94,6 +132,12 @@ def document_evidence(root: Path) -> dict[str, Any]:
 def project_evidence(project: Path, source: Path, source_sha256: str | None,
                      *, receipt_sha256: str | None = None,
                      receipt_source: Path | None = None) -> dict[str, Any] | None:
+    store = None
+    if (project / ".sciplot_store/head.json").is_file():
+        from sciplot_core.project_host_factory import project_store
+
+        store = project_store(project)
+    snapshot = store.snapshot() if store is not None else None
     request = read_object(project / "plot_request.json")
     recorded = record_path(request.get("input"), base=project)
     expected = (request.get("resolved_figure_plan") or {}).get("source_sha256")
@@ -124,10 +168,20 @@ def project_evidence(project: Path, source: Path, source_sha256: str | None,
         return None
     query = inspect_project(project, native=False)
     documents = []
+    index = read_index(store, snapshot) if store is not None else None
     for figure in query["figures"]:
-        root = document_root(project, figure["figure_id"])
-        if (root / "head.json").exists():
-            documents.append(document_evidence(root))
+        entries = [entry for entry in index["attachments"].values()
+                   if entry["figure_id"] == figure["figure_id"]] if index is not None else []
+        if len(entries) > 1:
+            raise ValueError("One figure has competing current semantic attachments.")
+        if entries:
+            assert store is not None and snapshot is not None
+            attachment = Attachment(store, entries[0])
+            documents.append(document_evidence(attachment.root, attachment=attachment, snapshot=snapshot))
+        else:
+            root = document_root(project, figure["figure_id"])
+            if (root / "head.json").exists():
+                documents.append(document_evidence(root))
     source_current = query["source"]["current"]
     selected_source_current = source_sha256 == matched_sha if source_sha256 and matched_sha else None
     stale = [item for item in documents if not item["current"]
@@ -146,15 +200,20 @@ def project_evidence(project: Path, source: Path, source_sha256: str | None,
                 resolve_delivery_target(delivery_root)
             except (OSError, ValueError, TypeError, KeyError):
                 visible_conflict = True
-    state = ("source_revision_required" if source_current is False or selected_source_current is False else
+    # A known foreign publication owner is an explicit copy conflict regardless
+    # of that copy's source currentness. Source repair cannot transfer delivery
+    # ownership and must not be offered as a way around this conflict.
+    state = ("project_output_conflict" if delivery_owner is not None and delivery_owner != project else
+             "source_revision_required" if source_current is False or selected_source_current is False else
              "visible_edits_require_recovery" if visible_conflict else
              "source_evidence_missing" if source_current is None else
-             "document_conflict" if stale else
-             "project_output_conflict" if delivery_owner is not None and delivery_owner != project else "saved_project")
+             "document_conflict" if stale else "saved_project")
     figures = [{key: item[key] for key in ("figure_id", "title", "document", "document_sha256",
                 "spec", "spec_sha256")} for item in query["figures"]]
     identity = {"request_sha256": query["request_sha256"], "figures": figures,
                 "documents": documents, "source": query["source"]}
+    if store is not None and snapshot is not None and store.snapshot()["generation"] != snapshot["generation"]:
+        raise ValueError("The project generation changed during saved-work discovery.")
     return {"target": str(project), "kind": "project", "state": state,
             "source_relation": relation, "recorded_source": str(recorded),
             "recorded_source_sha256": matched_sha,

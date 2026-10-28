@@ -63,6 +63,23 @@ def current_source_files(project: Path, source: Path, figures: list[dict[str, An
         spec = json.loads(store.read_bytes(name, generation=resolver.generation))
         for path, digest in source_records(spec).items():
             add(str(path), digest)
+    # A multi-condition recipe can seal its original workbook in the canonical
+    # FigurePlan while the ledger/spec describe only its produced tables. The
+    # plan's file-tree seal selects an exact registered byte version; neither
+    # registration order nor another literal with identical bytes is authority.
+    original_input = Path(request["input"])
+    if not original_input.is_absolute():
+        original_input = project / original_input
+    if literal not in values and resolver.literal_path(original_input) == literal:
+        originals = [(identity, version) for identity, versions in snapshot["sources"].items()
+                     for version, entry in versions.items() if entry.get("locator") == literal]
+        if originals:
+            seal = (request.get("resolved_figure_plan") or {}).get("source_sha256")
+            selected = [(identity, version) for identity, version in originals
+                        if canonical_json_sha256({"kind": "file", "content_sha256": version}, allow_nan=False) == seal]
+            if len(selected) != 1:
+                raise ProjectConflict("The current original file needs one exact registered identity and canonical version.")
+            add(literal, selected[0][1])
     if any(len(digests) != 1 for digests in values.values()):
         raise ValueError("The current canonical request and selected native source versions disagree")
     files = {path: next(iter(digests)) for path, digests in values.items()}
