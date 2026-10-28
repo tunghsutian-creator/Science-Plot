@@ -18,6 +18,12 @@ from typing import Any
 # Matching implementation: qt/qtbase v6.11.2 qpdf.cpp:3255-3260,
 # qfontengine.cpp:242-254 and qfixed_p.h:24-39 (official Qt source).
 PDF_FIXED_SCALE = 64
+# QRawFont.boundingRect exposes QFixed metrics. CoreText's bbox edges rebuild
+# x+width and -y-height from at most two truncated QFixed scalars, each with
+# error <1/64 pixel. Enclose that representation before physical transforms.
+# qtbase v6.11.2 src/gui/text/coretext/qfontengine_coretext.mm:344-355 and
+# src/gui/text/qrawfont.cpp:756-762; this never relaxes the 2-mm target.
+GLYPH_METRIC_MAX_ERROR_PX = 2/PDF_FIXED_SCALE
 
 
 def qt_pdf_origin(value: float) -> float:
@@ -86,7 +92,9 @@ def painted_label_ink_bounds(widget: Any, state: dict[str, Any]) -> list[float]:
                             continue
                         # Native glyph metrics complement the outline's numerical
                         # bounding rectangle; neither is a guessed text padding.
-                        glyph = path.boundingRect().united(face.boundingRect(index))
+                        metric = face.boundingRect(index)
+                        error = GLYPH_METRIC_MAX_ERROR_PX
+                        glyph = path.boundingRect().united(metric.adjusted(-error, -error, error, error))
                         offset_x, offset_y = position.x(), position.y()-line.ascent()
                         native = glyph.translated(point.x()+offset_x, point.y()+offset_y)
                         exported = glyph.translated(qt_pdf_origin(point.x())+offset_x,

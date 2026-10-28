@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from sciplot_core.foundation.rectangle_geometry import rectangle_distance
-from sciplot_core.veusz_audit.direct_label_ink import PDF_FIXED_SCALE, painted_label_ink_bounds
+from sciplot_core.veusz_audit.direct_label_ink import GLYPH_METRIC_MAX_ERROR_PX, PDF_FIXED_SCALE, painted_label_ink_bounds
 from sciplot_core.veusz_audit.legend_geometry import _curve_distance
 from sciplot_core.veusz_audit.measurements import _setting_hidden
 from sciplot_core.veusz_audit.segmented_legend_geometry import _painted_box
@@ -68,4 +68,5 @@ def collect_direct_label_geometry(ordered: list[tuple[str, Any]],
         "hidden_data_paths": sorted(path for path, _ in hidden_curves), "unsupported": unsupported,
         "pdf_origin_quantization_device_pixel": 1/PDF_FIXED_SCALE,
         "coordinate_dpi": 72,
+        "glyph_metric_max_error_device_pixel": GLYPH_METRIC_MAX_ERROR_PX,
         "envelope": "unclipped_native_and_qt_pdf_origins_with_glyph_paths_metrics_and_complete_visible_xy_geometry"}

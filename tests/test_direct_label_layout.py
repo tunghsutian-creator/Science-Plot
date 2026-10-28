@@ -163,17 +163,20 @@ def test_exact_current_qa_is_new_auto_only_and_missing_measurement_fails_closed(
     assert issue[0]["severity"] == "critical" and issue[0]["measurement_scope"] == "unverified_current_native"
 
 
-@pytest.mark.parametrize("defect", ["none", "stale", "unsupported", "missing_curve", "outside", "collision", "label_collision", "old_control_box_measurement"])
+@pytest.mark.parametrize("defect", ["none", "stale", "unsupported", "missing_curve", "outside", "collision", "label_collision", "old_control_box_measurement", "old_glyph_metric_measurement"])
 def test_actual_qa_requires_complete_bound_text_frame_and_all_visible_curves(tmp_path, defect):
     from sciplot_core.foundation.file_hashing import file_sha256
     document = tmp_path / "plot.vsz"
     document.write_text("native bytes")
     spec = {"source_request": {KEY: VERSION}, "direct_labels": [{"name": "label_1"}, {"name": "label_2"}], "series": [{"name": "curve_1"}]}
     geometry = {"kind": "sciplot_native_direct_label_geometry", "version": 2, "coverage_complete": True,
+        "coordinate_dpi": 72, "pdf_origin_quantization_device_pixel": 1/64, "glyph_metric_max_error_device_pixel": 2/64,
         "labels": [{"path": "/page1/graph1/label_"+str(i), "graph_path": "/page1/graph1",
                     "minimum_curve_clearance_mm": 2.1, "minimum_label_clearance_mm": 2.1} for i in (1, 2)],
         "hidden_labels": [], "data_paths": ["/page1/graph1/curve_1"], "hidden_data_paths": [], "outside_plot_paths": []}
     audit = {"path": str(document), "sha256": file_sha256(document), "direct_label_geometry": geometry}
+    if defect == "old_glyph_metric_measurement":
+        geometry.pop("glyph_metric_max_error_device_pixel")
     if defect == "old_control_box_measurement":
         geometry["version"] = 1
     if defect == "stale":
@@ -210,3 +213,17 @@ def test_terminal_projection_and_normalization_preserve_the_recorded_layout_sele
     assert KEY not in authoritative_terminal_render_request(historical)
     with pytest.raises(ValueError, match="Unknown persisted"):
         authoritative_terminal_render_request({**request, KEY: None})
+
+
+@pytest.mark.parametrize("x,y,width,height", [(0.01, .001, .031, .046),
+    (-.01, -.001, .031, .046), (7.1, -3.2, 4.8, 2.3), (-7.1, 3.2, 4.8, 2.3)])
+def test_two_scalar_metric_reconstruction_is_enclosed_without_relaxing_clearance(x, y, width, height):
+    from sciplot_core.veusz_audit.direct_label_ink import GLYPH_METRIC_MAX_ERROR_PX, qt_pdf_origin
+    rx, ry, rw, rh = map(qt_pdf_origin, (x, y, width, height))
+    # Qt CoreText glyph metric construction, compared to original CT rectangle.
+    metric = [rx, -ry-rh, rx+rw, -ry]
+    actual = [x, -y-height, x+width, -y]
+    error = GLYPH_METRIC_MAX_ERROR_PX
+    assert metric[0]-error <= actual[0] and metric[1]-error <= actual[1]
+    assert metric[2]+error >= actual[2] and metric[3]+error >= actual[3]
+    assert error == 2/64  # Representation error in device pixels, not QA tolerance.

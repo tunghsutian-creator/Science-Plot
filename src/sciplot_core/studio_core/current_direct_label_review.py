@@ -8,6 +8,7 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.policy.frame_export import DEFAULT_LEGEND_CURVE_CLEARANCE_MM
 from sciplot_core.studio_render.direct_label_layout import DIRECT_LABEL_LAYOUT_KEY, active_direct_label_layout
+from sciplot_core.veusz_audit.direct_label_ink import GLYPH_METRIC_MAX_ERROR_PX, PDF_FIXED_SCALE
 
 
 def current_direct_label_issues(issues: list[dict[str, Any]], spec: dict[str, Any],
@@ -38,7 +39,10 @@ def current_direct_label_issues(issues: list[dict[str, Any]], spec: dict[str, An
     if (Path(str(audit.get("path", ""))).resolve() != document_path.resolve()
             or audit.get("sha256") != file_sha256(document_path)
             or not isinstance(geometry, dict) or geometry.get("coverage_complete") is not True
-            or geometry.get("kind") != "sciplot_native_direct_label_geometry" or geometry.get("version") != 2):
+            or geometry.get("kind") != "sciplot_native_direct_label_geometry" or geometry.get("version") != 2
+            or geometry.get("coordinate_dpi") != 72
+            or geometry.get("pdf_origin_quantization_device_pixel") != 1/PDF_FIXED_SCALE
+            or geometry.get("glyph_metric_max_error_device_pixel") != GLYPH_METRIC_MAX_ERROR_PX):
         return unavailable("The exact-current native inline-label geometry is incomplete or stale.")
     records, hidden = geometry.get("labels"), geometry.get("hidden_labels")
     paths, hidden_curves = geometry.get("data_paths"), geometry.get("hidden_data_paths")
