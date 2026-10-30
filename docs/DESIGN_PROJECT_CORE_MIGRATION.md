@@ -536,3 +536,14 @@ repairs remain separate evidence. Component checks and static review do not
 replace the subsequent frozen full/native/capture/access/CI gates. The open
 resource-role and NativeSuite root-field findings retain their stated limits;
 closing this read boundary does not certify the entire project architecture.
+
+The temporary-view boundary also has a real configuration counterexample. With
+the stdlib temporary base cached as the project directory, the 3287 query cleaned
+its files but changed the directory mtime. That original result remains retained.
+The shared resolver now validates an explicit existing base before any
+`gettempdir` probing or creation. Both literal/resolved project and namespace
+roots, scoped resource grants and inherited query protections participate.
+External ancestors remain usable with disjoint child-name prefixes. Protected
+cached/environment bases and aliases refuse without a metadata write; normal
+external success and exception cleanup retain their existing behavior. This is
+a query-view location check, not a new temporary-files framework or OS sandbox.

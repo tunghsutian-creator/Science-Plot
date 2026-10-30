@@ -482,6 +482,11 @@ their selected version. Missing physical source views may use finite external
 addresses do not become public locators or command capabilities. Cold attached
 queries leave disposable project caches absent and report unavailable export
 evidence honestly. Read-only describes project-state effects, not zero local IO.
+The configured or cached temporary base is resolved and checked before any
+probing write or directory creation. Project roots, exact resource grants and
+selected namespace aliases are excluded; an external ancestor is allowed only
+with child names disjoint from its protected descendants. An unsafe configuration
+is refused without changing environment settings or writing into the project.
 
 A failed Managed export-only transaction with an exact native publication-QA
 layout rejection may be superseded by a nonempty typed presentation correction.
