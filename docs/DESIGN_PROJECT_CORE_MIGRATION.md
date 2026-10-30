@@ -439,3 +439,49 @@ source/access capture, full release gates and supported-platform CI. Unknown
 private inventory and real-client token/cost telemetry cannot become PASS through
 software test counts. One combined frozen batch receives final acceptance;
 workers use bounded relevant feedback rather than independent full reruns.
+
+
+## 2026-10-30 acceptance follow-up
+
+This is the pre-freeze repair record, not a replacement for exact-version runtime
+receipts. The aa725 full run stopped without original completion/wait after
+7923 successful calls and seven reported failures; its source remains frozen.
+All recorded process candidates were absent on independent inspection. The
+actual parent exit cause is unknown, so no capture completeness or exit status
+is reconstructed from the stale running label.
+
+The failures have three shared causes and finite repair boundaries:
+
+- Native preview formerly reached setting validation before qualifying a known
+  saved member. The shared observed read-witness owner now qualifies registered
+  paths, modes, non-native bytes and selected membership before any native worker.
+  Empty requests cannot authorize adoption. A nonempty validated intent whose
+  actual changes are empty remains compatible. Settings validation still precedes
+  audit and adoption; the audit rechecks the same witness before the sole writer's
+  locked CAS. Unrelated figure updates remain independent. A race fixture now
+  injects the actual read-witness boundary instead of a retired helper.
+- Three panel rejection controls relied on the old default FTIR clipping defect.
+  They now create that exact violation through an actual bound native save,
+  preserving scientific payload, source/spec bytes and the original rejection
+  assertions. A separate positive control verifies the corrected persistent
+  creation default. Production QA, geometry tolerances and goldens are unchanged.
+- The receipt regression mixed an environment-dependent fixture-root address into
+  its 2300-character content budget. Only five explicit, validated fixture
+  locators use a fixed test prefix for that comparison. The limit, full journal,
+  hashes and absolute public addresses remain; this is not a 2300-total-character
+  public guarantee or a token/cost measurement. Short/deep fixture roots and
+  pointer ownership are checked explicitly.
+
+These were respectively a central admission-order defect and migration/fixture
+coverage defects, not a common environment excuse. Preflight must include both
+valid native-save continuation and refusal/race controls; negative QA fixtures
+must construct their violation rather than depend on a broken default.
+
+One integrated source/config/docs/local-log snapshot will own the subsequent
+collection, node classification, static checks, finite combination and full run.
+Progress stays outside that closure. A partial full or scoped access receipt is
+never promoted to complete software/private-access acceptance. A second unexplained
+loss of completion should trigger host/run-lifecycle diagnosis before another
+full. Existing resource-role, generic-query side-effect, numerical-runtime and
+AI-disclosure/usage limitations in the architecture review remain explicit; these
+repairs do not close every project-level architecture finding.
