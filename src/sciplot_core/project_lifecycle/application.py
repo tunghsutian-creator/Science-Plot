@@ -18,7 +18,7 @@ from sciplot_core.plot_document import (
     validate_patch,
 )
 from sciplot_core.project_lifecycle.paths import canonical_path
-from sciplot_core.project_lifecycle.context import external_project_session
+from sciplot_core.project_lifecycle.context import external_project_session, project_query
 
 from sciplot_core.plot_engine.backend import PlotBackend
 from sciplot_core.plot_engine.cache_identity import build_key
@@ -123,7 +123,7 @@ class ProjectApplication(CommandDispatch):
     def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
         description = require_selector(description)
         root = canonical_path(plot)
-        with external_project_session(root):
+        with project_query(root):
             return self._describe(root, description=description)
 
     def _describe(self, root: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -188,27 +188,28 @@ class ProjectApplication(CommandDispatch):
         request = validate_intent(request)
         root = canonical_path(plot)
         if request["mode"] == "plan":
-            # No session lease, native inspection, journal reservation, preview,
-            # or renderer call: a plan is a read of one current frozen revision.
-            head = load_head(root)
-            _, plan = compile_intent(head["document"], request)
-            require_current(self.backend, head["binding"])
-            pending = active(root)
-            if pending and pending["phase"] not in {"complete", "rejected"}:
-                raise _pending_edit_error(root, pending, "Finish or reject the pending transaction first.")
-            current = load_head(root)["document"]
-            if (current["plot_id"], current["revision"], current["scientific_hash"],
-                    current["presentation_hash"]) != (head["document"]["plot_id"], head["document"]["revision"],
-                                                     head["document"]["scientific_hash"],
-                                                     head["document"]["presentation_hash"]):
-                raise EngineError("document_revision_conflict", "The plot changed while planning this edit.",
-                                  action="plot.describe", description={"scope": "summary"},
-                                  current_revision=current["revision"])
-            require_current(self.backend, head["binding"])
-            pending = active(root)
-            if pending and pending["phase"] not in {"complete", "rejected"}:
-                raise _pending_edit_error(root, pending, "An edit began while planning this request.")
-            return {"plot": str(root), **plan}
+            with project_query(root):
+                # No session lease, native inspection, journal reservation, preview,
+                # or renderer call: a plan is a read of one current frozen revision.
+                head = load_head(root)
+                _, plan = compile_intent(head["document"], request)
+                require_current(self.backend, head["binding"])
+                pending = active(root)
+                if pending and pending["phase"] not in {"complete", "rejected"}:
+                    raise _pending_edit_error(root, pending, "Finish or reject the pending transaction first.")
+                current = load_head(root)["document"]
+                if (current["plot_id"], current["revision"], current["scientific_hash"],
+                        current["presentation_hash"]) != (head["document"]["plot_id"], head["document"]["revision"],
+                                                         head["document"]["scientific_hash"],
+                                                         head["document"]["presentation_hash"]):
+                    raise EngineError("document_revision_conflict", "The plot changed while planning this edit.",
+                                      action="plot.describe", description={"scope": "summary"},
+                                      current_revision=current["revision"])
+                require_current(self.backend, head["binding"])
+                pending = active(root)
+                if pending and pending["phase"] not in {"complete", "rejected"}:
+                    raise _pending_edit_error(root, pending, "An edit began while planning this request.")
+                return {"plot": str(root), **plan}
         with external_project_session(root), admitted(root, "intent", request):
             saved = transaction_path(root, request["idempotency_key"])
             # Recompile a retry against the *original* snapshot. Resolving a

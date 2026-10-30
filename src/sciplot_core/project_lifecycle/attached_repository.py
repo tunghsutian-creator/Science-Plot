@@ -76,6 +76,7 @@ class AttachedProjectRepository(FileProjectRepository):
         lock.mkdir(parents=True, exist_ok=True, mode=0o700)
         with exclusive_directory_lease(lock) as held:
             with self.backend_scope():
+                self._materialize_history()
                 yield
             held.verify()
 
@@ -83,7 +84,6 @@ class AttachedProjectRepository(FileProjectRepository):
         return self.attachment.origin
 
     def runtime_envelope(self, root: Path, envelope: dict[str, Any]) -> dict[str, Any]:
-        self._materialize_history()
         result: dict[str, Any] = metadata_view(envelope, self.attachment)
         return result
 
@@ -270,7 +270,6 @@ class AttachedProjectRepository(FileProjectRepository):
             raise EngineError("document_state_invalid", "Attached semantic JSON must be an object.")
         if path.name == "transaction.json":
             saved_command(value)
-            self._materialize_history()
         relative = self.attachment.relative(path)
         if relative is not None and (relative.parts[0] == "revisions" or relative.as_posix() == "head.json"):
             return value  # Original envelope digest is checked before runtime projection.

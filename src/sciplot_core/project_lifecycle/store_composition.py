@@ -33,9 +33,7 @@ def tracked_namespace_store(path: Path) -> tuple[FileProjectStore, Path] | None:
     from sciplot_core.project_store.io import STORE
     from .legacy_namespace import known_head
 
-    namespace = next((item for item in (path, *path.parents)
-                      if (item.parent.name == ".sciplot_documents" and item.name not in {"managed", "creations"})
-                      or item.parent.name == "managed" and item.parent.parent.name == ".sciplot_documents"), None)
+    namespace = namespace_root(path)
     if namespace is None:
         return None
     for project in namespace.parent.parents:
@@ -48,3 +46,10 @@ def tracked_namespace_store(path: Path) -> tuple[FileProjectStore, Path] | None:
 def project_identity(store: FileProjectStore) -> str:
     with store._locked(allow_pending=True) as (_io, current):
         return str(current["project_id"])
+
+
+def namespace_root(path: Path) -> Path | None:
+    """The closed existing semantic namespace shape, including descendant reads."""
+    return next((item for item in (path, *path.parents)
+                      if (item.parent.name == ".sciplot_documents" and item.name not in {"managed", "creations"})
+                      or item.parent.name == "managed" and item.parent.parent.name == ".sciplot_documents"), None)

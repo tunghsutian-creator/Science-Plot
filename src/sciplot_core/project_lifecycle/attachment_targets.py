@@ -81,7 +81,7 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
     if len(matches) > 1 or target == store.root and figure_id is None and len(index["attachments"]) > 1:
         raise EngineError("semantic_attachment_ambiguous", "Choose one exact attached figure or plot ID.",
                           figures=[item["figure_id"] for item in index["attachments"].values()])
-    if (FileProjectRepository.has_head(repository, target) or known_head(store, target)) and target != store.root:
+    if (known_head(store, target) or FileProjectRepository().has_head(target)) and target != store.root:
         # The human/host supplied this one exact old namespace; never enumerate
         # its source parent's other .sciplot_documents records.
         attachment = attach_existing(store, target, figure_id=figure_id, validate=repository.validate_attachment)

@@ -13,7 +13,9 @@ from .attached_repository import AttachedProjectRepository
 from .attachment_index import Attachment, owned_marker, read_index
 from .errors import EngineError
 from .repository import FileProjectRepository
-from .store_composition import existing_store, project_identity, tracked_namespace_store
+from .frozen_namespace import NamespaceQueryRepository
+from sciplot_core.project_store.source_resolver import query_sources
+from .store_composition import existing_store, project_identity, tracked_namespace_store, namespace_root
 
 
 @dataclass
@@ -30,6 +32,7 @@ class ComposedProjectRepository(FileProjectRepository):
     def __init__(self, *, lease: Any = None, attachment_admission: Any = None) -> None:
         super().__init__(lease=lease)
         self._attachment_admission = attachment_admission
+        self._queries: ContextVar[list[NamespaceQueryRepository] | None] = ContextVar("sciplot_semantic_query", default=None)
 
     def validate_attachment(self, namespace: Any, envelope: dict[str, Any], attachment: Attachment) -> Any:
         if self._attachment_admission is None:
@@ -81,7 +84,9 @@ class ComposedProjectRepository(FileProjectRepository):
         if selected is None:
             yield
         else:
-            with selected.backend_scope(binding.get("_semantic_project_generation")):
+            scope = (query_sources(selected.attachment.store, binding.get("_semantic_project_generation"))
+                     if self._queries.get() is not None else selected.backend_scope(binding.get("_semantic_project_generation")))
+            with scope:
                 yield
 
     def selected_store(self) -> FileProjectStore | None:
@@ -147,25 +152,77 @@ class ComposedProjectRepository(FileProjectRepository):
         if marker is not None:
             raise EngineError("semantic_attachment_import_pending", "The namespace transfer is fenced but its complete generation is not yet published.",
                               action="open_attached_project")
-        if tracked is not None:
-            from .attachment_import import attach_existing
-
-            store, namespace = tracked
-            if explicit is not None and project_identity(explicit) != project_identity(store):
-                raise EngineError("semantic_attachment_project_conflict", "The explicit semantic path belongs to another project generation.")
-            return self.select(attach_existing(store, namespace, figure_id=None, validate=self.validate_attachment))
         return None
+
+    def _tracked(self, path: Path) -> tuple[FileProjectStore, Path] | None:
+        from .legacy_namespace import known_head
+
+        tracked = tracked_namespace_store(path)
+        explicit, namespace = self.selected_store(), namespace_root(path)
+        if tracked is not None and explicit is not None and project_identity(explicit) != project_identity(tracked[0]):
+            raise EngineError("semantic_attachment_project_conflict", "The explicit semantic path belongs to another project generation.")
+        if tracked is None and explicit is not None and namespace is not None and known_head(explicit, namespace):
+            return explicit, namespace
+        return tracked
+
+    def _owner(self, path: Path) -> FileProjectRepository:
+        queries = self._queries.get()
+        if queries is not None:
+            for view in queries:
+                if view.contains(path):
+                    return view
+        selected = self._discover(path)
+        if selected is not None:
+            return selected
+        tracked = self._tracked(path)
+        if tracked is None:
+            return self
+        view = NamespaceQueryRepository(*tracked)
+        if queries is not None:
+            queries.append(view)
+        return view
+
+    def _mutation_owner(self, path: Path) -> FileProjectRepository:
+        if self._queries.get() is not None:
+            raise EngineError("document_query_read_only", "A semantic query cannot acquire a writer or publish state.")
+        return self._owner(path)
+
+    @contextmanager
+    def query_scope(self, root: Path) -> Iterator[None]:
+        if self._queries.get() is not None:
+            yield
+            return
+        queries: list[NamespaceQueryRepository] = []
+        token = self._queries.set(queries)
+        try:
+            owner = self._owner(root)
+            store = (owner.attachment.store if isinstance(owner, AttachedProjectRepository)
+                     else owner.store if isinstance(owner, NamespaceQueryRepository) else None)
+            with ExitStack() as stack:
+                if store is not None:
+                    sources = owner.load_head(root)["document"]["scientific"]["data_sources"] if isinstance(owner, NamespaceQueryRepository) else ()
+                    stack.enter_context(query_sources(store, semantic_sources=sources))
+                yield
+                for view in queries:
+                    view.verify()
+        finally:
+            self._queries.reset(token)
 
     def runtime_path(self, path: Path) -> Path:
         selected = self._discover(path)
         return selected.runtime_path(path) if selected is not None else path
 
-    def _owner(self, path: Path) -> FileProjectRepository:
-        return self._discover(path) or self
-
     def lease(self, root: Path) -> Any:
-        owner = self._owner(root)
-        return super().lease(root) if owner is self else owner.lease(root)
+        if self._queries.get() is not None:
+            raise EngineError("document_query_read_only", "A semantic query cannot acquire a writer or migrate ownership.")
+        owner = self._discover(root)
+        if owner is None:
+            tracked = self._tracked(root)
+            if tracked is not None:
+                from .attachment_import import attach_existing
+
+                owner = self.select(attach_existing(*tracked, figure_id=None, validate=self.validate_attachment))
+        return super().lease(root) if owner is None else owner.lease(root)
 
     def exists(self, path: Path) -> bool:
         owner = self._owner(path)
@@ -176,7 +233,7 @@ class ComposedProjectRepository(FileProjectRepository):
         return super().read(path) if owner is self else owner.read(path)
 
     def write(self, path: Path, payload: dict[str, Any]) -> None:
-        owner = self._owner(path)
+        owner = self._mutation_owner(path)
         if owner is self:
             super().write(path, payload)
         else:
@@ -191,21 +248,21 @@ class ComposedProjectRepository(FileProjectRepository):
         return super().load_revision(root, revision) if owner is self else owner.load_revision(root, revision)
 
     def commit(self, root: Path, document: dict[str, Any], binding: dict[str, Any], transaction: str) -> None:
-        owner = self._owner(root)
+        owner = self._mutation_owner(root)
         if owner is self:
             super().commit(root, document, binding, transaction)
         else:
             owner.commit(root, document, binding, transaction)
 
     def persist(self, root: Path, transaction: dict[str, Any]) -> None:
-        owner = self._owner(root)
+        owner = self._mutation_owner(root)
         if owner is self:
             super().persist(root, transaction)
         else:
             owner.persist(root, transaction)
 
     def reserve(self, root: Path, transaction: dict[str, Any]) -> None:
-        owner = self._owner(root)
+        owner = self._mutation_owner(root)
         if owner is self:
             super().reserve(root, transaction)
         else:
@@ -216,7 +273,7 @@ class ComposedProjectRepository(FileProjectRepository):
         return super().content_snapshot(path) if owner is self else owner.content_snapshot(path)
 
     def publish_content(self, path: Path, payload: bytes, verify_existing: Callable[[], None]) -> None:
-        owner = self._owner(path)
+        owner = self._mutation_owner(path)
         if owner is self:
             super().publish_content(path, payload, verify_existing)
         else:
@@ -227,14 +284,14 @@ class ComposedProjectRepository(FileProjectRepository):
         return super().json_members(directory, pattern) if owner is self else owner.json_members(directory, pattern)
 
     def prepare_namespace(self, root: Path) -> None:
-        owner = self._owner(root)
+        owner = self._mutation_owner(root)
         if owner is self:
             super().prepare_namespace(root)
         else:
             owner.prepare_namespace(root)
 
     def create_namespace(self, root: Path) -> None:
-        owner = self._owner(root)
+        owner = self._mutation_owner(root)
         if owner is self:
             super().create_namespace(root)
         else:

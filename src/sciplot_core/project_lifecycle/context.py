@@ -130,6 +130,10 @@ def reserve(root: Path, transaction: dict[str, Any]) -> None:
     selected.reserve(root, transaction)
 
 
+def project_query(root: Path) -> Any:
+    return repository().query_scope(root)
+
+
 def external_project_session(root: Path) -> Any:
     return repository().lease(root)
 

@@ -49,11 +49,12 @@ def _path(value: str, attachment: Attachment, *, storing: bool) -> str:
     return value
 
 
-def metadata_view(value: Any, attachment: Attachment, *, storing: bool = False, binding: bool = False) -> Any:
+def path_metadata_view(value: Any, path_view: Any, *, binding_identity: str | None = None) -> Any:
+    """Project metadata only, retaining sealed scientific documents verbatim."""
     if isinstance(value, str):
-        return _path(value, attachment, storing=storing)
+        return path_view(value)
     if isinstance(value, list):
-        return [metadata_view(item, attachment, storing=storing, binding=binding) for item in value]
+        return [path_metadata_view(item, path_view, binding_identity=binding_identity) for item in value]
     if not isinstance(value, dict):
         return deepcopy(value)
     if value.get("kind") in {"sciplot_document", "sciplot_plot_ir", "sciplot_figure_ir"} or {"id", "columns", "provenance"} <= value.keys():
@@ -61,12 +62,20 @@ def metadata_view(value: Any, attachment: Attachment, *, storing: bool = False, 
     result = {}
     for key, item in value.items():
         if key in {"_semantic_attachment_id", "_semantic_project_generation"}:
-            continue  # Invocation capabilities are never serialized as history.
+            continue
         if key in _PROTECTED:
             result[key] = deepcopy(item)
         else:
-            new_key = _path(key, attachment, storing=storing) if isinstance(key, str) else key
-            result[new_key] = metadata_view(item, attachment, storing=storing, binding=key in {"binding", "before_binding", "_managed_binding", "_binding"})
+            new_key = path_view(key) if isinstance(key, str) else key
+            result[new_key] = path_metadata_view(item, path_view, binding_identity=binding_identity)
+            if key in {"binding", "before_binding", "_managed_binding", "_binding"} and binding_identity is not None:
+                result[new_key]["_semantic_attachment_id"] = binding_identity
+    return result
+
+
+def metadata_view(value: Any, attachment: Attachment, *, storing: bool = False, binding: bool = False) -> Any:
+    result = path_metadata_view(value, lambda value: _path(value, attachment, storing=storing),
+                                binding_identity=None if storing else attachment.entry["id"])
     if binding and not storing:
         result["_semantic_attachment_id"] = attachment.entry["id"]
     return result

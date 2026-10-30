@@ -49,3 +49,26 @@ def known_head(store: FileProjectStore, original: Path) -> bool:
             return store.logical_path(original / "head.json") in current["files"]
         except ProjectStoreError:
             return False
+
+
+def capture_registered(store: FileProjectStore, target: Path) -> LegacyNamespace:
+    """Observe existing canonical membership; never import, repair or adopt."""
+    from sciplot_core.project_store.namespace_io import capture as observe
+    from .errors import EngineError
+
+    with store._locked() as (io, current):
+        logical = logical_for_literal(current, str(target / "head.json"))
+        if logical is None:
+            logical = store.logical_path(target / "head.json")
+        prefix = logical.removesuffix("/head.json")
+        observed = observe(io, current, prefix)
+        expected = {name[len(prefix) + 1:]: entry for name, entry in current["files"].items()
+                    if name.startswith(prefix + "/")}
+        members = observed["members"]
+        if (set(members) != set(expected) or any(
+                members[name]["sha256"] != entry["sha256"] or members[name]["mode"] != entry["mode"]
+                for name, entry in expected.items())):
+            raise EngineError("document_inputs_changed", "The registered semantic namespace differs from its committed generation.")
+        return LegacyNamespace(Path(observed["origin_root"]), Path(observed["path"]), prefix,
+            {name: entry["data"] for name, entry in members.items()},
+            {name: entry["mode"] for name, entry in members.items()}, observed["directory"])

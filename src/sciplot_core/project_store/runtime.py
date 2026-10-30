@@ -119,8 +119,9 @@ def inspect_runtime_source_file(original: str | Path, *, expected_sha256: str | 
 
     selected = selected_source_resolver()
     if isinstance(selected, ProjectSourceResolver):
+        source_id = selected.source_identity(original, expected_sha256, source_id)
         explicit = inspect_invocation_file(selected.store, original, expected_sha256=expected_sha256,
-            source_id=source_id, generation=selected.generation)
+            source_id=source_id, generation=selected.inspection_generation)
         if explicit is not None:
             return explicit
     if isinstance(selected, ProjectCandidateResolver) and selected.logical_resource(original) is not None:
@@ -128,7 +129,7 @@ def inspect_runtime_source_file(original: str | Path, *, expected_sha256: str | 
             source_id=source_id), expected_sha256)
     if isinstance(selected, ProjectSourceResolver):
         return inspect_file(selected.store, original, expected_sha256=expected_sha256,
-                            source_id=source_id, generation=selected.generation)
+                            source_id=source_id, generation=selected.inspection_generation)
     return physical_file(resolve_source_path(original, expected_sha256=expected_sha256,
                          source_id=source_id), expected_sha256)
 
@@ -142,16 +143,16 @@ def inspect_runtime_source_tree(original: str | Path, *, allowed: set[str] | Non
 
     selected = selected_source_resolver()
     if isinstance(selected, ProjectSourceResolver):
-        whole = inspect_invocation_tree(selected.store, original, generation=selected.generation, allowed=allowed)
+        whole = inspect_invocation_tree(selected.store, original, generation=selected.inspection_generation, allowed=allowed)
         if whole is not None:
             return whole
-        explicit = inspect_invocation_file(selected.store, original, generation=selected.generation, tree=True)
+        explicit = inspect_invocation_file(selected.store, original, generation=selected.inspection_generation, tree=True)
         if explicit is not None:
             return digest({"kind": "file", "content_sha256": explicit.sha256})
     if isinstance(selected, ProjectCandidateResolver) and selected.logical_resource(original) is not None:
         return observe(str(selected.resolve_path(original)), allowed=allowed)[0]
     if isinstance(selected, ProjectSourceResolver):
-        return inspect_tree(selected.store, original, generation=selected.generation, allowed=allowed)
+        return inspect_tree(selected.store, original, generation=selected.inspection_generation, allowed=allowed)
     return observe(str(resolve_source_path(original).expanduser().absolute()), allowed=allowed)[0]
 
 

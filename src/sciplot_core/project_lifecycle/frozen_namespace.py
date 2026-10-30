@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Callable
 
+from sciplot_core.project_store.repository import FileProjectStore
+from .attachment_projection import path_metadata_view
+from .legacy_namespace import capture_registered
+
 from .errors import EngineError
 from .repository import FileProjectRepository
 
@@ -69,3 +73,41 @@ class FrozenNamespaceRepository(FileProjectRepository):
 
     def require_empty_output(self, output: Path) -> None:
         self.prepare_namespace(output)
+
+
+class NamespaceQueryRepository(FrozenNamespaceRepository):
+    """A captured read witness, never a second head or attachment identity."""
+    def __init__(self, store: FileProjectStore, namespace: Path) -> None:
+        self.store, self.namespace = store, namespace
+        self.witness = capture_registered(store, namespace)
+        super().__init__(self.witness.origin, self.witness.physical, self.witness.members)
+        with store._locked() as (_io, current):
+            self.pairs = [(Path(origin), store.root if not key else store.locations[key])
+                          for key, origin in current["locators"].items() if not key or key in store.locations]
+        self.pairs.insert(0, (self.origin, self.physical))
+
+    def contains(self, path: Path) -> bool:
+        return any(path == root or path.is_relative_to(root) for root in (self.origin, self.physical))
+
+    def _path(self, value: str) -> str:
+        path = Path(value)
+        if path.is_absolute():
+            for origin, actual in sorted(self.pairs, key=lambda pair: len(str(pair[0])), reverse=True):
+                if path == origin or path.is_relative_to(origin):
+                    return str(actual / path.relative_to(origin))
+        return value
+
+    def validation_root(self, root: Path) -> Path:
+        return self.origin
+
+    def runtime_envelope(self, root: Path, envelope: dict[str, Any]) -> dict[str, Any]:
+        result: dict[str, Any] = path_metadata_view(envelope, self._path)
+        return result
+
+    def read(self, path: Path) -> dict[str, Any]:
+        value = super().read(path)
+        return value if path.name == "head.json" or path.parent.name == "revisions" else self.runtime_envelope(path, value)
+
+    def verify(self) -> None:
+        if capture_registered(self.store, self.namespace) != self.witness:
+            raise EngineError("document_revision_conflict", "The registered semantic namespace changed during this query.")

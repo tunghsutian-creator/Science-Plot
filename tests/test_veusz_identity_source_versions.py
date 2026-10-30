@@ -1,10 +1,11 @@
 """Native bindings keep file-byte versions distinct from complete tree seals."""
 from copy import deepcopy
+from contextlib import nullcontext
 
 import pytest
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.foundation.source_locations import resolve_source_path, literal_source_path
 from sciplot_core.plot_backends.veusz_identity import fingerprint, require_current
 from sciplot_core.plot_document import DocumentError
 from sciplot_core.project_store import FileProjectStore, ProjectStoreError
@@ -31,8 +32,10 @@ def test_registered_file_tree_uses_its_byte_version_and_preserves_composite(tmp_
         store = FileProjectStore.import_bundle(store.export_bundle(tmp_path / 'bundle'), tmp_path / 'cold')
         source.rename(tmp_path / 'original-offline')
         binding['project'] = str(store.root)
+    before = _persistent_tree(store.root)
     require_current(binding)
     assert fingerprint(binding) == binding['fingerprint']
+    assert _persistent_tree(store.root) == before
     with project_runtime(store), pytest.raises(ProjectStoreError, match='exact registered version'):
         resolve_source_path(source)
 
@@ -47,8 +50,10 @@ def test_complete_directory_witness_keeps_all_members_live_or_imported(tmp_path,
         source.rename(tmp_path / 'original-offline')
         binding['project'] = str(store.root)
     with current_preparation_runtime(store, store.snapshot()):
+        before = _persistent_tree(store.root)
         require_current(binding)
         assert fingerprint(binding) == binding['fingerprint']
+        assert _persistent_tree(store.root) == before
 
 
 @pytest.mark.parametrize('changed', ['bytes', 'composite_as_file_sha', 'missing_byte_proof'])
@@ -90,3 +95,52 @@ def test_unbound_cold_directory_cannot_be_reconstructed_from_used_files(tmp_path
     binding['project'] = str(cold.root)
     with pytest.raises((DocumentError, ProjectStoreError)):
         require_current(binding)
+
+
+def _persistent_tree(root):
+    return {str(path.relative_to(root)): (path.stat().st_mode, path.stat().st_mtime_ns,
+            path.read_bytes() if path.is_file() else None)
+            for path in [root, *root.rglob('*')]}
+
+
+@pytest.mark.parametrize('exception', [False, True])
+def test_query_sealed_file_view_is_external_finite_and_cleaned_on_every_exit(tmp_path, exception):
+    import stat
+    from sciplot_core.project_store.incoming_sources import SourceExpectation
+    from sciplot_core.project_store.runtime import sealed_source_runtime
+    from sciplot_core.project_store.source_resolver import query_sources
+
+    store, source, _paths, _old, _tree = current_revision(tmp_path)
+    literal = str(source)
+    version = file_sha256(source)
+    snapshot = store.snapshot()
+    identities = [identity for identity, versions in snapshot['sources'].items()
+                  if version in versions and versions[version]['locator'] == literal]
+    assert len(identities) == 1
+    expected = source.read_bytes()
+    before = _persistent_tree(tmp_path)
+    with pytest.raises(RuntimeError, match='backend failure') if exception else nullcontext():
+        with sealed_source_runtime(store, [SourceExpectation(literal, identities[0], version)]), query_sources(store):
+            target = resolve_source_path(source, expected_sha256=version, source_id=identities[0])
+            assert not target.is_relative_to(tmp_path) and target.read_bytes() == expected
+            assert stat.S_IMODE(target.stat().st_mode) == 0o400
+            assert stat.S_IMODE(target.parent.stat().st_mode) == 0o700
+            assert list(target.parent.iterdir()) == [target]
+            assert literal_source_path(target) == literal
+            assert resolve_source_path(source, expected_sha256=version, source_id=identities[0]) == target
+            if exception:
+                raise RuntimeError('backend failure')
+    assert not target.exists() and not target.parent.exists()
+    assert _persistent_tree(tmp_path) == before
+
+
+def test_query_does_not_expose_unregistered_paths_in_a_selected_project(tmp_path):
+    from sciplot_core.project_store.source_resolver import query_sources
+
+    store, _source, _paths, _old, _tree = current_revision(tmp_path)
+    unregistered = store.root / 'never-admitted.txt'
+    unregistered.write_text('not a registered project input')
+    before = _persistent_tree(tmp_path)
+    with query_sources(store), pytest.raises(ProjectStoreError, match='no exact preserved locator'):
+        resolve_source_path(unregistered)
+    assert _persistent_tree(tmp_path) == before

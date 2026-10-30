@@ -49,6 +49,11 @@ class FileProjectRepository:
                  snapshot_validator: Callable[[Path, dict[str, Any]], None] | None = None) -> None:
         self._lease, self._validate_snapshot = lease, snapshot_validator
 
+    @contextmanager
+    def query_scope(self, root: Path) -> Iterator[None]:
+        """Standalone reads have no writer lease, migration or repair capability."""
+        yield
+
     def lease(self, root: Path) -> AbstractContextManager[Any]:
         from .attachment_index import require_local_owner
 

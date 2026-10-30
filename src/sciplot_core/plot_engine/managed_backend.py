@@ -54,18 +54,22 @@ class ManagedBackend:
 
     @staticmethod
     def _source_hash(canonical: dict[str, Any] | None, name: str, sha: str) -> str | None:
-        from sciplot_core.foundation.source_locations import selected_source_resolver
+        from sciplot_core.foundation.source_locations import selected_source_resolver, literal_source_path
         from sciplot_core.project_store.runtime import ProjectSourceResolver, inspect_runtime_source_file
         from sciplot_core.project_store.errors import ProjectStoreError
 
-        sources = [item for item in canonical['scientific']['data_sources'] if item['path'] == name] if canonical else []
+        try:
+            literal = literal_source_path(Path(name))
+        except (OSError, ProjectStoreError):
+            return None
+        sources = [item for item in canonical['scientific']['data_sources'] if item['path'] in {name, literal}] if canonical else []
         resolver = selected_source_resolver()
         if sources and isinstance(resolver, ProjectSourceResolver) and not getattr(resolver, 'pending', ()):
             # Currentness observes an explicitly selected version without
             # materializing its disposable source view. An in-flight declared
             # source still belongs to its original admission/compile path.
             try:
-                values = {inspect_runtime_source_file(name, expected_sha256=sha, source_id=item['source_id']).sha256
+                values = {inspect_runtime_source_file(item['path'], expected_sha256=sha, source_id=item['source_id']).sha256
                           for item in sources}
             except (OSError, ProjectStoreError):
                 return None

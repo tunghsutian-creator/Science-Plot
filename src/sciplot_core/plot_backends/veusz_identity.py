@@ -5,10 +5,12 @@ from contextlib import nullcontext
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
-from sciplot_core.foundation.source_tree import source_tree_sha256
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.plot_document import DocumentError
 from sciplot_core.project_store.errors import ProjectStoreError
-from sciplot_core.project_store.runtime import project_runtime, resolve_runtime_path
+from sciplot_core.project_store.runtime import resolve_runtime_path, inspect_runtime_source_file, inspect_runtime_source_tree
+from sciplot_core.project_store.source_resolver import QuerySourceResolver, query_sources
 from sciplot_core.project_commands.read_projections import projection_digest
 from sciplot_core.source_coverage.native_file_snapshots import observed_native_document
 
@@ -17,7 +19,7 @@ def fingerprint(binding: dict[str, Any]) -> dict[str, Any]:
     from sciplot_core.studio_core.project_command_scope import project_store
 
     project = Path(binding["project"])
-    context = project_runtime(project_store(project)) if (project / ".sciplot_store").exists() else nullcontext()
+    context = query_sources(project_store(project)) if (project / ".sciplot_store").exists() else nullcontext()
     with context:
         files = {}
         for path, expected in binding["files"].items():
@@ -35,9 +37,19 @@ def fingerprint(binding: dict[str, Any]) -> dict[str, Any]:
         return {"files": files,
             # A file's tree seal wraps its byte SHA; it is never itself a file
             # version. Directories retain their explicit complete-tree scope.
-            "source_trees": {path: source_tree_sha256(Path(path), expected_file_sha256=binding["files"].get(path))
+            "source_trees": {path: _source_tree(path, binding["files"].get(path))
                              for path in binding["source_trees"]},
             "projections": projections}
+
+
+def _source_tree(path: str, expected_file_sha256: str | None) -> str:
+    if expected_file_sha256 is not None:
+        observed = inspect_runtime_source_file(path, expected_sha256=expected_file_sha256)
+        return canonical_json_sha256({"kind": "file", "content_sha256": observed.sha256}, allow_nan=False)
+    selected = selected_source_resolver()
+    if isinstance(selected, QuerySourceResolver) and path in selected._sources:
+        raise ProjectStoreError("A registered file tree requires its exact byte version, not its composite seal.")
+    return inspect_runtime_source_tree(path)
 
 
 def changed_error(message: str, paths: list[str]) -> DocumentError:

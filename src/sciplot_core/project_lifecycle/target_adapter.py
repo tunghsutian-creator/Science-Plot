@@ -45,7 +45,14 @@ class FilesystemProjectTargets:
         return ImportTarget(document_root(project, selected_id), project, selected_id)
 
     def resolve_decision(self, target: Path) -> DecisionTarget:
+        from .store_composition import namespace_root
+
         root = canonical_path(target)
+        # These existing namespace formats are semantic aggregates. Classify
+        # their command target without opening a query before its writer lease;
+        # creation receipts have their own separate /creations/ namespace.
+        if namespace_root(root) == root or root.parent.name == ".sciplot_semantic":
+            return DecisionTarget(root, DecisionKind.SEMANTIC)
         return DecisionTarget(root, DecisionKind.CREATION if self.repository.exists(root / "creation.json") else DecisionKind.SEMANTIC)
 
     def creation_root(self, source: Path, key: str) -> Path:
