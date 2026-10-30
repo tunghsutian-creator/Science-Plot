@@ -16,6 +16,7 @@ from test_plot_engine import FakeBackend, request
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_document import seal_document
 from sciplot_core.plot_engine.managed_state import make_binding
+from sciplot_core.plot_engine.managed_backend import fingerprint_input_roles
 from sciplot_core.project_lifecycle.application import ProjectApplication
 from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
 from sciplot_core.project_lifecycle.context import repository, repository_scope
@@ -64,7 +65,9 @@ class ManagedBackend:
         self.calls = {"preview": 0, "apply": 0, "export": 0}
         self.fail_export = False
 
-    def fingerprint(self, binding):
+    def fingerprint(self, binding, *, input_document=None):
+        if input_document is not None:
+            fingerprint_input_roles(binding, input_document=input_document)
         return {"files": {path: file_sha256(Path(path)) for path in binding["fingerprint"]["files"]},
                 "artifacts": binding["fingerprint"]["artifacts"]}
 

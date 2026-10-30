@@ -14,11 +14,15 @@ from .storage import digest
 from sciplot_core.project_lifecycle.context import content_sha256
 
 
-def changed_inputs(backend: PlotBackend, binding: dict[str, Any]) -> list[str]:
+def changed_inputs(backend: PlotBackend, binding: dict[str, Any], *,
+                   input_document: dict[str, Any] | None = None) -> list[str]:
     from .builtin_history import fingerprint_for_read
 
     expected = {**fingerprint_for_read(binding), "scientific_content": binding.get("scientific_content_files", {})}
-    actual = {**backend.fingerprint(binding), "scientific_content": {
+    observed = (backend.fingerprint(binding, input_document=input_document)
+                if input_document is not None and binding.get("kind") == "sciplot_managed_binding"
+                else backend.fingerprint(binding))
+    actual = {**observed, "scientific_content": {
         path: content_sha256(Path(path)) for path in binding.get("scientific_content_files", {})}}
     changed: list[str] = []
     for group in set(expected) | set(actual):
@@ -27,8 +31,9 @@ def changed_inputs(backend: PlotBackend, binding: dict[str, Any]) -> list[str]:
     return sorted(set(changed))
 
 
-def require_current(backend: PlotBackend, binding: dict[str, Any]) -> None:
-    changed = changed_inputs(backend, binding)
+def require_current(backend: PlotBackend, binding: dict[str, Any], *,
+                    input_document: dict[str, Any] | None = None) -> None:
+    changed = changed_inputs(backend, binding, input_document=input_document)
     if changed:
         raise EngineError("document_inputs_changed", "Source or saved native inputs changed; this revision is no longer current.",
                           action="resolve_input_conflict", changed=changed[:16],

@@ -52,14 +52,23 @@ def declared_host_files(document: dict[str, Any]) -> dict[str, str]:
     return files
 
 
-def input_files(document: dict[str, Any]) -> dict[str, str]:
+def _input_files(document: dict[str, Any], *, authenticate: bool) -> dict[str, str]:
     files: dict[str, str] = {}
     for source in document["scientific"]["data_sources"]:
         add_input(files, source["path"], source["sha256"])
-    for implementation in _host_input_groups(document, authenticate=True):
+    for implementation in _host_input_groups(document, authenticate=authenticate):
         for path, sha256 in implementation:
             add_input(files, path, sha256)
     return files
+
+
+def declared_input_files(document: dict[str, Any]) -> dict[str, str]:
+    """Expected scientific/host roles; this declaration grants no source IO."""
+    return _input_files(document, authenticate=False)
+
+
+def input_files(document: dict[str, Any]) -> dict[str, str]:
+    return _input_files(document, authenticate=True)
 
 
 def require_inputs(document: dict[str, Any]) -> None:
@@ -75,11 +84,11 @@ def source_input_path(document: dict[str, Any], path: str, sha256: str) -> Path:
     matching = source_groups(document).get(physical_path(path), [])
     if not matching:
         return Path(path)
-    locations = {resolve_source_path(source["path"], expected_sha256=sha256, source_id=source["source_id"])
-                 for source in matching}
-    if len(locations) != 1:
+    locations = [resolve_source_path(source["path"], expected_sha256=sha256, source_id=source["source_id"])
+                 for source in matching]
+    if len({location.resolve() for location in locations}) != 1:
         raise EngineError("managed_source_locator_conflict", "One sealed original file cannot resolve to conflicting physical versions.")
-    return next(iter(locations))
+    return locations[0]
 
 
 def resolved_ir(root: Path, document: dict[str, Any]) -> dict[str, Any]:

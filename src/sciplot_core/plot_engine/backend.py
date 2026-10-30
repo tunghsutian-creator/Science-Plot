@@ -23,7 +23,8 @@ class PlotBackend(Protocol):
     def import_project(self, project: Path, figure_id: str | None = None,
                        plot_id: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]: ...
 
-    def fingerprint(self, binding: dict[str, Any]) -> dict[str, Any]: ...
+    def fingerprint(self, binding: dict[str, Any], *,
+                    input_document: dict[str, Any] | None = None) -> dict[str, Any]: ...
 
     def preview(self, document: dict[str, Any], binding: dict[str, Any],
                 new_document: dict[str, Any], diff: list[dict[str, Any]],

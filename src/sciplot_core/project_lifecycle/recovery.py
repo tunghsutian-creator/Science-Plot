@@ -94,7 +94,7 @@ def resume_transaction(plot: Path, request: dict[str, Any], backend: PlotBackend
             raise EngineError("document_resume_unsupported", "Continue this lifecycle through its original decision entry.",
                               action="plot.decide")
         if transaction["phase"] == "needs_review":
-            require_current(backend, transaction["binding"])
+            require_current(backend, transaction["binding"], input_document=transaction["document"])
         # Existing _patch/replay owns revision conflicts, native apply recovery,
         # source guards, historical results, and export-only continuation.
         normalized = transaction.get("normalized_command")

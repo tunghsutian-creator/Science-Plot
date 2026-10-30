@@ -46,6 +46,107 @@ def append_request(document, tmp_path, name='B', *, samples=True):
                       'source_context': 'User states this file is a cooling acquisition; preserve original observations.'}}]}
 
 
+def _scientific_observation_case(tmp_path, operation='append'):
+    from sciplot_core.plot_engine.current_unit_admission import prepare_current_update
+    from sciplot_core.plot_engine.managed_state import make_binding, scientific_binding
+
+    original = bound_document(tmp_path)
+    root = tmp_path / 'store'
+    binding = make_binding(root, original, output=tmp_path / 'output')
+    if operation == 'append':
+        request = append_request(original, tmp_path)
+    else:
+        source = original['scientific']['data_sources'][0]
+        path = Path(source['path'])
+        path.write_text(path.read_text().replace('5,5', '5,9'))
+        request = {'plot_id': original['plot_id'], 'base_revision': original['revision'],
+            'idempotency_key': 'reconfirm-A', 'intent_class': 'scientific', 'changes': [{'op': 'set',
+            'target': ['source:' + source['source_id']], 'property': 'source.sha256', 'value': file_sha256(path)}]}
+    candidate, diff, _risk, scientific = prepare_current_update(root, original, request)
+    assert scientific and diff
+    return original, binding, candidate, scientific_binding(binding, candidate)
+
+
+@pytest.mark.parametrize('operation', ['append', 'source-refresh'])
+def test_scientific_input_observation_uses_acknowledged_document_without_rebinding_native(tmp_path, operation):
+    from sciplot_core.plot_engine.current import changed_inputs
+    from sciplot_core.plot_engine.managed_backend import ManagedBackend
+    from sciplot_core.plot_engine.managed_state import declared_host_files, read_canonical, require_inputs
+
+    original, binding, candidate, guarded = _scientific_observation_case(tmp_path, operation)
+    before = deepcopy((original, binding, candidate, guarded))
+    backend = ManagedBackend.__new__(ManagedBackend)
+    if operation == 'append':
+        added = set(guarded['fingerprint']['files']) - set(binding['fingerprint']['files'])
+        assert candidate['scientific']['data_sources'][-1]['path'] in added
+        assert set(declared_host_files(candidate)) - set(declared_host_files(original))
+        assert added <= set(changed_inputs(backend, guarded))  # Missing context stays fail-closed.
+    else:
+        with pytest.raises(EngineError) as error:
+            require_inputs(original)
+        assert error.value.reason_code == 'managed_inputs_changed'
+    assert changed_inputs(backend, guarded, input_document=candidate) == []
+    assert read_canonical(guarded) == original
+    assert {key: guarded[key] for key in ('canonical_document', 'canonical_sha256', 'ir_path', 'ir_hash', 'document')} == {
+        key: binding[key] for key in ('canonical_document', 'canonical_sha256', 'ir_path', 'ir_hash', 'document')}
+    assert (original, binding, candidate, guarded) == before
+
+
+@pytest.mark.parametrize('fault', ['unacknowledged-inputs', 'foreign-plot'])
+def test_input_observation_context_cannot_authorize_another_input_closure(tmp_path, monkeypatch, fault):
+    from sciplot_core.plot_engine import managed_backend
+
+    original, _binding, candidate, guarded = _scientific_observation_case(tmp_path)
+    context = original if fault == 'unacknowledged-inputs' else seal_document({**candidate, 'plot_id': 'foreign-plot'})
+    monkeypatch.setattr(managed_backend, 'existing_file_sha256',
+        lambda _path: pytest.fail('Unbound input roles reached file IO'))
+    with pytest.raises(EngineError) as error:
+        managed_backend.ManagedBackend.__new__(managed_backend.ManagedBackend).fingerprint(guarded, input_document=context)
+    assert error.value.reason_code == 'managed_input_context_conflict'
+
+
+def test_acknowledged_input_context_does_not_grant_refused_source_io(tmp_path):
+    from sciplot_core.foundation.source_locations import source_location_scope
+    from sciplot_core.plot_engine.current import changed_inputs
+    from sciplot_core.plot_engine.managed_backend import ManagedBackend
+
+    _original, _binding, candidate, guarded = _scientific_observation_case(tmp_path)
+    appended = candidate['scientific']['data_sources'][-1]
+    calls = []
+
+    class Selected:
+        def resolve_path(self, original, *, expected_sha256=None, source_id=None):
+            calls.append((str(original), expected_sha256, source_id))
+            if source_id == appended['source_id']:
+                raise ValueError('This selected runtime does not authorize the appended source')
+            return Path(original)
+
+        def literal_path(self, actual):
+            pytest.fail('Declared source roles are not reverse IO requests')
+
+    before = deepcopy((candidate, guarded))
+    with source_location_scope(Selected()), pytest.raises(ValueError, match='does not authorize'):
+        changed_inputs(ManagedBackend.__new__(ManagedBackend), guarded, input_document=candidate)
+    assert (appended['path'], appended['sha256'], appended['source_id']) in calls
+    assert (candidate, guarded) == before
+
+
+def test_candidate_input_context_keeps_original_native_mutation_guard(tmp_path):
+    from sciplot_core.plot_engine.current import changed_inputs
+    from sciplot_core.plot_engine.managed_backend import ManagedBackend
+    from sciplot_core.plot_engine.storage import write
+
+    _original, _binding, candidate, guarded = _scientific_observation_case(tmp_path)
+    native = Path(guarded['document'])
+    native.parent.mkdir(parents=True)
+    native.write_bytes(b'original generated artifact, not a native scientific acceptance')
+    write(native.parent / 'build.json', {'ir_hash': guarded['ir_hash'], 'document_sha256': file_sha256(native)})
+    backend = ManagedBackend.__new__(ManagedBackend)
+    assert changed_inputs(backend, guarded, input_document=candidate) == []
+    native.write_bytes(native.read_bytes() + b' external mutation')
+    assert changed_inputs(backend, guarded, input_document=candidate) == [str(native)]
+
+
 def test_append_extends_source_bound_graph_without_changing_original_plot_or_presentation(tmp_path):
     document = bound_document(tmp_path)
     spec = figure_spec(document)

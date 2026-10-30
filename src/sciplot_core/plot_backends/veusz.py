@@ -31,7 +31,8 @@ class VeuszBackend:
                        plot_id: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
         return import_project(project, figure_id, plot_id)
 
-    def fingerprint(self, binding: dict[str, Any]) -> dict[str, Any]:
+    def fingerprint(self, binding: dict[str, Any], *,
+                    input_document: dict[str, Any] | None = None) -> dict[str, Any]:
         return fingerprint(binding)
 
     @warm_native_method

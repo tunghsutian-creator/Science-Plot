@@ -616,3 +616,53 @@ audit overhead, Veusz startup or computation. Repeated history/object validation
 and transport identity recomputation are measured candidates, not demonstrated
 wall-clock causes. Further optimization requires timings on an otherwise required
 run, with the same scientific, freshness and permission assertions intact.
+
+### Candidate input observation and admitted IO aliases
+
+A scientific edit has two legitimate descriptions before application: its
+acknowledged candidate input set and its previous canonical/native baseline.
+`scientific_binding` changes the former without replacing the latter. Deriving
+every input role from the old canonical therefore falsely rejected a newly
+appended source and its newly required immutable builtin files. The transient
+`input_document` argument now carries that observation context through
+`changed_inputs`/`require_current`, the backend protocol/router and repository
+binding adapter. The prepared patch, resolving/planned/review/commit/export
+guards, accepted decision, replay and recovery use their existing transaction
+document; no second document, state owner or persisted context is introduced.
+
+Managed observation validates the plot and exact acknowledged file-role/hash
+set before hashing. This is a declaration check, not an IO grant or proof that
+bytes are current. Source ID, selected byte version and permission checks still
+belong to the resolver; actual source and host-pin hashes remain fresh checks.
+The native before-image is observed with a pure input-guard projection of its
+old canonical document. New compilation uses its own new canonical binding.
+Settled queries, Saved Work and ordinary open/export keep the canonical default;
+Legacy dispatch retains its existing call form. No signature guessing or
+exception-based fallback may silently discard the new argument.
+
+Each source ID, original locator and expected version must pass resolution even
+when several declarations refer to one physical file. Compare only those
+resolver-approved actual IO paths by physical identity, then retain the first
+approved IO path for its reverse-locator contract. Different physical files do
+not become one source merely because their bytes match. Original source IDs,
+locators, table scopes, versions and document hashes are not rewritten by this
+comparison.
+
+The historical child fixture also has to preserve its inherited observer/public
+startup path before appending the fixed source root. Otherwise the real public
+guard correctly refuses the child before the historical writer is exercised.
+The fixture must still load all pinned historical owners and preserve the
+original writer assertions; missing bootstrap and an earlier foreign package
+remain real refusal controls. A successful default/private observation run does
+not establish this public startup contract.
+
+The retained 9cb full and CI failures remain separate evidence. The focused
+owner plan already contained the append family but deferred its comprehensive
+nodes, while the earlier short set omitted the candidate-input/native-baseline
+transition. The next bounded short set must include those real transitions,
+admitted aliases and both startup modes before a complete frozen release. Do
+not move native tiers or weaken guards to make that feedback green. Component
+and merged feedback, even with unchanged assertions and source snapshots, cannot
+replace exact-candidate full execution, complete capture and strict access
+validation. The wider resource-role, NativeSuite field and numerical/disclosure
+findings retain their independent closure criteria.

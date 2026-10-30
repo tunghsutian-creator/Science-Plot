@@ -29,9 +29,12 @@ class RepositoryBackendPaths:
     def __getattr__(self, name: str) -> Any:
         return getattr(self.backend, name)
 
-    def fingerprint(self, binding: dict[str, Any]) -> dict[str, Any]:
+    def fingerprint(self, binding: dict[str, Any], *,
+                    input_document: dict[str, Any] | None = None) -> dict[str, Any]:
         with self.repository.binding_scope(binding):
-            result: dict[str, Any] = self.backend.fingerprint(binding)
+            result: dict[str, Any] = (self.backend.fingerprint(binding, input_document=input_document)
+                if input_document is not None and binding.get("kind") == "sciplot_managed_binding"
+                else self.backend.fingerprint(binding))
             return result
 
     def preview(self, document: dict[str, Any], binding: dict[str, Any], new_document: dict[str, Any],

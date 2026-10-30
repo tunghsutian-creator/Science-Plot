@@ -59,6 +59,13 @@ the integrated preflight, then run the complete frozen release once. Preserve al
 historical failures and assertions; test counts alone prove neither architecture
 closure nor complete private-corpus coverage.
 
+That preflight must exercise acknowledged candidate inputs beside the retained
+native baseline, resolver-approved aliases beside different equal-byte files,
+and the real public child-startup mode. A settled-binding or default-mode control
+does not cover those transitions. Retain comprehensive tiers and include the
+relevant real chain in the bounded short gate rather than adding another policy
+registry or treating a deferred focused selection as release evidence.
+
 ## Scientific authority convergence
 
 Keep one writer for original source facts, confirmed bindings and transforms,

@@ -46,6 +46,102 @@ class SelectedSource:
         return self.source["path"]
 
 
+@pytest.mark.parametrize("projection", ["same-physical", "equal-bytes-distinct-physical"])
+def test_source_group_checks_each_identity_then_compares_physical_io_without_rewriting_locator(tmp_path, projection):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.foundation.source_locations import literal_source_path
+    from sciplot_core.plot_engine.errors import EngineError
+    from sciplot_core.plot_engine.managed_state import source_input_path
+
+    document, actual = relocated_document(tmp_path)
+    sources = document["scientific"]["data_sources"]
+    original = deepcopy(sources[0])
+    for index in range(2):
+        alias = tmp_path / f"scientific-alias-{index}.csv"
+        alias.symlink_to(actual)
+        source = {**deepcopy(original), "source_id": f"scientific:{index}", "path": str(alias)}
+        if index == 0:
+            sources[0] = source
+        else:
+            sources.append(source)
+    separate = tmp_path / "different-original.csv"
+    separate.write_bytes(actual.read_bytes())
+    assert file_sha256(separate) == file_sha256(actual) and separate.resolve() != actual.resolve()
+    views = [tmp_path / f"approved-view-{index}.csv" for index in range(2)]
+    views[0].symlink_to(actual)
+    views[1].symlink_to(actual if projection == "same-physical" else separate)
+    expected = [(source["path"], source["sha256"], source["source_id"]) for source in sources]
+    calls = []
+
+    class StrictAliases:
+        def resolve_path(self, literal, *, expected_sha256=None, source_id=None):
+            key = str(literal), expected_sha256, source_id
+            assert key in expected  # No physical/host path substitutes for scientific admission.
+            calls.append(key)
+            return views[expected.index(key)]
+
+        def literal_path(self, path):
+            assert path in views  # This port recognizes its approved spelling, not its symlink target.
+            return sources[views.index(path)]["path"]
+
+    before = deepcopy(document)
+    with source_location_scope(StrictAliases()):
+        if projection == "same-physical":
+            selected = source_input_path(document, str(actual), original["sha256"])
+            assert selected == views[0] and selected.is_symlink()
+            assert literal_source_path(selected) == sources[0]["path"]
+            assert file_sha256(selected) == original["sha256"]
+        else:
+            with pytest.raises(EngineError) as error:
+                source_input_path(document, str(actual), original["sha256"])
+            assert error.value.reason_code == "managed_source_locator_conflict"
+    assert calls == expected
+    assert document == before and len({source["source_id"] for source in sources}) == 2
+
+
+@pytest.mark.parametrize("refusal", ["source-id", "version", "permission"])
+def test_source_group_propagates_each_member_admission_refusal_before_equal_physical_io(tmp_path, refusal):
+    from sciplot_core.plot_engine.managed_state import source_input_path
+    from sciplot_core.project_store.errors import ProjectConflict, ProjectSourceVersionMismatch
+
+    document, actual = relocated_document(tmp_path)
+    sources = document["scientific"]["data_sources"]
+    original = deepcopy(sources[0])
+    for index in range(2):
+        alias = tmp_path / f"scientific-alias-{index}.csv"
+        alias.symlink_to(actual)
+        source = {**deepcopy(original), "source_id": f"scientific:{index}", "path": str(alias)}
+        if index == 0:
+            sources[0] = source
+        else:
+            sources.append(source)
+    expected = [(source["path"], source["sha256"], source["source_id"]) for source in sources]
+    calls = []
+
+    class StrictAliases:
+        def resolve_path(self, literal, *, expected_sha256=None, source_id=None):
+            key = str(literal), expected_sha256, source_id
+            assert key in expected
+            calls.append(key)
+            if source_id == sources[1]["source_id"]:
+                if refusal == "source-id":
+                    raise ProjectConflict("This source ID is not registered for the selected input.")
+                if refusal == "version":
+                    raise ProjectSourceVersionMismatch(str(literal), "0" * 64, expected_sha256,
+                                                       "The selected source version differs.")
+                raise PermissionError("The selected source is outside this invocation's read grant.")
+            return actual
+
+        def literal_path(self, _actual):
+            pytest.fail("A refused source cannot authorize reverse lookup or fallback.")
+
+    error = {"source-id": ProjectConflict, "version": ProjectSourceVersionMismatch, "permission": PermissionError}[refusal]
+    before = deepcopy(document)
+    with source_location_scope(StrictAliases()), pytest.raises(error):
+        source_input_path(document, str(actual), original["sha256"])
+    assert calls == expected and document == before
+
+
 def test_selected_source_double_requires_initial_identity_and_rejects_other_versions(tmp_path):
     document, actual = relocated_document(tmp_path)
     source = document["scientific"]["data_sources"][0]

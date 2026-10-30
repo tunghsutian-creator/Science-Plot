@@ -238,7 +238,7 @@ class ProjectApplication(CommandDispatch):
                 binding = scientific_binding(binding, document)
         else:
             document, diff, risk = apply_patch(head["document"], request)
-        require_current(self.backend, binding)
+        require_current(self.backend, binding, input_document=document)
         from sciplot_core.project_lifecycle.publication_repair import authorize_pending, reserve_repair
 
         repair = authorize_pending(root, head, request, document, diff, risk, scientific_update, self.backend)
@@ -295,7 +295,7 @@ class ProjectApplication(CommandDispatch):
             if tx["phase"] != "needs_review" and not can_discard:
                 raise EngineError("document_decision_conflict", "The transaction is not waiting for a visual decision.")
             if not can_discard and request["accept"]:
-                require_current(self.backend, tx["binding"])
+                require_current(self.backend, tx["binding"], input_document=tx["document"])
             tx.update({"accepted": request["accept"], "phase": "prepared" if request["accept"] else "rejected"})
             persist(root, tx)
             return advance(root, tx, self.backend)

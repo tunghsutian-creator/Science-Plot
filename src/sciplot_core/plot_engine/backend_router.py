@@ -32,8 +32,11 @@ class BackendRouter:
                        plot_id: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
         return self.legacy.import_project(project, figure_id, plot_id)
 
-    def fingerprint(self, binding: dict[str, Any]) -> dict[str, Any]:
-        return dict(self._owner(binding).fingerprint(binding))
+    def fingerprint(self, binding: dict[str, Any], *,
+                    input_document: dict[str, Any] | None = None) -> dict[str, Any]:
+        if binding.get("kind") == "sciplot_managed_binding":
+            return dict(self.managed.fingerprint(binding, input_document=input_document))
+        return dict(self.legacy.fingerprint(binding))
 
     def preview(self, document: dict[str, Any], binding: dict[str, Any], new_document: dict[str, Any],
                 diff: list[dict[str, Any]], output: Path) -> dict[str, Any]:

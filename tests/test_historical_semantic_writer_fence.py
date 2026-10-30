@@ -13,7 +13,10 @@ from frozen_semantic_597 import FIXTURE, ROOT, read_manifest
 
 
 def _child(operation, case, phase):
-    env = dict(os.environ, PYTHONPATH=str(ROOT / "src"), PYTHONDONTWRITEBYTECODE="1")
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+    # Keep the actual guard/observer startup and earlier source-owner order.
+    # An earlier foreign owner must be rejected, never masked by this fixture.
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, (env.get("PYTHONPATH", ""), str(ROOT / "src"))))
     completed = subprocess.run([sys.executable, str(ROOT / "tests/frozen_semantic_597.py"),
         operation, str(case), phase], env=env, text=True, capture_output=True, timeout=30, check=False)
     assert completed.returncode == 0, completed.stderr
@@ -92,3 +95,41 @@ def test_original_pending_writer_has_no_native_or_state_write_after_attachment(t
         assert result["backend_calls"]["export"] == 1
         assert result["result"]["revision"] == 1
         assert (native / "native-writes.txt").read_text() == "1"
+
+
+@pytest.mark.parametrize("mode", ["missing-bootstrap", "foreign-source"])
+def test_historical_child_public_startup_refuses_missing_guard_or_foreign_source(tmp_path, mode):
+    from sciplot_core.verification.public_input_guard import configure_environment
+
+    foreign = tmp_path / "foreign-source"
+    package = foreign / "sciplot_core"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("# Unrelated source owner, never executed.\n")
+    case = tmp_path / "never-launched-case"
+    environment = configure_environment(ROOT, dict(os.environ),
+        bootstrap=ROOT / "src/sciplot_core/verification/public_guard_bootstrap")
+    code = f"""
+import json, os, sys
+from pathlib import Path
+sys.path.insert(0, {str(ROOT / 'tests')!r})
+from test_historical_semantic_writer_fence import _child
+from sciplot_core.verification.public_input_guard import ENVIRONMENT_KEY, BOOTSTRAP_KEY
+roots, bootstrap = os.environ[ENVIRONMENT_KEY], os.environ[BOOTSTRAP_KEY]
+if {mode!r} == 'missing-bootstrap':
+    os.environ['PYTHONPATH'] = {str(ROOT / 'src')!r}
+else:
+    os.environ['PYTHONPATH'] = {str(foreign)!r} + os.pathsep + os.environ['PYTHONPATH']
+try:
+    _child('prepare', Path({str(case)!r}), 'prepared')
+except PermissionError as error:
+    assert 'requires its guard bootstrap' in str(error), str(error)
+else:
+    raise AssertionError('An unguarded or foreign-source historical child was launched')
+assert os.environ[ENVIRONMENT_KEY] == roots and os.environ[BOOTSTRAP_KEY] == bootstrap
+assert not Path({str(case)!r}).exists()
+print(json.dumps({{'status': 'rejected', 'mode': {mode!r}, 'guard_retained': True}}))
+"""
+    result = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=environment,
+        capture_output=True, text=True, timeout=30, check=False)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"status": "rejected", "mode": mode, "guard_retained": True}

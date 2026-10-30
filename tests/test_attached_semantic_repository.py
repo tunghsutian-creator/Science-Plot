@@ -11,6 +11,7 @@ from managed_plot_helpers import patch, request_for_source
 from test_project_lifecycle import ManagedBackend
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.plot_engine.managed_backend import fingerprint_input_roles
 from sciplot_core.project_lifecycle.application import ProjectApplication
 from sciplot_core.project_lifecycle.backend_paths import RepositoryBackendPaths
 from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
@@ -23,7 +24,9 @@ from sciplot_core.project_store.runtime import project_runtime
 
 
 class SourceAwareManagedBackend(ManagedBackend):
-    def fingerprint(self, binding):
+    def fingerprint(self, binding, *, input_document=None):
+        if input_document is not None:
+            fingerprint_input_roles(binding, input_document=input_document)
         return {"files": {path: file_sha256(resolve_source_path(path, expected_sha256=sha))
                           for path, sha in binding["fingerprint"]["files"].items()},
                 "artifacts": binding["fingerprint"]["artifacts"]}

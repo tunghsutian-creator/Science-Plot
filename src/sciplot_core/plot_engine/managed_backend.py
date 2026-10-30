@@ -7,13 +7,61 @@ from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256, file_sha256
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler, compiler_identity
+from sciplot_core.plot_document import validate_document
 
 from .errors import EngineError
 from .builtin_history import fingerprint_for_read
-from .managed_state import declared_host_files, make_binding, read_canonical, require_inputs, resolved_ir, source_input_path
+from .managed_state import declared_host_files, declared_input_files, make_binding, read_canonical, require_inputs, resolved_ir, scientific_binding, source_input_path
 from .managed_source_groups import physical_path, source_groups
 from .storage import read, write
 from sciplot_core.project_lifecycle.context import exists
+
+
+def _input_role(document: dict[str, Any], name: str, host_files: set[str]) -> tuple[str | None, list[dict[str, Any]]]:
+    """Match declared literals/host pins before an exact projected-source lookup."""
+    from sciplot_core.foundation.source_locations import selected_source_resolver
+    from sciplot_core.project_store.runtime import ProjectSourceResolver
+    from sciplot_core.project_store.errors import ProjectStoreError
+
+    groups = source_groups(document)
+    key = physical_path(name)
+    if key in groups:
+        return key, groups[key]
+    if key in host_files:
+        return key, []
+    resolver = selected_source_resolver()
+    if isinstance(resolver, ProjectSourceResolver):
+        try:
+            key = physical_path(resolver.literal_path(Path(name)))
+        except (OSError, ProjectStoreError):
+            return None, []
+        if key in groups:
+            return key, groups[key]
+    return None, []
+
+
+def fingerprint_input_roles(binding: dict[str, Any], *, input_document: dict[str, Any] | None = None) -> tuple[dict[str, Any] | None, set[str], dict[str, str]]:
+    """Observe declared roles for one guard; the canonical artifact stays separate."""
+    canonical = read_canonical(binding) if "canonical_document" in binding else None
+    expected_files: dict[str, str] = fingerprint_for_read(binding)["files"]
+    inputs = canonical
+    if input_document is not None:
+        inputs = validate_document(input_document)
+        if (canonical is None or inputs.get("plot_type") != "ManagedPlot"
+                or inputs["plot_id"] != canonical["plot_id"]):
+            raise EngineError("managed_input_context_conflict", "The observed input roles must exactly match this plot's acknowledged scientific guards.")
+    host_files = set(declared_host_files(inputs)) if inputs is not None else set()
+    if input_document is not None:
+        assert inputs is not None
+        roles: dict[str, str] = {}
+        for name, sha in expected_files.items():
+            key, _sources = _input_role(inputs, name, host_files)
+            if key is None or key in roles:
+                raise EngineError("managed_input_context_conflict", "The observed inputs lack one exact acknowledged role.")
+            roles[key] = sha
+        if roles != declared_input_files(inputs):
+            raise EngineError("managed_input_context_conflict", "The observed input roles must exactly match this plot's acknowledged scientific guards.")
+    return inputs, host_files, expected_files
 
 
 class ManagedBackend:
@@ -37,11 +85,11 @@ class ManagedBackend:
             return None
         return value
 
-    def fingerprint(self, binding: dict[str, Any]) -> dict[str, Any]:
-        canonical = read_canonical(binding) if "canonical_document" in binding else None
-        host_files = set(declared_host_files(canonical)) if canonical is not None else set()
-        files = {name: self._source_hash(canonical, name, sha, host_files=host_files)
-                 for name, sha in fingerprint_for_read(binding)["files"].items()}
+    def fingerprint(self, binding: dict[str, Any], *,
+                    input_document: dict[str, Any] | None = None) -> dict[str, Any]:
+        inputs, host_files, expected_files = fingerprint_input_roles(binding, input_document=input_document)
+        files = {name: self._source_hash(inputs, name, sha, host_files=host_files)
+                 for name, sha in expected_files.items()}
         native = Path(binding["document"])
         expected = binding["ir_hash"]
         if native.exists():
@@ -61,25 +109,17 @@ class ManagedBackend:
         from sciplot_core.project_store.runtime import ProjectSourceResolver, inspect_runtime_source_file
         from sciplot_core.project_store.errors import ProjectStoreError
 
-        groups = source_groups(canonical) if canonical is not None else {}
-        sources = groups.get(physical_path(name), [])
+        sources: list[dict[str, Any]] = []
         resolver = selected_source_resolver()
-        if canonical is not None and not sources:
+        if canonical is not None:
             declared = set(declared_host_files(canonical)) if host_files is None else host_files
-            if physical_path(name) in declared:
-                return existing_file_sha256(Path(name))
-            if isinstance(resolver, ProjectSourceResolver):
-                # Only this concrete host adapter can identify a projected
-                # registered source. A generic source port never receives a
-                # scientific literal or an implementation/executor filename
-                # as if it were already-verified actual IO.
-                try:
-                    literal = resolver.literal_path(Path(name))
-                except (OSError, ProjectStoreError):
-                    return None
-                sources = groups.get(physical_path(literal), [])
+            key, sources = _input_role(canonical, name, declared)
+            if key is None:
+                return None
             if not sources:
-                return None  # No canonical source or declared host role authorizes this fingerprint key.
+                return existing_file_sha256(Path(name))
+            if any(source['sha256'] != sha for source in sources):
+                return None
         if sources and isinstance(resolver, ProjectSourceResolver) and not getattr(resolver, 'pending', ()):
             # Currentness observes an explicitly selected version without
             # materializing its disposable source view. An in-flight declared
@@ -157,7 +197,9 @@ class ManagedBackend:
         review = {"scientific_audit": preview["scientific_audit"], "preview": preview.get("preview", preview),
                   "_managed_binding": candidate}
         if any(item["property"] == "source.append" for item in diff):
-            before_ir, before_native = self._ensure(binding)
+            # The before-image belongs to the original canonical artifact,
+            # whereas the transaction guard also observes the admitted append.
+            before_ir, before_native = self._ensure(scientific_binding(binding, document))
             before = self.compiler.render_ir(before_ir, before_native, output / "before.png")
             review["before_preview"] = before.get("preview", before)
             review["source_append"] = {"before_layer_ids": [layer["id"] for view in before_ir["views"] for layer in view["layers"]],
