@@ -472,6 +472,18 @@ The failures have three shared causes and finite repair boundaries:
   public guarantee or a token/cost measurement. Short/deep fixture roots and
   pointer ownership are checked explicitly.
 
+The unknown-export error branch uses the same content-budget comparison. Its
+four explicit locators (`plot`, `evidence`, `next_step.plot`, and
+`error.diagnostic`) must first resolve to the selected fixture and the exact
+transaction/diagnostic owner. The shared test projection deep-copies the reply
+and changes only those named locator fields; the real reply, journal and full
+50000-character diagnostic remain unchanged. Short/deep controls compare real
+replies with different address lengths but equal projected-content lengths,
+retain the `<2300` content limit and the production 240-character message
+preview, and require one export attempt, committed science-preserving state and
+the same read-only diagnostic recovery. This does not claim a universal bound
+over all receipt phases or permit rewriting arbitrary strings.
+
 These were respectively a central admission-order defect and migration/fixture
 coverage defects, not a common environment excuse. Preflight must include both
 valid native-save continuation and refusal/race controls; negative QA fixtures

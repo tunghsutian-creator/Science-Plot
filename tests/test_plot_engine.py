@@ -260,11 +260,10 @@ def test_export_timeout_retries_locally_once_then_only_export_resumes(engine):
 
 def test_unknown_export_error_never_gets_automatic_retry(engine):
     service, root, backend = engine
+    before = load_head(root)["document"]
     backend.export_failures = [RuntimeError("x" * 50000)]
     result = service.patch(root, request())
-    assert backend.calls["export"] == 1 and result["status"] == "blocked"
-    assert result["next_step"]["action"] == "inspect_diagnostic"
-    assert len(str(result)) < 2300 and len(read(Path(result["error"]["diagnostic"]))["message"]) == 50000
+    _assert_compact_unknown_export_error(result, root, backend, before, service)
 
 
 def test_missing_artifact_reexports_current_revision_without_reapplying(engine):
@@ -322,21 +321,31 @@ def test_inventory_evidence_rejects_added_data_but_ignores_regular_finder_metada
     assert not evidence_current(files, inventories)
 
 
-def _assert_compact_review_content(result, root):
+def _receipt_content_projection(result, root, locator_keys):
     # Absolute locators remain directly usable by clients. Their fixture root
     # varies with the checkout and retained pytest temp directory, independently
     # of the bounded protocol content or size of the journal's diagnostics.
     assert result["plot"] == str(root)
+    original = deepcopy(result)
     budget_reply = deepcopy(result)
-    for parent, key in ((budget_reply, "plot"), (budget_reply, "evidence"),
-                        (budget_reply["diff_evidence"], "path"),
-                        (budget_reply["scientific_audit"]["evidence"], "path"),
-                        (budget_reply["preview"], "path")):
+    for keys in locator_keys:
+        parent = budget_reply
+        for key in keys[:-1]:
+            parent = parent[key]
+        key = keys[-1]
         path = Path(parent[key])
         assert path.is_absolute() and path.exists()
         assert path.resolve().is_relative_to(root.parent.resolve())
         relative = path.relative_to(root.parent)
         parent[key] = "/fixture/" + relative.as_posix()
+    assert result == original
+    return budget_reply
+
+
+def _assert_compact_review_content(result, root):
+    budget_reply = _receipt_content_projection(result, root, (
+        ("plot",), ("evidence",), ("diff_evidence", "path"),
+        ("scientific_audit", "evidence", "path"), ("preview", "path")))
     assert len(str(budget_reply)) < 2300
     assert result["diff_count"] == 1 and "diff" not in result
     assert "a" * 3000 not in str(result) and "x" * 50000 not in str(result)
@@ -350,6 +359,65 @@ def _assert_compact_review_content(result, root):
     assert Path(result["preview"]["path"]).resolve().is_relative_to(transaction_path(root, "edit-1").parent.resolve())
     assert stored["diff"][0]["after"] == "a" * 3000
     assert stored["review"]["scientific_audit"]["full_diagnostics"] == "x" * 50000
+
+
+def _assert_compact_unknown_export_error(result, root, backend, before, service):
+    assert backend.calls["export"] == 1 and result["status"] == "blocked"
+    assert result["next_step"]["action"] == "inspect_diagnostic"
+    assert result["next_step"]["plot"] == result["plot"] == str(root)
+    evidence = transaction_path(root, "edit-1")
+    assert result["evidence"] == str(evidence)
+    diagnostic = Path(result["error"]["diagnostic"])
+    assert diagnostic.is_file() and not diagnostic.is_symlink()
+    assert diagnostic.parent == evidence.parent
+    assert diagnostic.resolve().parent == evidence.resolve().parent
+    original, journal_bytes, diagnostic_bytes = deepcopy(result), evidence.read_bytes(), diagnostic.read_bytes()
+    budget_reply = _receipt_content_projection(result, root, (
+        ("plot",), ("evidence",), ("next_step", "plot"), ("error", "diagnostic")))
+    assert len(str(budget_reply)) < 2300
+    stored, detail = read(evidence), read(diagnostic)
+    assert len(detail["message"]) == 50000 and detail["message"] == "x" * 50000
+    assert detail["stage"] == "export" and detail["type"] == "RuntimeError"
+    assert result["error"]["message"] == "x" * 240 and len(result["error"]["message"]) <= 240
+    assert "x" * 50000 not in str(result)
+    assert result["error"]["reason_code"] == "backend_failure" and result["error"]["stage"] == "export"
+    assert result["error"]["action"] == "inspect_diagnostic" and stored["error"] == result["error"]
+    assert stored.get("retry_counts", {}) == {}
+    assert stored["failure_attempts"] == [{"stage": "export", "diagnostic": str(diagnostic),
+                                           "reason_code": "backend_failure"}]
+    assert result["commit_status"] == "committed" and result["export_status"] == "pending"
+    after = load_head(root)["document"]
+    assert result["revision"] == after["revision"] == 1 and backend.native_writes == 1
+    assert after["scientific"] == before["scientific"]
+    assert result["scientific_hash"] == after["scientific_hash"] == before["scientific_hash"]
+    assert result["scientific_hash_changed"] is False and result["presentation_hash_changed"] is True
+    assert result["presentation_hash"] == after["presentation_hash"] != before["presentation_hash"]
+    calls = deepcopy(backend.calls)
+    recovery = service.describe(root, description={"scope": "summary"})["recovery"]
+    assert recovery["error"] == result["error"] and recovery["evidence"] == str(evidence)
+    assert recovery["phase"] == "export_pending" and recovery["commit_status"] == "committed"
+    assert recovery["export_status"] == "pending" and recovery["next_step"] == result["next_step"]
+    assert all(backend.calls[key] == calls[key] for key in ("preview", "apply", "export", "render"))
+    assert result == original and evidence.read_bytes() == journal_bytes and diagnostic.read_bytes() == diagnostic_bytes
+    return budget_reply
+
+
+@pytest.mark.parametrize("deep", [False, True], ids=["short-prefix", "deep-prefix"])
+def test_unknown_error_content_budget_preserves_real_locators_at_both_fixture_depths(tmp_path, deep):
+    directory = tmp_path / ("nested_" * 10) / ("source_" * 10) if deep else tmp_path / "short"
+    lengths = []
+    for selected in (tmp_path / "reference", directory):
+        selected.mkdir(parents=True)
+        backend = FakeBackend(selected / "backend")
+        before, binding = backend.initial()
+        root = selected / "plot"
+        commit(root, before, binding, "import")
+        service = PlotService(backend)
+        backend.export_failures = [RuntimeError("x" * 50000)]
+        result = service.patch(root, request())
+        budget_reply = _assert_compact_unknown_export_error(result, root, backend, before, service)
+        lengths.append((len(str(result)), len(str(budget_reply))))
+    assert lengths[0][0] != lengths[1][0] and lengths[0][1] == lengths[1][1]
 
 
 def test_large_review_audit_and_diff_remain_exact_in_journal_but_short_in_reply(engine):
