@@ -58,7 +58,12 @@ def test_scientific_noop_does_not_reinterpret_or_rewrite_old_request(tmp_path, m
     document = managed(expert_wire(tmp_path, header="Charge_C", quantity="charge", target="C"))
     head = {"document": document, "binding": {"plot_type": "ManagedPlot"}}
     monkeypatch.setattr(service, "load_head", lambda root: head)
-    monkeypatch.setattr(service, "require_current", lambda *args: None)
+    observed_inputs = []
+
+    def observe_current(backend, binding, *, input_document=None):
+        observed_inputs.append(deepcopy(input_document))
+
+    monkeypatch.setattr(service, "require_current", observe_current)
     from sciplot_core.plot_engine import current_unit_admission, managed_state, publication_repair
     monkeypatch.setattr(current_unit_admission, "admit_current_units", forbidden)
     monkeypatch.setattr(managed_state, "scientific_binding", forbidden)
@@ -70,6 +75,7 @@ def test_scientific_noop_does_not_reinterpret_or_rewrite_old_request(tmp_path, m
     original = deepcopy(document)
     result = PlotService(backend=object())._patch(tmp_path / "store", patch_for(document))
     assert result["diff"] == [] and result["document"] == original and document == original
+    assert observed_inputs == [original]
 
 
 def test_saved_transaction_replay_does_not_reenter_new_admission(tmp_path, monkeypatch):
@@ -110,7 +116,12 @@ def test_presentation_alias_does_not_reinterpret_historical_unit_graph(tmp_path,
     document = managed(expert_wire(tmp_path, header="Charge_C"))
     original_science = deepcopy(document["scientific"])
     monkeypatch.setattr(service, "load_head", lambda root: {"document": document, "binding": {}})
-    monkeypatch.setattr(service, "require_current", lambda *args: None)
+    observed_inputs = []
+
+    def observe_current(backend, binding, *, input_document=None):
+        observed_inputs.append(deepcopy(input_document))
+
+    monkeypatch.setattr(service, "require_current", observe_current)
     monkeypatch.setattr(current_unit_admission, "admit_current_units", forbidden)
     monkeypatch.setattr(publication_repair, "authorize_pending", lambda *args: None)
     monkeypatch.setattr(publication_repair, "reserve_repair", lambda *args: None)
@@ -119,6 +130,12 @@ def test_presentation_alias_does_not_reinterpret_historical_unit_graph(tmp_path,
                "changes": [{"op": "set", "target": ["layer:modulus"], "property": "series.display_label", "value": "Temperature alias"}]}
     result = PlotService(backend=object())._patch(tmp_path, request)
     assert result["document"]["scientific"] == original_science and result["phase"] == "planned"
+    assert len(observed_inputs) == 1
+    observed = observed_inputs[0]
+    assert observed["revision"] == document["revision"]
+    assert observed["scientific"] == original_science
+    assert observed["presentation"] == result["document"]["presentation"]
+    assert observed["presentation"] != document["presentation"]
 
 
 def test_targeted_binding_read_verifies_bytes_and_does_not_decode_other_arrays(tmp_path):

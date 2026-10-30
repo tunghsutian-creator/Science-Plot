@@ -678,3 +678,44 @@ and merged feedback, even with unchanged assertions and source snapshots, cannot
 replace exact-candidate full execution, complete capture and strict access
 validation. The wider resource-role, NativeSuite field and numerical/disclosure
 findings retain their independent closure criteria.
+
+### Public CI fixture and historical counter closure
+
+The public focused run for `0444d575` retained four failures: two unit-admission
+test substitutes rejected the new named `input_document` argument, and two
+before-transfer historical resumes exceeded their existing 30-second limit.
+These are separate defects; a successful Mac run does not establish the cause
+of a Linux timeout. The failed run and all later skipped release steps remain
+failed or unexecuted evidence, respectively.
+
+The unit substitutes now declare the real named observation argument and check
+the complete no-op document or the expected presentation candidate. They do not
+swallow arbitrary arguments. The original unit, replay and side-effect
+assertions remain intact. The migration census covers function monkeypatches
+as well as backend method substitutes: checking only `fingerprint` definitions
+missed these two callers.
+
+The historical counter previously constructed paths and repeated lexical root
+classification on every Python call, including unrelated library calls. Its
+replacement classifies each immutable code filename once within that counter
+invocation. Every matching function call still reaches the original recorder;
+loaded-owner checks and final source-byte reads remain fresh. No execution
+result, source bytes, filesystem permission or cross-invocation classification
+is cached. The seven frozen owners, manifest, FakeBackend, original seven
+controls and 30-second deadline are unchanged. Three new controls cover shared
+filenames, invocation isolation and refusal after source-byte drift.
+
+A paired local resume measured 11.98 to 1.26 seconds with the same absolute
+input paths, bytes, modes, guard environment, 112 functional names and 33
+executed-source hashes. Restoring the prepared fixture changed inodes, which
+the paired receipt records; this is neither identical physical identity nor a
+Linux timing result. A single 25-second stack diagnostic belongs only to the
+resume helper, writes stderr without locals and is cancelled in `finally`.
+The parent's 30-second rejection remains unchanged. Startup before the helper
+script is outside that diagnostic's coverage.
+
+The two changed test modules passed together as 17 public guarded controls.
+This repair changes no production source or scientific data. New actual
+collection, complete release execution and platform CI remain separate gates;
+the original 772-node composition and its native follow-ups retain their
+original identities instead of being relabelled as a new-source release.

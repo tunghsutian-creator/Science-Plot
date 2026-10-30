@@ -76,6 +76,32 @@ class FrozenOwners(importlib.abc.MetaPathFinder):
         return importlib.util.spec_from_file_location(fullname, member, loader=loader)
 
 
+def source_call_profile(executed, functional_calls):
+    """Classify immutable code filenames once within this one counter invocation.
+
+    Path membership here is purely lexical: it never resolves a file, reads
+    source bytes or authorizes execution. Every matching call is still recorded;
+    the separate final source-byte validation remains fresh.
+    """
+    roots = (ROOT / "src/sciplot_core", FIXTURE)
+    classified = {}
+
+    def profile(frame, event, argument):
+        if event != "call":
+            return
+        name = frame.f_code.co_filename
+        if name not in classified:
+            path = Path(name)
+            classified[name] = path if any(path.is_relative_to(root) for root in roots) else None
+        filename = classified[name]
+        if filename is not None:
+            executed.add(filename)
+            if frame.f_code.co_flags & 2:
+                functional_calls.add((str(filename), frame.f_code.co_qualname, frame.f_code.co_firstlineno))
+
+    return profile
+
+
 def main():
     manifest = read_manifest()
     finder = FrozenOwners(manifest)
@@ -84,14 +110,7 @@ def main():
     functional_calls = set()
     profiling = False
 
-    def profile(frame, event, argument):
-        if event != "call":
-            return
-        filename = Path(frame.f_code.co_filename)
-        if filename.is_relative_to(ROOT / "src/sciplot_core") or filename.is_relative_to(FIXTURE):
-            executed.add(filename)
-            if frame.f_code.co_flags & 2:
-                functional_calls.add((str(filename), frame.f_code.co_qualname, frame.f_code.co_firstlineno))
+    profile = source_call_profile(executed, functional_calls)
 
     try:
         import sciplot_core
@@ -156,4 +175,16 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:2] == ["resume"]:
+        # This child belongs only to the historical control. Keep its parent's
+        # 30-second deadline; retain one stack if resume is still working at25s.
+        # Startup before this script (including sitecustomize) is not covered.
+        import faulthandler
+
+        faulthandler.dump_traceback_later(25, repeat=False, file=sys.stderr)
+        try:
+            main()
+        finally:
+            faulthandler.cancel_dump_traceback_later()
+    else:
+        main()

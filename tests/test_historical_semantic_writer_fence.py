@@ -6,10 +6,88 @@ import os
 import stat
 import subprocess
 import sys
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from frozen_semantic_597 import FIXTURE, ROOT, read_manifest
+
+
+def _profile_frame(filename, name, *, flags=2):
+    return SimpleNamespace(f_code=SimpleNamespace(
+        co_filename=str(filename), co_qualname=name, co_firstlineno=17, co_flags=flags))
+
+
+def test_historical_counter_retains_every_call_and_exact_lexical_membership(monkeypatch, tmp_path):
+    import frozen_semantic_597 as counter
+
+    root, fixture = tmp_path / "checkout", tmp_path / "frozen"
+    monkeypatch.setattr(counter, "ROOT", root)
+    monkeypatch.setattr(counter, "FIXTURE", fixture)
+    path_calls = []
+
+    def counted_path(value):
+        path_calls.append(value)
+        return Path(value)
+
+    monkeypatch.setattr(counter, "Path", counted_path)
+    owned = root / "src/sciplot_core/owner.py"
+    historical = fixture / "old.py"
+    neighbor = root / "src/sciplot_core_neighbor/foreign.py"
+    dotted = str(root) + "/src/sciplot_core/./owner.py"
+    frames = [
+        _profile_frame(owned, "first"), _profile_frame(owned, "second"),
+        _profile_frame(historical, "old"), _profile_frame(neighbor, "foreign"),
+        _profile_frame("relative/owner.py", "relative"), _profile_frame(dotted, "dotted"),
+        _profile_frame(owned, "module", flags=0),
+    ]
+    executed, calls = set(), set()
+    profile = counter.source_call_profile(executed, calls)
+    for _ in range(40):
+        for frame in frames:
+            profile(frame, "call", None)
+    profile(_profile_frame(root / "src/sciplot_core/unexecuted.py", "return"), "return", None)
+    assert path_calls == [str(owned), str(historical), str(neighbor), "relative/owner.py", dotted]
+    assert executed == {owned, historical}
+    assert calls == {(str(owned), name, 17) for name in ("first", "second", "dotted")} | {
+        (str(historical), "old", 17)}
+
+
+def test_historical_counter_classification_is_not_shared_between_invocations(monkeypatch, tmp_path):
+    import frozen_semantic_597 as counter
+
+    root = tmp_path / "first"
+    monkeypatch.setattr(counter, "ROOT", root)
+    monkeypatch.setattr(counter, "FIXTURE", tmp_path / "frozen")
+    filename = root / "src/sciplot_core/owner.py"
+    first_files, first_calls = set(), set()
+    counter.source_call_profile(first_files, first_calls)(_profile_frame(filename, "first"), "call", None)
+    monkeypatch.setattr(counter, "ROOT", tmp_path / "second")
+    second_files, second_calls = set(), set()
+    counter.source_call_profile(second_files, second_calls)(_profile_frame(filename, "second"), "call", None)
+    assert first_files == {filename} and first_calls == {(str(filename), "first", 17)}
+    assert second_files == second_calls == set()
+
+
+def test_historical_counter_membership_memo_never_caches_source_bytes(monkeypatch, tmp_path):
+    import frozen_semantic_597 as counter
+
+    monkeypatch.setattr(counter, "ROOT", tmp_path)
+    monkeypatch.setattr(counter, "FIXTURE", tmp_path / "frozen")
+    helper = tmp_path / "src/sciplot_core/helper.py"
+    helper.parent.mkdir(parents=True)
+    helper.write_text("def measured():\n    return 1\n")
+    manifest = {"operational_helpers": {"src/sciplot_core/helper.py": {
+        "sha256": hashlib.sha256(helper.read_bytes()).hexdigest()}}}
+    executed, calls = set(), set()
+    profile = counter.source_call_profile(executed, calls)
+    profile(_profile_frame(helper, "measured"), "call", None)
+    counter.validate_operational_helpers(manifest, calls)
+    helper.write_text("def measured():\n    return 2\n")
+    profile(_profile_frame(helper, "measured"), "call", None)
+    with pytest.raises(AssertionError, match="src/sciplot_core/helper.py"):
+        counter.validate_operational_helpers(manifest, calls)
 
 
 def _child(operation, case, phase):
