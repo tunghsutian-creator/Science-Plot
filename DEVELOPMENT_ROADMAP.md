@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-28. External AI is the task interface. Current behavior belongs
+Status: 2026-10-30. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -26,12 +26,16 @@ rather than another policy or state registry.
    exact versions after relocation, complete directories, no physical path,
    foreign native saves and zero-write read-only queries. Require a field-role
    census for NativeSuite projection extensions. Current source hashes cannot
-   authenticate missing historical provenance.
+   authenticate missing historical provenance. Continue from the shared query
+   ports and Core-owned explicit-open admission; do not recreate initialization
+   in a UI or add another state owner. Complete the remaining projection roles
+   across all callers, including distinct identities that share a path or hash.
 2. **Measure and remove same-operation repeated work.** Use one representative
    complete task and SavedWork read with fixed source, environment, input and
    history size. Measure file reads/bytes, hashes, JSON parsing, native starts,
    waits and end-to-end time. In particular, trace per-member reads that may
-   revalidate the entire generation/history chain. If measurement confirms the
+   revalidate the entire generation/history chain, including slow operations
+   that start no native process. If measurement confirms the
    amplification, reuse one existing owner-bound read proof for that finite
    batch, recheck generation at exit and invalidate on mutation. Migrate all
    target loops, retain fresh refusal controls and avoid holding the storage
