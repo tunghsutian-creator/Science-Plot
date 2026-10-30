@@ -561,6 +561,15 @@ def test_saved_native_audit_keeps_selected_read_witness_across_generation_change
     else:
         binding = adopt_saved_native(project, selected)
         assert binding["files"]["studio/document.vsz"] == file_sha256(document)
-        assert [record["metadata"]["kind"] for record in store.commands()] == ["figure_set", "native_import"]
+        # commands() enumerates stable hash paths, not commit chronology.
+        records = store.commands()
+        by_kind = {record["metadata"]["kind"]: record for record in records}
+        assert len(records) == 2 and set(by_kind) == {"figure_set", "native_import"}
+        assert all(record["phase"] == "complete" for record in records)
+        prior, adopted = by_kind["figure_set"], by_kind["native_import"]
+        assert prior["install_parent"] == before["generation"]
+        assert adopted["expected_generation"] == adopted["install_parent"] == prior["generation"]
+        assert adopted["generation_sequence"] == prior["generation_sequence"] + 1
+        assert adopted["generation"] == store.snapshot()["generation"]
     assert store.snapshot()["generation"] != before["generation"]
     assert document.read_bytes() == b"complete human-saved native presentation"
