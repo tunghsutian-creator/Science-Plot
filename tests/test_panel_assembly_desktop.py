@@ -246,13 +246,14 @@ def test_source_library_actual_catalogues_across_projects(qt, tmp_path):
 @pytest.mark.comprehensive
 def test_qt_selects_two_projects_and_managed_plot_then_exports_native_mix(workbench, qt, tmp_path, monkeypatch):
     import pymupdf
-    from test_panel_assembly_export import managed_source
+    from test_panel_assembly_export import managed_source, clipped_legacy_label
     from test_task_papers_native import _projects
     from sciplot_core.foundation.file_hashing import file_sha256
     from sciplot_core.plot_engine.storage import load_head
 
     window = workbench
     raw, projects = _projects(tmp_path)
+    clipped_legacy_label(projects[1], sources=raw)
     managed, _bound = managed_source(tmp_path)
     photo = image(tmp_path, "micrograph.png", "#87aaba")
     protected = [*raw, photo, *(project / "studio/document.vsz" for project in projects),
@@ -294,7 +295,7 @@ def test_qt_selects_two_projects_and_managed_plot_then_exports_native_mix(workbe
     window.exportFinished.connect(results.append)
     qt[2].QTest.mouseClick(toolbar.widgetForAction(window.actions["export"]), qt[1].Qt.MouseButton.LeftButton)
     settle(window, qt, timeout=45)
-    # The FTIR source has a data-anchored inline label at its lower axis bound.
+    # The explicit saved-native control has a data-anchored label at its lower axis bound.
     # Refuse actual target-size clipping; preserve all source bytes and the
     # destination until the user explicitly removes that unsupported panel.
     assert not results

@@ -51,6 +51,57 @@ def managed_source(tmp_path):
     return root, capture_source({"kind": "managed", "project": str(root), "plot_id": document["plot_id"]})
 
 
+def clipped_legacy_label(project, *, sources):
+    """Save an explicit clipped native label; never rely on a default defect."""
+    native, spec = project / "studio/document.vsz", project / "studio/spec.json"
+    protected = {path: file_sha256(path) for path in [*sources, spec]}
+    before = file_sha256(native)
+    script = r"""
+import json
+import sys
+from pathlib import Path
+from PyQt6.QtWidgets import QApplication
+from sciplot_core.panel_assembly.native import _nonvisual_payload
+from sciplot_core.project_host_factory import project_store
+from sciplot_core.studio_core.persistence import atomic_save_veusz_document, project_save_binding
+from sciplot_core.veusz_worker.document_edit import loaded_native_document
+from sciplot_core.veusz_worker.spec_audit import audit_spec_data
+
+app = QApplication.instance() or QApplication([])
+project = Path(sys.argv[1])
+path, spec = project / "studio/document.vsz", project / "studio/spec.json"
+store = project_store(project)
+baseline = project_save_binding(project, path, store=store)
+before = audit_spec_data(path, spec, check_presentation=False)
+with loaded_native_document(path) as document:
+    payload = _nonvisual_payload(document)
+    label = document.resolveWidgetPath(None, "/page1/graph1/label_1")
+    assert label.typename == "label" and label.settings.positioning == "axes"
+    minimum = json.loads(spec.read_text())["axes"]["y"]["min"]
+    document.resolveSettingPath(None, label.path + "/yPos").set([minimum])
+    document.resolveSettingPath(None, label.path + "/alignVert").set("top")
+    assert _nonvisual_payload(document) == payload
+    document._sciplot_project_store = store
+    document._sciplot_project_read_set = baseline
+    saved = atomic_save_veusz_document(document, path)
+    assert saved["ready_for_export"] and saved["project_command"]["phase"] == "complete"
+with loaded_native_document(path) as reopened:
+    assert _nonvisual_payload(reopened) == payload
+after = audit_spec_data(path, spec, check_presentation=False)
+assert before["units"] == after["units"]
+print(json.dumps({"scientific_audit": "unchanged", "label": label.path,
+                  "native_save": saved["project_command"]}))
+"""
+    result = subprocess.run([sys.executable, "-c", script, str(project)],
+                            env=veusz_worker_environment(), capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+    evidence = json.loads(result.stdout)
+    assert evidence["scientific_audit"] == "unchanged"
+    assert file_sha256(native) != before
+    assert {path: file_sha256(path) for path in protected} == protected
+    return evidence
+
+
 @pytest.mark.parametrize("suffix", ["png", "jpg", "tiff"])
 def test_image_capture_closes_bytes_and_replacement_identity(tmp_path, suffix):
     path, source = image_source(tmp_path, name="source." + suffix)
@@ -389,16 +440,37 @@ def test_native_measured_data_label_clipping_blocks_legacy_panel(tmp_path):
 
     raw, projects = _projects(tmp_path)
     project = projects[1]
+    clipped_legacy_label(project, sources=raw)
     source = capture_source({"kind": "project", "project": str(project),
                              "figure_id": inspect_project(project)["primary_figure_id"]})
     protected = [*raw, project / "studio/document.vsz", project / "studio/spec.json"]
     before = {path: file_sha256(path) for path in protected}
-    # The existing FTIR label is anchored at its actual endpoint, aligned top.
-    # At this bounded height its measured glyph extends below the plot frame.
+    # An explicitly saved data-anchored label at the lower axis bound has
+    # measured glyphs below the plot frame, independent of creation defaults.
     document = add(new_document(rows=1, columns=1, width_mm=113, height_mm=98), source, name="ftir")
     with pytest.raises(AssemblyError) as error:
         export_document(document, tmp_path / "clipped-label")
     assert error.value.code == "assembly_native_qa_failed"
     assert "annotation_outside_view" in str(error.value)
     assert not (tmp_path / "clipped-label").exists()
+    assert {path: file_sha256(path) for path in protected} == before
+
+
+@pytest.mark.comprehensive
+def test_current_default_native_label_does_not_depend_on_clipping_for_panel_acceptance(tmp_path):
+    from test_task_papers_native import _projects
+    from sciplot_core.studio_core.project_query import inspect_project
+
+    raw, projects = _projects(tmp_path)
+    project = projects[1]
+    spec = json.loads((project / "studio/spec.json").read_text())
+    assert spec["source_request"]["direct_label_layout_version"] == "physical-clearance-v1"
+    source = capture_source({"kind": "project", "project": str(project),
+                             "figure_id": inspect_project(project)["primary_figure_id"]})
+    protected = [*raw, project / "studio/document.vsz", project / "studio/spec.json"]
+    before = {path: file_sha256(path) for path in protected}
+    document = add(new_document(rows=1, columns=1, width_mm=113, height_mm=98), source, name="ftir")
+    result = export_document(document, tmp_path / "current-default")
+    assert result["panels"][0]["evidence"]["publication_qa"]["status"] == "passed"
+    assert result["panels"][0]["evidence"]["publication_qa"]["native_text_checked"] is True
     assert {path: file_sha256(path) for path in protected} == before

@@ -66,13 +66,14 @@ def test_preview_refuses_source_drift_during_render(tmp_path, monkeypatch):
 @pytest.mark.comprehensive
 def test_legacy_preview_uses_current_native_not_adjacent_pdf_and_does_not_accept_export(tmp_path):
     from test_task_papers_native import _projects
-    from test_panel_assembly_export import add
+    from test_panel_assembly_export import add, clipped_legacy_label
     from sciplot_core.panel_assembly.export import export_document
     from sciplot_core.panel_assembly.model import new_document
     from sciplot_core.studio_core.document_edit_state import run_document_worker
     from sciplot_core.studio_core.project_query import inspect_project
 
     raw, projects = _projects(tmp_path)
+    clipped_legacy_label(projects[1], sources=raw)
     for index, project in enumerate(projects):
         native = project / "studio/document.vsz"
         stale = native.with_suffix(".pdf")
