@@ -144,3 +144,64 @@ def test_query_does_not_expose_unregistered_paths_in_a_selected_project(tmp_path
     with query_sources(store), pytest.raises(ProjectStoreError, match='no exact preserved locator'):
         resolve_source_path(unregistered)
     assert _persistent_tree(tmp_path) == before
+
+
+@pytest.mark.parametrize('configuration', [
+    'external-cached', 'external-env', 'protected-cached', 'protected-env',
+    'protected-alias', 'protected-namespace',
+])
+def test_query_temp_base_is_checked_without_any_default_directory_probe(tmp_path, monkeypatch, configuration):
+    import tempfile
+    from sciplot_core.project_store.incoming_sources import SourceExpectation
+    from sciplot_core.project_store.runtime import sealed_source_runtime
+    from sciplot_core.project_store.source_resolver import query_sources
+
+    store, source, _paths, _old, _tree = current_revision(tmp_path)
+    snapshot = store.snapshot()
+    version = file_sha256(source)
+    identity = next(identity for identity, versions in snapshot['sources'].items()
+                    if version in versions and versions[version]['locator'] == str(source))
+    expected = source.read_bytes()
+    namespace = tmp_path / 'sciplot-query-source-old' / 'namespace'
+    namespace.mkdir(parents=True)
+    alias = tmp_path / 'protected-alias'
+    alias.symlink_to(store.root, target_is_directory=True)
+    safe = configuration.startswith('external')
+    # The external ancestor is allowed, but all possible generated child names
+    # must exclude the preserved namespace descendant before any creation.
+    base = tmp_path if safe else namespace if configuration == 'protected-namespace' else alias if configuration == 'protected-alias' else store.root
+    before_project = _persistent_tree(store.root)
+    before_namespace = _persistent_tree(namespace)
+    before_source = (source.read_bytes(), source.stat().st_mode, source.stat().st_mtime_ns)
+    calls = []
+    original = tempfile.TemporaryDirectory
+
+    def created(*args, **kwargs):
+        calls.append(kwargs)
+        return original(*args, **kwargs)
+
+    def forbidden_probe():
+        pytest.fail('Read-only temp selection invoked a probing tempfile default')
+
+    with monkeypatch.context() as patch:
+        patch.setattr(tempfile, 'tempdir', str(base) if configuration.endswith('cached') or configuration == 'protected-namespace' else None)
+        patch.setenv('TMPDIR', str(base))
+        patch.setattr(tempfile, 'gettempdir', forbidden_probe)
+        patch.setattr(tempfile, '_get_default_tempdir', forbidden_probe)
+        patch.setattr(tempfile, 'TemporaryDirectory', created)
+        with sealed_source_runtime(store, [SourceExpectation(str(source), identity, version)]):
+            # The inner scope must inherit the outer namespace protection.
+            with query_sources(store, protected_roots=(namespace,)), query_sources(store):
+                with nullcontext() if safe else pytest.raises(ProjectStoreError, match='outside protected project and source namespaces'):
+                    target = resolve_source_path(source, expected_sha256=version, source_id=identity)
+                    assert target.read_bytes() == expected
+                    assert not target.is_relative_to(namespace) and not target.is_relative_to(store.root)
+                    assert target.parent.name.startswith('sciplot-query-source-private-')
+        if safe:
+            assert len(calls) == 1 and calls[0]['dir'] == str(base.resolve())
+            assert not target.exists() and not target.parent.exists()
+        else:
+            assert calls == []
+    assert _persistent_tree(store.root) == before_project
+    assert _persistent_tree(namespace) == before_namespace
+    assert (source.read_bytes(), source.stat().st_mode, source.stat().st_mtime_ns) == before_source

@@ -84,7 +84,8 @@ class ComposedProjectRepository(FileProjectRepository):
         if selected is None:
             yield
         else:
-            scope = (query_sources(selected.attachment.store, binding.get("_semantic_project_generation"))
+            scope = (query_sources(selected.attachment.store, binding.get("_semantic_project_generation"),
+                                   protected_roots=(selected.attachment.origin, selected.attachment.namespace_origin, selected.attachment.root))
                      if self._queries.get() is not None else selected.backend_scope(binding.get("_semantic_project_generation")))
             with scope:
                 yield
@@ -201,7 +202,10 @@ class ComposedProjectRepository(FileProjectRepository):
             with ExitStack() as stack:
                 if store is not None:
                     sources = owner.load_head(root)["document"]["scientific"]["data_sources"] if isinstance(owner, NamespaceQueryRepository) else ()
-                    stack.enter_context(query_sources(store, semantic_sources=sources))
+                    roots = ((root, owner.origin, owner.physical) if isinstance(owner, NamespaceQueryRepository)
+                             else (root, owner.attachment.origin, owner.attachment.namespace_origin, owner.attachment.root)
+                             if isinstance(owner, AttachedProjectRepository) else ())
+                    stack.enter_context(query_sources(store, semantic_sources=sources, protected_roots=roots))
                 yield
                 for view in queries:
                     view.verify()

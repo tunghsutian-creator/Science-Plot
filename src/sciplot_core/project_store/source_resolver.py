@@ -3,6 +3,7 @@ from pathlib import Path
 from contextlib import contextmanager
 from collections.abc import Iterator, Iterable
 import tempfile
+import os
 from sciplot_core.foundation.source_locations import source_location_scope
 from typing import Any
 
@@ -95,7 +96,8 @@ class ProjectSourceResolver:
 class QuerySourceResolver(ProjectSourceResolver):
     """Use checked physical evidence; sealed-only files get disposable external views."""
     def __init__(self, store: FileProjectStore, generation: str | None = None, *,
-                 semantic_sources: Iterable[dict[str, Any]] = ()) -> None:
+                 semantic_sources: Iterable[dict[str, Any]] = (),
+                 protected_roots: Iterable[Path] = ()) -> None:
         super().__init__(store, generation)
         # A current query remains a current physical observation after unrelated
         # project commands. Only an explicit historical/sealed scope freezes it.
@@ -113,6 +115,12 @@ class QuerySourceResolver(ProjectSourceResolver):
             self._semantic_aliases[(source["path"], source["sha256"], source["source_id"])] = matches[0]
         self.temporary: tempfile.TemporaryDirectory[str] | None = None
         self._views: dict[Path, str] = {}
+        from sciplot_core.foundation.source_locations import selected_source_resolver
+
+        parent = selected_source_resolver()
+        self._temporary_protection: list[tuple[Path, tuple[str, ...] | None]] = [*((root, None) for root in self._primary_roots),
+            *self._resource_roots, *((root, None) for root in protected_roots),
+            *(parent._temporary_protection if isinstance(parent, QuerySourceResolver) else ())]
 
     @property
     def inspection_generation(self) -> str | None:
@@ -141,6 +149,30 @@ class QuerySourceResolver(ProjectSourceResolver):
             return original_for_logical(self.snapshot, logical)
         return super().literal_path(path)
 
+    def _temporary_directory(self) -> tempfile.TemporaryDirectory[str]:
+        # gettempdir() can probe by writing. Choose and validate the host's
+        # existing base without invoking that probe, even on its first use.
+        value = tempfile.tempdir
+        if value is None:
+            value = next((os.environ[key] for key in ("TMPDIR", "TEMP", "TMP") if os.environ.get(key)), "/tmp")
+        base = Path(os.fsdecode(value)).expanduser().absolute().resolve(strict=True)
+        if not base.is_dir():
+            raise ProjectStoreError("A query temporary base must be an existing directory.")
+        protected: set[Path] = set()
+        for root, members in self._temporary_protection:
+            aliases = {root.expanduser().absolute(), root.expanduser().absolute().resolve()}
+            protected.update(path if members is None else path / member
+                             for path in aliases for member in (members if members is not None else ("",)))
+        if any(base == root or base.is_relative_to(root) for root in protected):
+            raise ProjectConflict("A query temporary base must stay outside protected project and source namespaces.")
+        # An external ancestor such as /tmp is valid. Before creation, exclude
+        # every protected descendant from the entire possible child-name set.
+        prefix = "sciplot-query-source-"
+        while any(root.is_relative_to(base) and root != base
+                  and root.relative_to(base).parts[0].startswith(prefix) for root in protected):
+            prefix += "private-"
+        return tempfile.TemporaryDirectory(prefix=prefix, dir=str(base))
+
     def close(self) -> None:
         if self.temporary is not None:
             self.temporary.cleanup()
@@ -165,7 +197,7 @@ class QuerySourceResolver(ProjectSourceResolver):
                     expected_sha256=expected_sha256, source_id=source_id)
                 data = io.get(entry)
             if self.temporary is None:
-                self.temporary = tempfile.TemporaryDirectory(prefix="sciplot-query-source-")
+                self.temporary = self._temporary_directory()
             target = Path(self.temporary.name).resolve() / (identity + "-" + version)
             if not target.exists():
                 target.write_bytes(data)
@@ -185,8 +217,9 @@ class QuerySourceResolver(ProjectSourceResolver):
 
 @contextmanager
 def query_sources(store: FileProjectStore, generation: str | None = None, *,
-                  semantic_sources: Iterable[dict[str, Any]] = ()) -> Iterator[None]:
-    resolver = QuerySourceResolver(store, generation, semantic_sources=semantic_sources)
+                  semantic_sources: Iterable[dict[str, Any]] = (),
+                  protected_roots: Iterable[Path] = ()) -> Iterator[None]:
+    resolver = QuerySourceResolver(store, generation, semantic_sources=semantic_sources, protected_roots=protected_roots)
     try:
         with source_location_scope(resolver):
             yield
