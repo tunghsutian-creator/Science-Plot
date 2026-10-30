@@ -17,8 +17,9 @@ from sciplot_core.studio_core.document_edit_review import (
     reviewed_edit as reviewed_edit, rebind_document_edit_review as rebind_document_edit_review,
 )
 from sciplot_core.studio_core.native_adoption import adopt_saved_native
+from sciplot_core.studio_core.observed_figure_binding import observed_figure_read_state
 from sciplot_core.studio_core.project_command_scope import (
-    command_for_binding, figure_read_state, project_command_runtime, project_store, query_for_apply, source_versions,
+    command_for_binding, project_command_runtime, project_store, query_for_apply, source_versions,
 )
 from sciplot_core.studio_core.project_query import resolve_project_figure, resolve_project_path
 
@@ -51,8 +52,7 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
     else:
         validate_edit_science_policy(changes, spec)
     repository = project_store(project)
-    snapshot = repository.snapshot()
-    reads = figure_read_state(project, selected)
+    snapshot, reads = observed_figure_read_state(project, selected)
     binding = {"project_id": snapshot["project_id"], "generation": snapshot["generation"],
                "files": reads["project_files"], "projected_reads": reads["projected_reads"],
                "source_files": reads["source_files"]}
@@ -79,6 +79,8 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
 
             raise ProjectCommandUnknown()
         return reviewed_edit(prior, project)
+    if not changes and not operations and snapshot["files"][relative]["sha256"] != expected_document_sha256:
+        raise ValueError("The selected native figure has unregistered outside changes")
     if operations is None or setting_changes:
         validate_settings(document, spec, setting_changes, expected_document_sha256=expected_document_sha256,
                           expected_spec_sha256=binding["files"][repository.logical_path(spec)])

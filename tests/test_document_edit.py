@@ -294,11 +294,11 @@ def test_preview_detects_save_between_expected_hash_and_inventory(edit_case, tmp
         {"path": str(project / "source/data.csv"), "sha256": file_sha256(project / "source/data.csv")}
     ]}]}))
     expected = file_sha256(document)
-    original = commands.figure_binding
+    original = commands.observed_figure_read_state
     def changed_inventory(*args, **kwargs):
         document.write_bytes(b"saved by native writer after SHA check")
         return original(*args, **kwargs)
-    monkeypatch.setattr(commands, "figure_binding", changed_inventory)
+    monkeypatch.setattr(commands, "observed_figure_read_state", changed_inventory)
     with pytest.raises(ValueError, match="changed while capturing|unregistered outside"):
         edits.preview_document_edit(project, [], output_dir=tmp_path / "preview",
                                     expected_document_sha256=expected)

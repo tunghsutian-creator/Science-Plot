@@ -1433,6 +1433,18 @@ that one use case; the lower scope does not retain or re-export the old mutation
 function. Native audit, source/spec fences, CAS and generation publication still
 use the sole ProjectCommands/FileProjectStore writer.
 
+`observed_figure_binding.observed_figure_read_state` owns the shared non-native
+qualification of an existing saved member before settings validation or audit.
+It binds selected native/spec/source bytes, registered modes and selected-registry
+projection without attaching or publishing a generation. Existing command-runtime
+source resolution may still materialize its immutable-history cache. An empty
+preview batch cannot adopt outside native bytes; a nonempty validated intent may
+continue even when its resulting candidate has no actual changes. Settings
+validation stays before scientific audit and adoption, so an invalid setting
+cannot commit a native import. Adoption rechecks the same selected read witness
+after audit and leaves unrelated figure-generation updates independent. The
+Core's existing locked read-set/CAS validation remains final publication authority.
+
 Builtin scientific execution selects an immutable per-operator implementation and
 its actual numerical dependency closure. Historical descriptors resolve retained
 implementations without rewriting old seals; an unrelated operator upgrade cannot

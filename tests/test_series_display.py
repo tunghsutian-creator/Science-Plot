@@ -1,6 +1,7 @@
 """Display edits preserve recoverable source identity and explicit authorization."""
 
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 from test_figure_document import request_for_figure
@@ -270,6 +271,11 @@ def test_shared_series_selector_preserves_each_entrys_existing_correction_contra
     assert style.value.repair["allowed"] == ["layer:modulus"]
 
 
+def _explicit_legend_delta():
+    return [{"object_path": "/page1/graph1/key1", "setting_path": "/page1/graph1/key1/columns",
+             "expected_value": 1, "value": 2}]
+
+
 def _saved_native_baseline(tmp_path, monkeypatch):
     from test_project_query import project as legacy_project
     from sciplot_core.foundation.file_hashing import file_sha256
@@ -325,12 +331,12 @@ def test_explicit_display_edit_registers_audited_saved_baseline_after_validation
         expected_document_sha256=file_sha256(document), operations=None,
         expected_spec_sha256=file_sha256(project / "studio/spec.json"), candidate_builder=candidate,
         audit_document=lambda *_args: {"status": "passed"}, validate_settings=validate)
-    reviewed = preview_native_edit(project, [], **arguments)
+    reviewed = preview_native_edit(project, _explicit_legend_delta(), **arguments)
     after = store.snapshot()
     assert calls == ["validate", "candidate"] and document.read_bytes() == saved
     assert after["files"]["source/data.csv"] == before["files"]["source/data.csv"]
     assert after["files"]["studio/spec.json"] == before["files"]["studio/spec.json"]
-    assert preview_native_edit(project, [], **arguments) == {
+    assert preview_native_edit(project, _explicit_legend_delta(), **arguments) == {
         key: value for key, value in reviewed.items() if key != "review_path"}
     assert calls == ["validate", "candidate"] and store.snapshot() == after
 
@@ -345,7 +351,7 @@ def test_invalid_display_delta_does_not_register_a_saved_native_baseline(tmp_pat
         raise ValueError("invalid physical legend bounds")
 
     with pytest.raises(ValueError, match="physical legend bounds"):
-        preview_native_edit(project, [], output_dir=tmp_path / "invalid", figure_id="first",
+        preview_native_edit(project, _explicit_legend_delta(), output_dir=tmp_path / "invalid", figure_id="first",
             expected_document_sha256=file_sha256(document), expected_spec_sha256=None, operations=None,
             candidate_builder=lambda *_args, **_kwargs: pytest.fail("invalid edit reached its effect"),
             audit_document=lambda *_args: {"status": "passed"}, validate_settings=invalid)
@@ -419,11 +425,142 @@ def test_unknown_display_edit_key_cannot_register_a_later_native_save(tmp_path, 
         candidate_builder=unknown, audit_document=lambda *_args: {"status": "passed"},
         validate_settings=lambda *_args, **_kwargs: None, request_id="a" * 64)
     with pytest.raises(RuntimeError, match="unknown candidate effect"):
-        preview_native_edit(project, [], **arguments)
+        preview_native_edit(project, _explicit_legend_delta(), **arguments)
     before = store.snapshot()
     document.write_bytes(b"a later external native save")
     arguments["expected_document_sha256"] = file_sha256(document)
     with pytest.raises(ValueError, match="another business request"):
-        preview_native_edit(project, [], **arguments)
+        preview_native_edit(project, _explicit_legend_delta(), **arguments)
     assert len(audits) == 1 and store.snapshot()["generation"] == before["generation"]
     assert len(store.commands()) == 2 and document.read_bytes() == b"a later external native save"
+
+
+@pytest.mark.parametrize("operations,reason", [(None, "The selected native figure has unregistered outside changes"),
+    ([], "Provide 1–100 explicit operations.")], ids=["empty-native-batch", "empty-semantic-batch"])
+def test_empty_preview_cannot_authorize_saved_native_adoption(tmp_path, monkeypatch, operations, reason):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core.document_edit_commands import preview_native_edit
+
+    project, store, before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)
+    observed = {str(p): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                for p in project.rglob("*") if p.is_file()}
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("An empty intent must be refused before every native worker")
+    with pytest.raises(ValueError) as refused:
+        preview_native_edit(project, [], output_dir=tmp_path / "empty", figure_id="first",
+            expected_document_sha256=file_sha256(document), expected_spec_sha256=None, operations=operations,
+            candidate_builder=forbidden, audit_document=forbidden, validate_settings=forbidden)
+    assert str(refused.value) == reason
+    assert not audits and not store.commands() and store.snapshot()["generation"] == before["generation"]
+    assert not (tmp_path / "empty").exists()
+    assert observed == {str(p): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                        for p in project.rglob("*") if p.is_file()}
+
+
+def test_explicit_validated_noop_may_continue_saved_native_adoption(tmp_path, monkeypatch):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core.document_edit_commands import preview_native_edit
+
+    project, store, before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)
+    calls = []
+    def validate(_document, _spec, changes, **_kwargs):
+        assert changes == _explicit_legend_delta() and not store.commands() and not audits
+        calls.append("validate")
+    def candidate(document, _spec, _changes, output, **_kwargs):
+        assert len(audits) == 1
+        calls.append("candidate")
+        native, image = output / "candidate.vsz", output / "candidate.png"
+        native.write_bytes(document.read_bytes())
+        image.write_bytes(b"controlled unchanged preview")
+        return {"changes": [], "candidate": {"path": str(native), "sha256": file_sha256(native)},
+                "preview": {"path": str(image), "sha256": file_sha256(image)},
+                "scientific_audit": {"status": "passed"}}
+    result = preview_native_edit(project, _explicit_legend_delta(), output_dir=tmp_path / "noop",
+        figure_id="first", expected_document_sha256=file_sha256(document), expected_spec_sha256=None,
+        operations=None, candidate_builder=candidate, audit_document=lambda *_args: {"status": "passed"},
+        validate_settings=validate)
+    assert result["actual_changes"] == [] and calls == ["validate", "candidate"]
+    assert store.snapshot()["generation"] != before["generation"]
+    assert document.read_bytes() == b"complete human-saved native presentation"
+
+
+@pytest.mark.parametrize("failure", ["unknown", "mode", "spec-mode", "raw", "spec", "membership"])
+def test_explicit_preview_rejects_unregistered_reads_before_any_native_worker(tmp_path, monkeypatch, failure):
+    import json
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core import document_edit_commands as commands
+    from sciplot_core.studio_core.project_query import resolve_project_figure
+
+    project, store, before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)
+    selected = resolve_project_figure(project, "first")
+    if failure == "unknown":
+        unknown = document.with_name("unknown.vsz")
+        unknown.write_bytes(document.read_bytes())
+        selected["document"] = str(unknown)
+        monkeypatch.setattr(commands, "resolve_project_figure", lambda *_args: selected)
+    elif failure in {"mode", "spec-mode"}:
+        path = document if failure == "mode" else Path(selected["spec"])
+        path.chmod((path.stat().st_mode & 0o777) ^ 0o200)
+    elif failure == "raw":
+        (project / "source/data.csv").write_bytes(b"x,y\n1,99\n")
+    elif failure == "spec":
+        path = Path(selected["spec"])
+        path.write_text(path.read_text() + "\n")
+    else:
+        path = project / "studio/figure_set.json"
+        payload = json.loads(path.read_bytes())
+        payload["figures"][0]["title"] = "different registered selection"
+        path.write_text(json.dumps(payload))
+    observed = {str(p): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                for p in project.rglob("*") if p.is_file()}
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Unregistered selection reached a native worker")
+    with pytest.raises(ValueError):
+        commands.preview_native_edit(project, _explicit_legend_delta(), output_dir=tmp_path / "refused",
+            figure_id="first", expected_document_sha256=file_sha256(document), expected_spec_sha256=None,
+            operations=None, candidate_builder=forbidden, audit_document=forbidden, validate_settings=forbidden)
+    assert not audits and not store.commands() and store.snapshot()["generation"] == before["generation"]
+    assert not (tmp_path / "refused").exists()
+    assert observed == {str(p): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                        for p in project.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("change", ["selected-spec", "unrelated-figure"])
+def test_saved_native_audit_keeps_selected_read_witness_across_generation_changes(tmp_path, monkeypatch, change):
+    import json
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.studio_core import native_scientific_audit
+    from sciplot_core.studio_core.native_adoption import adopt_saved_native
+    from sciplot_core.studio_core.project_query import resolve_project_figure
+
+    project, store, before, document, _audits = _saved_native_baseline(tmp_path, monkeypatch)
+    selected = resolve_project_figure(project, "first")
+    def concurrent_audit(native, spec):
+        baseline = store.snapshot()
+        resource = "studio/spec.json" if change == "selected-spec" else "studio/figure_set.json"
+        payload = json.loads((project / resource).read_bytes())
+        if change == "selected-spec":
+            payload["layout_issues"] = []
+        else:
+            payload["figures"][1]["title"] = "another legitimate figure update"
+        command = ProjectCommand.create("figure_set", "concurrent-spec-control", project_id=baseline["project_id"],
+            expected_generation=baseline["generation"], read_set={resource: baseline["files"][resource]["sha256"]},
+            write_set=[resource], request={"generated_layout_diagnostic": []})
+        ProjectCommands(store).execute(command, lambda: ProjectMutation(
+            {resource: json.dumps(payload).encode()}, {"generated_layout_diagnostic": True}))
+        return {"status": "passed", "document_sha256": file_sha256(native), "spec_sha256": file_sha256(spec)}
+    monkeypatch.setattr(native_scientific_audit, "audit_edited_document", concurrent_audit)
+    # Drop optional current query metadata so the post-audit witness comparison,
+    # rather than a stale-query field, rejects the newly registered specification.
+    selected.pop("spec_sha256")
+    if change == "selected-spec":
+        with pytest.raises(ValueError, match="read witness changed during scientific audit"):
+            adopt_saved_native(project, selected)
+        assert len(store.commands()) == 1 and store.commands()[0]["metadata"]["kind"] == "figure_set"
+    else:
+        binding = adopt_saved_native(project, selected)
+        assert binding["files"]["studio/document.vsz"] == file_sha256(document)
+        assert [record["metadata"]["kind"] for record in store.commands()] == ["figure_set", "native_import"]
+    assert store.snapshot()["generation"] != before["generation"]
+    assert document.read_bytes() == b"complete human-saved native presentation"
