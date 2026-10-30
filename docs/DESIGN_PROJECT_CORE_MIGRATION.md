@@ -485,3 +485,14 @@ loss of completion should trigger host/run-lifecycle diagnosis before another
 full. Existing resource-role, generic-query side-effect, numerical-runtime and
 AI-disclosure/usage limitations in the architecture review remain explicit; these
 repairs do not close every project-level architecture finding.
+
+The e240 finite follow-up completed with 239 passing cases and one failing new
+control. Its original wait and complete capture are retained as separate evidence;
+complete capture does not turn that software failure into a pass. The new control
+mistook command-record enumeration by stable hash filename for commit chronology.
+The retained synthetic project proved both complete publications and the correct
+B-to-A generation chain despite the reversed enumeration. The corrected control
+requires exactly those two complete records, the original parent, consecutive
+generation sequences, the adoption's expected/install parent and the current head.
+Production record enumeration is unchanged. Tests of causality must use these
+published revision relationships rather than incidental directory ordering.
