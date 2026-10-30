@@ -461,6 +461,28 @@ cannot accept a preview, invent a missing request, rebind changed inputs or
 advance a historical transaction as current. Transport failure guidance retains
 the original key and distinguishes a request not sent from a lost reply.
 
+Semantic describe, intent-plan and typed execute-plan use the shared repository
+query scope. Discovery selects published ownership; reading cannot attach an old
+namespace, fence its writer, recover a transaction or publish a generation.
+Registered old namespaces use their original envelope seals and exact canonical
+member/hash/mode witness, rechecked when the query exits. This observation is not
+a second head or an attachment identity. Explicit open and mutation leases retain
+ownership transfer, recovery and disposable history-cache installation. Command
+target classification recognizes the existing namespace formats before entering
+that writer lease; it does not run strict query evaluation as a format probe.
+
+Query source inspection keeps semantic IDs, registered source UUIDs, original
+locators and physical IO locations distinct. Only exact source triples declared
+by the verified old document receive an invocation-local registered-UUID lookup;
+no alias or source registration is written. Old path/hash-only sources keep that
+format. Current observations do not become historical merely because an unrelated
+project command advances the generation. Explicit sealed/history reads retain
+their selected version. Missing physical source views may use finite external
+0700 directories with 0400 files, removed on success and error; temporary IO
+addresses do not become public locators or command capabilities. Cold attached
+queries leave disposable project caches absent and report unavailable export
+evidence honestly. Read-only describes project-state effects, not zero local IO.
+
 A failed Managed export-only transaction with an exact native publication-QA
 layout rejection may be superseded by a nonempty typed presentation correction.
 The guard binds the current head, unchanged science, sources and known native

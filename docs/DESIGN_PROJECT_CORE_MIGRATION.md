@@ -496,3 +496,43 @@ requires exactly those two complete records, the original parent, consecutive
 generation sequences, the adoption's expected/install parent and the current head.
 Production record enumeration is unchanged. Tests of causality must use these
 published revision relationships rather than incidental directory ordering.
+
+## Read-only invocation closure
+
+Independent review of the 36fe source found a current contract regression, not
+merely historical debt: describe and both planning paths could discover a tracked
+old namespace by attaching it, fencing its old writer and publishing a generation.
+Two valid synthetic projects reproduced successful reads with new commands and
+heads. Query success therefore did not establish the advertised read-only effect.
+
+The repository now separates query observation from explicit activation. Its
+default discovery has no transfer branch. One query scope supplies checked frozen
+old-namespace reads and refuses mutation ports; its exit rechecks the namespace
+witness. Explicit open/decision/mutation retains the existing transfer validator,
+lease, recovery and sole generation writer. Old late commits and pending previews
+are classified by the existing namespace format before that mutation boundary,
+rather than rejected by an unrelated strict query snapshot.
+
+| Supported state | Query behavior and authority |
+| --- | --- |
+| Standalone | Existing format/seal reader; no implicit project registration. |
+| Registered old namespace | Canonical members, byte hashes and modes bind the original sealed document; no attachment or new generation. |
+| Attached, including cold caches | Read the published owner; do not install history caches or manufacture current export evidence. |
+| Moved project | Original scientific locators remain identities; registered IO projection supplies the actual location. |
+| Fenced, pending, foreign or drifted evidence | Preserve the existing state and refusal/recovery guidance; query cannot resume publication. |
+| Explicit open or command | Existing validated migration/recovery path and single writer, including valid late old-writer commits. |
+
+Real production source-hash consumers supplement controlled backend tests. The
+latter had omitted optional Legacy source IDs and semantic-ID/registered-UUID
+differences. Only verified declared triples participate in a temporary read lookup;
+path/hash-only history is not assigned a new identity. Original source locators
+remain separate from runtime metadata paths, and current inspection remains
+separate from explicitly selected sealed history even after an unrelated update.
+External private read views are cleaned on both outcomes and never serialized as
+lasting locators. No query creates aliases, source versions or execution grants.
+
+The original counterexamples, intermediate failures and their exact-version
+repairs remain separate evidence. Component checks and static review do not
+replace the subsequent frozen full/native/capture/access/CI gates. The open
+resource-role and NativeSuite root-field findings retain their stated limits;
+closing this read boundary does not certify the entire project architecture.
