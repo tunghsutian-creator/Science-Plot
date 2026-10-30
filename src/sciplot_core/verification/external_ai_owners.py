@@ -179,9 +179,15 @@ EXTERNAL_AI_OWNERS = (
                 "src/sciplot_core/studio.py",
             }
         ),
-        owned_test_paths=frozenset({"tests/test_project_session.py"}),
+        owned_test_paths=frozenset({"tests/test_project_session.py", "tests/test_project_session_bootstrap.py"}),
         pytest_targets=(
             "tests/test_project_session.py",
+            "tests/test_project_session_bootstrap.py",
+            "tests/test_project_store_admission.py",
+            "tests/test_project_source_observations.py",
+            "tests/test_project_query.py",
+            "tests/test_project_query_readonly_sources.py",
+            "tests/test_historical_semantic_writer_fence.py",
             "tests/test_document_edit.py",
             "tests/test_document_edit_native.py",
             "tests/test_project_source_update_transaction.py",

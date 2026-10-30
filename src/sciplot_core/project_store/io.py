@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 import hashlib
@@ -168,9 +168,13 @@ class StoreIO:
         self.root_fds: dict[str, int] = {}
         self.fd = -1
         self.validation_epoch = 0
+        # Only this live owned IO can attest that it created its metadata root.
+        # It is not persisted and never survives release/reacquisition.
+        self.created_store = False
 
     @contextmanager
-    def locked(self, *, blocking: bool = False) -> Iterator[StoreIO]:
+    def locked(self, *, blocking: bool = False,
+               before_create: Callable[[], object] | None = None) -> Iterator[StoreIO]:
         active = _ACTIVE.get()
         if active is not None:
             owned, process, thread = active
@@ -192,8 +196,20 @@ class StoreIO:
                     if not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", key):
                         raise ProjectStoreError("Invalid trusted resource-root ID.")
                     self.root_fds[key] = os.dup(leases[path].fd)
-                with directory(lease.fd, (STORE,), create=True) as store_fd:
+                try:
+                    os.stat(STORE, dir_fd=lease.fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    if before_create is not None:
+                        before_create()
+                try:
+                    os.mkdir(STORE, mode=0o700, dir_fd=lease.fd)
+                except FileExistsError:
+                    created_store = False
+                else:
+                    created_store = True
+                with directory(lease.fd, (STORE,)) as store_fd:
                     self.fd = store_fd
+                    self.created_store = created_store
                     token = _ACTIVE.set((self, os.getpid(), get_ident()))
                     try:
                         yield self
@@ -207,6 +223,7 @@ class StoreIO:
                     os.close(descriptor)
                 self.root_fds.clear()
                 self.fd = -1
+                self.created_store = False
                 self.validation_epoch += 1
 
     def verify_roots(self) -> None:

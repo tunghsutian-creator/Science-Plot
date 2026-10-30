@@ -5,11 +5,13 @@ from typing import Any, Protocol, cast
 from sciplot_core.project_lifecycle.errors import EngineError
 from .admission import usecase
 from .contracts import RevisionToken, NormalizedCommand, AuthorityMode
-from .context import command_scope, exists, external_project_session, read, transaction_path, load_head, project_query
+from .context import command_scope, exists, external_project_session, read, transaction_path, load_head
 from .paths import canonical_path
+from .ports import ProjectRepository
 
 
 class CommandTarget(Protocol):
+    repository: ProjectRepository
     def create(self, request: dict[str, Any]) -> dict[str, Any]: ...
     def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
@@ -36,7 +38,7 @@ class CommandDispatch:
             raise EngineError("document_command_unsupported", "Use a supported command with its expected revision token.")
         root = canonical_path(plot)
         planning = command.kind == "intent" and command.original_request.get("mode") == "plan"
-        with project_query(root) if planning else external_project_session(root):
+        with target.repository.query_scope(root) if planning else external_project_session(root):
             path = transaction_path(root, command.idempotency_key)
             document = read(path)["before"] if exists(path) else load_head(root)["document"]
             if RevisionToken.of(document) != command.expected_revision:

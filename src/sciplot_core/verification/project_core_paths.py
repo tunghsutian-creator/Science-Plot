@@ -25,6 +25,7 @@ ATTACHED_SOURCE_PATHS = frozenset({
     'src/sciplot_core/project_lifecycle/attachment_versions.py',
     'src/sciplot_core/project_lifecycle/backend_paths.py',
     'src/sciplot_core/project_lifecycle/checkpoint_storage.py',
+    'src/sciplot_core/project_lifecycle/command_dispatch.py',
     'src/sciplot_core/project_lifecycle/frozen_namespace.py',
     'src/sciplot_core/project_lifecycle/legacy_namespace.py',
     'src/sciplot_core/project_lifecycle/namespace_capture.py',
@@ -44,6 +45,8 @@ ATTACHED_SOURCE_PATHS = frozenset({
 })
 
 SOURCE_LOCATOR_PATHS = frozenset({
+    'src/sciplot_core/plot_engine/managed_backend.py',
+    'src/sciplot_core/plot_engine/managed_state.py',
     'src/sciplot_core/data_mapping/original_tables.py',
     'src/sciplot_core/data_mapping/raw_tables.py',
     'src/sciplot_core/figure_plan/frequency_resolution.py',

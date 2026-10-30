@@ -40,6 +40,7 @@ PROJECT_STORE_TESTS = (
     'tests/test_missing_generated_output_recovery.py',
     'tests/test_project_prepared_inputs.py',
     'tests/test_project_store.py',
+    'tests/test_project_store_admission.py',
     'tests/test_project_store_faults.py',
     'tests/test_project_derived_directories.py',
     'tests/test_project_store_preconditions.py',
@@ -108,6 +109,7 @@ PROJECT_COMMAND_TESTS = (
 )
 
 NATIVE_PROJECT_CONSUMERS = (
+    'tests/test_project_session_bootstrap.py',
     'tests/test_document_edit.py',
     'tests/test_document_edit_native.py',
     'tests/test_delivery_recovery.py',

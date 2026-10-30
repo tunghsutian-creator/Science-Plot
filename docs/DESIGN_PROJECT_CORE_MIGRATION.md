@@ -547,3 +547,72 @@ External ancestors remain usable with disjoint child-name prefixes. Protected
 cached/environment bases and aliases refuse without a metadata write; normal
 external success and exception cleanup retain their existing behavior. This is
 a query-view location check, not a new temporary-files framework or OS sandbox.
+
+
+### Retained-writer gateway feedback boundary
+
+Full19 retained four failures in the original 597 pending-writer counterexample.
+A fresh e345 process reproduced all four as an import-time interface regression:
+the current typed dispatcher required a new context helper that the byte-frozen
+context did not contain. The dispatcher now takes its query capability from the
+same injected repository selected by the use case; nonplanning leases, revision,
+business-command checks and the original frozen source/assertions remain intact.
+The original four cases passed in 35.70 seconds before their tier changed.
+
+Two selection gaps had delayed that feedback: the shared dispatcher lacked the
+existing attached-semantic exact-source edge, and the four bounded offline child
+controls were comprehensive-only. The existing edge now selects the complete
+historical family alongside all prior broad targets. Only those four cases move
+to focused; the five historical node IDs, order and behavior stay unchanged.
+This roughly 36-second cost belongs to the shared gateway contract, not unrelated
+local style leaves. No test, assertion, pin or release gate is removed. Final
+metadata must independently confirm focused +4 / comprehensive -4 with the same
+9009 pre-existing nodes and relative order, separately accounting for new cases.
+The retained full19 failures are not a final PASS;
+component fixes and this feedback correction require the later frozen release
+closure rather than another ad hoc full execution.
+
+### Source-role and explicit-open closure
+
+The e345 branch and main CI both failed six focused cases. Four Saved Work
+currentness failures and the cold-source literal failure shared one production
+cause: fingerprinting tried to reverse a scientific original locator through an
+API accepting only verified actual IO paths. A controlled resolver exposed that
+contract violation; the concrete project resolver returned no current hash.
+Scientific literals, projected IO and host implementation/executor pins must be
+classified before resolution. The correction shares the existing host-pin
+projection, preserves original source IDs/versions/seals, and refuses undeclared
+fingerprint keys without opening their bytes. Currentness still inspects source
+evidence without installing a disposable view. No historical ledger or golden is
+rewritten. The complete Saved Work consumer belongs to the source-location impact
+owner; testing the producer's own source cases alone had missed that consumer.
+
+The sixth CI failure was a valid old native project's first explicit Open. Removing
+implicit query import had left that mutation boundary without initialization.
+Explicit Open now asks the existing FileProjectStore owner to admit the project;
+read-only query behavior is unchanged. Its original directory writer lease owns
+preflight and initialization. Only an atomic mkdir performed by the active owned
+IO proves permission to import a pristine new store. A separate pre-lock
+"unregistered" observation cannot prove this: an independent counterexample
+created an empty store between observation and acquisition and reproduced the
+incorrect import. Existing empty/partial/foreign stores retain recovery/refusal;
+an existing valid head remains authoritative. The ephemeral creation fact is
+cleared at release and is not a second persisted state. The UI no longer reads
+store layout or constructs StoreIO to decide import eligibility.
+
+These failures distinguish three design boundaries from coverage gaps: injected
+repository capabilities versus mutable module imports; source roles versus path
+shape; and owned creation versus stale initialization observations. Impact edges
+must include their complete historical-writer, Saved Work and native/Core IO
+consumer families. Focused marker wording describes owner-scoped feedback,
+including bounded native/subprocess controls; it does not promise in-process-only
+execution. Component successes and independent reviews establish repair evidence,
+not a replacement for the final combined snapshot's release gates. The original
+e345 full, failed CI records and rejected initialization prototype stay preserved.
+
+CI cost evidence is similarly bounded: the slowest 30 reports explain only about
+22% of each failed focused run. The remaining time has not been attributed to
+audit overhead, Veusz startup or computation. Repeated history/object validation
+and transport identity recomputation are measured candidates, not demonstrated
+wall-clock causes. Further optimization requires timings on an otherwise required
+run, with the same scientific, freshness and permission assertions intact.

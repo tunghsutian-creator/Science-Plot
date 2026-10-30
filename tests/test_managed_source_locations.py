@@ -87,6 +87,137 @@ def test_managed_cold_source_io_and_currentness_keep_original_literal_and_seal(t
         require_inputs(document)
 
 
+@pytest.mark.parametrize("resolver_kind", ["minimal", "project"])
+@pytest.mark.parametrize("host_kind", ["builtin", "external"])
+def test_currentness_host_pins_never_enter_the_source_locator(tmp_path, monkeypatch, resolver_kind, host_kind):
+    import sys
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.plot_engine.managed_state import declared_host_files
+    from sciplot_core.plot_transforms import ExternalExecutor
+    from sciplot_core.project_store.repository import FileProjectStore
+    from sciplot_core.project_store.source_resolver import ProjectSourceResolver
+
+    document, actual = relocated_document(tmp_path)
+    if host_kind == "external":
+        wire = request_for_source(tmp_path)
+        script = tmp_path / "fixed-transform.py"
+        script.write_text("raise AssertionError('A role projection must not execute the transform')\n")
+        executor = ExternalExecutor(Path(sys.executable), script,
+            {"type": "object", "properties": {}, "additionalProperties": False})
+        node = wire["data_binding"]["transforms"][0]
+        node.update(kind="external", parameters={}, executor=executor.descriptor("fixed"))
+        document = resolved_metadata(create_managed_document(wire["template_definition"], wire["data_binding"],
+            plot_id="host-role"), rule_id=wire["rule_id"], executors={"fixed": executor.to_dict("fixed")})
+    source = document["scientific"]["data_sources"][0]
+    if resolver_kind == "minimal":
+        locator = SelectedSource(source, actual)
+    else:
+        project = tmp_path / "project"
+        project.mkdir()
+        store = FileProjectStore(project)
+        store.snapshot(import_legacy=True)
+        locator = ProjectSourceResolver(store)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("A declared implementation/executor pin entered source relocation")
+
+    monkeypatch.setattr(locator, "resolve_path", forbidden)
+    monkeypatch.setattr(locator, "literal_path", forbidden)
+    host = declared_host_files(document)
+    assert host
+    before = deepcopy(document)
+    with source_location_scope(locator):
+        assert {path: ManagedBackend._source_hash(document, path, sha) for path, sha in host.items()} == host
+        if host_kind == "external":
+            script.write_text("raise AssertionError('A different implementation must stay different')\n")
+            observed = ManagedBackend._source_hash(document, str(script), host[str(script)])
+            assert observed == file_sha256(script) and observed != host[str(script)]
+    assert document == before
+
+
+def test_canonical_fingerprint_key_keeps_the_declared_source_literal(tmp_path):
+    wire = request_for_source(tmp_path)
+    source = wire["data_binding"]["data_sources"][0]
+    actual = Path(source["path"])
+    source["path"] = str(tmp_path / "unavailable-original" / "unused" / ".." / "A.csv")
+    document = resolved_metadata(create_managed_document(wire["template_definition"], wire["data_binding"],
+        plot_id="source-literal-spelling"), rule_id=wire["rule_id"], executors={})
+    before = deepcopy(document)
+    source = document["scientific"]["data_sources"][0]
+    locator = SelectedSource(source, actual)
+    repo = FileProjectRepository(lease=lambda _: nullcontext())
+    with source_location_scope(locator), repository_scope(repo, capabilities=COMPATIBILITY_CAPABILITIES):
+        resolved, _ = resolve_science(tmp_path / "semantic", document)
+        binding = make_binding(tmp_path / "semantic", resolved, output=tmp_path / "output")
+        assert str(Path(source["path"]).resolve()) in binding["fingerprint"]["files"]
+        assert changed_inputs(ManagedBackend.__new__(ManagedBackend), binding) == []
+        assert resolved["scientific"]["data_sources"] == document["scientific"]["data_sources"]
+    assert document == before
+    assert (source["path"], source["sha256"], source["source_id"]) in locator.calls
+
+
+@pytest.mark.parametrize("resolver_kind", ["minimal", "project"])
+def test_equal_bytes_do_not_authorize_an_undeclared_fingerprint_path(tmp_path, monkeypatch, resolver_kind):
+    from sciplot_core.plot_engine import managed_backend
+    from sciplot_core.project_store.repository import FileProjectStore
+    from sciplot_core.project_store.source_resolver import ProjectSourceResolver
+
+    document, actual = relocated_document(tmp_path)
+    source = document["scientific"]["data_sources"][0]
+    other = tmp_path / "same-bytes-other-file.csv"
+    other.write_bytes(actual.read_bytes())
+    if resolver_kind == "minimal":
+        locator = SelectedSource(source, actual)
+    else:
+        project = tmp_path / "project"
+        project.mkdir()
+        store = FileProjectStore(project)
+        store.snapshot(import_legacy=True)
+        locator = ProjectSourceResolver(store)
+
+    def forbidden(_path):
+        pytest.fail("An undeclared fingerprint path must not be opened as a host pin")
+
+    monkeypatch.setattr(managed_backend, "existing_file_sha256", forbidden)
+    before = deepcopy(document)
+    with source_location_scope(locator):
+        assert ManagedBackend._source_hash(document, str(other), source["sha256"]) is None
+    assert document == before
+
+
+@pytest.mark.parametrize("failure", ["missing", "changed_bytes"])
+def test_currentness_does_not_replace_refused_source_io_with_the_original(tmp_path, failure):
+    document, actual = relocated_document(tmp_path)
+    before = deepcopy(document)
+    source = document["scientific"]["data_sources"][0]
+    original = Path(source["path"])
+    original.parent.mkdir()
+    original_bytes = actual.read_bytes()
+    original.write_bytes(original_bytes)
+    repo = FileProjectRepository(lease=lambda _: nullcontext())
+    with source_location_scope(SelectedSource(source, actual)), repository_scope(repo, capabilities=COMPATIBILITY_CAPABILITIES):
+        resolved, _ = resolve_science(tmp_path / "semantic", document)
+        binding = make_binding(tmp_path / "semantic", resolved, output=tmp_path / "output")
+
+    class Refused(SelectedSource):
+        def resolve_path(self, original, *, expected_sha256=None, source_id=None):
+            if failure == "missing":
+                raise ValueError("The selected source is unavailable")
+            return super().resolve_path(original, expected_sha256=expected_sha256, source_id=source_id)
+
+    if failure == "changed_bytes":
+        actual.write_text("Time,Signal\ns,V\n0,99\n1,99\n2,99\n")
+    with source_location_scope(Refused(source, actual)):
+        backend = ManagedBackend.__new__(ManagedBackend)
+        if failure == "missing":
+            with pytest.raises(ValueError, match="selected source"):
+                changed_inputs(backend, binding)
+        else:
+            assert changed_inputs(backend, binding) == [source["path"]]
+    assert document == before
+    assert original.read_bytes() == original_bytes
+
+
 @pytest.mark.parametrize("failure", ["missing", "changed_bytes"])
 def test_locator_failure_never_falls_back_to_same_name_original_or_blesses_changed_bytes(tmp_path, failure):
     document, actual = relocated_document(tmp_path)

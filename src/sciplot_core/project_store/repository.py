@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
+import os
 from pathlib import Path
 from typing import Any
 
@@ -101,6 +102,26 @@ class FileProjectStore:
                 yield io, current, checked
             finally:
                 checked.close()
+
+    def admit_open(self, *, before_import: Callable[[], object]) -> dict[str, Any]:
+        """Admit an explicit open; only its own pristine store may be imported.
+
+        Existing empty or incomplete metadata requires recovery. Validation runs
+        under the original writer lease before creating a new metadata root, or
+        before importing one already created by this same active owned IO.
+        """
+        validated = False
+
+        def validate() -> None:
+            nonlocal validated
+            before_import()
+            validated = True
+
+        with StoreIO(self.root, self.locations, self.location_members,
+                     self.namespace_backups).locked(before_create=validate) as io:
+            if io.created_store and not os.listdir(io.fd) and not validated:
+                validate()
+            return self.snapshot(import_legacy=io.created_store and not os.listdir(io.fd))
 
     def snapshot(self, *, import_legacy: bool = False) -> dict[str, Any]:
         with self._locked(import_legacy=import_legacy) as (io, current):

@@ -53,7 +53,7 @@ def test_historical_fixture_pins_original_source_commit_and_bytes():
 
 @pytest.mark.parametrize("phase", ["prepared", "applying"])
 @pytest.mark.parametrize("attached", [False, True], ids=["before-transfer", "after-transfer"])
-@pytest.mark.comprehensive
+@pytest.mark.focused
 def test_original_pending_writer_has_no_native_or_state_write_after_attachment(tmp_path, phase, attached):
     from sciplot_core.project_store.repository import FileProjectStore
     from sciplot_core.project_store.runtime import project_runtime

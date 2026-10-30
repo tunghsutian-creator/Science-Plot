@@ -10,7 +10,8 @@ from sciplot_core.plot_backends.managed import ManagedVeuszCompiler, compiler_id
 
 from .errors import EngineError
 from .builtin_history import fingerprint_for_read
-from .managed_state import make_binding, read_canonical, require_inputs, resolved_ir, source_input_path
+from .managed_state import declared_host_files, make_binding, read_canonical, require_inputs, resolved_ir, source_input_path
+from .managed_source_groups import physical_path, source_groups
 from .storage import read, write
 from sciplot_core.project_lifecycle.context import exists
 
@@ -38,7 +39,8 @@ class ManagedBackend:
 
     def fingerprint(self, binding: dict[str, Any]) -> dict[str, Any]:
         canonical = read_canonical(binding) if "canonical_document" in binding else None
-        files = {name: self._source_hash(canonical, name, sha)
+        host_files = set(declared_host_files(canonical)) if canonical is not None else set()
+        files = {name: self._source_hash(canonical, name, sha, host_files=host_files)
                  for name, sha in fingerprint_for_read(binding)["files"].items()}
         native = Path(binding["document"])
         expected = binding["ir_hash"]
@@ -53,17 +55,31 @@ class ManagedBackend:
         return {"files": files, "artifacts": {str(native): expected}}
 
     @staticmethod
-    def _source_hash(canonical: dict[str, Any] | None, name: str, sha: str) -> str | None:
-        from sciplot_core.foundation.source_locations import selected_source_resolver, literal_source_path
+    def _source_hash(canonical: dict[str, Any] | None, name: str, sha: str, *,
+                     host_files: set[str] | None = None) -> str | None:
+        from sciplot_core.foundation.source_locations import selected_source_resolver
         from sciplot_core.project_store.runtime import ProjectSourceResolver, inspect_runtime_source_file
         from sciplot_core.project_store.errors import ProjectStoreError
 
-        try:
-            literal = literal_source_path(Path(name))
-        except (OSError, ProjectStoreError):
-            return None
-        sources = [item for item in canonical['scientific']['data_sources'] if item['path'] in {name, literal}] if canonical else []
+        groups = source_groups(canonical) if canonical is not None else {}
+        sources = groups.get(physical_path(name), [])
         resolver = selected_source_resolver()
+        if canonical is not None and not sources:
+            declared = set(declared_host_files(canonical)) if host_files is None else host_files
+            if physical_path(name) in declared:
+                return existing_file_sha256(Path(name))
+            if isinstance(resolver, ProjectSourceResolver):
+                # Only this concrete host adapter can identify a projected
+                # registered source. A generic source port never receives a
+                # scientific literal or an implementation/executor filename
+                # as if it were already-verified actual IO.
+                try:
+                    literal = resolver.literal_path(Path(name))
+                except (OSError, ProjectStoreError):
+                    return None
+                sources = groups.get(physical_path(literal), [])
+            if not sources:
+                return None  # No canonical source or declared host role authorizes this fingerprint key.
         if sources and isinstance(resolver, ProjectSourceResolver) and not getattr(resolver, 'pending', ()):
             # Currentness observes an explicitly selected version without
             # materializing its disposable source view. An in-flight declared
@@ -76,7 +92,8 @@ class ManagedBackend:
             if len(values) != 1:
                 raise EngineError('managed_source_locator_conflict', 'One sealed source has conflicting observed versions.')
             return next(iter(values))
-        return existing_file_sha256(source_input_path(canonical, name, sha) if canonical is not None else Path(name))
+        original = sources[0]['path'] if sources else name
+        return existing_file_sha256(source_input_path(canonical, original, sha) if canonical is not None else Path(name))
 
     def _ensure(self, binding: dict[str, Any]) -> tuple[dict[str, Any], Path]:
         canonical = read_canonical(binding)

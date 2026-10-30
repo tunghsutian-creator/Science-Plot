@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -28,7 +28,7 @@ class _ScopedNativeSession:
 def _capture_binding(project: Path, target: Path) -> dict[str, Any] | None:
     from sciplot_core.studio_core.project_query import resolve_project_figure
     from sciplot_core.studio_core.native_adoption import adopt_saved_native
-    from sciplot_core.studio_core.project_command_scope import project_store
+    from sciplot_core.studio_core.project_command_scope import figure_read_state, project_store
     from sciplot_core.project_store.errors import ProjectStoreError
     from sciplot_core.project_store.runtime import project_runtime
 
@@ -38,8 +38,11 @@ def _capture_binding(project: Path, target: Path) -> dict[str, Any] | None:
         return None
     # An unidentified or scientifically unbound window remains conservative.
     try:
-        scope = project_runtime(project_store(project)) if (project / ".sciplot_store").exists() else nullcontext()
-        with scope:
+        repository = project_store(project)
+        # Explicit Open/Save As admits a writer. Core owns atomic initialization;
+        # a read-only query must never import an old project on its behalf.
+        repository.admit_open(before_import=lambda: figure_read_state(project, selected))
+        with project_runtime(repository):
             return adopt_saved_native(project, selected)
     except ProjectStoreError:
         # An existing generation must be explicitly recovered or reconciled;

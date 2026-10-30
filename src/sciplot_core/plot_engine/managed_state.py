@@ -1,6 +1,7 @@
 """Canonical managed snapshots and exact per-plot scientific input closure."""
 
 from copy import deepcopy
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ from sciplot_core.plot_transforms import builtin_files, require_builtin
 
 from .content_store import referenced_files, resolve_document_content
 from .errors import EngineError
-from .managed_source_groups import add_input
+from .managed_source_groups import add_input, physical_path, source_groups
 from .storage import digest, read, write
 from sciplot_core.project_lifecycle.context import exists
 
@@ -21,18 +22,17 @@ def is_managed(document: dict[str, Any]) -> bool:
     return document.get("plot_type") == "ManagedPlot"
 
 
-def input_files(document: dict[str, Any]) -> dict[str, str]:
-    files: dict[str, str] = {}
-    for source in document["scientific"]["data_sources"]:
-        add_input(files, source["path"], source["sha256"])
+def _host_input_groups(document: dict[str, Any], *, authenticate: bool) -> Iterator[list[tuple[str, str]]]:
+    """One host-role projection; only actual input admission authenticates bytes."""
     registry = document["scientific"]["provenance"]["managed"].get("executors", {})
     for executor in registry.values():
-        add_input(files, executor["executable"], executor["identity"]["executable_sha256"])
-        add_input(files, executor["script"], executor["identity"]["script_sha256"])
+        yield [(executor["executable"], executor["identity"]["executable_sha256"]),
+               (executor["script"], executor["identity"]["script_sha256"])]
     builtins = [node for node in document["scientific"]["transforms"] if node["executor"]["kind"] == "builtin"]
     for node in builtins:
         try:
-            require_builtin(node)
+            if authenticate:
+                require_builtin(node)
             implementation = builtin_files(node["kind"], node["executor"])
         except (OSError, DocumentError) as exc:
             changed = getattr(exc, "reason_code", None) == "transform_runtime_changed"
@@ -40,7 +40,24 @@ def input_files(document: dict[str, Any]) -> dict[str, str]:
                               "Restore the saved immutable builtin version before scientific reconstruction.",
                               action="restore_builtin_executor", targets=["transform:" + node["id"]],
                               automatic_refresh=False, automatic_retry=False) from exc
-        for path, sha256 in implementation.items():
+        yield list(implementation.items())
+
+
+def declared_host_files(document: dict[str, Any]) -> dict[str, str]:
+    """Expected implementation/executor roles, not evidence of current bytes."""
+    files: dict[str, str] = {}
+    for implementation in _host_input_groups(document, authenticate=False):
+        for path, sha256 in implementation:
+            add_input(files, path, sha256)
+    return files
+
+
+def input_files(document: dict[str, Any]) -> dict[str, str]:
+    files: dict[str, str] = {}
+    for source in document["scientific"]["data_sources"]:
+        add_input(files, source["path"], source["sha256"])
+    for implementation in _host_input_groups(document, authenticate=True):
+        for path, sha256 in implementation:
             add_input(files, path, sha256)
     return files
 
@@ -55,10 +72,11 @@ def require_inputs(document: dict[str, Any]) -> None:
 
 def source_input_path(document: dict[str, Any], path: str, sha256: str) -> Path:
     """Resolve source IO only; implementation and executor pins stay host paths."""
-    matching = [source for source in document["scientific"]["data_sources"] if source["path"] == path]
+    matching = source_groups(document).get(physical_path(path), [])
     if not matching:
         return Path(path)
-    locations = {resolve_source_path(path, expected_sha256=sha256, source_id=source["source_id"]) for source in matching}
+    locations = {resolve_source_path(source["path"], expected_sha256=sha256, source_id=source["source_id"])
+                 for source in matching}
     if len(locations) != 1:
         raise EngineError("managed_source_locator_conflict", "One sealed original file cannot resolve to conflicting physical versions.")
     return next(iter(locations))

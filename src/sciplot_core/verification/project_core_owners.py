@@ -219,6 +219,7 @@ PROJECT_CORE_OWNERS = (
     }),
         pytest_targets=('tests/test_native_setting_admission.py', *PROJECT_RUNTIME_TESTS, *SCIENTIFIC_ARTIFACT_TESTS, *ATTACHED_PROJECT_TESTS,
                         "tests/test_managed_sources.py", "tests/test_managed_source_reconfirmation.py",
+                        "tests/test_task_saved_work.py",
                         "tests/test_task_source_control.py", *NATIVE_PROJECT_CONSUMERS,
                         "tests/test_preparation_input_roots.py", "tests/test_preparation_input_roots_native.py",
                         "tests/test_mapping_candidate_roles.py", "tests/test_mapping_candidate_roles_native.py", "tests/test_studio_figure_set_probe_native.py", "tests/test_gui_source_currentness.py", "tests/test_gui_mapping_source_currentness.py", "tests/test_studio_project_status.py", "tests/test_task_mapping_review.py", "tests/test_studio_project_context.py", *ARCHITECTURE_CORE_TARGETS),

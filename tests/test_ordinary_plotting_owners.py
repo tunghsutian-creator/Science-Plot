@@ -698,6 +698,31 @@ def test_project_core_domains_retain_all_owned_inputs_and_real_native_consumers(
     shared = _plan(["src/sciplot_core/project_commands/contracts.py"])
     assert set(PROJECT_COMMAND_TESTS + PROJECT_STORE_TESTS + PROJECT_RUNTIME_TESTS
                + ATTACHED_PROJECT_TESTS + NATIVE_PROJECT_CONSUMERS) <= _targets(shared)
+    dispatcher = _plan(["src/sciplot_core/project_lifecycle/command_dispatch.py"])
+    assert {"semantic_plot_engine", "scientific_transaction_type_gate", "attached_semantic_project"} <= {
+        row["owner_id"] for row in dispatcher["owners"]}
+    assert set(ATTACHED_PROJECT_TESTS) <= _targets(dispatcher)
+    assert "tests/test_historical_semantic_writer_fence.py" in _targets(dispatcher)
+    for source in ("managed_backend.py", "managed_state.py"):
+        managed = _plan(["src/sciplot_core/plot_engine/" + source])
+        assert {"semantic_plot_engine", "scientific_transaction_type_gate", "selected_project_runtime_io"} <= {
+            row["owner_id"] for row in managed["owners"]}
+        assert "tests/test_task_saved_work.py" in _targets(managed)
+    shared_consumers = {"tests/test_project_store_admission.py", "tests/test_project_session_bootstrap.py",
+                        "tests/test_project_source_observations.py", "tests/test_project_query_readonly_sources.py",
+                        "tests/test_historical_semantic_writer_fence.py"}
+    for source in ("src/sciplot_core/project_store/io.py", "src/sciplot_core/project_store/repository.py",
+                   "src/sciplot_core/studio_core/project_session.py"):
+        assert shared_consumers <= _targets(_plan([source]))
+    for test, owner in (("tests/test_project_session_bootstrap.py", "native_project_session"),
+                        ("tests/test_project_store_admission.py", "complete_project_generation_store")):
+        registered = _plan([test])
+        assert registered["unowned_paths"] == []
+        assert owner in {row["owner_id"] for row in registered["owners"]}
+        assert test in _targets(registered)
+    style_leaf = _plan(["src/sciplot_core/studio_core/sample_style_presets.py"])
+    assert "attached_semantic_project" not in {row["owner_id"] for row in style_leaf["owners"]}
+    assert "tests/test_historical_semantic_writer_fence.py" not in _targets(style_leaf)
 
 
 def test_project_core_unknown_neighbor_does_not_inherit_an_empty_type_only_plan():

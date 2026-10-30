@@ -58,7 +58,7 @@ extend-select = [
 [tool.pytest.ini_options]
 addopts = "--strict-markers --durations=30"
 markers = [
-  "focused: single-owner, in-process tests used during local iteration",
+  "focused: default owner-scoped regression tier, including bounded subprocess/native compatibility checks",
   "comprehensive: cross-process Veusz, real export, or complete Studio lifecycle tests",
 ]
 
