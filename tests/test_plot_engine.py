@@ -322,16 +322,56 @@ def test_inventory_evidence_rejects_added_data_but_ignores_regular_finder_metada
     assert not evidence_current(files, inventories)
 
 
+def _assert_compact_review_content(result, root):
+    # Absolute locators remain directly usable by clients. Their fixture root
+    # varies with the checkout and retained pytest temp directory, independently
+    # of the bounded protocol content or size of the journal's diagnostics.
+    assert result["plot"] == str(root)
+    budget_reply = deepcopy(result)
+    for parent, key in ((budget_reply, "plot"), (budget_reply, "evidence"),
+                        (budget_reply["diff_evidence"], "path"),
+                        (budget_reply["scientific_audit"]["evidence"], "path"),
+                        (budget_reply["preview"], "path")):
+        path = Path(parent[key])
+        assert path.is_absolute() and path.exists()
+        assert path.resolve().is_relative_to(root.parent.resolve())
+        relative = path.relative_to(root.parent)
+        parent[key] = "/fixture/" + relative.as_posix()
+    assert len(str(budget_reply)) < 2300
+    assert result["diff_count"] == 1 and "diff" not in result
+    assert "a" * 3000 not in str(result) and "x" * 50000 not in str(result)
+    assert result["scientific_hash_changed"] is False and result["presentation_hash_changed"] is True
+    assert (result["diff_evidence"]["path"] == result["scientific_audit"]["evidence"]["path"]
+            == result["evidence"] == str(transaction_path(root, "edit-1")))
+    assert result["diff_evidence"]["json_pointer"] == "/diff"
+    assert result["scientific_audit"]["evidence"]["json_pointer"] == "/review/scientific_audit"
+    stored = read(Path(result["diff_evidence"]["path"]))
+    assert result["preview"] == stored["review"]["preview"]
+    assert Path(result["preview"]["path"]).resolve().is_relative_to(transaction_path(root, "edit-1").parent.resolve())
+    assert stored["diff"][0]["after"] == "a" * 3000
+    assert stored["review"]["scientific_audit"]["full_diagnostics"] == "x" * 50000
+
+
 def test_large_review_audit_and_diff_remain_exact_in_journal_but_short_in_reply(engine):
     service, root, backend = engine
     backend.audit["full_diagnostics"] = "x" * 50000
     changes = [{"op": "set", "target": ["title:main"], "property": "title.text", "value": "a" * 3000}]
     result = service.patch(root, request(changes=changes))
-    assert len(str(result)) < 2300 and result["diff_count"] == 1 and "diff" not in result
-    assert result["scientific_hash_changed"] is False and result["presentation_hash_changed"] is True
-    stored = read(Path(result["diff_evidence"]["path"]))
-    assert stored["diff"][0]["after"] == "a" * 3000
-    assert stored["review"]["scientific_audit"]["full_diagnostics"] == "x" * 50000
+    _assert_compact_review_content(result, root)
+
+
+@pytest.mark.parametrize("deep", [False, True], ids=["short-prefix", "deep-prefix"])
+def test_review_content_budget_preserves_real_locators_at_both_fixture_depths(tmp_path, deep):
+    directory = tmp_path / ("nested_" * 10) / ("source_" * 10) if deep else tmp_path
+    directory.mkdir(parents=True, exist_ok=True)
+    backend = FakeBackend(directory / "backend")
+    document, binding = backend.initial()
+    root = directory / "plot"
+    commit(root, document, binding, "import")
+    backend.audit["full_diagnostics"] = "x" * 50000
+    changes = [{"op": "set", "target": ["title:main"], "property": "title.text", "value": "a" * 3000}]
+    result = PlotService(backend).patch(root, request(changes=changes))
+    _assert_compact_review_content(result, root)
 
 
 def test_migrated_typed_style_reuses_frozen_request_without_another_revision(engine, monkeypatch):
