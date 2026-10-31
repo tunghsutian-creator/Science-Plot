@@ -153,6 +153,7 @@ files = [
   "src/sciplot_core/verification/public_stage.py",
   "src/sciplot_core/verification/public_control_boundary.py",
   "src/sciplot_core/verification/public_guard_bootstrap/sitecustomize.py",
+  "src/sciplot_core/verification/private_access.py",
   "src/sciplot_core/verification/private_observer.py",
   "src/sciplot_core/verification/private_observer_pytest.py",
   "src/sciplot_core/verification/private_capture.py",

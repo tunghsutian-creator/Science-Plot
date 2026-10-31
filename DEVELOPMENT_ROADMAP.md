@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-30. External AI is the task interface. Current behavior belongs
+Status: 2026-10-31. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -41,6 +41,11 @@ rather than another policy or state registry.
    target loops, retain fresh refusal controls and avoid holding the storage
    lock across rendering. No cross-operation PASS cache; report matched before/
    after evidence rather than extrapolating a microbenchmark to full CI.
+   The current bounded implementation covers frozen attached publication and
+   Veusz source fingerprint queries. Close their combined native/CI latency and
+   failure controls before extending the scope. SavedWork member loops and other
+   independent calls still require their own measurements; these two windows do
+   not establish whole-project performance closure.
 3. **Close the remaining independent contracts.** Move lifecycle use cases off
    direct legacy-engine dependencies through concrete domain ports and adapters,
    retiring each replaced call path. State the supported numerical runtime for
@@ -152,6 +157,13 @@ The checked-in private dependency inventory remains preliminary. Available
 inputs, successful original-data test bodies and complete child-inclusive
 access capture are separate claims. Neither public CI nor a prior full PASS
 can certify the current collection's complete private input closure.
+
+The current open-facts repair preserves producer mode/flags and FD context through
+the shared access projection. Its final short composition must include the real
+nodes that produced the previously unmapped parent opens, with strict scoped
+export before the next complete run. Generated roles and successful software
+bodies cannot promote old records that lack those facts. Retain both positive
+declared-file checks and actual undeclared sibling/listing refusal controls.
 
 Finish an independent inventory review against the exact collected node and
 parameter set, then bind actual authorized raw/golden membership and bytes,

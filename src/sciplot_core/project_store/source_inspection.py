@@ -110,7 +110,8 @@ def _invocation_file(io: StoreIO, value: dict[str, Any], literal: Path,
             or source_id is not None and source_id != selected.source_id):
         raise ProjectConflict("The requested source identity/version differs from the explicit invocation expectation.")
     if mode == "incoming":
-        return physical_file(literal, selected.sha256)
+        with io.validation_fence():
+            return physical_file(literal, selected.sha256)
     entry = value["sources"].get(selected.source_id, {}).get(selected.sha256)
     if entry is None:
         raise ProjectStoreError("The selected sealed source version is not in this generation.")

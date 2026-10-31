@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
-
 from sciplot_core.verification.owner_model import ChangedOwner
 
 ARCHITECTURE_CORE_TARGETS = (
@@ -21,6 +20,7 @@ CHANGED_VERIFICATION_TEST_TARGETS = (
     'tests/test_doctor_execution_identity.py',
     'tests/test_lifecycle_capability_contract.py',
     'tests/test_private_corpus_preflight.py',
+    'tests/test_private_access_roles.py',
     'tests/test_verification_evidence.py',
     'tests/test_durable_verification_runner.py',
     'tests/test_verification_evidence_runtime.py',

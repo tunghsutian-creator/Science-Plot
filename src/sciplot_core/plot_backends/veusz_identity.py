@@ -19,7 +19,7 @@ def fingerprint(binding: dict[str, Any]) -> dict[str, Any]:
     from sciplot_core.studio_core.project_command_scope import project_store
 
     project = Path(binding["project"])
-    context = query_sources(project_store(project)) if (project / ".sciplot_store").exists() else nullcontext()
+    context = query_sources(project_store(project), validation_window=True) if (project / ".sciplot_store").exists() else nullcontext()
     with context:
         files = {}
         for path, expected in binding["files"].items():

@@ -1,6 +1,8 @@
 """Concrete selected-generation resolver shared by host runtime views."""
 from pathlib import Path
 from contextlib import contextmanager
+from contextlib import nullcontext
+from copy import deepcopy
 from collections.abc import Iterator, Iterable
 import tempfile
 import os
@@ -21,6 +23,8 @@ class ProjectSourceResolver:
             self.snapshot = state.generation(io, generation) if generation is not None else current
             if self.snapshot["project_id"] != current["project_id"]:
                 raise ProjectConflict("A source resolver must belong to this exact project.")
+            if io._checked_window is not None:
+                self.snapshot = deepcopy(self.snapshot)
         self.generation: str = self.snapshot["generation"]
         self._primary_roots = (Path(self.snapshot["locators"][""]), store.root)
         self._resource_roots: list[tuple[Path, tuple[str, ...] | None]] = []
@@ -218,10 +222,11 @@ class QuerySourceResolver(ProjectSourceResolver):
 @contextmanager
 def query_sources(store: FileProjectStore, generation: str | None = None, *,
                   semantic_sources: Iterable[dict[str, Any]] = (),
-                  protected_roots: Iterable[Path] = ()) -> Iterator[None]:
-    resolver = QuerySourceResolver(store, generation, semantic_sources=semantic_sources, protected_roots=protected_roots)
-    try:
-        with source_location_scope(resolver):
-            yield
-    finally:
-        resolver.close()
+                  protected_roots: Iterable[Path] = (), validation_window: bool = False) -> Iterator[None]:
+    with store._validation_window() if validation_window else nullcontext():
+        resolver = QuerySourceResolver(store, generation, semantic_sources=semantic_sources, protected_roots=protected_roots)
+        try:
+            with source_location_scope(resolver):
+                yield
+        finally:
+            resolver.close()

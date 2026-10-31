@@ -1,13 +1,15 @@
 """One checked generation selection, projection observation, and member read."""
 
 from collections.abc import Sequence
+from contextlib import ExitStack
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Literal
 
 from .errors import ProjectConflict, ProjectStoreError
 from .io import StoreIO, parts, sha
 from .root_bindings import require as require_roots
-from .state import CheckedHead, reachable
+from .state import CheckedHead, checked_head, reachable
 
 
 @dataclass(frozen=True)
@@ -65,16 +67,31 @@ def observe(io: StoreIO, current: dict[str, Any], checked: CheckedHead, names: S
         raise ProjectStoreError("Physical observations must name explicitly requested members.")
     for name in requested:
         parts(name)
-    observed_projection = _projection(io, current) if projection else None
-    members = {}
-    for name in requested:
-        entry = selected["files"].get(name)
-        if entry is not None:
-            members[name] = ObservedMember("file", io.get(entry))
-        else:
-            kind: Literal["directory", "missing"] = (
-                "directory" if any(member.startswith(name + "/") for member in selected["files"]) else "missing")
-            members[name] = ObservedMember(kind)
-    host = {name: io.physical(name) for name in physical if name in current["files"]}
-    checked.require(io, current)
-    return MemberObservation(current, selected, members, observed_projection, host)
+    with ExitStack() as proofs:
+        epoch = io.validation_epoch
+        observed_projection = _projection(io, current) if projection else None
+        if io.validation_epoch != epoch:
+            # A snapshot reports physical conflicts as data. The failed physical
+            # validation has expired every old proof; retain that negative
+            # observation only after freshly checking the same canonical head.
+            fresh = checked_head(io)
+            if fresh is not None:
+                proofs.callback(fresh.close)
+            if fresh is None or fresh.current != current:
+                raise ProjectConflict("The canonical head changed across its projection observation boundary.")
+            checked, current = fresh, fresh.current
+            selected = reachable(io, current, generation, checked=checked) if generation else current
+        members = {}
+        for name in requested:
+            entry = selected["files"].get(name)
+            if entry is not None:
+                members[name] = ObservedMember("file", io.get(entry))
+            else:
+                kind: Literal["directory", "missing"] = (
+                    "directory" if any(member.startswith(name + "/") for member in selected["files"]) else "missing")
+                members[name] = ObservedMember(kind)
+        host = {name: io.physical(name) for name in physical if name in current["files"]}
+        checked.require(io, current)
+        if io._checked_window is not None:
+            current, selected, observed_projection = deepcopy((current, selected, observed_projection))
+        return MemberObservation(current, selected, members, observed_projection, host)

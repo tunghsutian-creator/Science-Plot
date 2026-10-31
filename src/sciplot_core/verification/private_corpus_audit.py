@@ -11,11 +11,11 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 from typing import Any
 
 from sciplot_core._paths import local_reference_root, resolve_fixture_path
 from sciplot_core.verification.private_capture import review_capture
+from sciplot_core.verification.private_access import access_events, file_parent_open
 
 
 def nodeids_sha256(nodeids: set[str] | list[str]) -> str:
@@ -83,31 +83,9 @@ def _validate_supported_streams(receipt: dict[str, Any], *, repo_root: Path,
         aliases.append(((repo_root / prefix).resolve(), prefix))
         if local_name is not None:
             aliases.append(((local_reference_root(repo_root=repo_root) / local_name).resolve(), prefix))
-    raw_events = []
-    raw_collection = []
-    diagnostics = {(row["epoch"], row["sequence"]) for row in result["diagnostic_observations"]}
-    for frame in result["frames"]:
-        if frame["event"] not in {"open", "os.scandir", "os.listdir"}:
-            continue
-        actual = Path(frame["path"])
-        resolved = Path(frame["resolved_path"])
-        if actual.resolve() != resolved:
-            raise ValueError("observed private path alias changed")
-        identifier = next((prefix / resolved.relative_to(root) for root, prefix in aliases
-                           if resolved.is_relative_to(root)), None)
-        if identifier is None:
-            continue  # Public fixtures lie outside the declared private namespaces.
-        if (frame["epoch"], frame["sequence"]) in diagnostics:
-            continue  # Actual source-owned identity/probe reads are bound to durable inputs.
-        nodeid = re.sub(r" \((setup|call|teardown)\)$", "", frame["nodeid"])
-        row = {"event": frame["event"], "path": identifier.as_posix(), "nodeid": nodeid}
-        if not nodeid and row["event"] in {"os.scandir", "os.listdir"}:
-            raw_collection.append({**row, "classification": "collector-directory-enumeration"})
-        else:
-            raw_events.append(row)
+    raw_events, raw_collection = access_events(result, aliases)
     def normalize(rows: list[dict[str, Any]]) -> list[str]:
-        return sorted(json.dumps({key: row[key] for key in ("event", "path", "nodeid")}, sort_keys=True)
-                      for row in rows)
+        return sorted(json.dumps(row, sort_keys=True) for row in rows)
     if (normalize(raw_events) != normalize(receipt.get("events", []))
             or normalize(raw_collection) != normalize(receipt.get("collection_events", []))):
         raise ValueError("receipt access or collection events differ from original raw streams")
@@ -184,11 +162,17 @@ def validate_access_audit(
             if nodeid not in collected_nodeids:
                 issues.append(("unbound_private_access", "private access is not bound to a collected test", nodeid))
                 continue
-            if not any(
+            facts = event.get("open")
+            raw = facts.get("raw") if isinstance(facts, dict) else None
+            if isinstance(raw, dict) and raw.get("path") != raw.get("resolved_path"):
+                issues.append(("unmapped_private_access", "private open uses an alias instead of its declared source", nodeid))
+                continue
+            case_dependencies = dependencies.get(nodeid, [])
+            if not (any(
                 path == Path(identifier)
                 or (kind == "directory" and path.is_relative_to(Path(identifier)))
-                for identifier, kind in dependencies.get(nodeid, [])
-            ):
+                for identifier, kind in case_dependencies
+            ) or file_parent_open(event, case_dependencies)):
                 issues.append(("unmapped_private_access", f"undeclared private access: {path.as_posix()}", nodeid))
         if not issues:
             _validate_supported_streams(receipt, repo_root=repo_root, nodeids=collected_nodeids,

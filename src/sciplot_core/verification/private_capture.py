@@ -247,6 +247,8 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
             last = records[-1]
             if any(record["event"] in {"unsupported_spawn", "unsupported_exec"} for record in records):
                 issues.append(f"unsupported process boundary:{epoch}")
+            if any(record["event"] == "sensor_failure" for record in records):
+                issues.append(f"unsupported Python access or sensor failure:{epoch}")
             terminals = [r for r in records if r["event"] == "process_finish"]
             if terminals:
                 if (len(terminals) != 1 or terminals[0] != last or last.get("recorded_events") != len(records) - 1

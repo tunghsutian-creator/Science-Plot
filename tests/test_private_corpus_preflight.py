@@ -28,6 +28,7 @@ from sciplot_core.verification.private_corpus_audit import (
 from sciplot_core.verification.private_observer import CHILD, CONTINUATION, PARENT, RUN, write_bootstrap
 from sciplot_core.verification.public_input_guard import ENVIRONMENT_KEY, rebind_bootstrap
 from private_observer_support import execute_observed
+from sciplot_core.verification.private_access import access_events
 
 NODE = "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_directory_requires_exactly_one_supported_file[2]"
 PUBLIC_SIBLING = NODE.removesuffix("[2]") + "[0]"
@@ -322,16 +323,25 @@ def test_preflight_files_have_changed_owner_and_focused_target() -> None:
         assert "tests/test_private_corpus_preflight.py" in selected
 
 
-def _review_and_receipt(tmp_path: Path, inventory: Path, *, collection_event: str = "os.scandir") -> Path:
+def _review_and_receipt(tmp_path: Path, inventory: Path, *, collection_event: str = "os.scandir",
+                        parent_open: bool = False, parent_action: str = "declared_child") -> Path:
     nodes = {NODE, PUBLIC_SIBLING}
     source = tmp_path / "tests" / NODE.split("::")[0].removeprefix("tests/")
     source.parent.mkdir(exist_ok=True)
     fixture = tmp_path / "reference" / "real_world" / "uvvis_spectrum" / FIXTURE.name
     name = NODE.split("::")[1].split("[")[0]
-    source.write_text("import pytest\nfrom pathlib import Path\n"
+    operation = ("os.listdir(fd)" if parent_action == "listdir" else
+                 "list(os.scandir(fd))" if parent_action == "scandir" else
+                 f"os.fdopen(os.open({fixture.name if parent_action == 'declared_child' else 'other.csv'!r}, os.O_RDONLY{'|os.O_NOFOLLOW' if parent_action != 'alias_child' else ''}, dir_fd=fd), 'rb').close()")
+    source.write_text("import os,pytest\nfrom pathlib import Path\n"
                       "@pytest.mark.parametrize('count', [0, 2])\n"
                       f"def {name}(count):\n"
-                      f"    if count == 2: Path({str(fixture)!r}).read_bytes()\n")
+                      + (f"    if count == 2:\n"
+                         f"        fd = os.open({str(fixture.parent)!r}, os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)\n"
+                         f"        try: {operation}\n"
+                         "        finally: os.close(fd)\n"
+                         if parent_open else "")
+                      + ("" if parent_open else f"    if count == 2: Path({str(fixture)!r}).read_bytes()\n"))
     conftest = tmp_path / "tests/conftest.py"
     action = "listdir" if collection_event == "os.listdir" else "scandir"
     conftest.write_text("import os\n"
@@ -359,13 +369,7 @@ def _review_and_receipt(tmp_path: Path, inventory: Path, *, collection_event: st
                                       [str(tmp_path / "tests/fixtures"), str(fixture.parents[2])], nodes=nodes, keep_public_guard=True)
     assert capture["actual_returncode"] == 0, capture["stdout"]
     assert capture["capture_complete"], capture["issues"]
-    access = [{"nodeid": frame["nodeid"], "path": FIXTURE.as_posix(), "event": frame["event"]}
-              for frame in capture["frames"] if frame["event"] == "open" and frame["resolved_path"] == str(fixture)]
-    for event in access:
-        event["nodeid"] = event["nodeid"].removesuffix(" (call)")
-    collection = [{"classification": "collector-directory-enumeration", "nodeid": "",
-                   "path": "tests/fixtures/real_world", "event": frame["event"]}
-                  for frame in capture["frames"] if frame["event"] in {"os.scandir", "os.listdir"}]
+    access, collection = access_events(capture, [(fixture.parents[1], Path("tests/fixtures/real_world"))])
     payload = json.loads(inventory.read_text())
     payload["collection_audit"] = {
         "static_review_complete": True, "nodeid_count": len(nodes),
@@ -417,6 +421,72 @@ def test_complete_inventory_requires_bound_full_access_evidence(
         access_audit_path=receipt_path,
     )
     assert (result["status"] == "READY_FOR_SELECTED_TESTS") is (mutation == "none")
+    assert result["scientific_acceptance"] is False
+
+
+@pytest.mark.parametrize("mutation", ["none", "forged_flags", "forged_constants", "missing_source", "alias_source"])
+def test_actual_parent_open_receipt_keeps_raw_facts_and_declared_source_checks(
+    tmp_path: Path, mutation: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SCIPLOT_REFERENCE_DATA", str(tmp_path / "reference"))
+    source = tmp_path / "reference/real_world/uvvis_spectrum" / FIXTURE.name
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"generated structural input only")
+    inventory = _inventory(tmp_path, complete=False, dependencies=[{"rule_id": "uvvis_spectrum"}])
+    receipt_path = _review_and_receipt(tmp_path, inventory, parent_open=True)
+    receipt = json.loads(receipt_path.read_text())
+    parent_events = [row for row in receipt["events"] if row["path"] == FIXTURE.parent.as_posix()]
+    assert len(parent_events) == 1
+    assert parent_events[0]["open"]["mode"] is None
+    assert parent_events[0]["open"]["raw"]["path"] == str(source.parent)
+    if mutation == "forged_flags":
+        parent_events[0]["open"]["flags"] ^= 1
+    elif mutation == "forged_constants":
+        parent_events[0]["open"]["constants"]["O_NOFOLLOW"] <<= 1
+    elif mutation == "missing_source":
+        source.unlink()
+    elif mutation == "alias_source":
+        outside = tmp_path / "outside.csv"
+        outside.write_bytes(source.read_bytes())
+        source.unlink()
+        source.symlink_to(outside)
+    receipt_path.write_text(json.dumps(receipt))
+    result = private_corpus_preflight(
+        repo_root=tmp_path, inventory_path=inventory, collected_nodeids={NODE, PUBLIC_SIBLING},
+        access_audit_path=receipt_path,
+    )
+    assert (result["status"] == "READY_FOR_SELECTED_TESTS") is (mutation == "none")
+    assert result["scientific_acceptance"] is False
+
+
+@pytest.mark.parametrize("action", ["declared_child", "sibling", "listdir", "scandir", "alias_child"])
+def test_actual_directory_fd_never_grants_listing_sibling_or_alias_content(
+    tmp_path: Path, action: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SCIPLOT_REFERENCE_DATA", str(tmp_path / "reference"))
+    source = tmp_path / "reference/real_world/uvvis_spectrum" / FIXTURE.name
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"generated source")
+    other = source.with_name("other.csv")
+    if action == "alias_child":
+        other.symlink_to(source)
+    else:
+        other.write_bytes(b"undeclared generated source")
+    inventory = _inventory(tmp_path, complete=False, dependencies=[{"rule_id": "uvvis_spectrum"}])
+    receipt_path = _review_and_receipt(tmp_path, inventory, parent_open=True, parent_action=action)
+    result = private_corpus_preflight(
+        repo_root=tmp_path, inventory_path=inventory, collected_nodeids={NODE, PUBLIC_SIBLING},
+        access_audit_path=receipt_path,
+    )
+    assert (result["status"] == "READY_FOR_SELECTED_TESTS") is (action == "declared_child")
+    receipt = json.loads(receipt_path.read_text())
+    assert any(row["path"] == FIXTURE.parent.as_posix() and row["event"] == "open" for row in receipt["events"])
+    if action in {"listdir", "scandir"}:
+        assert any(row["path"] == FIXTURE.parent.as_posix() and row["event"] == "os." + action for row in receipt["events"])
+    elif action == "sibling":
+        assert any(row["path"] == FIXTURE.with_name("other.csv").as_posix() for row in receipt["events"])
+    elif action == "alias_child":
+        assert any(row.get("open", {}).get("raw", {}).get("path") == str(other) for row in receipt["events"])
     assert result["scientific_acceptance"] is False
 
 

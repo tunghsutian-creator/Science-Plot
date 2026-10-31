@@ -178,6 +178,15 @@ pure leaf checks and daily Doctor retain their existing requirements. Short
 export reconciliation remains explicitly scoped; it cannot mint full inventory
 acceptance or replace the frozen unfiltered full and its strict exporter.
 
+Filesystem-observation changes need a short composition containing the actual
+previously blocked producers as well as generated refusal controls. Preserve
+open mode/flags, producer constants and live FD request context through the
+shared `verification.private_access.access_events` projection; current scoped
+and entire exporters must consume that owner rather than a three-field copy.
+Old records without those facts remain historical evidence with their original
+result. Directory-handle metadata permission never grants listing or child-file
+content. Retain raw/normalized reconciliation and original wait/capture checks.
+
 For bounded native feedback use `skill/scripts/sciplot smoke --profile quick
 --out .tmp_verify/quick_smoke --json`. It performs one real source-bound native
 creation/export/QA/delivery path and explicitly defers the complete lifecycle.

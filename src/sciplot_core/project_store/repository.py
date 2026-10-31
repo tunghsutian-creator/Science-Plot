@@ -68,6 +68,12 @@ class FileProjectStore:
             yield io, current
 
     @contextmanager
+    def _validation_window(self) -> Iterator[None]:
+        """Only finite internal readers/prepared publishers may enter this scope."""
+        with self._checked_locked(allow_pending=True) as (io, _current, checked), state.validation_window(io, checked):
+            yield
+
+    @contextmanager
     def _checked_locked(self, *, import_legacy: bool = False, repair: bool = False,
                         allow_pending: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any], state.CheckedHead]]:
         from .namespace_transfers import augment_controls

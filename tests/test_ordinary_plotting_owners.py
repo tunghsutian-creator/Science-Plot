@@ -140,6 +140,7 @@ NATIVE_PRESENTATION_STRICT_ADDITIONS = frozenset(
 )
 VERIFICATION_CAPTURE_STRICT_ADDITIONS = frozenset(
     {
+        "src/sciplot_core/verification/private_access.py",
         "src/sciplot_core/verification/evidence_runtime.py",
         "src/sciplot_core/verification/native_exit_boundary.py",
         "src/sciplot_core/verification/private_audit_runtime.py",

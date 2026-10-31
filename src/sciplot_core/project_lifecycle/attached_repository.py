@@ -216,7 +216,10 @@ class AttachedProjectRepository(FileProjectRepository):
                 write_set=command.write_set, metadata=command.to_payload())
             if admitted.get('source_tree_origins', {}).get(batch.prepared.source.locator) != batch.prepared.source_origin:
                 raise EngineError('source_changed', 'The prepared source changed before its exact Core admission.')
-        ProjectCommands(self.attachment.store).publish_prepared(command, mutation)
+        # All payload/source bytes above are frozen; this closure has no native
+        # callback. Writes and source fences expire its checked history.
+        with self.attachment.store._validation_window():
+            ProjectCommands(self.attachment.store).publish_prepared(command, mutation)
         if resolver is not None:
             resolver.refresh()
 

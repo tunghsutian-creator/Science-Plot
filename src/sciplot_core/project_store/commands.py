@@ -161,7 +161,8 @@ def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | P
 
     current = checked.current if checked is not None else state.head(io)
     assert current is not None
-    require_source_trees(io, current, record)
+    with io.validation_fence():
+        require_source_trees(io, current, record)
     from .generated_outputs import require as require_missing, validate_writes
     require_missing(io, current, record)
     frozen: dict[str, Any] = {"writes": state.import_writes(io, writes), "artifacts": state.import_writes(io, artifacts or {}),
@@ -289,30 +290,31 @@ def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
 
 
 def verify_sources(io: StoreIO, sources: Mapping[str, Any], record: dict[str, Any] | None = None) -> None:
-    from .source_observations import observations
-    from .produced_sources import frozen_output
+    with io.validation_fence():
+        from .source_observations import observations
+        from .produced_sources import frozen_output
 
-    selected = observations(record) if record is not None else {}
-    local = io.read("local_sources.json") or {"versions": {}}
-    for source_id, versions in sources.items():
-        for version, entry in versions.items():
-            if frozen_output(io, entry, record):
-                continue
-            if any(value.source_id == source_id and value.observed_sha256 == version for value in selected.values()):
-                io.get(entry)  # The exact confined original resource was rechecked immediately before this call.
-                continue
-            imported = local["versions"].get(source_id, {}).get(version)
-            if imported == entry["sha256"]:
-                io.get(entry)
-                continue
-            path = Path(entry["locator"])
-            try:
-                parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        selected = observations(record) if record is not None else {}
+        local = io.read("local_sources.json") or {"versions": {}}
+        for source_id, versions in sources.items():
+            for version, entry in versions.items():
+                if frozen_output(io, entry, record):
+                    continue
+                if any(value.source_id == source_id and value.observed_sha256 == version for value in selected.values()):
+                    io.get(entry)  # The exact confined original resource was rechecked immediately before this call.
+                    continue
+                imported = local["versions"].get(source_id, {}).get(version)
+                if imported == entry["sha256"]:
+                    io.get(entry)
+                    continue
+                path = Path(entry["locator"])
                 try:
-                    data, _mode = read_file(parent, path.name)
-                finally:
-                    os.close(parent)
-            except OSError as exc:
-                raise ProjectConflict("A selected original source is missing; use an explicit source/version binding.") from exc
-            if sha(data) != version:
-                raise ProjectConflict("A selected original source changed before head publication.")
+                    parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                    try:
+                        data, _mode = read_file(parent, path.name)
+                    finally:
+                        os.close(parent)
+                except OSError as exc:
+                    raise ProjectConflict("A selected original source is missing; use an explicit source/version binding.") from exc
+                if sha(data) != version:
+                    raise ProjectConflict("A selected original source changed before head publication.")

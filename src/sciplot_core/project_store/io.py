@@ -168,6 +168,10 @@ class StoreIO:
         self.root_fds: dict[str, int] = {}
         self.fd = -1
         self.validation_epoch = 0
+        self.lease_epoch = 0
+        # The history owner interprets this finite, lease-local scope. IO must
+        # remain independent of the higher-level history validation algorithm.
+        self._checked_window: object | None = None
         # Only this live owned IO can attest that it created its metadata root.
         # It is not persisted and never survives release/reacquisition.
         self.created_store = False
@@ -189,6 +193,7 @@ class StoreIO:
                 _ACTIVE.set(None)
         with _leases(self.root, self.locations, blocking=blocking) as leases:
             self.validation_epoch += 1
+            self.lease_epoch += 1
             lease = leases[self.root]
             try:
                 self.root_fds[""] = os.dup(lease.fd)
@@ -225,6 +230,21 @@ class StoreIO:
                 self.fd = -1
                 self.created_store = False
                 self.validation_epoch += 1
+                self.lease_epoch += 1
+
+    @contextmanager
+    def validation_fence(self) -> Iterator[None]:
+        """External/source observations end both adjacent history windows."""
+        self.validation_epoch += 1
+        try:
+            yield
+        finally:
+            self.validation_epoch += 1
+
+    def validation_failed(self) -> None:
+        """A detected read failure expires the finite history window's proofs."""
+        if self._checked_window is not None:
+            self.validation_epoch += 1
 
     def verify_roots(self) -> None:
         for key, fd in self.root_fds.items():
@@ -257,18 +277,25 @@ class StoreIO:
                 return value
         except FileNotFoundError:
             return None
+        except (OSError, ProjectStoreError):
+            self.validation_failed()
+            raise
 
     def read(self, name: str) -> dict[str, Any] | None:
-        components = parts(name)
         try:
-            with directory(self.fd, components[:-1]) as parent:
-                data, _mode = read_file(parent, components[-1])
-        except FileNotFoundError:
-            return None
-        payload = json.loads(data)
-        if not isinstance(payload, dict):
-            raise ProjectStoreError("Project store metadata must be an object.")
-        return payload
+            components = parts(name)
+            try:
+                with directory(self.fd, components[:-1]) as parent:
+                    data, _mode = read_file(parent, components[-1])
+            except FileNotFoundError:
+                return None
+            payload = json.loads(data)
+            if not isinstance(payload, dict):
+                raise ProjectStoreError("Project store metadata must be an object.")
+            return payload
+        except (OSError, ValueError):
+            self.validation_failed()
+            raise
 
     def write(self, name: str, payload: dict[str, Any], *, exclusive: bool = False) -> None:
         self.validation_epoch += 1
@@ -305,14 +332,18 @@ class StoreIO:
         return {"sha256": key, "size": len(data)}
 
     def get(self, entry: Mapping[str, Any]) -> bytes:
-        key = entry["sha256"]
-        if not isinstance(key, str) or not re.fullmatch(r"[0-9a-f]{64}", key):
-            raise ProjectStoreError("Invalid project content identity.")
-        with directory(self.fd, ("objects", key[:2])) as parent:
-            data, _mode = read_file(parent, key)
-        if sha(data) != key or len(data) != entry["size"]:
-            raise ProjectConflict("An immutable project object no longer matches its identity.")
-        return data
+        try:
+            key = entry["sha256"]
+            if not isinstance(key, str) or not re.fullmatch(r"[0-9a-f]{64}", key):
+                raise ProjectStoreError("Invalid project content identity.")
+            with directory(self.fd, ("objects", key[:2])) as parent:
+                data, _mode = read_file(parent, key)
+            if sha(data) != key or len(data) != entry["size"]:
+                raise ProjectConflict("An immutable project object no longer matches its identity.")
+            return data
+        except (OSError, ProjectStoreError):
+            self.validation_failed()
+            raise
 
     def scan(self) -> dict[str, dict[str, Any]]:
         files: dict[str, dict[str, Any]] = {}

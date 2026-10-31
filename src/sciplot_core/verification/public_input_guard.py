@@ -15,6 +15,7 @@ import sys
 from typing import Any
 
 from sciplot_core.verification.private_process_boundaries import forbidden_roots as forbidden_roots
+from sciplot_core.verification.private_access import access_path, install_open_port
 
 ENVIRONMENT_KEY = "SCIPLOT_PUBLIC_INPUT_GUARD"
 BOOTSTRAP_KEY = "SCIPLOT_PUBLIC_GUARD_BOOTSTRAP"
@@ -79,8 +80,12 @@ def install() -> None:
             return False
 
     def hook(event: str, args: tuple[Any, ...]) -> None:
-        if event in {"open", "os.listdir", "os.scandir"} and args and forbidden(args[0]):
-            raise PermissionError(f"Public input scope forbids private access: {os.fsdecode(args[0])}")
+        if event in {"open", "os.listdir", "os.scandir"} and args:
+            path, issue = access_path(event, args)
+            if issue is not None and issue not in {"invalid_descriptor", "nonfilesystem_pipe", "nonfilesystem_socket"}:
+                raise PermissionError("Public input scope cannot resolve this Python access request.")
+            if path is not None and forbidden(path):
+                raise PermissionError(f"Public input scope forbids private access: {path}")
         if event == "subprocess.Popen":
             executable, argv, _cwd, environment = args
             arguments = list(argv) if isinstance(argv, (list, tuple)) else [argv]
@@ -138,6 +143,7 @@ def install() -> None:
                 if not retained:
                     raise PermissionError("A public child cannot drop its input guard declaration.")
 
+    install_open_port()
     sys.addaudithook(hook)
     _installed = roots
 

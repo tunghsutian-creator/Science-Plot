@@ -57,11 +57,15 @@ def checked_member(io: StoreIO, value: dict[str, Any], logical: str, expected: s
     entry = value["files"].get(logical)
     if entry is None or expected is not None and expected != entry["sha256"]:
         raise ProjectConflict("The original locator does not bind this generation's exact bytes.")
-    io.get(entry)
-    physical = io.physical(logical, owned=logical not in value.get("input_resources", []))
-    if physical is None or sha(physical[0]) != entry["sha256"] or physical[1] != entry["mode"]:
-        raise ProjectConflict("The current resource view differs from the registered generation.")
-    return dict(entry)
+    try:
+        io.get(entry)
+        physical = io.physical(logical, owned=logical not in value.get("input_resources", []))
+        if physical is None or sha(physical[0]) != entry["sha256"] or physical[1] != entry["mode"]:
+            raise ProjectConflict("The current resource view differs from the registered generation.")
+        return dict(entry)
+    except (OSError, ProjectStoreError):
+        io.validation_failed()
+        raise
 
 
 def owned_source_view(io: StoreIO, value: dict[str, Any], actual: Path, *,
@@ -80,12 +84,13 @@ def owned_source_view(io: StoreIO, value: dict[str, Any], actual: Path, *,
             or expected_sha256 is not None and expected_sha256 != version
             or name != Path(entry.get("locator") or entry.get("logical") or "source.bin").name):
         raise ProjectConflict("The immutable source view does not match the selected source identity/version.")
-    parent = os.open(actual.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        from .io import read_file
-        data = read_file(parent, actual.name)[0]
-    finally:
-        os.close(parent)
-    if data != io.get(entry):
-        raise ProjectConflict("An immutable source view was changed outside the store.")
+    with io.validation_fence():
+        parent = os.open(actual.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            from .io import read_file
+            data = read_file(parent, actual.name)[0]
+        finally:
+            os.close(parent)
+        if data != io.get(entry):
+            raise ProjectConflict("An immutable source view was changed outside the store.")
     return actual, str(entry["locator"])

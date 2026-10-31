@@ -61,6 +61,7 @@ PROJECT_STORE_TESTS = (
     'tests/test_project_host_factory.py',
     'tests/test_project_store_recovery_authority.py',
     'tests/test_project_store_validation_cost.py',
+    'tests/test_project_store_read_windows.py',
     'tests/test_project_member_observation.py',
     "tests/test_project_observed_inputs.py",
     "tests/test_project_input_read_faults.py",

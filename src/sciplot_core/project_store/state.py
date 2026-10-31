@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from collections.abc import Iterator
+from contextlib import contextmanager
+from copy import deepcopy
 import os
 from pathlib import Path
 from threading import get_ident
-from typing import Any
+from typing import Any, cast
 from types import MappingProxyType
 
 from sciplot_core.project_commands.resources import PreparedFile
@@ -28,6 +31,7 @@ def generation(io: StoreIO, identity: str) -> dict[str, Any]:
     value = io.read(f"generations/{identity}.json")
     if (value is None or value.get("generation") != identity
             or value.get("kind") != "sciplot_project_generation" or value.get("version") != 1):
+        io.validation_failed()
         raise ProjectStoreError("The immutable project generation is missing.")
     return value
 
@@ -44,19 +48,33 @@ class CheckedHead:
         self.current = value
         self._generations = MappingProxyType(generations)
         self._io, self._fd, self._epoch = io, io.fd, io.validation_epoch
+        self._lease_epoch = io.lease_epoch
         self._owner, self._root = (os.getpid(), get_ident()), io.root
         self._roots = dict(io.root_fds)
         self._locations, self._members = dict(io.locations), dict(io.location_members)
         self._backups = dict(io.namespace_backups)
+        window = cast(_CheckedWindow | None, io._checked_window)
+        self._window_anchor = window.anchor if window is not None else None
         self._active = True
 
-    def require(self, io: StoreIO, current: dict[str, Any]) -> None:
+    def require_identity(self, io: StoreIO) -> None:
+        if self._window_anchor is not None:
+            self._window_anchor.require_identity(io)
         if (not self._active or io is not self._io or io.fd != self._fd or io.fd < 0
-                or io.validation_epoch != self._epoch or current is not self.current
+                or io.lease_epoch != self._lease_epoch
                 or self._owner != (os.getpid(), get_ident()) or io.root != self._root
                 or io.root_fds != self._roots or io.locations != self._locations
                 or io.location_members != self._members or io.namespace_backups != self._backups):
             raise ProjectConflict("A checked history cannot cross its IO, head or mutation boundary.")
+
+    def require(self, io: StoreIO, current: dict[str, Any]) -> None:
+        self.require_identity(io)
+        if io.validation_epoch != self._epoch or current is not self.current:
+            raise ProjectConflict("A checked history cannot cross its IO, head or mutation boundary.")
+
+    def borrow(self, io: StoreIO) -> CheckedHead:
+        self.require(io, self.current)
+        return CheckedHead(io, self.current, dict(self._generations), _verification=_CHECKED_HEAD)
 
     def reachable(self, io: StoreIO, current: dict[str, Any], identity: str) -> dict[str, Any]:
         self.require(io, current)
@@ -68,7 +86,64 @@ class CheckedHead:
         self._active = False
 
 
+class _CheckedWindow:
+    """A finite caller-owned window, never a second durable or public head."""
+    def __init__(self, io: StoreIO, checked: CheckedHead) -> None:
+        self.anchor = checked.borrow(io)
+        self.proof: CheckedHead | None = checked.borrow(io)
+
+    def discard(self) -> None:
+        if self.proof is not None:
+            self.proof.close()
+            self.proof = None
+
+    def borrow(self, io: StoreIO) -> CheckedHead | None:
+        self.anchor.require_identity(io)
+        io.verify_roots()
+        if self.proof is not None and self.proof._epoch != io.validation_epoch:
+            self.discard()
+        return self.proof.borrow(io) if self.proof is not None else None
+
+    def remember(self, io: StoreIO, checked: CheckedHead) -> None:
+        self.anchor.require_identity(io)
+        self.discard()
+        self.proof = checked.borrow(io)
+
+
+@contextmanager
+def validation_window(io: StoreIO, checked: CheckedHead) -> Iterator[None]:
+    existing = cast(_CheckedWindow | None, io._checked_window)
+    window = _CheckedWindow(io, checked)
+    io._checked_window = window
+    try:
+        yield
+    except BaseException:
+        if existing is not None:
+            existing.discard()
+        raise
+    finally:
+        window.discard()
+        window.anchor.close()
+        io._checked_window = existing
+
+
 def checked_head(io: StoreIO) -> CheckedHead | None:
+    window = cast(_CheckedWindow | None, io._checked_window)
+    if window is not None:
+        borrowed = window.borrow(io)
+        if borrowed is not None:
+            return borrowed
+    try:
+        checked = _read_checked_head(io)
+    except (OSError, ProjectStoreError):
+        io.validation_failed()
+        raise
+    if window is not None and checked is not None:
+        window.remember(io, checked)
+    return checked
+
+
+def _read_checked_head(io: StoreIO) -> CheckedHead | None:
     pointer = io.read("head.json")
     if pointer is None:
         return None
@@ -98,7 +173,7 @@ def head(io: StoreIO) -> dict[str, Any] | None:
     if checked is None:
         return None
     try:
-        return checked.current
+        return deepcopy(checked.current) if io._checked_window is not None else checked.current
     finally:
         checked.close()
 

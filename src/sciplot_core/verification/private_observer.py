@@ -1,4 +1,4 @@
-"""Opt-in synchronous Python access evidence; never record arguments or data."""
+"""Opt-in synchronous Python access evidence; never record data or arbitrary args."""
 from __future__ import annotations
 
 import atexit
@@ -23,6 +23,7 @@ from sciplot_core.verification.private_process_boundaries import ZERO as ZERO, f
 from sciplot_core.verification.native_probe_boundary import native_probe_call
 from sciplot_core.verification.private_exclusion_boundary import effective_child_environment, excluded_launch, final_launch, public_phase
 from sciplot_core.verification.private_audit_runtime import server_call, hold_server, install_socket_ports
+from sciplot_core.verification.private_access import install_open_port, observed_access, open_constants
 
 VERSION = 2
 DIRECTORY = "SCIPLOT_PRIVATE_AUDIT_DIR"
@@ -87,6 +88,7 @@ class Observer:
                      "observer_sources_sha256": source_hashes(),
                      "root_scope": self.root_scope,
                      "python_runtime": runtime_identity(),
+                     "open_constants": open_constants(),
                      "command_sha256": frame_digest({"arguments": sys.orig_argv[1:]}),
                      "wrapper_inputs": wrapper_inputs(environment),
                      "bootstrap_sha256": executable_hash(bootstrap) if bootstrap else None,
@@ -175,14 +177,9 @@ class Observer:
                 and not getattr(self.guard, "socket_port", False)):
             self.record({"event": "untracked_socket_connect"})
         if event in {"open", "os.scandir", "os.listdir"} and args:
-            value = args[0]
-            if isinstance(value, (str, bytes, os.PathLike)):
-                path = Path(os.path.abspath(os.fsdecode(value)))
-                resolved = path.resolve()
-                if any(path.is_relative_to(root) or resolved.is_relative_to(root) for root in self.roots):
-                    diagnostic = diagnostic_owner()
-                    self.record({"event": event, "path": str(path), "resolved_path": str(resolved),
-                                 "diagnostic_owner": diagnostic})
+            value = observed_access(event, args, self.roots)
+            if value is not None:
+                self.record({**value, "diagnostic_owner": diagnostic_owner()} if value["event"] == event else value)
         elif event in {"os.fork", "os.posix_spawn", "subprocess.Popen"} and not getattr(self.guard, "spawning", False):
             self.record({"event": "unsupported_spawn", "mechanism": event})
         elif event == "os.exec" and not getattr(self.guard, "executing", False):
@@ -363,6 +360,7 @@ def install() -> Observer | None:
         return None
     observer = Observer(dict(os.environ))
     _observer = observer
+    install_open_port()
     sys.addaudithook(observer.observe)
     _install_process_ports(observer)
     atexit.register(observer.finish)
@@ -383,6 +381,7 @@ def begin_suite_audit(environment: dict[str, str]) -> Observer:
         os.environ[key] = environment[key]
     observer = Observer(environment, activation=activation)
     _observer = observer
+    install_open_port()
     sys.addaudithook(observer.observe)
     _install_process_ports(observer)
     atexit.register(observer.finish)
