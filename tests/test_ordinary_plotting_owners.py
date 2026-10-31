@@ -202,6 +202,7 @@ PROJECT_STORAGE_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/project_store/incoming_sources.py',
         'src/sciplot_core/project_store/io.py',
         'src/sciplot_core/project_store/locators.py',
+        'src/sciplot_core/project_store/member_observation.py',
         'src/sciplot_core/project_store/membership.py',
         'src/sciplot_core/project_store/namespace_io.py',
         'src/sciplot_core/project_store/namespace_transfers.py',

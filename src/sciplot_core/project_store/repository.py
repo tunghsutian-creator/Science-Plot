@@ -18,6 +18,7 @@ import sciplot_core.project_store.native_work as native_work
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
 from .io import STORE, StoreIO, directory, install, owned_io, parts, read_file, sha
 from .resources import ResourceRoot
+from .member_observation import MemberObservation, observe
 
 
 class FileProjectStore:
@@ -144,26 +145,17 @@ class FileProjectStore:
                 validate()
             return self.snapshot(import_legacy=io.created_store and not os.listdir(io.fd))
 
-    def snapshot(self, *, import_legacy: bool = False) -> dict[str, Any]:
-        with self._locked(import_legacy=import_legacy) as (io, current):
-            from .root_bindings import require
+    def observe_members(self, names: Sequence[str] = (), *, generation: str | None = None,
+                        projection: bool = True, physical: Sequence[str] = (),
+                        import_legacy: bool = False) -> MemberObservation:
+        with self._checked_locked(import_legacy=import_legacy) as (io, current, checked):
+            return observe(io, current, checked, names, generation=generation,
+                           projection=projection, physical=physical)
 
-            require(io, current)
-            drift: dict[str, str | None] = {}
-            metadata_drift: dict[str, str] = {}
-            for name, entry in current["files"].items():
-                try:
-                    physical = io.physical(name, owned=name not in current.get("input_resources", [])
-                        and name not in current.get("history_resources", []))
-                except ProjectConflict as exc:
-                    drift[name] = None
-                    metadata_drift[name] = str(exc)
-                    continue
-                actual = sha(physical[0]) if physical else None
-                if actual != entry["sha256"] or physical is not None and physical[1] != entry["mode"]:
-                    drift[name] = actual
-            return {**current, "projection_status": "conflict" if drift else "current",
-                    "outside_changes": drift, "outside_metadata": metadata_drift}
+    def snapshot(self, *, import_legacy: bool = False) -> dict[str, Any]:
+        projection = self.observe_members(import_legacy=import_legacy).projection
+        assert projection is not None
+        return projection
 
     def capture_source_observation(self, resource: str, *, source_id: str, before_sha256: str) -> dict[str, Any]:
         from .source_observations import capture
@@ -295,11 +287,10 @@ class FileProjectStore:
                     "generation": current["generation"], "unknown_commands": sorted(unknown)}
 
     def read_bytes(self, logical: str, *, generation: str | None = None) -> bytes:
-        with self._checked_locked() as (io, current, checked):
-            value = state.reachable(io, current, generation, checked=checked) if generation else current
-            if value["project_id"] != current["project_id"] or logical not in value["files"]:
-                raise ProjectStoreError("The logical resource is not a member of this generation.")
-            return io.get(value["files"][logical])
+        member = self.observe_members((logical,), generation=generation, projection=False).members[logical]
+        if member.data is None:
+            raise ProjectStoreError("The logical resource is not a member of this generation.")
+        return member.data
 
     def logical_path(self, path: Path) -> str:
         candidate = Path(path).expanduser().absolute()

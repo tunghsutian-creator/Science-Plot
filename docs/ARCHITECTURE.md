@@ -1411,6 +1411,18 @@ IO epoch alone does not certify external work. This shares validated immutable
 history within that window, not file bytes, raw-source observations or PASS across
 operations. Every consumed object is still read and verified.
 
+`project_store/member_observation.py` owns coherent finite member reads and the
+snapshot projection algorithm behind `FileProjectStore.observe_members`,
+`snapshot` and `read_bytes`. Canonical head and selected historical generation
+are separate from optional physical evidence: an omitted projection is `None`,
+and explicit physical results contain only admitted current members (no key means
+unobserved; a present `None` means observed absence). Attached reads combine that
+one observation with their batch's captured generation and own writes, without
+retaining an IO proof or captured bytes across calls. Virtual directory reads use
+the existing `MembershipRead` over the base snapshot, rather than file-absence
+reads. Publication rejects conflicting prepared guards, deduplicates identical
+guards, and binds them into the command and its idempotency digest.
+
 Prepared template adoption is an invocation-scoped read constraint in
 `project_lifecycle/prepared_admission.py`. Every attached storage batch carries
 its validated project reads, memberships and original source-tree witnesses into

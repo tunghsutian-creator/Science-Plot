@@ -20,11 +20,22 @@ def encode(value: dict[str, Any]) -> bytes:
 
 
 def read_index(store: FileProjectStore, snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
-    current = snapshot if snapshot is not None else store.snapshot()
-    if INDEX not in current["files"]:
+    if snapshot is not None and INDEX not in snapshot["files"]:
+        current = snapshot
+        data = None
+    else:
+        observation = store.observe_members((INDEX,), generation=snapshot["generation"] if snapshot else None,
+                                             projection=snapshot is None)
+        current = snapshot if snapshot is not None else observation.selected
+        data = observation.members[INDEX].data
+        if snapshot is not None and data is None:
+            from sciplot_core.project_store.errors import ProjectStoreError
+
+            raise ProjectStoreError("The logical resource is not a member of this generation.")
+    if data is None:
         return {"kind": "sciplot_semantic_attachment_index", "version": 1,
                 "project_id": current["project_id"], "attachments": {}}
-    return validate_index(json.loads(store.read_bytes(INDEX, generation=current["generation"])), current["project_id"])
+    return validate_index(json.loads(data), current["project_id"])
 
 
 def validate_index(value: Any, project_id: str) -> dict[str, Any]:

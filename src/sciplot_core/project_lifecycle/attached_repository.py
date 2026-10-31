@@ -13,7 +13,8 @@ from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.writer_lease import exclusive_directory_lease
 from sciplot_core.foundation.source_locations import source_location_scope
-from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation, SourceAdoption
+from sciplot_core.project_commands import MembershipRead, ProjectCommand, ProjectCommands, ProjectMutation, SourceAdoption
+from sciplot_core.project_store.member_observation import ObservedMember
 from .attachment_index import Attachment, INDEX, OWNER, encode, read_index
 from .attachment_projection import derived_relative, metadata_view
 from .attachment_sources import AttachmentSourceResolver, prepared_sources, record_sources
@@ -28,7 +29,12 @@ class _Batch:
     snapshot: dict[str, Any]
     writes: dict[str, bytes | None] = field(default_factory=dict)
     reads: dict[str, str | None] = field(default_factory=dict)
+    directories: set[str] = field(default_factory=set)
     prepared: PreparedReads | None = None
+
+    def names(self) -> set[str]:
+        return (set(self.snapshot["files"]) | {name for name, data in self.writes.items() if data is not None}) - {
+            name for name, data in self.writes.items() if data is None}
 
 
 class AttachedProjectRepository(FileProjectRepository):
@@ -185,14 +191,24 @@ class AttachedProjectRepository(FileProjectRepository):
                     raise EngineError("prepared_project_changed", "Semantic adoption differs from its prepared publication reads.")
                 batch.reads[name] = expected
         mutation = ProjectMutation(writes, {"attachment_id": identity, "resources": sorted(writes)}, prepared_sources=captured)
-        publication = canonical_json_sha256({"prepared": mutation.prepared_digest,
-            "generation": batch.snapshot["generation"], "reads": batch.reads}, allow_nan=False)
+        memberships: dict[str, MembershipRead] = {}
+        inherited = batch.prepared.memberships if batch.prepared is not None else ()
+        observed = (MembershipRead.capture(batch.snapshot["files"], prefix) for prefix in sorted(batch.directories))
+        for guard in (*inherited, *observed):
+            if guard.prefix in memberships and memberships[guard.prefix] != guard:
+                raise EngineError("prepared_project_changed", "A directory observation differs from its prepared membership.")
+            memberships[guard.prefix] = guard
+        guards = tuple(memberships[prefix] for prefix in sorted(memberships))
+        identity_inputs = {"prepared": mutation.prepared_digest, "generation": batch.snapshot["generation"], "reads": batch.reads}
+        if guards:
+            identity_inputs["memberships"] = [guard.to_payload() for guard in guards]
+        publication = canonical_json_sha256(identity_inputs, allow_nan=False)
         key = "semantic:" + identity + ":" + publication[:32]
         command = ProjectCommand.create("semantic_record", key, project_id=batch.snapshot["project_id"],
             expected_generation=batch.snapshot["generation"], read_set=batch.reads,
             write_set=sorted(writes), request={"prepared_digest": mutation.prepared_digest, "attachment_id": identity},
             source_adoptions=tuple(observations.values()),
-            read_memberships=batch.prepared.memberships if batch.prepared is not None else (),
+            read_memberships=guards,
             source_trees=(batch.prepared.source,) if batch.prepared is not None else ())
         if batch.prepared is not None:
             admitted = self.attachment.store.reserve(command.key, command.command_digest,
@@ -204,22 +220,30 @@ class AttachedProjectRepository(FileProjectRepository):
         if resolver is not None:
             resolver.refresh()
 
-    def _bytes(self, path: Path) -> bytes:
-        logical = self.attachment.logical(path)
+    def _member(self, logical: str) -> ObservedMember:
         batch = self._batch.get()
         if batch is not None:
             if logical in batch.writes:
                 data = batch.writes[logical]
-                if data is None:
-                    raise FileNotFoundError(path)
-                return data
-            snapshot = batch.snapshot
-            batch.reads.setdefault(logical, snapshot["files"].get(logical, {}).get("sha256"))
-        else:
-            snapshot = self.attachment.store.snapshot()
-        if logical not in snapshot["files"]:
+                member = ObservedMember("file", data) if data is not None else ObservedMember("missing")
+            else:
+                member = self.attachment.store.observe_members((logical,), generation=batch.snapshot["generation"],
+                                                               projection=False).members[logical]
+            if member.kind != "file":
+                member = ObservedMember("directory" if any(name.startswith(logical + "/") for name in batch.names()) else "missing")
+            if logical not in batch.snapshot["files"] and (member.kind == "directory"
+                    or any(name.startswith(logical + "/") for name in batch.snapshot["files"])):
+                batch.directories.add(logical)
+            else:
+                batch.reads.setdefault(logical, batch.snapshot["files"].get(logical, {}).get("sha256"))
+            return member
+        return self.attachment.store.observe_members((logical,)).members[logical]
+
+    def _bytes(self, path: Path) -> bytes:
+        member = self._member(self.attachment.logical(path))
+        if member.data is None:
             raise FileNotFoundError(path)
-        return self.attachment.store.read_bytes(logical, generation=snapshot["generation"])
+        return member.data
 
     def content_snapshot(self, path: Path) -> dict[str, Any]:
         data = self._bytes(path)
@@ -246,13 +270,8 @@ class AttachedProjectRepository(FileProjectRepository):
         if relative is None:
             raise EngineError("semantic_attachment_path_invalid", "Attached semantic IO cannot escape its registered namespace.")
         if not relative.parts:
-            return bool(self.attachment.store.snapshot()["files"].get(INDEX))
-        try:
-            self._bytes(path)
-            return True
-        except FileNotFoundError:
-            logical = self.attachment.logical(path) + "/"
-            return any(name.startswith(logical) for name in self.attachment.store.snapshot()["files"])
+            return self._member(INDEX).kind == "file"
+        return self._member(self.attachment.logical(path)).kind != "missing"
 
     def read(self, path: Path) -> dict[str, Any]:
         cache = self._cache_path(path)
@@ -298,10 +317,10 @@ class AttachedProjectRepository(FileProjectRepository):
             raise EngineError("semantic_attachment_path_invalid", "Only registered semantic members may be listed.")
         prefix = self.attachment.entry["namespace"] + "/" + relative.as_posix().rstrip(".").rstrip("/")
         prefix = prefix.rstrip("/") + "/"
-        names = set(self.attachment.store.snapshot()["files"])
         batch = self._batch.get()
         if batch is not None:
-            names.update(batch.writes)
+            batch.directories.add(prefix.rstrip("/"))
+        names = batch.names() if batch is not None else set(self.attachment.store.snapshot()["files"])
         return sorted(self.attachment.root / Path(name).relative_to(self.attachment.entry["namespace"])
                       for name in names if name.startswith(prefix) and "/" not in name[len(prefix):]
                       and fnmatch(name[len(prefix):], pattern))

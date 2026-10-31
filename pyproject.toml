@@ -437,6 +437,7 @@ files = [
   "src/sciplot_core/project_store/io.py",
   "src/sciplot_core/project_store/locators.py",
   "src/sciplot_core/project_store/membership.py",
+  "src/sciplot_core/project_store/member_observation.py",
   "src/sciplot_core/project_store/native_work.py",
   "src/sciplot_core/project_store/portable.py",
   "src/sciplot_core/project_store/preconditions.py",
