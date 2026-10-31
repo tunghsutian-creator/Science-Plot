@@ -147,7 +147,8 @@ jobs:
             --wheel-dir /tmp/sciplot-wheel
           python3 tests/test_wheel_surface.py /tmp/sciplot-wheel/*.whl
       - name: Check known native CI regressions before the public suites
-        # This bounded diagnostic keeps the original five failures visible.
+        # Keep the nine observed failures and their three original native
+        # predecessors together, preserving the original collection order.
         # Both complete canonical suites still run below without filters.
         run: |
           python3 - <<'PY'
@@ -163,7 +164,16 @@ jobs:
           output = root / ".tmp_verify/ci_known_native_regressions"
           environment = dict(os.environ)
           assert not environment.get("PYTEST_ADDOPTS", "").strip()
-          expected = {
+          required_prefix = [
+              "tests/test_annotation_operations_native.py::test_native_semantic_batch_preview_commit_export_cold_resume_and_remove",
+              "tests/test_annotation_operations_native.py::test_native_display_window_preserves_measurements_through_export",
+              "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
+              "tests/test_attached_edit_checkpoints_native.py::test_default_attached_native_common_style_save_undo_restart_replay",
+              "tests/test_attached_semantic_native.py::test_attached_public_native_cold_lifecycle[managed]",
+              "tests/test_attached_semantic_native.py::test_attached_public_native_cold_lifecycle[legacy]",
+              "tests/test_attached_semantic_native.py::test_attached_public_native_cold_lifecycle[legacy_pending]",
+          ]
+          expected = set(required_prefix) | {
               "tests/test_mechanical_rendering_profile_native.py::test_wide_category_native_labels_fit_and_clipped_rotation_cannot_commit",
               "tests/test_private_observer.py::test_archived_metadata_reads_keep_actual_root_and_node_boundaries",
               "tests/test_private_observer.py::test_suite_parent_collector_and_supervisor_share_actual_scope[False]",
@@ -181,7 +191,7 @@ jobs:
           subprocess.run(validate, cwd=stage, env=child_environment, check=True)
           finish, reports_path = output / "finish.json", output / "reports.json"
           child_environment.update(SCIPLOT_VERIFY_FINISH=str(finish), SCIPLOT_PUBLIC_STAGE_REPORT=str(reports_path))
-          command = [sys.executable, "-m", "pytest", "-vv", "-p", "sciplot_core.verification.pytest_finish",
+          command = [sys.executable, "-m", "pytest", "-vv", "--tb=short", "-p", "sciplot_core.verification.pytest_finish",
                      "-p", "sciplot_core.verification.public_stage", "--input-scope", "public-all", "-k", expression,
                      "--basetemp", str(output / "pytest-tmp")]
           result = subprocess.run(command, cwd=stage, env=child_environment, stdin=subprocess.DEVNULL, check=False)
@@ -190,24 +200,42 @@ jobs:
           reports = json.loads(reports_path.read_bytes()) if reports_path.is_file() else {}
           issues = review_stage_reports(marker, reports, platform=sys.platform)
           if set(marker.get("selected_tests", [])) != expected:
-              issues.append("The bounded CI regression selection must contain exactly the original five nodes.")
+              issues.append("The bounded CI regression selection must contain exactly the observed failures and their three predecessors.")
+          if marker.get("selected_tests", [])[:len(required_prefix)] != required_prefix:
+              issues.append("The bounded CI regression order must retain the original three annotation predecessors and four attached failures.")
           phases = [(row.get("nodeid"), row.get("when"), row.get("outcome")) for row in reports.get("reports", [])]
           required = {(node, phase, "passed") for node in expected for phase in ("setup", "call", "teardown")}
-          if len(phases) != 15 or set(phases) != required:
-              issues.append("All fifteen original regression phases must pass without skips or duplicates.")
+          if len(phases) != len(required) or set(phases) != required:
+              issues.append("Every selected regression setup/call/teardown phase must pass without skips or duplicates.")
           origin_runtime_equal = runtime_binding(root, environment) == before["runtime"]
           if post.returncode != 0 or not origin_runtime_equal:
               issues.append("Original or staged source/runtime binding changed.")
-          summary = {"kind": "sciplot_bounded_ci_regression_preflight", "origin_head": before["origin_head"],
+          summary = {"kind": "sciplot_bounded_ci_regression_preflight", "claim": "DIAGNOSTIC_ONLY", "origin_head": before["origin_head"],
                      "actual_exit_code": result.returncode, "finish_complete": marker.get("complete"),
                      "selected_nodes": marker.get("selected_tests", []), "phase_count": len(phases), "issues": issues,
                      "full_public_acceptance": False, "scientific_acceptance": False, "access_capture_complete": False}
           (output / "scoped-result.json").write_text(json.dumps(summary, indent=2) + "\n")
           print(json.dumps(summary))
           if result.returncode or issues:
-              for log in sorted((output / "pytest-tmp").rglob("native-worker.log")):
-                  print(f"Generated regression diagnostic: {log}")
-                  print(log.read_text(errors="replace"))
+              # Only this fresh twelve-node run owns these generated outputs.
+              # Never enumerate source fixtures, environment files or other runs.
+              diagnostic_roots = (
+                  (output / "pytest-tmp", {"native-worker.log"}),
+                  (stage / ".tmp_verify/entry-checkpoints/native-cases",
+                   {"child.stdout.log", "child.stderr.log", "result.json", "owned-native.json", "owned-native-progress.json"}),
+                  (stage / ".tmp_verify/attached-semantic/native-cases",
+                   {"child.stdout.log", "child.stderr.log", "result.json", "owned-native.json", "failed-native-process.json"}),
+              )
+              for directory, filenames in diagnostic_roots:
+                  if directory.resolve() != directory:
+                      continue
+                  for current, directories, files in os.walk(directory, followlinks=False):
+                      directories[:] = sorted(name for name in directories if not (Path(current) / name).is_symlink())
+                      for name in sorted(set(files) & filenames):
+                          log = Path(current) / name
+                          if not log.is_symlink() and log.is_file():
+                              print(f"Generated regression diagnostic: {log}")
+                              print(log.read_text(errors="replace"))
           raise SystemExit(result.returncode if result.returncode else (4 if issues else 0))
           PY
       - name: Run reviewed public focused behavior
