@@ -12,6 +12,9 @@ class SourceResolver(Protocol):
 
     def literal_path(self, actual: Path) -> str: ...
 
+    def file_paths(self, actual: Path, *, expected_sha256: str | None = None,
+                   source_id: str | None = None) -> tuple[str, Path]: ...
+
 
 _SELECTED: ContextVar[SourceResolver | None] = ContextVar("sciplot_selected_source_locator", default=None)
 
@@ -40,3 +43,12 @@ def resolve_source_path(original: str | Path, *, expected_sha256: str | None = N
 def literal_source_path(actual: Path) -> str:
     resolver = _SELECTED.get()
     return resolver.literal_path(actual) if resolver is not None else str(actual.expanduser().resolve())
+
+
+def source_file_paths(actual: Path, *, expected_sha256: str | None = None,
+                      source_id: str | None = None) -> tuple[str, Path]:
+    """Locate one file's literal and IO roles before its physical capture."""
+    resolver = _SELECTED.get()
+    if resolver is not None:
+        return resolver.file_paths(actual, expected_sha256=expected_sha256, source_id=source_id)
+    return str(actual.expanduser().resolve()), actual

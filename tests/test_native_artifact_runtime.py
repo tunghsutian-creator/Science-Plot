@@ -163,6 +163,10 @@ def test_only_a_trusted_project_host_can_bind_closed_exact_argument_witnesses(tm
         class CustomResolver:
             def resolve_path(self, value, **_kwargs):return Path(value)
             def literal_path(self, value):return str(value)
+
+            def file_paths(self, actual, *, expected_sha256=None, source_id=None):
+                literal = self.literal_path(actual)
+                return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)
         context = source_location_scope(CustomResolver())
     else:
         context = project_runtime(store)

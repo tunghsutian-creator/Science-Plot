@@ -124,6 +124,10 @@ def test_acknowledged_input_context_does_not_grant_refused_source_io(tmp_path):
         def literal_path(self, actual):
             pytest.fail('Declared source roles are not reverse IO requests')
 
+        def file_paths(self, actual, *, expected_sha256=None, source_id=None):
+            literal = self.literal_path(actual)
+            return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)
+
     before = deepcopy((candidate, guarded))
     with source_location_scope(Selected()), pytest.raises(ValueError, match='does not authorize'):
         changed_inputs(ManagedBackend.__new__(ManagedBackend), guarded, input_document=candidate)

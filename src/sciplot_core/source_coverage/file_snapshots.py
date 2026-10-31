@@ -8,7 +8,7 @@ import stat
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
+from sciplot_core.foundation.source_locations import source_file_paths
 from sciplot_core.project_store.io import directory
 
 
@@ -33,9 +33,9 @@ def stable_file_snapshot(path: Path, *, label: str, expected_sha256: str | None 
     if expected_sha256 is not None and (len(expected_sha256) != 64
             or any(char not in "0123456789abcdef" for char in expected_sha256)):
         raise ValueError(f"{label} requires an exact SHA256 source version.")
-    literal = Path(literal_source_path(path))
-    resolved = resolve_source_path(path, expected_sha256=expected_sha256).expanduser().resolve()
-    return _physical_file_snapshot(resolved, literal=literal, label=label, expected_sha256=expected_sha256)
+    literal, resolved = source_file_paths(path, expected_sha256=expected_sha256)
+    return _physical_file_snapshot(resolved.expanduser().resolve(), literal=Path(literal),
+                                   label=label, expected_sha256=expected_sha256)
 
 
 def _physical_file_snapshot(path: Path, *, literal: Path, label: str,

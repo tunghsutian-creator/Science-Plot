@@ -323,10 +323,10 @@ def test_prepared_publication_uses_the_window_after_source_capture_and_reduces_h
     counts = {}
     captured = []
     actual_sources = attached_repository.prepared_sources
-    def prepared_sources(store, sources, *, force=frozenset()):
+    def prepared_sources(store, sources, *, force=frozenset(), snapshot=None):
         io = owned_io(store.root)
         captured.append(io is None or io._checked_window is None)
-        return actual_sources(store, sources, force=force)
+        return actual_sources(store, sources, force=force, snapshot=snapshot)
     def observed_read(reads, actual_read):
         def read(io, name):
             reads[name] += 1
@@ -530,3 +530,335 @@ def test_projection_negative_cannot_hide_concurrent_canonical_corruption_or_repl
         monkeypatch.setattr(StoreIO, "physical", physical)
         with pytest.raises(ProjectConflict, match="identity" if drift == "blob" else "canonical head changed"):
             store.snapshot()
+
+
+def test_plain_file_locator_pair_shares_history_and_finishes_before_actual_capture(tmp_path, monkeypatch):
+    from sciplot_core.project_store.runtime import project_runtime
+    from sciplot_core.source_coverage import file_snapshots
+
+    store, snapshot = store_with_files(tmp_path)
+    actual = file_snapshots._physical_file_snapshot
+    captured = []
+    def capture(path, *, literal, label, expected_sha256=None):
+        captured.append(owned_io(store.root))
+        return actual(path, literal=literal, label=label, expected_sha256=expected_sha256)
+    with project_runtime(store):
+        reads, gets = count_reads(monkeypatch)
+        monkeypatch.setattr(file_snapshots, "_physical_file_snapshot", capture)
+        assert file_snapshots.stable_file_snapshot(store.root / "A.bin", label="exact", expected_sha256=sha(b"A"))["bytes"] == b"A"
+        assert reads["head.json"] == 1 and gets[sha(b"A")] >= 2
+        assert captured == [None]
+        corrupt_object(store, snapshot["files"]["B.bin"])
+        with pytest.raises(ProjectStoreError, match="identity"):
+            file_snapshots.stable_file_snapshot(store.root / "A.bin", label="new operation")
+
+
+def test_unknown_resolver_subclass_cannot_inherit_the_plain_locator_window(tmp_path):
+    from sciplot_core.foundation.source_locations import source_location_scope
+    from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
+
+    store, _snapshot = store_with_files(tmp_path)
+    calls = []
+    class Extended(ProjectSourceResolver):
+        def resolve_path(self, original, *, expected_sha256=None, source_id=None):
+            calls.append(owned_io(store.root))
+            return super().resolve_path(original, expected_sha256=expected_sha256, source_id=source_id)
+    with source_location_scope(Extended(store)):
+        assert stable_file_snapshot(store.root / "A.bin", label="extension")["bytes"] == b"A"
+    assert calls == [None]
+
+
+def external_source(store, tmp_path):
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation, PreparedSource
+
+    raw = tmp_path / "external.csv"
+    raw.write_bytes(b"1,2\n")
+    source = PreparedSource("a" * 32, str(raw), sha(raw.read_bytes()), raw.read_bytes(), (), 0o644)
+    before = store.snapshot()
+    candidate = ProjectMutation({}, {}, prepared_sources=(source,))
+    command = ProjectCommand.create("attachment_import", uuid4().hex, project_id=before["project_id"],
+        expected_generation=before["generation"], read_set={}, write_set=[], request={"prepared_digest": candidate.prepared_digest})
+    ProjectCommands(store).publish_prepared(command, candidate)
+    return raw, source
+
+
+@pytest.mark.parametrize("mode", ["incoming", "sealed"])
+def test_expected_source_actual_reads_never_enter_the_plain_pair_window(tmp_path, monkeypatch, mode):
+    from sciplot_core.project_store import incoming_sources
+    from sciplot_core.project_store.runtime import incoming_source_runtime, sealed_source_runtime
+    from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
+
+    store, _snapshot = store_with_files(tmp_path)
+    raw, source = external_source(store, tmp_path)
+    expectation = incoming_sources.SourceExpectation(str(raw), source.source_id, source.version)
+    actual = incoming_sources.read_file
+    actual_get = StoreIO.get
+    windows = []
+    def read_file(fd, name, *, owned=False):
+        io = owned_io(store.root)
+        windows.append(io is not None and io._checked_window is not None)
+        return actual(fd, name, owned=owned)
+    monkeypatch.setattr(incoming_sources, "read_file", read_file)
+    def get(io, entry):
+        windows.append(io._checked_window is not None)
+        return actual_get(io, entry)
+    monkeypatch.setattr(StoreIO, "get", get)
+    scope = incoming_source_runtime if mode == "incoming" else sealed_source_runtime
+    with scope(store, [expectation]):
+        # A registered member also stays outside when an expectation is active.
+        assert stable_file_snapshot(store.root / "A.bin", label="owned")["bytes"] == b"A"
+        assert stable_file_snapshot(raw, label="expected", expected_sha256=source.version)["bytes"] == source.data
+    assert windows and not any(windows)
+
+
+def test_query_sealed_source_materialization_and_capture_stay_outside_pair_window(tmp_path, monkeypatch):
+    from sciplot_core.foundation.source_locations import source_location_scope
+    from sciplot_core.project_store.source_resolver import QuerySourceResolver
+    from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
+
+    store, _snapshot = store_with_files(tmp_path)
+    raw, source = external_source(store, tmp_path)
+    with StoreIO(store.root, {}).locked() as io:
+        io.write("local_sources.json", {"versions": {source.source_id: {source.version: source.version}}})
+    raw.unlink()
+    resolver = QuerySourceResolver(store)
+    actual = resolver._temporary_directory
+    observations = []
+    def temporary_directory():
+        observations.append(owned_io(store.root))
+        return actual()
+    monkeypatch.setattr(resolver, "_temporary_directory", temporary_directory)
+    try:
+        with source_location_scope(resolver):
+            captured = stable_file_snapshot(raw, label="sealed", expected_sha256=source.version)
+        assert captured["bytes"] == source.data and observations == [None]
+    finally:
+        resolver.close()
+    assert not raw.exists()
+
+
+def test_attachment_source_capture_and_current_mapping_keep_their_concrete_roles(tmp_path, monkeypatch):
+    from sciplot_core.foundation.source_locations import source_location_scope
+    from sciplot_core.project_lifecycle import attachment_sources
+    from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
+    from sciplot_core.studio_core.source_content_observation import _CurrentMappingResolver
+
+    store, _snapshot = store_with_files(tmp_path)
+    raw = tmp_path / "incoming.csv"
+    raw.write_bytes(b"1,2\n")
+    pending = {"path": str(raw), "sha256": sha(raw.read_bytes()), "source_id": "a" * 32}
+    resolver = attachment_sources.AttachmentSourceResolver(store, [pending])
+    capture_source = attachment_sources.capture_source
+    observations = []
+    def capture(path):
+        observations.append(owned_io(store.root))
+        return capture_source(path)
+    monkeypatch.setattr(attachment_sources, "capture_source", capture)
+    with source_location_scope(resolver):
+        assert stable_file_snapshot(raw, label="incoming", expected_sha256=pending["sha256"])["bytes"] == raw.read_bytes()
+    assert observations and all(io is None for io in observations)
+    current = _CurrentMappingResolver(store)
+    physical = StoreIO.physical
+    def observe(io, logical, *, owned=True):
+        assert io._checked_window is None
+        return physical(io, logical, owned=owned)
+    monkeypatch.setattr(StoreIO, "physical", observe)
+    with source_location_scope(current):
+        assert stable_file_snapshot(store.root / "A.bin", label="current physical")["bytes"] == b"A"
+
+
+def test_recorded_artifact_group_shares_history_but_reads_each_member_and_next_group_fresh(tmp_path, monkeypatch):
+    from sciplot_core.delivery.runtime_evidence import recorded_artifacts_ready
+    from sciplot_core.project_store.runtime import project_runtime
+
+    store, snapshot = store_with_files(tmp_path)
+    records = [{"exists": True, "path": str(store.root / name)} for name in ("A.bin", "B.bin")]
+    with project_runtime(store):
+        reads, gets = count_reads(monkeypatch)
+        assert recorded_artifacts_ready(records)
+        assert reads["head.json"] == 1
+        assert gets[sha(b"A")] >= 2 and gets[sha(b"B")] >= 2
+        assert owned_io(store.root) is None
+        corrupt_object(store, snapshot["files"]["B.bin"])
+        with pytest.raises(ProjectStoreError, match="identity"):
+            recorded_artifacts_ready(records[:1])
+
+
+def test_recorded_artifact_group_preserves_short_circuit_and_excludes_source_views(tmp_path, monkeypatch):
+    from sciplot_core.delivery.runtime_evidence import recorded_artifacts_ready
+    from sciplot_core.project_store.runtime import project_runtime
+
+    store, _snapshot = store_with_files(tmp_path)
+    _raw, source = external_source(store, tmp_path)
+    view = store.resolve_source(source.source_id, source.version)
+    get = StoreIO.get
+    observations = []
+    def actual_get(io, entry):
+        observations.append(io._checked_window)
+        return get(io, entry)
+    with project_runtime(store):
+        monkeypatch.setattr(StoreIO, "get", actual_get)
+        assert not recorded_artifacts_ready([{"exists": False, "path": str(store.root / "A.bin")}])
+        assert observations == []
+        with pytest.raises(ProjectStoreError, match="source cache"):
+            recorded_artifacts_ready([{"exists": True, "path": str(view)}])
+    assert observations and owned_io(store.root) is None
+
+
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_flush_planning_snapshot_does_not_keep_proof_across_real_source_capture(tmp_path, monkeypatch, corrupt):
+    from test_project_member_observation import project
+    from sciplot_core.project_lifecycle import attachment_sources
+
+    store, repository, before = project(tmp_path)
+    raw = tmp_path / "external.csv"
+    raw.write_bytes(b"1,2\n")
+    actual = attachment_sources.capture_source
+    observations = []
+    def capture(path):
+        observations.append(owned_io(store.root))
+        value = actual(path)
+        if corrupt:
+            corrupt_object(store, next(iter(before["files"].values())))
+        return value
+    monkeypatch.setattr(attachment_sources, "capture_source", capture)
+    payload = {"document": {"kind": "sciplot_document", "scientific": {"data_sources": [
+        {"path": str(raw), "sha256": sha(raw.read_bytes()), "source_id": "a" * 32}]}}}
+    path = repository.attachment.root / "revisions/new.json"
+    if corrupt:
+        with pytest.raises(ProjectStoreError, match="identity"):
+            repository.write(path, payload)
+    else:
+        repository.write(path, payload)
+        assert repository.read(path) == payload
+        assert store.snapshot()["projection_status"] == "current"
+    assert observations == [None]
+    assert raw.read_bytes() == b"1,2\n"
+
+
+def test_candidate_locator_pair_does_not_wrap_its_private_io_in_a_host_window(tmp_path, monkeypatch):
+    from sciplot_core.foundation.source_locations import source_location_scope
+    from sciplot_core.project_store import candidate_runtime
+    from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
+
+    store, _snapshot = store_with_files(tmp_path)
+    candidate = tmp_path / "candidate"
+    candidate.mkdir(mode=0o700)
+    for name in ("A.bin", "B.bin"):
+        (candidate / name).write_bytes((store.root / name).read_bytes())
+    resolver = candidate_runtime.ProjectCandidateResolver(store, candidate)
+    actual = candidate_runtime.read_file
+    observations = []
+    def read_file(fd, name, *, owned=False):
+        io = owned_io(store.root)
+        observations.append(io is not None and io._checked_window is not None)
+        return actual(fd, name, owned=owned)
+    monkeypatch.setattr(candidate_runtime, "read_file", read_file)
+    with source_location_scope(resolver):
+        assert stable_file_snapshot(candidate / "A.bin", label="private candidate")["bytes"] == b"A"
+    assert observations and not any(observations)
+
+
+def test_persist_metadata_reads_share_one_batch_before_any_source_or_durable_write(tmp_path, monkeypatch):
+    from test_project_member_observation import project
+
+    store, repository, _snapshot = project(tmp_path)
+    transaction = {"id": uuid4().hex, "request": {"idempotency_key": "journal"}, "phase": "planned"}
+    repository.persist(repository.attachment.root, transaction)
+    reads, _gets = count_reads(monkeypatch)
+    flush = repository._flush
+    boundaries = []
+    def actual_flush(batch):
+        boundaries.append((reads["head.json"], owned_io(store.root)))
+        return flush(batch)
+    monkeypatch.setattr(repository, "_flush", actual_flush)
+    transaction["phase"] = "prepared"
+    repository.persist(repository.attachment.root, transaction)
+    assert boundaries == [(1, None)]
+    assert repository.active(repository.attachment.root) is None
+    # The durable key path is derived from the original request, not tx.id.
+    from sciplot_core.project_lifecycle.repository import transaction_path
+    path = transaction_path(repository.attachment.root, "journal")
+    assert repository.read(path)["phase"] == "prepared"
+    before = store.snapshot()["generation"]
+    changed = deepcopy(transaction)
+    changed["request"]["different_business_request"] = True
+    with pytest.raises(ValueError, match="identity is immutable"):
+        repository.persist(repository.attachment.root, changed)
+    assert store.snapshot()["generation"] == before
+
+
+def test_nested_persist_keeps_the_base_read_set_when_another_generation_changes_its_journal(tmp_path):
+    import json
+    from test_project_member_observation import project
+    from sciplot_core.project_lifecycle.repository import transaction_path
+
+    store, repository, _snapshot = project(tmp_path)
+    transaction = {"id": uuid4().hex, "request": {"idempotency_key": "journal"}, "phase": "planned"}
+    repository.persist(repository.attachment.root, transaction)
+    path = transaction_path(repository.attachment.root, "journal")
+    changed = deepcopy(transaction)
+    changed["request"]["other_business_request"] = True
+    with pytest.raises(ProjectStoreError, match="changed|conflict"):
+        with repository.storage_batch(repository.attachment.root):
+            publish(store, {repository.attachment.logical(path): json.dumps(changed).encode()})
+            transaction["phase"] = "prepared"
+            repository.persist(repository.attachment.root, transaction)
+    assert repository.read(path)["request"] == changed["request"]
+
+
+def test_prepared_batch_rechecks_its_real_source_before_the_metadata_window(tmp_path, monkeypatch):
+    from test_project_member_observation import project
+    from sciplot_core.project_commands import SourceTreeRead
+    from sciplot_core.project_lifecycle import prepared_admission
+
+    store, repository, snapshot = project(tmp_path)
+    source = tmp_path / "source-tree"
+    source.mkdir()
+    (source / "values.csv").write_bytes(b"1,2\n")
+    version, _origin = prepared_admission.observe(str(source))
+    checkpoint = {"store_binding": {"project_id": snapshot["project_id"], "generation": snapshot["generation"]},
+                  "files": {name: entry["sha256"] for name, entry in snapshot["files"].items()}}
+    actual = prepared_admission.observe
+    observations = []
+    def observe(locator):
+        observations.append(owned_io(store.root))
+        return actual(locator)
+    monkeypatch.setattr(prepared_admission, "observe", observe)
+    transaction = {"id": uuid4().hex, "request": {"idempotency_key": "prepared-journal"}, "phase": "planned"}
+    with prepared_admission.publication_scope(store, checkpoint, SourceTreeRead(str(source), version)):
+        repository.persist(repository.attachment.root, transaction)
+    assert len(observations) >= 2 and all(io is None for io in observations)
+
+
+@pytest.mark.parametrize("kind", ["head", "historical_revision"])
+def test_semantic_metadata_query_uses_one_history_window_and_keeps_real_envelope_checks(tmp_path, monkeypatch, kind):
+    from pathlib import Path
+    from managed_plot_helpers import patch, request_for_source
+    from test_attached_semantic_repository import application
+    from sciplot_core.project_lifecycle.attached_repository import AttachedProjectRepository
+    from sciplot_core.project_lifecycle.attachment_index import Attachment, read_index
+    from sciplot_core.project_store.runtime import project_runtime
+
+    project = tmp_path / "project"
+    project.mkdir()
+    request = request_for_source(project)
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    app = application()
+    with project_runtime(store):
+        created = app.create(request)
+    root = Path(created["plot"])
+    edited = app.patch(root, patch(created, "metadata-window-style", "style.line.width", "1.2pt", "series:A"))
+    assert edited["revision"] == 1
+    entry = next(iter(read_index(store)["attachments"].values()))
+    repository = AttachedProjectRepository(Attachment(store, entry))
+    reads, gets = count_reads(monkeypatch)
+    value = repository.load_head(root) if kind == "head" else repository.load_revision(root, 0)
+    assert value["document"]["revision"] == (1 if kind == "head" else 0)
+    assert reads["head.json"] == 1 and owned_io(store.root) is None
+    logical = root.relative_to(project).as_posix() + "/revisions/00000000.json"
+    current = store.snapshot()
+    assert gets[current["files"][logical]["sha256"]] >= 2
+    value["document"]["scientific_hash"] = "corrupted returned metadata"
+    assert repository.load_head(root)["document"]["scientific_hash"] == created["scientific_hash"]

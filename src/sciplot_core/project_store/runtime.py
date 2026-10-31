@@ -7,7 +7,7 @@ from sciplot_core.foundation.source_locations import (
     literal_source_path, resolve_source_path, selected_source_resolver, source_location_scope,
 )
 from .repository import FileProjectStore
-from .incoming_sources import SourceExpectation, SourceReadMode, require_unambiguous_scope, source_expectation_scope
+from .incoming_sources import SourceExpectation, SourceReadMode, require_unambiguous_scope, source_expectation_scope, selected_expectations
 from .source_resolver import ProjectSourceResolver as ProjectSourceResolver
 from .sealed_source_trees import SealedSourceTree
 from .source_inspection import SourceFileObservation
@@ -18,6 +18,17 @@ def project_runtime(store: FileProjectStore, generation: str | None = None) -> I
     resolver = ProjectSourceResolver(store, generation)
     with source_location_scope(resolver):
         yield resolver
+
+
+@contextmanager
+def project_read_window() -> Iterator[None]:
+    """Finite ordinary artifact reads; source fallbacks retain their fences."""
+    selected = selected_source_resolver()
+    if type(selected) is ProjectSourceResolver and selected_expectations(selected.snapshot) is None:
+        with selected.store._validation_window():
+            yield
+    else:
+        yield
 
 
 @contextmanager
