@@ -41,11 +41,15 @@ rather than another policy or state registry.
    target loops, retain fresh refusal controls and avoid holding the storage
    lock across rendering. No cross-operation PASS cache; report matched before/
    after evidence rather than extrapolating a microbenchmark to full CI.
-   The current bounded implementation covers frozen attached publication and
-   Veusz source fingerprint queries. Close their combined native/CI latency and
-   failure controls before extending the scope. SavedWork member loops and other
-   independent calls still require their own measurements; these two windows do
-   not establish whole-project performance closure.
+   The bounded implementation covers attached metadata/journal planning and
+   frozen publication, Veusz source-fingerprint queries, plain registered locator
+   pairs and ordinary recorded-artifact existence batches. Effectful source/view
+   resolution, physical capture and native execution stay outside new metadata
+   scopes. Same-request canonical FD facts remove a second traversal without
+   caching FD authority. Close their combined native/CI latency and refusal
+   controls on the final candidate. SavedWork member loops and other independent
+   calls still require their own measurements; finite counters and pure checks
+   do not establish whole-project or end-to-end performance closure.
 3. **Close the remaining independent contracts.** Move lifecycle use cases off
    direct legacy-engine dependencies through concrete domain ports and adapters,
    retiring each replaced call path. State the supported numerical runtime for

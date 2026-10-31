@@ -189,6 +189,14 @@ Old records without those facts remain historical evidence with their original
 result. Directory-handle metadata permission never grants listing or child-file
 content. Retain raw/normalized reconciliation and original wait/capture checks.
 
+For metadata-read reuse, test the effect boundary rather than only the number of
+head checks. Incoming/sealed source reads, private-view materialization and native
+callbacks must not inherit a plain locator window. Keep physical byte/hash reads
+and publication CAS fresh. FD traversal reductions may reuse a fully proved
+canonical path only within its current request; preserve all live identity checks
+and test rename, descriptor reuse and relative-child aliases. Pure controls do
+not replace exact-candidate native deadlines or full access reconciliation.
+
 For bounded native feedback use `skill/scripts/sciplot smoke --profile quick
 --out .tmp_verify/quick_smoke --json`. It performs one real source-bound native
 creation/export/QA/delivery path and explicitly defers the complete lifecycle.
