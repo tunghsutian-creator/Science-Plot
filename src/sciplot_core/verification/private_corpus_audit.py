@@ -91,6 +91,45 @@ def _validate_supported_streams(receipt: dict[str, Any], *, repo_root: Path,
         raise ValueError("receipt access or collection events differ from original raw streams")
 
 
+def dependency_event_issues(
+    events: Any, *, nodeids: set[str], dependencies: dict[str, list[tuple[str, str]]],
+    issues: list[tuple[str, str, str | None]] | None = None,
+) -> list[tuple[str, str, str | None]]:
+    """Share exact dependency mapping; callers retain raw/full/scope admission.
+
+    A supplied list preserves prior diagnostics if a malformed later event raises.
+    This function alone cannot certify collection, capture or inventory completeness.
+    """
+    if issues is None:
+        issues = []
+    if not isinstance(events, list):
+        raise ValueError("receipt events must be a list")
+    for event in events:
+        if (not isinstance(event, dict) or event.get("event") not in {"open", "os.scandir", "os.listdir"}
+                or not isinstance(event.get("path"), str) or not isinstance(event.get("nodeid"), str)):
+            raise ValueError("malformed private-access event")
+        path = Path(event["path"])
+        nodeid = event["nodeid"]
+        if path.is_absolute() or ".." in path.parts or path.parts[:2] != ("tests", "fixtures"):
+            raise ValueError("private-access event paths must be safe fixture-relative identifiers")
+        if nodeid not in nodeids:
+            issues.append(("unbound_private_access", "private access is not bound to a collected test", nodeid))
+            continue
+        facts = event.get("open")
+        raw = facts.get("raw") if isinstance(facts, dict) else None
+        if isinstance(raw, dict) and raw.get("path") != raw.get("resolved_path"):
+            issues.append(("unmapped_private_access", "private open uses an alias instead of its declared source", nodeid))
+            continue
+        case_dependencies = dependencies.get(nodeid, [])
+        if not (any(
+            path == Path(identifier)
+            or (kind == "directory" and path.is_relative_to(Path(identifier)))
+            for identifier, kind in case_dependencies
+        ) or file_parent_open(event, case_dependencies)):
+            issues.append(("unmapped_private_access", f"undeclared private access: {path.as_posix()}", nodeid))
+    return issues
+
+
 def validate_access_audit(
     *, inventory: dict[str, Any], inventory_path: Path, repo_root: Path,
     collected_nodeids: set[str] | None,
@@ -148,32 +187,8 @@ def validate_access_audit(
         _validate_collection_events(
             receipt.get("collection_events", []), repo_root=repo_root, fixture_roots=fixture_roots,
         )
-        events = receipt.get("events")
-        if not isinstance(events, list):
-            raise ValueError("receipt events must be a list")
-        for event in events:
-            if (not isinstance(event, dict) or event.get("event") not in {"open", "os.scandir", "os.listdir"}
-                    or not isinstance(event.get("path"), str) or not isinstance(event.get("nodeid"), str)):
-                raise ValueError("malformed private-access event")
-            path = Path(event["path"])
-            nodeid = event["nodeid"]
-            if path.is_absolute() or ".." in path.parts or path.parts[:2] != ("tests", "fixtures"):
-                raise ValueError("private-access event paths must be safe fixture-relative identifiers")
-            if nodeid not in collected_nodeids:
-                issues.append(("unbound_private_access", "private access is not bound to a collected test", nodeid))
-                continue
-            facts = event.get("open")
-            raw = facts.get("raw") if isinstance(facts, dict) else None
-            if isinstance(raw, dict) and raw.get("path") != raw.get("resolved_path"):
-                issues.append(("unmapped_private_access", "private open uses an alias instead of its declared source", nodeid))
-                continue
-            case_dependencies = dependencies.get(nodeid, [])
-            if not (any(
-                path == Path(identifier)
-                or (kind == "directory" and path.is_relative_to(Path(identifier)))
-                for identifier, kind in case_dependencies
-            ) or file_parent_open(event, case_dependencies)):
-                issues.append(("unmapped_private_access", f"undeclared private access: {path.as_posix()}", nodeid))
+        dependency_event_issues(receipt.get("events"), nodeids=collected_nodeids,
+                                dependencies=dependencies, issues=issues)
         if not issues:
             _validate_supported_streams(receipt, repo_root=repo_root, nodeids=collected_nodeids,
                                         fixture_roots=fixture_roots)

@@ -183,6 +183,8 @@ previously blocked producers as well as generated refusal controls. Preserve
 open mode/flags, producer constants and live FD request context through the
 shared `verification.private_access.access_events` projection; current scoped
 and entire exporters must consume that owner rather than a three-field copy.
+Private event dependency checks use the same `private_corpus_audit` mapping
+owner in both modes; a scoped result never satisfies full-collection admission.
 Old records without those facts remain historical evidence with their original
 result. Directory-handle metadata permission never grants listing or child-file
 content. Retain raw/normalized reconciliation and original wait/capture checks.
