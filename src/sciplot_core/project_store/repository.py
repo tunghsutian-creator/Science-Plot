@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import os
 from pathlib import Path
 from typing import Any
@@ -71,37 +71,58 @@ class FileProjectStore:
                         allow_pending: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any], state.CheckedHead]]:
         from .namespace_transfers import augment_controls
 
-        active = owned_io(self.root)
-        if active is not None and active.locations == self.locations:
-            active_head = state.head(active)
-            if active_head is not None:
-                augment_controls(active, active_head, self.location_members)
-        with StoreIO(self.root, self.locations, self.location_members, self.namespace_backups).locked() as io:
-            checked = state.checked_head(io)
-            if checked is None:
-                if not import_legacy:
-                    raise ProjectRecoveryRequired("Explicit legacy import is required before project mutation.")
-                state.import_legacy(io)
-                checked = state.checked_head(io)
-            assert checked is not None
-            try:
+        # Admission-local proof; capability evolution starts a fresh window.
+        with ExitStack() as proofs:
+            active = owned_io(self.root)
+            checked = None
+            controls_augmented = False
+            if active is not None and active.locations == self.locations:
+                checked = state.checked_head(active)
+                if checked is not None:
+                    proofs.callback(checked.close)
+                    members = dict(active.location_members)
+                    augment_controls(active, checked.current, self.location_members)
+                    controls_augmented = True
+                    if members != active.location_members:
+                        checked.close()
+                        checked = None
+            with StoreIO(self.root, self.locations, self.location_members, self.namespace_backups).locked() as io:
+                if checked is None:
+                    checked = state.checked_head(io)
+                    if checked is not None:
+                        proofs.callback(checked.close)
+                else:
+                    checked.require(io, checked.current)
+                if checked is None:
+                    if not import_legacy:
+                        raise ProjectRecoveryRequired("Explicit legacy import is required before project mutation.")
+                    state.import_legacy(io)
+                    checked = state.checked_head(io)
+                    assert checked is not None
+                    proofs.callback(checked.close)
                 current = checked.current
-                augment_controls(io, current, self.location_members)
+                if not controls_augmented:
+                    members = dict(io.location_members)
+                    augment_controls(io, current, self.location_members)
+                    if members != io.location_members:
+                        checked.close()
+                        checked = state.checked_head(io)
+                        assert checked is not None
+                        proofs.callback(checked.close)
+                        current = checked.current
                 if repair:
                     epoch = io.validation_epoch
                     projection.recover(io, current, checked=checked)
                     if io.validation_epoch != epoch:
                         checked.close()
-                        refreshed = state.checked_head(io)
-                        if refreshed is None:
+                        checked = state.checked_head(io)
+                        if checked is None:
                             raise ProjectRecoveryRequired("Recovery lost its committed head; inspect the project before continuing.")
-                        checked = refreshed
+                        proofs.callback(checked.close)
                         current = checked.current
                 elif not allow_pending and projection.pending(io, current):
                     raise ProjectRecoveryRequired("A complete generation is committed; explicitly recover its derived files first.")
                 yield io, current, checked
-            finally:
-                checked.close()
 
     def admit_open(self, *, before_import: Callable[[], object]) -> dict[str, Any]:
         """Admit an explicit open; only its own pristine store may be imported.
@@ -160,14 +181,16 @@ class FileProjectStore:
                 read_set: Mapping[str, str | None], write_set: Sequence[str],
                 metadata: dict[str, Any] | None = None,
                 projected_reads: Sequence[dict[str, Any]] = ()) -> dict[str, Any]:
-        with self._locked(repair=True) as (io, current):
-            return commands.public(io, commands.reserve(io, current, command_id, command_digest,
+        with self._checked_locked(repair=True) as (io, current, checked):
+            epoch = io.validation_epoch
+            record = commands.reserve(io, current, command_id, command_digest,
                 expected_generation=expected_generation, read_set=read_set, write_set=write_set,
-                metadata=metadata, projected_reads=projected_reads))
+                metadata=metadata, projected_reads=projected_reads, checked=checked)
+            return commands.public(io, record, checked=checked if io.validation_epoch == epoch else None)
 
     def mark_applying(self, command_id: str, command_digest: str) -> dict[str, Any]:
-        with self._locked(repair=True) as (io, _current):
-            record = state.command(io, command_id, command_digest)
+        with self._checked_locked(repair=True) as (io, _current, checked):
+            record = state.command(io, command_id, command_digest, checked=checked)
             if record is None:
                 raise ProjectStoreError("Reserve this command before native preparation.")
             # Return the admitted applying phase only to this one successful CAS.
@@ -179,69 +202,76 @@ class FileProjectStore:
               sources: Sequence[dict[str, Any]] | None = None,
               input_reads: Sequence[dict[str, str]] = (),
               expected_metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
-        with self._locked(repair=True) as (io, _current):
-            record = state.command(io, command_id, command_digest)
+        with self._checked_locked(repair=True) as (io, _current, checked):
+            record = state.command(io, command_id, command_digest, checked=checked)
             if record is None:
                 raise ProjectStoreError("Reserve this command before freezing a candidate.")
-            return commands.public(io, commands.stage(io, record, writes=writes, result=result,
+            epoch = io.validation_epoch
+            record = commands.stage(io, record, writes=writes, result=result,
                 review=review, artifacts=artifacts, sources=sources, input_reads=input_reads,
-                expected_metadata=expected_metadata), create_views=True)
+                expected_metadata=expected_metadata, checked=checked)
+            return commands.public(io, record, create_views=True,
+                                   checked=checked if io.validation_epoch == epoch else None)
 
     def decide(self, command_id: str, command_digest: str, *, decision_id: str, accept: bool) -> dict[str, Any]:
-        with self._locked(allow_pending=True) as (io, _current):
-            record = state.command(io, command_id, command_digest)
+        with self._checked_locked(allow_pending=True) as (io, _current, checked):
+            record = state.command(io, command_id, command_digest, checked=checked)
             if record is None:
                 raise ProjectStoreError("The frozen candidate does not exist.")
-            return commands.public(io, commands.decide(io, record, decision_id, accept))
+            epoch = io.validation_epoch
+            record = commands.decide(io, record, decision_id, accept)
+            return commands.public(io, record, checked=checked if io.validation_epoch == epoch else None)
 
     def publish(self, command_id: str, command_digest: str, *, writes: Mapping[str, bytes | Path | PreparedFile | None],
                 result: dict[str, Any], sources: Sequence[dict[str, Any]] | None = None,
                 artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None,
                 input_reads: Sequence[dict[str, str]] = (),
                 expected_metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
-        with self._locked(repair=True) as (io, current):
-            record = state.command(io, command_id, command_digest)
+        with self._checked_locked(repair=True) as (io, current, checked):
+            record = state.command(io, command_id, command_digest, checked=checked)
             if record is None:
                 raise ProjectStoreError("Reserve this command before publication.")
             from .input_reads import require_metadata
 
             require_metadata(record, expected_metadata)
             if record["phase"] == "complete":
-                return commands.public(io, record)
+                return commands.public(io, record, checked=checked)
             if record["phase"] not in {"reserved", "applying"}:
                 raise ProjectStoreError("Resume an accepted command or decide its exact reviewed candidate explicitly.")
             commands.stage(io, record, writes=writes, result=result, review={"execution": "immediate"},
                            artifacts=artifacts, sources=sources, input_reads=input_reads,
-                           expected_metadata=expected_metadata)
+                           expected_metadata=expected_metadata, checked=checked)
             commands.decide(io, record, record["decision_id"], True)
             return commands.public(io, publication.publish(io, current, record, frozen=record["draft"]), create_views=True)
 
     def publish_staged(self, command_id: str, command_digest: str) -> dict[str, Any]:
-        with self._locked(repair=True) as (io, current):
-            record = state.command(io, command_id, command_digest)
+        with self._checked_locked(repair=True) as (io, current, checked):
+            record = state.command(io, command_id, command_digest, checked=checked)
             if record is None or record.get("accepted") is not True:
                 raise ProjectStoreError("An exact accepted frozen candidate is required.")
-            commands.public(io, record)  # Verify the sealed descriptor before using it.
+            if record["phase"] == "complete":
+                return commands.public(io, record, create_views=True, checked=checked)
+            commands.public(io, record, checked=checked)  # Verify the sealed descriptor before using it.
             return commands.public(io, publication.publish(io, current, record, frozen=record["draft"]), create_views=True)
 
     def query(self, command_id: str) -> dict[str, Any] | None:
         if not (self.root / STORE / "head.json").exists():
             return None
-        with self._locked(allow_pending=True) as (io, current):
-            record = state.command(io, command_id)
-            return commands.public(io, record, projection_pending=projection.pending(io, current)) if record else None
+        with self._checked_locked(allow_pending=True) as (io, current, checked):
+            record = state.command(io, command_id, checked=checked)
+            return commands.public(io, record, projection_pending=projection.pending(io, current), checked=checked) if record else None
 
     def claim_native_workspace(self, command_id: str, command_digest: str, adapter: str) -> Path:
-        with self._locked(allow_pending=True) as (io, _current):
-            record = state.command(io, command_id, command_digest)
+        with self._checked_locked(allow_pending=True) as (io, _current, checked):
+            record = state.command(io, command_id, command_digest, checked=checked)
             if record is None:
                 raise ProjectStoreError("An admitted exact command must own native execution evidence.")
             return native_work.claim(io, record, adapter)
 
     def append_native_failure(self, command_id: str, command_digest: str, *, original_error: str,
                               renderer_dispatch_entered: bool, owned_invocation_closed: bool) -> dict[str, Any]:
-        with self._locked(allow_pending=True) as (io, _current):
-            record = state.command(io, command_id, command_digest)
+        with self._checked_locked(allow_pending=True) as (io, _current, checked):
+            record = state.command(io, command_id, command_digest, checked=checked)
             if record is None:
                 raise ProjectStoreError("No admitted command owns this native failure evidence.")
             return commands.public(io, native_work.append_failure(io, record, original_error=original_error,
@@ -265,8 +295,8 @@ class FileProjectStore:
                     "generation": current["generation"], "unknown_commands": sorted(unknown)}
 
     def read_bytes(self, logical: str, *, generation: str | None = None) -> bytes:
-        with self._locked() as (io, current):
-            value = state.reachable(io, current, generation) if generation else current
+        with self._checked_locked() as (io, current, checked):
+            value = state.reachable(io, current, generation, checked=checked) if generation else current
             if value["project_id"] != current["project_id"] or logical not in value["files"]:
                 raise ProjectStoreError("The logical resource is not a member of this generation.")
             return io.get(value["files"][logical])
@@ -329,8 +359,8 @@ class FileProjectStore:
                        locator: str, expected: str, source_id: str | None, tree: bool) -> Path | None:
         from .prepared_inputs import input_path, tree_path
 
-        with self._locked(allow_pending=True) as (io, current):
-            record = state.command(io, command_id, command_digest)
+        with self._checked_locked(allow_pending=True) as (io, current, checked):
+            record = state.command(io, command_id, command_digest, checked=checked)
             if record is None or record.get("decision_id") != decision_id:
                 raise ProjectConflict("Prepared inputs require their exact command and sealed decision.")
             if tree:

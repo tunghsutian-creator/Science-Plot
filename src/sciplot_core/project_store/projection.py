@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 import os
 import stat
 from typing import Any
@@ -104,93 +105,106 @@ def pending(io: StoreIO, current: dict[str, Any]) -> bool:
     return False
 
 
-def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any]) -> None:
+def project(io: StoreIO, record: dict[str, Any], current: dict[str, Any], *,
+            checked: state.CheckedHead | None = None) -> None:
     """Finish only old-or-exact-new projections; never overwrite foreign bytes."""
     if record.get("phase") == "complete":
         raise ProjectRecoveryRequired("A completed receipt cannot reacquire active installation rights.")
-    checked = state.checked_head(io)
-    if checked is None or checked.current != current:
-        raise ProjectRecoveryRequired("The publication head changed before its projection admission.")
-    current = checked.current
-    committed = committed_outcome(io, current, record, checked=checked)
-    if committed is None:
-        raise ProjectRecoveryRequired("An unpublished candidate cannot materialize active project bytes.")
-    require_roots(io, current, record)
-    verify_committed(io, current, record)
-    old, names = committed.parent, committed.files
-    from .generated_outputs import projection_names, require_projection_parent
-    missing = projection_names(record, committed.outcome)
-    rewritten = descendant_writes(io, current, committed.generation, checked=checked)
-    retired = _retired_source_directories(io, old, current, set(names))
-    # Validate the entire installation before the first replacement.
-    for name in names:
-        before, own, after = old["files"].get(name), committed.generation["files"].get(name), current["files"].get(name)
-        physical = io.physical(name)
-        actual = (sha(physical[0]), physical[1]) if physical else None
-        if name in missing and actual is None and after is not None:
-            require_projection_parent(io, record, name)
-        preimages = (after,) if name in rewritten else (None, own, after) if name in missing else (before, own, after)
-        allowed = {(entry["sha256"], entry["mode"]) if entry else None for entry in preimages}
-        if actual not in allowed:
-            raise ProjectRecoveryRequired(f"Outside bytes prevent generation recovery: {name}")
-    for name in names:
-        after = current["files"].get(name)
-        physical = io.physical(name)
-        if ((sha(physical[0]), physical[1]) if physical else None) == ((after["sha256"], after["mode"]) if after else None):
-            continue
-        state.boundary("before_projection")
+    with ExitStack() as proofs:
+        if checked is None:
+            checked = state.checked_head(io)
+            if checked is not None:
+                proofs.callback(checked.close)
+            if checked is None or checked.current != current:
+                raise ProjectRecoveryRequired("The publication head changed before its projection admission.")
+            current = checked.current
         checked.require(io, current)
-        io.verify_roots()
-        fd, components = io.split(name)
-        with directory(fd, components[:-1], create=after is not None and name not in missing) as parent:
-            # Check again at this physical boundary, after staging predecessor IO.
-            current_physical = io.physical(name)
-            actual = (sha(current_physical[0]), current_physical[1]) if current_physical else None
-            before = old["files"].get(name)
-            own = committed.generation["files"].get(name)
+        committed = committed_outcome(io, current, record, checked=checked)
+        if committed is None:
+            raise ProjectRecoveryRequired("An unpublished candidate cannot materialize active project bytes.")
+        require_roots(io, current, record)
+        verify_committed(io, current, record)
+        old, names = committed.parent, committed.files
+        from .generated_outputs import projection_names, require_projection_parent
+        missing = projection_names(record, committed.outcome)
+        rewritten = descendant_writes(io, current, committed.generation, checked=checked)
+        retired = _retired_source_directories(io, old, current, set(names))
+        # Validate the entire installation before the first replacement.
+        for name in names:
+            before, own, after = old["files"].get(name), committed.generation["files"].get(name), current["files"].get(name)
+            physical = io.physical(name)
+            actual = (sha(physical[0]), physical[1]) if physical else None
+            if name in missing and actual is None and after is not None:
+                require_projection_parent(io, record, name)
             preimages = (after,) if name in rewritten else (None, own, after) if name in missing else (before, own, after)
-            if actual not in {(entry["sha256"], entry["mode"]) if entry else None for entry in preimages}:
-                raise ProjectConflict("A derived view changed during generation materialization.")
-            if after is None:
-                os.unlink(components[-1], dir_fd=parent)
-                os.fsync(parent)
-            else:
-                if name in missing and actual is None:
-                    require_projection_parent(io, record, name)
-                install(parent, components[-1], io.get(after), mode=after["mode"], exclusive=name in missing and actual is None)
-        state.boundary("after_projection")
-    checked.require(io, current)
-    _retire_source_directories(io, retired, current, checked)
+            allowed = {(entry["sha256"], entry["mode"]) if entry else None for entry in preimages}
+            if actual not in allowed:
+                raise ProjectRecoveryRequired(f"Outside bytes prevent generation recovery: {name}")
+        for name in names:
+            after = current["files"].get(name)
+            physical = io.physical(name)
+            if ((sha(physical[0]), physical[1]) if physical else None) == ((after["sha256"], after["mode"]) if after else None):
+                continue
+            state.boundary("before_projection")
+            checked.require(io, current)
+            io.verify_roots()
+            fd, components = io.split(name)
+            with directory(fd, components[:-1], create=after is not None and name not in missing) as parent:
+                # Check again at this physical boundary, after staging predecessor IO.
+                current_physical = io.physical(name)
+                actual = (sha(current_physical[0]), current_physical[1]) if current_physical else None
+                before = old["files"].get(name)
+                own = committed.generation["files"].get(name)
+                preimages = (after,) if name in rewritten else (None, own, after) if name in missing else (before, own, after)
+                if actual not in {(entry["sha256"], entry["mode"]) if entry else None for entry in preimages}:
+                    raise ProjectConflict("A derived view changed during generation materialization.")
+                if after is None:
+                    os.unlink(components[-1], dir_fd=parent)
+                    os.fsync(parent)
+                else:
+                    if name in missing and actual is None:
+                        require_projection_parent(io, record, name)
+                    install(parent, components[-1], io.get(after), mode=after["mode"], exclusive=name in missing and actual is None)
+            state.boundary("after_projection")
+        checked.require(io, current)
+        _retire_source_directories(io, retired, current, checked)
 
 
 def recover(io: StoreIO, current: dict[str, Any], *, checked: state.CheckedHead | None = None) -> list[str]:
-    if checked is None:
-        checked = state.checked_head(io)
-        if checked is None or checked.current != current:
-            raise ProjectRecoveryRequired("Recovery must bind its exact checked head.")
-        current = checked.current
-    checked.require(io, current)
-    pending_records = []
-    for record in state.read_commands(io, expected=current["commands"]):
-        committed = committed_outcome(io, current, record, checked=checked)
-        if committed is not None and record.get("phase") != "complete":
-            pending_records.append((record, committed))
-    # Validate every derived record before relocation or any active replacement.
-    require_roots(io, current, exemptions=root_exemptions(io, current))
-    relocate(io, current)
-    recovered: list[str] = []
-    for record, committed in pending_records:
-        project(io, record, current)
-        record.update(phase="complete", generation=committed.generation["generation"], result=committed.outcome["result"])
-        state.save_command(io, record)
-        recovered.append(record["command_id"])
-    return recovered
+    with ExitStack() as proofs:
+        if checked is None:
+            checked = state.checked_head(io)
+            if checked is not None:
+                proofs.callback(checked.close)
+            if checked is None or checked.current != current:
+                raise ProjectRecoveryRequired("Recovery must bind its exact checked head.")
+            current = checked.current
+        checked.require(io, current)
+        pending_records = []
+        for record in state.read_commands(io, expected=current["commands"]):
+            committed = committed_outcome(io, current, record, checked=checked)
+            if committed is not None and record.get("phase") != "complete":
+                pending_records.append((record, committed))
+        # Validate every derived record before relocation or any active replacement.
+        require_roots(io, current, exemptions=root_exemptions(io, current))
+        relocated = relocate(io, current)
+        # A completed relocation has performed physical IO outside this proof's
+        # window. Each receipt save below also ends the prior validation window.
+        admission = None if relocated else checked
+        recovered: list[str] = []
+        for record, committed in pending_records:
+            project(io, record, current, checked=admission)
+            record.update(phase="complete", generation=committed.generation["generation"], result=committed.outcome["result"])
+            state.save_command(io, record)
+            admission = None
+            recovered.append(record["command_id"])
+        return recovered
 
 
-def relocate(io: StoreIO, current: dict[str, Any]) -> None:
+def relocate(io: StoreIO, current: dict[str, Any]) -> bool:
     plan = io.read("relocation.json")
     if plan is None or plan.get("complete") is True:
-        return
+        return False
     if plan.get("generation") != current["generation"] or set(plan["files"]) != set(current["files"]):
         raise ProjectRecoveryRequired("The cold relocation plan no longer matches the complete generation.")
     for name in plan["files"]:
@@ -205,3 +219,4 @@ def relocate(io: StoreIO, current: dict[str, Any]) -> None:
         with directory(fd, components[:-1], create=True) as parent:
             install(parent, components[-1], io.get(entry), mode=entry["mode"], exclusive=True)
     io.write("relocation.json", {**plan, "complete": True})
+    return True

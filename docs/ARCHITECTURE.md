@@ -1400,6 +1400,17 @@ and native content identity have separate meanings. A standalone semantic
 aggregate retains its existing repository owner and format. The
 `PlotService` compatibility facade constructs concrete ports and routes separate
 native-project aggregates; it contains no competing semantic state machine.
+
+One owned Store admission carries its existing `CheckedHead` through read-only
+command, projection and historical-member helpers while the IO, head, epoch,
+process/thread and exact root capabilities remain valid. It closes its own proof
+on every exit; borrowed proofs stay with their original owner. Another public
+call, lease reopening or mutation requires a fresh admission. Source/native IO,
+publication and materialization retain their explicit fresh checks; an unchanged
+IO epoch alone does not certify external work. This shares validated immutable
+history within that window, not file bytes, raw-source observations or PASS across
+operations. Every consumed object is still read and verified.
+
 Prepared template adoption is an invocation-scoped read constraint in
 `project_lifecycle/prepared_admission.py`. Every attached storage batch carries
 its validated project reads, memberships and original source-tree witnesses into

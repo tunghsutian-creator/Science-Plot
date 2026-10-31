@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
@@ -21,8 +22,11 @@ import sciplot_core.project_store.preconditions as preconditions
 
 def reserve(io: StoreIO, current: dict[str, Any], command_id: str, command_digest: str, *,
             expected_generation: str | None, read_set: Mapping[str, str | None], write_set: Sequence[str],
-            metadata: dict[str, Any] | None, projected_reads: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    existing = state.command(io, command_id, command_digest)
+            metadata: dict[str, Any] | None, projected_reads: Sequence[dict[str, Any]],
+            checked: state.CheckedHead | None = None) -> dict[str, Any]:
+    if checked is not None:
+        checked.require(io, current)
+    existing = state.command(io, command_id, command_digest, checked=checked)
     if existing is not None:
         return existing
     scope_local_import(io, current)
@@ -140,10 +144,13 @@ def capture_sources(io: StoreIO, sources: Sequence[dict[str, Any]] | None) -> di
 def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | Path | PreparedFile | None],
           result: dict[str, Any], review: dict[str, Any], artifacts: Mapping[str, bytes | Path | PreparedFile] | None,
           sources: Sequence[dict[str, Any]] | None, input_reads: Sequence[dict[str, str]] = (),
-          expected_metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
+          expected_metadata: Mapping[str, Any] | None = None,
+          checked: state.CheckedHead | None = None) -> dict[str, Any]:
     from .input_reads import require_metadata
 
     require_metadata(record, expected_metadata)
+    if checked is not None:
+        checked.require(io, checked.current)
     if record["phase"] in {"needs_review", "accepted", "rejected", "complete"}:
         return record
     if record["phase"] not in {"reserved", "applying"}:
@@ -152,7 +159,7 @@ def stage(io: StoreIO, record: dict[str, Any], *, writes: Mapping[str, bytes | P
         raise ProjectStoreError("The candidate must exactly cover the declared write set.")
     from .source_trees import require as require_source_trees
 
-    current = state.head(io)
+    current = checked.current if checked is not None else state.head(io)
     assert current is not None
     require_source_trees(io, current, record)
     from .generated_outputs import require as require_missing, validate_writes
@@ -222,59 +229,63 @@ def decide(io: StoreIO, record: dict[str, Any], decision_id: str, accept: bool) 
 
 def public(io: StoreIO, record: dict[str, Any], *, create_views: bool = False,
            projection_pending: bool = False, checked: state.CheckedHead | None = None) -> dict[str, Any]:
-    result = dict(record)
-    checked = checked if checked is not None else state.checked_head(io)
-    current = checked.current if checked is not None else None
-    if checked is not None:
-        checked.require(io, checked.current)
-    committed = committed_outcome(io, current, record, checked=checked) if current else None
-    if committed is not None and record.get("phase") != "complete":
-        result["committed_generation"] = committed.generation["generation"]
-        projection_pending = True
-    if result["phase"] == "applying":
-        result["phase"] = "unknown"
-    result["generation_sequence"] = state.reachable(io, current, result["generation"], checked=checked)["sequence"] if current else None
-    result["projection_pending"] = projection_pending
-    if record.get("native_workspace") is not None:
-        import sciplot_core.project_store.native_work as native_work
+    with ExitStack() as proofs:
+        result = dict(record)
+        if checked is None:
+            checked = state.checked_head(io)
+            if checked is not None:
+                proofs.callback(checked.close)
+        current = checked.current if checked is not None else None
+        if checked is not None:
+            checked.require(io, checked.current)
+        committed = committed_outcome(io, current, record, checked=checked) if current else None
+        if committed is not None and record.get("phase") != "complete":
+            result["committed_generation"] = committed.generation["generation"]
+            projection_pending = True
+        if result["phase"] == "applying":
+            result["phase"] = "unknown"
+        result["generation_sequence"] = state.reachable(io, current, result["generation"], checked=checked)["sequence"] if current else None
+        result["projection_pending"] = projection_pending
+        if record.get("native_workspace") is not None:
+            import sciplot_core.project_store.native_work as native_work
 
-        result["native_workspace_path"] = str(native_work.verify(io, record)[0])
-    draft = record.get("draft")
-    if draft is not None:
-        draft = state.sealed_draft(io, record)
-        expected = record["decision_id"]
-        for key, field in (("writes", "staged_paths"), ("artifacts", "artifact_paths")):
-            paths = {}
-            all_views = bool(draft[key])
-            for logical, entry in draft[key].items():
-                if entry is None:
-                    continue
-                components = ("drafts", digest(record["command_id"]), expected, key, *parts(logical))
-                data = io.get(entry)
-                view_exists = False
-                try:
-                    with directory(io.fd, components[:-1], create=create_views) as parent:
+            result["native_workspace_path"] = str(native_work.verify(io, record)[0])
+        draft = record.get("draft")
+        if draft is not None:
+            draft = state.sealed_draft(io, record)
+            expected = record["decision_id"]
+            for key, field in (("writes", "staged_paths"), ("artifacts", "artifact_paths")):
+                paths = {}
+                all_views = bool(draft[key])
+                for logical, entry in draft[key].items():
+                    if entry is None:
+                        continue
+                    components = ("drafts", digest(record["command_id"]), expected, key, *parts(logical))
+                    data = io.get(entry)
+                    view_exists = False
+                    try:
+                        with directory(io.fd, components[:-1], create=create_views) as parent:
+                            if create_views:
+                                try:
+                                    install(parent, components[-1], data, mode=0o400, exclusive=True)
+                                except FileExistsError:
+                                    pass
+                            if read_file(parent, components[-1])[0] != data:
+                                raise ProjectConflict("A sealed candidate view has conflicting bytes.")
+                            view_exists = True
+                    except FileNotFoundError:
                         if create_views:
-                            try:
-                                install(parent, components[-1], data, mode=0o400, exclusive=True)
-                            except FileExistsError:
-                                pass
-                        if read_file(parent, components[-1])[0] != data:
-                            raise ProjectConflict("A sealed candidate view has conflicting bytes.")
-                        view_exists = True
-                except FileNotFoundError:
-                    if create_views:
-                        raise
-                sealed = Path(*components) if view_exists else Path("objects", entry["sha256"][:2], entry["sha256"])
-                all_views = all_views and view_exists
-                paths[logical] = str(io.root / ".sciplot_store" / sealed)
-            result[field] = paths
-            result["artifact_root" if key == "artifacts" else "staged_root"] = (
-                str(io.root / ".sciplot_store" / "drafts" / digest(record["command_id"]) / expected / key)
-                if all_views else None)
-    if checked is not None:
-        checked.require(io, checked.current)
-    return result
+                            raise
+                    sealed = Path(*components) if view_exists else Path("objects", entry["sha256"][:2], entry["sha256"])
+                    all_views = all_views and view_exists
+                    paths[logical] = str(io.root / ".sciplot_store" / sealed)
+                result[field] = paths
+                result["artifact_root" if key == "artifacts" else "staged_root"] = (
+                    str(io.root / ".sciplot_store" / "drafts" / digest(record["command_id"]) / expected / key)
+                    if all_views else None)
+        if checked is not None:
+            checked.require(io, checked.current)
+        return result
 
 
 def verify_sources(io: StoreIO, sources: Mapping[str, Any], record: dict[str, Any] | None = None) -> None:

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import os
 from pathlib import Path
+from threading import get_ident
 from typing import Any
 from types import MappingProxyType
 
@@ -42,11 +44,18 @@ class CheckedHead:
         self.current = value
         self._generations = MappingProxyType(generations)
         self._io, self._fd, self._epoch = io, io.fd, io.validation_epoch
+        self._owner, self._root = (os.getpid(), get_ident()), io.root
+        self._roots = dict(io.root_fds)
+        self._locations, self._members = dict(io.locations), dict(io.location_members)
+        self._backups = dict(io.namespace_backups)
         self._active = True
 
     def require(self, io: StoreIO, current: dict[str, Any]) -> None:
         if (not self._active or io is not self._io or io.fd != self._fd or io.fd < 0
-                or io.validation_epoch != self._epoch or current is not self.current):
+                or io.validation_epoch != self._epoch or current is not self.current
+                or self._owner != (os.getpid(), get_ident()) or io.root != self._root
+                or io.root_fds != self._roots or io.locations != self._locations
+                or io.location_members != self._members or io.namespace_backups != self._backups):
             raise ProjectConflict("A checked history cannot cross its IO, head or mutation boundary.")
 
     def reachable(self, io: StoreIO, current: dict[str, Any], identity: str) -> dict[str, Any]:
@@ -86,7 +95,12 @@ def checked_head(io: StoreIO) -> CheckedHead | None:
 
 def head(io: StoreIO) -> dict[str, Any] | None:
     checked = checked_head(io)
-    return checked.current if checked is not None else None
+    if checked is None:
+        return None
+    try:
+        return checked.current
+    finally:
+        checked.close()
 
 
 def reachable(io: StoreIO, current: dict[str, Any], identity: str, *, checked: CheckedHead | None = None) -> dict[str, Any]:
@@ -137,12 +151,17 @@ def import_legacy(io: StoreIO) -> dict[str, Any]:
     return value
 
 
-def command(io: StoreIO, command_id: str, command_digest: str | None = None) -> dict[str, Any] | None:
+def command(io: StoreIO, command_id: str, command_digest: str | None = None, *,
+            checked: CheckedHead | None = None) -> dict[str, Any] | None:
     from .errors import ProjectCommandConflict
 
+    if checked is not None:
+        checked.require(io, checked.current)
     value = read_command(io, command_path(command_id))
+    if checked is not None:
+        checked.require(io, checked.current)
     if value is None:
-        current = head(io)
+        current = checked.current if checked is not None else head(io)
         if current is not None and command_id in current["commands"]:
             raise ProjectRecoveryRequired("A committed command has no exact derived receipt; it is not a new command.")
     if value is not None and (value.get("command_id") != command_id

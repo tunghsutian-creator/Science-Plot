@@ -293,6 +293,7 @@ class StoreIO:
                     pass
 
     def put(self, data: bytes) -> dict[str, Any]:
+        self.validation_epoch += 1
         key = sha(data)
         with directory(self.fd, ("objects", key[:2]), create=True) as parent:
             try:
