@@ -84,6 +84,25 @@ class ProjectSourceResolver:
             return self.store.literal_path(path, generation=self.generation)
         return str(path)
 
+    def file_paths(self, actual: Path, *, expected_sha256: str | None = None,
+                   source_id: str | None = None) -> tuple[str, Path]:
+        # Only this measured concrete resolver's registered physical members
+        # have a pure locator pair. Subclasses may capture original sources or
+        # materialize private views, so they retain two independent admissions.
+        physical = actual.expanduser().absolute()
+        registered = False
+        if type(self) is ProjectSourceResolver and selected_expectations(self.snapshot) is None:
+            for name in self.snapshot["files"]:
+                key, separator, relative = name.partition("/")
+                root = self.store.locations.get(key[1:]) if key.startswith("@") else self.store.root
+                if root is not None and physical == root / (relative if key.startswith("@") and separator else name):
+                    registered = True
+                    break
+        with self.store._validation_window() if registered else nullcontext():
+            literal = self.literal_path(actual)
+            resolved = self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)
+            return literal, resolved
+
     def binding(self) -> dict[str, Any]:
         value = {"kind": "sciplot_project_runtime", "version": 1, "root": str(self.store.root),
                 "project_id": self.snapshot["project_id"], "generation": self.generation,

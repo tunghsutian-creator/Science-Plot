@@ -50,8 +50,11 @@ def _read_source(path: Path, version: str) -> tuple[bytes, int]:
 
 
 def prepared_sources(store: FileProjectStore, sources: Iterable[dict[str, Any]], *,
-                     force: frozenset[tuple[str, str]] = frozenset()) -> tuple[PreparedSource, ...]:
-    snapshot = store.snapshot()
+                     force: frozenset[tuple[str, str]] = frozenset(),
+                     snapshot: dict[str, Any] | None = None) -> tuple[PreparedSource, ...]:
+    # A caller may supply its immediately observed metadata, never a live proof.
+    # Actual captures below and the later publication/source CAS stay fresh.
+    snapshot = store.snapshot() if snapshot is None else snapshot
     collected: dict[tuple[str, str], set[str]] = {}
     for source in sources:
         aliases = collected.setdefault((source["path"], source["sha256"]), set())

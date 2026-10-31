@@ -41,15 +41,15 @@ def prepared_source(tmp_path, monkeypatch):
 
 def test_native_audit_uses_the_declared_version_for_capture_and_recapture(prepared_source, monkeypatch):
     store, raw, original, native, spec_path, _spec = prepared_source
-    resolve = file_snapshots.resolve_source_path
+    resolve = file_snapshots.source_file_paths
     observed = []
 
-    def checked(path, **kwargs):
+    def checked(path, *, expected_sha256=None, source_id=None):
         if Path(path) == raw:
-            observed.append(kwargs.get("expected_sha256"))
-        return resolve(path, **kwargs)
+            observed.append(expected_sha256)
+        return resolve(path, expected_sha256=expected_sha256, source_id=source_id)
 
-    monkeypatch.setattr(file_snapshots, "resolve_source_path", checked)
+    monkeypatch.setattr(file_snapshots, "source_file_paths", checked)
     before = store.snapshot()["generation"]
     with project_runtime(store):
         result = audit.audit_native_candidate(native, spec_path)
@@ -72,15 +72,15 @@ def run_audit(prepared, monkeypatch, consumer):
 
 def test_managed_audit_uses_the_declared_version_for_capture_and_recapture(prepared_source, monkeypatch):
     _store, raw, original, _native, _spec_path, _spec = prepared_source
-    resolve = file_snapshots.resolve_source_path
+    resolve = file_snapshots.source_file_paths
     observed = []
 
-    def checked(path, **kwargs):
+    def checked(path, *, expected_sha256=None, source_id=None):
         if Path(path) == raw:
-            observed.append(kwargs.get("expected_sha256"))
-        return resolve(path, **kwargs)
+            observed.append(expected_sha256)
+        return resolve(path, expected_sha256=expected_sha256, source_id=source_id)
 
-    monkeypatch.setattr(file_snapshots, "resolve_source_path", checked)
+    monkeypatch.setattr(file_snapshots, "source_file_paths", checked)
     result = run_audit(prepared_source, monkeypatch, "managed")
     assert result["status"] == "passed" and result["document_count"] == 1
     assert result["documents"][0]["prepared_source_derivation"]["status"] == "passed"

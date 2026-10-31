@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Literal, TypedDict
-from sciplot_core.delivery.runtime_evidence import path_identity, launcher_contract_identity, recorded_path_exists
+from sciplot_core.delivery.runtime_evidence import path_identity, launcher_contract_identity, recorded_artifacts_ready
 
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
@@ -338,17 +338,7 @@ def verify_delivery_package(
             "reason": "delivery_binding_policy_missing_or_invalid",
         }
         plan_figure_hashes_current = False
-    artifact_records_ready = bool(
-        isinstance(artifacts, list)
-        and artifacts
-        and all(
-            isinstance(item, dict)
-            and item.get("exists") is True
-            and isinstance(item.get("path"), str)
-            and recorded_path_exists(item["path"])
-            for item in artifacts
-        )
-    )
+    artifact_records_ready = recorded_artifacts_ready(artifacts)
     checks = {
         "record_kind_current": record.get("kind") == "sciplot_user_delivery_package"
         and record.get("version") == DELIVERY_PACKAGE_CONTRACT_VERSION,

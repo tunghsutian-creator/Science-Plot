@@ -45,6 +45,10 @@ class SelectedSource:
         assert actual == self.actual
         return self.source["path"]
 
+    def file_paths(self, actual, *, expected_sha256=None, source_id=None):
+        literal = self.literal_path(actual)
+        return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)
+
 
 @pytest.mark.parametrize("projection", ["same-physical", "equal-bytes-distinct-physical"])
 def test_source_group_checks_each_identity_then_compares_physical_io_without_rewriting_locator(tmp_path, projection):
@@ -83,6 +87,10 @@ def test_source_group_checks_each_identity_then_compares_physical_io_without_rew
         def literal_path(self, path):
             assert path in views  # This port recognizes its approved spelling, not its symlink target.
             return sources[views.index(path)]["path"]
+
+        def file_paths(self, actual, *, expected_sha256=None, source_id=None):
+            literal = self.literal_path(actual)
+            return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)
 
     before = deepcopy(document)
     with source_location_scope(StrictAliases()):
@@ -134,6 +142,10 @@ def test_source_group_propagates_each_member_admission_refusal_before_equal_phys
 
         def literal_path(self, _actual):
             pytest.fail("A refused source cannot authorize reverse lookup or fallback.")
+
+        def file_paths(self, actual, *, expected_sha256=None, source_id=None):
+            literal = self.literal_path(actual)
+            return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)
 
     error = {"source-id": ProjectConflict, "version": ProjectSourceVersionMismatch, "permission": PermissionError}[refusal]
     before = deepcopy(document)
@@ -301,6 +313,10 @@ def test_currentness_does_not_replace_refused_source_io_with_the_original(tmp_pa
                 raise ValueError("The selected source is unavailable")
             return super().resolve_path(original, expected_sha256=expected_sha256, source_id=source_id)
 
+        def file_paths(self, actual, *, expected_sha256=None, source_id=None):
+            literal = self.literal_path(actual)
+            return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)
+
     if failure == "changed_bytes":
         actual.write_text("Time,Signal\ns,V\n0,99\n1,99\n2,99\n")
     with source_location_scope(Refused(source, actual)):
@@ -327,6 +343,10 @@ def test_locator_failure_never_falls_back_to_same_name_original_or_blesses_chang
             if failure != "changed_bytes":
                 raise ValueError("The explicitly selected source version is unavailable")
             return super().resolve_path(original, expected_sha256=expected_sha256, source_id=source_id)
+
+        def file_paths(self, actual, *, expected_sha256=None, source_id=None):
+            literal = self.literal_path(actual)
+            return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)
     locator = Refused(source, actual)
     if failure == "changed_bytes":
         actual.write_text("Time,Signal\ns,V\n0,99\n1,99\n2,99\n")

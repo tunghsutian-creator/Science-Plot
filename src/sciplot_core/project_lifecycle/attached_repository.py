@@ -1,6 +1,6 @@
 """The semantic logical repository on the existing complete-generation byte owner."""
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
@@ -94,14 +94,29 @@ class AttachedProjectRepository(FileProjectRepository):
         return result
 
     def load_revision(self, root: Path, revision: int) -> dict[str, Any]:
-        envelope = self._load_revision_envelope(root, revision)
-        result = self.runtime_envelope(root, envelope)
-        if self.has_head(root) and self._head_envelope(root)["document"]["revision"] != revision:
-            from .attachment_versions import introduced_generation
+        with self.attachment.store._validation_window():
+            envelope = self._load_revision_envelope(root, revision)
+            result = self.runtime_envelope(root, envelope)
+            if self.has_head(root) and self._head_envelope(root)["document"]["revision"] != revision:
+                from .attachment_versions import introduced_generation
 
-            logical = self.attachment.logical(root / "revisions" / f"{revision:08d}.json")
-            result["binding"]["_semantic_project_generation"] = introduced_generation(self.attachment.store, logical)
-        return result
+                logical = self.attachment.logical(root / "revisions" / f"{revision:08d}.json")
+                result["binding"]["_semantic_project_generation"] = introduced_generation(self.attachment.store, logical)
+            return result
+
+    def _head_envelope(self, root: Path) -> dict[str, Any]:
+        with self.attachment.store._validation_window():
+            return super()._head_envelope(root)
+
+    def active(self, root: Path) -> dict[str, Any] | None:
+        with self.attachment.store._validation_window():
+            return super().active(root)
+
+    def persist(self, root: Path, transaction: dict[str, Any]) -> None:
+        # Identity reads and in-memory overlays form one metadata transaction.
+        # storage_batch closes its proof before actual source capture/publication.
+        with self.storage_batch(root, _metadata_only=True):
+            super().persist(root, transaction)
 
     def _materialize_history(self) -> None:
         from sciplot_core.project_store.io import install
@@ -126,58 +141,64 @@ class AttachedProjectRepository(FileProjectRepository):
         return result
 
     @contextmanager
-    def storage_batch(self, root: Path) -> Iterator[None]:
+    def storage_batch(self, root: Path, *, _metadata_only: bool = False) -> Iterator[None]:
         if self._batch.get() is not None:
-            yield
+            with self.attachment.store._validation_window() if _metadata_only else nullcontext():
+                yield
             return
         prepared = prepared_batch(self.attachment.store)
-        batch = (_Batch(prepared[0], prepared=prepared[1]) if prepared is not None
-                 else _Batch(self.attachment.store.snapshot()))
-        token = self._batch.set(batch)
+        token = None
         try:
-            yield
+            with self.attachment.store._validation_window() if _metadata_only else nullcontext():
+                batch = (_Batch(prepared[0], prepared=prepared[1]) if prepared is not None
+                         else _Batch(self.attachment.store.snapshot()))
+                token = self._batch.set(batch)
+                yield
             self._flush(batch)
         finally:
-            self._batch.reset(token)
+            if token is not None:
+                self._batch.reset(token)
 
     def _flush(self, batch: _Batch) -> None:
         if not batch.writes:
             return
-        index = read_index(self.attachment.store, batch.snapshot)
-        identity = self.attachment.entry["id"]
-        existing = index["attachments"].get(identity)
-        if existing is not None and existing != self.attachment.entry:
-            raise EngineError("semantic_attachment_identity_conflict", "A stable semantic attachment cannot be redirected.")
-        if existing is None:
-            index["attachments"][identity] = self.attachment.entry
-            batch.writes[INDEX] = encode(index)
-            batch.reads[INDEX] = batch.snapshot["files"].get(INDEX, {}).get("sha256")
-        marker = self.attachment.entry["namespace"] + "/" + OWNER
-        if marker not in batch.snapshot["files"]:
-            batch.writes[marker] = encode({"kind": "sciplot_semantic_owner", "version": 1,
-                "origin_root": str(self.attachment.root), "project": str(self.attachment.store.root),
-                "project_id": batch.snapshot["project_id"], "attachment_id": identity})
-            batch.reads[marker] = None
-        writes = {name: data for name, data in batch.writes.items()
-                  if data is None or hashlib.sha256(data).hexdigest() != batch.snapshot["files"].get(name, {}).get("sha256")}
-        if not writes:
-            return
-        for name in writes:
-            batch.reads.setdefault(name, batch.snapshot["files"].get(name, {}).get("sha256"))
-        sources = []
-        for logical, payload in writes.items():
-            if payload is not None:
-                try:
-                    sources.extend(record_sources(logical, json.loads(payload)))
-                except (UnicodeError, ValueError):
-                    pass  # Immutable binary/native resources are not source declarations.
-        resolver = self._source.get()
-        bound = {(source["path"], source["sha256"]) for source in sources}
-        incoming = [item for item in resolver.pending if item.get("logical") in batch.snapshot["files"]
-                    and (item["path"], item["sha256"]) in bound
-                    and batch.snapshot["files"][item["logical"]]["sha256"] != item["sha256"]] if resolver else []
+        with self.attachment.store._validation_window():
+            index = read_index(self.attachment.store, batch.snapshot)
+            identity = self.attachment.entry["id"]
+            existing = index["attachments"].get(identity)
+            if existing is not None and existing != self.attachment.entry:
+                raise EngineError("semantic_attachment_identity_conflict", "A stable semantic attachment cannot be redirected.")
+            if existing is None:
+                index["attachments"][identity] = self.attachment.entry
+                batch.writes[INDEX] = encode(index)
+                batch.reads[INDEX] = batch.snapshot["files"].get(INDEX, {}).get("sha256")
+            marker = self.attachment.entry["namespace"] + "/" + OWNER
+            if marker not in batch.snapshot["files"]:
+                batch.writes[marker] = encode({"kind": "sciplot_semantic_owner", "version": 1,
+                    "origin_root": str(self.attachment.root), "project": str(self.attachment.store.root),
+                    "project_id": batch.snapshot["project_id"], "attachment_id": identity})
+                batch.reads[marker] = None
+            writes = {name: data for name, data in batch.writes.items()
+                      if data is None or hashlib.sha256(data).hexdigest() != batch.snapshot["files"].get(name, {}).get("sha256")}
+            if not writes:
+                return
+            for name in writes:
+                batch.reads.setdefault(name, batch.snapshot["files"].get(name, {}).get("sha256"))
+            sources = []
+            for logical, payload in writes.items():
+                if payload is not None:
+                    try:
+                        sources.extend(record_sources(logical, json.loads(payload)))
+                    except (UnicodeError, ValueError):
+                        pass  # Immutable binary/native resources are not source declarations.
+            resolver = self._source.get()
+            bound = {(source["path"], source["sha256"]) for source in sources}
+            incoming = [item for item in resolver.pending if item.get("logical") in batch.snapshot["files"]
+                        and (item["path"], item["sha256"]) in bound
+                        and batch.snapshot["files"][item["logical"]]["sha256"] != item["sha256"]] if resolver else []
+            source_snapshot = self.attachment.store.snapshot()
         captured = prepared_sources(self.attachment.store, sources,
-                                   force=frozenset((item["path"], item["sha256"]) for item in incoming))
+                                   force=frozenset((item["path"], item["sha256"]) for item in incoming), snapshot=source_snapshot)
         observations = {}
         for item in incoming:
             logical = item["logical"]
@@ -220,8 +241,8 @@ class AttachedProjectRepository(FileProjectRepository):
         # callback. Writes and source fences expire its checked history.
         with self.attachment.store._validation_window():
             ProjectCommands(self.attachment.store).publish_prepared(command, mutation)
-        if resolver is not None:
-            resolver.refresh()
+            if resolver is not None:
+                resolver.refresh()
 
     def _member(self, logical: str) -> ObservedMember:
         batch = self._batch.get()

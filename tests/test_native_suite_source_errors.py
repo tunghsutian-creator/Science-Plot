@@ -63,6 +63,10 @@ def test_suite_boundary_preserves_unrelated_failures_without_string_matching(err
         def literal_path(self, path):
             return str(path)
 
+        def file_paths(self, actual, *, expected_sha256=None, source_id=None):
+            literal = self.literal_path(actual)
+            return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)
+
     with source_location_scope(Resolver()), pytest.raises(type(error)) as caught:
         _check_sources([{"path": "/selected/source.csv", "sha256": "a" * 64}])
     assert caught.value is error
