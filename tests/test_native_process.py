@@ -148,6 +148,40 @@ def test_default_cold_runner_observes_subprocess_patch_after_import(tmp_path, mo
     assert calls == [((argv,), kwargs)]
 
 
+def test_fresh_service_import_keeps_popen_tracking_and_unresolved_annotations():
+    script = '''
+import inspect
+import json
+import subprocess
+import sys
+
+original = subprocess.Popen
+calls = []
+def tracked(*args, **kwargs):
+    process = original(*args, **kwargs)
+    calls.append(process.pid)
+    return process
+
+subprocess.Popen = tracked
+assert "sciplot_core.native_process.session" not in sys.modules
+from sciplot_core.plot_engine.service import PlotService
+from sciplot_core.native_process.session import PersistentWorker
+assert callable(PlotService)
+annotations = inspect.get_annotations(PersistentWorker._start, eval_str=False)
+assert annotations == {"return": "subprocess.Popen[bytes]"}, annotations
+with subprocess.Popen([sys.executable, "-c", "print('tracked child')"],
+                      stdout=subprocess.PIPE, text=True) as child:
+    stdout, _ = child.communicate(timeout=10)
+assert child.returncode == 0 and stdout == "tracked child\\n"
+assert calls == [child.pid]
+print(json.dumps({"return_annotation": annotations["return"], "tracked_processes": len(calls)}))
+'''
+    result = subprocess.run([sys.executable, "-c", script], env=session.veusz_worker_environment(),
+                            capture_output=True, text=True, timeout=30, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout) == {"return_annotation": "subprocess.Popen[bytes]", "tracked_processes": 1}
+
+
 def test_explicit_cold_runner_remains_authoritative_after_subprocess_patch(monkeypatch):
     calls = []
 

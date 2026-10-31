@@ -534,6 +534,12 @@ loss carries the original request identity and never silently resends a mutation
 Files are verified when a request uses them; there is no background source
 recomputation or claim of a general live filesystem watcher.
 
+Process-callable instrumentation can precede a cold service import.
+`native_process.session` postpones type annotations so supported interpreters do
+not evaluate `Popen[T]` on an installed callable tracker. The original process
+ownership, natural-exit, deadline and source/runtime checks remain in force;
+tracing does not preload the service to hide an import-order failure.
+
 While `serve()` owns the main thread, a temporary SIGTERM handler requests a
 normal stop after the current bounded request. The existing service `finally`
 closes the native worker through EOF and an actual wait, then removes the owned

@@ -1,5 +1,7 @@
 """One serial native process, with bounded lifetime and fail-closed disconnection."""
 
+from __future__ import annotations
+
 import atexit
 from collections.abc import Iterator
 from contextlib import contextmanager
