@@ -142,33 +142,40 @@ def test_kernel_descriptor_path_is_fresh_and_nonfilesystem_is_not_a_file(tmp_pat
             original = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
             descriptor = os.dup(original)
             descriptors.extend([original, descriptor])
-            assert _fd_path(descriptor) == (tmp_path, None)
+            access = _fd_path(descriptor)
+            assert access.path == tmp_path and access.issue is None
         elif kind == "reused_file":
             original = os.open(source, os.O_RDONLY)
             descriptor = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
             descriptors.extend([original, descriptor])
-            assert _fd_path(descriptor) == (tmp_path, None)
+            access = _fd_path(descriptor)
+            assert access.path == tmp_path and access.issue is None
             os.dup2(original, descriptor)
-            assert _fd_path(descriptor) == (source, None)
+            access = _fd_path(descriptor)
+            assert access.path == source and access.issue is None
         elif kind == "invalid":
             descriptor = os.open(source, os.O_RDONLY)
             os.close(descriptor)
-            assert _fd_path(descriptor) == (None, "invalid_descriptor")
+            access = _fd_path(descriptor)
+            assert access.path is None and access.issue == "invalid_descriptor"
         elif kind == "deleted_file":
             descriptor = os.open(source, os.O_RDONLY)
             descriptors.append(descriptor)
             source.unlink()
-            assert _fd_path(descriptor) == (None, "unknown_descriptor")
+            access = _fd_path(descriptor)
+            assert access.path is None and access.issue == "unknown_descriptor"
         elif kind in {"pipe_read", "pipe_write"}:
             read, write = os.pipe()
             descriptors.extend([read, write])
-            assert _fd_path(read if kind == "pipe_read" else write) == (None, "nonfilesystem_pipe")
+            access = _fd_path(read if kind == "pipe_read" else write)
+            assert access.path is None and access.issue == "nonfilesystem_pipe"
         elif kind == "named_fifo":
             source.unlink()
             os.mkfifo(source)
             descriptor = os.open(source, os.O_RDONLY | os.O_NONBLOCK)
             descriptors.append(descriptor)
-            assert _fd_path(descriptor) == (source, None)
+            access = _fd_path(descriptor)
+            assert access.path == source and access.issue is None
     finally:
         for descriptor in descriptors:
             os.close(descriptor)
@@ -359,7 +366,7 @@ def test_actual_temporaryfile_write_seek_read_close_keeps_original_requests(tmp_
         " info=os.fstat(stderr.fileno())\n"
         " assert stat.S_ISREG(info.st_mode) and info.st_nlink==0\n"
         " stderr.write(b'generated stderr');stderr.seek(0);assert stderr.read()==b'generated stderr'\n"
-        " print(json.dumps({'temporaryfile_regular':True,'nlink':info.st_nlink,'name_is_fd':isinstance(stderr.name,int),'descriptor_path_issue':_fd_path(stderr.fileno())[1]}))\n")
+        " print(json.dumps({'temporaryfile_regular':True,'nlink':info.st_nlink,'name_is_fd':isinstance(stderr.name,int),'descriptor_path_issue':_fd_path(stderr.fileno()).issue}))\n")
     assert result["capture_complete"], result["issues"]
     facts = json.loads(result["stdout"].splitlines()[-1])
     assert facts == {"temporaryfile_regular": True, "nlink": 0, "name_is_fd": True,
@@ -379,7 +386,8 @@ def test_actual_socketpair_keeps_ipc_distinct_from_filesystem_access(tmp_path: P
         f"current_observer().nodeid={NODE!r}\n"
         "left,right=socket.socketpair()\n"
         "try:\n"
-        " assert _fd_path(left.fileno())==(None,'nonfilesystem_socket')\n"
+        " access=_fd_path(left.fileno())\n"
+        " assert access.path is None and access.issue=='nonfilesystem_socket'\n"
         " left.sendall(b'generated IPC')\n"
         " with os.fdopen(os.dup(right.fileno()),'rb') as incoming:\n"
         "  assert incoming.read(13)==b'generated IPC'\n"
@@ -390,3 +398,120 @@ def test_actual_socketpair_keeps_ipc_distinct_from_filesystem_access(tmp_path: P
     assert sum(frame["event"] == "nonfilesystem_descriptor"
                and frame["descriptor_kind"] == "socket" for frame in frames) == 1
     assert not any(frame["event"] in {"open", "sensor_failure"} for frame in frames)
+
+
+def test_each_integer_fd_consumer_resolves_once_and_keeps_both_live_identity_checks(tmp_path: Path) -> None:
+    result = _observed(tmp_path,
+        "from sciplot_core.verification.public_input_guard import install,ENVIRONMENT_KEY\n"
+        "source=watch/'input.csv';descriptor=os.open(source,os.O_RDONLY)\n"
+        "os.environ[ENVIRONMENT_KEY]=json.dumps([str(watch)]);install()\n"
+        "actual_resolve=Path.resolve;actual_fstat=os.fstat;counts={'resolve':0,'fstat':0}\n"
+        "def resolve(path,strict=False):\n"
+        " if path==source: counts['resolve']+=1\n"
+        " return actual_resolve(path,strict=strict)\n"
+        "def fstat(fd):\n"
+        " if fd==descriptor: counts['fstat']+=1\n"
+        " return actual_fstat(fd)\n"
+        "Path.resolve=resolve;os.fstat=fstat\n"
+        f"current_observer().nodeid={NODE!r}\n"
+        "try:\n"
+        " try: open(descriptor,'rb',closefd=False).close()\n"
+        " except PermissionError: pass\n"
+        " else: raise AssertionError('private FD was allowed')\n"
+        "finally:\n"
+        " Path.resolve=actual_resolve;os.fstat=actual_fstat;os.close(descriptor)\n"
+        "print(json.dumps(counts))\n")
+    assert result["capture_complete"], result["issues"]
+    # Each audit consumer still performs the complete live-FD proof. Neither
+    # resolves its own same-request canonical fact again or caches for the other.
+    assert json.loads(result["stdout"].splitlines()[-1]) == {"resolve": 2, "fstat": 4}
+
+
+def test_public_directory_fd_still_resolves_the_final_private_child_alias(tmp_path: Path) -> None:
+    result = _observed(tmp_path,
+        "from sciplot_core.verification.public_input_guard import install,ENVIRONMENT_KEY\n"
+        "public=base/'public';public.mkdir();alias=public/'alias.csv';alias.symlink_to(watch/'input.csv')\n"
+        "directory=os.open(public,os.O_RDONLY|os.O_DIRECTORY)\n"
+        "os.environ[ENVIRONMENT_KEY]=json.dumps([str(watch)]);install()\n"
+        "actual=Path.resolve;counts={'child_resolve':0}\n"
+        "def resolve(path,strict=False):\n"
+        " if path==alias: counts['child_resolve']+=1\n"
+        " return actual(path,strict=strict)\n"
+        "Path.resolve=resolve\n"
+        f"current_observer().nodeid={NODE!r}\n"
+        "try:\n"
+        " try: os.close(os.open('alias.csv',os.O_RDONLY,dir_fd=directory))\n"
+        " except PermissionError: pass\n"
+        " else: raise AssertionError('public base granted private child alias')\n"
+        "finally:\n"
+        " Path.resolve=actual;os.close(directory)\n"
+        "print(json.dumps(counts))\n")
+    assert result["capture_complete"], result["issues"]
+    assert json.loads(result["stdout"].splitlines()[-1]) == {"child_resolve": 2}
+    assert any(frame["event"] == "open" and frame.get("path") == str(tmp_path / "public/alias.csv")
+               and frame["resolved_path"] == str(tmp_path / "watched/input.csv") for frame in result["frames"])
+
+
+@pytest.mark.parametrize("change", ["rename", "dup_rename", "reuse"])
+def test_next_integer_fd_request_rechecks_namespace_and_reuse(tmp_path: Path, change: str) -> None:
+    setup = ("from sciplot_core.verification.public_input_guard import install,ENVIRONMENT_KEY\n"
+             "public=base/'public.csv';public.write_bytes(b'generated public')\n"
+             "descriptor=os.open(public,os.O_RDONLY);private=os.open(watch/'input.csv',os.O_RDONLY)\n")
+    if change == "dup_rename":
+        setup += "original=descriptor;descriptor=os.dup(original);os.close(original)\n"
+    setup += ("os.environ[ENVIRONMENT_KEY]=json.dumps([str(watch)]);install()\n"
+              f"current_observer().nodeid={NODE!r}\n"
+              "with open(descriptor,'rb',closefd=False) as first: assert first.read()==b'generated public'\n")
+    setup += "os.dup2(private,descriptor)\n" if change == "reuse" else "public.rename(watch/'moved.csv')\n"
+    result = _observed(tmp_path, setup +
+        "try:\n"
+        " try: open(descriptor,'rb',closefd=False).close()\n"
+        " except PermissionError: pass\n"
+        " else: raise AssertionError('earlier public FD fact escaped into the next request')\n"
+        "finally:\n"
+        " os.close(descriptor);os.close(private)\n")
+    assert result["capture_complete"], result["issues"]
+    expected = "input.csv" if change == "reuse" else "moved.csv"
+    assert any(frame["event"] == "open" and frame.get("resolved_path") == str(tmp_path / "watched" / expected)
+               and frame["nodeid"] == NODE for frame in result["frames"])
+
+
+@pytest.mark.parametrize("change", ["path_alias", "fd_reuse"])
+def test_canonical_fact_is_not_issued_after_same_request_identity_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str) -> None:
+    source, other = tmp_path / "source", tmp_path / "other"
+    source.write_bytes(b"generated source")
+    other.write_bytes(b"other generated source")
+    descriptor, replacement = os.open(source, os.O_RDONLY), os.open(other, os.O_RDONLY)
+    original = Path.resolve
+    mutated = False
+
+    def resolve(path, strict=False):
+        nonlocal mutated
+        value = original(path, strict=strict)
+        if path == source and not mutated:
+            mutated = True
+            if change == "path_alias":
+                source.rename(tmp_path / "moved")
+                source.symlink_to(other)
+            else:
+                os.dup2(replacement, descriptor)
+        return value
+
+    try:
+        monkeypatch.setattr(Path, "resolve", resolve)
+        access = _fd_path(descriptor)
+        assert mutated
+        assert access.path is None and access.issue == "unknown_descriptor"
+        assert access._canonical_path is None
+    finally:
+        os.close(descriptor)
+        os.close(replacement)
+
+
+def test_caller_payload_cannot_supply_a_canonical_fact(tmp_path: Path) -> None:
+    from sciplot_core.verification.private_access import ResolvedAccess, access_path
+    supplied = {"path": str(tmp_path / "private"), "canonical_path": str(tmp_path / "public")}
+    parsed = access_path("open", (supplied, "r", os.O_RDONLY))
+    assert parsed.path is None and parsed._canonical_path is None
+    parsed = access_path("open", (ResolvedAccess(tmp_path / "private", _canonical_path=tmp_path / "public"), "r", os.O_RDONLY))
+    assert parsed.path is None and parsed._canonical_path is None

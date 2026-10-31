@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import errno
+from dataclasses import dataclass
 from functools import wraps
 import operator
 from pathlib import Path
@@ -18,6 +19,25 @@ from typing import Any
 
 _open_context = threading.local()
 _port_installed = False
+
+
+@dataclass(frozen=True)
+class ResolvedAccess:
+    """Internal facts for this request only; never parsed from caller payloads."""
+    path: Path | None = None
+    issue: str | None = None
+    _canonical_path: Path | None = None
+
+    def resolved_path(self) -> Path:
+        if self.path is None:
+            raise ValueError("This request has no filesystem path.")
+        return self.path.resolve() if self._canonical_path is None else self._canonical_path
+
+    def within(self, roots: tuple[Path, ...]) -> bool:
+        if self.path is None:
+            return False
+        resolved = self.resolved_path()
+        return any(self.path.is_relative_to(root) or resolved.is_relative_to(root) for root in roots)
 
 
 def _primitive_path(value: Any) -> str | bytes:
@@ -57,12 +77,12 @@ def install_open_port() -> None:
     _port_installed = True
 
 
-def _fd_path(descriptor: int) -> tuple[Path | None, str | None]:
+def _fd_path(descriptor: int) -> ResolvedAccess:
     """Resolve this live FD, never a cached path or descriptor number grant."""
     try:
         before = os.fstat(descriptor)
     except OSError as exc:
-        return None, "invalid_descriptor" if exc.errno == errno.EBADF else "unknown_descriptor"
+        return ResolvedAccess(issue="invalid_descriptor" if exc.errno == errno.EBADF else "unknown_descriptor")
     try:
         nonfilesystem = "pipe" if stat.S_ISFIFO(before.st_mode) else "socket" if stat.S_ISSOCK(before.st_mode) else None
         if sys.platform == "darwin":
@@ -71,29 +91,29 @@ def _fd_path(descriptor: int) -> tuple[Path | None, str | None]:
         elif sys.platform.startswith("linux"):
             name = os.readlink(f"/proc/self/fd/{descriptor}")
             if nonfilesystem and name.startswith(nonfilesystem + ":[") and name.endswith("]"):
-                return (None, "nonfilesystem_" + nonfilesystem) if _fd_identity(before) == _fd_identity(os.fstat(descriptor)) else (None, "unknown_descriptor")
+                return ResolvedAccess(issue="nonfilesystem_" + nonfilesystem if _fd_identity(before) == _fd_identity(os.fstat(descriptor)) else "unknown_descriptor")
         else:
-            return None, "unknown_descriptor"
+            return ResolvedAccess(issue="unknown_descriptor")
         path = Path(name)
         if not path.is_absolute() or name.endswith(" (deleted)") or path.resolve() != path:
-            return None, "unknown_descriptor"
+            return ResolvedAccess(issue="unknown_descriptor")
         current, after = path.lstat(), os.fstat(descriptor)
         if _fd_identity(before) != _fd_identity(current) or _fd_identity(current) != _fd_identity(after):
-            return None, "unknown_descriptor"
-        return path, None
+            return ResolvedAccess(issue="unknown_descriptor")
+        return ResolvedAccess(path, _canonical_path=path)
     except OSError as exc:
         if sys.platform == "darwin" and exc.errno == errno.EBADF and nonfilesystem:
             try:
                 if _fd_identity(before) == _fd_identity(os.fstat(descriptor)):
-                    return None, "nonfilesystem_" + nonfilesystem
+                    return ResolvedAccess(issue="nonfilesystem_" + nonfilesystem)
             except OSError:
                 pass
-        return None, "unknown_descriptor"
+        return ResolvedAccess(issue="unknown_descriptor")
     except (ValueError, RuntimeError):
-        return None, "unknown_descriptor"
+        return ResolvedAccess(issue="unknown_descriptor")
 
 
-def access_path(event: str, args: tuple[Any, ...]) -> tuple[Path | None, str | None]:
+def access_path(event: str, args: tuple[Any, ...]) -> ResolvedAccess:
     """Resolve the actual supported Python request, including FD arguments.
 
     Invalid descriptors keep the original operation's exception. Live descriptors
@@ -101,18 +121,18 @@ def access_path(event: str, args: tuple[Any, ...]) -> tuple[Path | None, str | N
     This observes requests; it does not assert successful reads or kernel-wide IO.
     """
     if not args:
-        return None, None
+        return ResolvedAccess()
     value = args[0]
     if isinstance(value, int):
         # CPython's directory path converter uses -1 for its cwd/default,
         # including an explicit -1 argument. It is not a failed FD request.
         if value == -1 and event in {"os.listdir", "os.scandir"}:
-            return Path.cwd(), None
+            return ResolvedAccess(Path.cwd())
         return _fd_path(value)
     if value is None and event in {"os.listdir", "os.scandir"}:
         value = os.curdir
     if not isinstance(value, (str, bytes, os.PathLike)):
-        return None, None
+        return ResolvedAccess()
     value = _primitive_path(value)
     path = Path(os.fsdecode(value))
     if event == "open" and len(args) == 3 and args[1] is None and not path.is_absolute():
@@ -125,27 +145,28 @@ def access_path(event: str, args: tuple[Any, ...]) -> tuple[Path | None, str | N
                 # fstat(sentinel) == EBADF. These are this producer's OS ABI.
                 cwd_fd = -2 if sys.platform == "darwin" else -100 if sys.platform.startswith("linux") else None
                 if descriptor == cwd_fd:
-                    return Path(os.path.abspath(path)), None
-                base, issue = _fd_path(descriptor)
-                if base is None:
-                    return None, issue
-                if not stat.S_ISDIR(base.lstat().st_mode):
-                    return None, "invalid_descriptor"  # The real open will raise ENOTDIR.
-                path = base / path
+                    return ResolvedAccess(Path(os.path.abspath(path)))
+                base = _fd_path(descriptor)
+                if base.path is None:
+                    return base
+                if not stat.S_ISDIR(base.path.lstat().st_mode):
+                    return ResolvedAccess(issue="invalid_descriptor")  # The real open will raise ENOTDIR.
+                path = base.path / path
         else:
-            return None, "unknown_open_context"
-    return Path(os.path.abspath(path)), None
+            return ResolvedAccess(issue="unknown_open_context")
+    return ResolvedAccess(Path(os.path.abspath(path)))
 
 
 def observed_access(event: str, args: tuple[Any, ...], roots: tuple[Path, ...]) -> dict[str, Any] | None:
     """Turn a resolved Python request into one observer fact, without data."""
-    path, issue = access_path(event, args)
+    access = access_path(event, args)
+    path, issue = access.path, access.issue
     if issue in {"nonfilesystem_pipe", "nonfilesystem_socket"}:
         return {"event": "nonfilesystem_descriptor", "descriptor_kind": issue.removeprefix("nonfilesystem_"), "access_event": event}
     if issue is not None and issue != "invalid_descriptor":
         return {"event": "sensor_failure", "operation": issue, "access_event": event}
     if path is not None:
-        resolved = path.resolve()
+        resolved = access.resolved_path()
         if any(path.is_relative_to(root) or resolved.is_relative_to(root) for root in roots):
             return {"event": event, "path": str(path), "resolved_path": str(resolved),
                     **(open_facts(args) if event == "open" else {})}

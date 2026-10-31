@@ -15,7 +15,7 @@ import sys
 from typing import Any
 
 from sciplot_core.verification.private_process_boundaries import forbidden_roots as forbidden_roots
-from sciplot_core.verification.private_access import access_path, install_open_port
+from sciplot_core.verification.private_access import ResolvedAccess, access_path, install_open_port
 
 ENVIRONMENT_KEY = "SCIPLOT_PUBLIC_INPUT_GUARD"
 BOOTSTRAP_KEY = "SCIPLOT_PUBLIC_GUARD_BOOTSTRAP"
@@ -68,23 +68,29 @@ def install() -> None:
         if roots == _installed:
             return
 
+    def forbidden_access(access: ResolvedAccess) -> bool:
+        try:
+            return access.within(roots)
+        except (OSError, ValueError, RuntimeError):
+            return False
+
     def forbidden(value: Any) -> bool:
         if not isinstance(value, (str, bytes, os.PathLike)):
             return False
         try:
             path = Path(os.fsdecode(value)).expanduser()
             path = Path(os.path.abspath(path))
-            resolved = path.resolve()
-            return any(path.is_relative_to(r) or resolved.is_relative_to(r) for r in roots)
+            return forbidden_access(ResolvedAccess(path))
         except (OSError, ValueError, RuntimeError):
             return False
 
     def hook(event: str, args: tuple[Any, ...]) -> None:
         if event in {"open", "os.listdir", "os.scandir"} and args:
-            path, issue = access_path(event, args)
+            access = access_path(event, args)
+            path, issue = access.path, access.issue
             if issue is not None and issue not in {"invalid_descriptor", "nonfilesystem_pipe", "nonfilesystem_socket"}:
                 raise PermissionError("Public input scope cannot resolve this Python access request.")
-            if path is not None and forbidden(path):
+            if path is not None and forbidden_access(access):
                 raise PermissionError(f"Public input scope forbids private access: {path}")
         if event == "subprocess.Popen":
             executable, argv, _cwd, environment = args
