@@ -16,7 +16,8 @@ from sciplot_core.project_commands.resources import PreparedFile
 from uuid import uuid4
 
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
-from .io import StoreIO, digest, parts
+from .io import STORE, StoreIO, digest, parts
+from .read_directories import reading_directories
 from .root_bindings import identities
 from .command_records import command_path as command_path, read_command as read_command, read_commands as read_commands
 
@@ -144,27 +145,28 @@ def checked_head(io: StoreIO) -> CheckedHead | None:
 
 
 def _read_checked_head(io: StoreIO) -> CheckedHead | None:
-    pointer = io.read("head.json")
-    if pointer is None:
-        return None
-    value = generation(io, pointer["generation"])
-    if (pointer.get("kind") != "sciplot_project_head" or pointer.get("version") != 1
-            or pointer.get("sha256") != digest(value) or pointer.get("project_id") != value["project_id"]):
-        raise ProjectConflict("The project head and complete generation disagree.")
-    for name, item in value["files"].items():
-        parts(name)
-        io.get(item)
-    for versions in value.get("sources", {}).values():
-        for item in versions.values():
+    with reading_directories(io, STORE):
+        pointer = io.read("head.json")
+        if pointer is None:
+            return None
+        value = generation(io, pointer["generation"])
+        if (pointer.get("kind") != "sciplot_project_head" or pointer.get("version") != 1
+                or pointer.get("sha256") != digest(value) or pointer.get("project_id") != value["project_id"]):
+            raise ProjectConflict("The project head and complete generation disagree.")
+        for name, item in value["files"].items():
+            parts(name)
             io.get(item)
-    cursor, generations = value, {value["generation"]: value}
-    while cursor.get("parent") is not None:
-        parent = generation(io, cursor["parent"])
-        if (parent["generation"] in generations or cursor.get("parent_sha256") != digest(parent)
-                or parent["project_id"] != value["project_id"] or parent["sequence"] != cursor["sequence"] - 1):
-            raise ProjectConflict("The immutable complete project history changed or split.")
-        generations[parent["generation"]] = parent
-        cursor = parent
+        for versions in value.get("sources", {}).values():
+            for item in versions.values():
+                io.get(item)
+        cursor, generations = value, {value["generation"]: value}
+        while cursor.get("parent") is not None:
+            parent = generation(io, cursor["parent"])
+            if (parent["generation"] in generations or cursor.get("parent_sha256") != digest(parent)
+                    or parent["project_id"] != value["project_id"] or parent["sequence"] != cursor["sequence"] - 1):
+                raise ProjectConflict("The immutable complete project history changed or split.")
+            generations[parent["generation"]] = parent
+            cursor = parent
     return CheckedHead(io, value, generations, _verification=_CHECKED_HEAD)
 
 

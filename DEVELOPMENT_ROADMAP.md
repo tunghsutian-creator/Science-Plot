@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-10-31. External AI is the task interface. Current behavior belongs
+Status: 2026-11-04. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the

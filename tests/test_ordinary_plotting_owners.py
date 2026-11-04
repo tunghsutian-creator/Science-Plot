@@ -217,6 +217,7 @@ PROJECT_STORAGE_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/project_store/produced_sources.py',
         'src/sciplot_core/project_store/projection.py',
         'src/sciplot_core/project_store/publication.py',
+        'src/sciplot_core/project_store/read_directories.py',
         'src/sciplot_core/project_store/repository.py',
         'src/sciplot_core/project_store/resources.py',
         'src/sciplot_core/project_store/root_bindings.py',

@@ -21,6 +21,7 @@ from sciplot_core.foundation.writer_lease import DirectoryWriterLease, WriterLea
 from sciplot_core.foundation.project_session_lease import ProjectSessionBusy, external_project_session
 
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
+from .read_directories import DirectoryReads, read_stored_file
 
 STORE = ".sciplot_store"
 _ACTIVE: ContextVar[tuple[StoreIO, int, int] | None] = ContextVar("project_store_owned_io", default=None)
@@ -172,6 +173,7 @@ class StoreIO:
         # The history owner interprets this finite, lease-local scope. IO must
         # remain independent of the higher-level history validation algorithm.
         self._checked_window: object | None = None
+        self._read_directories: DirectoryReads | None = None
         # Only this live owned IO can attest that it created its metadata root.
         # It is not persisted and never survives release/reacquisition.
         self.created_store = False
@@ -192,7 +194,7 @@ class StoreIO:
             if process != os.getpid() or thread != get_ident():
                 _ACTIVE.set(None)
         with _leases(self.root, self.locations, blocking=blocking) as leases:
-            self.validation_epoch += 1
+            self.advance_epoch()
             self.lease_epoch += 1
             lease = leases[self.root]
             try:
@@ -229,22 +231,29 @@ class StoreIO:
                 self.root_fds.clear()
                 self.fd = -1
                 self.created_store = False
-                self.validation_epoch += 1
+                self.advance_epoch()
                 self.lease_epoch += 1
 
     @contextmanager
     def validation_fence(self) -> Iterator[None]:
         """External/source observations end both adjacent history windows."""
-        self.validation_epoch += 1
+        self.advance_epoch()
         try:
             yield
         finally:
-            self.validation_epoch += 1
+            self.advance_epoch()
+
+    def advance_epoch(self) -> None:
+        self.validation_epoch += 1
+        if self._read_directories is not None:
+            self._read_directories.invalidate()
 
     def validation_failed(self) -> None:
         """A detected read failure expires the finite history window's proofs."""
+        if self._read_directories is not None:
+            self._read_directories.invalidate()
         if self._checked_window is not None:
-            self.validation_epoch += 1
+            self.advance_epoch()
 
     def verify_roots(self) -> None:
         for key, fd in self.root_fds.items():
@@ -285,8 +294,7 @@ class StoreIO:
         try:
             components = parts(name)
             try:
-                with directory(self.fd, components[:-1]) as parent:
-                    data, _mode = read_file(parent, components[-1])
+                data, _mode = read_stored_file(self, components, read_file, directory)
             except FileNotFoundError:
                 return None
             payload = json.loads(data)
@@ -298,7 +306,7 @@ class StoreIO:
             raise
 
     def write(self, name: str, payload: dict[str, Any], *, exclusive: bool = False) -> None:
-        self.validation_epoch += 1
+        self.advance_epoch()
         components = parts(name)
         with directory(self.fd, components[:-1], create=True) as parent:
             temporary = ".sciplot-json-" + uuid4().hex
@@ -320,7 +328,7 @@ class StoreIO:
                     pass
 
     def put(self, data: bytes) -> dict[str, Any]:
-        self.validation_epoch += 1
+        self.advance_epoch()
         key = sha(data)
         with directory(self.fd, ("objects", key[:2]), create=True) as parent:
             try:
@@ -336,8 +344,7 @@ class StoreIO:
             key = entry["sha256"]
             if not isinstance(key, str) or not re.fullmatch(r"[0-9a-f]{64}", key):
                 raise ProjectStoreError("Invalid project content identity.")
-            with directory(self.fd, ("objects", key[:2])) as parent:
-                data, _mode = read_file(parent, key)
+            data, _mode = read_stored_file(self, ("objects", key[:2], key), read_file, directory)
             if sha(data) != key or len(data) != entry["size"]:
                 raise ProjectConflict("An immutable project object no longer matches its identity.")
             return data

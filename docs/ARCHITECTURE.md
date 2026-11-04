@@ -1425,6 +1425,17 @@ share metadata admission; subclasses and incoming/sealed expectations retain
 independent effectful resolution. Physical capture starts after that finite
 locator scope. Callers use the paired port rather than recreating two lookups.
 
+During one complete `_read_checked_head`, `project_store/read_directories.py`
+may retain only the `objects` and `generations` structural directory descriptors.
+They authorize neither content nor a checked head: every object, hash-prefix,
+generation and history digest still follows its original read and validation.
+Each reuse checks current names, descriptor identities, effective permissions
+and the owning IO/lease/epoch/process/thread/capabilities. Unprovable metadata or
+permissions discard the resources and defer to the original fresh opener's
+actual result, including permission errors and allowed reads. Mutation, failure
+and scope exit invalidate and close the resources before a checked head returns.
+No descriptor resource outlives this one validation or replaces an OS check.
+
 `project_store/member_observation.py` owns coherent finite member reads and the
 snapshot projection algorithm behind `FileProjectStore.observe_members`,
 `snapshot` and `read_bytes`. Canonical head and selected historical generation
