@@ -1,4 +1,4 @@
-"""One additive, byte-proven Darwin baseline; historical authority never changes.
+"""Explicit additive, byte-proven Darwin baselines; authority never changes.
 
 Descriptors are explicit source-owned inputs, not an environment allowlist or an
 update mode. Every selection rechecks the parent, capture and transition facts.
@@ -15,6 +15,10 @@ from rendering_profiles_helpers import load_profile
 
 BASELINE_ID = "darwin-27.2.0-arm64-v1"
 SUFFIX = "--darwin-27.2.0-v1.json"
+BASELINE_273_ID = "darwin-27.3.0-arm64-v1"
+SUFFIX_273 = "--darwin-27.3.0-v1.json"
+BASELINES = {BASELINE_ID: (SUFFIX, "27.2.0"),
+             BASELINE_273_ID: (SUFFIX_273, "27.3.0")}
 GOLDEN_ROLES = frozenset({"golden_png", "golden_structure", "golden_environment",
                           "golden_capture", "golden_producer", "golden_inventory"})
 FILE_ROLES = GOLDEN_ROLES | {"parent_manifest", "golden_datasets", "capture_request",
@@ -66,11 +70,11 @@ def _ordinary(root, value):
     return current
 
 
-def _pinned_files(path, descriptor):
+def _pinned_files(path, descriptor, *, baseline_id=BASELINE_ID):
     _require(set(descriptor) == {"schema_version", "kind", "baseline_id", "files"}
              and descriptor["schema_version"] == 2
              and descriptor["kind"] == "sciplot_native_environment_baseline"
-             and descriptor["baseline_id"] == BASELINE_ID,
+             and baseline_id in BASELINES and descriptor["baseline_id"] == baseline_id,
              "Unsupported closed baseline descriptor")
     records = descriptor["files"]
     _require(isinstance(records, dict) and set(records) == FILE_ROLES,
@@ -153,13 +157,14 @@ def _process(parent, files, producer):
     return run
 
 
-def _bridge(parent, files):
+def _bridge(parent, files, *, release="27.2.0"):
+    _require(release in {"27.2.0", "27.3.0"}, "Unsupported explicit baseline transition")
     old_environment = _read(parent.files["golden_environment"])
     new_environment = _read(files["golden_environment"])
     expected = json.loads(json.dumps(old_environment))
     _require(expected["platform"] == {"system": "Darwin", "release": "27.0.0", "machine": "arm64"},
              "This baseline transition requires its original Darwin environment")
-    expected["platform"]["release"] = "27.2.0"
+    expected["platform"]["release"] = release
     _require(_equal(new_environment, expected), "Unreviewed renderer/font/environment transition")
     for role in ("golden_structure", "golden_png"):
         _require(parent.files[role].read_bytes() == files[role].read_bytes(),
@@ -180,7 +185,7 @@ def _bridge(parent, files):
     run = _process(parent, files, producer)
     facts = {"schema_version": 1, "parent_manifest_sha256": _hash(parent.manifest_path),
              "document_sha256": capture["document_sha256"],
-             "environment_delta": [{"path": "/platform/release", "old": "27.0.0", "new": "27.2.0"}],
+             "environment_delta": [{"path": "/platform/release", "old": "27.0.0", "new": release}],
              "capture_added_empty_paths": added,
              "structure_sha256": _hash(files["golden_structure"]),
              "png_sha256": _hash(files["golden_png"]),
@@ -198,12 +203,18 @@ def validate_baseline(profile):
     _require(path == _ordinary(profile.manifest_path.parent, path.name), "Baseline descriptor escaped authority")
     _require(_hash(path) == profile.baseline_sha256, "Selected baseline descriptor changed")
     descriptor = _read(path)
-    files = _pinned_files(path, descriptor)
+    baseline_id = descriptor.get("baseline_id")
+    _require(isinstance(baseline_id, str) and baseline_id in BASELINES,
+             "Unsupported closed baseline descriptor")
+    suffix, release = BASELINES[baseline_id]
+    _require(path.name == profile.manifest_path.stem + suffix,
+             "Baseline descriptor name does not match its explicit identity")
+    files = _pinned_files(path, descriptor, baseline_id=baseline_id)
     _require(files["parent_manifest"] == profile.manifest_path,
              "Baseline parent authority changed")
     parent = load_profile(profile.manifest_path)
     _require(parent.manifest == profile.manifest, "Historical profile authority changed")
-    _bridge(parent, files)
+    _bridge(parent, files, release=release)
     effective = {**parent.files, **{role: files[role] for role in GOLDEN_ROLES}}
     _require(profile.files == effective, "Baseline cannot replace scientific authority")
     return profile
@@ -214,14 +225,15 @@ def select_baseline(profile, environment):
     _require(profile.baseline_path is None, "Select a baseline only from historical authority")
     _require(load_profile(profile.manifest_path).manifest == profile.manifest, "Historical authority changed")
     candidates = [profile] if _equal(_read(profile.files["golden_environment"]), environment) else []
-    path = profile.manifest_path.with_name(profile.manifest_path.stem + SUFFIX)
-    if path.exists() or path.is_symlink():
-        _ordinary(path.parent, path.name)
-        files = _pinned_files(path, _read(path))
-        selected = replace(profile, files={**profile.files, **{role: files[role] for role in GOLDEN_ROLES}},
-                           baseline_path=path, baseline_sha256=_hash(path))
-        validate_baseline(selected)
-        if _equal(_read(files["golden_environment"]), environment):
-            candidates.append(selected)
+    for baseline_id, (suffix, _release) in BASELINES.items():
+        path = profile.manifest_path.with_name(profile.manifest_path.stem + suffix)
+        if path.exists() or path.is_symlink():
+            _ordinary(path.parent, path.name)
+            files = _pinned_files(path, _read(path), baseline_id=baseline_id)
+            selected = replace(profile, files={**profile.files, **{role: files[role] for role in GOLDEN_ROLES}},
+                               baseline_path=path, baseline_sha256=_hash(path))
+            validate_baseline(selected)
+            if _equal(_read(files["golden_environment"]), environment):
+                candidates.append(selected)
     _require(len(candidates) == 1, "No unique verified rendering baseline for actual environment")
     return candidates[0]

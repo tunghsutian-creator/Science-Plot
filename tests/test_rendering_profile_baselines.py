@@ -1,6 +1,7 @@
 """Generated controls for additive baselines; no private/native fixture reads."""
 
 from copy import deepcopy
+from functools import partial
 from hashlib import sha256
 import json
 import sys
@@ -25,7 +26,7 @@ def _pin(root, path):
     return {"path": path.relative_to(root).as_posix(), "sha256": _sha(path)}
 
 
-def _case(tmp_path, *, old_primitives=False):
+def _case(tmp_path, *, old_primitives=False, release="27.2.0"):
     root = tmp_path / "fixture"
     root.mkdir()
     (root / "raw.csv").write_text("x,y\n1,2\n")
@@ -59,7 +60,7 @@ def _case(tmp_path, *, old_primitives=False):
     bundle.mkdir()
     files = {"parent_manifest": root / "manifest.json"}
     new_environment = deepcopy(environment)
-    new_environment["platform"]["release"] = "27.2.0"
+    new_environment["platform"]["release"] = release
     new_capture = deepcopy(capture)
     new_capture.setdefault("painted_primitives", [])
     (bundle / "capture_helper.py").write_text("# generated capture source\n")
@@ -103,14 +104,14 @@ def _case(tmp_path, *, old_primitives=False):
     files["bridge"] = bundle / "bridge.json"
     _write(files["bridge"], {"schema_version": 1, "parent_manifest_sha256": _sha(parent.manifest_path),
            "document_sha256": capture["document_sha256"],
-           "environment_delta": [{"path": "/platform/release", "old": "27.0.0", "new": "27.2.0"}],
+           "environment_delta": [{"path": "/platform/release", "old": "27.0.0", "new": release}],
            "capture_added_empty_paths": [] if old_primitives else ["/painted_primitives"],
            "structure_sha256": _sha(files["golden_structure"]), "png_sha256": _sha(files["golden_png"]),
            "datasets_sha256": _sha(files["golden_datasets"]), "old_producer": producer,
            "new_producer": new_producer, "source_commit": commit})
-    descriptor = root / "manifest--darwin-27.2.0-v1.json"
+    descriptor = root / ("manifest--darwin-" + release + "-v1.json")
     _write(descriptor, {"schema_version": 2, "kind": "sciplot_native_environment_baseline",
-                       "baseline_id": "darwin-27.2.0-arm64-v1", "files": {k: _pin(root, p) for k, p in files.items()}})
+                       "baseline_id": "darwin-" + release + "-arm64-v1", "files": {k: _pin(root, p) for k, p in files.items()}})
     assert set(files) == FILE_ROLES
     return parent, new_environment, descriptor, files
 
@@ -154,7 +155,7 @@ def test_actual_environment_requires_unique_complete_type_sensitive_match(tmp_pa
         select_baseline(parent, environment)
 
 
-@pytest.mark.parametrize("role,mutation", [
+REPINNED_ATTACKS = [
     ("golden_environment", "font"), ("golden_environment", "old_environment"),
     ("golden_structure", "structure"), ("golden_capture", "science"),
     ("golden_capture", "document"), ("golden_capture", "primitive"),
@@ -163,7 +164,10 @@ def test_actual_environment_requires_unique_complete_type_sensitive_match(tmp_pa
     ("capture_run", "wait"), ("capture_run", "exit"), ("capture_run", "argv"),
     ("capture_run", "stream"), ("capture_state", "source_drift"),
     ("bridge", "approval"), ("bridge", "bridge"),
-])
+]
+
+
+@pytest.mark.parametrize("role,mutation", REPINNED_ATTACKS)
 def test_repinned_forgery_cannot_replace_recomputed_transition_facts(tmp_path, role, mutation):
     parent, environment, descriptor, files = _case(tmp_path)
     value = json.loads(files[role].read_text())
@@ -291,4 +295,86 @@ def test_descriptor_is_closed_and_cannot_substitute_or_escape_ancestry(tmp_path,
         return
     _write(descriptor, value)
     with pytest.raises(AssertionError):
+        select_baseline(parent, environment)
+
+
+_CONTROLS_273 = [
+    pytest.param(test_repinned_forgery_cannot_replace_recomputed_transition_facts, (role, mutation),
+                 id=role + "-" + mutation) for role, mutation in REPINNED_ATTACKS
+] + [
+    pytest.param(test_actual_environment_requires_unique_complete_type_sensitive_match, (change,),
+                 id="actual-environment-" + change) for change in ("font", "extra_key", "boolean_dpi", "numeric_type")
+] + [
+    pytest.param(test_in_root_symlinks_are_rejected_before_resolution, (alias,),
+                 id="ordinary-path-" + alias) for alias in ("file", "directory", "descriptor")
+] + [
+    pytest.param(test_descriptor_is_closed_and_cannot_substitute_or_escape_ancestry, (mutation,),
+                 id="closed-descriptor-" + mutation) for mutation in ("unknown_key", "escape", "missing", "alias", "parent", "duplicate_json")
+] + [
+    pytest.param(test_complete_baseline_inherits_authority_and_all_three_strict_gates, (primitives,),
+                 id="complete-capture-existing-primitives-" + str(primitives)) for primitives in (False, True)
+] + [
+    pytest.param(test_even_one_pixel_change_and_coordinated_current_drift_fail, (), id="pixel-drift"),
+    pytest.param(test_descriptor_pin_is_revalidated_after_selection, (), id="descriptor-drift"),
+    pytest.param(test_historical_raw_and_parent_pins_remain_required, (), id="parent-science-drift"),
+]
+
+
+@pytest.mark.parametrize("control,arguments", _CONTROLS_273)
+def test_explicit_273_keeps_the_existing_strict_controls(tmp_path, monkeypatch, control, arguments):
+    # Change only generated input data. The original validators and every
+    # original refusal assertion above execute unchanged for the new identity.
+    monkeypatch.setattr(sys.modules[__name__], "_case", partial(_case, release="27.3.0"))
+    control(tmp_path, *arguments)
+
+
+def test_273_selected_descriptor_symlink_is_rejected_before_read(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys.modules[__name__], "_case", partial(_case, release="27.3.0"))
+    test_selected_descriptor_symlink_is_rejected_before_read(tmp_path, monkeypatch)
+
+
+def test_273_does_not_admit_an_unknown_release(tmp_path):
+    parent, environment, _, _ = _case(tmp_path, release="27.3.0")
+    environment["platform"]["release"] = "27.4.0"
+    with pytest.raises(AssertionError, match="No unique"):
+        select_baseline(parent, environment)
+
+
+@pytest.mark.parametrize("identity", ["darwin-27.2.0-arm64-v1", "darwin-27.4.0-arm64-v1"])
+def test_273_suffix_requires_its_unique_explicit_identity(tmp_path, identity):
+    parent, environment, descriptor, _ = _case(tmp_path, release="27.3.0")
+    value = json.loads(descriptor.read_text())
+    value["baseline_id"] = identity
+    _write(descriptor, value)
+    with pytest.raises(AssertionError, match="Unsupported"):
+        select_baseline(parent, environment)
+
+
+def test_273_is_additive_and_cannot_ambiguously_reuse_272_environment(tmp_path):
+    parent, environment, descriptor, files = _case(tmp_path)
+    old_descriptor = descriptor.read_bytes()
+    old_files = {path: path.read_bytes() for path in files.values()}
+    newer = dict(files)
+    newer["golden_environment"] = descriptor.parent / "environment-273.json"
+    env273 = deepcopy(environment)
+    env273["platform"]["release"] = "27.3.0"
+    _write(newer["golden_environment"], env273)
+    newer["bridge"] = descriptor.parent / "bridge-273.json"
+    bridge = json.loads(files["bridge"].read_text())
+    bridge["environment_delta"][0]["new"] = "27.3.0"
+    _write(newer["bridge"], bridge)
+    descriptor273 = descriptor.with_name("manifest--darwin-27.3.0-v1.json")
+    value = json.loads(descriptor.read_text())
+    value["baseline_id"] = "darwin-27.3.0-arm64-v1"
+    _write(descriptor273, value)
+    _repin(descriptor273, newer)
+    assert select_baseline(parent, environment).baseline_path == descriptor
+    assert select_baseline(parent, env273).baseline_path == descriptor273
+    assert select_baseline(parent, json.loads(parent.files["golden_environment"].read_text())) == parent
+    assert descriptor.read_bytes() == old_descriptor
+    assert all(path.read_bytes() == content for path, content in old_files.items())
+    # A repinned sibling cannot create a second valid match for the old release.
+    _write(newer["golden_environment"], environment)
+    _repin(descriptor273, newer)
+    with pytest.raises(AssertionError, match="Unreviewed"):
         select_baseline(parent, environment)
