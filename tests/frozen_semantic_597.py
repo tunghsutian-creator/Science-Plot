@@ -2,7 +2,9 @@
 
 Only seven historical owners and the original FakeBackend class slice are loaded from
 the fixture. Other project imports remain in this tracked checkout and their
-actually executed source hashes must match the original source manifest.
+actually executed scientific helper hashes must match the original source manifest.
+Current enforcement belongs to the live verification owner and is witnessed
+separately before and after the operation; it is not historical scientific code.
 """
 import ast
 import hashlib
@@ -48,18 +50,45 @@ def _function_bytes(path, qualified):
     return value
 
 
-def validate_operational_helpers(manifest, calls):
+def current_enforcement_sources():
+    from sciplot_core.verification import private_process_boundaries, public_input_guard
+
+    source = ROOT / "src/sciplot_core"
+    verification = source / "verification"
+    assert Path(private_process_boundaries.__file__).resolve() == verification / "private_process_boundaries.py"
+    assert Path(public_input_guard.__file__).resolve() == verification / "public_input_guard.py"
+    result = {}
+    for name, digest in private_process_boundaries.source_hashes().items():
+        if name == "repository:skill/scripts/sciplot":
+            continue  # Shell startup is outside this Python-call counter.
+        path = (verification / name).resolve()
+        assert path.is_relative_to(source), ("foreign enforcement owner", name)
+        result[str(path)] = digest
+    # The shared observation source map does not include public enforcement.
+    # Bind its actual loaded owner explicitly, rather than changing that registry.
+    guard = Path(public_input_guard.__file__).resolve()
+    result[str(guard)] = hashlib.sha256(guard.read_bytes()).hexdigest()
+    return result
+
+
+def validate_operational_helpers(manifest, calls, enforcement_sources=None):
     for filename, qualified, _line in calls:
         path = Path(filename)
         if path.is_relative_to(FIXTURE):
             continue
         relative = path.relative_to(ROOT).as_posix()
-        expected = manifest["operational_helpers"][relative]
+        expected = manifest["operational_helpers"].get(relative)
+        if expected is None:
+            assert enforcement_sources is not None and str(path) in enforcement_sources, ("unknown helper", relative, qualified)
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == enforcement_sources[str(path)], ("current enforcement changed", relative)
+            continue
         if "sha256" in expected:
             assert hashlib.sha256(path.read_bytes()).hexdigest() == expected["sha256"], relative
         else:
             original = expected["functions"][qualified]
             assert hashlib.sha256(_function_bytes(path, qualified)).hexdigest() == original["sha256"], (relative, qualified)
+    if enforcement_sources is not None:
+        assert current_enforcement_sources() == enforcement_sources, "Current enforcement source identity changed during the historical operation."
 
 
 class FrozenOwners(importlib.abc.MetaPathFinder):
@@ -124,6 +153,7 @@ def main():
         from sciplot_core.studio_core.project_session import external_project_session
 
         assert Path(sciplot_core.__file__).resolve().is_relative_to(ROOT / "src/sciplot_core")
+        enforcement_sources = current_enforcement_sources()
         backend_file = FIXTURE / manifest["slices"]["fake_backend"]["fixture"]
         original_backend = ModuleType("frozen597_backend")
         original_backend.__dict__.update(Path=Path, deepcopy=deepcopy, file_sha256=file_sha256,
@@ -168,7 +198,9 @@ def main():
     finally:
         if profiling:
             sys.setprofile(None)
-    validate_operational_helpers(manifest, functional_calls)
+    validate_operational_helpers(manifest, functional_calls, enforcement_sources)
+    result["current_enforcement"] = {"claim": "Current source identity only; not frozen597 scientific certification.",
+                                     "sources": enforcement_sources}
     result["executed"] = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(executed)}
     result["functional_calls"] = sorted(functional_calls)
     print(json.dumps(result))

@@ -90,6 +90,83 @@ def test_historical_counter_membership_memo_never_caches_source_bytes(monkeypatc
         counter.validate_operational_helpers(manifest, calls)
 
 
+def test_current_enforcement_has_a_separate_live_source_identity():
+    import frozen_semantic_597 as counter
+
+    manifest_bytes = (FIXTURE / "manifest.json").read_bytes()
+    sources = counter.current_enforcement_sources()
+    for relative in ("verification/private_access.py", "verification/public_input_guard.py",
+                     "foundation/descriptor_names.py"):
+        path = ROOT / "src/sciplot_core" / relative
+        assert sources[str(path)] == hashlib.sha256(path.read_bytes()).hexdigest()
+        assert path.relative_to(ROOT).as_posix() not in read_manifest()["operational_helpers"]
+    assert (FIXTURE / "manifest.json").read_bytes() == manifest_bytes
+
+
+@pytest.mark.parametrize("changed", ["called", "uncalled"])
+def test_current_enforcement_identity_is_fresh_for_the_whole_operation(monkeypatch, tmp_path, changed):
+    import frozen_semantic_597 as counter
+
+    monkeypatch.setattr(counter, "ROOT", tmp_path)
+    helper = tmp_path / "src/sciplot_core/verification/live.py"
+    helper.parent.mkdir(parents=True)
+    helper.write_text("def measured():\n    return 1\n")
+    other = helper.with_name("other.py")
+    other.write_text("def uncalled():\n    return 1\n")
+
+    def fresh_sources():
+        return {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in (helper, other)}
+
+    monkeypatch.setattr(counter, "current_enforcement_sources", fresh_sources)
+    snapshot = fresh_sources()
+    calls = {(str(helper), "measured", 1)}
+    counter.validate_operational_helpers({"operational_helpers": {}}, calls, snapshot)
+    (helper if changed == "called" else other).write_text("def changed():\n    return 2\n")
+    with pytest.raises(AssertionError, match="enforcement"):
+        counter.validate_operational_helpers({"operational_helpers": {}}, calls, snapshot)
+
+
+def test_current_enforcement_cannot_admit_an_unknown_helper(monkeypatch, tmp_path):
+    import frozen_semantic_597 as counter
+
+    monkeypatch.setattr(counter, "ROOT", tmp_path)
+    helper = tmp_path / "src/sciplot_core/verification/unregistered.py"
+    helper.parent.mkdir(parents=True)
+    helper.write_text("def measured():\n    return 1\n")
+    with pytest.raises(AssertionError, match="unknown helper"):
+        counter.validate_operational_helpers({"operational_helpers": {}}, {(str(helper), "measured", 1)}, {})
+
+
+@pytest.mark.parametrize("binding", ["file", "function"])
+def test_historical_scientific_identity_precedes_current_enforcement(monkeypatch, tmp_path, binding):
+    import frozen_semantic_597 as counter
+
+    monkeypatch.setattr(counter, "ROOT", tmp_path)
+    helper = tmp_path / "src/sciplot_core/scientific.py"
+    helper.parent.mkdir(parents=True)
+    helper.write_text("def measured():\n    return 1\n")
+    original = hashlib.sha256(helper.read_bytes()).hexdigest()
+    expected = {"sha256": original} if binding == "file" else {"functions": {"measured": {"sha256": original}}}
+    manifest = {"operational_helpers": {"src/sciplot_core/scientific.py": expected}}
+    helper.write_text("def measured():\n    return 2\n")
+    current = {str(helper): hashlib.sha256(helper.read_bytes()).hexdigest()}
+    with pytest.raises(AssertionError, match="scientific.py"):
+        counter.validate_operational_helpers(manifest, {(str(helper), "measured", 1)}, current)
+
+
+def test_current_enforcement_cannot_admit_an_unknown_scientific_function(monkeypatch, tmp_path):
+    import frozen_semantic_597 as counter
+
+    monkeypatch.setattr(counter, "ROOT", tmp_path)
+    helper = tmp_path / "src/sciplot_core/scientific.py"
+    helper.parent.mkdir(parents=True)
+    helper.write_text("def unreviewed():\n    return 1\n")
+    manifest = {"operational_helpers": {"src/sciplot_core/scientific.py": {"functions": {}}}}
+    current = {str(helper): hashlib.sha256(helper.read_bytes()).hexdigest()}
+    with pytest.raises(KeyError, match="unreviewed"):
+        counter.validate_operational_helpers(manifest, {(str(helper), "unreviewed", 1)}, current)
+
+
 def _child(operation, case, phase):
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
     # Keep the actual guard/observer startup and earlier source-owner order.
@@ -102,6 +179,7 @@ def _child(operation, case, phase):
     manifest = read_manifest()
     assert result["loaded_owners"] == {name: str(FIXTURE / record["fixture"])
         for name, record in manifest["owners"].items()}
+    assert result["current_enforcement"]["claim"] == "Current source identity only; not frozen597 scientific certification."
     return result
 
 
