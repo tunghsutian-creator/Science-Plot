@@ -303,7 +303,9 @@ roots and cannot inherit an exec continuation. The real launch still requires
 its native exclusion proof. During teardown, an observation activation failure
 must allow fixture restoration and original cleanup before reporting the same
 failure; it never supplies a missing phase or a successful receipt. Keep no-I/O
-test replacements scoped to the product call they assert.
+test replacements scoped to the product call they assert. A process-wide path
+substitute needs a local context ending before the test returns: pytest's later
+fixture undo cannot protect the observer's teardown-phase entry.
 Before the observer's terminal record, collect already-exited held children
 with the original nonblocking OS wait under their wait lock. A cached Popen
 return code or its ECHILD fallback cannot establish a previously missing exit;

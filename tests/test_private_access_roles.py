@@ -84,14 +84,15 @@ def test_root_containment_keeps_fresh_resolution_and_original_failure(tmp_path, 
         if isinstance(result, BaseException):
             raise result
         return result
-    monkeypatch.setattr(Path, "resolve", resolve)
-    access = ResolvedAccess(literal)
-    assert not access.within((private,))
-    assert access.within((private,))
-    with pytest.raises(PermissionError) as error:
-        access.within((private,))
-    assert error.value.errno == errno.EPERM and calls == [literal]*3
-    assert not ResolvedAccess().within((private,))
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "resolve", resolve)
+        access = ResolvedAccess(literal)
+        assert not access.within((private,))
+        assert access.within((private,))
+        with pytest.raises(PermissionError) as error:
+            access.within((private,))
+        assert error.value.errno == errno.EPERM and calls == [literal]*3
+        assert not ResolvedAccess().within((private,))
 
 
 def _capture(tmp_path: Path) -> tuple[dict, list[tuple[Path, Path]]]:
