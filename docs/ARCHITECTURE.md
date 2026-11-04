@@ -1445,6 +1445,13 @@ Current named/held metadata and permissions remain independently checked.
 consumer, rather than repeating that same observation in the resource helper.
 Verification retains its original resolve/lstat/fstat checks around the shared
 primitive and includes its source bytes in the observer's source identity.
+`ResolvedAccess.within` checks both the literal and freshly resolved path against
+each root in the original order. For exact POSIX paths its lexical comparison
+uses anchors and component prefixes, preserving relative paths, `..`, the
+distinct `/` and `//` anchors, equality and component boundaries without building
+every parent path. Custom paths or other flavours use the original method.
+This changes no filesystem observation, private-role rule or permission check;
+no path, credential or access decision is cached across requests.
 
 `project_store/member_observation.py` owns coherent finite member reads and the
 snapshot projection algorithm behind `FileProjectStore.observe_members`,

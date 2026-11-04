@@ -10,7 +10,7 @@ import errno
 from dataclasses import dataclass
 from functools import wraps
 import operator
-from pathlib import Path
+from pathlib import Path, PosixPath
 import re
 import stat
 import sys
@@ -39,6 +39,18 @@ class ResolvedAccess:
         if self.path is None:
             return False
         resolved = self.resolved_path()
+        if type(self.path) is PosixPath and type(resolved) is PosixPath:
+            literal_parts, resolved_parts = self.path.parts, resolved.parts
+            for root in roots:
+                if type(root) is PosixPath:
+                    parts, anchor = root.parts, root.anchor
+                    size = len(parts)
+                    if (self.path.anchor == anchor and literal_parts[:size] == parts
+                            or resolved.anchor == anchor and resolved_parts[:size] == parts):
+                        return True
+                elif self.path.is_relative_to(root) or resolved.is_relative_to(root):
+                    return True
+            return False
         return any(self.path.is_relative_to(root) or resolved.is_relative_to(root) for root in roots)
 
 

@@ -6,14 +6,14 @@ import json
 import os
 import errno
 import inspect
-from pathlib import Path
+from pathlib import Path, PosixPath, PureWindowsPath
 import sys
 from uuid import uuid4
 
 import pytest
 
 from sciplot_core.verification import private_corpus_audit as audit
-from sciplot_core.verification.private_access import _fd_path, access_events, file_parent_open, open_facts
+from sciplot_core.verification.private_access import ResolvedAccess, _fd_path, access_events, file_parent_open, open_facts
 from sciplot_core.verification.private_observer import CHILD, CONTINUATION, PARENT, RUN, write_bootstrap
 from private_observer_support import execute_observed
 
@@ -23,6 +23,74 @@ DEPENDENCIES = [(FILE, "file")]
 # Producer values deliberately differ from the host's os masks.
 CONSTANTS = {"platform": "generated-foreign", "O_RDONLY": 0, "O_ACCMODE": 3,
              "O_DIRECTORY": 16, "O_NOFOLLOW": 64, "O_CLOEXEC": 256}
+
+
+@pytest.mark.parametrize("spellings", [
+    ["", ".", "a", "a/b"],
+    ["..", "../a", "a/..", "a/../b", "a/../../b"],
+    ["/", "/a", "/a/b", "/ab", "/a-b"],
+    ["//", "//a", "//a/b", "///a/b"],
+    ["/A", "/a", "/A/b", "/a/B"],
+    ["/é", "/e\u0301", "/é/子", "/éx", "/子/é"],
+    ["/a/.", "/a//b", "/a/../b", "/a/../../b"],
+    ["/a b", "/a b/c", "/a b-c", "/a\\b", "/a.b/c"],
+], ids=["relative_empty", "relative_parents", "absolute_prefix", "double_anchor", "case", "unicode", "lexical_parents", "literal_spelling"])
+def test_root_containment_matches_the_original_path_predicate_for_each_concept_family(spellings):
+    paths = [PosixPath(value) for value in spellings]
+    roots = [PosixPath(value) for value in ["", ".", "..", "a", "a/b", "/", "//", "/a", "//a", "/ab", "/A", "/é", "/e\u0301", "/a b", "/outside"]]
+    for literal in paths:
+        for resolved in [*paths, PosixPath("/resolved/outside")]:
+            access = ResolvedAccess(literal, _canonical_path=resolved)
+            for root in roots:
+                assert access.within((root,)) == (literal.is_relative_to(root) or resolved.is_relative_to(root))
+            ordered = (roots[-1], roots[0], roots[7], roots[1])
+            assert access.within(ordered) == any(literal.is_relative_to(root) or resolved.is_relative_to(root) for root in ordered)
+            assert not access.within(())
+
+
+@pytest.mark.parametrize("shape", ["custom_literal", "custom_resolved", "custom_root", "foreign_flavor"])
+def test_root_containment_retains_custom_path_protocol_and_short_circuit_order(shape):
+    events = []
+    class CustomPath(PosixPath):
+        def is_relative_to(self, other):
+            events.append((str(self), str(other)))
+            return super().is_relative_to(other)
+    class RootProtocol:
+        def __fspath__(self):
+            events.append("root_protocol")
+            return "/matched"
+    literal = CustomPath("/literal") if shape == "custom_literal" else PosixPath("/literal")
+    resolved = CustomPath("/matched/file") if shape == "custom_resolved" else PosixPath("/matched/file")
+    roots = (RootProtocol(), PosixPath("/unused")) if shape == "custom_root" else (PosixPath("/outside"), PosixPath("/matched"), PosixPath("/unused"))
+    if shape == "foreign_flavor":
+        literal, resolved = PureWindowsPath("c:/MATCHED/file"), PureWindowsPath("D:/other")
+        roots = (PureWindowsPath("C:/matched"), PureWindowsPath("D:/unused"))
+    expected = any(literal.is_relative_to(root) or resolved.is_relative_to(root) for root in roots)
+    reference_events = events[:]
+    events.clear()
+    assert ResolvedAccess(literal, _canonical_path=resolved).within(roots) == expected
+    assert events == reference_events
+
+
+def test_root_containment_keeps_fresh_resolution_and_original_failure(tmp_path, monkeypatch):
+    literal = tmp_path / "literal"
+    private = tmp_path / "private"
+    calls = []
+    outcomes = [tmp_path / "outside", private / "value", PermissionError(errno.EPERM, "fresh resolution denied")]
+    def resolve(path):
+        calls.append(path)
+        result = outcomes[len(calls)-1]
+        if isinstance(result, BaseException):
+            raise result
+        return result
+    monkeypatch.setattr(Path, "resolve", resolve)
+    access = ResolvedAccess(literal)
+    assert not access.within((private,))
+    assert access.within((private,))
+    with pytest.raises(PermissionError) as error:
+        access.within((private,))
+    assert error.value.errno == errno.EPERM and calls == [literal]*3
+    assert not ResolvedAccess().within((private,))
 
 
 def _capture(tmp_path: Path) -> tuple[dict, list[tuple[Path, Path]]]:
