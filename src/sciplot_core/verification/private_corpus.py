@@ -35,8 +35,7 @@ FIXTURE_ROOTS = {
 }
 
 
-def _issue(code: str, why: str, *, nodeid: str | None = None,
-           path: str | None = None) -> dict[str, str]:
+def _issue(code: str, why: str, *, nodeid: str | None = None, path: str | None = None) -> dict[str, str]:
     issue = {"gate": GATE, "code": code, "why": why}
     if nodeid is not None:
         issue["nodeid"] = nodeid
@@ -224,8 +223,7 @@ def _listed_source_issues(path: Path, identifier: Path, repo_root: Path,
     return issues
 
 
-def _declared_input_check(*, repo_root: Path, inventory_path: Path,
-                          selected_nodeids: list[str] | None,
+def _declared_input_check(*, repo_root: Path, inventory_path: Path, selected_nodeids: list[str] | None,
                           collected_nodeids: set[str] | None) -> tuple[
                               dict[str, Any], list[str], list[dict[str, Any]],
                               list[dict[str, str]], dict[str, list[tuple[str, str]]]]:
@@ -290,24 +288,20 @@ def _declared_input_check(*, repo_root: Path, inventory_path: Path,
             except OSError as exc:
                 valid = False
                 reason = f"cannot inspect required {kind}: {exc}"
-            checked.append({"path": relative, "kind": kind,
-                            "status": "present" if valid else "blocked"})
+            checked.append({"path": relative, "kind": kind, "status": "present" if valid else "blocked"})
             if not valid:
-                issues.append(_issue("missing_or_invalid_fixture", reason,
-                                     nodeid=nodeid, path=relative))
+                issues.append(_issue("missing_or_invalid_fixture", reason, nodeid=nodeid, path=relative))
             elif listed_sources:
                 members: list[str] = []
                 issues.extend(_listed_source_issues(
                     resolved, identifier, repo_root, nodeid, listed_sources, members,
                 ))
                 event_dependencies[nodeid].extend((member, "file") for member in members)
-        rows.append({"nodeid": nodeid, "evidence": case["evidence"],
-                     "dependencies": checked})
+        rows.append({"nodeid": nodeid, "evidence": case["evidence"], "dependencies": checked})
     return inventory, selected, rows, issues, event_dependencies
 
 
-def declared_input_availability(*, repo_root: Path,
-                                inventory_path: Path = INVENTORY,
+def declared_input_availability(*, repo_root: Path, inventory_path: Path = INVENTORY,
                                 selected_nodeids: list[str] | None = None,
                                 collected_nodeids: set[str] | None = None) -> dict[str, Any]:
     """Authorize test execution on declared presence, never scientific acceptance.
@@ -317,8 +311,7 @@ def declared_input_availability(*, repo_root: Path,
     """
     _, selected, rows, issues, _ = _declared_input_check(
         repo_root=repo_root, inventory_path=inventory_path,
-        selected_nodeids=selected_nodeids, collected_nodeids=collected_nodeids,
-    )
+        selected_nodeids=selected_nodeids, collected_nodeids=collected_nodeids)
     return {"kind": "sciplot_declared_private_input_availability", "version": 1,
             "status": "BLOCKED" if issues else "READY_FOR_SELECTED_TESTS",
             "collection_verified": collected_nodeids is not None,
@@ -326,25 +319,21 @@ def declared_input_availability(*, repo_root: Path,
             "selected_count": len(selected), "cases": rows, "issues": issues}
 
 
-def private_corpus_preflight(*, repo_root: Path,
-                             inventory_path: Path = INVENTORY,
+def private_corpus_preflight(*, repo_root: Path, inventory_path: Path = INVENTORY,
                              selected_nodeids: list[str] | None = None,
                              collected_nodeids: set[str] | None = None,
                              access_audit_path: Path | None = None) -> dict[str, Any]:
     """Diagnose declared case inputs without claiming complete private acceptance."""
     inventory, selected, rows, issues, event_dependencies = _declared_input_check(
         repo_root=repo_root, inventory_path=inventory_path,
-        selected_nodeids=selected_nodeids, collected_nodeids=collected_nodeids,
-    )
+        selected_nodeids=selected_nodeids, collected_nodeids=collected_nodeids)
     declared_present = not issues
     complete = inventory["inventory_complete"]
     if inventory.get("collection_audit") is not None or access_audit_path is not None:
         complete, audit_issues = validate_access_audit(
             inventory=inventory, inventory_path=inventory_path, repo_root=repo_root,
             collected_nodeids=collected_nodeids, dependencies=event_dependencies,
-            access_audit_path=access_audit_path,
-            fixture_roots=FIXTURE_ROOTS,
-        )
+            access_audit_path=access_audit_path, fixture_roots=FIXTURE_ROOTS)
         issues.extend(_issue(code, why, nodeid=nodeid) for code, why, nodeid in audit_issues)
     if not complete:
         issues.append(_issue("inventory_incomplete",
@@ -370,9 +359,7 @@ def _collect_nodeids(repo_root: Path, inventory_path: Path) -> set[str]:
     )
     completed = subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only", "-q"],
-        cwd=repo_root, env=env, capture_output=True, text=True, check=False,
-        timeout=90,
-    )
+        cwd=repo_root, env=env, capture_output=True, text=True, check=False, timeout=90)
     if completed.returncode != 0:
         raise ValueError(f"pytest collection failed (exit {completed.returncode}): {completed.stderr[-1000:]}")
     return {line for line in completed.stdout.splitlines() if line.startswith("tests/") and "::" in line}
@@ -391,9 +378,7 @@ def main(argv: list[str] | None = None) -> int:
         collected = _collect_nodeids(args.repo_root.resolve(), INVENTORY)
         payload = private_corpus_preflight(
             repo_root=args.repo_root.resolve(), selected_nodeids=selected,
-            collected_nodeids=collected,
-            access_audit_path=args.access_audit,
-        )
+            collected_nodeids=collected, access_audit_path=args.access_audit)
     except (OSError, UnicodeError, TypeError, ValueError, subprocess.TimeoutExpired) as exc:
         payload = {"kind": "sciplot_private_corpus_preflight", "version": 1,
                    "gate": GATE, "status": "BLOCKED", "inventory_complete": False,

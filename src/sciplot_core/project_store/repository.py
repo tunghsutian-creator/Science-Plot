@@ -155,8 +155,7 @@ class FileProjectStore:
                         projection: bool = True, physical: Sequence[str] = (),
                         import_legacy: bool = False) -> MemberObservation:
         with self._checked_locked(import_legacy=import_legacy) as (io, current, checked):
-            return observe(io, current, checked, names, generation=generation,
-                           projection=projection, physical=physical)
+            return observe(io, current, checked, names, generation=generation, projection=projection, physical=physical)
 
     def snapshot(self, *, import_legacy: bool = False) -> dict[str, Any]:
         projection = self.observe_members(import_legacy=import_legacy).projection
@@ -176,8 +175,7 @@ class FileProjectStore:
             return capture(io, current, prefix)
 
     def reserve(self, command_id: str, command_digest: str, *, expected_generation: str | None,
-                read_set: Mapping[str, str | None], write_set: Sequence[str],
-                metadata: dict[str, Any] | None = None,
+                read_set: Mapping[str, str | None], write_set: Sequence[str], metadata: dict[str, Any] | None = None,
                 projected_reads: Sequence[dict[str, Any]] = ()) -> dict[str, Any]:
         with self._checked_locked(repair=True) as (io, current, checked):
             epoch = io.validation_epoch
@@ -197,8 +195,7 @@ class FileProjectStore:
     def stage(self, command_id: str, command_digest: str, *, writes: Mapping[str, bytes | Path | PreparedFile | None],
               result: dict[str, Any], review: dict[str, Any],
               artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None,
-              sources: Sequence[dict[str, Any]] | None = None,
-              input_reads: Sequence[dict[str, str]] = (),
+              sources: Sequence[dict[str, Any]] | None = None, input_reads: Sequence[dict[str, str]] = (),
               expected_metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
         with self._checked_locked(repair=True) as (io, _current, checked):
             record = state.command(io, command_id, command_digest, checked=checked)
