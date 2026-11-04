@@ -533,6 +533,15 @@ evidence; targeted checks alone cannot authorize main delivery. Its exact frozen
 source, complete local run/capture/access records and candidate/main CI establish
 delivery status independently of this ownership description.
 
+Verification contexts retain their own authorities: old scientific witnesses use
+the original manifest, current enforcement uses fresh source identity, and Store
+cost measurements count Store calls without discarding guard observations.
+Protocol feedback keeps the real public guard. Named Darwin 27.2 and 27.3 native
+baselines preserve the original scientific authority and require complete actual
+producer evidence plus exact environment, structure and image comparisons. New
+local captures remain outside distribution. These contracts do not replace the
+final version's local full/capture/access gates and supported-platform CI.
+
 Package dependency cleanup, measured runtime/verification costs, finer global
 test-owner closure, outbound minimization and the remaining open scientific
 schemas stay later work. This is not a claim that every architecture finding is

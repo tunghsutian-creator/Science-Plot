@@ -139,7 +139,10 @@ ftir_output/
 # scientific arrays. Preserve historical tracked fixtures; keep new captures local.
 /tests/fixtures/rendering_profiles/mechanical-v1/baselines/
 /tests/fixtures/rendering_profiles/mechanical-v1/manifest--darwin-27.2.0-v1.json
+/tests/fixtures/rendering_profiles/mechanical-v1/manifest--darwin-27.3.0-v1.json
 /tests/fixtures/rendering_profiles/rheology-v1/gp/baselines/
 /tests/fixtures/rendering_profiles/rheology-v1/gpp/baselines/
 /tests/fixtures/rendering_profiles/rheology-v1/manifest-gp--darwin-27.2.0-v1.json
 /tests/fixtures/rendering_profiles/rheology-v1/manifest-gpp--darwin-27.2.0-v1.json
+/tests/fixtures/rendering_profiles/rheology-v1/manifest-gp--darwin-27.3.0-v1.json
+/tests/fixtures/rendering_profiles/rheology-v1/manifest-gpp--darwin-27.3.0-v1.json

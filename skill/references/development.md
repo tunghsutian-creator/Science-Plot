@@ -144,8 +144,8 @@ scientific-safe edit route.
 Historical native goldens bind the actual Python binary, Qt and font identities.
 An upgraded Homebrew `opt` link can drift an existing venv. Restore the matching
 runtime in ignored local storage and use the canonical wrapper; preserve golden
-bytes and environment assertions. The finite Darwin27.0→27.2 transition has an
-additive, explicit sibling descriptor selected only by complete exact environment
+bytes and environment assertions. The finite Darwin27.0→27.2 and 27.0→27.3
+transitions have separate explicit sibling descriptors selected only by complete exact environment
 identity. It retains the original v1 scientific authority and every old dependency;
 its new capture/process/producer closure is independently reviewed before local
 installation. Structure/PNG bytes and complete shared scientific capture must
@@ -153,6 +153,23 @@ match the old authority; only the recorded empty painted-primitives addition is
 permitted for the two rheology profiles. Old environment failures remain failures.
 The new producer identity is recorded truthfully. This is no general OS allowlist,
 update mode, comparator relaxation, or permission to publish local private fixtures.
+Capture helper and producer identities can differ from the historical producer;
+their actual source, child input snapshots and original exits remain separate
+evidence. Native PDF bytes are pinned to each actual capture, not promised equal
+across captures. Historical scientific payload, structure and PNG assertions stay exact.
+
+Observer protocol feedback retains the real inherited public guard through the
+existing observed helper's `keep_public_guard=True` path and rebinds its generated
+bootstrap. Additional watch roots extend the inherited roots rather than replace
+them. Cost counters distinguish the measured owner's calls from the guard's
+required fresh observations; neither may be removed to improve a measurement.
+Historical witnesses validate old scientific helpers against their old manifest
+and separately bind the finite current enforcement sources before and after the
+operation. A current hash never certifies historical scientific bytes.
+The `--input-scope` gate requires its complete reviewed collection. Do not pass
+file subsets to it: register actual new nodes and use filtering after complete
+collection. Ordinary development feedback still uses the affected owners and
+existing bounded helpers, not a full run for each edit.
 A relocated framework Python also needs the
 wrapper's loader bootstrap before direct development Python calls.
 The Mac wrapper discovers `.local/runtime/qt/lib` under its selected runtime

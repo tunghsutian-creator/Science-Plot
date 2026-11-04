@@ -419,6 +419,15 @@ scans an entire source/project parent. No power-loss or distributed-lock claim.
 
 ## Original findings and closure criteria
 
+Verification must distinguish application behavior from its observation context.
+Historical scientific owners and their original helper manifest remain immutable;
+the live enforcement source closure is recorded separately and checked fresh
+before and after the operation. Unknown helpers still refuse. An inherited public
+guard remains active in protocol tests, with generated bootstrap identity rebound
+through the existing owner. Store scan counters attribute calls to the actual
+Store code while preserving every guard observation. A plain targeted pass cannot
+substitute for behavior under the real public entry point.
+
 | Finding | Required closure evidence / remaining boundary |
 | --- | --- |
 | F1 multiple owners | All target callers above use one command/generation boundary; old physical writers cannot commit; cross-entry equivalence and original-history tests. Distinct scientific/native authorities remain explicit. |
