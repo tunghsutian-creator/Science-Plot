@@ -48,23 +48,16 @@ def edit_entry_owner(entry: Path) -> str | None:
     """A key belongs to one existing command authority, including legacy tasks."""
     entry = canonical_path(entry)
     storage = EditCheckpointStorage(entry)
-    owners = [name for name in _BINDINGS if storage.exists(entry / name)]
-    if len(owners) > 1:
-        raise EngineError("document_idempotency_conflict", "The edit entry contains competing command bindings.")
-    return owners[0] if owners else None
+    return storage.inspect_bindings(_BINDINGS)[0]
 
 
 def read_edit_entry(entry: Path, name: EditEntryName) -> dict[str, Any] | None:
     """Read without allocating; an occupied key cannot change command owners."""
     entry = canonical_path(entry)
-    owner = edit_entry_owner(entry)
-    if owner is not None and owner != name:
-        raise EngineError("document_idempotency_conflict",
-                          "Use the original command for this occupied edit entry.")
     storage = EditCheckpointStorage(entry)
-    if not storage.exists(entry / name):
+    saved = storage.inspect_bindings(_BINDINGS, name)[1]
+    if saved is None:
         return None
-    saved = storage.read(entry / name)
     intent = saved.get("intent")
     plot = intent.get("plot") if name == "semantic-style.json" and isinstance(intent, dict) else saved.get("plot")
     if (not isinstance(intent, dict) or not isinstance(saved.get("request"), dict)

@@ -557,6 +557,12 @@ Use its historical-replay stage observations to distinguish necessary validation
 from remaining repeated work before claiming further latency gains. Neither a
 runner-region difference nor a passing subset establishes that cause or release
 readiness.
+The prepared-publication candidate still exceeded that deadline before the
+historical common-edit call returned. The next bounded correction batches its
+checkpoint membership and request read in the existing complete Store observation;
+it keeps external-file races, entry-lease freshness and every rejection boundary.
+Reduced duplicate reads alone remain insufficient: retain the actual native
+deadline, frozen full/capture/access gates and supported-platform CI.
 
 Package dependency cleanup, measured runtime/verification costs, finer global
 test-owner closure, outbound minimization and the remaining open scientific

@@ -246,6 +246,7 @@ def test_cold_typed_style_keeps_selected_checkpoint_owner_through_execution(tmp_
     assert cold_backend.calls["apply"] == 0
     assert {name: moved.read_bytes(name) for name in history} == history
     assert moved.read_bytes(logical) == original
+
     assert read_edit_entry(entry, "semantic-style.json") == saved
     assert selected_source_resolver() is None
     monkeypatch.setattr(compat, "PlotService", lambda: pytest.fail("constructed an owner for a different frozen intent"))
@@ -254,3 +255,125 @@ def test_cold_typed_style_keeps_selected_checkpoint_owner_through_execution(tmp_
     assert conflict.value.reason_code == "document_idempotency_conflict"
     assert selected_source_resolver() is None
     assert moved.read_bytes(logical) == original
+
+
+@pytest.mark.parametrize("name", ["semantic-edit.json", "semantic-style.json"])
+@pytest.mark.parametrize("role", ["missing", "file", "directory", "foreign", "task", "multiple", "invalid", "array"])
+def test_checkpoint_observation_classifies_all_owners_before_selected_decode(tmp_path, monkeypatch, name, role):
+    import json
+    from test_project_member_observation import project, publish
+    from sciplot_core.plot_engine.edit_entry import read_edit_entry
+    from sciplot_core.project_store.errors import ProjectStoreError
+    from sciplot_core.project_store.runtime import project_runtime
+
+    store, _, _ = project(tmp_path)
+    entry = store.root / "compatibility/request"
+    prefix = "compatibility/request/"
+    payload = {"intent": {"plot": str(store.root)}, "plot": str(store.root), "request": {}}
+    foreign = "semantic-style.json" if name == "semantic-edit.json" else "semantic-edit.json"
+    writes = {}
+    if role in {"file", "multiple", "invalid", "array"}:
+        writes[prefix + name] = {"invalid": b"not JSON", "array": b"[]"}.get(role, json.dumps(payload).encode())
+    if role == "directory":
+        writes[prefix + name + "/child"] = b"occupied directory"
+    if role in {"foreign", "multiple", "task"}:
+        writes[prefix + ("task.json" if role == "task" else foreign)] = b"unselected invalid JSON"
+    if writes:
+        publish(store, writes)
+    observed, original = [], store.observe_members
+    def observe(names=(), **options):
+        observed.append((names, options))
+        return original(names, **options)
+    monkeypatch.setattr(store, "observe_members", observe)
+    with project_runtime(store):
+        if role in {"foreign", "task", "multiple"}:
+            with pytest.raises(ValueError) as failed:
+                read_edit_entry(entry, name)
+            assert failed.value.reason_code == "document_idempotency_conflict"
+        elif role == "directory":
+            with pytest.raises(ProjectStoreError, match="not a member of this generation"):
+                read_edit_entry(entry, name)
+        elif role in {"invalid", "array"}:
+            with pytest.raises(ValueError):
+                read_edit_entry(entry, name)
+        else:
+            assert read_edit_entry(entry, name) == (payload if role == "file" else None)
+    assert observed == [((prefix + "semantic-style.json", prefix + "semantic-edit.json", prefix + "task.json"), {"projection": True})]
+
+
+@pytest.mark.parametrize("change", ["create", "delete"])
+def test_local_checkpoint_keeps_fresh_selected_probe_after_owner_scan(tmp_path, monkeypatch, change):
+    import json
+    from sciplot_core.plot_engine.edit_entry import read_edit_entry
+    from sciplot_core.project_lifecycle.repository import FileProjectRepository
+
+    entry = tmp_path / "external"
+    entry.mkdir()
+    path = entry / "semantic-edit.json"
+    payload = {"intent": {}, "plot": str(tmp_path), "request": {}}
+    if change == "delete":
+        path.write_text(json.dumps(payload))
+    calls, original = [], FileProjectRepository.exists
+    def exists(repository, candidate):
+        value = original(repository, candidate)
+        calls.append(candidate.name)
+        if len(calls) == 3:
+            if change == "create":
+                path.write_text(json.dumps(payload))
+            else:
+                path.unlink()
+        return value
+    monkeypatch.setattr(FileProjectRepository, "exists", exists)
+    assert read_edit_entry(entry, "semantic-edit.json") == (payload if change == "create" else None)
+    assert calls == ["semantic-style.json", "semantic-edit.json", "task.json", "semantic-edit.json"]
+
+
+@pytest.mark.parametrize("name", ["semantic-edit.json", "semantic-style.json"])
+def test_checkpoint_probe_and_entry_lease_each_observe_fresh_generation(tmp_path, name):
+    import json
+    from test_project_member_observation import project, publish
+    from sciplot_core.plot_engine.edit_entry import edit_entry_session, read_edit_entry
+    from sciplot_core.project_store.runtime import project_runtime
+
+    store, _, _ = project(tmp_path)
+    entry = store.root / "compatibility/request"
+    logical = "compatibility/request/" + name
+    payload = {"intent": {"plot": str(store.root)}, "plot": str(store.root), "request": {"version": 1}}
+    publish(store, {logical: json.dumps(payload).encode()})
+    with project_runtime(store):
+        assert read_edit_entry(entry, name) == payload
+        payload["request"]["version"] = 2
+        publish(store, {logical: json.dumps(payload).encode()})
+        with edit_entry_session(entry):
+            assert read_edit_entry(entry, name) == payload
+            foreign = "semantic-style.json" if name == "semantic-edit.json" else "semantic-edit.json"
+            publish(store, {"compatibility/request/" + foreign: b"invalid JSON"})
+            with pytest.raises(ValueError) as failed:
+                read_edit_entry(entry, name)
+            assert failed.value.reason_code == "document_idempotency_conflict"
+
+
+@pytest.mark.parametrize("failure", ["recorded_root", "physical_errno"])
+def test_checkpoint_observation_keeps_recorded_root_and_unrelated_physical_failures(tmp_path, monkeypatch, failure):
+    from test_project_member_observation import project
+    from sciplot_core.plot_engine.edit_entry import read_edit_entry
+    from sciplot_core.project_store.errors import ProjectRecoveryRequired
+    from sciplot_core.project_store.io import StoreIO
+    from sciplot_core.project_store.runtime import project_runtime
+
+    store, _, _ = project(tmp_path)
+    if failure == "recorded_root":
+        with store._locked() as (io, current):
+            io.write("local_resource_roots.json", {"project_id": current["project_id"],
+                "generation": current["generation"], "roots": {"": {"device": -1, "inode": -1}}})
+        error, message = ProjectRecoveryRequired, "root changed ownership"
+    else:
+        original = StoreIO.physical
+        def physical(io, name, *, owned=True):
+            if name.endswith("/revisions/00000000.json"):
+                raise PermissionError(13, "unrelated projection denied", name)
+            return original(io, name, owned=owned)
+        monkeypatch.setattr(StoreIO, "physical", physical)
+        error, message = PermissionError, "unrelated projection denied"
+    with project_runtime(store), pytest.raises(error, match=message):
+        read_edit_entry(store.root / "compatibility/request", "semantic-edit.json")

@@ -1525,6 +1525,13 @@ retain one literal request-file owner. Its entry lease retains the selected host
 runtime through replay/cleanup when the original project is offline. Source,
 export and revision directories cannot become user edit entries. Necessary old
 checkpoint formats remain readable.
+For an internal checkpoint, one existing `FileProjectStore.observe_members`
+observation classifies all three binding names and supplies the selected request
+bytes. It retains the complete history, recorded resource-root, physical-file and
+post-read mutation checks; directory descendants still occupy their binding.
+The outer probe and the entry-lease reread are independent observations. External
+request files keep their original existence/read sequence. No proof or cached
+head survives the checkpoint read into native execution.
 
 `studio_render/template_resolution.py` projects declared option values once.
 Domain defaults and series-encoding provenance consume it; recorded effective

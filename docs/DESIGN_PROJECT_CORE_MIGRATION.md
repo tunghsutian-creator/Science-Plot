@@ -432,6 +432,12 @@ One entry lease keeps the selected project runtime through bound replay and owne
 cleanup, including when the original project is offline. Rebinding physical host
 locations does not rewrite the frozen intent or bypass namespace/source/output/
 revision protections.
+Checkpoint owner classification and selected-byte reading share the Store's
+existing complete member observation, replacing repeated full snapshots in one
+read. Competing, foreign and legacy-task bindings still refuse a different
+command; a directory binding cannot become absence. This does not merge the
+unlocked probe with the fresh read under the entry lease, extend a metadata proof
+through `patch`, or change historical replay into repair or execution.
 
 Private render/export/QA preparation may discover its output membership before
 publication only when it changes no active/source/delivery files. This exception

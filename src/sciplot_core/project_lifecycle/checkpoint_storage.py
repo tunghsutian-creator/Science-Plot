@@ -15,6 +15,7 @@ from sciplot_core.project_commands import ProjectCommand, ProjectCommands, Proje
 from sciplot_core.project_store.io import STORE
 from sciplot_core.project_store.repository import FileProjectStore
 from sciplot_core.project_store.runtime import project_runtime, selected_project_store
+from sciplot_core.project_store.errors import ProjectStoreError
 
 from .attachment_index import encode, require_local_owner
 from .errors import EngineError
@@ -46,15 +47,39 @@ class EditCheckpointStorage:
         return self.exists(self.entry) or (self.entry.exists() and (
             not self.entry.is_dir() or any(self.entry.iterdir())))
 
-    def read(self, path: Path) -> dict[str, Any]:
+    def inspect_bindings(self, names: tuple[str, ...], selected: str | None = None) -> tuple[str | None, dict[str, Any] | None]:
+        """Classify fixed owner candidates; decode only the selected request."""
+        members = None
         if self.store is None:
-            return self.local.read(path)
+            owners = [name for name in names if self.local.exists(self.entry / name)]
+        else:
+            logical = tuple(self._logical(self.entry / name) for name in names)
+            # The existing observation owns full projection/root checks and
+            # before/after history proof. Unselected bytes are never decoded.
+            observation = self.store.observe_members(logical, projection=True)
+            members = {name: observation.members[path] for name, path in zip(names, logical, strict=True)}
+            owners = [name for name in names if members[name].kind != "missing"]
+        if len(owners) > 1:
+            raise EngineError("document_idempotency_conflict", "The edit entry contains competing command bindings.")
+        owner = owners[0] if owners else None
+        if selected is not None and owner is not None and owner != selected:
+            raise EngineError("document_idempotency_conflict", "Use the original command for this occupied edit entry.")
+        if selected is None:
+            return owner, None
+        if members is None:
+            path = self.entry / selected
+            return owner, self.local.read(path) if self.local.exists(path) else None
+        if owner is None:
+            return owner, None
+        data = members[selected].data
+        if data is None:
+            raise ProjectStoreError("The logical resource is not a member of this generation.")
         import json
 
-        result = json.loads(self.store.read_bytes(self._logical(path)))
+        result = json.loads(data)
         if not isinstance(result, dict):
             raise EngineError("document_state_invalid", "An edit checkpoint must contain an object.")
-        return result
+        return owner, result
 
     def bind(self, name: str, payload: dict[str, Any]) -> None:
         if self.store is None:
