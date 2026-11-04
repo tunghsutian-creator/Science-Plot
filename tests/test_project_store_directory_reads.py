@@ -5,6 +5,7 @@ import errno
 import os
 from pathlib import Path
 import shutil
+import sys
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -56,10 +57,10 @@ def test_one_head_reuses_only_structural_parents_and_keeps_every_actual_read(tmp
         yield
     for enabled in (False, True):
         opens, reads, gets = Counter(), Counter(), Counter()
-        resolutions = []
+        observations = []
         original_resolve = Path.resolve
-        def resolve(path, *args, _calls=resolutions, _resolve=original_resolve, **kwargs):
-            _calls.append(path)
+        def resolve(path, *args, _calls=observations, _resolve=original_resolve, **kwargs):
+            _calls.append((sys._getframe(1).f_code, path))
             return _resolve(path, *args, **kwargs)
         def opened(path, flags, mode=0o777, *, dir_fd=None, _counts=opens):
             descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
@@ -84,7 +85,15 @@ def test_one_head_reuses_only_structural_parents_and_keeps_every_actual_read(tmp
             proof.require(io, proof.current)
             proof.close()
             os.fstat(io.fd)  # Pool teardown did not close the lease/store FD.
+        # The guard independently resolves live FDs and final children. Count
+        # the Store's ancestor scan by its caller, retaining every observation.
+        resolutions = [path for owner, path in observations if owner is resources.DirectoryReads._anchors.__code__]
         assert resolutions == ([store.root] if enabled else [])
+        from sciplot_core.verification import private_access, public_input_guard
+        if public_input_guard._installed is not None:
+            owners = {owner for owner, _path in observations}
+            assert private_access._fd_path.__code__ in owners
+            assert private_access.ResolvedAccess.resolved_path.__code__ in owners
         counters[enabled] = opens, reads, gets
     before, after = counters[False], counters[True]
     assert before[1:] == after[1:]
@@ -107,6 +116,29 @@ def test_one_head_reuses_only_structural_parents_and_keeps_every_actual_read(tmp
         assert sum(before[0].values()) == 163 and sum(after[0].values()) == 109
     else:
         assert before[0] == after[0]
+
+
+def test_store_canonical_scan_count_keeps_independent_live_fd_and_path_observations(prepared, monkeypatch):
+    from sciplot_core.verification.private_access import ResolvedAccess, _fd_path
+
+    store, snapshot = prepared
+    observations = []
+    original_resolve = Path.resolve
+    def resolve(path, *args, **kwargs):
+        observations.append((sys._getframe(1).f_code, path))
+        return original_resolve(path, *args, **kwargs)
+    with StoreIO(store.root, {}).locked() as io, resources.reading_directories(io, STORE):
+        with monkeypatch.context() as patch:
+            patch.setattr(Path, "resolve", resolve)
+            assert _fd_path(io.root_fds[""]).path == store.root
+            assert ResolvedAccess(store.root / "A.bin").within((store.root,))
+            assert io.get(snapshot["files"]["A.bin"]) == b"A"
+        assert [path for owner, path in observations if owner is resources.DirectoryReads._anchors.__code__] == [store.root]
+        assert (_fd_path.__code__, store.root) in observations
+        owners = {owner for owner, _path in observations}
+        assert _fd_path.__code__ in owners
+        assert ResolvedAccess.resolved_path.__code__ in owners
+        assert len(observations) >= 3
 
 
 @pytest.mark.parametrize("reason", ["false", "unsupported", "unavailable_metadata", "unavailable_name", "unsupported_name", "relative_name", "deleted_name"])
