@@ -15,6 +15,7 @@ import pytest
 from sciplot_core.verification import private_corpus_audit as audit
 from sciplot_core.verification.private_access import ResolvedAccess, _fd_path, access_events, file_parent_open, open_facts
 from sciplot_core.verification.private_observer import CHILD, CONTINUATION, PARENT, RUN, write_bootstrap
+from sciplot_core.verification.public_input_guard import ENVIRONMENT_KEY, rebind_bootstrap
 from private_observer_support import execute_observed
 
 NODE = "tests/test_generated.py::test_source"
@@ -310,11 +311,17 @@ def _observed(tmp_path: Path, code: str) -> dict:
     environment.update(PYTHONPATH=os.pathsep.join((str(plugin), str(root / "src"), environment.get("PYTHONPATH", ""))),
                        SCIPLOT_PRIVATE_AUDIT_DIR=str(output), SCIPLOT_PRIVATE_AUDIT_ROOTS=json.dumps([str(watch)]))
     environment[RUN] = uuid4().hex
+    if ENVIRONMENT_KEY in environment:
+        environment = rebind_bootstrap(environment, plugin)
     program = ("import os,sys,json,errno,posix\nfrom pathlib import Path\n"
                "from sciplot_core.verification.private_observer import current_observer\n"
+               "if 'SCIPLOT_PUBLIC_INPUT_GUARD' in os.environ:\n"
+               " from sciplot_core.verification.public_input_guard import _installed\n"
+               " assert _installed==tuple(Path(value) for value in json.loads(os.environ['SCIPLOT_PUBLIC_INPUT_GUARD']))\n"
                f"watch=Path({str(watch)!r})\nbase=Path({str(tmp_path)!r})\n"
                "current_observer().nodeid='synthetic:setup'\n" + code)
-    _proof, result = execute_observed(tmp_path, [sys.executable, "-c", program], environment, output, [str(watch)])
+    _proof, result = execute_observed(tmp_path, [sys.executable, "-c", program], environment, output,
+                                      [str(watch)], keep_public_guard=True)
     assert result["actual_returncode"] == 0, result["stdout"]
     return result
 
@@ -368,7 +375,7 @@ def test_actual_public_guard_keeps_descriptor_and_nested_protocol_requests_exact
              "class PlainPath:\n def __fspath__(self): return HostileStr('public.csv')\n"
              "class PlainFlags:\n def __index__(self): return os.O_RDONLY\n"
              "from sciplot_core.verification.public_input_guard import install,ENVIRONMENT_KEY\n"
-             "os.environ[ENVIRONMENT_KEY]=json.dumps([str(watch)]);install()\n"
+             "os.environ[ENVIRONMENT_KEY]=json.dumps([*json.loads(os.environ.get(ENVIRONMENT_KEY,'[]')),str(watch)]);install()\n"
              "invalid=os.open(public/'public.csv',os.O_RDONLY);os.close(invalid)\n"
              f"current_observer().nodeid={NODE!r}\n"
              + ("os.chdir(watch)\n" if attempt in {"cwd_sentinel", "nested_fspath", "nested_index", "saved_posix_fspath", "saved_posix_index", "listdir_cwd_sentinel", "scandir_cwd_sentinel"} else "os.chdir(base)\n"))
@@ -428,7 +435,7 @@ def test_actual_temporaryfile_write_seek_read_close_keeps_original_requests(tmp_
         "import tempfile,stat\n"
         "from sciplot_core.verification.public_input_guard import install,ENVIRONMENT_KEY\n"
         "from sciplot_core.verification.private_access import _fd_path\n"
-        "os.environ[ENVIRONMENT_KEY]=json.dumps([str(watch)]);install()\n"
+        "os.environ[ENVIRONMENT_KEY]=json.dumps([*json.loads(os.environ.get(ENVIRONMENT_KEY,'[]')),str(watch)]);install()\n"
         f"current_observer().nodeid={NODE!r}\n"
         "with tempfile.TemporaryFile(dir=base) as stderr:\n"
         " info=os.fstat(stderr.fileno())\n"
@@ -450,7 +457,7 @@ def test_actual_socketpair_keeps_ipc_distinct_from_filesystem_access(tmp_path: P
         "import socket\n"
         "from sciplot_core.verification.public_input_guard import install,ENVIRONMENT_KEY\n"
         "from sciplot_core.verification.private_access import _fd_path\n"
-        "os.environ[ENVIRONMENT_KEY]=json.dumps([str(watch)]);install()\n"
+        "os.environ[ENVIRONMENT_KEY]=json.dumps([*json.loads(os.environ.get(ENVIRONMENT_KEY,'[]')),str(watch)]);install()\n"
         f"current_observer().nodeid={NODE!r}\n"
         "left,right=socket.socketpair()\n"
         "try:\n"
@@ -472,7 +479,7 @@ def test_each_integer_fd_consumer_resolves_once_and_keeps_both_live_identity_che
     result = _observed(tmp_path,
         "from sciplot_core.verification.public_input_guard import install,ENVIRONMENT_KEY\n"
         "source=watch/'input.csv';descriptor=os.open(source,os.O_RDONLY)\n"
-        "os.environ[ENVIRONMENT_KEY]=json.dumps([str(watch)]);install()\n"
+        "os.environ[ENVIRONMENT_KEY]=json.dumps([*json.loads(os.environ.get(ENVIRONMENT_KEY,'[]')),str(watch)]);install()\n"
         "actual_resolve=Path.resolve;actual_fstat=os.fstat;counts={'resolve':0,'fstat':0}\n"
         "def resolve(path,strict=False):\n"
         " if path==source: counts['resolve']+=1\n"
@@ -492,7 +499,11 @@ def test_each_integer_fd_consumer_resolves_once_and_keeps_both_live_identity_che
     assert result["capture_complete"], result["issues"]
     # Each audit consumer still performs the complete live-FD proof. Neither
     # resolves its own same-request canonical fact again or caches for the other.
-    assert json.loads(result["stdout"].splitlines()[-1]) == {"resolve": 2, "fstat": 4}
+    # A public invocation retains its additional inherited guard consumer too.
+    if ENVIRONMENT_KEY in os.environ:
+        assert json.loads(result["stdout"].splitlines()[-1]) == {"resolve": 3, "fstat": 6}
+    else:
+        assert json.loads(result["stdout"].splitlines()[-1]) == {"resolve": 2, "fstat": 4}
 
 
 def test_public_directory_fd_still_resolves_the_final_private_child_alias(tmp_path: Path) -> None:
@@ -500,7 +511,7 @@ def test_public_directory_fd_still_resolves_the_final_private_child_alias(tmp_pa
         "from sciplot_core.verification.public_input_guard import install,ENVIRONMENT_KEY\n"
         "public=base/'public';public.mkdir();alias=public/'alias.csv';alias.symlink_to(watch/'input.csv')\n"
         "directory=os.open(public,os.O_RDONLY|os.O_DIRECTORY)\n"
-        "os.environ[ENVIRONMENT_KEY]=json.dumps([str(watch)]);install()\n"
+        "os.environ[ENVIRONMENT_KEY]=json.dumps([*json.loads(os.environ.get(ENVIRONMENT_KEY,'[]')),str(watch)]);install()\n"
         "actual=Path.resolve;counts={'child_resolve':0}\n"
         "def resolve(path,strict=False):\n"
         " if path==alias: counts['child_resolve']+=1\n"
@@ -515,7 +526,10 @@ def test_public_directory_fd_still_resolves_the_final_private_child_alias(tmp_pa
         " Path.resolve=actual;os.close(directory)\n"
         "print(json.dumps(counts))\n")
     assert result["capture_complete"], result["issues"]
-    assert json.loads(result["stdout"].splitlines()[-1]) == {"child_resolve": 2}
+    if ENVIRONMENT_KEY in os.environ:
+        assert json.loads(result["stdout"].splitlines()[-1]) == {"child_resolve": 3}
+    else:
+        assert json.loads(result["stdout"].splitlines()[-1]) == {"child_resolve": 2}
     assert any(frame["event"] == "open" and frame.get("path") == str(tmp_path / "public/alias.csv")
                and frame["resolved_path"] == str(tmp_path / "watched/input.csv") for frame in result["frames"])
 
@@ -527,7 +541,7 @@ def test_next_integer_fd_request_rechecks_namespace_and_reuse(tmp_path: Path, ch
              "descriptor=os.open(public,os.O_RDONLY);private=os.open(watch/'input.csv',os.O_RDONLY)\n")
     if change == "dup_rename":
         setup += "original=descriptor;descriptor=os.dup(original);os.close(original)\n"
-    setup += ("os.environ[ENVIRONMENT_KEY]=json.dumps([str(watch)]);install()\n"
+    setup += ("os.environ[ENVIRONMENT_KEY]=json.dumps([*json.loads(os.environ.get(ENVIRONMENT_KEY,'[]')),str(watch)]);install()\n"
               f"current_observer().nodeid={NODE!r}\n"
               "with open(descriptor,'rb',closefd=False) as first: assert first.read()==b'generated public'\n")
     setup += "os.dup2(private,descriptor)\n" if change == "reuse" else "public.rename(watch/'moved.csv')\n"
