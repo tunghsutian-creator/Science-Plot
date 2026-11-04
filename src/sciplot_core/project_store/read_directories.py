@@ -200,7 +200,13 @@ def read_stored_file(io: ReadIO, components: tuple[str, ...], reader: FileReader
     parents, name = components[:-1], components[-1]
     if resources is not None:
         try:
-            resources._scope()
+            # The concrete pooled parent enters _anchors/_scope before any
+            # opener or reader. No effect separates that check from this
+            # branch; keep the outer check for every other read and owner.
+            pooled = (type(resources) is DirectoryReads and resources.io is io and resources.reusable
+                      and parents and parents[0] in {"objects", "generations"})
+            if not pooled:
+                resources._scope()
             if resources.io is not io:
                 raise ProjectConflict("Directory resources belong to another IO.")
             if resources.reusable and parents and parents[0] in {"objects", "generations"}:

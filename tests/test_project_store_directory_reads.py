@@ -1,6 +1,6 @@
 """Directory resources reduce opens only within one fully checked head."""
 from collections import Counter
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import errno
 import os
 from pathlib import Path
@@ -35,6 +35,77 @@ def closed(descriptors):
 
 def held(resources_owner):
     return [item.fd for item in resources_owner.held.values()]
+
+
+@pytest.mark.parametrize("change", ["none", "before_read", "during_read"])
+def test_each_pooled_leaf_keeps_distinct_fresh_credential_checks(prepared, monkeypatch, change):
+    store, snapshot = prepared
+    original_credentials, original_read = resources._credentials, store_io.read_file
+    events, changed = [], [False]
+
+    def credentials():
+        events.append("credentials")
+        uid, euid, gid, egid, groups = original_credentials()
+        return uid, euid, gid, egid, groups + ((-1,) if changed[0] else ())
+
+    def read(*args, **kwargs):
+        events.append("read")
+        result = original_read(*args, **kwargs)
+        if change == "during_read":
+            changed[0] = True
+        return result
+
+    with StoreIO(store.root, {}).locked() as io:
+        with pytest.raises(ProjectStoreError, match="boundary") if change != "none" else nullcontext():
+            with resources.reading_directories(io, STORE):
+                # Prime the actual structural descriptor, retaining all real
+                # opens and permission checks on this platform.
+                io.get(snapshot["files"]["A.bin"])
+                owner = io._read_directories
+                assert owner.reusable and "objects" in owner.held
+                monkeypatch.setattr(resources, "_credentials", credentials)
+                monkeypatch.setattr(store_io, "read_file", read)
+                changed[0] = change == "before_read"
+                value = io.get(snapshot["files"]["B.bin"])
+                assert value == b"B"
+                assert events == ["credentials", "read", "credentials"]
+        if change == "before_read":
+            assert events == ["credentials"]
+        elif change == "during_read":
+            assert events == ["credentials", "read", "credentials"]
+
+
+@pytest.mark.parametrize("kind", ["head", "disabled", "custom_parent"])
+def test_unpooled_or_custom_parent_keeps_the_original_outer_credential_guard(prepared, monkeypatch, kind):
+    store, snapshot = prepared
+    original_credentials = resources._credentials
+    changed, callbacks = [False], []
+
+    def credentials():
+        uid, euid, gid, egid, groups = original_credentials()
+        return uid, euid, gid, egid, groups + ((-1,) if changed[0] else ())
+
+    class CustomParent(resources.DirectoryReads):
+        def parent(self, name):
+            callbacks.append(name)
+            changed[0] = False
+            return super().parent(name)
+
+    with StoreIO(store.root, {}).locked() as io:
+        with pytest.raises(ProjectStoreError, match="boundary"):
+            with resources.reading_directories(io, STORE):
+                owner = io._read_directories
+                if kind == "disabled":
+                    owner.disable()
+                elif kind == "custom_parent":
+                    owner.__class__ = CustomParent
+                monkeypatch.setattr(resources, "_credentials", credentials)
+                changed[0] = True
+                if kind == "head":
+                    io.read("head.json")
+                else:
+                    io.get(snapshot["files"]["A.bin"])
+        assert callbacks == []
 
 
 def test_one_head_reuses_only_structural_parents_and_keeps_every_actual_read(tmp_path, monkeypatch):

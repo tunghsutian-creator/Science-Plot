@@ -105,9 +105,11 @@ def _run_output_capability(project: Path, request: dict[str, Any], locations: di
 def _snapshot_members(project: Path, *, blocking: bool = False) -> set[str]:
     """Retain finite archive members already admitted by exact host commands."""
     members: set[str] = set()
-    with admitted_project_generation(project, blocking=blocking) as (primary, _io, current):
-        names = list(current["files"])
-        for record in primary.commands():
+    primary = FileProjectStore(project, locations={})
+    with StoreIO(project, {}).locked(blocking=blocking):
+        current_names, records = primary._command_observation()
+        names = list(current_names)
+        for record in records:
             names.extend(record.get("write_set", record.get("metadata", {}).get("write_set", [])))
         for name in names:
             components = str(name).split("/")

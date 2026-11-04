@@ -10,6 +10,52 @@ from sciplot_core.project_store.adapters import publish_files
 from sciplot_core.studio_core.project_command_scope import project_store as public_store
 
 
+def test_snapshot_member_selection_observes_current_names_and_full_commands_once(tmp_path, monkeypatch):
+    from sciplot_core.project_host_factory import _snapshot_members
+    from sciplot_core.project_store import io as store_io
+
+    root = _project(tmp_path)
+    (tmp_path / "sealed.zip").write_bytes(b"generated sealed archive")
+    store = FileProjectStore(root, locations={"snapshot": ResourceRoot(tmp_path, ("sealed.zip", "pending.zip"))})
+    snapshot = store.snapshot(import_legacy=True)
+    store.reserve("archive-plan", "a" * 64, expected_generation=snapshot["generation"],
+                  read_set={"@snapshot/pending.zip": None}, write_set=["@snapshot/pending.zip"], metadata={"kind": "generated"})
+    original_head, original_get = state._read_checked_head, store_io.StoreIO.get
+    original_commands = state.read_commands
+    calls, reads, records = [], [], []
+
+    def head(io):
+        calls.append(io)
+        return original_head(io)
+
+    def get(io, entry):
+        reads.append(entry["sha256"])
+        return original_get(io, entry)
+
+    def commands(*args, **kwargs):
+        result = original_commands(*args, **kwargs)
+        records.extend(record["command_id"] for record in result)
+        return result
+
+    monkeypatch.setattr(state, "_read_checked_head", head)
+    monkeypatch.setattr(store_io.StoreIO, "get", get)
+    monkeypatch.setattr(state, "read_commands", commands)
+    assert _snapshot_members(root) == {"sealed.zip", "pending.zip"}
+    # Both the records query and the pending-projection check retain their
+    # actual journal reads; only the duplicate complete head is removed.
+    assert len(calls) == 1 and records == ["archive-plan", "archive-plan"]
+    expected = [entry["sha256"] for entry in snapshot["files"].values()]
+    expected.extend(entry["sha256"] for versions in snapshot["sources"].values() for entry in versions.values())
+    assert sorted(reads) == sorted(expected)
+    # The next independent admission must read and hash every current blob.
+    entry = snapshot["files"]["@snapshot/sealed.zip"]
+    key = entry["sha256"]
+    (root / ".sciplot_store/objects" / key[:2] / key).write_bytes(b"changed generated archive")
+    with pytest.raises(ProjectConflict, match="identity"):
+        _snapshot_members(root)
+    assert len(calls) == 2
+
+
 def _project(tmp_path):
     root = tmp_path / "project"
     root.mkdir()

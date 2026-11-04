@@ -276,10 +276,15 @@ class FileProjectStore:
                 renderer_dispatch_entered=renderer_dispatch_entered, owned_invocation_closed=owned_invocation_closed))
 
     def commands(self) -> tuple[dict[str, Any], ...]:
+        return self._command_observation()[1]
+
+    def _command_observation(self) -> tuple[tuple[str, ...], tuple[dict[str, Any], ...]]:
+        """Observe sealed member names and full public command records together."""
         with self._checked_locked(allow_pending=True) as (io, current, checked):
+            names = tuple(current["files"])
             records = state.read_commands(io, expected=current["commands"])
             pending = projection.pending(io, current)
-            return tuple(commands.public(io, record, projection_pending=pending, checked=checked) for record in records)
+            return names, tuple(commands.public(io, record, projection_pending=pending, checked=checked) for record in records)
 
     def recover(self) -> dict[str, Any]:
         with self._checked_locked(repair=True) as (io, current, checked):
