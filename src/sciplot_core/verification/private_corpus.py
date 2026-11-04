@@ -45,14 +45,16 @@ def _issue(code: str, why: str, *, nodeid: str | None = None,
     return issue
 
 
-def _safe_fixture_identifier(value: object) -> Path | None:
+def _safe_fixture_identifier(value: object, *, allow_fixture_root: bool = False) -> Path | None:
     if not isinstance(value, str) or not value.strip():
         return None
     path = Path(value)
     if (path.is_absolute() or ".." in path.parts
             or Path(*path.parts[:3]) not in FIXTURE_ROOTS):
         return None
-    if len(path.parts) <= 3 or any(part in {"", "."} for part in path.parts):
+    if (len(path.parts) < 3 or len(path.parts) == 3 and not allow_fixture_root
+            or any(part in {"", "."} for part in path.parts)
+            or allow_fixture_root and path.as_posix() != value):
         return None
     return path
 
@@ -94,6 +96,15 @@ def _directory_has_safe_file(directory: Path) -> bool:
     return found
 
 
+def _metadata_directory_available(directory: Path) -> bool:
+    """Check readonly directory-open availability without opening or listing it.
+
+    R_OK matches the declared O_RDONLY request; no child, search permission,
+    successful open, or nonempty corpus claim follows from this presence check.
+    """
+    return directory.is_dir() and os.access(directory, os.R_OK)
+
+
 def _load_inventory(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or payload.get("kind") != "sciplot_private_corpus_dependencies":
@@ -130,8 +141,9 @@ def _load_inventory(path: Path) -> dict[str, Any]:
                 if not isinstance(dependency["rule_id"], str) or not dependency["rule_id"]:
                     raise ValueError(f"invalid rule dependency for {nodeid}")
             elif set(dependency) in ({"path", "kind"}, {"path", "kind", "listed_sources"}):
-                if (_safe_fixture_identifier(dependency["path"]) is None
-                        or dependency["kind"] not in {"file", "directory"}):
+                if (_safe_fixture_identifier(dependency["path"],
+                        allow_fixture_root=dependency["kind"] == "directory_metadata") is None
+                        or dependency["kind"] not in {"file", "directory", "directory_metadata"}):
                     raise ValueError(f"unsafe or invalid path dependency for {nodeid}")
                 if "listed_sources" in dependency and (
                     dependency["kind"] != "file"
@@ -156,7 +168,8 @@ def _case_dependencies(case: dict[str, Any]) -> list[tuple[Path, str, str | None
             kind = "directory" if rule.rule_id in DIRECTORY_RULE_IDS else "file"
             result.append((identifier, kind, None))
         else:
-            identifier = _safe_fixture_identifier(dependency["path"])
+            identifier = _safe_fixture_identifier(dependency["path"],
+                allow_fixture_root=dependency["kind"] == "directory_metadata")
             if identifier is None:
                 raise ValueError(f"unsafe fixture identifier: {dependency['path']!r}")
             result.append((identifier, dependency["kind"], dependency.get("listed_sources")))
@@ -268,6 +281,9 @@ def _declared_input_check(*, repo_root: Path, inventory_path: Path,
                 if kind == "file":
                     valid = _readable_nonempty_file(resolved)
                     reason = "required file is missing, wrong type, unreadable, or empty"
+                elif kind == "directory_metadata":
+                    valid = _metadata_directory_available(resolved)
+                    reason = "required metadata directory is missing, wrong type, or unavailable for readonly opening"
                 else:
                     valid = _directory_has_safe_file(resolved)
                     reason = "required directory is missing, wrong type, empty, unreadable, or contains unsafe links"

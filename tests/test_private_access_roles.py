@@ -13,7 +13,7 @@ from uuid import uuid4
 import pytest
 
 from sciplot_core.verification import private_corpus_audit as audit
-from sciplot_core.verification.private_access import ResolvedAccess, _fd_path, access_events, file_parent_open, open_facts
+from sciplot_core.verification.private_access import ResolvedAccess, _fd_path, access_events, directory_metadata_open, file_parent_open, open_facts
 from sciplot_core.verification.private_observer import CHILD, CONTINUATION, PARENT, RUN, write_bootstrap
 from sciplot_core.verification.public_input_guard import ENVIRONMENT_KEY, rebind_bootstrap
 from private_observer_support import execute_observed
@@ -145,6 +145,80 @@ def test_only_exact_declared_file_parent_directory_request_is_derived(tmp_path: 
     elif mutation == "directory_dependency":
         dependencies = [(FILE, "directory")]
     assert file_parent_open(event, dependencies) is (mutation in {"none", "without_cloexec"})
+
+
+@pytest.mark.parametrize("mutation", [
+    "none", "without_cloexec", "not_declared", "file_kind", "directory_kind", "unknown_kind",
+    "root", "child", "sibling", "listdir", "scandir", "ordinary_open", "text_mode",
+    "write", "create", "truncate", "append", "unknown_flags", "missing_directory", "missing_nofollow",
+    "alias", "missing_raw", "raw_sequence", "raw_sha", "raw_epoch", "missing_constants",
+    "boolean_flags", "overlapping_constants", "unknown_constant", "empty_node", "wrong_node",
+])
+def test_directory_metadata_is_exact_open_only_in_the_shared_dependency_mapper(tmp_path: Path, mutation: str) -> None:
+    capture, aliases = _capture(tmp_path)
+    event = access_events(capture, aliases)[0][0]
+    identifier = event["path"]
+    dependencies = [(identifier, "directory_metadata")]
+    if mutation == "without_cloexec":
+        event["open"]["flags"] &= ~256
+    elif mutation == "not_declared":
+        dependencies = DEPENDENCIES
+        event["path"] = "tests/fixtures/real_world"  # Unregistered higher ancestor remains refused.
+    elif mutation in {"file_kind", "directory_kind", "unknown_kind"}:
+        dependencies = [(identifier, mutation.removesuffix("_kind"))]
+    elif mutation in {"root", "child", "sibling"}:
+        event["path"] = {"root": "tests/fixtures/real_world", "child": FILE,
+                         "sibling": identifier + "-other"}[mutation]
+    elif mutation in {"listdir", "scandir"}:
+        event["event"] = "os." + mutation
+    elif mutation == "ordinary_open":
+        event["open"]["flags"] = 0
+    elif mutation == "text_mode":
+        event["open"]["mode"] = "r"
+    elif mutation in {"write", "create", "truncate", "append", "unknown_flags"}:
+        event["open"]["flags"] |= {"write": 1, "create": 512, "truncate": 1024,
+                                   "append": 2048, "unknown_flags": 4096}[mutation]
+    elif mutation in {"missing_directory", "missing_nofollow"}:
+        event["open"]["flags"] &= ~({"missing_directory": 16, "missing_nofollow": 64}[mutation])
+    elif mutation == "alias":
+        event["open"]["raw"]["path"] += "-alias"
+    elif mutation == "missing_raw":
+        event["open"]["raw"] = None
+    elif mutation in {"raw_sequence", "raw_sha", "raw_epoch"}:
+        event["open"]["raw"][{"raw_sequence": "sequence", "raw_sha": "sha256", "raw_epoch": "epoch"}[mutation]] = {
+            "raw_sequence": 0, "raw_sha": "unknown", "raw_epoch": "unknown"}[mutation]
+    elif mutation == "missing_constants":
+        event["open"]["constants"] = None
+    elif mutation == "boolean_flags":
+        event["open"]["flags"] = True
+    elif mutation == "overlapping_constants":
+        event["open"]["constants"] = {**CONSTANTS, "O_NOFOLLOW": 16}
+    elif mutation == "unknown_constant":
+        event["open"]["constants"] = {**CONSTANTS, "O_DIRECTORY": None}
+    elif mutation in {"empty_node", "wrong_node"}:
+        event["nodeid"] = "" if mutation == "empty_node" else NODE + "-other"
+    positive = mutation in {"none", "without_cloexec"}
+    # Old file/directory declarations retain their original equality rules. They
+    # do not become metadata declarations merely because the request has flags.
+    assert directory_metadata_open(event, dependencies) is (positive or mutation == "wrong_node")
+    issues = audit.dependency_event_issues([event], nodeids={NODE}, dependencies={NODE: dependencies})
+    assert (not issues) is (positive or mutation in {"file_kind", "directory_kind"})
+
+
+@pytest.mark.parametrize("constants", [
+    {"platform": "darwin", "O_RDONLY": 0, "O_ACCMODE": 3,
+     "O_DIRECTORY": 1048576, "O_NOFOLLOW": 256, "O_CLOEXEC": 16777216},
+    {"platform": "linux", "O_RDONLY": 0, "O_ACCMODE": 3,
+     "O_DIRECTORY": 65536, "O_NOFOLLOW": 131072, "O_CLOEXEC": 524288},
+])
+def test_directory_metadata_uses_original_producer_constants_across_platforms(tmp_path: Path, constants: dict) -> None:
+    capture, aliases = _capture(tmp_path)
+    capture["frames"][0]["open_constants"] = constants
+    capture["frames"][1]["open_flags"] = constants["O_DIRECTORY"] | constants["O_NOFOLLOW"] | constants["O_CLOEXEC"]
+    event = access_events(capture, aliases)[0][0]
+    assert directory_metadata_open(event, [(event["path"], "directory_metadata")])
+    event["open"]["constants"] = CONSTANTS
+    assert not directory_metadata_open(event, [(event["path"], "directory_metadata")])
 
 
 def test_old_unknown_open_stays_unknown_and_projection_keeps_original_facts(tmp_path: Path) -> None:

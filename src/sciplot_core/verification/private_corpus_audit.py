@@ -15,7 +15,7 @@ from typing import Any
 
 from sciplot_core._paths import local_reference_root, resolve_fixture_path
 from sciplot_core.verification.private_capture import review_capture
-from sciplot_core.verification.private_access import access_events, file_parent_open
+from sciplot_core.verification.private_access import access_events, directory_metadata_open, file_parent_open
 
 
 def nodeids_sha256(nodeids: set[str] | list[str]) -> str:
@@ -122,10 +122,11 @@ def dependency_event_issues(
             continue
         case_dependencies = dependencies.get(nodeid, [])
         if not (any(
-            path == Path(identifier)
+            kind in {"file", "directory"} and path == Path(identifier)
             or (kind == "directory" and path.is_relative_to(Path(identifier)))
             for identifier, kind in case_dependencies
-        ) or file_parent_open(event, case_dependencies)):
+        ) or file_parent_open(event, case_dependencies)
+                or directory_metadata_open(event, case_dependencies)):
             issues.append(("unmapped_private_access", f"undeclared private access: {path.as_posix()}", nodeid))
     return issues
 

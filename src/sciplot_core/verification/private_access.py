@@ -222,8 +222,8 @@ def _directory_request(facts: dict[str, Any]) -> bool:
     return flags in {required, required | cloexec} and flags & access == readonly
 
 
-def file_parent_open(event: dict[str, Any], dependencies: list[tuple[str, str]]) -> bool:
-    """Derive only an exact file's direct-parent metadata-open request."""
+def _canonical_directory_request(event: dict[str, Any]) -> bool:
+    """Require original readonly directory-request facts and canonical raw identity."""
     facts = event.get("open")
     if event.get("event") != "open" or not isinstance(facts, dict) or not _directory_request(facts):
         return False
@@ -236,8 +236,29 @@ def file_parent_open(event: dict[str, Any], dependencies: list[tuple[str, str]])
             or not isinstance(raw.get("path"), str) or not Path(raw["path"]).is_absolute()
             or raw["path"] != raw.get("resolved_path")):
         return False  # Even an in-namespace alias cannot acquire this permission.
+    return True
+
+
+def file_parent_open(event: dict[str, Any], dependencies: list[tuple[str, str]]) -> bool:
+    """Derive only an exact file's direct-parent metadata-open request."""
+    if not _canonical_directory_request(event):
+        return False
     path = Path(event["path"])
     return any(kind == "file" and path == Path(identifier).parent for identifier, kind in dependencies)
+
+
+def directory_metadata_open(event: dict[str, Any], dependencies: list[tuple[str, str]]) -> bool:
+    """Authorize only an explicitly declared exact directory metadata request.
+
+    This does not infer traversal or a producer role, successful opening,
+    directory listing, content reads, or access to any child.
+    """
+    if (not isinstance(event.get("nodeid"), str) or not event["nodeid"]
+            or not _canonical_directory_request(event)):
+        return False
+    path = Path(event["path"])
+    return any(kind == "directory_metadata" and path == Path(identifier)
+               for identifier, kind in dependencies)
 
 
 def access_events(capture: dict[str, Any], aliases: list[tuple[Path, Path]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

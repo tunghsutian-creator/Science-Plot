@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -153,6 +154,94 @@ def test_unsafe_dependency_identifier_blocks_before_file_access(
 
     assert payload["status"] == "BLOCKED"
     assert payload["issues"][0]["code"] == "invalid_inventory"
+
+
+@pytest.mark.parametrize("identifier", [
+    "tests/fixtures/real_world", "tests/fixtures/polymer_corpus",
+    "tests/fixtures/archived_output_raw_data", "tests/fixtures/rendering_profiles",
+    "tests/fixtures/real_world/generated",
+])
+def test_directory_metadata_preflight_checks_empty_exact_directory_without_open_or_enumeration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, identifier: str,
+) -> None:
+    monkeypatch.setenv("SCIPLOT_REFERENCE_DATA", str(tmp_path / "reference"))
+    directory = tmp_path / identifier
+    directory.mkdir(parents=True)
+    inventory = _inventory(tmp_path, complete=True, dependencies=[
+        {"path": identifier, "kind": "directory_metadata"},
+    ])
+    accessed = []
+    def check_access(path, mode):
+        accessed.append((path, mode))
+        return True
+    def forbidden(*args, **kwargs):
+        raise AssertionError("metadata availability must not open or enumerate the directory")
+    monkeypatch.setattr(corpus_module.os, "access", check_access)
+    monkeypatch.setattr(corpus_module, "_directory_has_safe_file", forbidden)
+    monkeypatch.setattr(Path, "iterdir", forbidden)
+    monkeypatch.setattr(Path, "rglob", forbidden)
+    monkeypatch.setattr(corpus_module.os, "listdir", forbidden)
+    monkeypatch.setattr(corpus_module.os, "scandir", forbidden)
+    original_open = Path.open
+    def checked_open(path, *args, **kwargs):
+        assert path != directory
+        return original_open(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "open", checked_open)
+    value, selected, rows, issues, dependencies = corpus_module._declared_input_check(
+        repo_root=tmp_path, inventory_path=inventory, selected_nodeids=[NODE], collected_nodeids={NODE})
+    assert not issues and selected == [NODE]
+    assert rows[0]["dependencies"] == [{"path": identifier, "kind": "directory_metadata", "status": "present"}]
+    assert dependencies == {NODE: [(identifier, "directory_metadata")]}
+    assert accessed == [(directory, os.R_OK)]
+    assert value["cases"][0]["dependencies"][0]["kind"] == "directory_metadata"
+
+
+@pytest.mark.parametrize("kind,identifier,listed", [
+    ("file", "tests/fixtures/real_world", None),
+    ("directory", "tests/fixtures/real_world", None),
+    ("directory_metadata", "tests/fixtures", None),
+    ("directory_metadata", "tests/fixtures/unknown", None),
+    ("directory_metadata", "tests/fixtures/real_world/../other", None),
+    ("directory_metadata", "/tests/fixtures/real_world", None),
+    ("directory_metadata", "tests//fixtures/real_world", None),
+    ("directory_metadata", "tests/fixtures/real_world", "source_files"),
+    ("directory_metadata", "tests/fixtures/real_world", "profile_files"),
+])
+def test_directory_metadata_schema_does_not_expand_old_kinds_or_listed_content(
+    tmp_path: Path, kind: str, identifier: str, listed: str | None,
+) -> None:
+    dependency = {"path": identifier, "kind": kind}
+    if listed is not None:
+        dependency["listed_sources"] = listed
+    inventory = _inventory(tmp_path, complete=True, dependencies=[dependency])
+    result = _run(tmp_path, inventory)
+    assert result["status"] == "BLOCKED"
+    assert result["issues"][0]["code"] == "invalid_inventory"
+
+
+@pytest.mark.parametrize("state", ["missing", "file", "unreadable", "escaped_alias"])
+def test_directory_metadata_availability_stays_closed_without_requesting_children(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: str,
+) -> None:
+    monkeypatch.setenv("SCIPLOT_REFERENCE_DATA", str(tmp_path / "reference"))
+    identifier = "tests/fixtures/real_world/generated"
+    directory = tmp_path / identifier
+    directory.parent.mkdir(parents=True)
+    if state == "file":
+        directory.write_bytes(b"generated")
+    elif state == "unreadable":
+        directory.mkdir()
+        monkeypatch.setattr(corpus_module.os, "access", lambda path, mode: False)
+    elif state == "escaped_alias":
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        directory.symlink_to(outside, target_is_directory=True)
+    inventory = _inventory(tmp_path, complete=True, dependencies=[
+        {"path": identifier, "kind": "directory_metadata"},
+    ])
+    result = _run(tmp_path, inventory)
+    assert result["status"] == "BLOCKED"
+    assert result["issues"][0]["code"] == ("unsafe_fixture" if state == "escaped_alias" else "missing_or_invalid_fixture")
 
 
 def test_nodeid_module_cannot_escape_test_tree(tmp_path: Path) -> None:
@@ -324,20 +413,22 @@ def test_preflight_files_have_changed_owner_and_focused_target() -> None:
 
 
 def _review_and_receipt(tmp_path: Path, inventory: Path, *, collection_event: str = "os.scandir",
-                        parent_open: bool = False, parent_action: str = "declared_child") -> Path:
+                        parent_open: bool = False, parent_action: str = "declared_child",
+                        opened_directory: Path | None = None) -> Path:
     nodes = {NODE, PUBLIC_SIBLING}
     source = tmp_path / "tests" / NODE.split("::")[0].removeprefix("tests/")
     source.parent.mkdir(exist_ok=True)
     fixture = tmp_path / "reference" / "real_world" / "uvvis_spectrum" / FIXTURE.name
     name = NODE.split("::")[1].split("[")[0]
-    operation = ("os.listdir(fd)" if parent_action == "listdir" else
+    operation = ("None" if parent_action == "metadata_only" else
+                 "os.listdir(fd)" if parent_action == "listdir" else
                  "list(os.scandir(fd))" if parent_action == "scandir" else
                  f"os.fdopen(os.open({fixture.name if parent_action == 'declared_child' else 'other.csv'!r}, os.O_RDONLY{'|os.O_NOFOLLOW' if parent_action != 'alias_child' else ''}, dir_fd=fd), 'rb').close()")
     source.write_text("import os,pytest\nfrom pathlib import Path\n"
                       "@pytest.mark.parametrize('count', [0, 2])\n"
                       f"def {name}(count):\n"
                       + (f"    if count == 2:\n"
-                         f"        fd = os.open({str(fixture.parent)!r}, os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)\n"
+                         f"        fd = os.open({str(fixture.parent if opened_directory is None else opened_directory)!r}, os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)\n"
                          f"        try: {operation}\n"
                          "        finally: os.close(fd)\n"
                          if parent_open else "")
@@ -457,6 +548,48 @@ def test_actual_parent_open_receipt_keeps_raw_facts_and_declared_source_checks(
     )
     assert (result["status"] == "READY_FOR_SELECTED_TESTS") is (mutation == "none")
     assert result["scientific_acceptance"] is False
+
+
+def test_actual_directory_metadata_receipt_keeps_shared_mapping_and_original_raw_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SCIPLOT_REFERENCE_DATA", str(tmp_path / "reference"))
+    source = tmp_path / "reference/real_world/uvvis_spectrum" / FIXTURE.name
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"generated input, never read by metadata-only child")
+    identifier = "tests/fixtures/real_world"
+    inventory = _inventory(tmp_path, complete=False, dependencies=[
+        {"path": identifier, "kind": "directory_metadata"},
+    ])
+    receipt_path = _review_and_receipt(tmp_path, inventory, parent_open=True,
+        parent_action="metadata_only", opened_directory=source.parents[1])
+    original = json.loads(receipt_path.read_text())
+    assert len(original["events"]) == 1
+    assert original["events"][0]["path"] == identifier
+    from sciplot_core.verification.private_corpus_audit import dependency_event_issues
+    dependencies = {NODE: [(identifier, "directory_metadata")]}
+    assert not dependency_event_issues(original["events"], nodeids={NODE, PUBLIC_SIBLING}, dependencies=dependencies)
+    assert dependency_event_issues(original["events"], nodeids={NODE, PUBLIC_SIBLING}, dependencies={})
+    for mutation in ("none", "flags", "constants", "platform", "raw", "normalized_role"):
+        receipt = deepcopy(original)
+        facts = receipt["events"][0]["open"]
+        if mutation == "flags":
+            facts["flags"] ^= 1
+        elif mutation == "constants":
+            facts["constants"]["O_NOFOLLOW"] <<= 1
+        elif mutation == "platform":
+            facts["constants"]["platform"] += "-forged"
+        elif mutation == "raw":
+            facts["raw"]["sequence"] += 1
+        elif mutation == "normalized_role":
+            receipt["events"][0]["directory_metadata"] = True
+        candidate = tmp_path / ("metadata-" + mutation + ".json")
+        candidate.write_text(json.dumps(receipt))
+        result = private_corpus_preflight(repo_root=tmp_path, inventory_path=inventory,
+            collected_nodeids={NODE, PUBLIC_SIBLING}, access_audit_path=candidate)
+        assert (result["status"] == "READY_FOR_SELECTED_TESTS") is (mutation == "none")
+        assert result["scientific_acceptance"] is False
+    assert json.loads(receipt_path.read_text()) == original
 
 
 @pytest.mark.parametrize("action", ["declared_child", "sibling", "listdir", "scandir", "alias_child"])
