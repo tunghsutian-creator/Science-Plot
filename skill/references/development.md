@@ -202,6 +202,12 @@ shared `verification.private_access.access_events` projection; current scoped
 and entire exporters must consume that owner rather than a three-field copy.
 Private event dependency checks use the same `private_corpus_audit` mapping
 owner in both modes; a scoped result never satisfies full-collection admission.
+Declare a required namespace handle explicitly with `directory_metadata`; it
+authorizes only that exact canonical readonly/no-follow directory open. Keep
+file/direct-parent, directory-content and metadata-only roles distinct. A metadata
+role grants no enumeration, child read, inferred traversal or successful opening.
+Old events and source identities retain their original result; a pure mapper
+replay cannot replace a newly bound complete capture and strict export.
 Old records without those facts remain historical evidence with their original
 result. Directory-handle metadata permission never grants listing or child-file
 content. Retain raw/normalized reconciliation and original wait/capture checks.

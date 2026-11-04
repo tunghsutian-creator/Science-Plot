@@ -168,6 +168,10 @@ nodes that produced the previously unmapped parent opens, with strict scoped
 export before the next complete run. Generated roles and successful software
 bodies cannot promote old records that lack those facts. Retain both positive
 declared-file checks and actual undeclared sibling/listing refusal controls.
+The subsequent exact directory-metadata dependency role must retain those
+refusals and all original content declarations. Static per-node role review and
+pure mapping of retained events do not close the new candidate's strict scoped
+or full capture/export gates.
 
 Finish an independent inventory review against the exact collected node and
 parameter set, then bind actual authorized raw/golden membership and bytes,

@@ -23167,6 +23167,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "first_observed_failure_and_test_source"
@@ -23176,6 +23180,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "first_observed_failure_and_test_source"
@@ -23185,6 +23193,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "first_observed_failure_and_test_source"
@@ -23194,6 +23206,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "first_observed_failure_and_test_source"
@@ -23203,6 +23219,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "first_observed_failure_and_test_source"
@@ -23212,6 +23232,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "first_observed_failure_and_test_source"
@@ -23221,6 +23245,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "first_observed_failure_and_test_source"
@@ -23949,6 +23977,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -23958,6 +23990,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -24012,6 +24048,10 @@
       "dependencies": [
         {
           "rule_id": "dma_temperature_sweep"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -24030,6 +24070,10 @@
       "dependencies": [
         {
           "rule_id": "dsc_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -24039,6 +24083,10 @@
       "dependencies": [
         {
           "rule_id": "dsc_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -24048,6 +24096,10 @@
       "dependencies": [
         {
           "rule_id": "dsc_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -24088,6 +24140,14 @@
       "dependencies": [
         {
           "rule_id": "tensile_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
+        },
+        {
+          "path": "tests/fixtures/real_world/tensile_curve",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -24124,6 +24184,14 @@
       "dependencies": [
         {
           "rule_id": "tensile_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
+        },
+        {
+          "path": "tests/fixtures/real_world/tensile_curve",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -24133,6 +24201,10 @@
       "dependencies": [
         {
           "rule_id": "rheology_temperature_sweep"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -24142,6 +24214,10 @@
       "dependencies": [
         {
           "rule_id": "rheology_temperature_sweep"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -24151,6 +24227,10 @@
       "dependencies": [
         {
           "rule_id": "rheology_temperature_sweep"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "test_source_inspection"
@@ -24257,6 +24337,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "full_collection_static_transitive_source_review"
@@ -24266,6 +24350,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "full_collection_static_transitive_source_review"
@@ -24275,6 +24363,10 @@
       "dependencies": [
         {
           "rule_id": "compression_curve"
+        },
+        {
+          "path": "tests/fixtures/real_world",
+          "kind": "directory_metadata"
         }
       ],
       "evidence": "full_collection_static_transitive_source_review"
