@@ -167,6 +167,7 @@ PROJECT_CORE_OWNERS = (
         owner_id="complete_project_generation_store",
         path_prefixes=("src/sciplot_core/project_store/",),
         exact_paths=frozenset({"src/sciplot_core/project_manifest.py",
+                              "src/sciplot_core/foundation/descriptor_names.py",
                               "src/sciplot_core/project_manifest_locations.py",
                               "src/sciplot_core/project_host_factory.py",
                               "src/sciplot_core/studio_core/native_save_storage.py",

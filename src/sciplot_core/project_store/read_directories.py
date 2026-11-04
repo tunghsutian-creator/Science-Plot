@@ -14,6 +14,8 @@ import stat
 from threading import get_ident
 from typing import Protocol
 
+from sciplot_core.foundation.descriptor_names import descriptor_name
+
 from .errors import ProjectConflict
 
 DirectoryOpener = Callable[[int, tuple[str, ...]], AbstractContextManager[int]]
@@ -31,7 +33,7 @@ class ReadIO(Protocol):
     namespace_backups: dict[str, Path]
     _read_directories: DirectoryReads | None
 
-    def verify_roots(self) -> None: ...
+    def verify_roots(self) -> dict[str, tuple[os.stat_result, os.stat_result]]: ...
 
 
 class _Unprovable(Exception):
@@ -72,6 +74,7 @@ class DirectoryReads:
             os.supports_dir_fd, os.supports_effective_ids, os.supports_follow_symlinks))
         self.root_identity: tuple[int, ...] | None = None
         self.store_identity: tuple[int, ...] | None = None
+        self.root_name: str | None = None
 
     def close(self) -> None:
         held, self.held = self.held, {}
@@ -101,11 +104,18 @@ class DirectoryReads:
         self._scope()
         io = self.io
         try:
-            io.verify_roots()
-            if io.root.resolve(strict=True) != io.root:
+            named_root, root = io.verify_roots()[""]
+            name = descriptor_name(io.root_fds[""])
+            current = Path(name)
+            if not current.is_absolute() or str(current) != name or name.endswith(" (deleted)"):
+                raise _Unprovable
+            # A canonical path can retain the caller's case on a
+            # case-insensitive filesystem while the kernel reports disk case.
+            # Prove the original no-alias rule once, then observe the same
+            # live kernel name afresh. A changed name re-enters that rule;
+            # it is not by itself identity or permission authority.
+            if (self.root_name is None or name != self.root_name) and io.root.resolve(strict=True) != io.root:
                 raise _Changed("The current project namespace acquired an ancestor alias.")
-            root = os.fstat(io.root_fds[""])
-            named_root = io.root.lstat()
             store = os.fstat(io.fd)
             named_store = os.stat(self.store_name, dir_fd=io.root_fds[""], follow_symlinks=False)
         except (OSError, RuntimeError) as exc:
@@ -115,6 +125,7 @@ class DirectoryReads:
             raise _Changed("The named project/store directory differs from its held descriptor.")
         if self.root_identity is None:
             self.root_identity, self.store_identity = _identity(root), _identity(store)
+            self.root_name = name
         elif self.root_identity != _identity(root) or self.store_identity != _identity(store):
             raise _Changed("The project/store directory identity or permissions changed during validation.")
 

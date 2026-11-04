@@ -1435,6 +1435,16 @@ permissions discard the resources and defer to the original fresh opener's
 actual result, including permission errors and allowed reads. Mutation, failure
 and scope exit invalidate and close the resources before a checked head returns.
 No descriptor resource outlives this one validation or replaces an OS check.
+`foundation/descriptor_names.py` owns the fresh Darwin/Linux kernel-name
+observation shared with verification; a returned name proves neither existence,
+identity nor permission. Store resources establish the original canonical-path
+check at scope entry, then compare fresh kernel names; differing names retain
+the original path check, including legitimate case-insensitive spellings.
+Current named/held metadata and permissions remain independently checked.
+`StoreIO.verify_roots` supplies one set of fresh named/opened observations to its
+consumer, rather than repeating that same observation in the resource helper.
+Verification retains its original resolve/lstat/fstat checks around the shared
+primitive and includes its source bytes in the observer's source identity.
 
 `project_store/member_observation.py` owns coherent finite member reads and the
 snapshot projection algorithm behind `FileProjectStore.observe_members`,

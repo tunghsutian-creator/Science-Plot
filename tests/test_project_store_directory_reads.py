@@ -3,6 +3,7 @@ from collections import Counter
 from contextlib import contextmanager
 import errno
 import os
+from pathlib import Path
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 
@@ -55,6 +56,11 @@ def test_one_head_reuses_only_structural_parents_and_keeps_every_actual_read(tmp
         yield
     for enabled in (False, True):
         opens, reads, gets = Counter(), Counter(), Counter()
+        resolutions = []
+        original_resolve = Path.resolve
+        def resolve(path, *args, _calls=resolutions, _resolve=original_resolve, **kwargs):
+            _calls.append(path)
+            return _resolve(path, *args, **kwargs)
         def opened(path, flags, mode=0o777, *, dir_fd=None, _counts=opens):
             descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
             _counts[(str(path), bool(flags & os.O_DIRECTORY))] += 1
@@ -69,6 +75,7 @@ def test_one_head_reuses_only_structural_parents_and_keeps_every_actual_read(tmp
             patch.setattr(os, "open", opened)
             patch.setattr(StoreIO, "read", read)
             patch.setattr(StoreIO, "get", get)
+            patch.setattr(Path, "resolve", resolve)
             if not enabled:
                 patch.setattr(state, "reading_directories", no_resources)
             proof = state.checked_head(io)
@@ -77,6 +84,7 @@ def test_one_head_reuses_only_structural_parents_and_keeps_every_actual_read(tmp
             proof.require(io, proof.current)
             proof.close()
             os.fstat(io.fd)  # Pool teardown did not close the lease/store FD.
+        assert resolutions == ([store.root] if enabled else [])
         counters[enabled] = opens, reads, gets
     before, after = counters[False], counters[True]
     assert before[1:] == after[1:]
@@ -101,7 +109,7 @@ def test_one_head_reuses_only_structural_parents_and_keeps_every_actual_read(tmp
         assert before[0] == after[0]
 
 
-@pytest.mark.parametrize("reason", ["false", "unsupported", "unavailable_metadata"])
+@pytest.mark.parametrize("reason", ["false", "unsupported", "unavailable_metadata", "unavailable_name", "unsupported_name", "relative_name", "deleted_name"])
 def test_unprovable_reuse_closes_resources_and_keeps_the_original_fresh_result(prepared, monkeypatch, reason):
     store, snapshot = prepared
     with StoreIO(store.root, {}).locked() as io:
@@ -116,13 +124,21 @@ def test_unprovable_reuse_closes_resources_and_keeps_the_original_fresh_result(p
                     def unsupported(_fd, _name):
                         raise NotImplementedError("No effective no-follow access probe")
                     patch.setattr(resources, "_permission", unsupported)
-                else:
+                elif reason == "unavailable_metadata":
                     original = os.stat
                     def invisible(path, *, dir_fd=None, follow_symlinks=True):
                         if path == "objects" and dir_fd == io.fd:
                             raise PermissionError(errno.EPERM, "metadata is not observable")
                         return original(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
                     patch.setattr(os, "stat", invisible)
+                elif reason in {"unavailable_name", "unsupported_name"}:
+                    def missing_name(_descriptor):
+                        if reason == "unavailable_name":
+                            raise PermissionError(errno.EPERM, "kernel name is not observable")
+                        raise NotImplementedError("No supported kernel name observation")
+                    patch.setattr(resources, "descriptor_name", missing_name)
+                else:
+                    patch.setattr(resources, "descriptor_name", lambda _descriptor: "relative" if reason == "relative_name" else str(store.root) + " (deleted)")
                 assert io.get(snapshot["files"]["B.bin"]) == b"B"
             assert not owner.reusable and owner.held == {}
             closed(descriptors)
@@ -138,6 +154,55 @@ def test_platform_without_effective_access_uses_original_directory_reads(prepare
             assert io.get(snapshot["files"]["A.bin"]) == b"A"
             assert io.get(snapshot["files"]["B.bin"]) == b"B"
             assert not io._read_directories.reusable and io._read_directories.held == {}
+
+
+def test_valid_root_case_spelling_keeps_the_original_fresh_read_result(prepared, monkeypatch):
+    store, snapshot = prepared
+    spelling = store.root.with_name(store.root.name.upper())
+    with monkeypatch.context() as patch:
+        if not spelling.exists():
+            spelling = store.root
+            # On a case-sensitive host, model only the kernel observation's
+            # spelling difference. Names, identities, permissions and reads
+            # remain actual filesystem operations.
+            observe = resources.descriptor_name
+            patch.setattr(resources, "descriptor_name", lambda descriptor: observe(descriptor).upper())
+        assert spelling.resolve(strict=True) == spelling
+        with StoreIO(spelling, {}).locked() as io, resources.reading_directories(io, STORE):
+            assert io.get(snapshot["files"]["A.bin"]) == b"A"
+            assert io.get(snapshot["files"]["B.bin"]) == b"B"
+            assert io._read_directories.root_name == resources.descriptor_name(io.root_fds[""])
+            assert io._read_directories.root_name != str(io.root)
+
+
+def test_a_valid_case_only_ancestor_move_keeps_the_original_no_alias_rule(tmp_path, monkeypatch):
+    parent = tmp_path / "lower-parent"
+    moved = parent.with_name("LOWER-PARENT")
+    root = parent / "project"
+    root.mkdir(parents=True)
+    (root / "A.bin").write_bytes(b"A")
+    (root / "B.bin").write_bytes(b"B")
+    store = FileProjectStore(root)
+    snapshot = store.snapshot(import_legacy=True)
+    with StoreIO(store.root, {}).locked() as io:
+        with resources.reading_directories(io, STORE):
+            assert io.get(snapshot["files"]["A.bin"]) == b"A"
+            parent.rename(moved)
+            try:
+                with monkeypatch.context() as patch:
+                    if not parent.exists():
+                        moved.rename(parent)
+                        # Isolate the same changed kernel spelling on a
+                        # case-sensitive filesystem without bypassing any of
+                        # the original resolve/stat/access/read checks.
+                        observe = resources.descriptor_name
+                        patch.setattr(resources, "descriptor_name", lambda descriptor: observe(descriptor).replace("lower-parent", "LOWER-PARENT"))
+                    assert resources.descriptor_name(io.root_fds[""]) != io._read_directories.root_name
+                    assert store.root.resolve(strict=True) == store.root
+                    assert io.get(snapshot["files"]["B.bin"]) == b"B"
+            finally:
+                if moved.exists():
+                    moved.rename(parent)
 
 
 @pytest.mark.parametrize("failure", ["missing_prefix", "aliased_prefix", "aliased_leaf", "changed_bytes"])

@@ -255,12 +255,15 @@ class StoreIO:
         if self._checked_window is not None:
             self.advance_epoch()
 
-    def verify_roots(self) -> None:
+    def verify_roots(self) -> dict[str, tuple[os.stat_result, os.stat_result]]:
+        observations = {}
         for key, fd in self.root_fds.items():
             path = self.locations[key] if key else self.root
             current, opened = path.lstat(), os.fstat(fd)
             if not stat.S_ISDIR(current.st_mode) or (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
                 raise ProjectRecoveryRequired("A trusted resource root changed its directory identity.")
+            observations[key] = current, opened
+        return observations
 
     def split(self, logical: str) -> tuple[int, tuple[str, ...]]:
         components = parts(logical)

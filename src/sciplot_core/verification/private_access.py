@@ -17,6 +17,8 @@ import sys
 import threading
 from typing import Any
 
+from sciplot_core.foundation.descriptor_names import descriptor_name
+
 _open_context = threading.local()
 _port_installed = False
 
@@ -85,15 +87,12 @@ def _fd_path(descriptor: int) -> ResolvedAccess:
         return ResolvedAccess(issue="invalid_descriptor" if exc.errno == errno.EBADF else "unknown_descriptor")
     try:
         nonfilesystem = "pipe" if stat.S_ISFIFO(before.st_mode) else "socket" if stat.S_ISSOCK(before.st_mode) else None
-        if sys.platform == "darwin":
-            import fcntl
-            name = os.fsdecode(fcntl.fcntl(descriptor, fcntl.F_GETPATH, b"\0" * 1024).split(b"\0", 1)[0])
-        elif sys.platform.startswith("linux"):
-            name = os.readlink(f"/proc/self/fd/{descriptor}")
-            if nonfilesystem and name.startswith(nonfilesystem + ":[") and name.endswith("]"):
-                return ResolvedAccess(issue="nonfilesystem_" + nonfilesystem if _fd_identity(before) == _fd_identity(os.fstat(descriptor)) else "unknown_descriptor")
-        else:
+        if sys.platform != "darwin" and not sys.platform.startswith("linux"):
             return ResolvedAccess(issue="unknown_descriptor")
+        name = descriptor_name(descriptor)
+        if (sys.platform.startswith("linux") and nonfilesystem
+                and name.startswith(nonfilesystem + ":[") and name.endswith("]")):
+            return ResolvedAccess(issue="nonfilesystem_" + nonfilesystem if _fd_identity(before) == _fd_identity(os.fstat(descriptor)) else "unknown_descriptor")
         path = Path(name)
         if not path.is_absolute() or name.endswith(" (deleted)") or path.resolve() != path:
             return ResolvedAccess(issue="unknown_descriptor")
