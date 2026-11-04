@@ -82,11 +82,15 @@ def lifecycle(root, progress):
         service.backend.backend.legacy.apply = no_apply
         progress("historical_replay")
         replayed = edit_task(plot, palette="tol_bright", task_dir=common_entry, service=service)
+        progress("historical_replay_returned")
         assert replayed["replayed"] and replayed["historical"] and replayed["revision"] == 1, replayed
         assert replayed["current_revision"] == 3 and replayed["ready_to_use"] is False
         assert (studio / "document.vsz").read_bytes() == native
+        progress("historical_native_bytes_checked")
         assert {name: store.read_bytes(name) for name in originals} == originals
+        progress("historical_source_bytes_checked")
         assert store.snapshot()["projection_status"] == "current"
+        progress("historical_projection_snapshot_checked")
     finally:
         progress("close_second_service")
         service.close()

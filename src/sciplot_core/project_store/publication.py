@@ -19,6 +19,12 @@ from .namespace_transfers import require as require_namespaces, values as namesp
 
 def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
             frozen: dict[str, Any]) -> dict[str, Any]:
+    # Staging may legitimately reenter this same writer for another command.
+    # Select its fully checked successor before merging this frozen mutation.
+    latest = state.head(io)
+    if latest is None or latest["project_id"] != current["project_id"]:
+        raise ProjectConflict("The publication lost its exact project head.")
+    current = latest
     outcome = current["commands"].get(record["command_id"])
     if outcome is not None:
         if outcome["command_digest"] != record["command_digest"]:
@@ -112,7 +118,7 @@ def publish(io: StoreIO, current: dict[str, Any], record: dict[str, Any], *,
         if any(path != expected_root / key for key, path in io.locations.items()):
             raise ProjectConflict("A cold project resource must retain its confined host-selected local root.")
         io.write("local_locations.json", {"ids": sorted(io.locations), "members": io.location_members})
-    state.publish_head(io, value)
+    state.publish_head(io, value, expected=current)
     state.boundary("after_head")
     projection.project(io, record, value)
     record.update(phase="complete", generation=value["generation"], result=frozen["result"])

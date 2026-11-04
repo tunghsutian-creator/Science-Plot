@@ -546,6 +546,18 @@ producer evidence plus exact environment, structure and image comparisons. New
 local captures remain outside distribution. These contracts do not replace the
 final version's local full/capture/access gates and supported-platform CI.
 
+The current prepared-publication closure must retain every staged-view,
+decision, source and recovery check while retiring unused intermediate protocol
+round trips. A coherent latest-generation merge and final expected-head check
+must preserve independent nested updates and their complete command history.
+The generated transaction demonstrates fewer metadata/view reads, with unchanged
+complete-head validation count; this alone does not prove the whole native
+waiting cost resolved. Keep the original 180-second case and all release coverage.
+Use its historical-replay stage observations to distinguish necessary validation
+from remaining repeated work before claiming further latency gains. Neither a
+runner-region difference nor a passing subset establishes that cause or release
+readiness.
+
 Package dependency cleanup, measured runtime/verification costs, finer global
 test-owner closure, outbound minimization and the remaining open scientific
 schemas stay later work. This is not a claim that every architecture finding is

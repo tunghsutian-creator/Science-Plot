@@ -22,7 +22,8 @@ class ProjectStore(Protocol):
                 sources: Sequence[dict[str, Any]] | None = None,
                 artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None,
                 input_reads: Sequence[dict[str, str]] = (),
-                expected_metadata: Mapping[str, Any] | None = None) -> dict[str, Any]: ...
+                expected_metadata: Mapping[str, Any] | None = None,
+                review: dict[str, Any] | None = None) -> dict[str, Any]: ...
 
     def stage(self, command_id: str, command_digest: str, *,
               writes: Mapping[str, bytes | Path | PreparedFile | None], result: dict[str, Any], review: dict[str, Any],

@@ -86,14 +86,22 @@ class ProjectCommands:
             result=candidate.result, sources=self._sources(candidate), artifacts=candidate.artifacts,
             **self._input_options(command, candidate)))
 
-    def stage_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
-        """Durably freeze bytes without accepting a later ownership transfer."""
+    @staticmethod
+    def _prepared_review(command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
         candidate.validate_for(command)
         expected = candidate.prepared_digest
         if (command.kind not in {CommandKind.SEMANTIC_RECORD, CommandKind.ATTACHMENT_IMPORT}
                 or json.loads(command.request_json).get("prepared_digest") != expected):
             raise ProjectCommandError("project_prepared_publication_invalid", "The prepared bytes require their exact storage command binding.")
-        record = self._admit(command)
+        return {"publication": "prepared_storage", "prepared_digest": expected, "candidate_review": candidate.review}
+
+    def stage_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
+        """Durably freeze bytes without accepting a later ownership transfer."""
+        review = self._prepared_review(command, candidate)
+        return self._staged_prepared(command, candidate, self._admit(command), review)
+
+    def _staged_prepared(self, command: ProjectCommand, candidate: ProjectMutation,
+                         record: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:
         self.store.recover()
         current = self.store.query(command.key)
         if current is not None:
@@ -103,12 +111,11 @@ class ProjectCommands:
         if record.get("phase") == "reserved":
             record = self._bound(command, self.store.stage(
                 command.key, command.command_digest, writes=candidate.writes, result=candidate.result,
-                review={"publication": "prepared_storage", "prepared_digest": expected,
-                        "candidate_review": candidate.review}, artifacts=candidate.artifacts,
+                review=review, artifacts=candidate.artifacts,
                 sources=self._sources(candidate), **self._input_options(command, candidate)))
         if record.get("phase") in {"needs_review", "accepted"}:
-            review = record.get("review", {})
-            if review.get("publication") != "prepared_storage" or review.get("prepared_digest") != expected:
+            saved_review = record.get("review", {})
+            if saved_review.get("publication") != "prepared_storage" or saved_review.get("prepared_digest") != review["prepared_digest"]:
                 raise ProjectCommandError("project_prepared_publication_invalid", "An interactive or different candidate cannot be automatically accepted.")
             return record
         raise ProjectCommandUnknown()
@@ -118,7 +125,14 @@ class ProjectCommands:
         if command.namespace_transfers:
             raise ProjectCommandError("project_namespace_decision_required",
                 "Stage the exact namespace transfer, validate and fence its owner, then explicitly decide.")
-        record = self.stage_prepared(command, candidate)
+        review = self._prepared_review(command, candidate)
+        record = self._admit(command)
+        if record.get("phase") == "reserved":
+            options = {**self._input_options(command, candidate), "expected_metadata": command.to_payload()}
+            return self._bound(command, self.store.publish(
+                command.key, command.command_digest, writes=candidate.writes, result=candidate.result,
+                review=review, sources=self._sources(candidate), artifacts=candidate.artifacts, **options))
+        record = self._staged_prepared(command, candidate, record, review)
         if record.get("phase") == "complete":
             return record
         return self.decide(command, decision_id=record["decision_id"], accept=True)

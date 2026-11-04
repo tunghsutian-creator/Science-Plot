@@ -1425,6 +1425,20 @@ query; original journal, pending-projection, history and object validation remai
 The host retains its empty external capability set and original blocking lease
 while selecting finite names. This does not extend a proof into resource selection,
 physical source capture or native execution.
+Already prepared semantic publications enter the existing Store `publish` owner
+once after typed kind, digest and metadata admission. The explicit staged
+transfer/review and saved nonterminal recovery routes retain their original
+owners. Prepared publication still installs and validates candidate views before
+decision, validates the sealed candidate again after decision, and validates the
+final public outcome. Removing unused intermediate protocol replies does not
+remove these effects or reuse a proof across a journal mutation.
+The shared publication owner selects a completely checked current head after
+staging, so an independent nested update participates in the merge. The sole
+`state.publish_head` writer requires an expected head, or explicit absence for
+initial import, and compares the pointer immediately before replacement under
+the existing cooperative writer lease. This comparison is additional concurrency
+control, not a replacement for full history, object, source or physical read-set
+validation, and is not an OS-level CAS against arbitrary uncooperative writers.
 The foundation source-locator port returns literal and physical file roles as one
 `file_paths` request. Its plain registered/no-expectation implementation may
 share metadata admission; subclasses and incoming/sealed expectations retain

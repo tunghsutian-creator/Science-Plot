@@ -134,7 +134,7 @@ def test_nested_generation_mutation_refuses_a_partial_mixed_observation(tmp_path
                          sequence=current["sequence"] + 1)
         successor["files"][logical].update(io.put(b'{"revision":1}'))
         state.write_generation(io, successor)
-        state.publish_head(io, successor)
+        state.publish_head(io, successor, expected=current)
         return projection
     with monkeypatch.context() as scoped:
         scoped.setattr(member_observation, "_projection", advance)

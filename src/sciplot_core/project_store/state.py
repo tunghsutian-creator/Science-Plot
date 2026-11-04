@@ -195,10 +195,18 @@ def write_generation(io: StoreIO, value: dict[str, Any]) -> None:
     io.write(f"generations/{value['generation']}.json", value, exclusive=True)
 
 
-def publish_head(io: StoreIO, value: dict[str, Any]) -> None:
-    io.write("head.json", {"kind": "sciplot_project_head", "version": 1,
-             "project_id": value["project_id"], "generation": value["generation"],
-             "sequence": value["sequence"], "sha256": digest(value)})
+def _head_pointer(value: dict[str, Any]) -> dict[str, Any]:
+    return {"kind": "sciplot_project_head", "version": 1,
+            "project_id": value["project_id"], "generation": value["generation"],
+            "sequence": value["sequence"], "sha256": digest(value)}
+
+
+def publish_head(io: StoreIO, value: dict[str, Any], *, expected: dict[str, Any] | None) -> None:
+    # Under the held cooperative writer lease, this is only the final pointer
+    # CAS. The publication owner already performed complete history/source IO.
+    if io.read("head.json") != (_head_pointer(expected) if expected is not None else None):
+        raise ProjectConflict("The project head changed before its publication CAS.")
+    io.write("head.json", _head_pointer(value))
 
 
 def import_legacy(io: StoreIO) -> dict[str, Any]:
@@ -223,7 +231,7 @@ def import_legacy(io: StoreIO) -> dict[str, Any]:
     write_generation(io, value)
     boundary("before_head")
     io.verify_roots()
-    publish_head(io, value)
+    publish_head(io, value, expected=None)
     boundary("after_head")
     return value
 

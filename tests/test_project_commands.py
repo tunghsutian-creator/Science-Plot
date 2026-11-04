@@ -44,10 +44,13 @@ class MemoryPort:
             self.calls.append("begin")
             return deepcopy(self.record)
 
-    def publish(self, _key, _digest, *, writes, result, sources, artifacts=None):
+    def publish(self, _key, _digest, *, writes, result, sources, artifacts=None,
+                input_reads=(), expected_metadata=None, review=None):
         self.calls.append("publish")
+        if expected_metadata is not None:
+            assert self.record["metadata"] == expected_metadata
         self.record.update(phase="complete", result=deepcopy(result), writes=deepcopy(writes), sources=sources,
-                           artifacts=deepcopy(artifacts))
+                           artifacts=deepcopy(artifacts), review=deepcopy(review) if review is not None else {"execution": "immediate"})
         return deepcopy(self.record)
 
     def stage(self, _key, _digest, *, writes, result, review, artifacts, sources=None):
@@ -144,7 +147,9 @@ def test_prepared_storage_publication_never_enters_native_execution():
     result = ProjectCommands(port).publish_prepared(prepared_command(mutation), mutation)
     assert result["phase"] == "complete"
     assert "begin" not in port.calls
-    assert port.calls == ["reserve", "recover", "stage", "decide", "publish_staged"]
+    assert port.calls == ["reserve", "publish"]
+    assert result["review"] == {"publication": "prepared_storage", "prepared_digest": mutation.prepared_digest,
+                                "candidate_review": None}
 
 
 def test_namespace_storage_cannot_accept_without_the_domain_fence_decision():
@@ -238,24 +243,32 @@ def test_membership_witness_binds_additions_without_confusing_member_content_has
     assert ProjectCommand.from_payload(admitted.to_payload()).read_memberships == (original,)
 
 
-def test_prepared_storage_resumes_exact_staged_bytes_after_lost_stage_reply():
-    class LostStageReplyPort(MemoryPort):
-        def stage(self, *args, **kwargs):
-            result = super().stage(*args, **kwargs)
-            if self.calls.count("stage") == 1:
-                raise RuntimeError("lost stage reply")
-            return result
-    port = LostStageReplyPort()
-    mutation = ProjectMutation({"head.json": b"fixed-json"}, {})
-    request = prepared_command(mutation)
+def test_prepared_storage_resumes_exact_staged_bytes_after_lost_stage_reply(tmp_path, monkeypatch):
+    from sciplot_core.project_store import commands
+    from test_project_commands_store_contract import prepared, storage_command
+
+    _project, port, original = prepared(tmp_path)
+    mutation = ProjectMutation({"A.vsz": b"fixed-json"}, {})
+    request = storage_command(original, mutation)
+    calls, entered = [], []
+    stage = commands.stage
+    def lose_stage_reply(*args, **kwargs):
+        result = stage(*args, **kwargs)
+        calls.append("stage")
+        if calls.count("stage") == 1:
+            raise RuntimeError("lost stage reply")
+        return result
+    monkeypatch.setattr(commands, "stage", lose_stage_reply)
+    monkeypatch.setattr(port, "mark_applying", lambda *args: entered.append("begin"))
     with pytest.raises(RuntimeError, match="lost stage reply"):
         ProjectCommands(port).publish_prepared(request, mutation)
     assert ProjectCommands(port).resume(request)["phase"] == "needs_review"
     assert ProjectCommands(port).publish_prepared(request, mutation)["phase"] == "complete"
-    assert port.calls.count("stage") == 1
-    assert "begin" not in port.calls
+    assert calls.count("stage") == 1
+    assert "begin" not in entered
+    assert port.read_bytes("A.vsz") == b"fixed-json"
     with pytest.raises(ProjectCommandError, match="exact storage command"):
-        ProjectCommands(port).publish_prepared(request, ProjectMutation({"head.json": b"different"}, {}))
+        ProjectCommands(port).publish_prepared(request, ProjectMutation({"A.vsz": b"different"}, {}))
 
 
 def test_staged_transfer_cannot_publish_before_its_explicit_acceptance():

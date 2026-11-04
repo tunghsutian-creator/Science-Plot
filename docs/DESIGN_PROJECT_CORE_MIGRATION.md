@@ -332,6 +332,39 @@ writes, artifacts, result and prepared source versions. It has no native callbac
 An interrupted prepared-storage seal may finish its original bytes; an interactive
 preview cannot be accepted by that path.
 
+For a reserved prepared command without a namespace transfer, the application
+uses the Store's existing immediate publication transaction instead of producing
+unused replies between separate stage and decision calls. The original
+`prepared_storage` review, candidate digest and candidate review remain exact;
+expected typed metadata is checked before effects. A concurrent transition to
+`applying` remains unknown for this path. Explicit staging and non-reserved
+recovery continue through the same durable stage/decision/publication owners.
+Candidate views must be installed and checked before the decision is recorded,
+then checked afresh before publication after the decision's journal write.
+
+Two generated reentrant-writer counterexamples exposed a shared publication
+defect: an independent B command could complete during A's staging or final
+pre-head callback, while A still published from its earlier head and lost B's
+canonical result. The publication owner now selects the latest fully verified
+generation before merging, and the only head writer compares its explicit
+expected pointer immediately before replacement, after the original pre-head,
+source, root and read-set checks. Initial import requires an absent head. A
+changed pointer refuses A without replacing B; the exact accepted A candidate
+can then resume against its original read set. This uses the existing writer
+lease and format, with no unguarded head-writing mode or cross-operation cache.
+
+One generated held-window comparison against exact 8b source retained eight
+complete head validations on both sides. Store metadata reads fell 64 to 46,
+object gets 31 to 27, public projections seven to four, view reads ten to six,
+and actual Store file reads 102 to 80; the final pointer check added one head
+pointer read, eight to nine. Seed and candidate bytes matched, while generated
+IDs and absolute roots differed. This is limited work-count evidence, not a
+whole-native latency improvement or proof of the original 180-second deadline.
+Four added calls to the existing progress writer distinguish historical replay return,
+native/source byte checks and projection snapshot completion; they change no
+operation, assertion, timeout or scientific input. Final exact-source native,
+full/capture/access and platform CI remain independent acceptance requirements.
+
 Read-only queries do not repair or replace active native files. Resume validates
 the original key, project and command binding before recovery. Invalid target
 membership must fail before import, recovery or any other write.

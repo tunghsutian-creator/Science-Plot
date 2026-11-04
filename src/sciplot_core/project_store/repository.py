@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.project_commands.resources import PreparedFile
-
+from sciplot_core.project_commands.errors import ProjectCommandUnknown
 import sciplot_core.project_store.commands as commands
 import sciplot_core.project_store.projection as projection
 import sciplot_core.project_store.publication as publication
@@ -219,24 +219,28 @@ class FileProjectStore:
 
     def publish(self, command_id: str, command_digest: str, *, writes: Mapping[str, bytes | Path | PreparedFile | None],
                 result: dict[str, Any], sources: Sequence[dict[str, Any]] | None = None,
-                artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None,
-                input_reads: Sequence[dict[str, str]] = (),
-                expected_metadata: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None, input_reads: Sequence[dict[str, str]] = (),
+                expected_metadata: Mapping[str, Any] | None = None, review: dict[str, Any] | None = None) -> dict[str, Any]:
         with self._checked_locked(repair=True) as (io, current, checked):
             record = state.command(io, command_id, command_digest, checked=checked)
             if record is None:
                 raise ProjectStoreError("Reserve this command before publication.")
             from .input_reads import require_metadata
-
             require_metadata(record, expected_metadata)
             if record["phase"] == "complete":
                 return commands.public(io, record, checked=checked)
+            if review is not None and record["phase"] == "applying":
+                raise ProjectCommandUnknown()
             if record["phase"] not in {"reserved", "applying"}:
                 raise ProjectStoreError("Resume an accepted command or decide its exact reviewed candidate explicitly.")
-            commands.stage(io, record, writes=writes, result=result, review={"execution": "immediate"},
+            commands.stage(io, record, writes=writes, result=result, review={"execution": "immediate"} if review is None else review,
                            artifacts=artifacts, sources=sources, input_reads=input_reads,
                            expected_metadata=expected_metadata, checked=checked)
+            if review is not None:
+                commands.public(io, record, create_views=True)
             commands.decide(io, record, record["decision_id"], True)
+            if review is not None:
+                commands.public(io, record)  # Retain prepared publication's sealed pre-use checks.
             return commands.public(io, publication.publish(io, current, record, frozen=record["draft"]), create_views=True)
 
     def publish_staged(self, command_id: str, command_digest: str) -> dict[str, Any]:
@@ -384,16 +388,13 @@ class FileProjectStore:
 
     def literal_path(self, actual: Path, *, generation: str | None = None) -> str:
         from .paths import literal_path
-
         return literal_path(self, actual, generation=generation)
 
     def export_bundle(self, destination: Path) -> Path:
         from .portable import export_bundle
-
         return export_bundle(self, destination)
 
     @classmethod
     def import_bundle(cls, bundle: Path, destination: Path) -> FileProjectStore:
         from .portable import import_bundle
-
         return import_bundle(bundle, destination, factory=lambda root, locations: cls(root, locations=locations))
