@@ -343,17 +343,25 @@ def test_direct_and_child_native_busy_both_require_inspection(prepared_case, mon
 
 @pytest.mark.parametrize("boundary", ["needs_review", "accepted", "after_head"])
 def test_sealed_renderer_fact_failure_resumes_storage_without_native_reexecution(prepared_case, monkeypatch, boundary):
-    from sciplot_core.project_commands import ProjectCommands
     from sciplot_core.project_store import FileProjectStore, state
+    from sciplot_core.project_store.io import StoreIO
     case = prepared_case
     if boundary == "needs_review":
-        _inject(monkeypatch, case, ProjectCommands, "stage_prepared", after=True,
-                predicate=lambda self, command, *_a, **_k:
-                command.to_payload()["request"].get("adapter") == "native_suite_renderer_fact")
+        _inject(monkeypatch, case, StoreIO, "write", after=True,
+                predicate=lambda self, name, record, **_:
+                self.root == case.workspace and record.get("phase") == "needs_review"
+                and record.get("metadata", {}).get("request", {}).get("adapter") == "native_suite_renderer_fact"
+                and name == state.command_path(record["command_id"]))
     else:
         name = "before_storage" if boundary == "accepted" else "after_head"
         _inject(monkeypatch, case, state, "boundary", predicate=lambda value: value == name and case.saves == ["Custom"])
     _assert_failure(case, "resume_prepared_creation")
+    if boundary == "needs_review":
+        store = FileProjectStore(case.workspace, locations={"delivery": case.delivery})
+        fact = next(record for record in store.commands()
+                    if record["metadata"]["request"].get("adapter") == "native_suite_renderer_fact")
+        assert fact["phase"] == "needs_review" and fact.get("accepted") is not True
+        assert _snapshot(case.root) == case.after_failure
     before = {path: (file_sha256(path), path.stat().st_mtime_ns) for path in case.out.glob("*.vsz")}
     exports = case.exports[:]
     assert case.run(resume=True)["status"] == "ready"
