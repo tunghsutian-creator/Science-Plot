@@ -1610,7 +1610,10 @@ command/application classes, keeping the import graph acyclic.
 
 `resource_roles.py` derives finite facts from an actual selected generation;
 roles neither create host capabilities nor promote ordinary source references
-to immutable inputs. `FigureReadWitness` preserves exact selected file/source
+to immutable inputs. The shared enum contains only the four consumed generation
+facts: source reference, immutable input, history and retired namespace. Native,
+specification and generated-media admission remain in their existing domain ports;
+callers cannot inject extra role declarations. `FigureReadWitness` preserves exact selected file/source
 and existing projection values, with explicit binding absence separate from an
 actual observed file. Original public dictionary shapes and digest formulas
 remain compatible. Host IO, physical currentness and the final CAS retain their

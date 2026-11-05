@@ -13,12 +13,6 @@ from .resources import _identity, _sha, resource_key
 class ResourceRole(StrEnum):
     SOURCE_REFERENCE = "source_reference"
     IMMUTABLE_INPUT = "immutable_input"
-    NATIVE_AUTHORITY = "native_authority"
-    SCIENTIFIC_SPEC = "scientific_spec"
-    REQUEST = "request"
-    CATALOG = "catalog"
-    INTENT = "intent"
-    GENERATED_MEDIA = "generated_media"
     HISTORY = "history"
     RETIRED_NAMESPACE = "retired_namespace"
 
@@ -65,11 +59,10 @@ def _literal(generation: Mapping[str, Any], resource: str) -> str | None:
     return str(PurePosixPath(origin) / relative) if isinstance(origin, str) else None
 
 
-def resource_facts(generation: Mapping[str, Any], resource: str, *,
-                   declared_roles: Iterable[ResourceRole] = ()) -> ResourceFacts:
+def resource_facts(generation: Mapping[str, Any], resource: str) -> ResourceFacts:
     """Interpret existing metadata only, never import/repair/query a Store."""
     resource_key(resource)
-    roles = set(declared_roles)
+    roles: set[ResourceRole] = set()
     if resource in generation.get("input_resources", ()):
         roles.add(ResourceRole.IMMUTABLE_INPUT)
     if resource in generation.get("history_resources", ()):

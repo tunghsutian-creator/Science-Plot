@@ -124,3 +124,13 @@ def test_source_validation_belongs_once_to_the_public_prepared_constructor(monke
     direct = PreparedMutation(value._writes, value._result_json, value._review_json,
                               value._artifacts, prepared_sources=(source,))
     assert observed == [source] and direct.prepared_digest == value.prepared_digest
+
+
+def test_resource_roles_are_only_consumed_generation_facts():
+    assert {role.value for role in ResourceRole} == {
+        "source_reference", "immutable_input", "history", "retired_namespace"}
+    generation = {"project_id": "project", "generation": "generation", "files": {},
+                  "roles": {"unregistered.vsz": ["native_authority"]}}
+    assert resource_facts(generation, "unregistered.vsz").roles == frozenset()
+    with pytest.raises(TypeError, match="declared_roles"):
+        resource_facts(generation, "unregistered.vsz", declared_roles=(ResourceRole.IMMUTABLE_INPUT,))
