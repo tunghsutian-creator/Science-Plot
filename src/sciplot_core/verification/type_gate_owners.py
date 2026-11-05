@@ -124,7 +124,7 @@ TYPED_CORE_CONTRACT_OWNER = ChangedOwner(
         {
             "tests/test_autoplot_evidence.py",
             "tests/test_foundation_text_values.py", "tests/test_source_version_error_contracts.py",
-            "tests/test_foundation_json_io.py", "tests/test_writer_lease.py",
+            "tests/test_foundation_json_io.py", "tests/test_writer_lease.py", "tests/test_iso_timestamps.py",
             "tests/test_output_package_contract.py",
             "tests/test_publish_state.py",
             "tests/test_dsc_adapter_dispatch.py",
@@ -138,7 +138,7 @@ TYPED_CORE_CONTRACT_OWNER = ChangedOwner(
     pytest_targets=(
         "tests/test_autoplot_evidence.py",
         "tests/test_foundation_text_values.py", "tests/test_source_version_error_contracts.py",
-        "tests/test_foundation_json_io.py", "tests/test_writer_lease.py",
+        "tests/test_foundation_json_io.py", "tests/test_writer_lease.py", "tests/test_iso_timestamps.py",
         "tests/test_panel_assembly_storage.py", "tests/test_panel_assembly_writer_lease.py",
         "tests/test_output_package_contract.py",
         "tests/test_publish_state.py",
