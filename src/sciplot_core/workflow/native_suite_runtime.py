@@ -54,11 +54,10 @@ def _bound_selection(target: Path, workspace: Path, delivery: Path,
     elif role == "native":
         if target not in allowed:
             documents = bindings.documents()
-            if (not isinstance(documents, list) or target.suffix.lower() != ".vsz"
-                    or any(not isinstance(item, dict) for item in documents)):
+            if target.suffix.lower() != ".vsz":
                 raise ValueError("The target is not an exact NativeSuite member.")
-            matches = [item for item in documents if isinstance(item.get("id"), str)
-                       and Path(item.get("path", "")) == origin_delivery / "editable" / (item["id"] + ".vsz")
+            matches = [item for item in documents
+                       if Path(item.get("path", "")) == origin_delivery / "editable" / (item["id"] + ".vsz")
                        and target == delivery / "editable" / (item["id"] + ".vsz")]
             if len(matches) != 1:
                 raise ValueError("The target is not an exact selected NativeSuite figure.")
