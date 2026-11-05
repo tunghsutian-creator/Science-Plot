@@ -281,6 +281,69 @@ def exercise_collector(root, tmp_path, monkeypatch):
         with pytest.raises(collector.UnsupportedEnvironment, match="input_root"):
             collector._collect_ubuntu(simulated)
 
+        # Simulate only the observed Ubuntu stdlib link without writing host /etc.
+        dist.files = [source, extension]
+        hook = Path("/usr/lib/python3.12/sitecustomize.py")
+        target = Path("/etc/python3.12/sitecustomize.py")
+        wrong_hook = Path("/usr/lib/python3.12/other.py")
+        wrong_target = Path("/etc/python3.12/other.py")
+        target_file = tmp_path / "hook-target"
+        target_file.write_text("finite hook")
+        real_walk, real_resolve, real_stat, real_is_file = collector.os.walk, Path.resolve, Path.stat, Path.is_file
+        virtual = {"logical": hook, "target": target, "resolves": 0, "drift": False, "mutation": ""}
+        def walk(path, *args, **kwargs):
+            yield from real_walk(path, *args, **kwargs)
+            if Path(path) == directory:
+                yield str(virtual["logical"].parent), [], [virtual["logical"].name]
+        def resolve(path, *args, **kwargs):
+            if path == virtual["logical"]:
+                virtual["resolves"] += 1
+                if virtual["drift"] and virtual["resolves"] > 1:
+                    return wrong_target
+                return virtual["target"]
+            return real_resolve(path, *args, **kwargs)
+        def stat(path, *args, **kwargs):
+            return real_stat(target_file if path in (target, wrong_target) else path, *args, **kwargs)
+        def hook_bytes(path):
+            if path == target:
+                data = read_bytes(target_file)
+                if virtual["mutation"] == "content":
+                    target_file.write_bytes(data + b"changed")
+                elif virtual["mutation"] == "mode":
+                    target_file.chmod(0o600 if target_file.stat().st_mode & 0o077 else 0o644)
+                return data
+            return public_bytes(path)
+        with context.context() as hook_context:
+            hook_context.setattr(collector.os, "walk", walk)
+            hook_context.setattr(Path, "resolve", resolve)
+            hook_context.setattr(Path, "stat", stat)
+            hook_context.setattr(Path, "is_file", lambda path: True if path in (target, wrong_target) else real_is_file(path))
+            hook_context.setattr(Path, "read_bytes", hook_bytes)
+            baseline, _ = collector._collect_ubuntu(simulated)
+            target_file.write_text("different hook")
+            changed_hook, _ = collector._collect_ubuntu(simulated)
+            assert baseline["stdlib_sha256"] != changed_hook["stdlib_sha256"]
+            target_file.chmod(0o600)
+            changed_hook_mode, _ = collector._collect_ubuntu(simulated)
+            assert changed_hook["stdlib_sha256"] != changed_hook_mode["stdlib_sha256"]
+            for logical, resolved in ((wrong_hook, target), (hook, wrong_target), (wrong_hook, wrong_target)):
+                virtual.update(logical=logical, target=resolved, resolves=0)
+                with pytest.raises(collector.UnsupportedEnvironment, match="input_root"):
+                    collector._collect_ubuntu(simulated)
+            virtual.update(logical=hook, target=target, resolves=0)
+            dist.files = [hook]
+            with pytest.raises(collector.UnsupportedEnvironment, match="input_root"):
+                collector._collect_ubuntu(simulated)
+            dist.files = [source, extension]
+            virtual.update(resolves=0, drift=True)
+            with pytest.raises(collector.UnsupportedEnvironment, match="alias_drift"):
+                collector._collect_ubuntu(simulated)
+            for mutation in ("content", "mode"):
+                virtual.update(resolves=0, drift=False, mutation=mutation)
+                with pytest.raises(collector.UnsupportedEnvironment, match="input_drift"):
+                    collector._collect_ubuntu(simulated)
+            virtual["mutation"] = ""
+
 
 def exercise_wire(tmp_path, monkeypatch):
     from sciplot_core.verification import ci_public_reuse as reuse
