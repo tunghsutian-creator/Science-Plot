@@ -85,7 +85,8 @@ def test_one():
 def test_one_extra():
     raise AssertionError("a prefix neighbour must not execute")
 ''')
-    command = [sys.executable, "-m", "pytest", "-q", "-p", "sciplot_core.verification.public_stage_selection",
+    # cwd alone does not stop pytest discovering a parent project's root.
+    command = [sys.executable, "-m", "pytest", "-q", f"--rootdir={tmp_path}", "-p", "sciplot_core.verification.public_stage_selection",
                "--input-scope", "public-focused", "--sciplot-public-target", nodes[0]]
     if partial_collection:
         command.append(nodes[0])
