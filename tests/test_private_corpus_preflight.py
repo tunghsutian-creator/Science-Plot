@@ -176,24 +176,25 @@ def test_directory_metadata_preflight_checks_empty_exact_directory_without_open_
         return True
     def forbidden(*args, **kwargs):
         raise AssertionError("metadata availability must not open or enumerate the directory")
-    monkeypatch.setattr(corpus_module.os, "access", check_access)
-    monkeypatch.setattr(corpus_module, "_directory_has_safe_file", forbidden)
-    monkeypatch.setattr(Path, "iterdir", forbidden)
-    monkeypatch.setattr(Path, "rglob", forbidden)
-    monkeypatch.setattr(corpus_module.os, "listdir", forbidden)
-    monkeypatch.setattr(corpus_module.os, "scandir", forbidden)
     original_open = Path.open
     def checked_open(path, *args, **kwargs):
         assert path != directory
         return original_open(path, *args, **kwargs)
-    monkeypatch.setattr(Path, "open", checked_open)
-    value, selected, rows, issues, dependencies = corpus_module._declared_input_check(
-        repo_root=tmp_path, inventory_path=inventory, selected_nodeids=[NODE], collected_nodeids={NODE})
-    assert not issues and selected == [NODE]
-    assert rows[0]["dependencies"] == [{"path": identifier, "kind": "directory_metadata", "status": "present"}]
-    assert dependencies == {NODE: [(identifier, "directory_metadata")]}
-    assert accessed == [(directory, os.R_OK)]
-    assert value["cases"][0]["dependencies"][0]["kind"] == "directory_metadata"
+    with monkeypatch.context() as no_io:
+        no_io.setattr(corpus_module.os, "access", check_access)
+        no_io.setattr(corpus_module, "_directory_has_safe_file", forbidden)
+        no_io.setattr(Path, "iterdir", forbidden)
+        no_io.setattr(Path, "rglob", forbidden)
+        no_io.setattr(corpus_module.os, "listdir", forbidden)
+        no_io.setattr(corpus_module.os, "scandir", forbidden)
+        no_io.setattr(Path, "open", checked_open)
+        value, selected, rows, issues, dependencies = corpus_module._declared_input_check(
+            repo_root=tmp_path, inventory_path=inventory, selected_nodeids=[NODE], collected_nodeids={NODE})
+        assert not issues and selected == [NODE]
+        assert rows[0]["dependencies"] == [{"path": identifier, "kind": "directory_metadata", "status": "present"}]
+        assert dependencies == {NODE: [(identifier, "directory_metadata")]}
+        assert accessed == [(directory, os.R_OK)]
+        assert value["cases"][0]["dependencies"][0]["kind"] == "directory_metadata"
 
 
 @pytest.mark.parametrize("kind,identifier,listed", [

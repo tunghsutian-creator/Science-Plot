@@ -35,16 +35,17 @@ def test_byte_prepared_detaches_every_public_container_and_preserves_v1_digest()
 def test_deferred_constructor_detaches_without_observing_paths(monkeypatch):
     def forbidden(*args, **kwargs):
         raise AssertionError("a value constructor cannot observe the filesystem")
-    monkeypatch.setattr(Path, "open", forbidden)
-    monkeypatch.setattr(Path, "stat", forbidden)
-    writes, result = {"a": Path("missing-private-candidate")}, {"nested": [1]}
-    value = ProjectMutation(writes, result)
-    writes.clear()
-    result["nested"].append(2)
-    assert value.writes == {"a": Path("missing-private-candidate")}
-    assert value.result == {"nested": [1]}
-    with pytest.raises(ValueError, match="byte values"):
-        prepared_mutation(value)
+    with monkeypatch.context() as no_io:
+        no_io.setattr(Path, "open", forbidden)
+        no_io.setattr(Path, "stat", forbidden)
+        writes, result = {"a": Path("missing-private-candidate")}, {"nested": [1]}
+        value = ProjectMutation(writes, result)
+        writes.clear()
+        result["nested"].append(2)
+        assert value.writes == {"a": Path("missing-private-candidate")}
+        assert value.result == {"nested": [1]}
+        with pytest.raises(ValueError, match="byte values"):
+            prepared_mutation(value)
 
 
 def test_old_declaration_without_new_helper_uses_the_same_conversion():

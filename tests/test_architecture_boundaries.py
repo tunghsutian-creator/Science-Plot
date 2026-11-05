@@ -41,6 +41,127 @@ def _source_files() -> list[Path]:
     )
 
 
+def _unscoped_no_io_patches(source: str) -> list[int]:
+    """Recognize direct unconditional IO denials, not arbitrary mock behavior."""
+    tree = ast.parse(source)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    imports = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.update((item.asname or item.name, item.name) for item in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imports.update((item.asname or item.name, f"{node.module}.{item.name}") for item in node.names)
+
+    def name(node: ast.AST) -> str:
+        if isinstance(node, ast.Name):
+            return imports.get(node.id, node.id)
+        if isinstance(node, ast.Attribute):
+            return f"{name(node.value)}.{node.attr}"
+        return ""
+
+    def ancestors(node: ast.AST):
+        while node in parents:
+            node = parents[node]
+            yield node
+
+    def denial(node: ast.AST, call: ast.Call) -> bool:
+        if isinstance(node, ast.Name):
+            for scope in ancestors(call):
+                if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Module)):
+                    definitions = [item for item in scope.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                                   and item.name == node.id]
+                    if definitions:
+                        node = definitions[-1]
+                        break
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = list(node.body)
+            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+                body = body[1:]
+            if len(body) != 1:
+                return False
+            node = body[0]
+        if isinstance(node, ast.Raise):
+            return True
+        expression = node.body if isinstance(node, ast.Lambda) else (
+            node.value if isinstance(node, (ast.Expr, ast.Return)) else None)
+        return isinstance(expression, ast.Call) and name(expression.func) == "pytest.fail"
+
+    escaped = []
+    for call in ast.walk(tree):
+        if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "setattr" and isinstance(call.func.value, ast.Name)):
+            continue
+        if len(call.args) == 3 and isinstance(call.args[1], ast.Constant):
+            target = f"{name(call.args[0])}.{call.args[1].value}"
+        elif len(call.args) == 2 and isinstance(call.args[0], ast.Constant):
+            target = call.args[0].value
+        else:
+            continue
+        if not isinstance(target, str) or not (
+            target.startswith(("pathlib.Path.", "pathlib.PosixPath.", "pathlib.WindowsPath."))
+            or target in {"builtins.open", "io.open", "os.open", "os.stat", "os.lstat", "os.listdir", "os.scandir"}
+        ) or not denial(call.args[-1], call):
+            continue
+        receiver = call.func.value.id
+        scoped = False
+        for scope in ancestors(call):
+            if isinstance(scope, (ast.With, ast.AsyncWith)):
+                scoped |= any(isinstance(item.optional_vars, ast.Name) and item.optional_vars.id == receiver
+                              and isinstance(item.context_expr, ast.Call)
+                              and isinstance(item.context_expr.func, ast.Attribute)
+                              and item.context_expr.func.attr == "context" for item in scope.items)
+            if isinstance(scope, ast.Try) and scope.finalbody and any(call in ast.walk(item) for item in scope.body):
+                undo = scope.finalbody[0]
+                scoped |= (isinstance(undo, ast.Expr) and isinstance(undo.value, ast.Call)
+                           and isinstance(undo.value.func, ast.Attribute) and undo.value.func.attr == "undo"
+                           and isinstance(undo.value.func.value, ast.Name) and undo.value.func.value.id == receiver)
+        if not scoped:
+            escaped.append(call.lineno)
+    return sorted(escaped)
+
+
+def test_process_wide_no_io_patches_end_before_test_teardown() -> None:
+    prefix = "from pathlib import Path as P\nimport builtins\nimport pytest\n"
+    unsafe = '''
+def test_value(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("no IO")
+    monkeypatch.setattr(P, "open", forbidden)
+    with monkeypatch.context():
+        monkeypatch.setattr(P, "stat", forbidden)
+    monkeypatch.setattr("builtins.open", lambda *args: pytest.fail("no IO"))
+'''
+    assert len(_unscoped_no_io_patches(prefix + textwrap.dedent(unsafe))) == 3
+    safe = '''
+def test_value(monkeypatch, owner):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("no IO")
+    with monkeypatch.context() as no_io:
+        no_io.setattr(P, "open", forbidden)
+        no_io.setattr(builtins, "open", lambda *args: pytest.fail("no IO"))
+    try:
+        monkeypatch.setattr(P, "stat", forbidden)
+    finally:
+        monkeypatch.undo()
+    original = P.read_bytes
+    def selected(path):
+        if path == owner:
+            pytest.fail("selected fault")
+        return original(path)
+    monkeypatch.setattr(P, "read_bytes", selected)
+    monkeypatch.setattr(owner, "open", forbidden)
+'''
+    assert _unscoped_no_io_patches(prefix + textwrap.dedent(safe)) == []
+    # Read Python sources only; do not walk private fixture namespaces or parse
+    # generated observer-child snippets inside string literals as host patches.
+    violations = {
+        str(path.relative_to(REPO_ROOT)): lines
+        for path in sorted((REPO_ROOT / "tests").glob("*.py"))
+        if (lines := _unscoped_no_io_patches(path.read_text(encoding="utf-8")))
+    }
+    assert violations == {}, f"Process-wide no-IO mocks need a local context or finally undo: {violations}"
+
+
 def _module_name(path: Path) -> str:
     relative = path.relative_to(SOURCE_ROOT)
     parts = list(relative.with_suffix("").parts)
