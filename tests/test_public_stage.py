@@ -44,6 +44,50 @@ def test_only_affected_profile_can_request_explicit_selection(tmp_path: Path) ->
         assert not (tmp_path / "never-created").exists()
 
 
+@pytest.mark.parametrize("partial_collection", (False, True))
+def test_affected_selector_runs_after_exhaustive_scope_validation(tmp_path: Path, partial_collection: bool) -> None:
+    nodes = ["test_generated.py::test_one", "test_generated.py::test_one_extra"]
+    manifest = {"scopes": {"public": nodes, "private": []}, "tiers": {"focused": nodes, "comprehensive": []}}
+    (tmp_path / "conftest.py").write_text(f'''import json
+from pathlib import Path
+import pytest
+from sciplot_core.verification.input_scope import select_scope
+def pytest_addoption(parser):
+    parser.addoption("--input-scope")
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config, items):
+    collected = [item.nodeid for item in items]
+    Path("collected.json").write_text(json.dumps(collected))
+    try:
+        select_scope(config.getoption("input_scope"), manifest={manifest!r}, collected=collected,
+                     tiers={{node: "focused" for node in collected}}, private_nodes=set())
+    except ValueError as error:
+        raise pytest.UsageError(str(error)) from error
+''')
+    (tmp_path / "test_generated.py").write_text('''from pathlib import Path
+def test_one():
+    Path("executed.txt").write_text("exact selected body")
+def test_one_extra():
+    raise AssertionError("a prefix neighbour must not execute")
+''')
+    command = [sys.executable, "-m", "pytest", "-q", "-p", "sciplot_core.verification.public_stage_selection",
+               "--input-scope", "public-focused", "--sciplot-public-target", nodes[0]]
+    if partial_collection:
+        command.append(nodes[0])
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = os.pathsep.join(str(Path(entry).absolute()) for entry in environment.get("PYTHONPATH", "").split(os.pathsep))
+    result = subprocess.run(command, cwd=tmp_path, env=environment, capture_output=True, text=True, check=False)
+    assert (tmp_path / "collected.json").is_file(), result.stdout + result.stderr
+    assert json.loads((tmp_path / "collected.json").read_text()) == (nodes[:1] if partial_collection else nodes)
+    if partial_collection:
+        assert result.returncode != 0 and "Input scope drift" in result.stderr
+        assert not (tmp_path / "executed.txt").exists()
+    else:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "1 passed, 1 deselected" in result.stdout
+        assert (tmp_path / "executed.txt").read_text() == "exact selected body"
+
+
 def test_affected_result_cannot_be_published_as_a_canonical_origin(tmp_path: Path) -> None:
     from sciplot_core.verification.ci_public_environment import digest
     from sciplot_core.verification.ci_public_reuse import _stage_evidence
