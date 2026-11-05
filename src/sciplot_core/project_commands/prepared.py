@@ -10,6 +10,7 @@ from typing import Any, Protocol
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from .resources import InputRead, PreparedFile, PreparedSource, resource_key
+from .mutation_validation import validate_input_reads, validate_mutation_for
 
 
 class MutationDeclaration(Protocol):
@@ -58,7 +59,6 @@ class PreparedMutation:
     input_reads: tuple[InputRead, ...] = ()
 
     def __post_init__(self) -> None:
-        from .contracts import validate_input_reads
         if not isinstance(self._writes, tuple) or not isinstance(self._artifacts, tuple):
             raise ValueError("Prepared files must be immutable tuples.")
         if (len(dict(self._writes)) != len(self._writes) or len(dict(self._artifacts)) != len(self._artifacts)
@@ -84,7 +84,6 @@ class PreparedMutation:
                     review: dict[str, Any] | None = None,
                     artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None,
                     prepared_sources: Sequence[PreparedSource] = (), input_reads: Sequence[InputRead] = ()) -> PreparedMutation:
-        from .contracts import validate_input_reads
         captured = tuple(prepared_sources)
         for source in captured:
             if not isinstance(source, PreparedSource):
@@ -130,9 +129,7 @@ class PreparedMutation:
         return canonical_json_sha256(value, allow_nan=False)
 
     def validate_for(self, command: Any) -> None:
-        from .contracts import ProjectMutation
-        ProjectMutation(self.writes, self.result, review=self.review, artifacts=self.artifacts,
-                        prepared_sources=self.prepared_sources, input_reads=self.input_reads).validate_for(command)
+        validate_mutation_for(self, command)
 
 
 def prepared_mutation(value: MutationDeclaration) -> PreparedMutation:
@@ -143,7 +140,7 @@ def prepared_mutation(value: MutationDeclaration) -> PreparedMutation:
     """
     if isinstance(value, PreparedMutation):
         return value
-    if value.sources is not None:
+    if getattr(value, "sources", None) is not None:
         raise ValueError("Prepared storage publication requires byte values and no deferred source capture.")
-    return PreparedMutation.from_values(value.writes, value.result, review=value.review, artifacts=value.artifacts,
-                                        prepared_sources=value.prepared_sources, input_reads=value.input_reads)
+    return PreparedMutation.from_values(value.writes, value.result, review=getattr(value, "review", None), artifacts=getattr(value, "artifacts", {}),
+                                        prepared_sources=getattr(value, "prepared_sources", ()), input_reads=getattr(value, "input_reads", ()))

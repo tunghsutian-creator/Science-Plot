@@ -93,3 +93,35 @@ def is_native_save_as_excluded(facts: ResourceFacts, *, selected_catalogs: Itera
     return bool(facts.roles & {ResourceRole.SOURCE_REFERENCE, ResourceRole.IMMUTABLE_INPUT,
                               ResourceRole.HISTORY, ResourceRole.RETIRED_NAMESPACE}
                 or facts.resource in selected_catalogs)
+
+
+def role_resources(generation: Mapping[str, Any], roles: Iterable[ResourceRole]) -> frozenset[str]:
+    """Batch existing logical role facts, without source IO or a retained index."""
+    requested = frozenset(roles)
+    if any(not isinstance(role, ResourceRole) for role in requested):
+        raise ValueError("Only declared resource roles can select logical facts.")
+    result: set[str] = set()
+    for role, field in ((ResourceRole.IMMUTABLE_INPUT, "input_resources"), (ResourceRole.HISTORY, "history_resources")):
+        if role in requested:
+            result.update(generation.get(field, ()))
+    if ResourceRole.RETIRED_NAMESPACE in requested:
+        result.update(name for name in generation["files"]
+                      if any(name.startswith(prefix + "/") for prefix in generation.get("retired_namespace_prefixes", ())))
+    if ResourceRole.SOURCE_REFERENCE in requested:
+        # Invert only admitted canonical member literals. Equal bytes and a
+        # containing host directory cannot create another logical resource.
+        literals: dict[str, set[str]] = {}
+        for name in generation["files"]:
+            literal = _literal(generation, name)
+            if literal is not None:
+                literals.setdefault(literal, set()).add(name)
+        for versions in generation.get("sources", {}).values():
+            for entry in versions.values():
+                logical = entry.get("logical")
+                if logical in generation["files"]:
+                    result.add(logical)
+                matches = literals.get(entry.get("locator"), set())
+                if len(matches) > 1:
+                    raise ValueError("The preserved source locator has ambiguous registered roots.")
+                result.update(matches)
+    return frozenset(result)
