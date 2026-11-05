@@ -264,3 +264,48 @@ class PreparedSource:
         value = self.descriptor()
         value["data"] = self.data
         return value
+
+
+@dataclass(frozen=True)
+class FigureReadWitness:
+    """Selected currentness facts, independent of unrelated publication state."""
+    files: tuple[tuple[str, str | None], ...]
+    source_files: tuple[tuple[str, str], ...] = ()
+    projected_reads: tuple[ProjectionRead, ...] = ()
+
+    def __post_init__(self) -> None:
+        for values in (self.files, self.source_files):
+            if not isinstance(values, tuple) or len(dict(values)) != len(values):
+                raise ValueError("Selected file witnesses require unique immutable pairs.")
+            if any(not isinstance(name, str) or not name or version is not None and not _sha(version) for name, version in values):
+                raise ValueError("Selected file witnesses require exact named byte versions.")
+        if any(not _sha(version) for _name, version in self.source_files):
+            raise ValueError("Source witnesses require observed exact byte versions.")
+        for name, _version in self.files:
+            resource_key(name)
+        if (not isinstance(self.projected_reads, tuple)
+                or any(not isinstance(item, ProjectionRead) for item in self.projected_reads)
+                or len(set(self.projected_reads)) != len(self.projected_reads)):
+            raise ValueError("Selected projections require unique typed witnesses.")
+
+    @classmethod
+    def from_read_state(cls, value: Mapping[str, Any]) -> FigureReadWitness:
+        if any(not _sha(version) for version in value["project_files"].values()):
+            raise ValueError("Selected observations require all mandatory file byte versions.")
+        return cls(tuple(sorted(value["project_files"].items())),
+                   tuple(sorted(value.get("source_files", {}).items())),
+                   tuple(ProjectionRead(**item) for item in value.get("projected_reads", ())))
+
+    @classmethod
+    def from_binding(cls, value: Mapping[str, Any]) -> FigureReadWitness:
+        return cls(tuple(sorted(value["files"].items())),
+                   tuple(sorted(value.get("source_files", {}).items())),
+                   tuple(ProjectionRead(**item) for item in value.get("projected_reads", ())))
+
+    def to_read_state_payload(self) -> dict[str, Any]:
+        return {"project_files": dict(self.files), "source_files": dict(self.source_files),
+                "projected_reads": [item.to_payload() for item in self.projected_reads]}
+
+    def to_binding_fields(self) -> dict[str, Any]:
+        return {"files": dict(self.files), "source_files": dict(self.source_files),
+                "projected_reads": [item.to_payload() for item in self.projected_reads]}

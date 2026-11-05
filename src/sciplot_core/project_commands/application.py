@@ -8,6 +8,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from .contracts import CommandKind, ProjectCommand, ProjectMutation
 from .errors import ProjectCommandError, ProjectCommandUnknown
 from .ports import ProjectStore
+from .prepared import MutationDeclaration, PreparedMutation, prepared_mutation
 
 
 class ProjectCommands:
@@ -15,12 +16,12 @@ class ProjectCommands:
         self.store = store
 
     @staticmethod
-    def _sources(candidate: ProjectMutation) -> list[dict[str, Any]] | None:
+    def _sources(candidate: ProjectMutation | PreparedMutation) -> list[dict[str, Any]] | None:
         values = [*(candidate.sources or ()), *(source.to_storage_payload() for source in candidate.prepared_sources)]
         return values or None
 
     @staticmethod
-    def _input_options(command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
+    def _input_options(command: ProjectCommand, candidate: ProjectMutation | PreparedMutation) -> dict[str, Any]:
         inputs = (*command.input_reads, *candidate.input_reads)
         result: dict[str, Any] = {"input_reads": [item.to_payload() for item in inputs]} if inputs else {}
         if inputs or command.missing_outputs:
@@ -87,7 +88,7 @@ class ProjectCommands:
             **self._input_options(command, candidate)))
 
     @staticmethod
-    def _prepared_review(command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
+    def _prepared_review(command: ProjectCommand, candidate: PreparedMutation) -> dict[str, Any]:
         candidate.validate_for(command)
         expected = candidate.prepared_digest
         if (command.kind not in {CommandKind.SEMANTIC_RECORD, CommandKind.ATTACHMENT_IMPORT}
@@ -95,12 +96,13 @@ class ProjectCommands:
             raise ProjectCommandError("project_prepared_publication_invalid", "The prepared bytes require their exact storage command binding.")
         return {"publication": "prepared_storage", "prepared_digest": expected, "candidate_review": candidate.review}
 
-    def stage_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
+    def stage_prepared(self, command: ProjectCommand, candidate: MutationDeclaration) -> dict[str, Any]:
         """Durably freeze bytes without accepting a later ownership transfer."""
+        candidate = prepared_mutation(candidate)
         review = self._prepared_review(command, candidate)
         return self._staged_prepared(command, candidate, self._admit(command), review)
 
-    def _staged_prepared(self, command: ProjectCommand, candidate: ProjectMutation,
+    def _staged_prepared(self, command: ProjectCommand, candidate: PreparedMutation,
                          record: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:
         self.store.recover()
         current = self.store.query(command.key)
@@ -120,11 +122,12 @@ class ProjectCommands:
             return record
         raise ProjectCommandUnknown()
 
-    def publish_prepared(self, command: ProjectCommand, candidate: ProjectMutation) -> dict[str, Any]:
+    def publish_prepared(self, command: ProjectCommand, candidate: MutationDeclaration) -> dict[str, Any]:
         """Publish the admitted prepared bytes with no native callback."""
         if command.namespace_transfers:
             raise ProjectCommandError("project_namespace_decision_required",
                 "Stage the exact namespace transfer, validate and fence its owner, then explicitly decide.")
+        candidate = prepared_mutation(candidate)
         review = self._prepared_review(command, candidate)
         record = self._admit(command)
         if record.get("phase") == "reserved":
