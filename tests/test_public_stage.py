@@ -82,16 +82,18 @@ def test_source_stage_copies_public_bytes_and_independent_git_without_reading_pr
     monkeypatch.setattr(public_stage, "_hash", public_hash)
     monkeypatch.setattr(public_stage, "runtime_binding", lambda *_: {"helpers": "synthetic unit instrumentation"})
     environment = {"SCIPLOT_RUNTIME_REPO": str(root)}
-    stage, child, receipt = public_stage.create_stage(root, root / ".tmp_verify/stage", environment)
-    assert (stage / "src/generated.py").read_bytes() == (root / "src/generated.py").read_bytes()
-    assert private.read_bytes() == original_private
-    assert receipt["stage_head"] != receipt["origin_head"]
-    assert receipt["source_bytes"] == receipt["origin_source_bytes"]
-    assert not any(path.exists() or path.is_symlink() for path in public_stage.private_namespace_paths(stage))
-    assert child["SCIPLOT_SOURCE_ROOT"] == str(stage / "src")
-    assert child["SCIPLOT_RUNTIME_REPO"] == str(stage)
-    assert public_stage.source_binding(stage) == receipt["source_bytes"]
-    assert _git(root, "status", "--porcelain") == ""
+    for profile in ("public-focused", "public-comprehensive"):
+        stage, child, receipt = public_stage.create_stage(root, root / (".tmp_verify/" + profile), environment)
+        assert (stage / "src/generated.py").read_bytes() == (root / "src/generated.py").read_bytes()
+        assert private.read_bytes() == original_private
+        assert receipt["stage_head"] != receipt["origin_head"]
+        assert receipt["source_bytes"] == receipt["origin_source_bytes"]
+        assert not any(path.exists() or path.is_symlink() for path in public_stage.private_namespace_paths(stage))
+        assert child["SCIPLOT_SOURCE_ROOT"] == str(stage / "src")
+        assert child["SCIPLOT_RUNTIME_REPO"] == str(stage)
+        assert public_stage.source_binding(stage) == receipt["source_bytes"]
+        assert _git(root, "status", "--porcelain") == ""
+
 
 
 @pytest.mark.parametrize("mutation", ("dirty_source", "source_alias", "inherited_reference", "wrong_source_environment", "traversal_output", "aliased_output"))

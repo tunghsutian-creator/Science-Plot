@@ -11,8 +11,8 @@ def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def require_zoned_iso_timestamp(value: object, label: str) -> str:
-    """Validate a non-empty ISO-8601 timestamp with an explicit UTC offset."""
+def _zoned_iso_timestamp(value: object, label: str) -> tuple[str, datetime]:
+    """Parse once for both normalized-text and datetime consumers."""
 
     if not isinstance(value, str):
         raise ValueError(f"{label} must be a string.")
@@ -25,7 +25,17 @@ def require_zoned_iso_timestamp(value: object, label: str) -> str:
         raise ValueError(f"{label} must be an ISO-8601 timestamp.") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError(f"{label} must include a timezone offset.")
-    return text
+    return text, parsed
+
+
+def require_zoned_iso_timestamp(value: object, label: str) -> str:
+    """Validate a non-empty ISO-8601 timestamp with an explicit UTC offset."""
+    return _zoned_iso_timestamp(value, label)[0]
+
+
+def parse_zoned_iso_timestamp(value: object, label: str) -> datetime:
+    """Return the validated zoned instant without duplicating the parser owner."""
+    return _zoned_iso_timestamp(value, label)[1]
 
 
 def local_display_time(value: str) -> str:
@@ -34,4 +44,4 @@ def local_display_time(value: str) -> str:
     return datetime.fromisoformat(value).astimezone().isoformat(sep=" ", timespec="seconds")
 
 
-__all__ = ["require_zoned_iso_timestamp", "utc_now_iso", "local_display_time"]
+__all__ = ["require_zoned_iso_timestamp", "parse_zoned_iso_timestamp", "utc_now_iso", "local_display_time"]

@@ -16,16 +16,19 @@ import sysconfig
 import time
 from typing import Any
 
-from sciplot_core.verification.public_stage import _git, assert_private_absent, runtime_binding, source_binding
+from sciplot_core.verification.public_stage import _git, runtime_binding, source_binding
 
 REPOSITORY = "tunghsutian-creator/Science-Plot"
-PROTOCOL = "sciplot-public-ci-behavior-v1"
-COMMANDS = ["python -m pytest -q --input-scope public-focused",
+PROTOCOL = "sciplot-public-ci-behavior-v2"
+COMMANDS = ["python -m sciplot_core.verification.public_stage --profile public-focused --out .tmp_verify/ci_public_focused",
             "python -m sciplot_core.verification.public_stage --profile public-comprehensive --out .tmp_verify/ci_public_comprehensive"]
+
+INPUT_SCOPE_CONTRACT = {"origin": "public_source_binding_excludes_private_namespaces",
+                        "profiles": "public_stage_private_namespace_absent"}
 
 FONTCONFIG_ROOT = Path("/etc/fonts")
 
-BINDING_FIELDS = frozenset({"protocol", "commands", "workspace", "source_sha256", "image", "os_release", "kernel",
+BINDING_FIELDS = frozenset({"protocol", "commands", "input_scope_contract", "workspace", "source_sha256", "image", "os_release", "kernel",
     "cpu_class", "cpu_count", "python", "stdlib_sha256", "source_modes_sha256", "qt_plugins_sha256", "fontconfig_sha256", "distributions", "system_packages_sha256", "native_sha256", "font_sha256",
     "qmake", "compiler", "abi_build", "application_environment", "head", "focused_count", "focused_skips",
     "focused_nodes_sha256", "comprehensive_nodes_sha256"})
@@ -54,7 +57,7 @@ def _qt_plugin_root() -> Path:
     return Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath))
 
 
-def _head_source(root: Path, source: dict[str, str], environment: dict[str, str]) -> str:
+def _head_source(root: Path, source: dict[str, str]) -> str:
     """Check actual bytes against HEAD objects, including hidden index flags."""
     rows = _git(root, "ls-tree", "-r", "-z", "HEAD").split("\0")
     entries = {}
@@ -76,20 +79,14 @@ def _head_source(root: Path, source: dict[str, str], environment: dict[str, str]
     if set(entries) != set(source):
         raise UnsupportedEnvironment("head_source_membership_drift")
     names = sorted(entries)
-    result = subprocess.run(["git", "-c", "core.hooksPath=" + os.devnull, "-c", "core.fsmonitor=false", "cat-file", "--batch"],
-                            input="".join(entries[name] + "\n" for name in names).encode(), cwd=root,
-                            env=environment, check=True, capture_output=True, timeout=60)
-    offset = 0
-    for name in names:
-        end = result.stdout.index(b"\n", offset)
-        object_id, kind, size = result.stdout[offset:end].decode("ascii").split()
-        start, stop = end + 1, end + 1 + int(size)
-        if (object_id != entries[name] or kind != "blob" or stop >= len(result.stdout)
-                or result.stdout[stop:stop+1] != b"\n" or hashlib.sha256(result.stdout[start:stop]).hexdigest() != source[name]):
+    # Delegate byte identity to the existing Git owner. Its environment preserves
+    # active public guards; --no-filters compares actual bytes with HEAD blob IDs.
+    # Bounded argv batches avoid a second subprocess/environment implementation.
+    for start in range(0, len(names), 200):
+        batch = names[start:start + 200]
+        observed = _git(root, "hash-object", "--no-filters", "--", *batch).splitlines()
+        if observed != [entries[name] for name in batch]:
             raise UnsupportedEnvironment("head_source_bytes_drift")
-        offset = stop + 1
-    if offset != len(result.stdout):
-        raise UnsupportedEnvironment("head_source_protocol_drift")
     return digest(modes)
 
 
@@ -114,11 +111,12 @@ def _collect_ubuntu(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     if not sys.dont_write_bytecode or sys.pycache_prefix != environment["PYTHONPYCACHEPREFIX"]:
         raise UnsupportedEnvironment("collector_requires_owned_bytecode_policy")
     try:
-        assert_private_absent(root, environment)
+        # Original checkout may contain tracked historical fixtures. The existing
+        # source owner excludes them without reading; each profile stage owns absence.
         source = source_binding(root)
     except ValueError as error:
         raise UnsupportedEnvironment("source_binding: " + str(error)) from error
-    source_modes = _head_source(root, source, environment)
+    source_modes = _head_source(root, source)
     cache: dict[Path, tuple[tuple[int, ...], str]] = {}
     aliases: dict[Path, Path] = {}
     byte_count = file_count = 0
@@ -257,7 +255,7 @@ def _collect_ubuntu(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
             cpu.setdefault(key.strip(), set()).add(value.strip())
     if not cpu or any(not value for values in cpu.values() for value in values) or not os.cpu_count():
         raise UnsupportedEnvironment("missing_cpu_class")
-    facts = {"protocol": PROTOCOL, "commands": COMMANDS, "workspace": str(root),
+    facts = {"protocol": PROTOCOL, "commands": COMMANDS, "input_scope_contract": INPUT_SCOPE_CONTRACT, "workspace": str(root),
              "source_sha256": digest(source), "source_modes_sha256": source_modes, "image": image,
              "qt_plugins_sha256": digest(plugins), "fontconfig_sha256": digest(fontconfig),
              "os_release": os_release, "kernel": [platform.system(), platform.release(), platform.machine()],

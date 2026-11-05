@@ -9,7 +9,8 @@ import re
 from typing import Any
 import zipfile
 
-from sciplot_core.verification.ci_public_environment import BINDING_FIELDS, COMMANDS, PROTOCOL, REPOSITORY, digest
+from sciplot_core.foundation.iso_timestamps import parse_zoned_iso_timestamp
+from sciplot_core.verification.ci_public_environment import BINDING_FIELDS, COMMANDS, INPUT_SCOPE_CONTRACT, PROTOCOL, REPOSITORY, digest
 
 MAX_ARCHIVE = 1024 * 1024
 MAX_JSON = 512 * 1024
@@ -82,7 +83,7 @@ def origin_eligible(proof: Any, binding: dict[str, Any], run: Any,
         if not isinstance(job.get("steps"), list) or any(not isinstance(row, dict) for row in job["steps"]):
             return "official_steps_schema"
     if (set(proof) != FIELDS or proof.get("kind") != "sciplot_public_ci_result"
-            or type(proof.get("version")) is not int or proof["version"] != 1):
+            or type(proof.get("version")) is not int or proof["version"] != 2):
         return "proof_schema"
     if proof.get("claim") != CLAIM or proof.get("fresh_execution") is not True:
         return "not_fresh_origin"
@@ -94,7 +95,8 @@ def origin_eligible(proof: Any, binding: dict[str, Any], run: Any,
         observed_binding = digest(proof["binding"])
     except (ValueError, TypeError):
         return "proof_binding_not_canonical_json"
-    if binding["protocol"] != PROTOCOL or binding["commands"] != COMMANDS or observed_binding != digest(binding):
+    if (binding["protocol"] != PROTOCOL or binding["commands"] != COMMANDS
+            or binding["input_scope_contract"] != INPUT_SCOPE_CONTRACT or observed_binding != digest(binding)):
         return "binding_mismatch"
     origin = proof.get("origin")
     if not isinstance(origin, dict) or set(origin) != {"repository", "sha", "run_id", "attempt", "workflow"}:
@@ -113,8 +115,8 @@ def origin_eligible(proof: Any, binding: dict[str, Any], run: Any,
             or run.get("event") != "push" or run.get("status") != "completed" or run.get("conclusion") != "success"):
         return "official_origin_not_success"
     try:
-        created = datetime.fromisoformat(proof["created_at"])
-        expires = datetime.fromisoformat(artifact["expires_at"])
+        created = parse_zoned_iso_timestamp(proof["created_at"], "origin.created_at")
+        expires = parse_zoned_iso_timestamp(artifact["expires_at"], "artifact.expires_at")
         if not 0 <= (now - created).total_seconds() <= 7 * 86400 or expires <= now:
             return "expired_origin"
     except (KeyError, TypeError, ValueError):
@@ -139,9 +141,13 @@ def origin_eligible(proof: Any, binding: dict[str, Any], run: Any,
             or not isinstance(comprehensive["original_result_sha256"], str)
             or not re.fullmatch(r"[0-9a-f]{64}", comprehensive["original_result_sha256"])):
         return "comprehensive_schema"
-    if set(focused) != {"selected", "skipped", "passed"} or any(type(value) is not int or value < 0 for value in focused.values()):
+    if (set(focused) != {"selected", "skipped", "passed", "selected_sha256", "original_result_sha256"}
+            or any(type(focused[key]) is not int or focused[key] < 0 for key in ("selected", "skipped", "passed"))
+            or any(not isinstance(focused[key], str) or not re.fullmatch(r"[0-9a-f]{64}", focused[key])
+                   for key in ("selected_sha256", "original_result_sha256"))):
         return "focused_schema"
-    if (focused.get("selected") != binding["focused_count"] or focused.get("skipped") != binding["focused_skips"]
+    if (focused["selected_sha256"] != binding["focused_nodes_sha256"]
+            or focused.get("selected") != binding["focused_count"] or focused.get("skipped") != binding["focused_skips"]
             or focused["passed"] + focused["skipped"] != focused.get("selected")
             or comprehensive.get("status") != "PASS" or comprehensive.get("actual_exit_code") != 0
             or comprehensive.get("selected_sha256") != binding["comprehensive_nodes_sha256"]):

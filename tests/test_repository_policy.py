@@ -172,9 +172,10 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
         context.setenv("GITHUB_OUTPUT", str(native_output))
         assert ci_feedback.main() == 0
         assert native_output.read_text() == "preflight=true\n"
-    from ci_public_reference_support import exercise_collector, exercise_fresh_origin, exercise_head_source, exercise_public_reference, exercise_wire
+    from ci_public_reference_support import exercise_collector, exercise_fresh_origin, exercise_head_source, exercise_profile_stage_route, exercise_public_reference, exercise_wire
     exercise_public_reference(ROOT, tmp_path, monkeypatch)
     exercise_collector(ROOT, tmp_path, monkeypatch)
     exercise_wire(tmp_path, monkeypatch)
     exercise_head_source(tmp_path)
     exercise_fresh_origin(tmp_path, monkeypatch)
+    exercise_profile_stage_route(tmp_path / "profile-routes", monkeypatch)

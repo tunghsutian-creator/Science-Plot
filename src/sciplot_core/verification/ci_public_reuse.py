@@ -15,11 +15,12 @@ import urllib.parse
 import urllib.request
 import zipfile
 
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.verification.ci_public_environment import (
     COMMANDS, REPOSITORY, UnsupportedEnvironment, application_environment, collect_environment, digest,
 )
 from sciplot_core.verification.ci_public_proof import (
-    CLAIM, MAX_ARCHIVE, focused_summary, origin_eligible, policy_compatible, unpack_artifact,
+    CLAIM, MAX_ARCHIVE, origin_eligible, policy_compatible, unpack_artifact,
 )
 from sciplot_core.verification.input_scope import load_manifest
 from sciplot_core.verification.public_stage import PLATFORM_SKIPS, review_stage_reports
@@ -191,19 +192,44 @@ def run_profile(root: Path, profile: str) -> int:
         raise ValueError("CI evidence roots cannot follow aliases.")
     controlled = (directory / "current.json").is_file()
     environment = application_environment(root) if controlled else dict(os.environ)
-    command = ([sys.executable, "-m", "pytest", "-q", "--input-scope", "public-focused"] if profile == "focused" else
-               [sys.executable, "-m", "sciplot_core.verification.public_stage", "--profile", "public-comprehensive", "--out", ".tmp_verify/ci_public_comprehensive"])
+    command = [sys.executable, "-m", "sciplot_core.verification.public_stage", "--profile", "public-" + profile,
+               "--out", ".tmp_verify/ci_public_" + profile]
     directory.mkdir(parents=True, exist_ok=True)
     log = directory / f"{profile}.log"
     with log.open("x") as stream:
-        child = subprocess.Popen(command, cwd=root, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        assert child.stdout is not None
-        for line in child.stdout:
-            print(line, end="", flush=True)
-            stream.write(line)
-        code = child.wait()
+        # Same owned command.log stream previously used by comprehensive in Actions.
+        # It is progress only; the original stage exit/finish/reports own completion.
+        progress = subprocess.Popen(["tail", "-n", "+1", "--follow=name", "--retry",
+                                     str(root / f".tmp_verify/ci_public_{profile}/command.log")],
+                                    env=environment, stderr=subprocess.DEVNULL)
+        try:
+            child = subprocess.Popen(command, cwd=root, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            assert child.stdout is not None
+            for line in child.stdout:
+                print(line, end="", flush=True)
+                stream.write(line)
+            code = child.wait()
+        finally:
+            if progress.poll() is None:
+                progress.terminate()
+            progress.wait()
     (directory / f"{profile}.exit.json").write_text(json.dumps({"actual_exit_code": code, "controlled": controlled, "command": COMMANDS[0 if profile == "focused" else 1]}))
     return code
+
+
+
+def _stage_evidence(root: Path, profile: str, before: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    stage = root / f".tmp_verify/ci_public_{profile}"
+    result_path = stage / "result.json"
+    raw = result_path.read_bytes()
+    result = json.loads(raw)
+    reports = json.loads((stage / "reports.json").read_bytes())
+    if (result["status"] != "PASS" or result["actual_exit_code"] != 0 or result["origin_head"] != before["head"]
+            or result["profile"] != "public-" + profile or not all(result["binding_checks"].values())
+            or review_stage_reports(result["finish"], reports, platform="linux")
+            or digest(sorted(result["finish"]["selected_tests"])) != before[profile + "_nodes_sha256"]):
+        raise ValueError(f"Fresh {profile} original evidence is inconsistent.")
+    return result, hashlib.sha256(raw).hexdigest()
 
 
 def publish(root: Path) -> None:
@@ -238,22 +264,22 @@ def publish(root: Path) -> None:
         if (record["actual_exit_code"] != 0 or record["controlled"] is not True
                 or record["command"] != COMMANDS[0 if profile == "focused" else 1]):
             raise ValueError("Fresh profile original exit/control evidence is inconsistent.")
-    selected = before["focused_count"]
-    focused = focused_summary((directory / "focused.log").read_text(), selected, before["focused_skips"])
-    stage = root / ".tmp_verify/ci_public_comprehensive"
-    result = json.loads((stage / "result.json").read_bytes())
-    reports = json.loads((stage / "reports.json").read_bytes())
-    if (result["status"] != "PASS" or result["actual_exit_code"] != 0 or result["origin_head"] != before["head"]
-            or not all(result["binding_checks"].values()) or review_stage_reports(result["finish"], reports, platform="linux")
-            or digest(sorted(result["finish"]["selected_tests"])) != before["comprehensive_nodes_sha256"]):
-        raise ValueError("Fresh comprehensive original evidence is inconsistent.")
-    proof = {"kind": "sciplot_public_ci_result", "version": 1, "claim": CLAIM, "fresh_execution": True,
-             "created_at": datetime.now(timezone.utc).isoformat(), "binding": before,
+    focused_result, focused_sha256 = _stage_evidence(root, "focused", before)
+    marker = focused_result["finish"]
+    focused = {"passed": len(marker["executed_tests"]),
+               "skipped": len(marker["selected_tests"]) - len(marker["executed_tests"]),
+               "selected": len(marker["selected_tests"]), "selected_sha256": before["focused_nodes_sha256"],
+               "original_result_sha256": focused_sha256}
+    if focused["selected"] != before["focused_count"] or focused["skipped"] != before["focused_skips"]:
+        raise ValueError("Fresh focused profile counts differ from the bound scope.")
+    _result, comprehensive_sha256 = _stage_evidence(root, "comprehensive", before)
+    proof = {"kind": "sciplot_public_ci_result", "version": 2, "claim": CLAIM, "fresh_execution": True,
+             "created_at": utc_now_iso(), "binding": before,
              "origin": {"repository": REPOSITORY, "sha": before["head"], "run_id": int(os.environ["GITHUB_RUN_ID"]),
                         "attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]), "workflow": WORKFLOW}, "focused": focused,
              "comprehensive": {"status": "PASS", "actual_exit_code": 0,
                                "selected_sha256": before["comprehensive_nodes_sha256"],
-                               "original_result_sha256": hashlib.sha256((stage / "result.json").read_bytes()).hexdigest()}}
+                               "original_result_sha256": comprehensive_sha256}}
     (directory / "public-result.json").write_text(json.dumps(proof, sort_keys=True))
     (directory / "after-costs.json").write_text(json.dumps(costs, sort_keys=True))
     output(artifact="true", reason="ORIGIN:await_official_job_completion_not_yet_eligible")

@@ -18,21 +18,21 @@ import pytest
 def exercise_public_reference(root, tmp_path, monkeypatch):
     from sciplot_core.verification import ci_public_reuse as reuse
     from sciplot_core.verification.ci_public_environment import (
-        BINDING_FIELDS, COMMANDS, PROTOCOL, REPOSITORY, UnsupportedEnvironment, application_environment, collect_environment,
+        BINDING_FIELDS, COMMANDS, INPUT_SCOPE_CONTRACT, PROTOCOL, REPOSITORY, UnsupportedEnvironment, application_environment, collect_environment,
     )
     from sciplot_core.verification.ci_public_proof import (
         CLAIM, focused_summary, origin_eligible, policy_compatible, unpack_artifact,
     )
     now = datetime.now(timezone.utc)
-    binding = {"protocol": PROTOCOL, "commands": COMMANDS, "head": "a" * 40, "focused_count": 10,
-               "focused_skips": 1, "comprehensive_nodes_sha256": "b" * 64,
+    binding = {"protocol": PROTOCOL, "commands": COMMANDS, "input_scope_contract": INPUT_SCOPE_CONTRACT, "head": "a" * 40, "focused_count": 10,
+               "focused_skips": 1, "focused_nodes_sha256": "e" * 64, "comprehensive_nodes_sha256": "b" * 64,
                "source_sha256": "c" * 64, "native_sha256": "d" * 64, "image": "supported", "cpu_count": 1}
     binding = {**{key: "finite-tested-fact" for key in BINDING_FIELDS}, **binding}
-    proof = {"kind": "sciplot_public_ci_result", "version": 1, "claim": CLAIM, "fresh_execution": True,
+    proof = {"kind": "sciplot_public_ci_result", "version": 2, "claim": CLAIM, "fresh_execution": True,
              "created_at": now.isoformat(), "binding": binding,
              "origin": {"repository": REPOSITORY, "sha": "a" * 40, "run_id": 123, "attempt": 1,
                         "workflow": ".github/workflows/minimal-repository.yml"},
-             "focused": {"passed": 9, "skipped": 1, "selected": 10},
+             "focused": {"passed": 9, "skipped": 1, "selected": 10, "selected_sha256": "e" * 64, "original_result_sha256": "f" * 64},
              "comprehensive": {"status": "PASS", "actual_exit_code": 0, "selected_sha256": "b" * 64, "original_result_sha256": "d" * 64}}
     run = {"id": 123, "run_attempt": 1, "head_sha": "a" * 40, "path": ".github/workflows/minimal-repository.yml",
            "event": "push", "status": "completed", "conclusion": "success", "repository": {"full_name": REPOSITORY},
@@ -55,7 +55,7 @@ def exercise_public_reference(root, tmp_path, monkeypatch):
     del incomplete["cpu_class"]
     assert origin_eligible(proof, incomplete, run, jobs, artifact, now) == "incomplete_current_binding"
     for target, path, value in (
-        ("proof", ("fresh_execution",), False), ("proof", ("version",), 0),
+        ("proof", ("fresh_execution",), False), ("proof", ("version",), 0), ("proof", ("version",), 1),
         ("proof", ("created_at",), (now - timedelta(days=8)).isoformat()),
         ("proof", ("focused", "passed"), 8), ("run", ("head_repository", "fork"), True),
         ("run", ("head_repository", "full_name"), "fork/repo"),
@@ -86,7 +86,7 @@ def exercise_public_reference(root, tmp_path, monkeypatch):
     for archive_bytes, expected in ((data, "sha256:" + "0" * 64), (archive("../public-result.json"), None), (archive(content="{"), None)):
         with pytest.raises((ValueError, json.JSONDecodeError)):
             unpack_artifact(archive_bytes, expected or "sha256:" + hashlib.sha256(archive_bytes).hexdigest())
-    assert focused_summary("9 passed, 1 skipped in 1.23s", 10, 1) == proof["focused"]
+    assert focused_summary("9 passed, 1 skipped in 1.23s", 10, 1) == {key: proof["focused"][key] for key in ("passed", "skipped", "selected")}
     for text in ("9 passed in 1.23s", "8 passed, 1 skipped in 1.23s", "1 failed, 9 passed in 1.23s", "running"):
         with pytest.raises(ValueError):
             focused_summary(text, 10, 1)
@@ -208,6 +208,19 @@ def exercise_collector(root, tmp_path, monkeypatch):
     for name in ("_nc_cntr", "qtmml", "qtloops", "recordpaint", "threed"):
         (helpers / (name + ".so")).write_bytes(name.encode())
     dist = types.SimpleNamespace(name="finite-package", version="1", files=[source, pycache, extension], locate_file=lambda member: member)
+    private = simulated / "tests/fixtures/rendering_profiles/generated/input.csv"
+    private.parent.mkdir(parents=True)
+    private.write_text("generated namespace sentinel, not user data")
+    (simulated / ".gitignore").write_text(".venv/\n.tmp_verify/\nthird_party/\n")
+    (simulated / "public.py").write_text("PUBLIC = 1\n")
+    for args in (("init", "-q"), ("config", "user.name", "finite fixture"),
+                 ("config", "user.email", "fixture@invalid"), ("add", "."),
+                 ("-c", "commit.gpgsign=false", "commit", "-qm", "tracked private-layout fixture")):
+        subprocess.run(["git", *args], cwd=simulated, check=True, capture_output=True)
+    real_run, read_bytes = subprocess.run, Path.read_bytes
+    def public_bytes(path):
+        assert not path.is_relative_to(private.parent), "collector read excluded private namespace"
+        return read_bytes(path)
     read_text = Path.read_text
     def text(path, *args, **kwargs):
         if str(path) == "/etc/os-release":
@@ -225,21 +238,26 @@ def exercise_collector(root, tmp_path, monkeypatch):
         context.setenv("ImageVersion", "finite-image")
         context.setenv("GH_TOKEN", "never-collect-this-value")
         context.setattr(Path, "read_text", text)
-        context.setattr(collector, "assert_private_absent", lambda *_args: None)
-        context.setattr(collector, "source_binding", lambda _root: {})
-        context.setattr(collector, "_head_source", lambda *_args: "finite-source-modes")
+        context.setattr(Path, "read_bytes", public_bytes)
         context.setattr(collector, "_qt_plugin_root", lambda: plugins)
         context.setattr(collector, "FONTCONFIG_ROOT", configuration)
         context.setattr(collector, "runtime_binding", lambda *_args: {"finite": "Python/Qt/helpers"})
         context.setattr(collector.importlib.metadata, "distributions", lambda: [dist])
         def tool(argv, **kwargs):
+            if argv[0] == "git":
+                return real_run(argv, **kwargs)
             assert "GH_TOKEN" not in kwargs["env"] and "GITHUB_REF" not in kwargs["env"]
             value = str(font) if argv[0] == "fc-list" else "finite tool facts"
             if argv[0] == "ldd":
                 value = f"fixture => {extension} (0x0000)"
             return types.SimpleNamespace(stdout=value)
         context.setattr(collector.subprocess, "run", tool)
+        from sciplot_core.verification.public_stage import assert_private_absent
+        with pytest.raises(ValueError, match="private input namespace"):
+            assert_private_absent(simulated, collector.application_environment(simulated))
         facts, costs = collector._collect_ubuntu(simulated)
+        assert private.is_file()
+        assert facts["input_scope_contract"]["origin"] == "public_source_binding_excludes_private_namespaces"
         assert costs["files_hashed"] >= 11 and costs["bytes_hashed"] > 0
         assert "never-collect-this-value" not in json.dumps(facts)
         pycache.write_bytes(b"different-legacy-cache")
@@ -290,7 +308,7 @@ def exercise_wire(tmp_path, monkeypatch):
 
 
 def exercise_head_source(tmp_path):
-    from sciplot_core.verification.ci_public_environment import UnsupportedEnvironment, _head_source, application_environment
+    from sciplot_core.verification.ci_public_environment import UnsupportedEnvironment, _head_source
     root = tmp_path / "head-source"
     root.mkdir()
     def git(*args):
@@ -302,37 +320,36 @@ def exercise_head_source(tmp_path):
     source.write_text("x = 1\n")
     git("add", "sample.py")
     git("-c", "commit.gpgsign=false", "commit", "-qm", "finite source")
-    environment = application_environment(root)
-    _head_source(root, {"sample.py": hashlib.sha256(source.read_bytes()).hexdigest()}, environment)
+    _head_source(root, {"sample.py": hashlib.sha256(source.read_bytes()).hexdigest()})
     git("update-index", "--assume-unchanged", "sample.py")
     source.write_text("x = 2\n")
     with pytest.raises(UnsupportedEnvironment, match="head_source_bytes"):
-        _head_source(root, {"sample.py": hashlib.sha256(source.read_bytes()).hexdigest()}, environment)
+        _head_source(root, {"sample.py": hashlib.sha256(source.read_bytes()).hexdigest()})
 
 
 def exercise_fresh_origin(tmp_path, monkeypatch):
     from sciplot_core.verification import ci_public_reuse as reuse
-    from sciplot_core.verification.ci_public_environment import BINDING_FIELDS, COMMANDS, PROTOCOL, digest
+    from sciplot_core.verification.ci_public_environment import BINDING_FIELDS, COMMANDS, INPUT_SCOPE_CONTRACT, PROTOCOL, digest
     root = tmp_path / "producer"
     directory = root / reuse.DIRECTORY
     directory.mkdir(parents=True)
     node = "tests/test_generated.py::test_public"
     facts = {key: "finite-tested-fact" for key in BINDING_FIELDS}
-    facts.update(protocol=PROTOCOL, commands=COMMANDS, head="a" * 40, focused_count=10,
-                 focused_skips=1, comprehensive_nodes_sha256=digest([node]))
+    facts.update(protocol=PROTOCOL, commands=COMMANDS, input_scope_contract=INPUT_SCOPE_CONTRACT,
+                 head="a" * 40, focused_count=1, focused_skips=0,
+                 focused_nodes_sha256=digest([node]), comprehensive_nodes_sha256=digest([node]))
     (directory / "current.json").write_text(json.dumps({"binding": facts}))
+    marker = {"complete": True, "exit_code": 0, "selected_tests": [node], "executed_tests": [node]}
     for index, profile in enumerate(("focused", "comprehensive")):
         (directory / (profile + ".exit.json")).write_text(json.dumps({
             "actual_exit_code": 0, "controlled": True, "command": COMMANDS[index]}))
-    (directory / "focused.log").write_text("9 passed, 1 skipped in 1.00s")
-    stage = root / ".tmp_verify/ci_public_comprehensive"
-    stage.mkdir()
-    marker = {"complete": True, "exit_code": 0, "selected_tests": [node], "executed_tests": [node]}
-    result = {"status": "PASS", "actual_exit_code": 0, "origin_head": "a" * 40,
-              "binding_checks": {"source": True}, "finish": marker}
-    (stage / "result.json").write_text(json.dumps(result))
-    (stage / "reports.json").write_text(json.dumps({"selected_tests": [node], "exit_code": 0, "reports": [
-        {"nodeid": node, "when": phase, "outcome": "passed"} for phase in ("setup", "call", "teardown")]}))
+        stage = root / (".tmp_verify/ci_public_" + profile)
+        stage.mkdir()
+        result = {"status": "PASS", "actual_exit_code": 0, "origin_head": "a" * 40,
+                  "profile": "public-" + profile, "binding_checks": {"source": True}, "finish": marker}
+        (stage / "result.json").write_text(json.dumps(result))
+        (stage / "reports.json").write_text(json.dumps({"selected_tests": [node], "exit_code": 0, "reports": [
+            {"nodeid": node, "when": phase, "outcome": "passed"} for phase in ("setup", "call", "teardown")]}))
     with monkeypatch.context() as context:
         context.setattr(reuse, "binding", lambda _root: (facts, {"elapsed_seconds": 0.01}))
         context.setenv("GITHUB_RUN_ID", "123")
@@ -340,10 +357,45 @@ def exercise_fresh_origin(tmp_path, monkeypatch):
         context.setenv("GITHUB_OUTPUT", str(tmp_path / "producer-output"))
         reuse.publish(root)
         proof = json.loads((directory / "public-result.json").read_text())
-        assert proof["fresh_execution"] is True and proof["focused"] == {"passed": 9, "skipped": 1, "selected": 10}
-        assert proof["comprehensive"]["original_result_sha256"] == hashlib.sha256((stage / "result.json").read_bytes()).hexdigest()
+        assert proof["version"] == 2 and proof["fresh_execution"] is True
+        assert {key: proof["focused"][key] for key in ("passed", "skipped", "selected")} == {"passed": 1, "skipped": 0, "selected": 1}
+        for profile in ("focused", "comprehensive"):
+            stage = root / (".tmp_verify/ci_public_" + profile)
+            assert proof[profile]["original_result_sha256"] == hashlib.sha256((stage / "result.json").read_bytes()).hexdigest()
+            original = json.loads((stage / "result.json").read_bytes())
+            altered = {**original, "binding_checks": {"source": False}}
+            (stage / "result.json").write_text(json.dumps(altered))
+            with pytest.raises(ValueError, match=profile + " original evidence"):
+                reuse.publish(root)
+            (stage / "result.json").write_text(json.dumps(original))
         assert "await_official_job_completion_not_yet_eligible" in (tmp_path / "producer-output").read_text()
-        result["binding_checks"]["source"] = False
-        (stage / "result.json").write_text(json.dumps(result))
-        with pytest.raises(ValueError, match="comprehensive original evidence"):
-            reuse.publish(root)
+
+
+def exercise_profile_stage_route(tmp_path, monkeypatch):
+    from sciplot_core.verification import ci_public_reuse as reuse
+    calls = []
+    tails = []
+    class Process:
+        def __init__(self, command, **kwargs):
+            self.is_tail = command[0] == "tail"
+            self.stdout = io.StringIO("owner result\n") if not self.is_tail else None
+            self.running = True
+            calls.append(command)
+            if self.is_tail:
+                tails.append(self)
+        def wait(self):
+            self.running = False
+            return 0
+        def poll(self):
+            return None if self.running else 0
+        def terminate(self):
+            self.running = False
+    with monkeypatch.context() as context:
+        context.setattr(reuse.subprocess, "Popen", Process)
+        for profile in ("focused", "comprehensive"):
+            assert reuse.run_profile(tmp_path, profile) == 0
+            command = calls[-1]
+            assert command[1:5] == ["-m", "sciplot_core.verification.public_stage", "--profile", "public-" + profile]
+            assert command[-1] == ".tmp_verify/ci_public_" + profile
+            assert str(tmp_path / (".tmp_verify/ci_public_" + profile + "/command.log")) in calls[-2]
+        assert len(tails) == 2 and not any(tail.running for tail in tails)

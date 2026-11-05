@@ -9,6 +9,7 @@ from sciplot_core import assistant_operations, assisted_cleanup, readiness
 from sciplot_core.assistant_provider import text_validation
 from sciplot_core.data_mapping import contracts as data_mapping_contracts
 from sciplot_core.foundation.iso_timestamps import (
+    parse_zoned_iso_timestamp,
     require_zoned_iso_timestamp,
     utc_now_iso,
 )
@@ -60,8 +61,10 @@ def test_iso_timestamp_requires_an_explicit_timezone() -> None:
     assert require_zoned_iso_timestamp("2026-07-28T12:30:00Z", "created_at") == (
         "2026-07-28T12:30:00Z"
     )
-    with pytest.raises(ValueError, match="timezone offset"):
-        require_zoned_iso_timestamp("2026-07-28T12:30:00", "created_at")
+    assert parse_zoned_iso_timestamp(" 2026-07-28T12:30:00Z ", "created_at").isoformat() == "2026-07-28T12:30:00+00:00"
+    for parse in (require_zoned_iso_timestamp, parse_zoned_iso_timestamp):
+        with pytest.raises(ValueError, match="timezone offset"):
+            parse("2026-07-28T12:30:00", "created_at")
 
 
 def test_utc_now_iso_is_timezone_aware() -> None:
