@@ -7,23 +7,6 @@ from typing import Any
 import pytest
 
 
-def selected_public_nodes(manifest: dict[str, Any], source: dict[str, str], profile: str, targets: list[str] | None) -> set[str]:
-    scope = "public-focused" if profile == "public-affected" else profile
-    expected = set(manifest["scopes"]["public"])
-    if scope != "public-all":
-        expected.intersection_update(manifest["tiers"][scope.removeprefix("public-")])
-    if targets is None:
-        return expected
-    selected: set[str] = set()
-    for target in targets:
-        filename = target.split("::", 1)[0]
-        matches = {node for node in expected if node == target or node.startswith((target + "::", target + "["))}
-        if not filename.startswith("tests/") or filename not in source or not matches:
-            raise ValueError("Affected selector must bind a current tracked public focused test.")
-        selected.update(matches)
-    return selected
-
-
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--sciplot-public-target", action="append", default=[],
                      help="Exact public-focused selectors, applied after exhaustive scope validation.")

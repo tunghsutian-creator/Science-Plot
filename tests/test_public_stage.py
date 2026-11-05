@@ -44,6 +44,21 @@ def test_only_affected_profile_can_request_explicit_selection(tmp_path: Path) ->
         assert not (tmp_path / "never-created").exists()
 
 
+def test_stage_binding_owner_import_does_not_require_the_pytest_plugin() -> None:
+    script = '''import builtins
+original = builtins.__import__
+def without_dev(name, *args, **kwargs):
+    if name == "pytest" or name.startswith("pytest."):
+        raise ImportError("generated control: pytest is not installed")
+    return original(name, *args, **kwargs)
+builtins.__import__ = without_dev
+from sciplot_core.verification.public_stage import validate_stage
+assert callable(validate_stage)
+'''
+    result = subprocess.run([sys.executable, "-c", script], env=dict(os.environ), capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 @pytest.mark.parametrize("partial_collection", (False, True))
 def test_affected_selector_runs_after_exhaustive_scope_validation(tmp_path: Path, partial_collection: bool) -> None:
     nodes = ["test_generated.py::test_one", "test_generated.py::test_one_extra"]

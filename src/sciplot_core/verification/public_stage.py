@@ -15,8 +15,6 @@ import subprocess
 import sys
 from typing import Any, cast, overload
 
-from sciplot_core.verification.public_stage_selection import selected_public_nodes as _selected_public_nodes
-
 PRIVATE_NAMES = ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")
 RECEIPT = ".tmp_verify/public-source-stage.json"
 HELPERS = ("_nc_cntr", "qtmml", "qtloops", "recordpaint", "threed")
@@ -245,6 +243,23 @@ def create_stage(root: Path, output: Path, environment: dict[str, str]) -> tuple
     for key in ("SCIPLOT_PUBLIC_INPUT_GUARD", "SCIPLOT_PUBLIC_GUARD_BOOTSTRAP", "SCIPLOT_PUBLIC_GUARD_WRAPPER_BOOTSTRAP"):
         child_environment.pop(key, None)
     return stage, child_environment, receipt
+
+
+def _selected_public_nodes(manifest: dict[str, Any], source: dict[str, str], profile: str, targets: list[str] | None) -> set[str]:
+    scope = "public-focused" if profile == "public-affected" else profile
+    expected = set(manifest["scopes"]["public"])
+    if scope != "public-all":
+        expected.intersection_update(manifest["tiers"][scope.removeprefix("public-")])
+    if targets is None:
+        return expected
+    selected: set[str] = set()
+    for target in targets:
+        filename = target.split("::", 1)[0]
+        matches = {node for node in expected if node == target or node.startswith((target + "::", target + "["))}
+        if not filename.startswith("tests/") or filename not in source or not matches:
+            raise ValueError("Affected selector must bind a current tracked public focused test.")
+        selected.update(matches)
+    return selected
 
 
 def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[str] | None = None) -> dict[str, Any]:
