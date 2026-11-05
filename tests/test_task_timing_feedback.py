@@ -66,6 +66,22 @@ def test_scalar_metadata_arithmetic_edit_remains_eligible(tmp_path):
     assert task_timing_feedback_eligible(tmp_path)
 
 
+def test_conditional_extra_callback_before_clock_assignment_is_ineligible(tmp_path):
+    original = (ROOT / TASK_TIMING_PATH).read_text()
+    before = "        started = perf_counter()\n        token = _ACTIVE.set"
+    after = '''        try:
+            if args and args[0].name == "rare_root":
+                function(*args, **kwargs)
+        finally:
+            started = perf_counter()
+        token = _ACTIVE.set'''
+    assert original.count(before) == 1 and task_timing_feedback_eligible(ROOT)
+    path = tmp_path / TASK_TIMING_PATH
+    path.parent.mkdir(parents=True)
+    path.write_text(original.replace(before, after))
+    assert not task_timing_feedback_eligible(tmp_path)
+
+
 def test_timing_executes_once_preserves_science_and_restores_context_on_failure(monkeypatch, tmp_path):
     assert task_timing_feedback_eligible(ROOT)
     from sciplot_core import task_timing as timing

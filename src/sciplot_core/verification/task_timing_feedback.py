@@ -147,6 +147,12 @@ def task_timing_feedback_eligible(repo_root: Path) -> bool:
             and not run.args.defaults and not run.args.kw_defaults
             and len(run.decorator_list) == 1 and _same(run.decorator_list[0], "wraps(function)")
             and len(run.body) == 3 and isinstance(run.body[2], ast.Try)
+            # Their exact RHS bindings were checked by _function_boundary.
+            # A compound first statement could otherwise invoke the callback too.
+            and isinstance(run.body[0], ast.Assign) and len(run.body[0].targets) == 1
+            and _same(run.body[0].targets[0], "started")
+            and isinstance(run.body[1], ast.Assign) and len(run.body[1].targets) == 1
+            and _same(run.body[1].targets[0], "token")
             and len(run.body[2].body) == 1 and isinstance(run.body[2].body[0], ast.Return)
             and _same(run.body[2].body[0].value, "function(*args, **kwargs)")
             and not run.body[2].handlers and not run.body[2].orelse
