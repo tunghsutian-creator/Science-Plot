@@ -18,6 +18,8 @@ from typing import Any
 PRIVATE_NAMES = ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")
 RECEIPT = ".tmp_verify/public-source-stage.json"
 HELPERS = ("_nc_cntr", "qtmml", "qtloops", "recordpaint", "threed")
+BINDING_CHECKS = ("private_namespace_absent", "stage_source_equal", "origin_source_equal",
+                  "stage_head_equal", "origin_head_equal", "runtime_equal", "stage_runtime_equal")
 CLAIM = "private-absent generated behavior; no OS isolation, scientific acceptance or complete private access capture"
 PLATFORM_SKIPS = {
     "tests/test_macos_distribution.py::test_build_refuses_existing_output_before_copying": ("call", "Skipped: macOS builder"),
@@ -251,8 +253,7 @@ def run_public_stage(root: Path, output: Path, profile: str) -> dict[str, Any]:
         process = subprocess.run(command, cwd=stage, env=child_environment, stdin=subprocess.DEVNULL,
                                  stdout=log, stderr=subprocess.STDOUT, close_fds=True, check=False)
     issues = []
-    checks: dict[str, bool | None] = dict.fromkeys(("private_namespace_absent", "stage_source_equal", "origin_source_equal",
-                                                "stage_head_equal", "origin_head_equal", "runtime_equal", "stage_runtime_equal"))
+    checks: dict[str, bool | None] = dict.fromkeys(BINDING_CHECKS)
     try:
         assert_private_absent(stage, child_environment)
         checks["private_namespace_absent"] = True
@@ -263,7 +264,7 @@ def run_public_stage(root: Path, output: Path, profile: str) -> dict[str, Any]:
         checks["runtime_equal"] = runtime_binding(root, environment) == before["runtime"]
         assert_stage_helpers(stage, child_environment)
         checks["stage_runtime_equal"] = runtime_binding(stage, child_environment) == before["runtime"]
-        if not all(checks.values()):
+        if not all(checks[key] is True for key in BINDING_CHECKS):
             raise ValueError("Actual source/stage/runtime closure drift after execution.")
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         issues.append(str(error))

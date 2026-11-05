@@ -23,7 +23,7 @@ from sciplot_core.verification.ci_public_proof import (
     CLAIM, MAX_ARCHIVE, origin_eligible, policy_compatible, unpack_artifact,
 )
 from sciplot_core.verification.input_scope import load_manifest
-from sciplot_core.verification.public_stage import PLATFORM_SKIPS, review_stage_reports
+from sciplot_core.verification.public_stage import BINDING_CHECKS, PLATFORM_SKIPS, review_stage_reports
 
 DIRECTORY = ".tmp_verify/ci-public-reference"
 WORKFLOW = ".github/workflows/minimal-repository.yml"
@@ -224,8 +224,12 @@ def _stage_evidence(root: Path, profile: str, before: dict[str, Any]) -> tuple[d
     raw = result_path.read_bytes()
     result = json.loads(raw)
     reports = json.loads((stage / "reports.json").read_bytes())
+    checks = result["binding_checks"]
+    if (not isinstance(checks, dict) or set(checks) != set(BINDING_CHECKS)
+            or any(checks[key] is not True for key in BINDING_CHECKS)):
+        raise ValueError(f"Fresh {profile} original evidence has incomplete or non-boolean binding checks.")
     if (result["status"] != "PASS" or result["actual_exit_code"] != 0 or result["origin_head"] != before["head"]
-            or result["profile"] != "public-" + profile or not all(result["binding_checks"].values())
+            or result["profile"] != "public-" + profile
             or review_stage_reports(result["finish"], reports, platform="linux")
             or digest(sorted(result["finish"]["selected_tests"])) != before[profile + "_nodes_sha256"]):
         raise ValueError(f"Fresh {profile} original evidence is inconsistent.")

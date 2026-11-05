@@ -31,22 +31,6 @@ def policy_compatible(branch: Any, rulesets: Any) -> bool:
             and isinstance(rulesets, list) and rulesets == [])
 
 
-def focused_summary(log: str, selected: int, allowed_skips: int) -> dict[str, int]:
-    summaries = [line for line in log.splitlines() if re.search(r"\d+ passed.* in \d", line)]
-    if not summaries:
-        raise ValueError("focused_aggregate_missing")
-    line = summaries[-1]
-    if re.search(r"\d+ (?:failed|error)", line):
-        raise ValueError("focused_failed")
-    passed = re.search(r"(\d+) passed", line)
-    skips = re.search(r"(\d+) skipped", line)
-    count = int(passed[1]) if passed else 0
-    skipped = int(skips[1]) if skips else 0
-    if count + skipped != selected or skipped != allowed_skips:
-        raise ValueError("focused_scope_or_skip_drift")
-    return {"passed": count, "skipped": skipped, "selected": selected}
-
-
 def unpack_artifact(data: bytes, expected_digest: str) -> dict[str, Any]:
     if len(data) > MAX_ARCHIVE or expected_digest != "sha256:" + hashlib.sha256(data).hexdigest():
         raise ValueError("artifact_size_or_digest")

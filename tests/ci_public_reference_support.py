@@ -21,7 +21,7 @@ def exercise_public_reference(root, tmp_path, monkeypatch):
         BINDING_FIELDS, COMMANDS, INPUT_SCOPE_CONTRACT, PROTOCOL, REPOSITORY, UnsupportedEnvironment, application_environment, collect_environment,
     )
     from sciplot_core.verification.ci_public_proof import (
-        CLAIM, focused_summary, origin_eligible, policy_compatible, unpack_artifact,
+        CLAIM, origin_eligible, policy_compatible, unpack_artifact,
     )
     now = datetime.now(timezone.utc)
     binding = {"protocol": PROTOCOL, "commands": COMMANDS, "input_scope_contract": INPUT_SCOPE_CONTRACT, "head": "a" * 40, "focused_count": 10,
@@ -86,10 +86,6 @@ def exercise_public_reference(root, tmp_path, monkeypatch):
     for archive_bytes, expected in ((data, "sha256:" + "0" * 64), (archive("../public-result.json"), None), (archive(content="{"), None)):
         with pytest.raises((ValueError, json.JSONDecodeError)):
             unpack_artifact(archive_bytes, expected or "sha256:" + hashlib.sha256(archive_bytes).hexdigest())
-    assert focused_summary("9 passed, 1 skipped in 1.23s", 10, 1) == {key: proof["focused"][key] for key in ("passed", "skipped", "selected")}
-    for text in ("9 passed in 1.23s", "8 passed, 1 skipped in 1.23s", "1 failed, 9 passed in 1.23s", "running"):
-        with pytest.raises(ValueError):
-            focused_summary(text, 10, 1)
     environment = application_environment(root)
     assert not any(key.startswith(("GITHUB_", "GH_", "RUNNER_")) for key in environment)
     assert not policy_compatible({"name": "main", "protected": False}, [])
@@ -330,6 +326,7 @@ def exercise_head_source(tmp_path):
 def exercise_fresh_origin(tmp_path, monkeypatch):
     from sciplot_core.verification import ci_public_reuse as reuse
     from sciplot_core.verification.ci_public_environment import BINDING_FIELDS, COMMANDS, INPUT_SCOPE_CONTRACT, PROTOCOL, digest
+    from sciplot_core.verification.public_stage import BINDING_CHECKS
     root = tmp_path / "producer"
     directory = root / reuse.DIRECTORY
     directory.mkdir(parents=True)
@@ -346,7 +343,7 @@ def exercise_fresh_origin(tmp_path, monkeypatch):
         stage = root / (".tmp_verify/ci_public_" + profile)
         stage.mkdir()
         result = {"status": "PASS", "actual_exit_code": 0, "origin_head": "a" * 40,
-                  "profile": "public-" + profile, "binding_checks": {"source": True}, "finish": marker}
+                  "profile": "public-" + profile, "binding_checks": dict.fromkeys(BINDING_CHECKS, True), "finish": marker}
         (stage / "result.json").write_text(json.dumps(result))
         (stage / "reports.json").write_text(json.dumps({"selected_tests": [node], "exit_code": 0, "reports": [
             {"nodeid": node, "when": phase, "outcome": "passed"} for phase in ("setup", "call", "teardown")]}))
@@ -363,11 +360,28 @@ def exercise_fresh_origin(tmp_path, monkeypatch):
             stage = root / (".tmp_verify/ci_public_" + profile)
             assert proof[profile]["original_result_sha256"] == hashlib.sha256((stage / "result.json").read_bytes()).hexdigest()
             original = json.loads((stage / "result.json").read_bytes())
-            altered = {**original, "binding_checks": {"source": False}}
-            (stage / "result.json").write_text(json.dumps(altered))
-            with pytest.raises(ValueError, match=profile + " original evidence"):
-                reuse.publish(root)
+            for bad_checks in ({}, {key: True for key in BINDING_CHECKS[1:]},
+                               {**original["binding_checks"], BINDING_CHECKS[0]: "true"},
+                               {**original["binding_checks"], BINDING_CHECKS[0]: 1},
+                               {**original["binding_checks"], BINDING_CHECKS[0]: False}):
+                (stage / "result.json").write_text(json.dumps({**original, "binding_checks": bad_checks}))
+                with pytest.raises(ValueError, match=profile + " original evidence"):
+                    reuse.publish(root)
             (stage / "result.json").write_text(json.dumps(original))
+            reports_path = stage / "reports.json"
+            original_reports = json.loads(reports_path.read_bytes())
+            for mutation in ("missing_call", "failed_call", "duplicate_call"):
+                broken = copy.deepcopy(original_reports)
+                if mutation == "missing_call":
+                    broken["reports"].pop(1)
+                elif mutation == "failed_call":
+                    broken["reports"][1]["outcome"] = "failed"
+                else:
+                    broken["reports"].append(copy.deepcopy(broken["reports"][1]))
+                reports_path.write_text(json.dumps(broken))
+                with pytest.raises(ValueError, match=profile + " original evidence"):
+                    reuse.publish(root)
+            reports_path.write_text(json.dumps(original_reports))
         assert "await_official_job_completion_not_yet_eligible" in (tmp_path / "producer-output").read_text()
 
 
