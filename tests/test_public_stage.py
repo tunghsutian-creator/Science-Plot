@@ -18,6 +18,49 @@ def _git(root: Path, *arguments: str) -> str:
     return subprocess.run(["git", *arguments], cwd=root, text=True, capture_output=True, check=True).stdout
 
 
+def test_affected_selection_is_exact_public_focused_and_preserves_canonical_profiles() -> None:
+    nodes = ["tests/test_generated.py::test_value[a]", "tests/test_generated.py::test_value[b]",
+             "tests/test_generated.py::test_value_extra", "tests/test_generated.py::test_native",
+             "tests/test_generated.py::test_private"]
+    manifest = {"scopes": {"public": nodes[:4], "private": nodes[4:]},
+                "tiers": {"focused": [*nodes[:3], nodes[4]], "comprehensive": nodes[3:4]}}
+    source = {"tests/test_generated.py": "generated source digest"}
+    assert public_stage._selected_public_nodes(manifest, source, "public-focused", None) == set(nodes[:3])
+    assert public_stage._selected_public_nodes(manifest, source, "public-comprehensive", None) == set(nodes[3:4])
+    assert public_stage._selected_public_nodes(manifest, source, "public-all", None) == set(nodes[:4])
+    assert public_stage._selected_public_nodes(manifest, source, "public-affected", ["tests/test_generated.py::test_value"]) == set(nodes[:2])
+    assert public_stage._selected_public_nodes(manifest, source, "public-affected", [nodes[0]]) == {nodes[0]}
+    assert public_stage._selected_public_nodes(manifest, source, "public-affected", ["tests/test_generated.py"]) == set(nodes[:3])
+    for target in [nodes[3], nodes[4], "../tests/test_generated.py", "-q", "tests/untracked.py", "tests/test_generated.py::missing"]:
+        with pytest.raises(ValueError, match="current tracked public focused"):
+            public_stage._selected_public_nodes(manifest, source, "public-affected", [target])
+
+
+def test_only_affected_profile_can_request_explicit_selection(tmp_path: Path) -> None:
+    for profile, targets in [("public-affected", None), ("public-affected", []),
+                             ("public-focused", []), ("public-all", ["tests/test_generated.py"])]:
+        with pytest.raises(ValueError, match="requires explicit nonempty"):
+            public_stage.run_public_stage(tmp_path, tmp_path / "never-created", profile, targets=targets)
+        assert not (tmp_path / "never-created").exists()
+
+
+def test_affected_result_cannot_be_published_as_a_canonical_origin(tmp_path: Path) -> None:
+    from sciplot_core.verification.ci_public_environment import digest
+    from sciplot_core.verification.ci_public_reuse import _stage_evidence
+
+    stage = tmp_path / ".tmp_verify/ci_public_focused"
+    stage.mkdir(parents=True)
+    node = "tests/test_generated.py::test_one"
+    marker = {"complete": True, "exit_code": 0, "selected_tests": [node], "executed_tests": [node]}
+    result = {"status": "PASS", "actual_exit_code": 0, "profile": "public-affected", "origin_head": "a" * 40,
+              "binding_checks": dict.fromkeys(public_stage.BINDING_CHECKS, True), "finish": marker}
+    (stage / "result.json").write_text(json.dumps(result))
+    (stage / "reports.json").write_text(json.dumps({"exit_code": 0, "selected_tests": [node], "reports": [
+        {"nodeid": node, "when": phase, "outcome": "passed"} for phase in ("setup", "call", "teardown")]}))
+    with pytest.raises(ValueError, match="original evidence is inconsistent"):
+        _stage_evidence(tmp_path, "focused", {"head": "a" * 40, "focused_nodes_sha256": digest([node])})
+
+
 def _origin(tmp_path: Path) -> Path:
     root = tmp_path / "origin"
     root.mkdir()

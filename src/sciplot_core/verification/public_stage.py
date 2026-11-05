@@ -245,9 +245,29 @@ def create_stage(root: Path, output: Path, environment: dict[str, str]) -> tuple
     return stage, child_environment, receipt
 
 
-def run_public_stage(root: Path, output: Path, profile: str) -> dict[str, Any]:
-    if profile not in {"public-focused", "public-comprehensive", "public-all"}:
+def _selected_public_nodes(manifest: dict[str, Any], source: dict[str, str], profile: str, targets: list[str] | None) -> set[str]:
+    scope = "public-focused" if profile == "public-affected" else profile
+    expected = set(manifest["scopes"]["public"])
+    if scope != "public-all":
+        expected.intersection_update(manifest["tiers"][scope.removeprefix("public-")])
+    if targets is None:
+        return expected
+    selected: set[str] = set()
+    for target in targets:
+        filename = target.split("::", 1)[0]
+        matches = {node for node in expected if node == target or node.startswith((target + "::", target + "["))}
+        if not filename.startswith("tests/") or filename not in source or not matches:
+            raise ValueError("Affected selector must bind a current tracked public focused test.")
+        selected.update(matches)
+    return selected
+
+
+def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[str] | None = None) -> dict[str, Any]:
+    affected = profile == "public-affected"
+    if profile not in {"public-focused", "public-comprehensive", "public-all", "public-affected"}:
         raise ValueError("Only exact public profiles may execute in a source stage.")
+    if affected != bool(targets) or (targets is not None and not affected):
+        raise ValueError("Only public-affected requires explicit nonempty test selectors.")
     root = root.expanduser().resolve()
     output = output.expanduser()
     output = output if output.is_absolute() else root / output
@@ -255,9 +275,13 @@ def run_public_stage(root: Path, output: Path, profile: str) -> dict[str, Any]:
     if environment.get("PYTEST_ADDOPTS", "").strip():
         raise ValueError("Controlled public profiles reject PYTEST_ADDOPTS filters/options.")
     stage, child_environment, before = create_stage(root, output, environment)
+    from sciplot_core.verification.input_scope import load_manifest
+    manifest = load_manifest(stage / "src/sciplot_core/verification/input_scope_manifest.json")
+    scope = "public-focused" if affected else profile
+    expected = _selected_public_nodes(manifest, before["source_bytes"], profile, targets)
     finish = output / "finish.json"
     command = [sys.executable, "-m", "pytest", "-vv", "-p", "sciplot_core.verification.pytest_finish",
-               "-p", "sciplot_core.verification.public_stage", "--input-scope", profile]
+               "-p", "sciplot_core.verification.public_stage", "--input-scope", scope, *(targets or [])]
     child_environment["SCIPLOT_VERIFY_FINISH"] = str(finish)
     child_environment["SCIPLOT_PUBLIC_STAGE_REPORT"] = str(output / "reports.json")
     with (output / "command.log").open("xb") as log:
@@ -282,15 +306,12 @@ def run_public_stage(root: Path, output: Path, profile: str) -> dict[str, Any]:
     marker = json.loads(finish.read_bytes()) if finish.is_file() else {}
     reports = json.loads((output / "reports.json").read_bytes()) if (output / "reports.json").is_file() else {}
     issues.extend(review_stage_reports(marker, reports, platform=sys.platform))
-    from sciplot_core.verification.input_scope import load_manifest
-    manifest = load_manifest(stage / "src/sciplot_core/verification/input_scope_manifest.json")
-    expected = set(manifest["scopes"]["public"])
-    if profile != "public-all":
-        expected.intersection_update(manifest["tiers"][profile.removeprefix("public-")])
     if set(marker.get("selected_tests", [])) != expected:
-        issues.append("Actual execution omitted or added an exact public profile node.")
+        issues.append("Actual execution omitted or added an exact selected public node.")
     complete = not issues
-    result = {"kind": "sciplot_public_source_stage_execution", "profile": profile, "claim": CLAIM,
+    result = {"kind": "sciplot_public_source_stage_execution", "profile": profile,
+              "claim": "limited_affected_public_behavior_not_canonical_profile" if affected else CLAIM,
+              "selection_targets": targets, "canonical_profile_executed": not affected,
               "status": "PASS" if process.returncode == 0 and complete and not issues else "BLOCKED",
               "actual_exit_code": process.returncode, "execution_argv": command, "stage_root": str(stage),
               "origin_head": before["origin_head"], "stage_head": before["stage_head"], "issues": issues,
@@ -355,11 +376,12 @@ def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--profile", choices=("public-focused", "public-comprehensive", "public-all"), default="public-comprehensive")
+    parser.add_argument("--profile", choices=("public-focused", "public-comprehensive", "public-all", "public-affected"), default="public-comprehensive")
+    parser.add_argument("--target", action="append", dest="targets")
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[3]
     try:
-        result = run_public_stage(root, arguments.out, arguments.profile)
+        result = run_public_stage(root, arguments.out, arguments.profile, targets=arguments.targets)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         result = {"kind": "sciplot_public_source_stage_execution", "status": "BLOCKED", "error": str(error), "executed_test_count": 0}
     print(json.dumps(result, sort_keys=True))
