@@ -160,8 +160,8 @@ def _stage_snapshot(store: FileProjectStore, payload: dict[str, Any], writes: Ma
             raise ProjectConflict("The snapshot native overlay differs from its audited pending adoption.")
     names = tuple(name for name in snapshot["files"] if not name.startswith("@") and name not in writes)
     # One explicit generation capture owns the finite member reads. Each member
-    # still consumes fresh checked object bytes; no lease/proof reaches staging,
-    # overlay-path reads, archive callbacks, native work or later publication.
+    # still consumes fresh checked object bytes. This capture does not extend its
+    # borrowed proof across staging/callbacks; the caller's original lease is unchanged.
     members = store.observe_members(names, generation=snapshot["generation"], projection=False).members
     with TemporaryDirectory(prefix="sciplot-package-stage-") as folder:
         candidate = Path(folder) / store.root.name

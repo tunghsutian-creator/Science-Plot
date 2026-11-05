@@ -55,8 +55,8 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONNOUSERSITE: "1"
-      # Enable only after review; first enabled fresh run establishes its own controlled origin.
-      SCIPLOT_PUBLIC_REUSE: "false"
+      # The first compatible run executes both profiles; only an official complete origin can be referenced.
+      SCIPLOT_PUBLIC_REUSE: "true"
     steps:
       - name: Require a valid scheduling plan
         env:

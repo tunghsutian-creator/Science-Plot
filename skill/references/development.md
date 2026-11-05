@@ -6,6 +6,18 @@ guessing: record cause, replacement contract, verification and limitations.
 Use `.venv/bin/python` and `skill/scripts/sciplot`. Development evidence belongs
 under ignored `.tmp_verify/`; preserve user data and exact-current VSZ authority.
 
+Validate at the owner of a real boundary. External requests, persisted values,
+scientific data, host permissions and recovery facts retain their necessary
+checks. Within one synchronous operation, typed immutable values do not need a
+second copy of the same validation. A later process, file observation, callback
+or commit can introduce new facts and keeps its own admission. Before adding a
+guard, identify its caller, the invalid state it rejects and its counterexample.
+Do not catch a business or permission error merely to return a plausible default;
+preserve its original cause and completed-effect receipt. Remove replaced
+parsers and unused compatibility branches after migrating their actual callers.
+Do not retain speculative role names, validation flags or fallback paths for
+future uses. Cleanup must preserve the original refusal and recovery assertions.
+
 Stress-relaxation preparation records its per-series method in the typed
 scientific transform and source diagnostics. Its outer normalization summary
 references those fields instead of declaring a second selection algorithm.
@@ -120,8 +132,9 @@ its failure retains early preflight. Superseded runs remain cancelled, never reu
 This only affects workflows containing the new groups; do not cancel an existing
 acceptance by API. Actions scheduling is not a guarantee of chronological queue
 order, and completion still requires the latest intended candidate's actual gates.
-The finite cross-event public-result path is implemented but disabled by default
-(`SCIPLOT_PUBLIC_REUSE=false`). Root enables it only in a reviewed frozen workflow.
+The reviewed workflow enables the finite cross-event public-result path
+(`SCIPLOT_PUBLIC_REUSE=true`). A first compatible run executes both profiles
+fresh; it cannot reference an old run that never produced this controlled proof.
 Only main push may reference a prior actual non-fork push origin from this repository;
 other branch pushes can only execute fresh and produce an origin. Both need the same
 actual Ubuntu24/Python

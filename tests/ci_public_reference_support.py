@@ -175,7 +175,7 @@ def exercise_public_reference(root, tmp_path, monkeypatch):
         with pytest.raises(RuntimeError, match="programming defect"):
             reuse.prepare(broken_root)
     workflow = (root / ".github/workflows/minimal-repository.yml").read_text()
-    assert 'SCIPLOT_PUBLIC_REUSE: "false"' in workflow
+    assert 'SCIPLOT_PUBLIC_REUSE: "true"' in workflow
     assert "actions: read" in workflow and "actions: write" not in workflow
     assert "include-hidden-files: true" in workflow and "retention-days: 7" in workflow
 

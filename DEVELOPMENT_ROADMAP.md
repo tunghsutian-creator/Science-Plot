@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-11-04. External AI is the task interface. Current behavior belongs
+Status: 2026-11-05. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -14,6 +14,18 @@ shared generation writer, retained operators and host grants does not close all
 original architecture findings. Independently review the final source before
 adding features; use the existing migration contract and retained failure records
 rather than another policy or state registry.
+
+The current bounded batch implements detached prepared publications, one retained
+NativeSuite reader, generation-derived resource roles and one selected-figure
+witness across their existing consumers. Its closure is recorded in the migration
+contract; it does not close every historical scientific schema or domain port.
+Measured same-generation snapshot batching removes repeated complete admission
+without reusing a proof across operations. One matched profiled native case fell
+from 1709.20 to 1161.73 seconds; whole-suite or cross-platform improvement still
+requires its own actual evidence. CI reference can avoid duplicate public profiles
+only for an official identical compatible origin; current native/runtime/health
+and private/full acceptance retain separate obligations. Preserve the final frozen
+batch's actual results outside its input closure rather than rewriting them here.
 
 1. **Close resource roles and query effects.** Separate scientific UUID, original
    locator, file-byte version, tree scope, host location, sealed readable content
