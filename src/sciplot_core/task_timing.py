@@ -14,6 +14,7 @@ _ACTIVE: ContextVar[dict[str, Any] | None] = ContextVar("sciplot_task_clock", de
 
 
 def observe_phase(root: Path, state: dict[str, Any]) -> None:
+    # Attribute elapsed time to the previous phase before recording the next one.
     clock = _ACTIVE.get()
     if clock is None:
         return
