@@ -25,7 +25,9 @@ try:
             raise UnsupportedEnvironment("owned_initial_state")
         path.mkdir(parents=True, exist_ok=True)
     result["stage"] = "collector"
-    collect_environment(root)
+    _facts, costs = collect_environment(root)
+    result["collector_costs"] = {key: costs[key] for key in
+                                 ("elapsed_seconds", "files_hashed", "bytes_hashed", "native_extension_count")}
     result["outcome"] = "collector_completed_without_refusal"
 except UnsupportedEnvironment as error:
     result["outcome"] = "unsupported_environment"
@@ -48,9 +50,9 @@ except UnsupportedEnvironment as error:
             if collector is not None:
                 result["collector_elapsed_seconds"] = round(
                     time.monotonic() - collector.f_locals["started"], 3)
-            producer = {178: "stdlib", 211: "distribution", 230: "qt_plugin",
-                        240: "fontconfig", 245: "native_extension",
-                        253: "native_dependency", 254: "font"}.get(line, "unknown")
+            producer = {180: "stdlib", 213: "distribution", 232: "qt_plugin",
+                        242: "fontconfig", 247: "native_extension",
+                        255: "native_dependency", 256: "font"}.get(line, "unknown")
             result.update(logical_path=str(logical), resolved_path=str(resolved),
                           is_file=resolved.is_file(), logical_is_symlink=logical.is_symlink(),
                           is_alias=logical != resolved, producer=producer,
