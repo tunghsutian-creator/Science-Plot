@@ -1495,6 +1495,7 @@ def test_quick_human_output_reports_selection_actual_summary_and_feedback_limit(
     assert cli.main(["verify", "--quick"]) == 0
     output = capsys.readouterr().out
     assert "Quick development feedback only; this is not merge acceptance." in output
+    assert "Pytest tier: focused (may include bounded native checks); comprehensive lifecycle tests are deferred." in output
     assert "Owners: changed_verification" in output
     assert "Declared pytest targets:" in output
     assert "Pytest final output: 4 passed in 0.10s" in output

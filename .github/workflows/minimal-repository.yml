@@ -3,6 +3,13 @@ name: Minimal repository policy
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      native_regression_preflight:
+        description: "Repeat the 12 historical native regressions before the complete public suites for diagnosis"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   runtime-integrity:
@@ -147,9 +154,10 @@ jobs:
             --wheel-dir /tmp/sciplot-wheel
           python3 tests/test_wheel_surface.py /tmp/sciplot-wheel/*.whl
       - name: Check known native CI regressions before the public suites
-        # Keep the nine observed failures and their three original native
-        # predecessors together, preserving the original collection order.
-        # Both complete canonical suites still run below without filters.
+        # These same 12 nodes remain in the unconditional comprehensive suite.
+        # Repeating them is an explicit diagnostic choice, not extra acceptance.
+        # Preserve all original predecessors, assertions and phase review below.
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_regression_preflight }}
         run: |
           python3 - <<'PY'
           import hashlib

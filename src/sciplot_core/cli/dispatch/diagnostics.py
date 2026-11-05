@@ -161,6 +161,7 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
             print(f"SciPlot changed verification: {payload['status']}")
             if quick:
                 print("Quick development feedback only; this is not merge acceptance.")
+                print("Pytest tier: focused (may include bounded native checks); comprehensive lifecycle tests are deferred.")
             owner_ids = [owner["owner_id"] for owner in payload["owners"]]
             print("Owners: " + (", ".join(owner_ids) if owner_ids else "none"))
             print(f"Checks: {len(payload['checks'])}; base: {payload['comparison']['base']}")

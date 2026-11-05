@@ -94,6 +94,42 @@ coverage proof. Standard pytest `--durations=30` reports the slowest setup/call/
 teardown reports in the same required run; it does not change selection or
 replace completion/access evidence. Keep `PYTEST_ADDOPTS` unset for known suites.
 
+### Feedback, diagnostic repetition and claim-specific reuse
+
+Normal push and pull-request CI retain both complete public profiles, native
+runtime/build checks, both static type targets, Doctor and the lifecycle smoke.
+The twelve historical native regressions remain in public comprehensive. Their
+separate preflight repeats those same bodies only when a manual workflow dispatch
+sets `native_regression_preflight=true`; this is diagnostic repetition, not extra
+acceptance. Normal CI therefore loses that separate early-failure checkpoint;
+the same regressions still execute in the comprehensive stage. The observed
+536.12-second duplicate cost is a bounded opportunity, not an hours-long native
+speedup claim. Keep the diagnostic predecessor order and complete phase review.
+Cross-event CI reuse is not enabled: fresh required-check policy and branch/event,
+resolved dependency, input and guard-mode equivalence have not been established.
+A matching SHA or runner label alone cannot authorize skipping a canonical gate.
+Do not cancel an already running acceptance to apply this scheduling change.
+
+Reuse is per claim. Treat behavior inputs, observation/evidence rules and narrative
+references separately; do not invent one universal identity or cache policy.
+
+| Claim | Relevant closure and reuse boundary |
+| --- | --- |
+| Ruff or static types | The checked source/configuration, exact check scope, tool/dependency and target identities. An unrelated private input, progress note or prose change does not logically invalidate this claim. The existing recorded implementation may bind more; do not rewrite its receipt to bypass that contract. |
+| Test behavior | Executed source/test/configuration, selected bodies/order, actual inputs and runtime/platform, plus genuine original completion. An unexecuted prose-only change need not require another full body when actual consumers prove it is outside that closure. Documentation tests still bind the prose they inspect. |
+| Capture/access or process completion | The observation owner/version, producer/sensor protocol, event semantics, input/actor identities, original waits and complete phases. Compatible original raw evidence may be revalidated by an authorized current validator only if all required facts were genuinely recorded with compatible meanings and complete scope. Preserve the original record and label this a new validation of that original run. A missing sensor/event/identity or changed producer requirement needs fresh execution; adding fields to old raw does not establish observation. |
+| Release acceptance or required CI | Combine every applicable behavior, scientific/native, input and evidence claim with the actual required-check policy. Prior lint, public CI or access readiness does not establish scientific acceptance or a new release PASS. |
+
+Current release captures really bind their declared LOG/configuration and other
+inputs. Preserve those records and their exact original contracts. Narrower
+future claim closures require a demonstrated consumer boundary; prose classification
+alone cannot weaken a bound receipt. A different reference path or narrative
+summary is not itself an executed behavior change, but changing a source root can
+change imports, path semantics or observation identity and must be assessed.
+An invalid evidence rule can sometimes be repaired by revalidating compatible
+raw evidence; a changed test/behavior input, incomplete observation or unsatisfied
+required-check must not be relabeled PASS without its required fresh work.
+
 Recorded changed-check preparation shares only successful raw Mach-O `otool`
 metadata within that one preparation. The memo belongs to the existing runtime
 module; the low-level native observation boundary retains its original duties.
