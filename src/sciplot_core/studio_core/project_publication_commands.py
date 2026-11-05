@@ -190,7 +190,8 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         external_sources: dict[str, str] = {}
         for figure in selected_figures:
             if figure["status"] == "ready":
-                external_sources.update(figure_read_state(project, figure)["source_files"])
+                from sciplot_core.project_commands import FigureReadWitness
+                external_sources.update(dict(FigureReadWitness.from_read_state(figure_read_state(project, figure)).source_files))
         binding["source_files"] = external_sources
         candidate = Path(temporary).resolve()
         run = candidate / final_run.name

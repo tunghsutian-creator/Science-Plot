@@ -72,15 +72,15 @@ def catalog_matches(io: StoreIO, current: dict[str, Any], name: str, selector: P
         return True
     # Creation receipts bind the exact initial-render path, while the selected
     # catalog binds its exact installed destination; this is one fixed mapping.
-    suffixes = {"pdf": ".pdf", "tiff_300": "_300dpi.tiff", "png_300": "_300dpi.png"}
+    from sciplot_core.project_commands.native_suite_projections import NATIVE_SUITE_MEDIA, native_suite_figure_folder
+    suffixes = dict(NATIVE_SUITE_MEDIA)
     for row in _exports(receipt):
         format_name = row.get("format")
         suffix = suffixes.get(format_name) if isinstance(format_name, str) else None
         if suffix is None:
             continue
         initial = PurePosixPath(value["workspace"]) / "initial_render" / (selector.key + suffix)
-        visible = PurePosixPath(value["delivery"]) / ("SI" if selector.key.startswith("SI_") else
-            "" if selector.key.startswith("Figure_X") else "panels") / (selector.key + suffix)
+        visible = native_suite_figure_folder(value["delivery"], selector.key) / (selector.key + suffix)
         if (row.get("path") == str(initial) and logical(current, str(visible)) == name
                 and row.get("sha256") == current["files"][name]["sha256"]):
             return True

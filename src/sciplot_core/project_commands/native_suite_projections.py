@@ -16,7 +16,7 @@ _PUBLICATION_CLOCKS = ("timestamp", "created_at", "updated_at", "started_at", "f
 
 def _manifest(value: dict[str, Any]) -> None:
     if (not isinstance(value, dict) or value.get("kind") != "sciplot_rheology_tts_suite"
-            or type(value.get("version")) is not int or value["version"] != 1
+            or "version" in value and (type(value["version"]) is not int or value["version"] != 1)
             or not isinstance(value.get("workspace"), str)
             or not isinstance(value.get("delivery"), str)
             or not isinstance(value.get("sources"), list)):
@@ -107,3 +107,20 @@ def merge_native_suite_figure(current: dict[str, Any], candidate: dict[str, Any]
         result["last_export"] = _replace(result.get("last_export", []), exported,
                                          key, exported=True)
     return result
+
+
+NATIVE_SUITE_MEDIA = (("pdf", ".pdf"), ("tiff_300", "_300dpi.tiff"), ("png_300", "_300dpi.png"))
+
+
+def native_suite_figure_folder(delivery: str, identifier: str) -> PurePath:
+    """The retained logical layout, not permission to access any host path."""
+    from .resources import _identity
+    root = PurePath(delivery)
+    if not root.is_absolute() or not _identity(identifier):
+        raise ValueError("A NativeSuite layout requires its exact root and figure identity.")
+    return root if identifier.startswith("Figure_X") else root / ("SI" if identifier.startswith("SI_") else "panels")
+
+
+def native_suite_native_locator(delivery: str, identifier: str) -> PurePath:
+    native_suite_figure_folder(delivery, identifier)  # Validate the same declaration.
+    return PurePath(delivery) / "editable" / (identifier + ".vsz")

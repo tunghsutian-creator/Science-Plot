@@ -64,9 +64,12 @@ def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, 
         require_bindings(baseline, record)
         from .input_reads import require as require_inputs
         require_inputs(io, current, record, observed=sources)
-        if set(record["write_set"]) & set(current.get("input_resources", [])):
+        from sciplot_core.project_commands.resource_roles import ResourceRole, role_resources
+        immutable = role_resources(current, (ResourceRole.IMMUTABLE_INPUT,))
+        history = role_resources(current, (ResourceRole.HISTORY,))
+        if set(record["write_set"]) & immutable:
             raise ProjectConflict("An observed original input cannot become a materialized output write.")
-        if set(record["write_set"]) & set(current.get("history_resources", [])):
+        if set(record["write_set"]) & history:
             raise ProjectConflict("Read-only semantic history cannot become an active output write.")
         if any(name.startswith(prefix + "/") for prefix in current.get("retired_namespace_prefixes", []) for name in record["write_set"]):
             raise ProjectConflict("A retired semantic namespace cannot acquire another active writer.")
@@ -78,7 +81,7 @@ def require_reads(io: StoreIO, current: Mapping[str, Any], record: Mapping[str, 
             if old is not None and latest is not None and old["mode"] != latest["mode"]:
                 raise ProjectConflict(f"A declared project resource changed permission mode: {name}")
             physical = io.physical(name, owned=name not in sources and name not in namespaces.physical
-                and name not in current.get("input_resources", []) and name not in current.get("history_resources", []))
+                and name not in immutable and name not in history)
             actual = sha(physical[0]) if physical else None
             namespace_observation = namespaces.physical.get(name)
             observed = None if name in missing else (namespace_observation["sha256"] if namespace_observation else None) if name in namespaces.physical else (

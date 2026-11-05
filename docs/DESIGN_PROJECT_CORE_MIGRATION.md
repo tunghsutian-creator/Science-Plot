@@ -767,3 +767,39 @@ This repair changes no production source or scientific data. New actual
 collection, complete release execution and platform CI remain separate gates;
 the original 772-node composition and its native follow-ups retain their
 original identities instead of being relabelled as a new-source release.
+
+### Detached publication values and finite role readers
+
+The P1 contract keeps the version-1 command, generation, candidate digest and
+projection algorithms. `PreparedMutation` retains byte-only file tuples and
+immutable JSON text; public mappings/JSON are detached copies. Prepared entry
+points convert old declaration fields through this same implementation, without
+requiring a new method on a byte-frozen historical instance. Deferred
+`ProjectMutation` paths are not opened by construction or queries: the existing
+Store staging boundary still captures their bytes. Both values delegate to the
+same pure mutation validator, with no reverse dependency on concrete commands.
+
+Derived `ResourceFacts` describe an actual selected generation and confer no IO
+right. Ordinary source references, immutable inputs, native authority, generated
+outputs and history remain different roles. Save As retains its own exclusion
+policy; regeneration does not inherit a blanket source-reference write ban.
+Host roots, exact members, native argument witnesses and source/root/CAS checks
+remain in their existing owners.
+
+NativeSuite uses one retained catalog reader for document selection and sparse
+creation/export/spec overlays. A finite historical export catalog can be read
+without inventing complete manifest roots; complete host selection still requires
+its bound manifest and explicit runtime. Missing historical version fields retain
+their supported old shape, while explicit unknown versions refuse. Opaque
+metadata never becomes an IO role. Candidate document rows remain editable until
+mutation construction, then detach; this preserves existing export publication
+updates without retaining a mutable prepared payload. Layout interpretation is
+shared with generated-output proof, independently of all physical observations.
+
+The original reentrant staging control now injects at the actual Store byte-import
+boundary: detached declarations no longer retain a caller's mapping callback.
+It keeps the independent command, full generation ancestry, old bytes and final
+head assertions. Scientific presentation-plan review is explicitly included in
+the final detached candidate rather than relying on a shared mutable dictionary.
+These are development contracts, not a replacement for the eventual frozen
+combined native/full/capture/access and platform acceptance.

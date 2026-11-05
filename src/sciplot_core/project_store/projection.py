@@ -26,9 +26,8 @@ def _retired_source_directories(io: StoreIO, before: dict[str, Any], current: di
     removed = {name for name in names if name in before["files"] and name not in current["files"]}
     if not removed:
         return []
-    protected = set(before.get("input_resources", [])) | set(current.get("input_resources", []))
-    protected.update(before.get("history_resources", []))
-    protected.update(current.get("history_resources", []))
+    from sciplot_core.project_commands.resource_roles import ResourceRole, role_resources
+    protected = role_resources(before, (ResourceRole.IMMUTABLE_INPUT, ResourceRole.HISTORY)) | role_resources(current, (ResourceRole.IMMUTABLE_INPUT, ResourceRole.HISTORY))
     produced = set()
     for versions in before.get("sources", {}).values():
         for source in versions.values():

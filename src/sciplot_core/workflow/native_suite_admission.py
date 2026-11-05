@@ -25,8 +25,10 @@ def _admit_wire_before_runtime(operation: str) -> Callable[[NativeHandler], Nati
             store = read_bound_store(target)
             if store is not None:
                 manifest = json.loads((store.root / "suite.json").read_bytes())
-                selected = ([item["id"] for item in manifest["documents"] if item["id"] == target.stem]
-                            if target.suffix.lower() == ".vsz" else [item["id"] for item in manifest["documents"]])
+                from .native_suite_bindings import parse_suite_bindings
+                documents = parse_suite_bindings(manifest).documents()
+                selected = ([item["id"] for item in documents if item["id"] == target.stem]
+                            if target.suffix.lower() == ".vsz" else [item["id"] for item in documents])
                 if len(selected) != 1:
                     raise EngineError("native_object_figure_required", "Select one exact existing native figure.")
                 identifier = selected[0]

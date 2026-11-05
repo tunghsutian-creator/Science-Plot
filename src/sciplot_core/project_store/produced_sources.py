@@ -30,7 +30,8 @@ def frozen_output(io: StoreIO, entry: dict[str, Any], record: dict[str, Any] | N
     components = parts(name)
     key = components[0][1:] if components[0].startswith("@") else ""
     relative = Path(*components[1:]) if key else Path(*components)
-    if name in current.get("input_resources", []) or not key and components[0] in {"raw", "source"}:
+    from sciplot_core.project_commands.resource_roles import ResourceRole, role_resources
+    if name in role_resources(current, (ResourceRole.IMMUTABLE_INPUT,)) or not key and components[0] in {"raw", "source"}:
         raise ProjectConflict("An observed original input cannot be rebound as a produced source.")
     io.split(name)  # The finite trusted output capability must admit it.
     host = io.locations[key] if key else io.root

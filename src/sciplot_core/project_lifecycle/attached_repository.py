@@ -13,7 +13,7 @@ from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.writer_lease import exclusive_directory_lease
 from sciplot_core.foundation.source_locations import source_location_scope
-from sciplot_core.project_commands import MembershipRead, ProjectCommand, ProjectCommands, ProjectMutation, SourceAdoption
+from sciplot_core.project_commands import MembershipRead, ProjectCommand, ProjectCommands, PreparedMutation, SourceAdoption
 from sciplot_core.project_store.member_observation import ObservedMember
 from .attachment_index import Attachment, INDEX, OWNER, encode, read_index
 from .attachment_projection import derived_relative, metadata_view
@@ -211,7 +211,7 @@ class AttachedProjectRepository(FileProjectRepository):
                 if name in batch.reads and batch.reads[name] != expected:
                     raise EngineError("prepared_project_changed", "Semantic adoption differs from its prepared publication reads.")
                 batch.reads[name] = expected
-        mutation = ProjectMutation(writes, {"attachment_id": identity, "resources": sorted(writes)}, prepared_sources=captured)
+        mutation = PreparedMutation.from_values(writes, {"attachment_id": identity, "resources": sorted(writes)}, prepared_sources=captured)
         memberships: dict[str, MembershipRead] = {}
         inherited = batch.prepared.memberships if batch.prepared is not None else ()
         observed = (MembershipRead.capture(batch.snapshot["files"], prefix) for prefix in sorted(batch.directories))

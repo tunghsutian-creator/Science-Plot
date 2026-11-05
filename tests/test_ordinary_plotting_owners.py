@@ -175,6 +175,9 @@ PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/project_commands/__init__.py",
         "src/sciplot_core/project_commands/application.py",
         "src/sciplot_core/project_commands/contracts.py",
+        "src/sciplot_core/project_commands/prepared.py",
+        "src/sciplot_core/project_commands/resource_roles.py",
+        "src/sciplot_core/project_commands/mutation_validation.py",
         "src/sciplot_core/project_commands/errors.py",
         "src/sciplot_core/project_commands/generated_outputs.py",
         "src/sciplot_core/project_commands/native_suite_projections.py",
@@ -326,6 +329,7 @@ STUDIO_PREPARATION_STRICT_ADDITIONS = frozenset(
 )
 RHEOLOGY_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
     {
+        'src/sciplot_core/workflow/native_suite_bindings.py',
         'src/sciplot_core/rheology_tts_creation_bindings.py',
         'src/sciplot_core/rheology_tts_native_invocation.py',
         'src/sciplot_core/workflow/native_suite_admission.py',

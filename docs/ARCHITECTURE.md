@@ -1598,6 +1598,31 @@ journal before launch and refuses an unknown prior outcome. Package-level domain
 dependency cleanup, global cost/owner optimization, outbound minimization and all
 historical scientific-schema closure remain separate work and claims.
 
+### Detached declarations and derived resource roles
+
+`project_commands/prepared.py` owns byte-only `PreparedMutation` values, not a
+second journal. Candidate JSON is retained as immutable text and public views
+are copies. Old prepared declaration fields convert through the same pure
+factory. Ordinary `ProjectMutation` detaches caller containers but retains staged
+Paths; only the existing Store stage captures those bytes. The shared
+`mutation_validation.py` depends on resource declarations rather than concrete
+command/application classes, keeping the import graph acyclic.
+
+`resource_roles.py` derives finite facts from an actual selected generation;
+roles neither create host capabilities nor promote ordinary source references
+to immutable inputs. `FigureReadWitness` preserves exact selected file/source
+and existing projection values, with explicit binding absence separate from an
+actual observed file. Original public dictionary shapes and digest formulas
+remain compatible. Host IO, physical currentness and the final CAS retain their
+existing owners.
+
+NativeSuite's pure `native_suite_bindings.py` separates a finite retained catalog
+from complete workspace/delivery/source bindings. Historical readers need not
+fabricate roots; explicit host selection still validates its original role before
+recovery. The shared NativeSuite logical layout also supplies generated-output
+proof without moving Store IO into workflow code. Unknown versions or requested
+roles refuse; opaque metadata confers no access.
+
 ## Ownership table
 
 | Concern | Owner | Boundary |

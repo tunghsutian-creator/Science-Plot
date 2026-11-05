@@ -8,7 +8,8 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from .contracts import CommandKind, ProjectCommand, ProjectMutation
 from .errors import ProjectCommandError, ProjectCommandUnknown
 from .ports import ProjectStore
-from .prepared import MutationDeclaration, PreparedMutation, prepared_mutation
+from .prepared import PreparedMutation, prepared_mutation
+from .mutation_validation import MutationDeclaration
 
 
 class ProjectCommands:

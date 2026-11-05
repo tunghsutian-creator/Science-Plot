@@ -4,11 +4,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from sciplot_core.project_commands import ProjectCommands, ProjectMutation
+from sciplot_core.project_commands import ProjectCommands, ProjectMutation, PreparedMutation
 from sciplot_core.project_commands.errors import ProjectCommandUnknown
 from sciplot_core.workflow.native_suite_generation import command_for, mutation, saved_command
 
-def _prepared_mutation(store: Any, candidate: ProjectMutation, sources: list[dict[str, Any]]) -> ProjectMutation:
+def _prepared_mutation(store: Any, candidate: ProjectMutation, sources: list[dict[str, Any]]) -> PreparedMutation:
     from sciplot_core.project_commands import PreparedSource
     from sciplot_core.workflow.native_suite_generation import candidate_file, source_versions
     prepared = []
@@ -19,7 +19,7 @@ def _prepared_mutation(store: Any, candidate: ProjectMutation, sources: list[dic
         captured = candidate_file(path, source["version"], unaliased=False)
         prepared.append(PreparedSource(source["source_id"], source["path"], source["version"], captured.data,
                                        mode=registered["mode"] if registered else captured.mode))
-    return ProjectMutation(candidate.writes, candidate.result, review=candidate.review,
+    return PreparedMutation.from_values(candidate.writes, candidate.result, review=candidate.review,
                            artifacts=candidate.artifacts, prepared_sources=tuple(prepared))
 
 

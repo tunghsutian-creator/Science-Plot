@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.project_commands import PreparedFile, ProjectCommand, ProjectCommands, ProjectMutation
+from sciplot_core.project_commands import PreparedFile, ProjectCommand, ProjectCommands, PreparedMutation
 from sciplot_core.project_store.repository import FileProjectStore
 from sciplot_core.project_store.errors import ProjectRecoveryRequired
 from .attachment_index import Attachment, INDEX, OWNER, attachment_id, encode, owned_marker, read_index
@@ -138,7 +138,7 @@ def _attach_existing(store: FileProjectStore, observed: LegacyNamespace, *, figu
             sources.extend(record_sources(relative, json.loads(data)))
     captured_sources = prepared_sources(store, sources)
     verify_original_bytes(root, members, modes=modes)
-    mutation = ProjectMutation(writes, {"attachment_id": entry["id"], "plot_id": entry["plot_id"]},
+    mutation = PreparedMutation.from_values(writes, {"attachment_id": entry["id"], "plot_id": entry["plot_id"]},
                                prepared_sources=captured_sources)
     command = ProjectCommand.create("attachment_import", "attach:" + entry["id"], project_id=snapshot["project_id"],
         expected_generation=snapshot["generation"], read_set={name: snapshot["files"].get(name, {}).get("sha256") for name in writes},

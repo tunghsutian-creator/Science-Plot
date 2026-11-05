@@ -29,18 +29,17 @@ def _suite_value(path: Path) -> dict[str, Any]:
     from sciplot_core.studio_core.source_update_commit import reject_symlink_path
     reject_symlink_path(path)
     value = json.loads(path.read_bytes())
-    if not isinstance(value, dict) or value.get("kind") != "sciplot_rheology_tts_suite":
-        raise ValueError("The selected member has no bound NativeSuite manifest.")
-    return value
+    from .native_suite_bindings import validate_suite_manifest
+    return validate_suite_manifest(value)
 
 
 def _bound_selection(target: Path, workspace: Path, delivery: Path,
                      value: dict[str, Any], *, role: str) -> None:
     """Authorize the selected role before a manifest pointer can cause repair."""
     hidden, visible = workspace / "suite.json", delivery / "data/delivery_manifest.json"
-    origin_workspace, origin_delivery = Path(value["workspace"]), Path(value["delivery"])
-    if not origin_workspace.is_absolute() or not origin_delivery.is_absolute():
-        raise ValueError("NativeSuite origins must be exact absolute locations.")
+    from .native_suite_bindings import parse_suite_bindings
+    bindings = parse_suite_bindings(value)
+    origin_workspace, origin_delivery = Path(bindings.workspace_locator), Path(bindings.delivery_locator)
     allowed = {workspace, delivery, hidden, visible}
     if role in {"prepared_request", "analysis_request"}:
         if target != workspace / "request.json":
@@ -48,13 +47,13 @@ def _bound_selection(target: Path, workspace: Path, delivery: Path,
         request = json.loads(target.read_bytes())
         if not isinstance(request, dict) or request.get("out", str(origin_delivery)) != str(origin_delivery):
             raise ValueError("The selected request is not bound to this suite's delivery.")
-        if role == "prepared_request" and request.get("prepared_plan") != value.get("prepared_input", {}).get("path"):
+        if role == "prepared_request" and request.get("prepared_plan") != (bindings.prepared_input.locator if bindings.prepared_input is not None else None):
             raise ValueError("The selected prepared request is not bound to this suite.")
-        if role == "analysis_request" and request.get("frequency_source") not in {item["path"] for item in value["sources"]}:
+        if role == "analysis_request" and request.get("frequency_source") not in {item.locator for item in bindings.sources}:
             raise ValueError("The selected analysis request is not bound to this suite's original source.")
     elif role == "native":
         if target not in allowed:
-            documents = value.get("documents")
+            documents = bindings.documents()
             if (not isinstance(documents, list) or target.suffix.lower() != ".vsz"
                     or any(not isinstance(item, dict) for item in documents)):
                 raise ValueError("The target is not an exact NativeSuite member.")
@@ -228,9 +227,9 @@ def literal_resource(path: Path) -> str:
 
 def native_path(manifest: dict[str, Any], document: dict[str, Any]) -> Path:
     """Resolve only the closed saved-native authority, including audited drift."""
-    expected = Path(manifest['delivery']) / 'editable' / (document['id'] + '.vsz')
-    if Path(document['path']) != expected:
-        raise ValueError('Native figure is outside its exact bound editable member.')
+    from .native_suite_bindings import parse_suite_bindings
+    bindings = parse_suite_bindings(manifest)
+    bindings.native_locator(document)
     identifier = str(document['id'])
     actual = delivery_path(manifest) / 'editable' / (identifier + '.vsz')
     store = current_store()

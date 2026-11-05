@@ -32,12 +32,13 @@ class MemberObservation:
 
 def _projection(io: StoreIO, current: dict[str, Any]) -> dict[str, Any]:
     require_roots(io, current)
+    from sciplot_core.project_commands.resource_roles import ResourceRole, role_resources
+    unowned = role_resources(current, (ResourceRole.IMMUTABLE_INPUT, ResourceRole.HISTORY))
     drift: dict[str, str | None] = {}
     metadata_drift: dict[str, str] = {}
     for name, entry in current["files"].items():
         try:
-            physical = io.physical(name, owned=name not in current.get("input_resources", [])
-                and name not in current.get("history_resources", []))
+            physical = io.physical(name, owned=name not in unowned)
         except ProjectConflict as exc:
             drift[name] = None
             metadata_drift[name] = str(exc)

@@ -56,10 +56,10 @@ def _resolve_native_object(target: Path, figure_id: str | None = None, *, repair
             raise ValueError("Visible and hidden suite manifests disagree.")
     if path not in (hidden, visible):
         raise ValueError("Native suite manifest is outside its bound workspace/delivery.")
-    documents = manifest["documents"]
+    from .native_suite_bindings import parse_suite_bindings
+    bindings = parse_suite_bindings(manifest)
+    documents = bindings.documents()
     identifiers = [item["id"] for item in documents]
-    if len(set(identifiers)) != len(identifiers):
-        raise ValueError("Native suite document identities are not unique.")
     if target.suffix.lower() == ".vsz":
         matches = [item for item in documents if native_path(manifest, item) == target]
         if len(matches) != 1 or (figure_id is not None and matches[0]["id"] != figure_id):
@@ -71,8 +71,6 @@ def _resolve_native_object(target: Path, figure_id: str | None = None, *, repair
                           available_figures=identifiers)
     selected = matches[0]
     native = native_path(manifest, selected)
-    if native != delivery / "editable" / f"{selected['id']}.vsz":
-        raise ValueError("Native figure lies outside its bound visible editable directory.")
     reject_symlink_path(native)
     if not native.is_file():
         raise EngineError("native_object_missing", "The selected native authority is missing; preserve the suite.")

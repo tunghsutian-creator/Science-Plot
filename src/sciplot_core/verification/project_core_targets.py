@@ -104,6 +104,7 @@ PROJECT_RUNTIME_TESTS = (
 )
 
 PROJECT_COMMAND_TESTS = (
+    'tests/test_project_command_values.py',
     'tests/test_project_commands.py',
     'tests/test_project_commands_store_contract.py',
     'tests/test_project_read_projections.py',
@@ -130,6 +131,7 @@ NATIVE_PROJECT_CONSUMERS = (
 )
 
 NATIVE_PROJECT_COMMAND_TESTS = (
+    'tests/test_project_command_values.py',
     'tests/test_missing_generated_output_consumers.py',
     'tests/test_current_native_observation.py',
     'tests/test_document_edit_review.py',
@@ -185,6 +187,7 @@ WORKFLOW_PROJECT_TESTS = (
 )
 
 NATIVE_SUITE_COMMAND_TESTS = (
+    'tests/test_native_suite_bindings.py',
     'tests/test_native_suite_missing_export.py',
     'tests/test_native_suite_project_commands.py',
     'tests/test_native_suite_generation_projection.py',

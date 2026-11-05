@@ -33,9 +33,9 @@ def _load(workspace: Path, *, native_display: bool = False, repair: bool = False
         raise ValueError("Template restoration requires the separated layout; legacy suites remain reproducible.")
     if json.loads((delivery / "data/delivery_manifest.json").read_text()) != manifest:
         raise ValueError("Visible and hidden suite manifests disagree.")
-    for document in manifest["documents"]:
-        if native_path(manifest, document) != delivery / "editable" / f"{document['id']}.vsz":
-            raise ValueError("Native document path is outside the bound visible editable directory.")
+    from .native_suite_bindings import parse_suite_bindings
+    for document in parse_suite_bindings(manifest).documents():
+        native_path(manifest, document)  # Shared role selection plus current membership.
     return workspace, manifest
 
 
@@ -309,7 +309,7 @@ def preview_suite_style(workspace: Path, *, presentation_plan: Path | None = Non
                 check_snapshot({binding["path"]: binding["sha256"]}, label="external presentation plan")
                 # This is an intent dependency, never a suite scientific source.
                 review["presentation_plan"] = binding
-                candidate = replace(candidate, sources=[*(candidate.sources or ()), *source_versions(store, [binding])])
+                candidate = replace(candidate, review=review, sources=[*(candidate.sources or ()), *source_versions(store, [binding])])
             return candidate
         record = app.preview(command, prepare)
     if record["result"].get("status") == "no_change":

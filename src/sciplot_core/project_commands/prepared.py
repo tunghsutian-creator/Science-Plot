@@ -6,28 +6,12 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from .resources import InputRead, PreparedFile, PreparedSource, resource_key
-from .mutation_validation import validate_input_reads, validate_mutation_for
+from .mutation_validation import CommandFacts, MutationDeclaration, validate_input_reads, validate_mutation_for
 
-
-class MutationDeclaration(Protocol):
-    @property
-    def writes(self) -> Mapping[str, bytes | Path | PreparedFile | None]: ...
-    @property
-    def result(self) -> dict[str, Any]: ...
-    @property
-    def sources(self) -> Sequence[dict[str, Any]] | None: ...
-    @property
-    def review(self) -> dict[str, Any] | None: ...
-    @property
-    def artifacts(self) -> Mapping[str, bytes | Path | PreparedFile]: ...
-    @property
-    def prepared_sources(self) -> tuple[PreparedSource, ...]: ...
-    @property
-    def input_reads(self) -> tuple[InputRead, ...]: ...
 
 
 def _json(value: dict[str, Any] | None) -> str:
@@ -128,7 +112,7 @@ class PreparedMutation:
             value["input_reads"] = [item.to_payload() for item in self.input_reads]
         return canonical_json_sha256(value, allow_nan=False)
 
-    def validate_for(self, command: Any) -> None:
+    def validate_for(self, command: CommandFacts) -> None:
         validate_mutation_for(self, command)
 
 
@@ -140,7 +124,7 @@ def prepared_mutation(value: MutationDeclaration) -> PreparedMutation:
     """
     if isinstance(value, PreparedMutation):
         return value
-    if getattr(value, "sources", None) is not None:
+    if value.sources is not None:
         raise ValueError("Prepared storage publication requires byte values and no deferred source capture.")
-    return PreparedMutation.from_values(value.writes, value.result, review=getattr(value, "review", None), artifacts=getattr(value, "artifacts", {}),
-                                        prepared_sources=getattr(value, "prepared_sources", ()), input_reads=getattr(value, "input_reads", ()))
+    return PreparedMutation.from_values(value.writes, value.result, review=value.review, artifacts=value.artifacts,
+                                        prepared_sources=value.prepared_sources, input_reads=value.input_reads)

@@ -34,70 +34,41 @@ def _bound_sources(request: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _check_sources(sources: list[dict[str, Any]]) -> None:
     from sciplot_core.foundation.source_errors import SourceVersionMismatch
+    from .native_suite_bindings import source_references
 
-    for source in sources:
+    for source in source_references(sources):
         from sciplot_core.project_store.runtime import resolve_runtime_path
         try:
-            path = resolve_runtime_path(source["path"], expected_sha256=source["sha256"], source_id=source.get("source_id"))
+            path = resolve_runtime_path(source.locator, expected_sha256=source.version, source_id=source.source_id)
         except SourceVersionMismatch as exc:
-            if (exc.literal, exc.expected_sha256) != (source["path"], source["sha256"]):
+            if (exc.literal, exc.expected_sha256) != (source.locator, source.version):
                 raise
-            raise ValueError(f"Original source changed: {source['path']}; a new analysis is required.") from exc
-        if not path.is_file() or _sha(path) != source["sha256"]:
+            raise ValueError(f"Original source changed: {source.locator}; a new analysis is required.") from exc
+        if not path.is_file() or _sha(path) != source.version:
             raise ValueError(f"Original source changed: {path}; a new analysis is required.")
 
 
 def _figure_folder(delivery: Path, identifier: str) -> Path:
-    if identifier.startswith("Figure_X"):
-        return delivery
-    return delivery / ("SI" if identifier.startswith("SI_") else "panels")
+    from sciplot_core.project_commands.native_suite_projections import native_suite_figure_folder
+    return Path(native_suite_figure_folder(str(delivery), identifier))
 
 
 def _selected_documents(manifest: dict[str, Any], figure_ids: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
-    documents: list[dict[str, Any]] = manifest["documents"]
-    identifiers = [document["id"] for document in documents]
-    if len(set(identifiers)) != len(identifiers):
-        raise ValueError("Saved document identities are not unique.")
-    if figure_ids is None:
-        return documents
-    if (not isinstance(figure_ids, tuple) or not figure_ids or len(set(figure_ids)) != len(figure_ids)
-            or any(identifier not in identifiers for identifier in figure_ids)):
-        raise ValueError("Select exact, unique existing figure IDs before native execution.")
-    return [document for document in documents if document["id"] in figure_ids]
+    from .native_suite_bindings import parse_suite_catalog
+    selected = {row["id"] for row in parse_suite_catalog(manifest).documents(figure_ids)}
+    # Existing candidate editors update these declared rows in place before
+    # freezing their mutation; the parser owns selection, not a second draft.
+    return [row for row in manifest["documents"] if row["id"] in selected]
 
 
 def _active_receipts(manifest: dict[str, Any]) -> list[dict[str, Any]]:
-    """Select the active spec per figure; unrelated overlays never erase it."""
-    original = {item["id"]: item for item in manifest["native_result"]["figures"]}
-    overlay = manifest.get("presentation_revision", {}).get("figures", [])
-    if len({item["id"] for item in overlay}) != len(overlay):
-        raise ValueError("Active compiled figure identities are not unique.")
-    original.update({item["id"]: item for item in overlay})
-    return [original[document["id"]] for document in manifest["documents"]]
+    from .native_suite_bindings import parse_suite_catalog
+    return parse_suite_catalog(manifest).active_receipts()
 
 
 def _export_receipts(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Overlay sparse latest export facts on complete immutable creation facts.
-
-    An explicit pending/empty export row overrides creation evidence. Missing
-    overlay rows retain their original facts; no files or successful exports
-    are inferred by this read-only projection.
-    """
-    identifiers = [item["id"] for item in manifest["documents"]]
-    if len(set(identifiers)) != len(identifiers):
-        raise ValueError("Saved document identities are not unique.")
-    result: dict[str, dict[str, Any]] = {}
-    for rows in (manifest["native_result"]["figures"], manifest.get("last_export", [])):
-        seen = set()
-        for item in rows:
-            identifier = Path(item["document"]).stem
-            if identifier not in identifiers or identifier in seen or item.get("id", identifier) != identifier:
-                raise ValueError("Saved export receipts require unique bound figure identities.")
-            seen.add(identifier)
-            result[identifier] = item
-    if set(result) != set(identifiers):
-        raise ValueError("Saved export receipts lack a creation-bound figure.")
-    return result
+    from .native_suite_bindings import parse_suite_catalog
+    return parse_suite_catalog(manifest).export_receipts()
 
 
 def _compiled_figures(manifest: dict[str, Any], *, figure_ids: tuple[str, ...] | None = None) -> dict[str, Any]:

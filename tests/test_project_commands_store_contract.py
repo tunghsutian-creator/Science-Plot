@@ -356,12 +356,16 @@ def test_prepared_publication_cannot_discard_an_independent_reentrant_generation
         entered.append("B")
         command = make_command(original, "independent-B", "B.vsz")
         committed_b.append(ProjectCommands(store).execute(command, lambda: ProjectMutation({"B.vsz": b"new-B"}, {"independent": "B"})))
-    class ReentrantWrites(dict):
-        def items(self):
-            if point == "stage-mapping" and not entered and owned_io(project) is not None:
-                publish_b()
-            return super().items()
-    mutation = ProjectMutation(ReentrantWrites({"A.vsz": b"new-A"}), {})
+    # Candidate declarations are now detached before Store admission. Inject
+    # the same nested writer at the actual held-lease byte staging boundary,
+    # rather than rely on a retired user-mapping callback surviving detachment.
+    original_import = state.import_writes
+    def import_with_nested_writer(io, writes):
+        if point == "stage-mapping" and not entered and set(writes) == {"A.vsz"} and owned_io(project) is not None:
+            publish_b()
+        return original_import(io, writes)
+    monkeypatch.setattr(state, "import_writes", import_with_nested_writer)
+    mutation = ProjectMutation({"A.vsz": b"new-A"}, {})
     command = storage_command(original, mutation)
     if point == "before-head":
         def boundary(name):

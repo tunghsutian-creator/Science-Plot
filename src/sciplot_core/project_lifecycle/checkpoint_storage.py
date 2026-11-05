@@ -11,7 +11,7 @@ from typing import Any
 
 from sciplot_core.foundation.project_session_lease import external_project_session
 from sciplot_core.foundation.writer_lease import exclusive_directory_lease
-from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+from sciplot_core.project_commands import ProjectCommand, ProjectCommands, PreparedMutation
 from sciplot_core.project_store.io import STORE
 from sciplot_core.project_store.repository import FileProjectStore
 from sciplot_core.project_store.runtime import project_runtime, selected_project_store
@@ -87,7 +87,7 @@ class EditCheckpointStorage:
             return
         snapshot = self.store.snapshot()
         logical = self._logical(self.entry / name)
-        mutation = ProjectMutation({logical: encode(payload)}, {"checkpoint": logical})
+        mutation = PreparedMutation.from_values({logical: encode(payload)}, {"checkpoint": logical})
         command = ProjectCommand.create("semantic_record", "edit-checkpoint:" + digest(logical),
             project_id=snapshot["project_id"], expected_generation=snapshot["generation"],
             read_set={logical: None}, write_set=[logical],

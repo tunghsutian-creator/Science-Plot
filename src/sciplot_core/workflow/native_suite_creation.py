@@ -250,8 +250,8 @@ def create_project(workspace: Path, delivery: Path, request: dict[str, Any], sou
                 _finish_saved_exports(store, command, original_workspace, sources)
                 result = recover_prepare(original_workspace, original_delivery,
                                          recovery / "workspace", recovery / "delivery")
-                candidate = collect(dict(result), recovery / "workspace", recovery / "delivery")
-                candidate = _prepared_mutation(store, candidate, sources)
+                collected_candidate = collect(dict(result), recovery / "workspace", recovery / "delivery")
+                candidate = _prepared_mutation(store, collected_candidate, sources)
                 recovery_request = {"adapter": "native_suite_verified_effect_import",
                     "original_command": command.command_digest, "prepared_digest": candidate.prepared_digest}
                 recovery_key = command.key + ":verified"

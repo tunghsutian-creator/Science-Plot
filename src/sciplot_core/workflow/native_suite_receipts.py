@@ -21,14 +21,15 @@ def _current_exports(context: dict[str, Any], native_sha: str) -> list[dict[str,
     if receipt is None or receipt["document_sha256"] != native_sha:
         return []
     origin_delivery = Path(manifest.get("delivery", context["delivery"]))
-    origin_native = origin_delivery / "editable" / (identifier + ".vsz")
+    from sciplot_core.project_commands.native_suite_projections import NATIVE_SUITE_MEDIA, native_suite_native_locator
+    origin_native = Path(native_suite_native_locator(str(origin_delivery), identifier))
     origin_initial = Path(manifest.get("workspace", context["workspace"])) / "initial_render"
     if Path(receipt["document"]) not in {origin_native, origin_initial / origin_native.name}:
         return []
     exports: list[dict[str, Any]] = deepcopy(receipt["exports"])
     folder = _figure_folder(Path(context["delivery"]), identifier)
     origin_folder = _figure_folder(origin_delivery, identifier)
-    suffixes = {"pdf": ".pdf", "tiff_300": "_300dpi.tiff", "png_300": "_300dpi.png"}
+    suffixes = dict(NATIVE_SUITE_MEDIA)
     document = context["document"]
     if (document["sha256"] != native_sha or len(document["exports"]) != 3
             or {Path(name) for name in document["exports"]} != {origin_folder / (identifier + suffix) for suffix in suffixes.values()}):

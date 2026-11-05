@@ -275,7 +275,8 @@ class FigureReadWitness:
 
     def __post_init__(self) -> None:
         for values in (self.files, self.source_files):
-            if not isinstance(values, tuple) or len(dict(values)) != len(values):
+            if (not isinstance(values, tuple) or any(not isinstance(pair, tuple) or len(pair) != 2 for pair in values)
+                    or len(dict(values)) != len(values)):
                 raise ValueError("Selected file witnesses require unique immutable pairs.")
             if any(not isinstance(name, str) or not name or version is not None and not _sha(version) for name, version in values):
                 raise ValueError("Selected file witnesses require exact named byte versions.")

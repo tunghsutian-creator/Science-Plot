@@ -238,9 +238,9 @@ def _admit_saved_native_reuse(store: FileProjectStore, before: dict[str, Any]) -
                 and Path(figure["document"]) == store.root / "studio/document.vsz"]
     if len(selected) != 1:
         raise ProjectConflict("Saved-native reuse requires the exact registered ready canonical primary.")
-    reads = figure_read_state(store.root, selected[0])
-    binding = {"project_id": before["project_id"], "files": reads["project_files"],
-               "projected_reads": reads["projected_reads"], "source_files": reads["source_files"]}
+    from sciplot_core.project_commands import FigureReadWitness
+    reads = FigureReadWitness.from_read_state(figure_read_state(store.root, selected[0]))
+    binding = {"project_id": before["project_id"], **reads.to_binding_fields()}
     current = store.snapshot()
     if (current["generation"] != before["generation"] or current.get("outside_changes") != changes
             or current.get("outside_metadata") != before.get("outside_metadata")):

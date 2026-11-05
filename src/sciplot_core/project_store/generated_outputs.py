@@ -9,7 +9,7 @@ from typing import Any, Protocol
 from sciplot_core.project_commands import MissingGeneratedOutput, ProjectCommand, ProjectionRead
 from .committed_outcomes import require as committed_outcome
 from .errors import ProjectConflict
-from .generated_output_owners import catalog_matches, logical, receipt_matches
+from .generated_output_owners import catalog_matches, receipt_matches
 from .io import StoreIO, directory, sha
 import sciplot_core.project_store.state as state
 
@@ -69,9 +69,8 @@ def _role(io: StoreIO, current: dict[str, Any], item: MissingGeneratedOutput, ch
     entry = current["files"].get(name)
     if entry is None or (entry["sha256"], entry["mode"]) != (item.before_sha256, item.mode):
         raise ProjectConflict("The missing output no longer has its exact registered byte/mode preimage.")
-    forbidden = set(current.get("input_resources", [])) | set(current.get("history_resources", []))
-    for versions in current.get("sources", {}).values():
-        forbidden.update(logical(current, source["locator"]) for source in versions.values())
+    from sciplot_core.project_commands.resource_roles import ResourceRole, role_resources
+    forbidden = role_resources(current, (ResourceRole.IMMUTABLE_INPUT, ResourceRole.HISTORY, ResourceRole.SOURCE_REFERENCE))
     if name in forbidden:
         raise ProjectConflict("An original input/source/history cannot become a missing generated output.")
     latest = _latest(io, current, name, checked)
