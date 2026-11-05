@@ -24,7 +24,7 @@ from sciplot_core.project_manifest_locations import (
     _CANONICAL_MANIFEST_NAME, _project_manifest_paths as _project_manifest_paths,
     intake_snapshot_location as intake_snapshot_location,
 )
-from sciplot_core.project_store import FileProjectStore, ProjectConflict, ResourceRoot
+from sciplot_core.project_store import FileProjectStore, ProjectConflict, ProjectStoreError, ResourceRoot
 from sciplot_core.project_store.adapters import project_storage_scope, publish_files
 from sciplot_core.project_store.io import install, parts, read_file, sha
 
@@ -158,6 +158,11 @@ def _stage_snapshot(store: FileProjectStore, payload: dict[str, Any], writes: Ma
         if (proof.before_sha256 != previous["sha256"] or proof.observed_sha256 != observed
                 or sha(captured.data) != observed or captured.mode != previous["mode"]):
             raise ProjectConflict("The snapshot native overlay differs from its audited pending adoption.")
+    names = tuple(name for name in snapshot["files"] if not name.startswith("@") and name not in writes)
+    # One explicit generation capture owns the finite member reads. Each member
+    # still consumes fresh checked object bytes; no lease/proof reaches staging,
+    # overlay-path reads, archive callbacks, native work or later publication.
+    members = store.observe_members(names, generation=snapshot["generation"], projection=False).members
     with TemporaryDirectory(prefix="sciplot-package-stage-") as folder:
         candidate = Path(folder) / store.root.name
         candidate.mkdir()
@@ -166,8 +171,13 @@ def _stage_snapshot(store: FileProjectStore, payload: dict[str, Any], writes: Ma
                 continue
             if name in writes and writes[name] is None:
                 continue
-            data = writes[name] if name in writes else PreparedFile(
-                store.read_bytes(name, generation=snapshot["generation"]), snapshot["files"][name]["mode"])
+            if name in writes:
+                data = writes[name]
+            else:
+                captured_data = members.pop(name).data
+                if captured_data is None:
+                    raise ProjectStoreError("The logical resource is not a member of this generation.")
+                data = PreparedFile(captured_data, snapshot["files"][name]["mode"])
             assert data is not None
             _write_snapshot_member(candidate, name, data)
         for name, data in writes.items():
