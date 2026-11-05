@@ -84,12 +84,13 @@ same 32 successful bodies and four checks in both modes: quick 11.00 seconds,
 unrecorded changed 10.09 seconds. This is an explicit daily entry and protection
 against accidental evidence collection, not an algorithmic speedup claim.
 
-Unrecorded feedback runs changed-file Ruff, six shared source contracts and the
+Unrecorded feedback runs changed-file Ruff, seven shared source contracts and the
 complete configured type gate before the affected behavior bodies (when each
 gate applies), then whitespace. A failure stops that editing loop; later checks
-are reported as `not_run`, never passed. The six shared contracts check source
+are reported as `not_run`, never passed. The seven shared contracts check source
 size, dependency cycles, timestamp ownership, process-wide no-IO mock lifetime,
-duplicate implementations and the strict type owner. This catches shared
+duplicate implementations, the strict type owner and the preserved type-scope
+partition. This catches shared
 migration failures before a broad behavior selection. Evidence-record mode keeps
 its existing diagnostic collection and completion contract.
 
@@ -156,6 +157,16 @@ that every small change is instant or that omitted bodies passed. Unknown risk
 widens the needed gate, and a bounded local incomplete result does not force a
 full run after every edit. Freeze the integrated candidate once before its full
 release evidence rather than repeatedly invalidating it with progress edits.
+
+A real comment-only timing-leaf push, commit `1638a586`, completed its two GitHub
+jobs in 325 seconds from run creation (314 seconds for the runtime job). Its
+affected stage took 51 seconds, executed all 89 selected bodies and passed the
+existing source/runtime binding checks. Installation took 65 seconds, the type
+gate 54 and helper construction 118. This demonstrates the limited workflow,
+not an equal-coverage full-suite speedup or a three-minute whole-CI result.
+The canonical profiles, native regression preflight, Doctor and lifecycle smoke
+were not executed by that limited layer; their separate responsibilities remain.
+See [the actual run](https://github.com/tunghsutian-creator/Science-Plot/actions/runs/42068732741).
 
 Future push runs on the same branch and pull-request runs for the same PR use
 Actions concurrency for the same workflow/job/Ubuntu/event responsibility.
@@ -338,6 +349,9 @@ The `--input-scope` gate requires its complete reviewed collection. Do not pass
 file subsets to it: register actual new nodes and use filtering after complete
 collection. Ordinary development feedback still uses the affected owners and
 existing bounded helpers, not a full run for each edit.
+Generated pytest subprojects must declare their own `--rootdir`; setting `cwd`
+alone can still discover the parent project's configuration. Collection-routing
+controls must also cover a project-owned temporary root under the real guards.
 A relocated framework Python also needs the
 wrapper's loader bootstrap before direct development Python calls.
 The Mac wrapper discovers `.local/runtime/qt/lib` under its selected runtime
