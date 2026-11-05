@@ -106,12 +106,6 @@ class NativeSuiteBindings:
         return str(expected)
 
 
-    def active_receipts(self) -> list[dict[str, Any]]:
-        return self.catalog.active_receipts()
-
-    def export_receipts(self) -> dict[str, dict[str, Any]]:
-        return self.catalog.export_receipts()
-
 
 def parse_suite_bindings(value: dict[str, Any]) -> NativeSuiteBindings:
     _manifest(value)
@@ -132,10 +126,6 @@ def validate_suite_manifest(value: Any) -> dict[str, Any]:
     """Minimal root reader for known legacy/pending shapes, without fake fields."""
     _manifest(value)
     return cast(dict[str, Any], value)
-
-
-def select_suite_documents(value: dict[str, Any], figure_ids: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
-    return parse_suite_catalog(value).documents(figure_ids)
 
 
 def source_references(sources: Any) -> tuple[SourceVersionRef, ...]:
