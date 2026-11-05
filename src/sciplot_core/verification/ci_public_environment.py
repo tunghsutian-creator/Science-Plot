@@ -126,7 +126,7 @@ def _collect_ubuntu(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     cache: dict[Path, tuple[tuple[int, ...], str]] = {}
     aliases: dict[Path, Path] = {}
     byte_count = file_count = 0
-    def file_identity(path: Path) -> str:
+    def file_identity(path: Path, *, stdlib_hook: bool = False) -> str:
         nonlocal byte_count, file_count
         logical = path
         path = path.resolve(strict=True)
@@ -135,7 +135,9 @@ def _collect_ubuntu(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
                    Path("/usr/bin"), Path("/usr/local/bin"), Path("/usr/share/fonts"),
                    Path("/usr/local/share/fonts"), Path("/usr/share"), Path("/etc/fonts"), root / "third_party/veusz")
         tracked_source = path.is_relative_to(root) and str(path.relative_to(root)) in source
-        if not path.is_file() or not (tracked_source or any(path.is_relative_to(base) for base in allowed)):
+        known_stdlib_hook = (stdlib_hook and logical == Path("/usr/lib/python3.12/sitecustomize.py")
+                             and path == Path("/etc/python3.12/sitecustomize.py"))
+        if not path.is_file() or not (known_stdlib_hook or tracked_source or any(path.is_relative_to(base) for base in allowed)):
             raise UnsupportedEnvironment("unsupported_installed_input_root")
         before = path.stat()
         stamp = (before.st_dev, before.st_ino, before.st_mode, before.st_uid, before.st_gid,
@@ -175,7 +177,7 @@ def _collect_ubuntu(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
                 if not path.with_suffix(".py").is_file():
                     raise UnsupportedEnvironment("unsupported_sourceless_stdlib")
                 continue
-            stdlib_files[str(path)] = file_identity(path)
+            stdlib_files[str(path)] = file_identity(path, stdlib_hook=True)
             if ".so" in path.name:
                 extensions.add(path.resolve())
     if not stdlib_files:
