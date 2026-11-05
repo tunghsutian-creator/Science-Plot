@@ -314,13 +314,20 @@ def exercise_head_source(tmp_path):
     git("config", "user.email", "fixture@invalid")
     source = root / "sample.py"
     source.write_text("x = 1\n")
-    git("add", "sample.py")
+    binary = root / "public.bin"
+    binary.write_bytes(b"\x00\xffpublic\nbinary\x00\xfe")
+    git("add", "sample.py", "public.bin")
     git("-c", "commit.gpgsign=false", "commit", "-qm", "finite source")
-    _head_source(root, {"sample.py": hashlib.sha256(source.read_bytes()).hexdigest()})
+    captured = {"sample.py": hashlib.sha256(source.read_bytes()).hexdigest(),
+                "public.bin": hashlib.sha256(binary.read_bytes()).hexdigest()}
+    _head_source(root, captured)
+    with pytest.raises(UnsupportedEnvironment, match="head_source_bytes"):
+        _head_source(root, {**captured, "sample.py": "0" * 64})
+    assert not git("status", "--porcelain").stdout  # physical source and HEAD did not change
     git("update-index", "--assume-unchanged", "sample.py")
     source.write_text("x = 2\n")
     with pytest.raises(UnsupportedEnvironment, match="head_source_bytes"):
-        _head_source(root, {"sample.py": hashlib.sha256(source.read_bytes()).hexdigest()})
+        _head_source(root, {**captured, "sample.py": hashlib.sha256(source.read_bytes()).hexdigest()})
 
 
 def exercise_fresh_origin(tmp_path, monkeypatch):

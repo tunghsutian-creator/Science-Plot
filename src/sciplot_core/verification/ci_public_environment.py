@@ -79,14 +79,20 @@ def _head_source(root: Path, source: dict[str, str]) -> str:
     if set(entries) != set(source):
         raise UnsupportedEnvironment("head_source_membership_drift")
     names = sorted(entries)
-    # Delegate byte identity to the existing Git owner. Its environment preserves
-    # active public guards; --no-filters compares actual bytes with HEAD blob IDs.
-    # Bounded argv batches avoid a second subprocess/environment implementation.
-    for start in range(0, len(names), 200):
-        batch = names[start:start + 200]
-        observed = _git(root, "hash-object", "--no-filters", "--", *batch).splitlines()
-        if observed != [entries[name] for name in batch]:
+    # HEAD object bytes must match the captured SHA256 values, not merely names
+    # or a later physical read. The single Git owner retains the real guard/env.
+    data = _git(root, "cat-file", "--batch", input_bytes="".join(entries[name] + "\n" for name in names).encode())
+    offset = 0
+    for name in names:
+        end = data.index(b"\n", offset)
+        object_id, kind, size = data[offset:end].decode("ascii").split()
+        start, stop = end + 1, end + 1 + int(size)
+        if (object_id != entries[name] or kind != "blob" or stop >= len(data)
+                or data[stop:stop + 1] != b"\n" or hashlib.sha256(data[start:stop]).hexdigest() != source[name]):
             raise UnsupportedEnvironment("head_source_bytes_drift")
+        offset = stop + 1
+    if offset != len(data):
+        raise UnsupportedEnvironment("head_source_protocol_drift")
     return digest(modes)
 
 

@@ -141,6 +141,7 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     ci_plan = build_changed_verification_plan(["src/sciplot_core/verification/ci_feedback.py"], repo_root=ROOT)
     ci_targets = next(check["command"] for check in ci_plan["checks"] if check["check_id"] == "pytest_changed_owners")
     assert "tests/test_repository_policy.py" in ci_targets
+    assert "tests/test_iso_timestamps.py::test_first_party_contract_timestamp_implementation_has_one_owner" in ci_targets
     from sciplot_core.verification import ci_feedback
     for base in ("", "0" * 40, "--all", "HEAD~1"):
         with pytest.raises(ValueError):

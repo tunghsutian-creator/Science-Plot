@@ -13,7 +13,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-from typing import Any
+from typing import Any, cast, overload
 
 PRIVATE_NAMES = ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")
 RECEIPT = ".tmp_verify/public-source-stage.json"
@@ -47,12 +47,23 @@ def _hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _git(root: Path, *arguments: str) -> str:
+@overload
+def _git(root: Path, *arguments: str, input_bytes: None = None) -> str: ...
+
+
+@overload
+def _git(root: Path, *arguments: str, input_bytes: bytes) -> bytes: ...
+
+
+def _git(root: Path, *arguments: str, input_bytes: bytes | None = None) -> str | bytes:
     if any(os.environ.get(key) for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_TEMPLATE_DIR", "GIT_CONFIG_COUNT")):
         raise ValueError("Controlled source inventory rejects inherited Git namespace overrides.")
     environment = dict(os.environ, GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
-    return subprocess.run(["git", "-c", f"core.hooksPath={os.devnull}", "-c", "core.fsmonitor=false", *arguments],
-                          cwd=root, env=environment, text=True, capture_output=True, check=True).stdout
+    command = ["git", "-c", f"core.hooksPath={os.devnull}", "-c", "core.fsmonitor=false", *arguments]
+    result = subprocess.run(command, cwd=root, env=environment, input=input_bytes,
+                            text=input_bytes is None, capture_output=True, check=True)
+    # subprocess typing cannot express the input-bytes-dependent return type.
+    return cast(str | bytes, result.stdout)
 
 
 def private_namespace_paths(root: Path) -> list[Path]:

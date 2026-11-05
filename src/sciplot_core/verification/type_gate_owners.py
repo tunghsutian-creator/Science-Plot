@@ -9,6 +9,7 @@ from sciplot_core.verification.owner_model import ChangedOwner
 ARCHITECTURE_CORE_TARGETS = (
     "tests/test_architecture_boundaries.py::test_ordinary_source_files_stay_within_the_size_boundary",
     "tests/test_architecture_boundaries.py::test_first_party_import_graph_is_acyclic",
+    "tests/test_iso_timestamps.py::test_first_party_contract_timestamp_implementation_has_one_owner",
 )
 
 CHANGED_VERIFICATION_TEST_TARGETS = (
@@ -395,6 +396,5 @@ __all__ = [
     "STUDIO_PROJECT_REGISTRY_TYPE_PATHS",
     "TYPED_CORE_CONTRACT_OWNER",
     "VERIFICATION_POLICY_OWNER",
-    "WORKFLOW_EXPORT_FORMAT_TYPE_OWNER",
-    "WORKFLOW_EXPORT_FORMAT_TYPE_PATHS",
+    "WORKFLOW_EXPORT_FORMAT_TYPE_OWNER", "WORKFLOW_EXPORT_FORMAT_TYPE_PATHS",
 ]

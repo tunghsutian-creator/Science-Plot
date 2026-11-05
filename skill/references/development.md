@@ -150,7 +150,8 @@ were collected: exact current workspace/source/runtime roots, PATH/locale/offscr
 owned initially empty HOME/TMP and an empty PYTHONPYCACHEPREFIX with bytecode writes
 disabled. GitHub branch/run/token variables are not inherited. No arbitrary path
 stripping or inode/host-name equivalence is used. Unsupported preparation keeps the
-old ambient fresh path and cannot publish a reusable origin. This controlled mode
+ambient fresh execution of both public source stages and cannot publish a
+reusable origin. This controlled mode
 requires its own first actual complete origin; old f1a results are not upgraded.
 
 The collector records ImageOS/ImageVersion, OS/kernel/CPU class, actual Python/Qt/
@@ -164,9 +165,21 @@ survives collection. File counts/bytes/elapsed costs are separate diagnostics;
 Linux collector cost and hit rate require the real supported runner, not Mac unit
 simulations. An unknown path, missing tool/dependency or changing byte is FRESH.
 
+The original checkout can contain tracked historical rendering fixtures. Its
+public source binding excludes those namespaces without reading their contents;
+the collector does not claim that the original checkout is private-absent. Both
+public profiles execute through the existing `public_stage` owner, which copies
+the public source, binds a separate Git identity and enforces private-absent
+execution before and after the actual selected bodies. Protocol v2 cannot reuse
+a v1 record. A first v2 origin needs actual execution in this mode; the extra
+focused-stage copy/validation cost and eventual hit rate require measurement.
+
 One small fixed-JSON Actions artifact can describe an actually executed origin:
-focused retains its original aggregate/real exit, comprehensive retains its existing
-validated metadata; no new focused phase platform is added. The official origin
+both profiles retain the existing stage result, finish, reports and actual exit.
+The original stage owner supplies the complete binding-check names; every check
+must explicitly be true. Missing phases, unknown skips, empty checks or truthy
+non-booleans cannot produce an origin. The retired focused text-summary parser
+is removed. The official origin
 run/attempt/job must subsequently be complete SUCCESS with both canonical profile
 steps actually successful. Referenced runs cannot generate an origin or serve as
 chains. A subsequent consumer verifies official metadata, artifact digest, one safe
@@ -176,6 +189,14 @@ drift or missing policy after skipping profiles is an actual FAIL, never a late
 implicit five-hour retry. The claim is prior official public software behavior; it is not current-host full
 execution, native-output reuse, private capture, scientific acceptance or release
 permission. On reference, the job summary links the original run explicitly.
+
+The shared cheap source checks include the existing timestamp-ownership scan,
+whose input is all first-party Python source. A CI helper is subject to that
+same owner rule. After a change to CI environments, process guards or profile
+delegation, verify the affected controls in a real private-absent public stage
+with the actual input guard and original finish/reports; an unguarded local unit
+run is not evidence for this execution mode. Reuse the existing stage owner and
+time/Git helpers rather than copying their parsing or environment construction.
 Do not cancel an already running acceptance to apply these changes.
 
 Reuse is per claim. Treat behavior inputs, observation/evidence rules and narrative
