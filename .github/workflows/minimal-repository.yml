@@ -55,8 +55,6 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONNOUSERSITE: "1"
-      # The first compatible run executes both profiles; only an official complete origin can be referenced.
-      SCIPLOT_PUBLIC_REUSE: "true"
     steps:
       - name: Require a valid scheduling plan
         env:
@@ -298,22 +296,14 @@ jobs:
         env:
           SCIPLOT_EVENT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE" --run-affected
-      - name: Prepare public result reference
-        if: ${{ steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch' }}
-        id: public-reference
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PYTHONDONTWRITEBYTECODE: "1"
-          PYTHONPYCACHEPREFIX: ${{ github.workspace }}/.tmp_verify/ci-public-pycache
-        run: python3 -m sciplot_core.verification.ci_public_reuse prepare
       - name: Run reviewed public focused behavior
-        if: ${{ (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') && steps.public-reference.outputs.reuse != 'true' }}
-        run: python3 -m sciplot_core.verification.ci_public_reuse focused
+        if: ${{ (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') }}
+        run: python3 -m sciplot_core.verification.ci_public_profiles focused
       - name: Run reviewed public comprehensive behavior
-        if: ${{ (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') && steps.public-reference.outputs.reuse != 'true' }}
+        if: ${{ (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') }}
         # Both profiles use the existing private-absent source-stage owner.
         # The wrapper streams its owned command.log without changing completion.
-        run: python3 -m sciplot_core.verification.ci_public_reuse comprehensive
+        run: python3 -m sciplot_core.verification.ci_public_profiles comprehensive
       - name: Verify source-checkout wrapper bootstrap
         run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
       - name: Run readiness check
@@ -322,20 +312,3 @@ jobs:
       - name: Run fixture-free lifecycle smoke
         if: ${{ steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch' }}
         run: skill/scripts/sciplot smoke --out .tmp_verify/ci_runtime_smoke --json
-      - name: Seal fresh public origin
-        if: ${{ steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch' }}
-        id: public-origin
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PYTHONDONTWRITEBYTECODE: "1"
-          PYTHONPYCACHEPREFIX: ${{ github.workspace }}/.tmp_verify/ci-public-pycache
-        run: python3 -m sciplot_core.verification.ci_public_reuse publish
-      - name: Preserve fresh public origin
-        if: ${{ (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') && steps.public-origin.outputs.artifact == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: public-result-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .tmp_verify/ci-public-reference/public-result.json
-          if-no-files-found: error
-          include-hidden-files: true
-          retention-days: 7

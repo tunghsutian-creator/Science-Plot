@@ -114,7 +114,7 @@ def run_affected(root: Path, base: str, *, event: str) -> dict[str, Any]:
                          "distribution checks retain their separate steps. "
                          "Full public profiles, native preflight, Doctor, lifecycle smoke, "
                          "real private inputs and access capture: NOT_EXECUTED. "
-                         "No canonical v2 origin is produced. Release gates remain separate.\n")
+                         "Release gates remain separate.\n")
     return result
 
 

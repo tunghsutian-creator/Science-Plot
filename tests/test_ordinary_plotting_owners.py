@@ -393,9 +393,7 @@ VERIFICATION_PROJECT_CORE_STRICT_ADDITIONS = frozenset(
 CI_FEEDBACK_STRICT_ADDITIONS = frozenset(
     {
         "src/sciplot_core/verification/ci_feedback.py",
-        "src/sciplot_core/verification/ci_public_environment.py",
-        "src/sciplot_core/verification/ci_public_proof.py",
-        "src/sciplot_core/verification/ci_public_reuse.py",
+        "src/sciplot_core/verification/ci_public_profiles.py",
         "src/sciplot_core/verification/task_timing_feedback.py",
         "src/sciplot_core/verification/source_contracts.py",
         "src/sciplot_core/verification/public_stage_selection.py",

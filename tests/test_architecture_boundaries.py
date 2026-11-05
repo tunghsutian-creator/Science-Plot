@@ -687,9 +687,7 @@ def test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint() -> None
     assert len(configured_files) == len(set(configured_files))
     for path in (
         "src/sciplot_core/verification/ci_feedback.py",
-        "src/sciplot_core/verification/ci_public_environment.py",
-        "src/sciplot_core/verification/ci_public_proof.py",
-        "src/sciplot_core/verification/ci_public_reuse.py",
+        "src/sciplot_core/verification/ci_public_profiles.py",
     ):
         assert configured_files.count(path) == 1
     for value in configured_files:

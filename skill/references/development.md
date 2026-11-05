@@ -136,15 +136,14 @@ Qt/font/toolchain and native helper build/import checks still execute. Only this
 closed layer omits the twelve-node native preflight, the two canonical public
 profiles, Doctor and lifecycle smoke. Its result and job summary explicitly say
 these bodies, real private inputs and access capture were NOT_EXECUTED; it cannot
-produce or reference a canonical v2 origin or claim current native lifecycle
+claim current native lifecycle
 acceptance. The selected stage is development/merge feedback, not release proof.
 
 The complete path preserves both original public profiles, all native assertions
 and predecessor order, runtime/build gates, Doctor and smoke. The twelve historical
 regressions remain in comprehensive and retain their early diagnostic on relevant
-or unknown changes. The existing compatible same-source public-reference path is
-available only inside this complete layer; affected output never becomes its
-origin. Release/frozen full, scientific result checks, required supported OSs and
+or unknown changes. Both public profiles always execute fresh in this layer.
+Release/frozen full, scientific result checks, required supported OSs and
 real-input/private-access capture remain separate required responsibilities.
 Changing CI execution policy itself follows the complete path. Preserve active
 frozen runs; do not restart them merely to apply a feedback-policy change.
@@ -179,64 +178,6 @@ its failure retains the complete public path and early preflight. Superseded run
 This only affects workflows containing the new groups; do not cancel an existing
 acceptance by API. Actions scheduling is not a guarantee of chronological queue
 order, and completion still requires the latest intended candidate's actual gates.
-The reviewed workflow enables the finite cross-event public-result path
-(`SCIPLOT_PUBLIC_REUSE=true`). A first compatible run executes both profiles
-fresh; it cannot reference an old run that never produced this controlled proof.
-Only main push may reference a prior actual non-fork push origin from this repository;
-other branch pushes can only execute fresh and produce an origin. Both need the same
-actual Ubuntu24/Python
-3.12 image/CPU class, installed package/native/font/ABI facts, source/public-input
-closure, exact profiles/commands and controlled process environment. A matching SHA
-or runner label alone is insufficient. Within the complete path, current native/runtime/type gates,
-Doctor and smoke still execute. Unknown/incompatible required policy, unsupported
-facts, absent/expired/corrupt origin or any difference means explicit FRESH with a
-reason; unexpected programming defects fail rather than silently run hours again.
-
-Two profiles use a complete fixed environment only after fresh eligibility facts
-were collected: exact current workspace/source/runtime roots, PATH/locale/offscreen,
-owned initially empty HOME/TMP and an empty PYTHONPYCACHEPREFIX with bytecode writes
-disabled. GitHub branch/run/token variables are not inherited. No arbitrary path
-stripping or inode/host-name equivalence is used. Unsupported preparation keeps the
-ambient fresh execution of both public source stages and cannot publish a
-reusable origin. This controlled mode
-requires its own first actual complete origin; old f1a results are not upgraded.
-
-The collector records ImageOS/ImageVersion, OS/kernel/CPU class, actual Python/Qt/
-helper and dynamic Qt plugin identities, effective system fontconfig bytes, installed distribution bytes (apt metadata ownership when no
-wheel file list exists), resolved system package versions, extension/ldd dependencies,
-fonts and build/ABI parameters. Actual tracked bytes/execute modes must match HEAD
-objects even when Git index flags could hide edits; compatibility also binds
-source/file modes and ownership while dev/inode/timestamps are local freshness only. It never traverses HOME or private namespaces.
-Per-operation file-byte memoization rechecks identity; no result or metadata cache
-survives collection. File counts/bytes/elapsed costs are separate diagnostics;
-Linux collector cost and hit rate require the real supported runner, not Mac unit
-simulations. An unknown path, missing tool/dependency or changing byte is FRESH.
-
-The original checkout can contain tracked historical rendering fixtures. Its
-public source binding excludes those namespaces without reading their contents;
-the collector does not claim that the original checkout is private-absent. Both
-public profiles execute through the existing `public_stage` owner, which copies
-the public source, binds a separate Git identity and enforces private-absent
-execution before and after the actual selected bodies. Protocol v2 cannot reuse
-a v1 record. A first v2 origin needs actual execution in this mode; the extra
-focused-stage copy/validation cost and eventual hit rate require measurement.
-
-One small fixed-JSON Actions artifact can describe an actually executed origin:
-both profiles retain the existing stage result, finish, reports and actual exit.
-The original stage owner supplies the complete binding-check names; every check
-must explicitly be true. Missing phases, unknown skips, empty checks or truthy
-non-booleans cannot produce an origin. The retired focused text-summary parser
-is removed. The official origin
-run/attempt/job must subsequently be complete SUCCESS with both canonical profile
-steps actually successful. Referenced runs cannot generate an origin or serve as
-chains. A subsequent consumer verifies official metadata, artifact digest, one safe
-JSON member, exact binding and a fresh supported required-policy snapshot. The
-reference branch repeats current binding and policy checks after the health gates;
-drift or missing policy after skipping profiles is an actual FAIL, never a late
-implicit five-hour retry. The claim is prior official public software behavior; it is not current-host full
-execution, native-output reuse, private capture, scientific acceptance or release
-permission. On reference, the job summary links the original run explicitly.
-
 The shared cheap source checks include the existing timestamp-ownership scan,
 whose input is all first-party Python source. A CI helper is subject to that
 same owner rule. After a change to CI environments, process guards or profile

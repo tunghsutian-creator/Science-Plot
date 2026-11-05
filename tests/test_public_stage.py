@@ -104,21 +104,40 @@ def test_one_extra():
         assert (tmp_path / "executed.txt").read_text() == "exact selected body"
 
 
-def test_affected_result_cannot_be_published_as_a_canonical_origin(tmp_path: Path) -> None:
-    from sciplot_core.verification.ci_public_environment import digest
-    from sciplot_core.verification.ci_public_reuse import _stage_evidence
+def test_affected_stage_reports_limited_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sciplot_core.verification import input_scope
 
-    stage = tmp_path / ".tmp_verify/ci_public_focused"
-    stage.mkdir(parents=True)
     node = "tests/test_generated.py::test_one"
-    marker = {"complete": True, "exit_code": 0, "selected_tests": [node], "executed_tests": [node]}
-    result = {"status": "PASS", "actual_exit_code": 0, "profile": "public-affected", "origin_head": "a" * 40,
-              "binding_checks": dict.fromkeys(public_stage.BINDING_CHECKS, True), "finish": marker}
-    (stage / "result.json").write_text(json.dumps(result))
-    (stage / "reports.json").write_text(json.dumps({"exit_code": 0, "selected_tests": [node], "reports": [
-        {"nodeid": node, "when": phase, "outcome": "passed"} for phase in ("setup", "call", "teardown")]}))
-    with pytest.raises(ValueError, match="original evidence is inconsistent"):
-        _stage_evidence(tmp_path, "focused", {"head": "a" * 40, "focused_nodes_sha256": digest([node])})
+    output = tmp_path / "output"
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    output.mkdir()
+    source = {"tests/test_generated.py": "bound"}
+    before = {"source_bytes": source, "origin_source_bytes": source, "stage_head": "head",
+              "origin_head": "head", "runtime": {"runtime": "bound"}}
+    monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+    monkeypatch.setattr(public_stage, "create_stage", lambda *_args: (stage, {}, before))
+    monkeypatch.setattr(input_scope, "load_manifest", lambda *_args: {
+        "scopes": {"public": [node]}, "tiers": {"focused": [node]}})
+    monkeypatch.setattr(public_stage, "assert_private_absent", lambda *_args: None)
+    monkeypatch.setattr(public_stage, "source_binding", lambda *_args: source)
+    monkeypatch.setattr(public_stage, "_git", lambda *_args: "head")
+    monkeypatch.setattr(public_stage, "runtime_binding", lambda *_args: {"runtime": "bound"})
+    monkeypatch.setattr(public_stage, "assert_stage_helpers", lambda *_args: None)
+    def run(command, **_kwargs):
+        marker = {"complete": True, "exit_code": 0, "selected_tests": [node], "executed_tests": [node]}
+        reports = {"exit_code": 0, "selected_tests": [node], "reports": [
+            {"nodeid": node, "when": phase, "outcome": "passed"} for phase in ("setup", "call", "teardown")]}
+        (output / "finish.json").write_text(json.dumps(marker))
+        (output / "reports.json").write_text(json.dumps(reports))
+        return subprocess.CompletedProcess(command, 0)
+    monkeypatch.setattr(public_stage.subprocess, "run", run)
+    result = public_stage.run_public_stage(tmp_path, output, "public-affected", targets=[node])
+    assert result["status"] == "PASS"
+    assert result["claim"] == "limited_affected_public_behavior_not_canonical_profile"
+    assert result["canonical_profile_executed"] is False
+    assert result["scientific_acceptance"] is False and result["access_capture_complete"] is False
+    assert all(value is True for value in result["binding_checks"].values())
 
 
 def _origin(tmp_path: Path) -> Path:
