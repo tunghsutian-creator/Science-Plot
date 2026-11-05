@@ -176,7 +176,7 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
                 elapsed = check.get("wall_seconds")
                 if type(elapsed) in (int, float) and math.isfinite(elapsed) and elapsed >= 0:
                     print(f"  Command elapsed: {elapsed:.2f}s")
-                if check["check_id"] == "pytest_changed_owners" and check.get("stdout", "").strip():
+                if check["check_id"].startswith("pytest_") and check.get("stdout", "").strip():
                     print("  Pytest final output: " + check["stdout"].strip().splitlines()[-1])
                 if check.get("reason"):
                     print(f"  {check['reason']}")

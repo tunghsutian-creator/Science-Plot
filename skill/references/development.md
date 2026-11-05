@@ -84,6 +84,15 @@ same 32 successful bodies and four checks in both modes: quick 11.00 seconds,
 unrecorded changed 10.09 seconds. This is an explicit daily entry and protection
 against accidental evidence collection, not an algorithmic speedup claim.
 
+Unrecorded feedback runs changed-file Ruff, six shared source contracts and the
+complete configured type gate before the affected behavior bodies (when each
+gate applies), then whitespace. A failure stops that editing loop; later checks
+are reported as `not_run`, never passed. The six shared contracts check source
+size, dependency cycles, timestamp ownership, process-wide no-IO mock lifetime,
+duplicate implementations and the strict type owner. This catches shared
+migration failures before a broad behavior selection. Evidence-record mode keeps
+its existing diagnostic collection and completion contract.
+
 Use this unrecorded mode for routine feedback. `--changed --record DIRECTORY` runs the same
 owner-selected assertions and also collects exact input/runtime identities and
 original completion evidence. Request that extra work when a reusable record or

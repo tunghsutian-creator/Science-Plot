@@ -115,7 +115,8 @@ def test_ordinary_verification_does_not_enter_fingerprint_or_reuse_paths(monkeyp
         repo_root=Path(__file__).resolve().parents[1], changed_paths=["README.md"],
         command_runner=lambda argv, _cwd: subprocess.CompletedProcess(argv, 0, "", ""),
     )
-    assert result["status"] == "passed" and result["checks_executed"] == 2
+    assert result["status"] == "passed" and result["checks_executed"] == 3
+    assert result["checks"][0]["check_id"] == "pytest_shared_contracts"
     assert result["execution_target"] == "current_worktree"
 
 

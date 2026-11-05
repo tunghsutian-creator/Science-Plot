@@ -5,12 +5,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 from sciplot_core.verification.owner_model import ChangedOwner
-
-ARCHITECTURE_CORE_TARGETS = (
-    "tests/test_architecture_boundaries.py::test_ordinary_source_files_stay_within_the_size_boundary",
-    "tests/test_architecture_boundaries.py::test_first_party_import_graph_is_acyclic",
-    "tests/test_iso_timestamps.py::test_first_party_contract_timestamp_implementation_has_one_owner",
-)
+from sciplot_core.verification.source_contracts import ARCHITECTURE_CORE_TARGETS
 
 CHANGED_VERIFICATION_TEST_TARGETS = (
     'tests/test_changed_verification.py', 'tests/test_repository_policy.py',

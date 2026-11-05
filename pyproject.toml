@@ -598,6 +598,8 @@ files = [
   "src/sciplot_core/studio_core/request_overrides.py",
   "src/sciplot_core/workflow/rheology_terminal_validation.py",
   "src/sciplot_core/verification/ci_feedback.py",
+  "src/sciplot_core/verification/task_timing_feedback.py",
+  "src/sciplot_core/verification/source_contracts.py",
   "src/sciplot_core/verification/ci_public_environment.py",
   "src/sciplot_core/verification/ci_public_proof.py",
   "src/sciplot_core/verification/ci_public_reuse.py",

@@ -15,6 +15,7 @@ from sciplot_core.verification.owners import (
     IGNORED_CHANGED_PATHS,
     ChangedOwner,
 )
+from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS
 
 
 CommandRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
@@ -153,7 +154,7 @@ def run_changed_verification(
     record: Path | None = None,
     reuse: Path | None = None,
 ) -> dict[str, Any]:
-    """Run every planned focused check once, without broad-gate fallback."""
+    """Run the current focused plan, stopping after the first failed check."""
 
     root = (repo_root or _default_repo_root()).expanduser().resolve()
     runner = command_runner or _run_command
@@ -199,8 +200,13 @@ def run_changed_verification(
                 "wall_seconds": time.monotonic() - started,
             }
         )
-    payload["checks"] = results
+        if completed.returncode:
+            break
     payload["checks_executed"] = len(results)
+    payload["checks"] = results + [
+        {**check, "status": "not_run", "reason": "blocked_by_failed_prior_check"}
+        for check in payload["checks"][len(results):]
+    ]
     payload["status"] = (
         "passed"
         if all(result["status"] == "passed" for result in results)
@@ -226,6 +232,16 @@ def _planned_checks(
                 "status": "planned",
             }
         )
+    if has_changes:
+        checks.append({
+            "check_id": "pytest_shared_contracts",
+            "command": [sys.executable, "-m", "pytest", "-q", *CHEAP_SOURCE_TARGETS],
+            "status": "planned",
+        })
+    if mypy_required:
+        checks.append({
+            "check_id": "mypy_owned_scope", "command": [sys.executable, "-m", "mypy"], "status": "planned",
+        })
     if pytest_targets:
         checks.append(
             {
@@ -239,14 +255,6 @@ def _planned_checks(
                     "focused",
                     *_deduplicated_targets(pytest_targets),
                 ],
-                "status": "planned",
-            }
-        )
-    if mypy_required:
-        checks.append(
-            {
-                "check_id": "mypy_owned_scope",
-                "command": [sys.executable, "-m", "mypy"],
                 "status": "planned",
             }
         )

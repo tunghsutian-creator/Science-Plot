@@ -10,7 +10,8 @@ import subprocess
 from typing import Any
 
 from sciplot_core.verification.changed import build_changed_verification_plan
-from sciplot_core.verification.task_control_owners import TASK_TIMING_PATH, TASK_TIMING_FEEDBACK_TARGETS
+from sciplot_core.verification.task_control_owners import TASK_TIMING_FEEDBACK_TARGETS
+from sciplot_core.verification.task_timing_feedback import TASK_TIMING_PATH
 
 NATIVE_PREFIX = (
     "tests/test_annotation_operations_native.py::test_native_semantic_batch_preview_commit_export_cold_resume_and_remove",

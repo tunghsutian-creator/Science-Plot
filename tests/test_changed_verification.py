@@ -298,6 +298,7 @@ def test_changed_owners_build_one_deduplicated_focused_pass() -> None:
     assert pytest_command.count("tests/test_changed_verification.py") == 1
     assert set(checks) == {
         "ruff_changed_python",
+        "pytest_shared_contracts",
         "pytest_changed_owners",
         "diff_whitespace",
     }
@@ -1141,6 +1142,7 @@ def test_deleted_owned_source_selects_owner_evidence_but_not_ruff() -> None:
     assert payload["status"] == "planned"
     assert [owner["owner_id"] for owner in payload["owners"]] == ["intake_project"]
     assert [check["check_id"] for check in payload["checks"]] == [
+        "pytest_shared_contracts",
         "pytest_changed_owners",
         "diff_whitespace",
     ]
@@ -1194,8 +1196,8 @@ def test_check_failure_is_projected_without_retry_or_gate_expansion() -> None:
         calls.append(list(command))
         return _completed(
             command,
-            returncode=1 if "pytest" in command else 0,
-            stderr="focused failure" if "pytest" in command else "",
+            returncode=1 if "focused" in command else 0,
+            stderr="focused failure" if "focused" in command else "",
         )
 
     result = run_changed_verification(
@@ -1207,14 +1209,36 @@ def test_check_failure_is_projected_without_retry_or_gate_expansion() -> None:
     assert result["status"] == "failed"
     assert [check["status"] for check in result["checks"]] == [
         "passed",
-        "failed",
         "passed",
+        "failed",
+        "not_run",
     ]
     assert len(calls) == 3
     pytest_calls = [command for command in calls if "pytest" in command]
-    assert len(pytest_calls) == 1
-    assert pytest_calls[0].count("tests/test_changed_verification.py") == 1
-    assert "tests/test_skill_wrapper_cwd.py" not in pytest_calls[0]
+    assert len(pytest_calls) == 2
+    assert pytest_calls[1].count("tests/test_changed_verification.py") == 1
+    assert "tests/test_skill_wrapper_cwd.py" not in pytest_calls[1]
+    assert result["checks_executed"] == 3
+    assert result["checks"][-1]["reason"] == "blocked_by_failed_prior_check"
+
+
+@pytest.mark.parametrize(("failed_check", "executed_count"), [("ruff", 1), ("shared", 2), ("mypy", 3)])
+def test_fast_preflight_failure_does_not_start_wide_behavior(failed_check: str, executed_count: int) -> None:
+    calls: list[list[str]] = []
+
+    def runner(command: Sequence[str], _cwd: Path) -> subprocess.CompletedProcess[str]:
+        calls.append(list(command))
+        kind = "ruff" if "ruff" in command else "mypy" if "mypy" in command else "shared"
+        return _completed(command, returncode=1 if kind == failed_check else 0)
+
+    result = run_changed_verification(repo_root=REPO_ROOT,
+                                     changed_paths=["src/sciplot_core/task_timing.py"], command_runner=runner)
+    assert result["status"] == "failed"
+    assert result["checks_executed"] == len(calls) == executed_count
+    assert not any("focused" in command for command in calls)
+    assert result["checks"][executed_count - 1]["status"] == "failed"
+    assert all(check["status"] == "not_run" and check["reason"] == "blocked_by_failed_prior_check"
+               for check in result["checks"][executed_count:])
 
 
 def _scope_git(repo: Path, *args: str) -> str:
@@ -1305,9 +1329,11 @@ def test_base_execution_runs_each_planned_gate_once_with_the_resolved_scope(scop
     assert result["changed_paths"] == ["pyproject.toml"]
     assert result["comparison"]["resolved_head"] == head
     assert result["comparison"]["resolved_base"] == middle
-    assert result["checks_executed"] == len(executed) == 3
+    assert result["checks_executed"] == len(executed) == 4
     assert [item["command"] for item in result["checks"]] == executed
-    assert sum("pytest" in command for command in executed) == 1
+    assert sum("pytest" in command for command in executed) == 2
+    pytest_commands = [command for command in executed if "pytest" in command]
+    assert "focused" not in pytest_commands[0] and "focused" in pytest_commands[1]
     assert executed[-1] == ["git", "diff", "--check", middle, "--"]
 
 
@@ -1474,11 +1500,11 @@ def test_quick_verify_preserves_unknown_and_shared_owner_scope(path, monkeypatch
 def test_unrecorded_check_timings_use_monotonic_command_intervals(monkeypatch):
     from sciplot_core.verification import changed
 
-    ticks = iter([10.0, 10.25, 20.0, 21.5])
+    ticks = iter([10.0, 10.25, 20.0, 21.5, 30.0, 32.0])
     monkeypatch.setattr(changed.time, "monotonic", lambda: next(ticks))
     result = run_changed_verification(repo_root=REPO_ROOT, changed_paths=["README.md"],
         command_runner=lambda command, _cwd: _completed(command))
-    assert [check["wall_seconds"] for check in result["checks"]] == [0.25, 1.5]
+    assert [check["wall_seconds"] for check in result["checks"]] == [0.25, 1.5, 2.0]
     assert result["status"] == "passed"
 
 

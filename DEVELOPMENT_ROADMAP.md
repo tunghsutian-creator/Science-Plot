@@ -22,6 +22,13 @@ If the measured path exceeds three minutes, isolate the measured bottleneck befo
 adding caches or shards. Preserve necessary frozen full, scientific and platform
 acceptance, but do not require it synchronously after every editing step. No new
 P1/features until this cost question has a demonstrated bounded daily answer.
+Use the same current code, runtime, input scope and unrecorded mode for the local
+before/after comparison; report the scope reduction separately from execution
+cost at equal coverage. Add real historical-failure shadows and unknown/shared
+change counterexamples. Once these establish adequate local feedback and risk,
+continue the already authorized work without waiting for remote CI to begin
+development. Remote policy measurements and release gates remain their own
+explicit, uncompleted claims until actually observed.
 
 ## Next bounded architecture work
 
