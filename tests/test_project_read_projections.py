@@ -221,3 +221,66 @@ def test_selected_studio_read_and_generic_inventory_keep_distinct_scopes(studio_
     assert edit_state(project, selected) == selected_before
     assert edit_state(project) != whole_before
     assert relative in edit_state(project)["project_files"]
+
+
+@pytest.mark.parametrize("changed_mode", [False, True])
+def test_observed_native_mode_is_checked_once_at_its_original_physical_path(studio_figure, monkeypatch, changed_mode):
+    import inspect
+    from pathlib import Path
+    from sciplot_core.studio_core import observed_figure_binding as owner
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    project, selected = studio_figure
+    store = project_store(project)
+    before = store.snapshot(import_legacy=True)
+    document = Path(selected["document"])
+    assert store.logical_path(document) == document.relative_to(store.root).as_posix()
+    if changed_mode:
+        document.chmod(before["files"]["studio/a.vsz"]["mode"] ^ 0o200)
+    actual_stat = Path.stat
+    observations = []
+
+    def observe(path, *args, **kwargs):
+        if path == document and inspect.currentframe().f_back.f_code is owner.observed_figure_read_witness.__code__:
+            observations.append(path)
+        return actual_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", observe)
+    if changed_mode:
+        with pytest.raises(ValueError, match="native figure changed its registered permissions"):
+            owner.observed_figure_read_witness(project, selected)
+    else:
+        owner.observed_figure_read_witness(project, selected)
+    assert observations == [document]
+    assert not store.commands()
+
+
+@pytest.mark.parametrize("mapping", ["alias", "foreign", "unsupported"])
+def test_observed_native_mode_dedup_never_admits_another_physical_member(studio_figure, mapping):
+    from pathlib import Path
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.errors import ProjectStoreError
+    from sciplot_core.studio_core import observed_figure_binding as owner
+    from sciplot_core.studio_core.project_command_scope import project_store
+
+    project, selected = studio_figure
+    store = project_store(project)
+    store.snapshot(import_legacy=True)
+    if mapping == "alias":
+        alias = project / "studio/alias.vsz"
+        alias.symlink_to(selected["document"])
+        selected = {**selected, "document": str(alias)}
+    elif mapping == "foreign":
+        foreign = project.parent / "foreign.vsz"
+        foreign.write_bytes(Path(selected["document"]).read_bytes())
+        selected = {**selected, "document": str(foreign)}
+    else:
+        # The Store rejects a second physical namespace for this project member
+        # before it can supply an unsupported mapping to the observation owner.
+        with pytest.raises(ProjectStoreError, match="second physical root alias"):
+            FileProjectStore(project, locations={"studio": project / "studio"})
+        assert not store.commands()
+        return
+    with pytest.raises((ValueError, KeyError)):
+        owner.observed_figure_read_witness(project, selected)
+    assert not store.commands()

@@ -35,7 +35,10 @@ def observed_figure_read_witness(
         raise ValueError("The observed native figure changed its registered permissions")
     for name, digest in reads["project_files"].items():
         entry = before["files"].get(name, {})
-        if stat.S_IMODE((repository.root / name).stat().st_mode) != entry.get("mode"):
+        # The exact native path was checked first. Distinct physical paths keep
+        # their own mode observation even if a logical name happens to match.
+        if ((name != logical or repository.root / name != document)
+                and stat.S_IMODE((repository.root / name).stat().st_mode) != entry.get("mode")):
             raise ValueError("The observed native read witness changed its registered permissions")
         if name != logical and entry.get("sha256") != digest:
             raise ValueError("Observed native import cannot change source, spec, or request")
