@@ -108,18 +108,45 @@ replace completion/access evidence. Keep `PYTEST_ADDOPTS` unset for known suites
 
 ### Feedback, diagnostic repetition and claim-specific reuse
 
-Normal push and pull-request CI retain both complete public profiles, native
-runtime/build checks, both static type targets, Doctor and the lifecycle smoke.
-The twelve historical native regressions remain in public comprehensive. Their
-separate early preflight uses the existing owner plan without collecting tests.
-Only the explicitly reviewed design-prose leaves in `ci_feedback.py`, still
-matched to the documentation owner, can currently omit that repetition;
-consumer matches, code/shared/runtime/CI/guard changes, unknown owners, missing
-bases and planner failure keep early feedback. Owner disjointness alone is not
-proof of transitive native independence. Manual dispatch can explicitly request
-the diagnostic. Preserve the original predecessor order and complete phase review.
-The 536.12-second historical duplicate cost is an upper opportunity for eligible
-leaves, not a measured new speedup or an hours-long native improvement.
+Push and pull-request CI now distinguish limited affected feedback from complete
+public verification. The affected layer admits only the two explicitly reviewed
+design-prose leaves while they still map solely to the documentation owner, or
+exactly `task_timing.py` when the shared `task_timing_feedback_eligible` owner proves
+its finite metadata-only contract. Mixed paths, shared/scientific/native/guard/CI
+changes, unknown owners, unavailable bases and failed/missing planner outputs retain
+the complete path. Manual dispatch always retains the complete path. A new leaf
+is not eligible merely because it looks small or disjoint from native targets.
+
+The affected layer runs the current owner assertions and shared architecture,
+type-scope, timestamp-owner and public process/API-guard controls through the real
+private-absent `public-affected` source stage. It replans at execution; drift after
+an earlier eligibility decision is a failure, not an invented limited PASS.
+Configured Ruff, both complete static type targets, distribution/wheel,
+Qt/font/toolchain and native helper build/import checks still execute. Only this
+closed layer omits the twelve-node native preflight, the two canonical public
+profiles, Doctor and lifecycle smoke. Its result and job summary explicitly say
+these bodies, real private inputs and access capture were NOT_EXECUTED; it cannot
+produce or reference a canonical v2 origin or claim current native lifecycle
+acceptance. The selected stage is development/merge feedback, not release proof.
+
+The complete path preserves both original public profiles, all native assertions
+and predecessor order, runtime/build gates, Doctor and smoke. The twelve historical
+regressions remain in comprehensive and retain their early diagnostic on relevant
+or unknown changes. The existing compatible same-source public-reference path is
+available only inside this complete layer; affected output never becomes its
+origin. Release/frozen full, scientific result checks, required supported OSs and
+real-input/private-access capture remain separate required responsibilities.
+Changing CI execution policy itself follows the complete path. Preserve active
+frozen runs; do not restart them merely to apply a feedback-policy change.
+
+Daily local `verify --quick` and owner feedback remain the editing loop; CI
+provides the corresponding limited merge check only for these closed leaves.
+The three-minute routine-feedback budget is a target requiring a matched actual
+measurement, including setup, collection and stage-copy costs. It is not a claim
+that every small change is instant or that omitted bodies passed. Unknown risk
+widens the needed gate, and a bounded local incomplete result does not force a
+full run after every edit. Freeze the integrated candidate once before its full
+release evidence rather than repeatedly invalidating it with progress edits.
 
 Future push runs on the same branch and pull-request runs for the same PR use
 Actions concurrency for the same workflow/job/Ubuntu/event responsibility.
@@ -128,7 +155,7 @@ A checkout-free stdlib plan job hashes exact case-sensitive identity components
 The required runtime-integrity job uses an always condition and a unique fallback
 group when the key is absent, then genuinely fails its first validation step on
 failed/missing key output. The owner-risk planner runs after the normal checkout;
-its failure retains early preflight. Superseded runs remain cancelled, never reused or PASS.
+its failure retains the complete public path and early preflight. Superseded runs remain cancelled, never reused or PASS.
 This only affects workflows containing the new groups; do not cancel an existing
 acceptance by API. Actions scheduling is not a guarantee of chronological queue
 order, and completion still requires the latest intended candidate's actual gates.
@@ -140,7 +167,7 @@ other branch pushes can only execute fresh and produce an origin. Both need the 
 actual Ubuntu24/Python
 3.12 image/CPU class, installed package/native/font/ABI facts, source/public-input
 closure, exact profiles/commands and controlled process environment. A matching SHA
-or runner label alone is insufficient. Existing current native/runtime/type gates,
+or runner label alone is insufficient. Within the complete path, current native/runtime/type gates,
 Doctor and smoke still execute. Unknown/incompatible required policy, unsupported
 facts, absent/expired/corrupt origin or any difference means explicit FRESH with a
 reason; unexpected programming defects fail rather than silently run hours again.

@@ -7,6 +7,22 @@ run counts have been removed from this operational roadmap. Git and the
 original local evidence retain that history; historical PASS is not a new
 snapshot's acceptance.
 
+## Immediate priority: routine feedback cost
+
+Finish the small-change feedback boundary before more P1 architecture or features.
+The bounded CI policy now selects a private-absent affected stage only for reviewed
+design-prose leaves or the shared exact metadata-only task-timing contract. All
+unknown, mixed, scientific, native, guard and infrastructure changes retain complete
+public gates. Missing planning evidence widens rather than skips required work.
+Affected results name unexecuted full/real-private/capture/lifecycle responsibilities
+and cannot mint a canonical origin. Verify the routine end-to-end budget on an
+actual supported runner, including installation, full configured static checks,
+build/wheel and collection/stage costs; pure selection tests are not that timing.
+If the measured path exceeds three minutes, isolate the measured bottleneck before
+adding caches or shards. Preserve necessary frozen full, scientific and platform
+acceptance, but do not require it synchronously after every editing step. No new
+P1/features until this cost question has a demonstrated bounded daily answer.
+
 ## Next bounded architecture work
 
 Finish the exact-candidate project-core acceptance first. Implementation of the

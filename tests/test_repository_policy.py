@@ -65,7 +65,7 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     assert "  push:\n  pull_request:\n  workflow_dispatch:" in workflow
     steps = workflow.split("      - name: ")
     diagnostic = next(step for step in steps if step.startswith("Check known native CI regressions"))
-    assert "steps.native-feedback.outputs.preflight != 'false'" in diagnostic
+    assert "steps.native-feedback.outputs.layer != 'affected'" in diagnostic
     assert "inputs.native_regression_preflight" in diagnostic
     dispatch = workflow.split("  workflow_dispatch:", 1)[1].split("\njobs:", 1)[0]
     assert "native_regression_preflight:" in dispatch
@@ -80,9 +80,13 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
         step = next(step for step in steps if step.startswith(name))
         assert command in step
         if name.startswith("Run reviewed public "):
-            assert "if: ${{ steps.public-reference.outputs.reuse != 'true' }}" in step
+            assert "&& steps.public-reference.outputs.reuse != 'true' }}" in step
+        if name == "Run scoped static type gate":
+            assert "        if:" not in step, "Configured static gates must run in every layer"
         else:
-            assert "        if:" not in step, f"Required physical gate became conditional: {name}"
+            assert "steps.native-feedback.outcome != 'success'" in step
+            assert "steps.native-feedback.outputs.layer != 'affected'" in step
+            assert "github.event_name == 'workflow_dispatch'" in step
     from sciplot_core.verification.ci_feedback import NATIVE_PREFIX, NATIVE_EXPECTED, native_preflight_plan
     manifest = json.loads((ROOT / "src/sciplot_core/verification/input_scope_manifest.json").read_text())
     assert len(NATIVE_PREFIX) == 7 and len(NATIVE_EXPECTED) == 12
@@ -176,7 +180,7 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
         native_output = tmp_path / "native-output"
         context.setenv("GITHUB_OUTPUT", str(native_output))
         assert ci_feedback.main() == 0
-        assert native_output.read_text() == "preflight=true\n"
+        assert native_output.read_text() == "preflight=true\nlayer=full\n"
     from ci_public_reference_support import exercise_collector, exercise_fresh_origin, exercise_head_source, exercise_profile_stage_route, exercise_public_reference, exercise_wire
     exercise_public_reference(ROOT, tmp_path, monkeypatch)
     exercise_collector(ROOT, tmp_path, monkeypatch)
@@ -184,3 +188,5 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     exercise_head_source(tmp_path)
     exercise_fresh_origin(tmp_path, monkeypatch)
     exercise_profile_stage_route(tmp_path / "profile-routes", monkeypatch)
+    from ci_public_reference_support import exercise_ci_feedback_layers
+    exercise_ci_feedback_layers(ROOT, tmp_path, monkeypatch)
