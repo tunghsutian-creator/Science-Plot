@@ -96,7 +96,7 @@ def reader(runs, jobs, final=None):
         if "/attempts/" in path:
             assert "/100/attempts/1/jobs?per_page=100" in path
             return copy.deepcopy(jobs)
-        assert "event=push&head_sha=" + SHA in path and "status=" not in path
+        assert "?head_sha=" + SHA in path and "status=" not in path and "event=" not in path
         return copy.deepcopy(final if final is not None and len(calls) > 1 else runs)
 
     return read, calls
@@ -237,6 +237,28 @@ def test_latest_or_changed_push_never_falls_back_to_an_older_green(latest_state)
     )
     assert gate.admit(context(), read)["referenced"] is False
     assert len(calls) <= 3
+
+
+@pytest.mark.parametrize("state", ["failure", "in_progress", "manual_failure", "old_attempt_changed", "old_retry_success"])
+def test_all_visible_same_head_attempts_must_be_successful_and_stable(state):
+    runs, jobs = future_origin()
+    older = copy.deepcopy(runs["workflow_runs"][0])
+    older.update(id=99, run_number=9, run_attempt=2)
+    runs["workflow_runs"].append(older)
+    runs["total_count"] = 2
+    if state == "old_attempt_changed":
+        final = copy.deepcopy(runs)
+        final["workflow_runs"][1]["run_attempt"] = 3
+    else:
+        if state != "old_retry_success":
+            older.update(status="in_progress" if state == "in_progress" else "completed", conclusion=None if state == "in_progress" else "failure")
+        if state == "manual_failure":
+            older["event"] = "workflow_dispatch"
+            older["run_number"] = 11
+        final = runs
+    read, calls = reader(runs, jobs, final)
+    assert gate.admit(context(), read)["referenced"] is (state == "old_retry_success")
+    assert len(calls) == (3 if state in {"old_attempt_changed", "old_retry_success"} else 1)
 
 
 def test_real_recorded_successful_affected_job_is_not_a_full_source_origin():

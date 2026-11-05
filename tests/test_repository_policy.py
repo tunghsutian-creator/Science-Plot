@@ -183,7 +183,7 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
         context.setenv("GITHUB_OUTPUT", str(native_output))
         assert ci_feedback.main() == 0
         assert native_output.read_text() == "preflight=true\nlayer=full\n"
-    from ci_public_reference_support import exercise_profile_stage_route
+    from ci_public_profiles_support import exercise_profile_stage_route
     exercise_profile_stage_route(tmp_path / "profile-routes", monkeypatch)
-    from ci_public_reference_support import exercise_ci_feedback_layers
+    from ci_public_profiles_support import exercise_ci_feedback_layers
     exercise_ci_feedback_layers(ROOT, tmp_path, monkeypatch)

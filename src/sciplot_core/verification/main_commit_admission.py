@@ -27,6 +27,7 @@ REQUIRED_STEPS = (
 )
 PLATFORM_STEPS = {"Set up job", "Complete job", "Post Run actions/checkout@v4"}
 AFFECTED_STEP = "Run reviewed affected public feedback"
+RUN_STATE = ("id", "run_number", "run_attempt", "status", "conclusion", "head_sha", "event", "path")
 
 
 class Unavailable(ValueError):
@@ -84,7 +85,7 @@ def _page(value: dict[str, Any], key: str) -> list[dict[str, Any]]:
     return rows
 
 
-def _latest(value: dict[str, Any], current: int) -> dict[str, Any]:
+def _related(value: dict[str, Any], current: int, sha: str) -> list[dict[str, Any]]:
     rows = _page(value, "workflow_runs")
     if any(type(row.get(key)) is not int or row[key] <= 0 for row in rows for key in ("id", "run_number", "run_attempt")):
         raise Unavailable("unknown_run_identity")
@@ -93,7 +94,11 @@ def _latest(value: dict[str, Any], current: int) -> dict[str, Any]:
     related = [row for row in rows if row["id"] != current]
     if not related:
         raise Unavailable("no_prior_push")
-    return max(related, key=lambda row: row["run_number"])
+    # Include every event: an old run's new failed attempt or a manual failure
+    # must not disappear behind a newer successful push's run_number.
+    if any(not _origin(row, sha) for row in related):
+        raise Unavailable("visible_same_head_check_incomplete_or_unsupported")
+    return sorted(related, key=lambda row: row["id"])
 
 
 def _successful(value: dict[str, Any]) -> bool:
@@ -114,11 +119,10 @@ def admit(environment: Mapping[str, str], read: Callable[[str], dict[str, Any]] 
             or environment.get("GITHUB_REPOSITORY") != REPOSITORY or environment.get("GITHUB_WORKFLOW_SHA") != sha
             or environment.get("GITHUB_WORKFLOW_REF") != f"{REPOSITORY}/{WORKFLOW}@refs/heads/main"):
         return {"referenced": False, "reason": "unknown_current_source"}
-    path = f"/repos/{REPOSITORY}/actions/workflows/minimal-repository.yml/runs?event=push&head_sha={sha}&per_page=100"
+    path = f"/repos/{REPOSITORY}/actions/workflows/minimal-repository.yml/runs?head_sha={sha}&per_page=100"
     try:
-        run = _latest(read(path), int(current))
-        if not _origin(run, sha):
-            raise Unavailable("latest_push_not_successful_or_matching")
+        related = _related(read(path), int(current), sha)
+        run = max(related, key=lambda row: row["run_number"])
         jobs = _page(read(f"/repos/{REPOSITORY}/actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs?per_page=100"), "jobs")
         runtime = [job for job in jobs if job.get("name") == "runtime-integrity"]
         if len(runtime) != 1 or not _successful(runtime[0]):
@@ -140,9 +144,9 @@ def admit(environment: Mapping[str, str], read: Callable[[str], dict[str, Any]] 
                name != AFFECTED_STEP or step.get("status") != "completed" or step.get("conclusion") != "skipped"
                for name, step in by_name.items() if name not in REQUIRED_STEPS):
             raise Unavailable("unknown_or_nonfull_step")
-        final = _latest(read(path), int(current))
-        if not _origin(final, sha) or any(final[key] != run[key] for key in ("id", "run_attempt", "run_number")):
-            raise Unavailable("latest_push_changed_during_admission")
+        final = _related(read(path), int(current), sha)
+        if [[row[key] for key in RUN_STATE] for row in final] != [[row[key] for key in RUN_STATE] for row in related]:
+            raise Unavailable("same_head_checks_changed_during_admission")
     except Unavailable as error:
         return {"referenced": False, "reason": str(error)}
     return {"referenced": True, "reason": "completed_full_source_check", "origin_run_id": run["id"],

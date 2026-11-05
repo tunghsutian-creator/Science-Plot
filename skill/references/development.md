@@ -155,8 +155,12 @@ latest official push run may reference that source approval. The stdlib-only
 requires the complete original runtime job and every required step to have
 executed successfully in order. Both physical public stages also bind their
 existing result's actual `origin_head` to the event SHA. The lookup checks the
-exact attempt and rereads the latest run; a newer failed, partial, affected-only,
-reference-only or still-running check cannot be bypassed by choosing older green.
+exact attempt and rereads all visible same-head checks across events. Their full
+run identity/attempt/status/source state must remain complete and stable; any
+failed, unknown, still-running or unsupported event check retains the fresh path,
+including a later retry of an older run. Only an official push is an origin, and
+its full steps must pass: partial, affected-only and reference-only results cannot
+be bypassed by choosing older green.
 Incomplete pagination, API failure or unknown metadata retains the fresh path.
 Other branches and manual/PR events retain their existing fresh/affected route.
 
