@@ -69,7 +69,7 @@ def publish_native_save(document: Any, target: Path, staged: Path, *, result: di
     else:
         from uuid import uuid4
         from sciplot_core.project_commands import ProjectCommands, ProjectMutation
-        from sciplot_core.project_store.locators import logical_for_literal
+        from sciplot_core.project_commands.resource_roles import resource_facts, is_native_save_as_excluded
         from sciplot_core.studio_core.project_command_scope import command_for_binding
 
         if context is None or Path(context["project_dir"]) != root:
@@ -80,14 +80,9 @@ def publish_native_save(document: Any, target: Path, staged: Path, *, result: di
         if target.suffix.casefold() not in {".vsz", ".vszh5"}:
             raise ProjectConflict("A project Save As requires a native serialization destination.")
         current = store.snapshot()
-        protected = set(current.get("input_resources", [])) | set(current.get("history_resources", []))
-        protected.update(item["resource"] for item in binding.get("projected_reads", []))
-        protected.update(entry.get("logical") for versions in current["sources"].values()
-                         for entry in versions.values())
-        protected.update(logical_for_literal(current, entry["locator"])
-                         for versions in current["sources"].values() for entry in versions.values()
-                         if isinstance(entry.get("locator"), str))
-        if logical in protected:
+        facts = resource_facts(current, logical)
+        if is_native_save_as_excluded(facts, selected_catalogs=tuple(
+                item["resource"] for item in binding.get("projected_reads", []))):
             raise ProjectConflict("A project Save As cannot replace a scientific source or immutable history.")
         if logical in binding["files"]:
             from sciplot_core.studio_core.project_query import resolve_project_figure

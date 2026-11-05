@@ -64,18 +64,25 @@ def live(tmp_path, monkeypatch):
     project.mkdir()
     document, spec = project / "document.vsz", project / "spec.json"
     document.write_text("original native")
-    spec.write_text('{"series": []}')
+    source = project / "measurements.csv"
+    source.write_text("x,y\n1,2\n")
+    spec.write_text(json.dumps({"series": [{"source_artifacts": [
+        {"path": str(source), "sha256": file_sha256(source)}]}]}))
+    (project / "plot_request.json").write_text("{}")
     figure = {"figure_id": "figure", "document": str(document), "spec": str(spec)}
     evidence = {"source": {"current": True}, "qa": {"current": True}, "delivery": {"current": True}}
     monkeypatch.setattr(module, "resolve_project_path", lambda path: project)
     monkeypatch.setattr(module, "resolve_project_figure", lambda *args: figure)
     monkeypatch.setattr(module, "inspect_project", lambda *args: copy.deepcopy(evidence))
     monkeypatch.setattr(module, "audit_edited_document", lambda *args: {})
-    monkeypatch.setattr(module, "edit_state", lambda *args: {
-        "project_files": {str(path.relative_to(project)): file_sha256(path)
-                          for path in project.rglob("*") if path.is_file()},
-        "delivery": str(tmp_path / "delivery"), "delivery_files": None,
-    })
+    from sciplot_core.studio_core.project_command_scope import figure_read_state
+
+    def selected_state(root, selected=None):
+        selected = selected or module.resolve_project_figure(root, "figure")
+        return {**figure_read_state(root, selected),
+                "delivery": str(tmp_path / "delivery"), "delivery_files": None}
+
+    monkeypatch.setattr(module, "edit_state", selected_state)
     monkeypatch.setattr(module, "new_preview_directory", lambda project, output: output)
     output = tmp_path / "session"
     output.mkdir()
@@ -231,10 +238,12 @@ def test_complete_export_receipt_cannot_hide_invalid_current_evidence(live, monk
     assert state["stale"] and state["result"]["task"] == task
 
 
-@pytest.mark.parametrize("relative", ["spec.json", "plot_request.json", "notes.json", "another.vsz"])
+@pytest.mark.parametrize("relative", ["spec.json", "plot_request.json", "measurements.csv"])
 def test_save_does_not_rebase_external_changes_after_apply(live, monkeypatch, relative):
     target = live.project / relative
-    target.write_text('{"before": true}')
+    if relative != "measurements.csv":
+        value = json.loads(target.read_text())
+        target.write_text(json.dumps({**value, "before": True}))
     live.baseline = module.edit_state(live.project)
     baseline, saved_hash = copy.deepcopy(live.baseline), live.saved_hash
     change(live)
@@ -242,7 +251,10 @@ def test_save_does_not_rebase_external_changes_after_apply(live, monkeypatch, re
 
     def apply(*args):
         live.document.write_text("saved 2pt native")
-        target.write_text('{"foreign": true}')
+        if relative == "spec.json":
+            target.write_text(json.dumps({**json.loads(target.read_text()), "foreign": True}))
+        else:
+            target.write_text('{"foreign": true}')
         return {"operation_id": "committed-save", "result_is_current": True,
                 "result_sha256": file_sha256(live.document)}
 
@@ -251,74 +263,75 @@ def test_save_does_not_rebase_external_changes_after_apply(live, monkeypatch, re
         command(live, "save")
     assert live.stale and live.baseline == baseline and live.saved_hash == saved_hash
     assert live.state()["dirty"] and live.last_result["operation_id"] == "committed-save"
-    assert target.read_text() == '{"foreign": true}'
+    assert json.loads(target.read_text())["foreign"] is True
 
 
-@pytest.mark.parametrize("relative", ["spec.json", "plot_request.json", "notes.json", "another.vsz"])
+@pytest.mark.parametrize("relative", ["spec.json", "plot_request.json", "measurements.csv"])
 def test_export_does_not_rebase_external_input_changes(live, monkeypatch, relative):
     target = live.project / relative
-    target.write_text('{"before": true}')
+    if relative != "measurements.csv":
+        value = json.loads(target.read_text())
+        target.write_text(json.dumps({**value, "before": True}))
     live.baseline = module.edit_state(live.project)
     baseline = copy.deepcopy(live.baseline)
 
     def export(*args, **kwargs):
-        target.write_text('{"foreign": true}')
+        if relative == "spec.json":
+            target.write_text(json.dumps({**json.loads(target.read_text()), "foreign": True}))
+        else:
+            target.write_text('{"foreign": true}')
         return {"status": "complete", "task_dir": "completed-export"}
 
     monkeypatch.setattr(module, "start_task", export)
-    with pytest.raises(ValueError, match="元数据发生变化"):
+    reason = "scientific source changed" if relative == "measurements.csv" else "元数据发生变化"
+    with pytest.raises(ValueError, match=reason):
         command(live, "export")
     assert live.stale and live.baseline == baseline
     assert live.last_result["task"]["task_dir"] == "completed-export"
 
 
-@pytest.mark.parametrize("foreign_metadata", [None, "source", "study", "plan"])
-def test_export_accepts_publication_records_but_protects_manifest_inputs(live, monkeypatch, foreign_metadata):
-    manifest = live.project / "intake_manifest.json"
+@pytest.mark.parametrize("foreign_metadata", [None, "source", "task", "selected", "unknown"])
+def test_export_uses_selected_projection_and_protects_actual_inputs(live, monkeypatch, foreign_metadata):
     registry = live.project / "studio" / "figure_set.json"
     registry.parent.mkdir()
-    figure_set = {"figures": [{"figure_id": "figure", "document": "document.vsz",
-                               "document_state": {"sha256": "old"}, "document_authority": "generated"}]}
-    original = {"source": {"sha256": "original-source"},
-                "resolved_figure_plan": {"tasks": [{"figure_id": "figure"}], "outcomes": []},
-                "study_model": {"sample_order": ["A", "B"],
-                                "figure_queue": [{"id": "figure", "title": "Absorbance", "artifacts": []}]},
-                "studio": {
-        "spec": "spec.json", "figure_set": figure_set,
-        "document_state": {"sha256": "old"}, "manual_edit_hash": "old"}}
-    manifest.write_text(json.dumps(original))
+    task = {"figure_id": "figure", "source": "original", "metric": "response"}
+    figure_set = {"kind": "sciplot_studio_figure_set", "version": 2,
+                  "primary_figure_id": "figure", "status": "ready",
+                  "figures": [{"figure_id": "figure", "status": "ready",
+                               "document": "document.vsz", "spec": "spec.json",
+                               "resolved_figure_task": task,
+                               "document_state": {"sha256": "old"},
+                               "document_authority": "generated"}],
+                  "resolved_figure_plan": {"tasks": [task],
+                      "outcomes": [{"figure_id": "figure", "status": "editable", "artifacts": []}]}}
     registry.write_text(json.dumps(figure_set))
     live.baseline = module.edit_state(live.project)
 
     def export(*args, **kwargs):
-        updated = copy.deepcopy(original)
-        updated["last_run"] = "new-run"
-        updated["resolved_figure_plan"].update({"outcomes": [{"figure_id": "figure", "artifacts": ["new.pdf"]}],
-                                               "status": "complete", "complete": True})
-        updated["study_model"]["run"] = {"output": "new-run", "qa": {"passed": True}}
-        updated["study_model"]["figure_queue"][0].update({"status": "rendered", "artifacts": ["new.pdf"]})
-        updated["studio"].update({"exports": ["new.pdf"], "last_export_run": "new-run",
-                                  "manual_edit_hash": "current", "document_state": {"sha256": "current"}})
-        entry = updated["studio"]["figure_set"]["figures"][0]
-        entry.update({"document_state": {"sha256": "current"}, "document_authority": "saved"})
+        updated = copy.deepcopy(figure_set)
+        updated["status"] = "complete"
+        updated["resolved_figure_plan"]["outcomes"][0]["artifacts"] = ["new.pdf"]
+        updated["figures"][0].update(document_state={"sha256": "current"}, document_authority="saved")
         if foreign_metadata == "source":
-            updated["source"]["sha256"] = "foreign-source"
-        elif foreign_metadata == "study":
-            updated["study_model"]["figure_queue"][0]["title"] = "Foreign interpretation"
-        elif foreign_metadata == "plan":
-            updated["resolved_figure_plan"]["tasks"][0]["figure_id"] = "another-figure"
-        manifest.write_text(json.dumps(updated))
-        registry.write_text(json.dumps(updated["studio"]["figure_set"]))
-        for relative in ("studio/exports/current.pdf", "studio/logs/veusz_export_stderr.log",
+            (live.project / "measurements.csv").write_text("foreign source")
+        elif foreign_metadata == "task":
+            updated["figures"][0]["resolved_figure_task"]["metric"] = "foreign interpretation"
+        elif foreign_metadata == "selected":
+            updated["figures"][0]["spec"] = "remapped.spec.json"
+        elif foreign_metadata == "unknown":
+            updated["figures"][0]["future_scientific_binding"] = "foreign"
+        registry.write_text(json.dumps(updated))
+        for relative in ("intake_manifest.json", "notes.json", "another.vsz",
+                         "studio/exports/current.pdf", "studio/logs/veusz_export_stderr.log",
                          "Open_in_Veusz.command"):
             target = live.project / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text("publication output")
+            target.write_text("publication output outside selected read set")
         return {"status": "complete"}
 
     monkeypatch.setattr(module, "start_task", export)
     if foreign_metadata:
-        with pytest.raises(ValueError, match="元数据发生变化"):
+        with pytest.raises(ValueError):
             command(live, "export")
         assert live.stale
     else:
@@ -456,7 +469,7 @@ def test_publish_failure_retains_saved_figure_and_retry_only_exports(live, monke
 def _second_figure(live, monkeypatch):
     document, spec = live.project / "second.vsz", live.project / "second.spec.json"
     document.write_text("second native")
-    spec.write_text('{"series": []}')
+    spec.write_text(live.spec.read_text())
     primary = copy.deepcopy(live.figure)
     secondary = {"figure_id": "second", "title": "Second", "status": "ready",
                  "document": str(document), "spec": str(spec)}
@@ -517,3 +530,60 @@ def test_initial_target_keeps_canonical_secondary_document_identity(live, monkey
     opened = module.LiveSession(target, output=output)
     opened.close()
     assert calls[0] == (target, None)
+
+
+@pytest.mark.parametrize("relative", ["notes.json", "another.vsz"])
+@pytest.mark.parametrize("action", ["save", "export"])
+def test_selected_session_keeps_unrelated_files_outside_its_read_witness(live, monkeypatch, relative, action):
+    target = live.project / relative
+    target.write_bytes(b"unrelated before")
+    if action == "save":
+        change(live)
+        monkeypatch.setattr(module, "preview_document_edit", lambda *a, **k: {"preview": live.native["preview"]})
+
+        def apply(*args):
+            live.document.write_text("saved native")
+            target.write_bytes(b"unrelated later")
+            return {"result_is_current": True, "result_sha256": file_sha256(live.document)}
+
+        monkeypatch.setattr(module, "apply_document_edit", apply)
+    else:
+        def export(*args, **kwargs):
+            target.write_bytes(b"unrelated later")
+            return {"status": "complete"}
+
+        monkeypatch.setattr(module, "start_task", export)
+    command(live, action)
+    assert target.read_bytes() == b"unrelated later"
+    assert not live.stale and relative not in live.baseline["project_files"]
+
+
+def test_live_baseline_dictionary_is_only_a_detached_view(live):
+    before = copy.deepcopy(live.baseline)
+    projected = live.baseline
+    projected["project_files"].clear()
+    projected["source_files"]["invented"] = "0" * 64
+    assert live.baseline == before
+    change(live)
+    assert live.state()["dirty"]
+
+
+def test_export_observation_permission_failure_keeps_original_error_and_completed_receipt(live, monkeypatch):
+    observe = module.edit_state
+    exported = []
+
+    def export(*args, **kwargs):
+        exported.append(True)
+        return {"status": "complete", "task_dir": "committed-export"}
+
+    def observe_current(*args, **kwargs):
+        if exported:
+            raise PermissionError("selected source observation denied")
+        return observe(*args, **kwargs)
+
+    monkeypatch.setattr(module, "start_task", export)
+    monkeypatch.setattr(module, "edit_state", observe_current)
+    with pytest.raises(PermissionError, match="selected source observation denied"):
+        command(live, "export")
+    assert live.stale and live.last_result["task"]["task_dir"] == "committed-export"
+    assert exported == [True]

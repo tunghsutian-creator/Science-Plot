@@ -23,7 +23,7 @@ from sciplot_core.studio_core.document_edit_commit import (
     prior_edit_result,
 )
 from sciplot_core.studio_core.document_edit_policy import validate_edit_science_policy
-from sciplot_core.studio_core.project_command_scope import figure_read_state, project_read_runtime
+from sciplot_core.studio_core.project_command_scope import figure_read_witness, project_read_runtime
 from sciplot_core.studio_core.document_edit_state import (
     audit_edited_document as audit_edited_document,
     check_artifact,
@@ -45,7 +45,8 @@ def preview_project_document(
     project = resolve_project_path(project)
     selected = resolve_project_figure(project, figure_id)
     document = Path(selected["document"])
-    state = figure_read_state(project, selected)
+    witness = figure_read_witness(project, selected)
+    state = witness.to_read_state_payload()
     output = new_preview_directory(project, output_dir)
     arguments = ["preview-document", str(document), "--out", str(output / "current.png")]
     resolver = selected_source_resolver()
@@ -60,7 +61,7 @@ def preview_project_document(
         "path": str(document),
         "sha256": state["project_files"][str(document.relative_to(project))],
     }
-    if figure_read_state(project, selected) != state or rendered["document"] != identity:
+    if figure_read_witness(project, selected) != witness or rendered["document"] != identity:
         raise ValueError(
             "The project changed while creating its preview; inspect again."
         )

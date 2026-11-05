@@ -11,6 +11,7 @@ from typing import Any, ParamSpec, TypeVar, cast
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_commands import MembershipRead, NativeAdoption, ProjectCommand, ProjectCommands, ProjectionRead, MissingGeneratedOutput
+from sciplot_core.project_commands.resources import FigureReadWitness
 from sciplot_core.project_commands.read_projections import projection_digest
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.project_host_factory import (
@@ -57,7 +58,7 @@ def project_read_runtime(function: Callable[_P, _R]) -> Callable[_P, _R]:
     return invoke
 
 
-def figure_read_state(project: Path, selected: dict[str, Any]) -> dict[str, Any]:
+def figure_read_witness(project: Path, selected: dict[str, Any]) -> FigureReadWitness:
     """The actual selected native/spec/source reads, independent of publication."""
     project = canonical_path(project)
     document, spec = canonical_path(Path(selected["document"])), canonical_path(Path(selected["spec"]))
@@ -81,19 +82,23 @@ def figure_read_state(project: Path, selected: dict[str, Any]) -> dict[str, Any]
         kind, key = "studio_figure_v1", str(selected["figure_id"])
         projected.append(ProjectionRead("studio/figure_set.json", kind, key,
                                         projection_digest(registry.read_bytes(), kind=kind, key=key)).to_payload())
-    return {"project_files": files, "source_files": sources, "projected_reads": projected}
+    return FigureReadWitness.from_read_state({"project_files": files, "source_files": sources, "projected_reads": projected})
+
+
+def figure_read_state(project: Path, selected: dict[str, Any]) -> dict[str, Any]:
+    """Retain the public v1 dictionary view of the selected immutable witness."""
+    return figure_read_witness(project, selected).to_read_state_payload()
 
 
 def figure_binding(project: Path, selected: dict[str, Any], *, store: FileProjectStore | None = None) -> dict[str, Any]:
     repository = store or project_store(project)
     snapshot = repository.snapshot(import_legacy=True)
-    reads = figure_read_state(project, selected)
-    for logical, digest in reads["project_files"].items():
+    witness = figure_read_witness(project, selected)
+    for logical, digest in witness.files:
         if snapshot["files"].get(logical, {}).get("sha256") != digest:
             raise ValueError("The selected native figure has unregistered outside changes")
     return {"project_id": snapshot["project_id"], "generation": snapshot["generation"],
-            "files": reads["project_files"], "projected_reads": reads["projected_reads"],
-            "source_files": reads["source_files"]}
+            **witness.to_binding_fields()}
 
 
 def command_for_binding(store: FileProjectStore, binding: dict[str, Any], *, kind: str, key: str,
@@ -101,7 +106,8 @@ def command_for_binding(store: FileProjectStore, binding: dict[str, Any], *, kin
                         projected_writes: list[ProjectionRead] | None = None,
                         native_adoptions: list[NativeAdoption] | None = None,
                         missing_outputs: tuple[MissingGeneratedOutput, ...] = ()) -> ProjectCommand:
-    reads = dict(binding["files"])
+    witness = FigureReadWitness.from_binding(binding)
+    reads = dict(witness.files)
     snapshot = store.snapshot()
     for logical in writes:
         if logical not in reads and not any(item.resource == logical for item in projected_writes or ()):
@@ -109,9 +115,8 @@ def command_for_binding(store: FileProjectStore, binding: dict[str, Any], *, kin
     return ProjectCommand.create(
         kind, key, project_id=binding["project_id"], expected_generation=binding["generation"],
         read_set=reads, write_set=writes, request=request,
-        expected_revision=canonical_json_sha256({"files": binding["files"],
-            "projected_reads": binding.get("projected_reads", []), "source_files": binding.get("source_files", {})}),
-        projected_reads=[ProjectionRead(**item) for item in binding.get("projected_reads", [])],
+        expected_revision=canonical_json_sha256(witness.to_binding_fields()),
+        projected_reads=witness.projected_reads,
         projected_writes=projected_writes or (), native_adoptions=native_adoptions or (),
         read_memberships=[MembershipRead(**item) for item in binding.get("read_memberships", [])],
         missing_outputs=missing_outputs)

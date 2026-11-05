@@ -140,3 +140,84 @@ def test_selected_publication_cannot_write_a_scientific_binding():
     candidate["figures"][0]["spec"] = "foreign-spec.json"
     with pytest.raises(ValueError, match="cannot change scientific"):
         merge_projection(json.dumps(base).encode(), json.dumps(candidate).encode(), kind="studio_figure_v1", key="a")
+
+
+@pytest.fixture
+def studio_figure(tmp_path):
+    from sciplot_core.foundation.file_hashing import file_sha256
+
+    project = tmp_path / "project"
+    studio = project / "studio"
+    studio.mkdir(parents=True)
+    source = tmp_path / "measurements.csv"
+    source.write_bytes(b"x,y\n1,2\n")
+    (project / "plot_request.json").write_text("{}")
+    for name in ("a", "b"):
+        (studio / f"{name}.vsz").write_text(f"native {name}")
+        (studio / f"{name}.spec.json").write_text(json.dumps({"series": [
+            {"source_artifacts": [{"path": str(source), "sha256": file_sha256(source)}]}]}))
+    (studio / "document.vsz").write_text("canonical primary native")
+    (studio / "figure_set.json").write_text(json.dumps(registry()))
+    selected = {"figure_id": "a", "document": str(studio / "a.vsz"), "spec": str(studio / "a.spec.json")}
+    return project, selected
+
+
+def test_studio_typed_observation_preserves_v1_payload_hash_and_explicit_destination(studio_figure):
+    from sciplot_core.foundation.json_hashing import canonical_json_sha256
+    from sciplot_core.project_commands import FigureReadWitness
+    from sciplot_core.studio_core.project_command_scope import (
+        command_for_binding, figure_binding, figure_read_state, figure_read_witness, project_store,
+    )
+
+    project, selected = studio_figure
+    witness = figure_read_witness(project, selected)
+    reads = figure_read_state(project, selected)
+    assert isinstance(witness, FigureReadWitness) and reads == witness.to_read_state_payload()
+    store = project_store(project)
+    binding = figure_binding(project, selected, store=store)
+    original = {"files": reads["project_files"], "source_files": reads["source_files"],
+                "projected_reads": reads["projected_reads"]}
+    command = command_for_binding(store, binding, kind="save", key="copy", writes=["studio/copy.vsz"], request={})
+    assert command.expected_revision == canonical_json_sha256(original)
+    assert command.expected_generation == binding["generation"]
+    assert dict(command.read_set) == {**original["files"], "studio/copy.vsz": None}
+    assert binding == {"project_id": store.snapshot()["project_id"],
+                       "generation": store.snapshot()["generation"], **original}
+
+
+def test_observed_native_keeps_registered_prior_and_actual_witness_separate(studio_figure):
+    from pathlib import Path
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core.observed_figure_binding import (
+        observed_figure_binding, observed_figure_read_state, observed_figure_read_witness,
+    )
+    from sciplot_core.studio_core.project_command_scope import figure_binding, project_store
+
+    project, selected = studio_figure
+    store = project_store(project)
+    registered = figure_binding(project, selected, store=store)
+    document, spec = Path(selected["document"]), Path(selected["spec"])
+    document.write_bytes(b"human saved native")
+    selected = {**selected, "document_sha256": file_sha256(document), "spec_sha256": file_sha256(spec)}
+    before, observed = observed_figure_read_witness(project, selected)
+    assert observed_figure_read_state(project, selected) == (before, observed.to_read_state_payload())
+    with pytest.raises(ValueError, match="exact passed"):
+        observed_figure_binding(project, selected, {"status": "failed"})
+    result = observed_figure_binding(project, selected, {"status": "passed",
+        "document_sha256": file_sha256(document), "spec_sha256": file_sha256(spec)})
+    assert result == registered
+    assert dict(observed.files)["studio/a.vsz"] == file_sha256(document)
+    assert dict(observed.files)["studio/a.vsz"] != result["files"]["studio/a.vsz"]
+
+
+@pytest.mark.parametrize("relative", ["notes.json", "studio/b.vsz"])
+def test_selected_studio_read_and_generic_inventory_keep_distinct_scopes(studio_figure, relative):
+    from sciplot_core.studio_core.document_edit_state import edit_state
+
+    project, selected = studio_figure
+    selected_before, whole_before = edit_state(project, selected), edit_state(project)
+    target = project / relative
+    target.write_bytes(b"unrelated publication")
+    assert edit_state(project, selected) == selected_before
+    assert edit_state(project) != whole_before
+    assert relative in edit_state(project)["project_files"]

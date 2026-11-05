@@ -43,10 +43,10 @@ def native_edit_request_key(project_id: str, request_id: str) -> str:
 @project_read_runtime
 def edit_state(project: Path, selected: dict[str, Any] | None = None) -> dict[str, Any]:
     if selected is not None:
-        from sciplot_core.studio_core.project_command_scope import figure_read_state
+        from sciplot_core.studio_core.project_command_scope import figure_read_witness
 
         request = json.loads((project / "plot_request.json").read_text())
-        return {**figure_read_state(project, selected),
+        return {**figure_read_witness(project, selected).to_read_state_payload(),
                 "delivery": str(canonical_path(requested_delivery_root({"request": request}, run_output=project))),
                 "delivery_files": None}
     inventory = project_inventory(project)

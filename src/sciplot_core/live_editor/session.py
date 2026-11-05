@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import shutil
 import tempfile
@@ -15,6 +14,7 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.project_commands.resources import FigureReadWitness
 from sciplot_core.live_editor.worker import NativeWorker
 from sciplot_core.live_editor.entry import resolve_editor_input
 from sciplot_core.studio_core.document_edit import apply_document_edit, preview_document_edit
@@ -27,67 +27,6 @@ from sciplot_core.task_control import start_task
 def field_values(objects: dict[str, Any]) -> dict[str, Any]:
     return {field["setting_path"]: copy.deepcopy(field["current_value"])
             for obj in objects.values() for field in obj["editable_fields"]}
-
-
-def _export_authority(project: Path, state: dict[str, Any]) -> dict[str, Any]:
-    """Exclude only publication-owned output from an export's immutable baseline."""
-    def remove_plan_outcome(value: Any) -> None:
-        if isinstance(value, dict):
-            for key in ("outcomes", "status", "complete"):
-                value.pop(key, None)
-
-    def registry_authority(value: Any) -> Any:
-        result = copy.deepcopy(value)
-        if isinstance(result, dict):
-            for entry in result.get("figures", []):
-                if isinstance(entry, dict):
-                    entry.pop("document_state", None)
-                    entry.pop("document_authority", None)
-        return result
-
-    files: dict[str, Any] = {}
-    for relative, digest in state["project_files"].items():
-        path = Path(relative)
-        if relative.startswith(("studio/exports/", "studio/logs/")) or relative in {
-            "Open_in_SciPlot_Studio.command", "Open_in_Veusz.command", "Export_Edited_Veusz.command",
-        }:
-            continue
-        manifest = path.parent == Path(".") and (
-            path.name == "intake_manifest.json" or path.name.endswith(".sciplot.json")
-        )
-        if manifest or relative == "studio/figure_set.json":
-            content = (project / path).read_bytes()
-            # The inventory and parsed metadata must describe the same file version.
-            if hashlib.sha256(content).hexdigest() != digest:
-                raise ValueError("导出期间项目元数据发生变化；请重新加载核查。")
-            value = json.loads(content)
-            if not isinstance(value, dict):
-                raise ValueError("项目元数据格式发生变化；请重新加载核查。")
-            if manifest:
-                for key in ("last_run", "package_contract", "delivery_package", "layout_quality", "figure_set_export_scope"):
-                    value.pop(key, None)
-                remove_plan_outcome(value.get("resolved_figure_plan"))
-                study = value.get("study_model")
-                if isinstance(study, dict):
-                    study.pop("run", None)
-                    for figure in study.get("figure_queue", []):
-                        if isinstance(figure, dict):
-                            for key in ("artifacts", "status", "resolved_figure_ids"):
-                                figure.pop(key, None)
-                studio = value.get("studio")
-                if isinstance(studio, dict):
-                    for key in ("exports", "last_export_run", "manual_edit_hash", "manual_edit_detected", "document_state", "document_authority"):
-                        studio.pop(key, None)
-                    remove_plan_outcome(studio.get("resolved_figure_plan"))
-                    if "figure_set" in studio:
-                        studio["figure_set"] = registry_authority(studio["figure_set"])
-            else:
-                value = registry_authority(value)
-            files[relative] = value
-        else:
-            files[relative] = digest
-    return {"project_files": files, "delivery": state["delivery"],
-            **{key: copy.deepcopy(state[key]) for key in ("projected_reads", "source_files") if key in state}}
 
 
 class LiveSession:
@@ -107,7 +46,8 @@ class LiveSession:
         self.worker: NativeWorker | None = None
         self.native: dict[str, Any] = {}
         self.baseline_values: dict[str, Any] = {}
-        self.baseline: dict[str, Any] = {}
+        self._baseline_witness: FigureReadWitness | None = None
+        self._baseline_delivery = ""
         self.evidence: dict[str, Any] = {}
         self.sample_labels: dict[str, str] = {}
         self.figures: list[dict[str, Any]] = []
@@ -118,6 +58,35 @@ class LiveSession:
         self.stale = False
         self.session_error: str | None = None
         self._load()
+
+    @staticmethod
+    def _read_witness(state: dict[str, Any]) -> FigureReadWitness:
+        return FigureReadWitness.from_read_state({
+            "project_files": state["project_files"],
+            "source_files": state.get("source_files", {}),
+            "projected_reads": state.get("projected_reads", []),
+        })
+
+    @property
+    def baseline(self) -> dict[str, Any]:
+        """Expose a detached v1 view; the session retains one immutable witness."""
+        if self._baseline_witness is None:
+            return {}
+        return {**self._baseline_witness.to_read_state_payload(),
+                "delivery": self._baseline_delivery, "delivery_files": None}
+
+    @baseline.setter
+    def baseline(self, state: dict[str, Any]) -> None:
+        witness = self._read_witness(state)
+        delivery = state["delivery"]
+        if not isinstance(delivery, str) or state.get("delivery_files") is not None:
+            raise ValueError("A live editor baseline requires selected figure reads and an explicit delivery identity.")
+        self._baseline_witness, self._baseline_delivery = witness, delivery
+
+    def _matches_baseline(self, state: dict[str, Any]) -> bool:
+        return (self._read_witness(state) == self._baseline_witness
+                and state["delivery"] == self._baseline_delivery
+                and state.get("delivery_files") is None)
 
     def _load(self, figure_id: str | None = None) -> None:
         resolve_editor_input(self.entry_target)
@@ -171,7 +140,7 @@ class LiveSession:
         self._check_worker()
         if self.session_error:
             raise ValueError(self.session_error)
-        if self.stale or edit_state(self.project, self.figure) != self.baseline:
+        if self.stale or not self._matches_baseline(edit_state(self.project, self.figure)):
             self.stale = True
             raise ValueError("项目、保存图或交付已在其他地方变化；请重新加载后编辑，当前草稿尚未保存。")
         inspection = inspect_project(self.project)
@@ -233,7 +202,15 @@ class LiveSession:
         # made after the existing apply owner's project lock has been released.
         expected = copy.deepcopy(self.baseline)
         expected["project_files"][str(self.document.relative_to(self.project))] = result["result_sha256"]
-        if edit_state(self.project, self.figure) != expected:
+        try:
+            current = edit_state(self.project, self.figure) == expected
+        except (ValueError, OSError) as exc:
+            self.stale = True
+            self.last_result = {**result, "message": "保存已执行，但后续当前性核查失败；请核查原始错误后重新加载。"}
+            if isinstance(exc, OSError):
+                raise
+            raise ValueError(self.last_result["message"]) from exc
+        if not current:
             self.stale = True
             self.last_result = {**result, "message": "保存已执行，但项目或交付随后变化；请重新加载核查。"}
             raise ValueError(self.last_result["message"])
@@ -247,19 +224,18 @@ class LiveSession:
     def _export(self) -> dict[str, Any]:
         if self._changes():
             raise ValueError("请先保存当前图形，再导出。")
-        protected = _export_authority(self.project, self.baseline)
         task = start_task({"version": 1, "action": "export", "project": str(self.project)},
                           task_dir=self.output / ("export-" + uuid4().hex))
         if file_sha256(self.document) != self.saved_hash:
             self.stale = True
             raise ValueError("导出过程中保存图已变化，请核查当前状态。")
-        after = edit_state(self.project, self.figure)
         try:
-            if _export_authority(self.project, after) != protected:
+            after = edit_state(self.project, self.figure)
+            if not self._matches_baseline(after):
                 raise ValueError("导出期间源规格、请求或项目元数据发生变化；请重新加载核查。")
         except (ValueError, OSError):
             self.stale = True
-            self.last_result = {"task": task, "message": "导出任务记录已保留；当前项目已变化，请重新加载核查。"}
+            self.last_result = {"task": task, "message": "导出任务记录已保留；后续当前性核查未通过，请核查原始错误后重新加载。"}
             raise
         self.baseline = after
         self.revision += 1

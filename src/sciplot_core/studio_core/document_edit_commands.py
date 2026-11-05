@@ -10,7 +10,7 @@ from collections.abc import Callable
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
-from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+from sciplot_core.project_commands import FigureReadWitness, ProjectCommand, ProjectCommands, ProjectMutation
 from sciplot_core.studio_core.document_edit_policy import validate_edit_science_policy
 from sciplot_core.studio_core.document_edit_state import new_preview_directory, native_edit_request_key
 from sciplot_core.studio_core.document_edit_review import (
@@ -53,9 +53,9 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
         validate_edit_science_policy(changes, spec)
     repository = project_store(project)
     snapshot, reads = observed_figure_read_state(project, selected)
+    witness = FigureReadWitness.from_read_state(reads)
     binding = {"project_id": snapshot["project_id"], "generation": snapshot["generation"],
-               "files": reads["project_files"], "projected_reads": reads["projected_reads"],
-               "source_files": reads["source_files"]}
+               **witness.to_binding_fields()}
     relative = repository.logical_path(document)
     if binding["files"][relative] != expected_document_sha256:
         raise ValueError("The native document changed while capturing its selected read witness")

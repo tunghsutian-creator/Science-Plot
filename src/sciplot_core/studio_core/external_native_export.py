@@ -13,7 +13,7 @@ from sciplot_core.project_commands import MembershipRead, ProjectCommand, Projec
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.project_store.runtime import project_runtime
-from sciplot_core.studio_core.project_command_scope import figure_read_state, project_store
+from sciplot_core.studio_core.project_command_scope import figure_read_witness, project_store
 from sciplot_core.studio_core.project_query import resolve_project_figure
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.export_projection import export_projection
@@ -69,15 +69,15 @@ def export_external_native(document: Path, *, formats: list[str], output_root: P
     # source-project store or history. Existing cold projects use their locator.
     context = project_runtime(project_store(project)) if (project / ".sciplot_store").exists() else nullcontext()
     with context:
-        witness = figure_read_state(project, selected)
+        witness = figure_read_witness(project, selected)
         request = {"document": str(document), "figure_id": selected["figure_id"], "formats": formats,
-                   "source_read_witness": witness, "authority": "standalone_output_artifacts"}
+                   "source_read_witness": witness.to_read_state_payload(), "authority": "standalone_output_artifacts"}
         from sciplot_core.studio_core.export_replay import current_export
         app = ProjectCommands(output_store)
         prior, automatic = current_export(app, output_store, request, kind="export", whole_output=True)
         if prior is not None:
             _current_output(root, prior)
-            if figure_read_state(project, selected) != witness:
+            if figure_read_witness(project, selected) != witness:
                 raise ValueError("The source native revision changed during standalone replay")
             return export_projection(prior, output_store, document=document, spec=Path(selected["spec"]),
                                      receipt_key="output_command")
@@ -91,7 +91,7 @@ def export_external_native(document: Path, *, formats: list[str], output_root: P
             receipt = publish_standalone_export_receipt(document_path=document, requested_formats=formats,
                 exports=exported["exports"], artifact_root=private,
                 export_document_sha256=exported["document_sha256"])
-            if figure_read_state(project, selected) != witness:
+            if figure_read_witness(project, selected) != witness:
                 raise ValueError("The source native revision changed during standalone export")
             roots = {private: root}
             payload = relocate_candidate({**exported, "standalone_export": receipt}, roots)
@@ -105,7 +105,7 @@ def export_external_native(document: Path, *, formats: list[str], output_root: P
                 missing_outputs=tuple(MissingGeneratedOutput.from_payload(item) for item in automatic.get("missing_outputs", [])))
             record = app.execute(command, lambda: ProjectMutation(writes, payload))
             _current_output(root, record)
-            if figure_read_state(project, selected) != witness:
+            if figure_read_witness(project, selected) != witness:
                 raise ValueError("The source native revision changed during standalone publication; inspect its recorded version")
             return export_projection(record, output_store, document=document, spec=Path(selected["spec"]),
                                      receipt_key="output_command")
