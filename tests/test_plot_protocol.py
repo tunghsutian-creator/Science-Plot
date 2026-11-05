@@ -537,3 +537,228 @@ def test_public_call_rejects_malformed_request_before_startup(monkeypatch, value
     with pytest.raises(rpc.ProtocolError) as failed:
         client.call("plot.patch", {"plot": "/tmp/plot", "request": value})
     assert failed.value.reason_code == "invalid_rpc_params"
+
+
+def _memory_server(monkeypatch, frames, *, factory, disconnect=False):
+    """Run the real serialized frame/admission loop without an OS socket."""
+    stopping = threading.Event()
+    replies = []
+    received = []
+
+    class Connection:
+        def __init__(self, frame, final):
+            self.frame, self.final = frame, final
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            if self.final:
+                stopping.set()
+
+        def settimeout(self, _timeout):
+            pass
+
+        def recv(self, size):
+            received.append(self)
+            chunk, self.frame = self.frame[:size], self.frame[size:]
+            return chunk
+
+        def sendall(self, data):
+            if disconnect:
+                raise BrokenPipeError("caller lost the reply")
+            replies.append(rpc.decode(data))
+
+    class Listener:
+        def __init__(self):
+            self.pending = [Connection(frame, index == len(frames) - 1)
+                            for index, frame in enumerate(frames)]
+
+        def accept(self):
+            return self.pending.pop(0), None
+
+    monkeypatch.setattr(server, "make_service", factory)
+    server._serve(Listener(), {"instance_id": "memory-owner"}, None, stopping, 60, 10)
+    return replies, received
+
+
+def test_owned_wire_request_has_one_server_admission_and_public_entries_still_validate(monkeypatch):
+    service = FakeService()
+    counts = []
+    for module, prefix in ((server, "server"), (rpc, "public")):
+        for name in ("validate_call", "validate_params"):
+            original = getattr(module, name)
+
+            def counted(*args, _original=original, _name=f"{prefix}.{name}", **kwargs):
+                counts.append(_name)
+                return _original(*args, **kwargs)
+
+            monkeypatch.setattr(module, name, counted)
+    request = {"jsonrpc": "2.0", "id": "once", "method": "plot.patch",
+               "params": {"plot": "/tmp/plot", "request": {"idempotency_key": "original"}}}
+
+    def make_service():
+        assert counts == ["server.validate_call", "server.validate_params"]
+        return service
+
+    replies, _received = _memory_server(monkeypatch, [rpc.encode(request)], factory=make_service)
+    assert counts == ["server.validate_call", "server.validate_params"]
+    before = list(service.calls)
+    assert replies == [rpc.handle(service, request)]
+    assert service.calls == before * 2
+    assert counts[-2:] == ["public.validate_call", "public.validate_params"]
+    with pytest.raises(rpc.ProtocolError, match="Unknown semantic plot method"):
+        rpc.invoke(service, "python.exec", {})
+    assert service.calls == before * 2
+
+
+@pytest.mark.parametrize("wire_request,code", [
+    ({"jsonrpc": "2.0", "id": "bad", "method": "python.exec", "params": {}}, -32601),
+    ({"jsonrpc": "2.0", "id": "bad", "method": "plot.patch", "params": {"plot": "/tmp/a", "request": {}, "force": True}}, -32602),
+    ({"jsonrpc": "2.0", "id": "bad", "method": "plot.patch", "params": {"plot": "relative", "request": {}}}, -32602),
+    ({"jsonrpc": "2.0", "id": "bad", "method": "plot.patch", "params": {"plot": "/tmp/a", "request": None}}, -32602),
+    ({"jsonrpc": "2.0", "method": "plot.describe", "params": {"plot": "/tmp/a"}}, -32600),
+    ([{"jsonrpc": "2.0", "id": "batch", "method": "plot.describe"}], -32600),
+])
+def test_memory_wire_invalid_admission_precedes_service_factory(monkeypatch, wire_request, code):
+    def forbidden():
+        pytest.fail("An invalid wire request started the service")
+
+    replies, _received = _memory_server(monkeypatch, [rpc.encode(wire_request)], factory=forbidden)
+    assert replies[0]["error"]["code"] == code
+
+
+@pytest.mark.parametrize("raw", [b'{"jsonrpc":"2.0","id":1,"id":2,"method":"plot.create"}\n',
+                                 b'{"jsonrpc":"2.0","id":1,"params":{"request":NaN}}\n'])
+def test_memory_wire_json_rejection_remains_before_service(monkeypatch, raw):
+    replies, _received = _memory_server(monkeypatch, [raw], factory=lambda: pytest.fail("Bad JSON started service"))
+    assert replies[0]["error"]["code"] == -32700
+    assert replies[0]["id"] is None
+
+
+def test_client_params_changed_while_starting_are_still_validated_as_received_bytes(monkeypatch):
+    params = {"plot": "/tmp/plot", "request": {"idempotency_key": "initially-valid"}}
+
+    def startup(*_args, **_kwargs):
+        params["request"] = None
+        return Path("/not-an-os-socket")
+
+    def exchange(_path, request, _timeout):
+        assert request["params"] is params  # Preserve the existing client API ownership.
+        replies, _received = _memory_server(monkeypatch, [rpc.encode(request)],
+            factory=lambda: pytest.fail("Mutated invalid wire request started service"))
+        raise rpc.RemoteError(replies[0]["error"])
+
+    monkeypatch.setattr(client, "ensure_server", startup)
+    monkeypatch.setattr(client, "_exchange", exchange)
+    with pytest.raises(rpc.RemoteError) as failed:
+        client.call("plot.patch", params, request_id="changed-during-startup")
+    assert failed.value.rpc_code == -32602
+    assert failed.value.reason_code == "invalid_rpc_params"
+    assert failed.value.issues == [{"path": "/params/request", "constraint": "object"}]
+
+
+@pytest.mark.parametrize("with_repair", [False, True])
+def test_memory_ping_and_domain_error_keep_original_envelopes(monkeypatch, with_repair):
+    ping = {"jsonrpc": "2.0", "id": "ping", "method": "engine.ping", "params": {}}
+    replies, _received = _memory_server(monkeypatch, [rpc.encode(ping)],
+        factory=lambda: pytest.fail("Ping started the plotting service"))
+    assert replies == [{"jsonrpc": "2.0", "id": "ping", "result": {"instance_id": "memory-owner"}}]
+
+    class ScientificError(ValueError):
+        reason_code = "scientific_patch_required"
+        issues: ClassVar[list[dict[str, Any]]] = [{"path": "/operations/0", "constraint": "scientific_gate"}]
+
+    if with_repair:
+        ScientificError.repair = {"action": "revise_intent", "automatic_retry": False}
+
+    class RefusingService(FakeService):
+        def patch(self, plot, request):
+            raise ScientificError("Preserve original measurements")
+
+    request = {"jsonrpc": "2.0", "id": "domain", "method": "plot.patch",
+               "params": {"plot": "/tmp/plot", "request": {}}}
+    service = RefusingService()
+    replies, _received = _memory_server(monkeypatch, [rpc.encode(request)], factory=lambda: service)
+    assert replies == [rpc.handle(service, request)]
+    if with_repair:
+        assert replies[0]["error"]["data"]["repair"] == ScientificError.repair
+        assert "issues" not in replies[0]["error"]["data"]  # Existing feedback chooses repair over issues.
+    else:
+        assert replies[0]["error"]["data"]["issues"] == ScientificError.issues
+        assert "repair" not in replies[0]["error"]["data"]
+
+
+def test_memory_reply_loss_does_not_replay_a_completed_dispatch(monkeypatch):
+    service = FakeService()
+    request = {"jsonrpc": "2.0", "id": "lost", "method": "plot.patch",
+               "params": {"plot": "/tmp/plot", "request": {"idempotency_key": "same"}}}
+    replies, _received = _memory_server(monkeypatch, [rpc.encode(request)], factory=lambda: service, disconnect=True)
+    assert replies == []
+    assert service.calls == [("patch", Path("/tmp/plot").resolve(), request["params"]["request"])]
+
+
+def test_memory_server_keeps_requests_serial_through_dispatch(monkeypatch):
+    class SerialService(FakeService):
+        def patch(self, plot, request):
+            assert self.calls == []
+            return super().patch(plot, request)
+
+        def describe(self, plot):
+            assert [call[0] for call in self.calls] == ["patch"]
+            return super().describe(plot)
+
+    service = SerialService()
+    frames = [rpc.encode({"jsonrpc": "2.0", "id": index, "method": method, "params": params})
+              for index, (method, params) in enumerate([
+                  ("plot.patch", {"plot": "/tmp/plot", "request": {}}),
+                  ("plot.describe", {"plot": "/tmp/plot"})])]
+    replies, _received = _memory_server(monkeypatch, frames, factory=lambda: service)
+    assert [reply["result"]["method"] for reply in replies] == ["patch", "describe"]
+    assert service.maximum_active == 1
+
+
+def test_memory_server_retains_request_frame_size_guard(monkeypatch):
+    replies, _received = _memory_server(monkeypatch, [b"x" * (rpc.MAX_REQUEST_BYTES + 1) + b"\n"],
+        factory=lambda: pytest.fail("Oversized frame started the service"))
+    assert replies[0]["error"]["code"] == -32600
+    assert replies[0]["error"]["data"]["reason_code"] == "rpc_frame_too_large"
+
+
+def test_memory_exchange_keeps_total_deadline_and_unknown_sent_outcome(monkeypatch):
+    from sciplot_core.plot_protocol import socket_client
+
+    clock = [0.0]
+    sent = []
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def settimeout(self, _value):
+            pass
+
+        def connect(self, _path):
+            pass
+
+        def sendall(self, payload):
+            sent.append(payload)
+
+        def recv(self, _size):
+            clock[0] += 0.6
+            return b"x"  # Partial activity cannot extend the original deadline.
+
+    monkeypatch.setattr(socket_client.socket, "socket", lambda *_a, **_k: Connection())
+    monkeypatch.setattr(socket_client.time, "monotonic", lambda: clock[0])
+    request = {"jsonrpc": "2.0", "id": "deadline", "method": "plot.patch",
+               "params": {"plot": "/tmp/plot", "request": {"idempotency_key": "known"}}}
+    with pytest.raises(TransportError) as failed:
+        socket_client._exchange(Path("/memory-only"), request, 1.0)
+    assert sent == [rpc.encode(request)]
+    assert failed.value.reason_code == "transport_outcome_unknown"
+    assert failed.value.repair["request_sent"] is True
+    assert failed.value.repair["automatic_retry"] is False
+    assert failed.value.repair["idempotency_key"] == "known"

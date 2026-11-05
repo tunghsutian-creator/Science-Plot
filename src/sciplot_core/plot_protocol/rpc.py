@@ -121,6 +121,11 @@ def validate_params(method: str, params: dict[str, Any]) -> None:
 
 def invoke(service: Service, method: str, params: dict[str, Any]) -> dict[str, Any]:
     validate_params(method, params)
+    return _invoke_validated(service, method, params)
+
+
+def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Dispatch an admitted call synchronously within the owning RPC boundary."""
     if method == "project.open":
         target = Path(params["target"]).expanduser().resolve()
         if "description" in params:

@@ -19,7 +19,7 @@ from sciplot_core.plot_protocol.paths import (
 )
 from sciplot_core.plot_protocol.rpc import (
     MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, ProtocolError, Service, decode, encode, error_response,
-    handle, validate_call, validate_params,
+    _invoke_validated, validate_call, validate_params,
 )
 
 
@@ -126,7 +126,8 @@ def _serve(listener: socket.socket, owner: dict[str, Any], service: Service | No
                         validate_params(method, params)
                         if service is None:
                             service = make_service()
-                        response = handle(service, request)
+                        response = {"jsonrpc": "2.0", "id": request_id,
+                                    "result": _invoke_validated(service, method, params)}
                 except Exception as exc:
                     response = error_response(request_id, exc)
                 try:
