@@ -5,7 +5,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 from sciplot_core.verification.owner_model import ChangedOwner
-from sciplot_core.verification.source_contracts import ARCHITECTURE_CORE_TARGETS
+from sciplot_core.verification.source_contracts import ARCHITECTURE_CORE_TARGETS, TYPE_SCOPE_PARTITION_TARGET
 
 CHANGED_VERIFICATION_TEST_TARGETS = (
     'tests/test_changed_verification.py', 'tests/test_repository_policy.py',
@@ -363,14 +363,14 @@ SCIENTIFIC_TRANSACTION_TYPE_OWNER = ChangedOwner(
     owner_id="scientific_transaction_type_gate",
     path_prefixes=SCIENTIFIC_TRANSACTION_TYPE_PREFIXES,
     exact_paths=SCIENTIFIC_TRANSACTION_TYPE_PATHS,
-    pytest_targets=(),
+    pytest_targets=(TYPE_SCOPE_PARTITION_TARGET,),
     mypy_required=True,
 )
 
 MYPY_SCOPE_CONFIGURATION_OWNER = ChangedOwner(
     owner_id="mypy_scope_configuration",
     exact_paths=frozenset({"pyproject.toml"}),
-    pytest_targets=(),
+    pytest_targets=(TYPE_SCOPE_PARTITION_TARGET,),
     mypy_required=True,
 )
 

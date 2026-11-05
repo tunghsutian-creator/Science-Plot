@@ -187,6 +187,14 @@ jobs:
           PYFONT
       - name: Run lint gate
         run: python3 -m ruff check src tests
+      - name: Run shared source contracts
+        run: |
+          python3 - <<'PYCONTRACTS'
+          import subprocess
+          import sys
+          from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS
+          subprocess.run([sys.executable, "-m", "pytest", "-q", *CHEAP_SOURCE_TARGETS], check=True)
+          PYCONTRACTS
       - name: Run scoped static type gate
         run: |
           python3 -m mypy --platform linux

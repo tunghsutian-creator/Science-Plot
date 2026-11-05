@@ -281,7 +281,14 @@ and public-entry regressions without selecting unrelated task workflows. Changes
 to shared task contracts, storage or CLI parser/dispatch retain the broad task gate.
 Run the scoped static type gate when changing a file
 declared under `[tool.mypy]` in `pyproject.toml`.
-Its exact scope and strictness belong to `pyproject.toml`.
+Its exact scope and strictness belong to `pyproject.toml`. The existing reviewed-additions
+partition contract also runs in the shared early source checks and type/config
+owner selection: each new configured file needs one reviewed category, preserving
+the 195-file residual. A clean mypy run checks types, not this ownership partition;
+keep both existing contracts. CI feedback helpers belong to the existing reviewed
+CI additions group, and limited affected plans retain the same partition check. Full-risk CI runs the same
+shared source contracts after lint and before mypy/native/long public bodies,
+so a missing reviewed category fails before those broader commands start.
 CI checks both `mypy --platform linux` and `mypy --platform darwin` over that
 same scope. Keep platform-only implementations in explicit guarded branches;
 an unconditional raising guard followed by a platform-only body can become an

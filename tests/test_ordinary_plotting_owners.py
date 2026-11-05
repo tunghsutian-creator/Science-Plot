@@ -396,6 +396,9 @@ CI_FEEDBACK_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/verification/ci_public_environment.py",
         "src/sciplot_core/verification/ci_public_proof.py",
         "src/sciplot_core/verification/ci_public_reuse.py",
+        "src/sciplot_core/verification/task_timing_feedback.py",
+        "src/sciplot_core/verification/source_contracts.py",
+        "src/sciplot_core/verification/public_stage_selection.py",
     }
 )
 FINAL_STRICT_ADDITIONS = (
@@ -663,6 +666,31 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
     assert FINAL_STRICT_ADDITIONS <= SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert all(configured.count(path) == 1 for path in FINAL_STRICT_ADDITIONS)
     assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS - FINAL_STRICT_ADDITIONS) == 195
+    from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS, TYPE_SCOPE_PARTITION_TARGET
+    from sciplot_core.verification.type_gate_owners import MYPY_SCOPE_CONFIGURATION_OWNER, SCIENTIFIC_TRANSACTION_TYPE_OWNER
+
+    assert TYPE_SCOPE_PARTITION_TARGET in CHEAP_SOURCE_TARGETS
+    assert TYPE_SCOPE_PARTITION_TARGET in SCIENTIFIC_TRANSACTION_TYPE_OWNER.pytest_targets
+    assert TYPE_SCOPE_PARTITION_TARGET in MYPY_SCOPE_CONFIGURATION_OWNER.pytest_targets
+    workflow = (ROOT / ".github/workflows/minimal-repository.yml").read_text()
+    shared_step = workflow.split("      - name: Run shared source contracts\n", 1)[1].split("      - name:", 1)[0]
+    assert "source_contracts import CHEAP_SOURCE_TARGETS" in shared_step
+    assert "*CHEAP_SOURCE_TARGETS], check=True)" in shared_step
+    assert "        if:" not in shared_step
+    assert workflow.index("Run lint gate") < workflow.index("Run shared source contracts")
+    assert workflow.index("Run shared source contracts") < workflow.index("Run scoped static type gate")
+    for changed in ("pyproject.toml", *sorted(CI_FEEDBACK_STRICT_ADDITIONS)):
+        checks = _plan([changed])["checks"]
+        shared = next(check for check in checks if check["check_id"] == "pytest_shared_contracts")
+        assert TYPE_SCOPE_PARTITION_TARGET in shared["command"]
+        assert checks.index(shared) < next(index for index, check in enumerate(checks)
+                                          if check["check_id"] == "mypy_owned_scope")
+    from sciplot_core.verification.ci_feedback import ci_feedback_plan
+
+    for changed in ("docs/DESIGN_PROJECT_LIFECYCLE.md", "src/sciplot_core/task_timing.py"):
+        affected = ci_feedback_plan([changed], ROOT)
+        assert affected["layer"] == "affected"
+        assert TYPE_SCOPE_PARTITION_TARGET in affected["targets"]
     for path in FINAL_STRICT_ADDITIONS:
         assert (ROOT / path).is_file()
         owners = [owner for owner in CHANGED_OWNERS if owner.matches(path)]

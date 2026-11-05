@@ -14,6 +14,7 @@ from sciplot_core.verification import (
     collect_changed_paths,
     run_changed_verification,
 )
+from sciplot_core.verification.source_contracts import TYPE_SCOPE_PARTITION_TARGET
 from sciplot_core.verification.type_gate_owners import (
     ARCHITECTURE_CORE_TARGETS,
     SCIENTIFIC_TRANSACTION_TYPE_OWNER,
@@ -567,7 +568,7 @@ def test_scientific_transaction_type_owner_adds_mypy_once(path: str) -> None:
     assert type_owner == {
         "owner_id": "scientific_transaction_type_gate",
         "changed_paths": [path],
-        "pytest_targets": [],
+        "pytest_targets": [TYPE_SCOPE_PARTITION_TARGET],
     }
     commands = [check["command"] for check in payload["checks"]]
     assert commands.count([sys.executable, "-m", "mypy"]) == 1

@@ -491,7 +491,7 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
             assert enabled(conditional[name], outcome, layer, event) is full, name
         for name in ("Run reviewed public focused behavior", "Run reviewed public comprehensive behavior"):
             assert enabled(conditional[name], outcome, layer, event, reuse="true") is False
-    for name in ("Run lint gate", "Run scoped static type gate", "Build vendored Veusz helpers",
+    for name in ("Run lint gate", "Run shared source contracts", "Run scoped static type gate", "Build vendored Veusz helpers",
                  "Verify vendored Veusz helpers", "Verify minimal wheel surface", "Verify Qt build and runtime identity"):
         assert name not in conditional
 
