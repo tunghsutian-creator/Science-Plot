@@ -69,12 +69,6 @@ class PreparedMutation:
                     artifacts: Mapping[str, bytes | Path | PreparedFile] | None = None,
                     prepared_sources: Sequence[PreparedSource] = (), input_reads: Sequence[InputRead] = ()) -> PreparedMutation:
         captured = tuple(prepared_sources)
-        for source in captured:
-            if not isinstance(source, PreparedSource):
-                raise ValueError("Prepared sources must be explicit captured values.")
-            source.__post_init__()
-        if not isinstance(result, dict):
-            raise ValueError("Candidate result must be a JSON object.")
         return cls(_files(writes, deletion=True), _json(result), _json(review),
                    _files(artifacts or {}, deletion=False), captured, validate_input_reads(input_reads))
 

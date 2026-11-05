@@ -84,3 +84,43 @@ def test_binding_absence_is_preserved_but_not_an_observed_selected_file():
     assert witness.to_binding_fields()["files"] == binding["files"]
     with pytest.raises(ValueError, match="mandatory"):
         FigureReadWitness.from_read_state({"project_files": binding["files"]})
+
+
+@pytest.mark.parametrize("result", [None, [], "not an object", 7])
+def test_factory_and_direct_prepared_constructor_still_reject_nonobject_results(result):
+    import json
+
+    with pytest.raises(ValueError):
+        PreparedMutation.from_values({"a": b"bytes"}, result)
+    with pytest.raises(ValueError):
+        PreparedMutation((("a", b"bytes"),), json.dumps(result), "null", ())
+
+
+def test_factory_and_direct_prepared_constructor_still_reject_uncaptured_sources():
+    for construct in (
+        lambda: PreparedMutation.from_values({"a": b"bytes"}, {}, prepared_sources=(object(),)),
+        lambda: PreparedMutation((("a", b"bytes"),), "{}", "null", (), prepared_sources=(object(),)),
+    ):
+        with pytest.raises(ValueError, match="explicit captured"):
+            construct()
+
+
+def test_source_validation_belongs_once_to_the_public_prepared_constructor(monkeypatch):
+    import hashlib
+    from sciplot_core.project_commands import PreparedSource
+
+    source = PreparedSource("a" * 32, "/raw/original", hashlib.sha256(b"original").hexdigest(), b"original")
+    observed = []
+    original = PreparedSource.__post_init__
+
+    def check(value):
+        observed.append(value)
+        original(value)
+
+    monkeypatch.setattr(PreparedSource, "__post_init__", check)
+    value = PreparedMutation.from_values({"a": b"bytes"}, {}, prepared_sources=[source])
+    assert observed == [source]
+    observed.clear()
+    direct = PreparedMutation(value._writes, value._result_json, value._review_json,
+                              value._artifacts, prepared_sources=(source,))
+    assert observed == [source] and direct.prepared_digest == value.prepared_digest
