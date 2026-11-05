@@ -3,6 +3,18 @@
 from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.ordinary_plotting_owners import CATEGORICAL_EDIT_TESTS, ORDINARY_TASK_LEAF_PATHS
 from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
+from sciplot_core.verification.task_timing_feedback import TASK_TIMING_PATH
+
+
+TASK_TIMING_FEEDBACK_TARGETS = (
+    "tests/test_task_timing_feedback.py",
+    "tests/test_task_semantic_delivery.py::test_semantic_call_timing_matches_saved_receipt_after_current_evidence",
+    "tests/test_task_semantic_delivery.py::test_semantic_delivery_retry_timing_excludes_wait_and_inspect_is_read_only",
+    "tests/test_task_initial_mapping.py::test_pending_table_recovery_batches_metadata_region_and_pairs",
+    "tests/test_task_initial_mapping.py::test_unambiguous_metadata_layout_is_repaired_without_ai_roundtrip",
+    "tests/test_task_result_projection.py",
+    *ARCHITECTURE_CORE_TARGETS,
+)
 
 
 GROUP_LEAF_PATHS = frozenset({
@@ -96,6 +108,14 @@ NATIVE_SERIES_REVISION_OWNER = ChangedOwner(
 
 
 TASK_CONTROL_OWNERS = (
+    ChangedOwner(
+        owner_id="local_task_timing_metadata",
+        exact_paths=frozenset({TASK_TIMING_PATH}),
+        owned_test_paths=frozenset({"tests/test_task_timing_feedback.py"}),
+        pytest_targets=TASK_TIMING_FEEDBACK_TARGETS,
+        mypy_required=True,
+        release_gates=("full_pytest",),
+    ),
     ChangedOwner(
         owner_id="current_native_legend_layout",
         exact_paths=frozenset({"src/sciplot_core/studio_core/current_layout_review.py",
@@ -239,7 +259,7 @@ TASK_CONTROL_OWNERS = (
     ChangedOwner(
         owner_id="local_task_control",
         path_prefixes=("src/sciplot_core/task_",),
-        excluded_paths=frozenset({"src/sciplot_core/task_common_edits.py"}) | GROUP_LEAF_PATHS | PAPER_LEAF_PATHS | ORDINARY_TASK_LEAF_PATHS,
+        excluded_paths=frozenset({"src/sciplot_core/task_common_edits.py", TASK_TIMING_PATH}) | GROUP_LEAF_PATHS | PAPER_LEAF_PATHS | ORDINARY_TASK_LEAF_PATHS,
         exact_paths=frozenset({
             ".github/workflows/minimal-repository.yml",
             "skill/references/experiment-group.json",
