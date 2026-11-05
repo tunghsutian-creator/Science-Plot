@@ -12,7 +12,7 @@ ARCHITECTURE_CORE_TARGETS = (
 )
 
 CHANGED_VERIFICATION_TEST_TARGETS = (
-    'tests/test_changed_verification.py',
+    'tests/test_changed_verification.py', 'tests/test_repository_policy.py',
     'tests/test_ordinary_plotting_owners.py',
     'tests/test_external_ai_verification.py',
     'tests/test_cli_surface.py',

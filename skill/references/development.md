@@ -99,12 +99,27 @@ replace completion/access evidence. Keep `PYTEST_ADDOPTS` unset for known suites
 Normal push and pull-request CI retain both complete public profiles, native
 runtime/build checks, both static type targets, Doctor and the lifecycle smoke.
 The twelve historical native regressions remain in public comprehensive. Their
-separate preflight repeats those same bodies only when a manual workflow dispatch
-sets `native_regression_preflight=true`; this is diagnostic repetition, not extra
-acceptance. Normal CI therefore loses that separate early-failure checkpoint;
-the same regressions still execute in the comprehensive stage. The observed
-536.12-second duplicate cost is a bounded opportunity, not an hours-long native
-speedup claim. Keep the diagnostic predecessor order and complete phase review.
+separate early preflight uses the existing owner plan without collecting tests.
+Only the explicitly reviewed design-prose leaves in `ci_feedback.py`, still
+matched to the documentation owner, can currently omit that repetition;
+consumer matches, code/shared/runtime/CI/guard changes, unknown owners, missing
+bases and planner failure keep early feedback. Owner disjointness alone is not
+proof of transitive native independence. Manual dispatch can explicitly request
+the diagnostic. Preserve the original predecessor order and complete phase review.
+The 536.12-second historical duplicate cost is an upper opportunity for eligible
+leaves, not a measured new speedup or an hours-long native improvement.
+
+Future push runs on the same branch and pull-request runs for the same PR use
+Actions concurrency for the same workflow/job/Ubuntu/event responsibility.
+A checkout-free stdlib plan job hashes exact case-sensitive identity components
+(Actions group names themselves ignore case); manual runs/attempts remain separate.
+The required runtime-integrity job uses an always condition and a unique fallback
+group when the key is absent, then genuinely fails its first validation step on
+failed/missing key output. The owner-risk planner runs after the normal checkout;
+its failure retains early preflight. Superseded runs remain cancelled, never reused or PASS.
+This only affects workflows containing the new groups; do not cancel an existing
+acceptance by API. Actions scheduling is not a guarantee of chronological queue
+order, and completion still requires the latest intended candidate's actual gates.
 Cross-event CI reuse is not enabled: fresh required-check policy and branch/event,
 resolved dependency, input and guard-mode equivalence have not been established.
 A matching SHA or runner label alone cannot authorize skipping a canonical gate.
