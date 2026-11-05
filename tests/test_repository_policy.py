@@ -82,7 +82,9 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
         if name.startswith("Run reviewed public "):
             assert "public-reference" not in step
         if name == "Run scoped static type gate":
-            assert "        if:" not in step, "Configured static gates must run in every layer"
+            assert "steps.main-admission.outcome != 'success'" in step
+            assert "steps.main-admission.outputs.referenced != 'true'" in step
+            assert "native-feedback" not in step, "Static gates must run in every fresh layer"
         else:
             assert "steps.native-feedback.outcome != 'success'" in step
             assert "steps.native-feedback.outputs.layer != 'affected'" in step

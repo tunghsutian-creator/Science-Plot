@@ -394,6 +394,7 @@ CI_FEEDBACK_STRICT_ADDITIONS = frozenset(
     {
         "src/sciplot_core/verification/ci_feedback.py",
         "src/sciplot_core/verification/ci_public_profiles.py",
+        "src/sciplot_core/verification/main_commit_admission.py",
         "src/sciplot_core/verification/task_timing_feedback.py",
         "src/sciplot_core/verification/source_contracts.py",
         "src/sciplot_core/verification/public_stage_selection.py",
@@ -674,7 +675,8 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
     shared_step = workflow.split("      - name: Run shared source contracts\n", 1)[1].split("      - name:", 1)[0]
     assert "source_contracts import CHEAP_SOURCE_TARGETS" in shared_step
     assert "*CHEAP_SOURCE_TARGETS], check=True)" in shared_step
-    assert "        if:" not in shared_step
+    assert "if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}" in shared_step
+    assert "native-feedback" not in shared_step
     assert workflow.index("Run lint gate") < workflow.index("Run shared source contracts")
     assert workflow.index("Run shared source contracts") < workflow.index("Run scoped static type gate")
     for changed in ("pyproject.toml", *sorted(CI_FEEDBACK_STRICT_ADDITIONS)):

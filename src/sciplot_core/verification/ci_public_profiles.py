@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -36,6 +37,13 @@ def run_profile(root: Path, profile: str) -> int:
             if progress.poll() is None:
                 progress.terminate()
             progress.wait()
+    expected_head = environment.get("GITHUB_SHA")
+    if code == 0 and expected_head:
+        # The existing stage already validates its phases/source/runtime. Bind
+        # that owner's actual execution head to the official push check identity.
+        result = json.loads((root / f".tmp_verify/ci_public_{profile}/result.json").read_bytes())
+        if result["origin_head"] != expected_head:
+            raise ValueError("Actual public stage source differs from GITHUB_SHA.")
     return code
 
 

@@ -142,11 +142,35 @@ acceptance. The selected stage is development/merge feedback, not release proof.
 The complete path preserves both original public profiles, all native assertions
 and predecessor order, runtime/build gates, Doctor and smoke. The twelve historical
 regressions remain in comprehensive and retain their early diagnostic on relevant
-or unknown changes. Both public profiles always execute fresh in this layer.
+or unknown changes. Both public profiles execute fresh in this layer unless the
+separate main source-commit admission below references their completed check.
 Release/frozen full, scientific result checks, required supported OSs and
 real-input/private-access capture remain separate required responsibilities.
 Changing CI execution policy itself follows the complete path. Preserve active
 frozen runs; do not restart them merely to apply a feedback-policy change.
+
+A push moving `main` to the exact commit already checked by this repository's
+latest official push run may reference that source approval. The stdlib-only
+`main_commit_admission` gate checks actual checkout/workflow identity first, then
+requires the complete original runtime job and every required step to have
+executed successfully in order. Both physical public stages also bind their
+existing result's actual `origin_head` to the event SHA. The lookup checks the
+exact attempt and rereads the latest run; a newer failed, partial, affected-only,
+reference-only or still-running check cannot be bypassed by choosing older green.
+Incomplete pagination, API failure or unknown metadata retains the fresh path.
+Other branches and manual/PR events retain their existing fresh/affected route.
+
+Only explicit successful admission with `referenced=true` skips duplicate setup,
+build and test steps on main. Its summary links the original run and declares
+`current_run_executed_tests=false`: the original environment and execution remain
+facts about that original run. This gate neither builds nor publishes runtime
+artifacts, creates canonical execution evidence, nor satisfies other required
+checks, private/scientific capture or release responsibilities. It does not compare
+or reuse another VM's environment, binaries or test-result artifacts. A changed
+commit requires its own check; the first candidate using this workflow must
+actually execute the complete path before an identical main commit can reference
+it. Candidate-to-main admission still needs actual CI validation; pure fixtures
+do not establish a measured speedup.
 
 Daily local `verify --quick` and owner feedback remain the editing loop; CI
 provides the corresponding limited merge check only for these closed leaves.

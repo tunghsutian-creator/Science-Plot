@@ -8,7 +8,7 @@ from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.source_contracts import ARCHITECTURE_CORE_TARGETS, TYPE_SCOPE_PARTITION_TARGET
 
 CHANGED_VERIFICATION_TEST_TARGETS = (
-    'tests/test_changed_verification.py', 'tests/test_repository_policy.py',
+    'tests/test_changed_verification.py', 'tests/test_repository_policy.py', 'tests/test_main_commit_admission.py',
     'tests/test_ordinary_plotting_owners.py',
     'tests/test_external_ai_verification.py',
     'tests/test_cli_surface.py',
@@ -58,7 +58,7 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
             "src/sciplot_core/doctor/actions.py", "src/sciplot_core/doctor/runtime_checks.py",
             "src/sciplot_core/doctor/readiness_checks.py",
             "src/sciplot_core/studio_core/lifecycle_contract.py",
-            "tests/public_curve_inputs.py", "tests/ci_public_reference_support.py",
+            "tests/public_curve_inputs.py", "tests/ci_public_reference_support.py", "tests/main_commit_admission_records.py",
             "tests/public_multitask_inputs.py",
             "tests/private_observer_support.py",
             "tests/process_private_descriptor_support.py",

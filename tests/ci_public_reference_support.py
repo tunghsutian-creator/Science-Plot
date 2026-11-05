@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import json
 
 import pytest
 
@@ -9,6 +10,13 @@ import pytest
 def exercise_profile_stage_route(tmp_path, monkeypatch):
     from sciplot_core.verification import ci_public_profiles as profiles
     calls = []
+    # The mocked stage supplies the same existing result field as a real stage;
+    # keep official CI's GITHUB_SHA binding active instead of stripping it.
+    monkeypatch.setenv("GITHUB_SHA", "a" * 40)
+    for profile in ("focused", "comprehensive"):
+        directory = tmp_path / f".tmp_verify/ci_public_{profile}"
+        directory.mkdir(parents=True)
+        (directory / "result.json").write_text(json.dumps({"origin_head": "a" * 40}))
     tails = []
     exit_code = [0]
     class Process:
@@ -35,6 +43,13 @@ def exercise_profile_stage_route(tmp_path, monkeypatch):
             assert command[-1] == ".tmp_verify/ci_public_" + profile
             assert str(tmp_path / (".tmp_verify/ci_public_" + profile + "/command.log")) in calls[-2]
         assert len(tails) == 2 and not any(tail.running for tail in tails)
+        wrong = tmp_path / "wrong-stage-head"
+        result = wrong / ".tmp_verify/ci_public_focused/result.json"
+        result.parent.mkdir(parents=True)
+        result.write_text(json.dumps({"origin_head": "b" * 40}))
+        with pytest.raises(ValueError, match="Actual public stage source"):
+            profiles.run_profile(wrong, "focused")
+        assert not any(tail.running for tail in tails)
         exit_code[0] = 7
         assert profiles.run_profile(tmp_path / "failed", "focused") == 7
         assert not tails[-1].running
@@ -91,8 +106,10 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
                   "Run reviewed public comprehensive behavior", "Run readiness check",
                   "Run fixture-free lifecycle smoke",
                   "Check known native CI regressions before the public suites")
-    def enabled(expression, outcome, layer, event):
+    def enabled(expression, outcome, layer, event, admission_outcome="success", referenced="false"):
         values = {"steps.native-feedback.outcome": outcome, "steps.native-feedback.outputs.layer": layer,
+                  "steps.main-admission.outcome": admission_outcome,
+                  "steps.main-admission.outputs.referenced": referenced,
                   "github.event_name": event,
                   "inputs.native_regression_preflight": False}
         for key, value in values.items():
@@ -110,7 +127,11 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
             assert enabled(conditional[name], outcome, layer, event) is full, name
     for name in ("Run lint gate", "Run shared source contracts", "Run scoped static type gate", "Build vendored Veusz helpers",
                  "Verify vendored Veusz helpers", "Verify minimal wheel surface", "Verify Qt build and runtime identity"):
-        assert name not in conditional
+        expression = conditional[name]
+        for admission_outcome, referenced, executes in (("success", "true", False), ("success", "false", True),
+                                                        ("failure", "true", True), ("", "", True)):
+            assert enabled(expression, "success", "affected", "push", admission_outcome, referenced) is executes
+            assert enabled(expression, "failure", "", "workflow_dispatch", admission_outcome, referenced) is executes
 
     with monkeypatch.context() as context:
         context.setattr(ci_feedback, "changed_paths", lambda *_args: ["src/sciplot_core/task_contract.py"])

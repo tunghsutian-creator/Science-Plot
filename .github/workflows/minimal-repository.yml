@@ -62,7 +62,16 @@ jobs:
           SCIPLOT_PLAN_GROUP: ${{ needs.feedback-plan.outputs.group }}
         run: test "$SCIPLOT_PLAN_RESULT" = success && test -n "$SCIPLOT_PLAN_GROUP"
       - uses: actions/checkout@v4
+      - name: Verify exact workflow checkout
+        run: python3 src/sciplot_core/verification/main_commit_admission.py --verify-checkout
+      - name: Check main commit admission
+        id: main-admission
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 src/sciplot_core/verification/main_commit_admission.py
       - name: Plan bounded public feedback
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         id: native-feedback
         continue-on-error: true
         env:
@@ -70,6 +79,7 @@ jobs:
           SCIPLOT_EVENT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE"
       - name: Enforce minimal runtime distribution
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -100,8 +110,10 @@ jobs:
             exit 1
           fi
       - name: Compile SciPlot-owned Python
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: python3 -m compileall -q src/sciplot_core src/sciplot_gui src/sciplot_recipes
       - name: Install matching system Python and Qt toolchain
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
@@ -115,6 +127,7 @@ jobs:
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
           .venv/bin/python -m pip install --upgrade pip setuptools wheel
       - name: Install local runtime
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         # Explicit Linux/Python 3.12 validation anchor; keep pandas 3.1 exercised.
         # This is not a universal freeze for the Python 3.11 language floor.
         run: >-
@@ -122,6 +135,7 @@ jobs:
           'numpy==2.4.6' 'pandas==3.1.0' 'scipy==1.18.1'
           'Pillow==13.0.0' 'PyMuPDF==2.0'
       - name: Verify Qt build and runtime identity
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: |
           python3 - <<'PY'
           import subprocess
@@ -170,6 +184,7 @@ jobs:
           }, sort_keys=True))
           PY
       - name: Verify Chinese glyph fallback in the system Qt runtime
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: |
           python3 - <<'PYFONT'
           from PyQt6.QtGui import QFont, QGuiApplication, QTextLayout
@@ -184,8 +199,10 @@ jobs:
           print({"text": text, "fallback_families": [run.rawFont().familyName() for run in runs]})
           PYFONT
       - name: Run lint gate
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: python3 -m ruff check src tests
       - name: Run shared source contracts
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: |
           python3 - <<'PYCONTRACTS'
           import subprocess
@@ -194,17 +211,21 @@ jobs:
           subprocess.run([sys.executable, "-m", "pytest", "-q", *CHEAP_SOURCE_TARGETS], check=True)
           PYCONTRACTS
       - name: Run scoped static type gate
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: |
           python3 -m mypy --platform linux
           python3 -m mypy --platform darwin
       - name: Build vendored Veusz helpers
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         working-directory: third_party/veusz
         run: QMAKE_EXE="$(command -v qmake6)" python3 setup.py build_ext --inplace
       - name: Verify vendored Veusz helpers
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         env:
           PYTHONPATH: third_party/veusz
         run: python3 -c 'from veusz.helpers import _nc_cntr, qtmml, qtloops, recordpaint, threed; assert all((qtloops, qtmml, recordpaint, threed, _nc_cntr))'
       - name: Verify minimal wheel surface
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -215,7 +236,7 @@ jobs:
         # These same 12 nodes remain in every full comprehensive suite.
         # Only the explicitly closed affected layer omits native diagnostics and full profiles.
         # Preserve all original predecessors, assertions and phase review below.
-        if: ${{ steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch' || inputs.native_regression_preflight == true }}
+        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch' || inputs.native_regression_preflight == true) }}
         run: |
           python3 - <<'PY'
           import hashlib
@@ -292,23 +313,24 @@ jobs:
           raise SystemExit(result.returncode if result.returncode else (4 if issues else 0))
           PY
       - name: Run reviewed affected public feedback
-        if: ${{ steps.native-feedback.outcome == 'success' && steps.native-feedback.outputs.layer == 'affected' && github.event_name != 'workflow_dispatch' }}
+        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome == 'success' && steps.native-feedback.outputs.layer == 'affected' && github.event_name != 'workflow_dispatch') }}
         env:
           SCIPLOT_EVENT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE" --run-affected
       - name: Run reviewed public focused behavior
-        if: ${{ (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && ((steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch')) }}
         run: python3 -m sciplot_core.verification.ci_public_profiles focused
       - name: Run reviewed public comprehensive behavior
-        if: ${{ (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && ((steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch')) }}
         # Both profiles use the existing private-absent source-stage owner.
         # The wrapper streams its owned command.log without changing completion.
         run: python3 -m sciplot_core.verification.ci_public_profiles comprehensive
       - name: Verify source-checkout wrapper bootstrap
+        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
       - name: Run readiness check
-        if: ${{ steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch' }}
+        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') }}
         run: skill/scripts/sciplot doctor --json
       - name: Run fixture-free lifecycle smoke
-        if: ${{ steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch' }}
+        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') }}
         run: skill/scripts/sciplot smoke --out .tmp_verify/ci_runtime_smoke --json
