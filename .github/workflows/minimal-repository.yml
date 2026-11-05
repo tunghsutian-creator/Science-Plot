@@ -11,6 +11,10 @@ on:
         required: false
         default: false
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   feedback-plan:
     runs-on: ubuntu-24.04
@@ -51,6 +55,8 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONNOUSERSITE: "1"
+      # Enable only after review; first enabled fresh run establishes its own controlled origin.
+      SCIPLOT_PUBLIC_REUSE: "false"
     steps:
       - name: Require a valid scheduling plan
         env:
@@ -279,9 +285,18 @@ jobs:
                               print(log.read_text(errors="replace"))
           raise SystemExit(result.returncode if result.returncode else (4 if issues else 0))
           PY
+      - name: Prepare public result reference
+        id: public-reference
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONPYCACHEPREFIX: ${{ github.workspace }}/.tmp_verify/ci-public-pycache
+        run: python3 -m sciplot_core.verification.ci_public_reuse prepare
       - name: Run reviewed public focused behavior
-        run: python3 -m pytest -q --input-scope public-focused
+        if: ${{ steps.public-reference.outputs.reuse != 'true' }}
+        run: python3 -m sciplot_core.verification.ci_public_reuse focused
       - name: Run reviewed public comprehensive behavior
+        if: ${{ steps.public-reference.outputs.reuse != 'true' }}
         # Original generated observer negatives genuinely disable Python hooks.
         # Execute every public comprehensive node in a bound source-only stage;
         # raw/golden private namespaces remain outside its input closure.
@@ -299,7 +314,7 @@ jobs:
           progress_pid=$!
           trap 'kill "$progress_pid" 2>/dev/null || true; wait "$progress_pid" 2>/dev/null || true' EXIT
           stage_status=0
-          python3 -m sciplot_core.verification.public_stage --profile public-comprehensive --out .tmp_verify/ci_public_comprehensive || stage_status=$?
+          python3 -m sciplot_core.verification.ci_public_reuse comprehensive || stage_status=$?
           kill "$progress_pid" 2>/dev/null || true
           wait "$progress_pid" 2>/dev/null || true
           trap - EXIT
@@ -313,3 +328,19 @@ jobs:
         run: skill/scripts/sciplot doctor --json
       - name: Run fixture-free lifecycle smoke
         run: skill/scripts/sciplot smoke --out .tmp_verify/ci_runtime_smoke --json
+      - name: Seal fresh public origin
+        id: public-origin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: "1"
+          PYTHONPYCACHEPREFIX: ${{ github.workspace }}/.tmp_verify/ci-public-pycache
+        run: python3 -m sciplot_core.verification.ci_public_reuse publish
+      - name: Preserve fresh public origin
+        if: ${{ steps.public-origin.outputs.artifact == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .tmp_verify/ci-public-reference/public-result.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 7

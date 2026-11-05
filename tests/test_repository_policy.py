@@ -71,15 +71,18 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     assert "native_regression_preflight:" in dispatch
     assert "type: boolean" in dispatch and "default: false" in dispatch
     for name, command in (
-        ("Run reviewed public focused behavior", "--input-scope public-focused"),
-        ("Run reviewed public comprehensive behavior", "--profile public-comprehensive"),
+        ("Run reviewed public focused behavior", "ci_public_reuse focused"),
+        ("Run reviewed public comprehensive behavior", "ci_public_reuse comprehensive"),
         ("Run scoped static type gate", "python3 -m mypy --platform darwin"),
         ("Run readiness check", "skill/scripts/sciplot doctor --json"),
         ("Run fixture-free lifecycle smoke", "skill/scripts/sciplot smoke --out"),
     ):
         step = next(step for step in steps if step.startswith(name))
         assert command in step
-        assert "        if:" not in step, f"Required gate became conditional: {name}"
+        if name.startswith("Run reviewed public "):
+            assert "if: ${{ steps.public-reference.outputs.reuse != 'true' }}" in step
+        else:
+            assert "        if:" not in step, f"Required physical gate became conditional: {name}"
     from sciplot_core.verification.ci_feedback import NATIVE_PREFIX, NATIVE_EXPECTED, native_preflight_plan
     manifest = json.loads((ROOT / "src/sciplot_core/verification/input_scope_manifest.json").read_text())
     assert len(NATIVE_PREFIX) == 7 and len(NATIVE_EXPECTED) == 12
@@ -169,3 +172,9 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
         context.setenv("GITHUB_OUTPUT", str(native_output))
         assert ci_feedback.main() == 0
         assert native_output.read_text() == "preflight=true\n"
+    from ci_public_reference_support import exercise_collector, exercise_fresh_origin, exercise_head_source, exercise_public_reference, exercise_wire
+    exercise_public_reference(ROOT, tmp_path, monkeypatch)
+    exercise_collector(ROOT, tmp_path, monkeypatch)
+    exercise_wire(tmp_path, monkeypatch)
+    exercise_head_source(tmp_path)
+    exercise_fresh_origin(tmp_path, monkeypatch)

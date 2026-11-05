@@ -120,10 +120,50 @@ its failure retains early preflight. Superseded runs remain cancelled, never reu
 This only affects workflows containing the new groups; do not cancel an existing
 acceptance by API. Actions scheduling is not a guarantee of chronological queue
 order, and completion still requires the latest intended candidate's actual gates.
-Cross-event CI reuse is not enabled: fresh required-check policy and branch/event,
-resolved dependency, input and guard-mode equivalence have not been established.
-A matching SHA or runner label alone cannot authorize skipping a canonical gate.
-Do not cancel an already running acceptance to apply this scheduling change.
+The finite cross-event public-result path is implemented but disabled by default
+(`SCIPLOT_PUBLIC_REUSE=false`). Root enables it only in a reviewed frozen workflow.
+Only main push may reference a prior actual non-fork push origin from this repository;
+other branch pushes can only execute fresh and produce an origin. Both need the same
+actual Ubuntu24/Python
+3.12 image/CPU class, installed package/native/font/ABI facts, source/public-input
+closure, exact profiles/commands and controlled process environment. A matching SHA
+or runner label alone is insufficient. Existing current native/runtime/type gates,
+Doctor and smoke still execute. Unknown/incompatible required policy, unsupported
+facts, absent/expired/corrupt origin or any difference means explicit FRESH with a
+reason; unexpected programming defects fail rather than silently run hours again.
+
+Two profiles use a complete fixed environment only after fresh eligibility facts
+were collected: exact current workspace/source/runtime roots, PATH/locale/offscreen,
+owned initially empty HOME/TMP and an empty PYTHONPYCACHEPREFIX with bytecode writes
+disabled. GitHub branch/run/token variables are not inherited. No arbitrary path
+stripping or inode/host-name equivalence is used. Unsupported preparation keeps the
+old ambient fresh path and cannot publish a reusable origin. This controlled mode
+requires its own first actual complete origin; old f1a results are not upgraded.
+
+The collector records ImageOS/ImageVersion, OS/kernel/CPU class, actual Python/Qt/
+helper and dynamic Qt plugin identities, effective system fontconfig bytes, installed distribution bytes (apt metadata ownership when no
+wheel file list exists), resolved system package versions, extension/ldd dependencies,
+fonts and build/ABI parameters. Actual tracked bytes/execute modes must match HEAD
+objects even when Git index flags could hide edits; compatibility also binds
+source/file modes and ownership while dev/inode/timestamps are local freshness only. It never traverses HOME or private namespaces.
+Per-operation file-byte memoization rechecks identity; no result or metadata cache
+survives collection. File counts/bytes/elapsed costs are separate diagnostics;
+Linux collector cost and hit rate require the real supported runner, not Mac unit
+simulations. An unknown path, missing tool/dependency or changing byte is FRESH.
+
+One small fixed-JSON Actions artifact can describe an actually executed origin:
+focused retains its original aggregate/real exit, comprehensive retains its existing
+validated metadata; no new focused phase platform is added. The official origin
+run/attempt/job must subsequently be complete SUCCESS with both canonical profile
+steps actually successful. Referenced runs cannot generate an origin or serve as
+chains. A subsequent consumer verifies official metadata, artifact digest, one safe
+JSON member, exact binding and a fresh supported required-policy snapshot. The
+reference branch repeats current binding and policy checks after the health gates;
+drift or missing policy after skipping profiles is an actual FAIL, never a late
+implicit five-hour retry. The claim is prior official public software behavior; it is not current-host full
+execution, native-output reuse, private capture, scientific acceptance or release
+permission. On reference, the job summary links the original run explicitly.
+Do not cancel an already running acceptance to apply these changes.
 
 Reuse is per claim. Treat behavior inputs, observation/evidence rules and narrative
 references separately; do not invent one universal identity or cache policy.

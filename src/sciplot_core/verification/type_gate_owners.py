@@ -62,7 +62,7 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
             "src/sciplot_core/doctor/actions.py", "src/sciplot_core/doctor/runtime_checks.py",
             "src/sciplot_core/doctor/readiness_checks.py",
             "src/sciplot_core/studio_core/lifecycle_contract.py",
-            "tests/public_curve_inputs.py",
+            "tests/public_curve_inputs.py", "tests/ci_public_reference_support.py",
             "tests/public_multitask_inputs.py",
             "tests/private_observer_support.py",
             "tests/process_private_descriptor_support.py",
