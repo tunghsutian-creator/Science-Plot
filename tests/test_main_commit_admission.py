@@ -296,7 +296,8 @@ def test_non_main_or_unknown_context_never_queries_an_origin(changes):
 
 
 @pytest.mark.parametrize(
-    "failure", [b"bad JSON", b"[]", b"x" * 2_000_001, 403, 302, "network"]
+    "failure", [b"bad JSON", b"[]", b"x" * 2_000_001, 403, 302, "network"],
+    ids=("bad_json", "array_response", "oversized_response", "permission_denied", "redirect", "network_error"),
 )
 def test_http_boundary_falls_back_without_secrets_or_redirects(monkeypatch, failure):
     class Opener:
