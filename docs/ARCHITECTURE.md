@@ -1528,6 +1528,36 @@ cancellation monitor. SSE parsing stays in `sse_client.py`; I/O interruption doe
 not race response disposal. Secondary cleanup errors preserve an existing failure;
 standalone cleanup errors surface through the redacted provider boundary.
 
+`assistant_provider/disclosure.py` owns the outbound projection of a validated
+local request. An absent disclosure field retains the visual route. Explicit
+properties-only requests omit the PNG and document-wide inventory/review/QA,
+locators and selected-point data; the local request and preview remain intact.
+The GUI states that choice before submission. It does not infer disclosure from
+free-form intent, and disclosure is never a host grant or edit capability.
+The existing provider descriptor advertises `properties_disclosure`. Both the
+submission and the stable worker-entry boundary use the same support admission
+before calling `generate`; older providers retain visual behavior and cannot
+silently receive a properties request as a full visual request. This is an
+implementation-support contract, not a sandbox for configured provider code.
+
+`assistant_provider/facts.py` owns detached optional `ProviderFacts`, containing
+provider response ID, model, numeric usage, observation status and terminal
+status. These are provider observations, not the local response UUID, a fee
+calculation or an admission proof. `openai_provider/observations.py` samples
+bounded metadata within the current SSE call before content callbacks can cancel
+it. Invalid counters retain an explicit unavailable state, without retaining the
+untrusted content or vetoing an otherwise valid proposal. Transport cleanup,
+cancellation, typed result and the GUI's original in-flight request carry these
+facts into the existing allowlisted Assistant history. There is no new registry
+or telemetry writer. Closing a window can deliver already queued calls to that
+runner only after its worker thread actually exits; timeout does not manufacture
+a terminal fact or apply a late proposal.
+
+Old request/response/history values without these optional fields remain
+readable and retain their previous serialized fields and hashes. Newly observed
+facts bind the new response/history payload; they do not change scientific
+identities, source bytes, native state, command admission or the generation writer.
+
 `plot_engine/edit_entry.py` admits and leases style/common edit checkpoint paths.
 A checkpoint retains the original literal request, not transaction stages. Replay
 uses that binding before fresh target discovery; the lifecycle journal remains

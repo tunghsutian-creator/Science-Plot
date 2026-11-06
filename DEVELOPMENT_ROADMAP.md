@@ -7,7 +7,22 @@ run counts have been removed from this operational roadmap. Git and the
 original local evidence retain that history; historical PASS is not a new
 snapshot's acceptance.
 
-## Immediate priority: close the measured native-cost batch
+## Immediate priority: bounded AI disclosure and provider facts
+
+The native digest-cost batch was delivered at `7b243305`; its original local
+full/capture/access and candidate/main CI records remain external evidence.
+The current authorized P2 slice is local code and offline simulation only:
+explicit visual/properties outbound context and factual optional provider usage
+through the existing Assistant request, transport, cancellation and history chain.
+Migrate every target caller and keep the old visual request/history readers.
+Preserve local PNG history and the separate path/revision/selection/expected-value
+admission; telemetry cannot authorize or veto a proposal. Do not send user data
+to a real provider, make paid calls, add fee estimates or expand DataMapping/P3.
+Development feedback uses affected offline contracts, complete static checks and
+the integrated caller/refusal controls. This local milestone is not a new release
+or whole-private-corpus certificate; merge/release gates retain their own scope.
+
+## Retained feedback and performance boundaries
 
 Keep routine feedback and final acceptance separate. The bounded CI policy selects
 a private-absent affected stage only for reviewed

@@ -557,6 +557,23 @@ Replace the example path with your checkout location:
 The assistant needs access to your local files. See the
 [AI connection guide](skill/references/external-control.md) for CLI and MCP details.
 
+The optional AI dock in the advanced native editor uses a separately configured
+provider and sends a request only when you ask it. Its **Send to AI** choice is
+explicit: **Visual** keeps the current page image and existing bounded context;
+**Properties only** sends the selected object's supported properties and your
+request, without the image, document inventory, review notes, QA summary or a
+selected data point. The page snapshot remains local for the existing visual
+history in either mode. Properties-only requires the provider to explicitly
+advertise support; an unsupported request is not sent or silently switched to
+Visual. Selection, document revision and expected-value checks
+still control whether a proposal can be applied.
+
+Provider-reported model, response ID and usage counters are retained when
+available, including for a discarded or cancelled proposal. Missing or invalid
+usage stays unknown, rather than zero. These observations do not estimate fees
+or authorize an edit; local Assistant response IDs remain separate. Local history
+does not store prompts, page images, API keys or raw setting values.
+
 ## Explore and contribute
 
 - [Example data and figure recipes](docs/assets/showcase/v2/README.md)
