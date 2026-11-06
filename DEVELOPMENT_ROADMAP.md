@@ -27,7 +27,7 @@ change counterexamples. Once these establish adequate local feedback and risk,
 continue the already authorized work without waiting for remote CI to begin
 development. Remote policy measurements and release gates remain their own
 explicit claims until actually observed. The current native digest change has
-matched development measurements in `docs/NATIVE_COST_20261106.md`. Close its
+matched development measurements in `docs/TASK_CAPABILITY_MEASUREMENTS.md`. Close its
 frozen full/capture/access and platform gates once before delivery. Do not add
 another cache framework, P2/P3 migration or feature to this batch.
 

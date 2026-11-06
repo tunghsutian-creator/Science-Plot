@@ -978,3 +978,81 @@ First-slice measurements are preserved separately. Warm native tests verify exac
 PNG/TIFF pixels and scientific audit, fresh-document reload, timeout/disconnect
 termination and code/runtime drift rejection; process reuse does not reuse stale
 native document state.
+
+
+## 2026-11-06 — Native history-validation cost
+
+The existing complete A–G semantic/native scenario was profiled on the same Mac,
+Python 3.14.7 runtime, Qt/helpers, source worktree and runtime wrapper. Its cold
+backend, generated UVvis fixture, assertions and original timeouts were unchanged.
+Each process had an independent, equal-length temporary output name, without
+another owned test run. These are unrecorded cProfile development measurements.
+
+| Source | Whole command elapsed | Result |
+| --- | ---: | --- |
+| `5d20e87c8606990c6dd1b8c5bdaf2607abbd0137` | 920.664658 s | A–G passed; original wait 0 |
+| lease prototype `a2008a86c7c980206b8ee5ba92fd73126f6075c0` | 894.678912 s | A–G passed; only 2.82% faster |
+| thread computation `03ce3deb588624708024850a51bc848f5346d644` | 681.127188 s | A–G passed; 26.02% faster |
+
+The final pair saved 239.537469 seconds. One sequential pair is not a statistical
+latency guarantee, whole-suite improvement or comparison against captured evidence
+mode. All three original source, command, wait and profile records are retained.
+
+The baseline parent spent 285.30 seconds decoding JSON, 229.48 seconds encoding
+it and 120.82 seconds querying supplementary groups. Native subprocess polling
+accounted for about 67.70 seconds. The change targets canonical JSON computation.
+
+The history reader hashes each freshly read metadata byte string and memoizes its
+canonical JSON digest in a bounded thread-local table. Every read still decodes
+a new dictionary. Schema checks and digest consumption retain their original
+short-circuit order. The private raw/value pair is consumed before either value
+is exposed or modified. At most 256 hash pairs are retained, with no parsed
+objects, source bytes, IO, host grant, checked history, currentness or PASS.
+Every permission, identity, source, object, history, lease/fence and CAS check
+still executes. Only the fixed loaded JSON algorithm's result is reused.
+
+The lease prototype hit 24.18% of lookups. The final case hit 99.93%: 98 canonical
+computations for 139,711 lookups. JSON encoder self time fell to 2.86 seconds.
+Both final and baseline parent profiles made 2,953 complete history reads,
+2,424,840 `open` calls and 1,014,343 supplementary-group observations. Fresh
+decoding was retained. No file observation or validation result is cached.
+
+The unchanged scenario checks scientific hashes, exact style deltas, scientific
+and stale-input refusals, replay/no-op behavior, bounded timeout recovery,
+export-only resume, lost-response recovery without reapplication and rollback.
+All operation outcomes and counters match. The counter window after
+creation/seed/open records 34 native commands and zero presentation data
+preparations in both versions; it does not count every setup subprocess. Injected
+failures are synchronous controls, not OS hard-kill evidence.
+
+Fifteen additional synthetic controls cover fresh history/blob reads across
+leases, detached metadata, equal-size/equal-mtime tampering, missing data,
+canonical reformatting, numeric representations, NaN/surrogate refusal order,
+bounded memory and thread isolation. All pre-existing assertions and decorators
+remain. Complete static type targets and shared ownership/import checks remain.
+
+Local records are under `.tmp_verify/native_perf_20261106_01/`. Each profile has
+its exact command, wrapper/source hashes, original wait, pstats and copied native
+counters. `FINAL_MATCHED_NATIVE_COMPARISON_03CE.json` binds the comparison. The
+unchanged node is
+`tests/test_plot_engine_native.py::test_native_semantic_engine_cases_a_to_g`.
+Reproduction needs the same supported runtime envelope and fresh outputs;
+shell Python or captured evidence mode defines a different experiment.
+
+The approved P1 prepared-publication/resource-role/selected-witness caller set
+was separately rechecked with no omitted caller or second writer found. Its
+scope and wider remaining findings belong to `DESIGN_PROJECT_CORE_MIGRATION.md`.
+This change introduces no publication, storage or resource authority.
+
+JSON parsing, complete ancestry checks, permissions and actual native work remain
+substantial. SavedWork and other workloads require their own measurements. Final
+frozen full/capture/strict-access and platform CI retain separate source-bound
+obligations; this synthetic development profile does not supply those claims.
+
+The final before/after TIFFs are byte-identical, 708×649 pixels at 300 dpi,
+with zero differing decoded pixels; fonts, axes, legend and title were also
+viewed. Different PDF/native bytes are not claimed equivalent. Both fixtures
+retain the publication-QA error `non_color_series_distinction`: their two solid
+curves differ only in color. Their target is inferred and ordinary QA passed;
+a confirmed target would block packaging on that error. The optimization keeps
+the original style and makes no journal-compliance claim.
