@@ -6,7 +6,6 @@ import json
 from typing import Any
 
 from sciplot_core.assistant_provider.facts import ProviderFacts, _fact_text
-from sciplot_core.openai_provider.errors import OpenAIProviderError
 
 
 class _ResponseFacts:
@@ -29,8 +28,6 @@ class _ResponseFacts:
         identity = self._identifier(response.get("id"))
         model = self._identifier(response.get("model"))
         if previous is not None:
-            if identity is not None and previous.response_id not in {None, identity}:
-                raise OpenAIProviderError("OpenAI response identity changed during one stream.")
             identity = identity or previous.response_id
             model = model or previous.model
         status = self._identifier(response.get("status")) if terminal else None
