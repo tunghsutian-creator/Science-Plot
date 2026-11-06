@@ -123,12 +123,16 @@ class RequestContextMixin:
         descriptor = self.runner.descriptor
         if descriptor is None:
             raise RuntimeError("No Assistant provider is connected.")
+        disclosure = str(self.disclosure_combo.currentData())
         intent_text = str(intent or "").strip()
         if not intent_text:
             intent_text = (
                 "Inspect the exact-current rendered page for context and suggest "
                 "a change only for the selected object when a visible issue can "
                 "be corrected with the allowed settings."
+                if disclosure == "visual"
+                else "Inspect the selected object's properties and suggest a change "
+                "only within its allowed settings. No page image is sent."
             )
         context = self.context_for_current_selection()
         _png, visual_preview = self.capture_current_plot_png()
@@ -153,4 +157,5 @@ class RequestContextMixin:
             context=context,
             allowed_proposal_kinds=allowed,
             visual_preview=visual_preview,
+            disclosure=disclosure,
         )

@@ -7,6 +7,7 @@ from sciplot_core.assistant_operations import VeuszSettingOperationBatch
 from sciplot_core.assistant_provider import (
     AssistantRequest,
     AssistantResponse,
+    ProviderFacts,
 )
 from sciplot_gui.studio_assistant_history import (
     append_assistant_history_event,
@@ -17,6 +18,13 @@ from sciplot_gui.studio_assistant.native_batch import native_batch_blocker
 
 
 class ContextHistoryMixin:
+    def _request_for_provider_result(self, request_id: str) -> AssistantRequest | None:
+        request = self._pending_request
+        if request is not None and request.request_id == request_id:
+            return request
+        request = self.runner.request
+        return request if request is not None and request.request_id == request_id else None
+
     @property
     def selected_widget(self) -> Any | None:
         return self._selected_widget
@@ -70,6 +78,7 @@ class ContextHistoryMixin:
         status: str,
         request: AssistantRequest,
         response: AssistantResponse | None = None,
+        provider_facts: ProviderFacts | None = None,
         batch: VeuszSettingOperationBatch | None = None,
         operations: list[Any] | tuple[Any, ...] | None = None,
         reason_code: str | None = None,
@@ -83,6 +92,7 @@ class ContextHistoryMixin:
             request=request,
             descriptor=self.runner.descriptor,
             response=response,
+            provider_facts=provider_facts,
             batch=batch,
             operations=operations,
             reason_code=reason_code,

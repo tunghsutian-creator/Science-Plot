@@ -19,7 +19,8 @@ class DockMixin:
         layout.setSpacing(8)
 
         self.intro_label = QtWidgets.QLabel(
-            "AI inspects the exact-current rendered page for context. It can "
+            "Choose whether AI receives the exact-current rendered page or "
+            "properties only. It can "
             "propose changes only to the selected object's supported properties."
         )
         self.intro_label.setWordWrap(True)
@@ -28,6 +29,20 @@ class DockMixin:
         self.selection_label = QtWidgets.QLabel()
         self.selection_label.setWordWrap(True)
         layout.addWidget(self.selection_label)
+
+        disclosure_row = QtWidgets.QHBoxLayout()
+        disclosure_row.addWidget(QtWidgets.QLabel("Send to AI:"))
+        self.disclosure_combo = QtWidgets.QComboBox()
+        self.disclosure_combo.setObjectName("sciplotAssistantDisclosure")
+        self.disclosure_combo.addItem("Visual (properties + page image)", "visual")
+        self.disclosure_combo.addItem("Properties only (no image)", "properties")
+        self.disclosure_combo.setToolTip(
+            "Visual sends the current page image and selected-object properties. "
+            "Properties only sends no image. A page snapshot is captured locally "
+            "in either mode for the existing edit and history checks."
+        )
+        disclosure_row.addWidget(self.disclosure_combo, 1)
+        layout.addLayout(disclosure_row)
 
         self.intent_edit = QtWidgets.QPlainTextEdit()
         self.intent_edit.setPlaceholderText(
@@ -97,7 +112,7 @@ class DockMixin:
         if self.provider is None:
             self.status_label.setText(
                 "No OpenAI Assistant is connected. Veusz editing remains fully "
-                "available; set OPENAI_API_KEY to enable visual AI edits."
+                "available; set OPENAI_API_KEY to enable AI edits."
             )
             self._refresh_ask_button()
             return

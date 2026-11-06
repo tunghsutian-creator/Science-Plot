@@ -12,8 +12,10 @@ from sciplot_core.assistant_provider import (
     AssistantProgressEvent,
     AssistantProvider,
     AssistantProviderDescriptor,
+    AssistantProviderFailure,
     AssistantRequest,
     AssistantResponse,
+    ProviderFacts,
 )
 
 _AUTO_ASSISTANT_PROVIDER = object()
@@ -81,6 +83,7 @@ class _AssistantProviderWorker(QtCore.QObject):
 
     @QtCore.pyqtSlot()
     def run(self) -> None:
+        provider_facts: ProviderFacts | None = None
         try:
             descriptor = AssistantProviderDescriptor.from_dict(
                 self._provider.descriptor.to_dict()
@@ -100,11 +103,14 @@ class _AssistantProviderWorker(QtCore.QObject):
                 emit_progress=self._emit_progress,
                 cancellation=self._cancellation,
             )
+            if isinstance(response, AssistantResponse):
+                provider_facts = response.provider_facts
             restored = (
                 AssistantResponse.from_dict(response)
                 if isinstance(response, dict)
                 else AssistantResponse.from_dict(response.to_dict())
             )
+            provider_facts = restored.provider_facts
             restored.validate_for_request(self._request)
             if self._cancellation.cancelled and restored.status != "cancelled":
                 restored = AssistantResponse(
@@ -117,9 +123,10 @@ class _AssistantProviderWorker(QtCore.QObject):
                     warnings=(
                         "The provider returned after cancellation; its result was discarded.",
                     ),
+                    provider_facts=provider_facts,
                 )
             self.response.emit(restored)
-        except AssistantCancelled:
+        except AssistantCancelled as exc:
             self.response.emit(
                 AssistantResponse(
                     request_id=self._request.request_id,
@@ -128,15 +135,19 @@ class _AssistantProviderWorker(QtCore.QObject):
                     request_sha256=self._request.payload_sha256,
                     status="cancelled",
                     understanding="Stopped at the user's request.",
+                    provider_facts=exc.provider_facts or provider_facts,
                 )
             )
         except Exception as exc:
-            self.failed.emit(
-                {
-                    "request_id": self._request.request_id,
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-            )
+            if isinstance(exc, AssistantProviderFailure):
+                provider_facts = exc.provider_facts or provider_facts
+            failure: dict[str, object] = {
+                "request_id": self._request.request_id,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+            if provider_facts is not None:
+                failure["provider_facts"] = provider_facts
+            self.failed.emit(failure)
         finally:
             self.finished.emit()
 
@@ -211,8 +222,8 @@ class AssistantRequestRunner(QtCore.QObject):
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.progress.connect(self.progress)
-        worker.response.connect(self.response)
-        worker.failed.connect(self.failed)
+        worker.response.connect(self._deliver_response)
+        worker.failed.connect(self._deliver_failure)
         worker.finished.connect(
             thread.quit,
             QtCore.Qt.ConnectionType.DirectConnection,
@@ -234,6 +245,16 @@ class AssistantRequestRunner(QtCore.QObject):
             raise RuntimeError("The connected Assistant provider cannot be stopped.")
         self._cancellation.cancel()
 
+    @QtCore.pyqtSlot(object)
+    def _deliver_response(self, response: AssistantResponse) -> None:
+        # Deliver on this receiver before its queued thread-finished cleanup;
+        # consumers can still bind a late result to this one inflight request.
+        self.response.emit(response)
+
+    @QtCore.pyqtSlot(object)
+    def _deliver_failure(self, payload: object) -> None:
+        self.failed.emit(payload)
+
     @QtCore.pyqtSlot()
     def _thread_finished(self) -> None:
         self._thread = None
@@ -248,7 +269,12 @@ class AssistantRequestRunner(QtCore.QObject):
             return True
         if self._cancellation is not None:
             self._cancellation.cancel()
-        return bool(thread.wait(max(int(wait_ms), 0)))
+        stopped = bool(thread.wait(max(int(wait_ms), 0)))
+        if stopped:
+            # Only this runner's already queued calls; never pump the app or
+            # turn a timeout into an observed provider completion.
+            QtCore.QCoreApplication.sendPostedEvents(self, QtCore.QEvent.Type.MetaCall)
+        return stopped
 
 
 __all__ = ["AssistantRequestRunner", "resolve_assistant_provider"]

@@ -2,12 +2,33 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from sciplot_core.assistant_operations import VeuszSettingOperationBatch
 from sciplot_core.assistant_provider import (
     AssistantRequest,
     AssistantResponse,
+    ProviderFacts,
 )
+
+
+def provider_facts_text(facts: ProviderFacts | None) -> str:
+    if facts is None:
+        return ""
+    lines = [f"Provider usage status: {facts.usage_status}"]
+    if facts.response_id is not None:
+        lines.append(f"Provider response: {facts.response_id}")
+    if facts.model is not None:
+        lines.append(f"Provider-reported model: {facts.model}")
+    if facts.terminal_status is not None:
+        lines.append(f"Provider terminal status: {facts.terminal_status}")
+    usage = facts.usage
+    lines.append(
+        "Provider-reported counters: " + json.dumps(usage, sort_keys=True)
+        if usage is not None
+        else "Usage amounts are unknown; they are not recorded as zero."
+    )
+    return "\n".join(lines)
 
 
 class RequestFlowMixin:
@@ -35,13 +56,20 @@ class RequestFlowMixin:
             (str(item["target_id"]), str(item["setting_path"])): dict(item)
             for item in capabilities
         }
-        self.proposal_view.setPlainText(
-            "Inspecting the exact-current rendered page…\n"
-            f"PNG SHA-256: {request.visual_preview['sha256']}"
-        )
-        self.status_label.setText(
-            "AI is inspecting the current page for a bounded selected-object proposal."
-        )
+        if request.disclosure == "visual":
+            self.proposal_view.setPlainText(
+                "Sending selected-object properties and the current page image…\n"
+                f"PNG SHA-256: {request.visual_preview['sha256']}"
+            )
+            self.status_label.setText(
+                "AI is inspecting the current page for a bounded selected-object proposal."
+            )
+        else:
+            self.proposal_view.setPlainText(
+                "Sending selected-object properties only. No image is sent.\n"
+                f"Local snapshot SHA-256: {request.visual_preview['sha256']}"
+            )
+            self.status_label.setText("AI is inspecting selected-object properties only.")
         try:
             self._record_history(status="submitted", request=request)
         except Exception:
@@ -80,20 +108,36 @@ class RequestFlowMixin:
         self.status_label.setText(str(getattr(event, "message", "AI is working…")))
 
     def _provider_response(self, response: AssistantResponse) -> None:
+        request = self._request_for_provider_result(response.request_id)
+        if request is None:
+            self._unbound_provider_result()
+            return
+        if getattr(self, "_window_closing", False):
+            try:
+                self._record_history(
+                    status="cancelled", request=request, response=response,
+                    reason_code="window_closed",
+                )
+            except Exception:
+                self.requestRejected.emit("Local Assistant history could not be finalized.")
+            finally:
+                self._clear_pending()
+            return
         context_blocker = self._document_context_blocker()
         if context_blocker is not None:
             self._reject_stale(
                 context_blocker,
                 reason_code="document_context_changed",
                 response=response,
+                request=request,
             )
             return
-        request = self._pending_request
-        if request is None:
+        if self._pending_request is None:
             self._reject_stale(
                 "Assistant response has no active request.",
                 reason_code="no_active_request",
                 response=response,
+                request=request,
             )
             return
         if not self._request_targets_current_selection(request):
@@ -206,4 +250,7 @@ class RequestFlowMixin:
                     f"• {label}: {operation.arguments.get('expected_value')!r} "
                     f"→ {operation.arguments.get('value')!r}"
                 )
+        facts_text = provider_facts_text(response.provider_facts)
+        if facts_text:
+            lines.extend(["", facts_text])
         return "\n".join(lines)

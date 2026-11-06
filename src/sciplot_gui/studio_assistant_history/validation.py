@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from sciplot_core.assistant_provider import ProviderFacts
 
 from sciplot_core.foundation.iso_timestamps import (
     require_zoned_iso_timestamp as _timestamp,
@@ -61,6 +62,10 @@ def validate_assistant_history_event(payload: dict[str, Any]) -> dict[str, Any]:
                 f"Unsupported Assistant history reason code: {reason_code!r}"
             )
     _required_text(payload.get("provider_id"), "provider_id", maximum=96)
+    if payload.get("disclosure", "visual") not in ("visual", "properties"):
+        raise ValueError("disclosure must be visual or properties.")
+    if "provider_facts" in payload:
+        ProviderFacts.from_dict(payload["provider_facts"])
     _required_text(payload.get("project_id"), "project_id", maximum=256)
     if "model_label" in payload:
         _required_text(payload["model_label"], "model_label", maximum=120)
@@ -153,6 +158,7 @@ def validate_assistant_history_event(payload: dict[str, Any]) -> dict[str, Any]:
                 "batch_sha256",
                 "applied_revision",
                 "after_page_render_sha256",
+                "provider_facts",
             )
         )
     ):

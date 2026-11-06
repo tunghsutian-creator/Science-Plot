@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import uuid4
-from sciplot_core.assistant_provider import canonical_payload_sha256
+from sciplot_core.assistant_provider import ProviderFacts, canonical_payload_sha256
 
 from sciplot_gui.studio_assistant_history.contracts import (
     ASSISTANT_HISTORY_KIND,
@@ -36,6 +36,7 @@ def build_assistant_history_event(
     request: Any,
     descriptor: Any | None = None,
     response: Any | None = None,
+    provider_facts: ProviderFacts | None = None,
     batch: Any | None = None,
     operations: list[Any] | tuple[Any, ...] | None = None,
     reason_code: str | None = None,
@@ -46,7 +47,7 @@ def build_assistant_history_event(
 ) -> dict[str, Any]:
     """Build an allowlisted history row from typed host-owned objects.
 
-    The function intentionally projects hashes and identifiers only. It never
+    The function projects hashes, identifiers and optional provider usage facts. It never
     serializes the request image, intent, provider instructions, model text,
     credentials, endpoint configuration, or raw setting values.
     """
@@ -137,6 +138,8 @@ def build_assistant_history_event(
     }
     if reason_code is not None:
         payload["reason_code"] = reason_code
+    if request.disclosure != "visual":
+        payload["disclosure"] = request.disclosure
     if model_label is not None:
         payload["model_label"] = model_label
     if before_render is not None:
@@ -144,11 +147,14 @@ def build_assistant_history_event(
     if selected_payload is not None:
         payload["selected_object"] = selected_payload
     if response is not None:
+        provider_facts = response.provider_facts
         payload["response_id"] = _uuid_text(
             response.response_id,
             "response_id",
         )
         payload["response_sha256"] = canonical_payload_sha256(response.to_dict())
+    if provider_facts is not None:
+        payload["provider_facts"] = provider_facts.to_dict()
     if batch is not None:
         payload["batch_id"] = _uuid_text(batch.batch_id, "batch_id")
         payload["batch_sha256"] = canonical_payload_sha256(batch.to_dict())
