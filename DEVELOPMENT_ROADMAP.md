@@ -1,44 +1,45 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-11-05. External AI is the task interface. Current behavior belongs
+Status: 2026-11-06. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
 original local evidence retain that history; historical PASS is not a new
 snapshot's acceptance.
 
-## Immediate priority: routine feedback cost
+## Immediate priority: close the measured native-cost batch
 
-Finish the small-change feedback boundary before more P1 architecture or features.
-The bounded CI policy now selects a private-absent affected stage only for reviewed
+Keep routine feedback and final acceptance separate. The bounded CI policy selects
+a private-absent affected stage only for reviewed
 design-prose leaves or the shared exact metadata-only task-timing contract. All
 unknown, mixed, scientific, native, guard and infrastructure changes retain complete
 public gates. Missing planning evidence widens rather than skips required work.
 Affected results name unexecuted full/real-private/capture/lifecycle responsibilities
-and cannot mint a canonical origin. Verify the routine end-to-end budget on an
-actual supported runner, including installation, full configured static checks,
-build/wheel and collection/stage costs; pure selection tests are not that timing.
-If the measured path exceeds three minutes, isolate the measured bottleneck before
-adding caches or shards. Preserve necessary frozen full, scientific and platform
-acceptance, but do not require it synchronously after every editing step. No new
-P1/features until this cost question has a demonstrated bounded daily answer.
+and cannot mint a canonical origin. Same-commit main admission can reference an
+already successful exact candidate; it does not execute another VM's tests.
+Retain measured installation, type and native-helper build costs when choosing
+later feedback optimization. Preserve necessary frozen full, scientific and
+platform acceptance without requiring it after every editing step.
 Use the same current code, runtime, input scope and unrecorded mode for the local
 before/after comparison; report the scope reduction separately from execution
 cost at equal coverage. Add real historical-failure shadows and unknown/shared
 change counterexamples. Once these establish adequate local feedback and risk,
 continue the already authorized work without waiting for remote CI to begin
 development. Remote policy measurements and release gates remain their own
-explicit, uncompleted claims until actually observed.
+explicit claims until actually observed. The current native digest change has
+matched development measurements in `docs/NATIVE_COST_20261106.md`. Close its
+frozen full/capture/access and platform gates once before delivery. Do not add
+another cache framework, P2/P3 migration or feature to this batch.
 
 ## Next bounded architecture work
 
-Finish the exact-candidate project-core acceptance first. Implementation of the
-shared generation writer, retained operators and host grants does not close all
-original architecture findings. Independently review the final source before
-adding features; use the existing migration contract and retained failure records
-rather than another policy or state registry.
+The approved P1 caller set has completed its bounded migration and delivery.
+Its prepared publications, finite roles and selected witnesses share the original
+generation writer. Wider original findings retain their own closure criteria.
+Review final source before selecting a further bounded scope; use the existing
+migration contract and retained failure records.
 
-The current bounded batch implements detached prepared publications, one retained
+That P1 scope implements detached prepared publications, one retained
 NativeSuite reader, generation-derived resource roles and one selected-figure
 witness across their existing consumers. Its closure is recorded in the migration
 contract; it does not close every historical scientific schema or domain port.
@@ -50,7 +51,7 @@ only for an official identical compatible origin; current native/runtime/health
 and private/full acceptance retain separate obligations. Preserve the final frozen
 batch's actual results outside its input closure rather than rewriting them here.
 
-1. **Close resource roles and query effects.** Separate scientific UUID, original
+1. **Review wider domain projections and query effects.** Separate scientific UUID, original
    locator, file-byte version, tree scope, host location, sealed readable content
    and materializable/executable artifacts. Enumerate their producers and all
    prepare/query/commit/export/cold-reopen consumers. Replace the remaining open
@@ -592,12 +593,6 @@ Use its historical-replay stage observations to distinguish necessary validation
 from remaining repeated work before claiming further latency gains. Neither a
 runner-region difference nor a passing subset establishes that cause or release
 readiness.
-The prepared-publication candidate still exceeded that deadline before the
-historical common-edit call returned. The next bounded correction batches its
-checkpoint membership and request read in the existing complete Store observation;
-it keeps external-file races, entry-lease freshness and every rejection boundary.
-Reduced duplicate reads alone remain insufficient: retain the actual native
-deadline, frozen full/capture/access gates and supported-platform CI.
 
 Package dependency cleanup, measured runtime/verification costs, finer global
 test-owner closure, outbound minimization and the remaining open scientific
