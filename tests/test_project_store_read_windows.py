@@ -51,9 +51,15 @@ def corrupt_object(store, entry):
 
 
 def test_digest_memo_keeps_every_history_and_blob_read_and_detaches_new_metadata(tmp_path, monkeypatch):
+    import json
+
     store, _old = store_with_files(tmp_path)
     publish(store, {"A.bin": b"C"})
     expected = store.snapshot()
+    # New raw encodings give this test a cold compute key without clearing any
+    # application cache; canonical history identities remain exactly the same.
+    for path in (store.root / ".sciplot_store/generations").glob("*.json"):
+        path.write_text(json.dumps(json.loads(path.read_bytes()), separators=(",", ":")))
     reads, gets = count_reads(monkeypatch)
     canonical_calls = []
     original_digest = state.digest
@@ -73,11 +79,13 @@ def test_digest_memo_keeps_every_history_and_blob_read_and_detaches_new_metadata
         assert sum(count for name, count in reads.items() if name.startswith("generations/")) == 3 * (expected["sequence"] + 1)
         assert gets[sha(b"C")] == 3
         assert len(canonical_calls) == expected["sequence"] + 1
-    assert io._metadata_digests == {}
     with io.locked():
         checked = state.checked_head(io)
         checked.close()
-    assert len(canonical_calls) == 2 * (expected["sequence"] + 1)
+    assert reads["head.json"] == 4
+    assert sum(count for name, count in reads.items() if name.startswith("generations/")) == 4 * (expected["sequence"] + 1)
+    assert gets[sha(b"C")] == 4
+    assert len(canonical_calls) == expected["sequence"] + 1
 
 
 @pytest.mark.parametrize("target", ["current", "parent", "blob", "missing"])
@@ -130,7 +138,7 @@ def test_digest_memo_preserves_canonical_json_and_numeric_representation(tmp_pat
             io.write("number.json", {"number": number})
             value, data = io._read_metadata("number.json")
             assert value is not None
-            result = state._metadata_digest(io, data, value)
+            result = state._metadata_digest(data, value)
             assert result == digest({"number": number})
             observed.append(result)
         assert len(set(observed)) == 4
@@ -145,7 +153,7 @@ def test_digest_memo_does_not_move_canonicalization_before_original_refusals(tmp
     with StoreIO(store.root, {}).locked() as io:
         checked = state.checked_head(io)
         checked.close()
-        retained = dict(io._metadata_digests)
+        retained = dict(state._METADATA_DIGESTS.values)
         path = store.root / ".sciplot_store/generations" / (original["generation"] + ".json")
         value = json.loads(path.read_bytes())
         value["malformed_canonical_value"] = float("nan") if malformed == "nan" else "\ud800"
@@ -166,23 +174,29 @@ def test_digest_memo_does_not_move_canonicalization_before_original_refusals(tmp
             message = "generation is missing" if target == "generation_kind" else "head and complete generation disagree"
             with pytest.raises(ProjectStoreError, match=message):
                 state.checked_head(io)
-        assert io._metadata_digests == retained
+        assert state._METADATA_DIGESTS.values == retained
 
 
-def test_digest_memo_is_bounded_and_expires_on_exceptional_lease_exit(tmp_path):
+def test_digest_memo_is_bounded_and_isolated_between_threads():
     import json
+    from threading import Thread
 
-    store, _old = store_with_files(tmp_path)
-    io = StoreIO(store.root, {})
-    with pytest.raises(RuntimeError, match="owned test interruption"):
-        with io.locked():
-            for number in range(260):
-                data = json.dumps({"number": number}).encode()
-                value = json.loads(data)
-                state._metadata_digest(io, data, value)
-            assert len(io._metadata_digests) == 256
-            raise RuntimeError("owned test interruption")
-    assert io.fd == -1 and io._metadata_digests == {}
+    original = dict(state._METADATA_DIGESTS.values)
+    observations = []
+
+    def worker():
+        before = len(state._METADATA_DIGESTS.values)
+        for number in range(260):
+            data = json.dumps({"number": number}).encode()
+            state._metadata_digest(data, json.loads(data))
+        observations.append((before, len(state._METADATA_DIGESTS.values)))
+
+    for _ in range(2):
+        thread = Thread(target=worker)
+        thread.start()
+        thread.join()
+    assert observations == [(0, 256), (0, 256)]
+    assert state._METADATA_DIGESTS.values == original
 
 
 def test_finite_window_checks_history_once_but_consumes_each_actual_blob(tmp_path, monkeypatch):

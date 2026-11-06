@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 import os
 from pathlib import Path
-from threading import get_ident
+from threading import get_ident, local
 from typing import Any, cast
 from types import MappingProxyType
 
@@ -49,20 +49,30 @@ def _generation_observation(io: StoreIO, identity: str) -> tuple[dict[str, Any],
     return _generation_value(io, identity, value), data
 
 
-def _metadata_digest(io: StoreIO, data: bytes, value: dict[str, Any]) -> str:
+class _MetadataDigests(local):
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+
+
+_METADATA_DIGESTS = _MetadataDigests()
+
+
+def _metadata_digest(data: bytes, value: dict[str, Any]) -> str:
     """Pure computation for one fresh, unmodified _read_metadata result.
 
     This reader consumes the pair before exposing either value. Every read,
-    decode and admission still executes; no file fact or parsed metadata is
-    retained. The bounded memo dies with its actual IO lease.
+    decode and admission still executes; only the fixed loaded JSON algorithm's
+    result is retained. The bounded thread-local memo holds no parsed metadata,
+    IO, authorization, currentness or validation outcome.
     """
     key = sha(data)
-    known = io._metadata_digests.get(key)
+    memo = _METADATA_DIGESTS.values
+    known = memo.get(key)
     if known is None:
         known = digest(value)
-        if len(io._metadata_digests) >= 256:
-            del io._metadata_digests[next(iter(io._metadata_digests))]
-        io._metadata_digests[key] = known
+        if len(memo) >= 256:
+            del memo[next(iter(memo))]
+        memo[key] = known
     return known
 
 
@@ -180,7 +190,7 @@ def _read_checked_head(io: StoreIO) -> CheckedHead | None:
             return None
         value, data = _generation_observation(io, pointer["generation"])
         if (pointer.get("kind") != "sciplot_project_head" or pointer.get("version") != 1
-                or pointer.get("sha256") != _metadata_digest(io, data, value) or pointer.get("project_id") != value["project_id"]):
+                or pointer.get("sha256") != _metadata_digest(data, value) or pointer.get("project_id") != value["project_id"]):
             raise ProjectConflict("The project head and complete generation disagree.")
         for name, item in value["files"].items():
             parts(name)
@@ -191,7 +201,7 @@ def _read_checked_head(io: StoreIO) -> CheckedHead | None:
         cursor, generations = value, {value["generation"]: value}
         while cursor.get("parent") is not None:
             parent, data = _generation_observation(io, cursor["parent"])
-            if (parent["generation"] in generations or cursor.get("parent_sha256") != _metadata_digest(io, data, parent)
+            if (parent["generation"] in generations or cursor.get("parent_sha256") != _metadata_digest(data, parent)
                     or parent["project_id"] != value["project_id"] or parent["sequence"] != cursor["sequence"] - 1):
                 raise ProjectConflict("The immutable complete project history changed or split.")
             generations[parent["generation"]] = parent
