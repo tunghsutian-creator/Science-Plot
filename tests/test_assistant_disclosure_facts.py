@@ -356,3 +356,41 @@ def test_changed_provider_metadata_records_the_terminal_observation_without_veto
     assert response.response_id not in {"resp_initial-observation", _EXTERNAL_ID}
     assert request.to_dict() == before
     assert connection.closed == connection.response.closed == 1
+
+
+@pytest.mark.parametrize("failure", ["cancel", "value", "secret"],
+                         ids=["cancelled", "value-error", "redacted-error"])
+def test_completed_progress_callback_failure_keeps_facts_and_never_returns_a_proposal(failure):
+    import traceback
+    from sciplot_core.assistant_provider import AssistantCancelled
+    from sciplot_core.openai_provider import OpenAIProviderError
+
+    connection = _Connection(_terminal("proposal", usage=_USAGE))
+    request = _request()
+    before = request.to_dict()
+    original = (AssistantCancelled("post-stream-progress") if failure == "cancel" else
+                ValueError("post-stream-progress") if failure == "value" else
+                RuntimeError("post-stream-progress " + _KEY))
+    stages = []
+
+    def progress(event):
+        stages.append(event.stage)
+        if event.stage == "validating":
+            assert connection.closed == connection.response.closed == 1
+            raise original
+
+    with pytest.raises(AssistantCancelled if failure == "cancel" else OpenAIProviderError) as exc:
+        _provider(lambda *_args: connection).generate(
+            request, emit_progress=progress, cancellation=AssistantCancellationToken())
+    assert stages[-1] == "validating" and len(connection.sent) == 1
+    assert exc.value.provider_facts.response_id == _EXTERNAL_ID
+    assert exc.value.provider_facts.model == "observed-model"
+    assert exc.value.provider_facts.usage == _USAGE
+    assert exc.value.provider_facts.terminal_status == "completed"
+    assert "post-stream-progress" in str(exc.value)
+    assert _KEY not in "".join(traceback.format_exception(exc.value))
+    if failure == "cancel":
+        assert exc.value is original
+    else:
+        assert type(original).__name__ in str(exc.value)
+    assert request.to_dict() == before
