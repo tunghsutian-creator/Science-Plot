@@ -30,7 +30,7 @@ class DockMixin:
         self.selection_label.setWordWrap(True)
         layout.addWidget(self.selection_label)
 
-        disclosure_row = QtWidgets.QHBoxLayout()
+        disclosure_row = QtWidgets.QVBoxLayout()
         disclosure_row.addWidget(QtWidgets.QLabel("Send to AI:"))
         self.disclosure_combo = QtWidgets.QComboBox()
         self.disclosure_combo.setObjectName("sciplotAssistantDisclosure")
@@ -42,7 +42,7 @@ class DockMixin:
             "Properties only sends no image. A page snapshot is captured locally "
             "in either mode for the existing edit and history checks."
         )
-        disclosure_row.addWidget(self.disclosure_combo, 1)
+        disclosure_row.addWidget(self.disclosure_combo)
         layout.addLayout(disclosure_row)
 
         self.intent_edit = QtWidgets.QPlainTextEdit()
