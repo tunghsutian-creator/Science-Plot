@@ -11,7 +11,7 @@ from sciplot_core.assistant_operations import (
 )
 from sciplot_core.assistant_provider import (
     AssistantCancellationToken,
-    AssistantCancelled,
+    AssistantProviderFailure,
     AssistantProgressEvent,
     AssistantProviderDescriptor,
     AssistantRequest,
@@ -27,6 +27,7 @@ from sciplot_core.openai_provider.contracts import (
 )
 
 from sciplot_core.openai_provider.errors import (
+    OpenAIProviderError,
     _AssistantContextUnavailable,
 )
 
@@ -322,50 +323,56 @@ class OpenAIResponsesProvider:
         )
         try:
             cancellation.raise_if_cancelled()
-        except AssistantCancelled as exc:
-            exc.provider_facts = result.provider_facts
-            raise
-        if not proposing_emitted:
-            text_started()
-        progress(
-            "validating",
-            "Validating the response against the local typed operation boundary.",
-            0.92,
-        )
-        if result.refusal:
-            refusal = _redact(result.refusal, secrets=())[:500]
-            response = self._response(
-                restored,
-                status="needs_human_confirmation",
-                understanding="The model declined to create a Veusz edit proposal.",
-                warnings=(refusal,),
+            if not proposing_emitted:
+                text_started()
+            progress(
+                "validating",
+                "Validating the response against the local typed operation boundary.",
+                0.92,
             )
-        elif result.incomplete_reason:
-            response = self._response(
-                restored,
-                status="needs_rule_repair",
-                understanding=(
-                    "The model response ended before a complete typed proposal was "
-                    "available."
-                ),
-                warnings=(f"Incomplete response: {result.incomplete_reason[:400]}",),
-            )
-        else:
-            try:
-                envelope = _model_envelope(result.text)
-                response = self._typed_model_response(restored, envelope)
-            except ValueError as exc:
-                safe = _redact(exc, secrets=())[:420]
+            if result.refusal:
+                refusal = _redact(result.refusal, secrets=())[:500]
+                response = self._response(
+                    restored,
+                    status="needs_human_confirmation",
+                    understanding="The model declined to create a Veusz edit proposal.",
+                    warnings=(refusal,),
+                )
+            elif result.incomplete_reason:
                 response = self._response(
                     restored,
                     status="needs_rule_repair",
                     understanding=(
-                        "The model response could not be converted into a safe "
-                        "selected-object proposal. The figure was not changed."
+                        "The model response ended before a complete typed proposal was "
+                        "available."
                     ),
-                    warnings=(f"Typed proposal rejected: {safe}",),
+                    warnings=(f"Incomplete response: {result.incomplete_reason[:400]}",),
                 )
-        return replace(response, provider_facts=result.provider_facts)
+            else:
+                try:
+                    envelope = _model_envelope(result.text)
+                    response = self._typed_model_response(restored, envelope)
+                except ValueError as exc:
+                    safe = _redact(exc, secrets=())[:420]
+                    response = self._response(
+                        restored,
+                        status="needs_rule_repair",
+                        understanding=(
+                            "The model response could not be converted into a safe "
+                            "selected-object proposal. The figure was not changed."
+                        ),
+                        warnings=(f"Typed proposal rejected: {safe}",),
+                    )
+            return replace(response, provider_facts=result.provider_facts)
+        except AssistantProviderFailure as exc:
+            exc.provider_facts = result.provider_facts
+            raise
+        except Exception as exc:
+            safe = _redact(exc, secrets=(self.config.api_key,))
+            raise OpenAIProviderError(
+                f"OpenAI completed response handling failed: {type(exc).__name__}: {safe}",
+                provider_facts=result.provider_facts,
+            ) from None
 
 
 def load_openai_provider_from_environment(
