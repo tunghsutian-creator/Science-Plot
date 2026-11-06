@@ -1419,6 +1419,16 @@ window encloses a native callback or source preparation. Every consumed object
 is still read and verified. Returned head, member, projection and resolver
 metadata are detached from a retained proof, so editing a returned dictionary
 cannot change generation authority. No bytes or PASS survive an operation.
+The history reader separately memoizes only canonical JSON digest computation
+within an actual StoreIO lease. Each admission still reads and decodes every
+generation afresh, validates its schema at the original point, walks the full
+parent chain, and consumes every required object. A digest lookup uses the SHA-256
+of the actual newly read raw JSON bytes; changed formatting recomputes the same
+canonical result, and changed values recompute a different result. The table
+contains at most 256 hash pairs, holds no parsed values or validation outcomes,
+and is cleared on normal or exceptional lease release. Its private raw/value
+pair is consumed before the reader exposes either value. It neither carries a
+checked history across a fence nor changes permission, source or CAS checks.
 Host archive-member selection reads canonical member names and full public command
 records through one primary Store admission. `commands()` delegates to that same
 query; original journal, pending-projection, history and object validation remain.

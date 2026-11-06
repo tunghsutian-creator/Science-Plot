@@ -56,12 +56,12 @@ def test_bulk_observation_has_one_checked_generation_and_explicit_physical_role(
     prefix = repository.attachment.entry["namespace"]
     names = (prefix + "/head.json", prefix + "/revisions/00000000.json", prefix + "/revisions", prefix + "/missing")
     reads = Counter()
-    original = StoreIO.read
+    original = StoreIO._read_metadata
     def read(io, name):
         reads[name] += 1
         return original(io, name)
     before = inventory(store.root)
-    monkeypatch.setattr(StoreIO, "read", read)
+    monkeypatch.setattr(StoreIO, "_read_metadata", read)
     observed = store.observe_members(names, projection=projection)
     assert observed.head["generation"] == observed.selected["generation"] == snapshot["generation"]
     assert observed.members[names[0]].data == b'{"revision":0}'

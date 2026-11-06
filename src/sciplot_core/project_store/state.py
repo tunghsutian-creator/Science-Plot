@@ -16,7 +16,7 @@ from sciplot_core.project_commands.resources import PreparedFile
 from uuid import uuid4
 
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
-from .io import STORE, StoreIO, digest, parts
+from .io import STORE, StoreIO, digest, parts, sha
 from .read_directories import reading_directories
 from .root_bindings import identities
 from .command_records import command_path as command_path, read_command as read_command, read_commands as read_commands
@@ -26,15 +26,44 @@ def boundary(_name: str) -> None:
     """Named storage boundaries; fault tests replace this function in owned children."""
 
 
-def generation(io: StoreIO, identity: str) -> dict[str, Any]:
+def _generation_path(identity: str) -> str:
     if not isinstance(identity, str) or len(identity) != 32 or any(c not in "0123456789abcdef" for c in identity):
         raise ProjectStoreError("Invalid immutable project generation identity.")
-    value = io.read(f"generations/{identity}.json")
+    return f"generations/{identity}.json"
+
+
+def _generation_value(io: StoreIO, identity: str, value: dict[str, Any] | None) -> dict[str, Any]:
     if (value is None or value.get("generation") != identity
             or value.get("kind") != "sciplot_project_generation" or value.get("version") != 1):
         io.validation_failed()
         raise ProjectStoreError("The immutable project generation is missing.")
     return value
+
+
+def generation(io: StoreIO, identity: str) -> dict[str, Any]:
+    return _generation_value(io, identity, io.read(_generation_path(identity)))
+
+
+def _generation_observation(io: StoreIO, identity: str) -> tuple[dict[str, Any], bytes]:
+    value, data = io._read_metadata(_generation_path(identity))
+    return _generation_value(io, identity, value), data
+
+
+def _metadata_digest(io: StoreIO, data: bytes, value: dict[str, Any]) -> str:
+    """Pure computation for one fresh, unmodified _read_metadata result.
+
+    This reader consumes the pair before exposing either value. Every read,
+    decode and admission still executes; no file fact or parsed metadata is
+    retained. The bounded memo dies with its actual IO lease.
+    """
+    key = sha(data)
+    known = io._metadata_digests.get(key)
+    if known is None:
+        known = digest(value)
+        if len(io._metadata_digests) >= 256:
+            del io._metadata_digests[next(iter(io._metadata_digests))]
+        io._metadata_digests[key] = known
+    return known
 
 
 _CHECKED_HEAD = object()
@@ -149,9 +178,9 @@ def _read_checked_head(io: StoreIO) -> CheckedHead | None:
         pointer = io.read("head.json")
         if pointer is None:
             return None
-        value = generation(io, pointer["generation"])
+        value, data = _generation_observation(io, pointer["generation"])
         if (pointer.get("kind") != "sciplot_project_head" or pointer.get("version") != 1
-                or pointer.get("sha256") != digest(value) or pointer.get("project_id") != value["project_id"]):
+                or pointer.get("sha256") != _metadata_digest(io, data, value) or pointer.get("project_id") != value["project_id"]):
             raise ProjectConflict("The project head and complete generation disagree.")
         for name, item in value["files"].items():
             parts(name)
@@ -161,8 +190,8 @@ def _read_checked_head(io: StoreIO) -> CheckedHead | None:
                 io.get(item)
         cursor, generations = value, {value["generation"]: value}
         while cursor.get("parent") is not None:
-            parent = generation(io, cursor["parent"])
-            if (parent["generation"] in generations or cursor.get("parent_sha256") != digest(parent)
+            parent, data = _generation_observation(io, cursor["parent"])
+            if (parent["generation"] in generations or cursor.get("parent_sha256") != _metadata_digest(io, data, parent)
                     or parent["project_id"] != value["project_id"] or parent["sequence"] != cursor["sequence"] - 1):
                 raise ProjectConflict("The immutable complete project history changed or split.")
             generations[parent["generation"]] = parent

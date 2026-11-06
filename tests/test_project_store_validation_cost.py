@@ -32,11 +32,11 @@ def populated(tmp_path, count=8):
 def test_one_operation_reads_history_linearly_and_keeps_complete_receipt_census(tmp_path, monkeypatch, entry):
     store, snapshot = populated(tmp_path)
     reads = Counter()
-    original = StoreIO.read
+    original = StoreIO._read_metadata
     def observed(io, name):
         reads[name] += 1
         return original(io, name)
-    monkeypatch.setattr(StoreIO, "read", observed)
+    monkeypatch.setattr(StoreIO, "_read_metadata", observed)
     getattr(store, entry)()
     generations = sum(count for name, count in reads.items() if name.startswith("generations/"))
     assert generations <= 2 * (snapshot["sequence"] + 1), reads
@@ -165,7 +165,7 @@ def test_one_admission_shares_history_with_all_read_and_replay_helpers(tmp_path,
     store, snapshot = populated(tmp_path, 2)
     receipt = store.query("command-1")
     reads, objects = Counter(), Counter()
-    original_read, original_get = StoreIO.read, StoreIO.get
+    original_read, original_get = StoreIO._read_metadata, StoreIO.get
     def read(io, name):
         reads[name] += 1
         return original_read(io, name)
@@ -174,7 +174,7 @@ def test_one_admission_shares_history_with_all_read_and_replay_helpers(tmp_path,
         return original_get(io, item)
     with StoreIO(store.root, {}).locked() as io:
         fd, epoch = io.fd, io.validation_epoch
-        monkeypatch.setattr(StoreIO, "read", read)
+        monkeypatch.setattr(StoreIO, "_read_metadata", read)
         monkeypatch.setattr(StoreIO, "get", get)
         for number in range(2):
             if entry in {"query", "missing"}:
@@ -301,11 +301,11 @@ def interrupted_head(tmp_path, monkeypatch):
 def test_recovery_borrows_only_its_pre_mutation_head_and_refreshes_after_receipt_save(tmp_path, monkeypatch):
     store = interrupted_head(tmp_path, monkeypatch)
     reads = Counter()
-    original = StoreIO.read
+    original = StoreIO._read_metadata
     def read(io, name):
         reads[name] += 1
         return original(io, name)
-    monkeypatch.setattr(StoreIO, "read", read)
+    monkeypatch.setattr(StoreIO, "_read_metadata", read)
     assert store.recover()["phase"] == "complete"
     assert reads["head.json"] == 2  # Initial admission and fresh proof after receipt save.
     assert (store.root / "document.vsz").read_bytes() == b"pending"
@@ -423,7 +423,7 @@ def test_historical_leaf_borrows_history_but_consumes_fresh_exact_object_each_ti
     store, snapshot = populated(tmp_path, 3)
     receipt = store.query("command-0")
     reads, objects = Counter(), Counter()
-    original_read, original_get = StoreIO.read, StoreIO.get
+    original_read, original_get = StoreIO._read_metadata, StoreIO.get
     def read(io, name):
         reads[name] += 1
         return original_read(io, name)
@@ -432,7 +432,7 @@ def test_historical_leaf_borrows_history_but_consumes_fresh_exact_object_each_ti
         return original_get(io, entry)
     with StoreIO(store.root, {}).locked() as io:
         fd, epoch = io.fd, io.validation_epoch
-        monkeypatch.setattr(StoreIO, "read", read)
+        monkeypatch.setattr(StoreIO, "_read_metadata", read)
         monkeypatch.setattr(StoreIO, "get", get)
         assert store.read_bytes("document.vsz", generation=receipt["generation"]) == b"0"
         historic = receipt["draft"]["writes"]["document.vsz"]

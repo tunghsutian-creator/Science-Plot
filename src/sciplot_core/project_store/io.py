@@ -170,10 +170,11 @@ class StoreIO:
         self.fd = -1
         self.validation_epoch = 0
         self.lease_epoch = 0
-        # The history owner interprets this finite, lease-local scope. IO must
-        # remain independent of the higher-level history validation algorithm.
+        # History owns the finite proof window and pure digest table; IO owns
+        # their lease lifetime, independently of the validation algorithm.
         self._checked_window: object | None = None
         self._read_directories: DirectoryReads | None = None
+        self._metadata_digests: dict[str, str] = {}
         # Only this live owned IO can attest that it created its metadata root.
         # It is not persisted and never survives release/reacquisition.
         self.created_store = False
@@ -194,6 +195,7 @@ class StoreIO:
             if process != os.getpid() or thread != get_ident():
                 _ACTIVE.set(None)
         with _leases(self.root, self.locations, blocking=blocking) as leases:
+            self._metadata_digests.clear()
             self.advance_epoch()
             self.lease_epoch += 1
             lease = leases[self.root]
@@ -231,6 +233,7 @@ class StoreIO:
                 self.root_fds.clear()
                 self.fd = -1
                 self.created_store = False
+                self._metadata_digests.clear()
                 self.advance_epoch()
                 self.lease_epoch += 1
 
@@ -294,16 +297,19 @@ class StoreIO:
             raise
 
     def read(self, name: str) -> dict[str, Any] | None:
+        return self._read_metadata(name)[0]
+
+    def _read_metadata(self, name: str) -> tuple[dict[str, Any] | None, bytes]:
         try:
             components = parts(name)
             try:
                 data, _mode = read_stored_file(self, components, read_file, directory)
             except FileNotFoundError:
-                return None
+                return None, b""
             payload = json.loads(data)
             if not isinstance(payload, dict):
                 raise ProjectStoreError("Project store metadata must be an object.")
-            return payload
+            return payload, data
         except (OSError, ValueError):
             self.validation_failed()
             raise

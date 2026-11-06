@@ -122,7 +122,7 @@ def test_one_head_reuses_only_structural_parents_and_keeps_every_actual_read(tmp
         publish(store, {f"{revision:03d}.bin": f"revision-{revision}".encode()})
     snapshot = store.snapshot()
     counters = {}
-    original_open, original_read, original_get = os.open, StoreIO.read, StoreIO.get
+    original_open, original_read, original_get = os.open, StoreIO._read_metadata, StoreIO.get
     @contextmanager
     def no_resources(io, name):
         yield
@@ -145,7 +145,7 @@ def test_one_head_reuses_only_structural_parents_and_keeps_every_actual_read(tmp
             return original_get(io, entry)
         with StoreIO(store.root, {}).locked() as io, monkeypatch.context() as patch:
             patch.setattr(os, "open", opened)
-            patch.setattr(StoreIO, "read", read)
+            patch.setattr(StoreIO, "_read_metadata", read)
             patch.setattr(StoreIO, "get", get)
             patch.setattr(Path, "resolve", resolve)
             if not enabled:

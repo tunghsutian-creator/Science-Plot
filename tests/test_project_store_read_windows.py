@@ -31,14 +31,14 @@ def publish(store, writes):
 
 def count_reads(monkeypatch):
     reads, gets = Counter(), Counter()
-    original_read, original_get = StoreIO.read, StoreIO.get
+    original_read, original_get = StoreIO._read_metadata, StoreIO.get
     def read(io, name):
         reads[name] += 1
         return original_read(io, name)
     def get(io, entry):
         gets[entry["sha256"]] += 1
         return original_get(io, entry)
-    monkeypatch.setattr(StoreIO, "read", read)
+    monkeypatch.setattr(StoreIO, "_read_metadata", read)
     monkeypatch.setattr(StoreIO, "get", get)
     return reads, gets
 
@@ -48,6 +48,141 @@ def corrupt_object(store, entry):
     before = path.stat()
     path.write_bytes(b"x" * before.st_size)
     os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+
+
+def test_digest_memo_keeps_every_history_and_blob_read_and_detaches_new_metadata(tmp_path, monkeypatch):
+    store, _old = store_with_files(tmp_path)
+    publish(store, {"A.bin": b"C"})
+    expected = store.snapshot()
+    reads, gets = count_reads(monkeypatch)
+    canonical_calls = []
+    original_digest = state.digest
+
+    def canonical(value):
+        canonical_calls.append(True)
+        return original_digest(value)
+
+    monkeypatch.setattr(state, "digest", canonical)
+    with StoreIO(store.root, {}).locked() as io:
+        for _ in range(3):
+            checked = state.checked_head(io)
+            assert checked.current["files"] == expected["files"]
+            checked.current["files"].clear()
+            checked.close()
+        assert reads["head.json"] == 3
+        assert sum(count for name, count in reads.items() if name.startswith("generations/")) == 3 * (expected["sequence"] + 1)
+        assert gets[sha(b"C")] == 3
+        assert len(canonical_calls) == expected["sequence"] + 1
+    assert io._metadata_digests == {}
+    with io.locked():
+        checked = state.checked_head(io)
+        checked.close()
+    assert len(canonical_calls) == 2 * (expected["sequence"] + 1)
+
+
+@pytest.mark.parametrize("target", ["current", "parent", "blob", "missing"])
+def test_digest_memo_cannot_hide_same_lease_history_or_blob_changes(tmp_path, target):
+    import json
+
+    store, old = store_with_files(tmp_path)
+    publish(store, {"A.bin": b"C"})
+    with StoreIO(store.root, {}).locked() as io:
+        checked = state.checked_head(io)
+        current = deepcopy(checked.current)
+        checked.close()
+        if target == "blob":
+            corrupt_object(store, current["files"]["B.bin"])
+        else:
+            identity = old["generation"] if target == "parent" else current["generation"]
+            path = store.root / ".sciplot_store/generations" / (identity + ".json")
+            if target == "missing":
+                path.unlink()
+            else:
+                before = path.stat()
+                data = path.read_bytes()
+                value = json.loads(data)
+                original = json.dumps(value["project_id"]).encode()
+                replacement = json.dumps("x" * len(value["project_id"])).encode()
+                changed = data.replace(original, replacement)
+                assert changed != data and len(changed) == len(data)
+                path.write_bytes(changed)
+                os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+        with pytest.raises(ProjectStoreError):
+            state.checked_head(io)
+
+
+def test_digest_memo_preserves_canonical_json_and_numeric_representation(tmp_path):
+    import json
+    from sciplot_core.project_store.io import digest
+
+    store, _old = store_with_files(tmp_path)
+    with StoreIO(store.root, {}).locked() as io:
+        checked = state.checked_head(io)
+        original = deepcopy(checked.current)
+        checked.close()
+        path = store.root / ".sciplot_store/generations" / (original["generation"] + ".json")
+        path.write_text(json.dumps(dict(reversed(tuple(original.items()))), ensure_ascii=True))
+        reordered = state.checked_head(io)
+        assert reordered.current == original
+        reordered.close()
+        observed = []
+        for number in (0.0, -0.0, 1, 1.0):
+            io.write("number.json", {"number": number})
+            value, data = io._read_metadata("number.json")
+            assert value is not None
+            result = state._metadata_digest(io, data, value)
+            assert result == digest({"number": number})
+            observed.append(result)
+        assert len(set(observed)) == 4
+
+
+@pytest.mark.parametrize("malformed", ["nan", "surrogate"])
+@pytest.mark.parametrize("target", ["generation_kind", "pointer_kind", "ordinary_generation", "canonical"])
+def test_digest_memo_does_not_move_canonicalization_before_original_refusals(tmp_path, malformed, target):
+    import json
+
+    store, original = store_with_files(tmp_path)
+    with StoreIO(store.root, {}).locked() as io:
+        checked = state.checked_head(io)
+        checked.close()
+        retained = dict(io._metadata_digests)
+        path = store.root / ".sciplot_store/generations" / (original["generation"] + ".json")
+        value = json.loads(path.read_bytes())
+        value["malformed_canonical_value"] = float("nan") if malformed == "nan" else "\ud800"
+        if target == "generation_kind":
+            value["kind"] = "invalid"
+        path.write_text(json.dumps(value, ensure_ascii=True))
+        if target == "pointer_kind":
+            pointer = store.root / ".sciplot_store/head.json"
+            metadata = json.loads(pointer.read_bytes())
+            metadata["kind"] = "invalid"
+            pointer.write_text(json.dumps(metadata))
+        if target == "ordinary_generation":
+            assert "malformed_canonical_value" in state.generation(io, original["generation"])
+        elif target == "canonical":
+            with pytest.raises(ValueError if malformed == "nan" else UnicodeEncodeError):
+                state.checked_head(io)
+        else:
+            message = "generation is missing" if target == "generation_kind" else "head and complete generation disagree"
+            with pytest.raises(ProjectStoreError, match=message):
+                state.checked_head(io)
+        assert io._metadata_digests == retained
+
+
+def test_digest_memo_is_bounded_and_expires_on_exceptional_lease_exit(tmp_path):
+    import json
+
+    store, _old = store_with_files(tmp_path)
+    io = StoreIO(store.root, {})
+    with pytest.raises(RuntimeError, match="owned test interruption"):
+        with io.locked():
+            for number in range(260):
+                data = json.dumps({"number": number}).encode()
+                value = json.loads(data)
+                state._metadata_digest(io, data, value)
+            assert len(io._metadata_digests) == 256
+            raise RuntimeError("owned test interruption")
+    assert io.fd == -1 and io._metadata_digests == {}
 
 
 def test_finite_window_checks_history_once_but_consumes_each_actual_blob(tmp_path, monkeypatch):
@@ -336,12 +471,12 @@ def test_prepared_publication_uses_the_window_after_source_capture_and_reduces_h
     for enabled in (False, True):
         store, repository, _snapshot = project(tmp_path / str(enabled))
         reads = Counter()
-        actual_read = StoreIO.read
+        actual_read = StoreIO._read_metadata
         @contextmanager
         def no_window(self):
             yield
         with monkeypatch.context() as scoped:
-            scoped.setattr(StoreIO, "read", observed_read(reads, actual_read))
+            scoped.setattr(StoreIO, "_read_metadata", observed_read(reads, actual_read))
             if not enabled:
                 scoped.setattr(FileProjectStore, "_validation_window", no_window)
             repository.write(repository.attachment.root / "new.json", {"value": "prepared"})
