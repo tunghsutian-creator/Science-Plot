@@ -20,9 +20,18 @@ from sciplot_core.assistant_provider.progress import (
 from sciplot_core.assistant_provider.response import (
     AssistantResponse,
 )
+from sciplot_core.assistant_provider.facts import ProviderFacts
 
 
-class AssistantCancelled(RuntimeError):
+class AssistantProviderFailure(RuntimeError):
+    """A failed call can retain observations without admitting its proposal."""
+
+    def __init__(self, message: str = "", *, provider_facts: ProviderFacts | None = None) -> None:
+        super().__init__(message)
+        self.provider_facts = provider_facts
+
+
+class AssistantCancelled(AssistantProviderFailure):
     """Raised by a provider when cooperative cancellation is observed."""
 
 

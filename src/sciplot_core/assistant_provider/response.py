@@ -42,6 +42,7 @@ from sciplot_core.assistant_provider.context_documents import (
 from sciplot_core.assistant_provider.request import (
     AssistantRequest,
 )
+from sciplot_core.assistant_provider.facts import ProviderFacts
 
 
 @dataclass(frozen=True)
@@ -57,8 +58,11 @@ class AssistantResponse:
     warnings: tuple[str, ...] = ()
     response_id: str = field(default_factory=lambda: str(uuid4()))
     created_at: str = field(default_factory=_now)
+    provider_facts: ProviderFacts | None = None
 
     def __post_init__(self) -> None:
+        if self.provider_facts is not None and not isinstance(self.provider_facts, ProviderFacts):
+            raise ValueError("Assistant provider facts must use the typed observation contract.")
         object.__setattr__(
             self, "response_id", _uuid_text(self.response_id, "response_id")
         )
@@ -141,7 +145,7 @@ class AssistantResponse:
             )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "kind": ASSISTANT_RESPONSE_KIND,
             "version": ASSISTANT_RESPONSE_VERSION,
             "response_id": self.response_id,
@@ -158,6 +162,9 @@ class AssistantResponse:
             "warnings": list(self.warnings),
             "created_at": self.created_at,
         }
+        if self.provider_facts is not None:
+            payload["provider_facts"] = self.provider_facts.to_dict()
+        return payload
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> AssistantResponse:
@@ -178,6 +185,7 @@ class AssistantResponse:
                 "proposal",
                 "warnings",
                 "created_at",
+                "provider_facts",
             },
             label="AssistantResponse",
         )
@@ -217,4 +225,6 @@ class AssistantResponse:
                 maximum_item_length=_MAX_WARNING_LENGTH,
             ),
             created_at=_timestamp(value.get("created_at"), "response created_at"),
+            provider_facts=(ProviderFacts.from_dict(value["provider_facts"])
+                            if "provider_facts" in value else None),
         )

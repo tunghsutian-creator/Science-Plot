@@ -54,8 +54,11 @@ class AssistantRequest:
     context_sha256: str | None = None
     created_at: str = field(default_factory=_now)
     visual_preview: dict[str, Any] | None = None
+    disclosure: str = "visual"
 
     def __post_init__(self) -> None:
+        if not isinstance(self.disclosure, str) or self.disclosure not in {"visual", "properties"}:
+            raise ValueError("Unsupported Assistant disclosure mode.")
         object.__setattr__(
             self, "request_id", _uuid_text(self.request_id, "request_id")
         )
@@ -130,6 +133,8 @@ class AssistantRequest:
         }
         if self.visual_preview is not None:
             payload["visual_preview"] = copy.deepcopy(self.visual_preview)
+        if self.disclosure != "visual":
+            payload["disclosure"] = self.disclosure
         return payload
 
     @property
@@ -154,6 +159,7 @@ class AssistantRequest:
                 "allowed_proposal_kinds",
                 "created_at",
                 "visual_preview",
+                "disclosure",
             },
             label="AssistantRequest",
         )
@@ -193,4 +199,5 @@ class AssistantRequest:
                 if "visual_preview" in value
                 else None
             ),
+            disclosure=value.get("disclosure", "visual"),
         )

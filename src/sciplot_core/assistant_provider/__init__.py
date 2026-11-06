@@ -82,11 +82,13 @@ from sciplot_core.assistant_provider.response import (  # noqa: F401
     AssistantResponse,
 )
 from sciplot_core.assistant_provider.provider import (  # noqa: F401
+    AssistantProviderFailure,
     AssistantCancelled,
     AssistantCancellationToken,
     AssistantProgressCallback,
     AssistantProvider,
 )
+from sciplot_core.assistant_provider.facts import ProviderFacts
 
 __all__ = [
     "ASSISTANT_CONTEXT_KIND",
@@ -103,6 +105,8 @@ __all__ = [
     "AssistantProgressCallback",
     "AssistantProgressEvent",
     "AssistantProvider",
+    "AssistantProviderFailure",
+    "ProviderFacts",
     "AssistantProviderDescriptor",
     "AssistantRequest",
     "AssistantResponse",

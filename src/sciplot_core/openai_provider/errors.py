@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from sciplot_core.assistant_provider.provider import AssistantProviderFailure
 
-class OpenAIProviderError(RuntimeError):
+
+class OpenAIProviderError(AssistantProviderFailure):
     """A redacted production-provider transport or protocol failure."""
 
 
