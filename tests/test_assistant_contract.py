@@ -284,3 +284,51 @@ def test_provider_worker_has_one_terminal_outcome_before_gui_admission(late_canc
     else:
         assert responses == [] and len(failures) == 1
         assert "advertised setting catalog" in failures[0]["error"]
+
+
+def test_legacy_response_wire_omits_optional_provider_facts_and_keeps_local_identity():
+    from sciplot_core.assistant_provider import ProviderFacts
+
+    request, batch = _request_and_batch()
+    response = _response(request, batch)
+    legacy = response.to_dict()
+    assert "provider_facts" not in legacy
+    assert AssistantResponse.from_dict(legacy).to_dict() == legacy
+    assert AssistantResponse.from_dict(legacy).provider_facts is None
+    facts = ProviderFacts.from_values(
+        response_id="resp_external-not-a-uuid", model="observed-model",
+        usage={"input_tokens": 3}, usage_status="reported", terminal_status="completed",
+    )
+    observed = replace(response, provider_facts=facts)
+    assert observed.to_dict() == {**legacy, "provider_facts": facts.to_dict()}
+    assert observed.response_id == response.response_id != facts.response_id
+    restored = AssistantResponse.from_dict(observed.to_dict())
+    restored.validate_for_request(request)
+    assert restored.to_dict() == observed.to_dict()
+    assert replace(observed, provider_facts=None).to_dict() == legacy
+
+
+@pytest.mark.parametrize("violation", ["target", "path", "revision", "request_digest"],
+                         ids=["target", "path", "revision", "request-digest"])
+def test_reported_provider_facts_cannot_authorize_a_bad_local_response(violation):
+    from sciplot_core.assistant_provider import ProviderFacts
+
+    request, batch = _request_and_batch()
+    operation, = batch.operations
+    if violation == "target":
+        batch = replace(batch, operations=(replace(operation, target_id="unadvertised-object"),))
+    elif violation == "path":
+        batch = replace(batch, operations=(replace(operation, arguments={
+            **operation.arguments, "setting_path": "/page1/graph1/y/label"}),))
+    elif violation == "revision":
+        batch = replace(batch, base_revision=request.base_revision + 1)
+    response = replace(_response(request, batch), provider_facts=ProviderFacts.from_values(
+        response_id="resp_completed", model="observed-model", usage={"total_tokens": 12},
+        usage_status="reported", terminal_status="completed",
+    ))
+    if violation == "request_digest":
+        response = replace(response, request_sha256="0" * 64)
+    before = response.to_dict()
+    with pytest.raises(ValueError):
+        AssistantResponse.from_dict(before).validate_for_request(request)
+    assert response.to_dict() == before

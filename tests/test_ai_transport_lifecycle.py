@@ -327,3 +327,113 @@ def test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs(wire, mess
     with pytest.raises(OpenAIProviderError, match=message):
         _stream(connection)
     assert connection.response.close_calls == connection.close_calls == 1
+
+
+_OBSERVED_ID = "resp_offline-not-a-local-uuid"
+_OBSERVED_USAGE = {"input_tokens": 17, "output_tokens": 5, "total_tokens": 22,
+                   "output_tokens_details": {"reasoning_tokens": 2}}
+
+
+def _observed_terminal(kind="completed", *, refusal=False):
+    content = ([{"type": "refusal", "refusal": "Offline refusal."}] if refusal else
+               [{"type": "output_text", "text": "bounded proposal"}])
+    response = {"id": _OBSERVED_ID, "model": "actual-offline-model", "status": kind,
+                "usage": _OBSERVED_USAGE, "output": [{"content": content}]}
+    if kind == "incomplete":
+        response["incomplete_details"] = {"reason": "max_output_tokens"}
+    if kind == "failed":
+        response["error"] = {"message": "rejected " + _KEY}
+    return _event("response." + kind, response=response)
+
+
+@pytest.mark.parametrize("kind,refusal", [("completed", False), ("completed", True),
+                                        ("incomplete", False)],
+                         ids=["completed", "refusal", "incomplete"])
+def test_terminal_observations_are_kept_separate_from_the_stream_outcome(kind, refusal):
+    connection = _Connection(_Response(_observed_terminal(kind, refusal=refusal)))
+    result = _stream(connection)
+    facts = result.provider_facts
+    assert facts.response_id == _OBSERVED_ID and facts.model == "actual-offline-model"
+    assert facts.usage == _OBSERVED_USAGE and facts.usage_status == "reported"
+    assert facts.terminal_status == kind
+    assert result.refusal == ("Offline refusal." if refusal else None)
+    assert result.incomplete_reason == ("max_output_tokens" if kind == "incomplete" else None)
+    assert connection.response.close_calls == connection.close_calls == 1
+
+
+@pytest.mark.parametrize("resource", ["response", "connection", "both"])
+def test_cleanup_errors_keep_already_observed_usage_without_replacing_the_failure(resource):
+    response = _Response(_observed_terminal(), close_error=resource in {"response", "both"})
+    connection = _Connection(response, close_error=resource in {"connection", "both"})
+    with pytest.raises(OpenAIProviderError, match="cleanup") as exc:
+        _stream(connection)
+    assert exc.value.provider_facts.usage == _OBSERVED_USAGE
+    assert exc.value.provider_facts.response_id == _OBSERVED_ID
+    assert exc.value.provider_facts.terminal_status == "completed"
+    assert _KEY not in "".join(traceback.format_exception(exc.value))
+    assert _KEY not in json.dumps(exc.value.provider_facts.to_dict())
+    assert response.close_calls == connection.close_calls == 1
+
+
+def test_failed_terminal_keeps_reported_facts_and_redacts_the_provider_message():
+    connection = _Connection(_Response(_observed_terminal("failed")))
+    with pytest.raises(OpenAIProviderError, match="response failed") as exc:
+        _stream(connection)
+    facts = exc.value.provider_facts
+    assert facts.response_id == _OBSERVED_ID and facts.model == "actual-offline-model"
+    assert facts.usage == _OBSERVED_USAGE and facts.usage_status == "reported"
+    assert facts.terminal_status == "failed"
+    assert _KEY not in "".join(traceback.format_exception(exc.value))
+    assert _KEY not in json.dumps(facts.to_dict())
+    assert connection.response.close_calls == connection.close_calls == 1
+
+
+@pytest.mark.parametrize("phase", ["text_callback", "response_disposal"])
+def test_late_cancellation_keeps_terminal_usage_but_never_returns_a_result(phase):
+    token = AssistantCancellationToken()
+    connection = _Connection(_Response(_observed_terminal()))
+    if phase == "response_disposal":
+        close = connection.response.close
+
+        def cancel_and_close():
+            token.cancel()
+            close()
+
+        connection.response.close = cancel_and_close
+    with pytest.raises(AssistantCancelled) as exc:
+        _stream(connection, token, on_text=token.cancel if phase == "text_callback" else lambda: None)
+    assert exc.value.provider_facts.response_id == _OBSERVED_ID
+    assert exc.value.provider_facts.usage == _OBSERVED_USAGE
+    assert exc.value.provider_facts.terminal_status == "completed"
+    assert connection.response.close_calls == connection.close_calls == 1
+
+
+@pytest.mark.parametrize("failure", ["cancel", "protocol"])
+def test_nonterminal_failure_keeps_created_identity_without_fabricating_usage(failure):
+    token = AssistantCancellationToken()
+    created = _event("response.created", response={"id": _OBSERVED_ID,
+        "model": "actual-offline-model", "status": "in_progress"})
+    wire = created + (_event("response.output_text.delta", delta="partial output")
+                      if failure == "cancel" else b"data: invalid JSON\n\n")
+    connection = _Connection(_Response(wire))
+    with pytest.raises(AssistantCancelled if failure == "cancel" else OpenAIProviderError) as exc:
+        _stream(connection, token, on_text=token.cancel)
+    facts = exc.value.provider_facts
+    assert facts.response_id == _OBSERVED_ID and facts.model == "actual-offline-model"
+    assert facts.usage is None and facts.usage_status == "not_observed"
+    assert facts.terminal_status is None
+    assert connection.response.close_calls == connection.close_calls == 1
+
+
+def test_cancel_before_send_does_not_invent_provider_identity_or_zero_usage():
+    token = AssistantCancellationToken()
+    token.cancel()
+    connection = _Connection(_Response(_observed_terminal()))
+    with pytest.raises(AssistantCancelled) as exc:
+        _stream(connection, token)
+    facts = exc.value.provider_facts
+    if facts is not None:
+        assert facts.response_id is facts.model is facts.usage is facts.terminal_status is None
+        assert facts.usage_status == "not_observed"
+    assert connection.request_calls == 0
+    assert connection.close_calls == 1
