@@ -36,7 +36,7 @@ def _inputs():
     request = _request("offline GUI", visual_preview=_visual_preview())
     descriptor = AssistantProviderDescriptor(
         provider_id=request.provider_id, display_name="Offline fixture",
-        capabilities=("veusz_setting_operation_batch", "cancellation"),
+        capabilities=("veusz_setting_operation_batch", "cancellation", "properties_disclosure"),
     )
     capability, = request.context["editing_capabilities"]["allowed_operations"]
     batch = VeuszSettingOperationBatch(
@@ -326,3 +326,74 @@ def test_shutdown_delivers_only_this_runners_observed_terminal_after_real_wait(a
     assert event['provider_facts'] == facts.to_dict() and runner.request is None
     QtCore.QCoreApplication.sendPostedEvents(foreign, QtCore.QEvent.Type.MetaCall)
     assert foreign.calls == 1
+
+
+@pytest.mark.parametrize('mode,supports', [('properties', False), ('visual', False), ('properties', True)])
+def test_provider_disclosure_support_gates_controls_submit_and_worker(application, tmp_path, mode, supports):
+    bridge = _Bridge(tmp_path)
+    request, descriptor, _, response, _ = _inputs()
+    if not supports:
+        descriptor = replace(descriptor, capabilities=('veusz_setting_operation_batch', 'cancellation'))
+    bridge.runner.descriptor = descriptor
+    bridge.disclosure_combo.setCurrentIndex(1)
+    bridge._refresh_disclosure_options()
+    DockMixin._refresh_ask_button(bridge)
+    assert bridge.disclosure_combo.currentData() == 'properties'
+    assert bridge.disclosure_combo.model().item(1).isEnabled() is supports
+    assert bridge.ask_button.isEnabled() is supports
+    request = replace(request, disclosure=mode)
+    response = replace(response, request_sha256=request.payload_sha256)
+    received = []
+    provider = SimpleNamespace(descriptor=descriptor, generate=lambda req, **kw: received.append(req) or response)
+    runner = AssistantRequestRunner(provider)
+    responses, failures = [], []
+    runner.response.connect(responses.append)
+    runner.failed.connect(failures.append)
+    if mode == 'properties' and not supports:
+        with pytest.raises(ValueError, match='disclosure'):
+            runner.submit(request)
+        assert runner.request is None and not runner.active and received == []
+        worker = _AssistantProviderWorker(provider=provider, descriptor=descriptor, request=request,
+                                          cancellation=AssistantCancellationToken())
+        worker.failed.connect(failures.append)
+        worker.run()
+        assert len(failures) == 1 and received == []
+    else:
+        runner.submit(request)
+        assert runner._thread.wait(1000) and runner.shutdown(wait_ms=1000)
+        assert len(responses) == 1 and failures == [] and len(received) == 1
+        assert received[0].disclosure == mode
+        assert received[0].context == request.context and received[0].visual_preview == request.visual_preview
+
+
+def test_capability_withdrawal_after_submit_keeps_stable_descriptor_refusal(application):
+    request, descriptor, _, response, _ = _inputs()
+    request = replace(request, disclosure='properties')
+    entered, release = threading.Event(), threading.Event()
+
+    class Provider:
+        calls = 0
+
+        @property
+        def descriptor(self):
+            if threading.current_thread() is not threading.main_thread():
+                entered.set()
+                assert release.wait(1)
+            return self.current
+
+        def generate(self, *_args, **_kwargs):
+            self.calls += 1
+            return response
+
+    provider = Provider()
+    provider.current = descriptor
+    runner = AssistantRequestRunner(provider)
+    failures = []
+    runner.failed.connect(failures.append)
+    runner.submit(request)
+    assert entered.wait(1)
+    provider.current = replace(descriptor, capabilities=('veusz_setting_operation_batch', 'cancellation'))
+    release.set()
+    assert runner._thread.wait(1000) and runner.shutdown(wait_ms=1000)
+    assert provider.calls == 0 and len(failures) == 1
+    assert 'descriptor changed' in failures[0]['error']

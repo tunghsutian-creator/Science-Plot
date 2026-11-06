@@ -36,6 +36,7 @@ class DockMixin:
         self.disclosure_combo.setObjectName("sciplotAssistantDisclosure")
         self.disclosure_combo.addItem("Visual (properties + page image)", "visual")
         self.disclosure_combo.addItem("Properties only (no image)", "properties")
+        self._refresh_disclosure_options()
         self.disclosure_combo.setToolTip(
             "Visual sends the current page image and selected-object properties. "
             "Properties only sends no image. A page snapshot is captured locally "
@@ -99,6 +100,7 @@ class DockMixin:
         self.window.treeedit.widgetsSelected.connect(self._widgets_selected)
         self.plot.sigWidgetClicked.connect(self._plot_widget_clicked)
         self.ask_button.clicked.connect(self._ask_from_ui)
+        self.disclosure_combo.currentIndexChanged.connect(self._refresh_ask_button)
         self.cancel_button.clicked.connect(self._cancel_request)
         self.apply_button.clicked.connect(self.accept_pending)
         self.reject_button.clicked.connect(self.reject_pending)
@@ -109,6 +111,7 @@ class DockMixin:
         self.window.destroyed.connect(self._shutdown)
 
     def _set_provider_state(self) -> None:
+        self._refresh_disclosure_options()
         if self.provider is None:
             self.status_label.setText(
                 "No OpenAI Assistant is connected. Veusz editing remains fully "
@@ -123,16 +126,34 @@ class DockMixin:
         )
         self._refresh_ask_button()
 
+    def _refresh_disclosure_options(self) -> None:
+        descriptor = self.runner.descriptor
+        supported = descriptor is not None and "properties_disclosure" in descriptor.capabilities
+        item = self.disclosure_combo.model().item(1)
+        item.setEnabled(supported)
+        item.setToolTip(
+            "Sends selected-object properties without the page image."
+            if supported else "Unavailable: this provider does not declare properties-only disclosure support."
+        )
+
     def _refresh_ask_button(self) -> None:
         try:
             context_blocker = self._document_context_blocker()
+            disclosure_blocker = (
+                "This provider does not support properties-only disclosure. "
+                "Choose Visual explicitly if you want to send the page image."
+                if self.disclosure_combo.currentData() == "properties"
+                and not self.disclosure_combo.model().item(1).isEnabled()
+                else None
+            )
             self.ask_button.setEnabled(
                 self.provider is not None
                 and self._selected_widget is not None
                 and not self.runner.active
                 and context_blocker is None
+                and disclosure_blocker is None
             )
-            self.ask_button.setToolTip(context_blocker or "")
+            self.ask_button.setToolTip(context_blocker or disclosure_blocker or "")
         except RuntimeError:
             # Child widgets can already be gone while the native MainWindow is
             # completing destruction.

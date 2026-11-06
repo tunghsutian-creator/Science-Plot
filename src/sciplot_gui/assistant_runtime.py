@@ -16,6 +16,7 @@ from sciplot_core.assistant_provider import (
     AssistantRequest,
     AssistantResponse,
     ProviderFacts,
+    require_disclosure_support,
 )
 
 _AUTO_ASSISTANT_PROVIDER = object()
@@ -96,6 +97,7 @@ class _AssistantProviderWorker(QtCore.QObject):
                 raise ValueError(
                     "Provider descriptor does not match Assistant request."
                 )
+            require_disclosure_support(self._request, descriptor)
             self._cancellation.raise_if_cancelled()
             provider_request = AssistantRequest.from_dict(self._request.to_dict())
             response = self._provider.generate(
@@ -210,6 +212,7 @@ class AssistantRequestRunner(QtCore.QObject):
             raise ValueError(
                 f"Assistant request asks for unsupported proposal kinds: {sorted(unsupported)!r}"
             )
+        require_disclosure_support(restored, self._descriptor)
         cancellation = AssistantCancellationToken()
         thread = QtCore.QThread(self)
         thread.setObjectName(f"assistant-provider-{restored.request_id}")
