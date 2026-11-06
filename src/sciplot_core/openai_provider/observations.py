@@ -42,7 +42,7 @@ class _ResponseFacts:
                     and json.dumps(self._secret)[1:-1] in observed.usage_json):
                 raise ValueError("Provider usage contains sensitive metadata.")
             self.value = observed
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, RecursionError):
             # Optional counter metadata cannot authorize or veto a proposal.
             # Retain the invalid observation, never its untrusted raw content.
             self.value = ProviderFacts.from_values(

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 from sciplot_core.json_contract import reject_unknown_keys, require_json_object
 
@@ -71,7 +71,7 @@ class ProviderFacts:
 
     @property
     def usage(self) -> dict[str, Any] | None:
-        return json.loads(self.usage_json) if self.usage_json is not None else None
+        return cast(dict[str, Any], json.loads(self.usage_json)) if self.usage_json is not None else None
 
     def to_dict(self) -> dict[str, Any]:
         return {"response_id": self.response_id, "model": self.model,
