@@ -336,3 +336,23 @@ def test_a_provider_echoing_the_configured_key_cannot_persist_it_as_metadata(fie
     assert response.status == "proposal" and response.provider_facts.usage == _USAGE
     assert _KEY not in json.dumps(response.provider_facts.to_dict())
     assert _KEY not in repr(response.provider_facts)
+
+
+def test_changed_provider_metadata_records_the_terminal_observation_without_vetoing_a_valid_edit():
+    created = ("data: " + json.dumps({"type": "response.created", "response": {
+        "id": "resp_initial-observation", "model": "initial-model", "status": "in_progress",
+    }}) + "\n\n").encode()
+    connection = _Connection(created + _terminal("proposal", usage=_USAGE))
+    request = _request()
+    before = request.to_dict()
+    response = _provider(lambda *_args: connection).generate(
+        request, emit_progress=lambda _event: None, cancellation=AssistantCancellationToken())
+    assert response.status == "proposal"
+    response.validate_for_request(request)
+    assert response.provider_facts.response_id == _EXTERNAL_ID
+    assert response.provider_facts.model == "observed-model"
+    assert response.provider_facts.usage == _USAGE
+    assert response.provider_facts.terminal_status == "completed"
+    assert response.response_id not in {"resp_initial-observation", _EXTERNAL_ID}
+    assert request.to_dict() == before
+    assert connection.closed == connection.response.closed == 1
