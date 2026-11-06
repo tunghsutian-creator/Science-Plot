@@ -89,6 +89,7 @@ from sciplot_core.assistant_provider.provider import (  # noqa: F401
     AssistantProvider,
 )
 from sciplot_core.assistant_provider.facts import ProviderFacts
+from sciplot_core.assistant_provider.disclosure import require_disclosure_support
 
 __all__ = [
     "ASSISTANT_CONTEXT_KIND",
@@ -107,6 +108,7 @@ __all__ = [
     "AssistantProvider",
     "AssistantProviderFailure",
     "ProviderFacts",
+    "require_disclosure_support",
     "AssistantProviderDescriptor",
     "AssistantRequest",
     "AssistantResponse",

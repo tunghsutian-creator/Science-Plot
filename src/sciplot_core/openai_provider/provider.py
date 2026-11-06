@@ -65,7 +65,7 @@ class OpenAIResponsesProvider:
             provider_id=OPENAI_PROVIDER_ID,
             display_name="OpenAI Assistant",
             model_label=config.model,
-            capabilities=("veusz_setting_operation_batch", "cancellation"),
+            capabilities=("veusz_setting_operation_batch", "cancellation", "properties_disclosure"),
         )
         self._client = _ResponsesSSEClient(
             config,

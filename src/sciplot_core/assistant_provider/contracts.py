@@ -32,7 +32,9 @@ ASSISTANT_RESPONSE_VERSION = 1
 ASSISTANT_PROPOSAL_KINDS = frozenset({"veusz_setting_operation_batch"})
 
 
-ASSISTANT_PROVIDER_CAPABILITIES = frozenset({*ASSISTANT_PROPOSAL_KINDS, "cancellation"})
+ASSISTANT_PROVIDER_CAPABILITIES = frozenset({
+    *ASSISTANT_PROPOSAL_KINDS, "cancellation", "properties_disclosure",
+})
 
 
 ASSISTANT_PROGRESS_STAGES = frozenset(
