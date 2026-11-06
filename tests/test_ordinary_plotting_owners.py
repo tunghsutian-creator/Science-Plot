@@ -400,6 +400,13 @@ CI_FEEDBACK_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/verification/public_stage_selection.py",
     }
 )
+ASSISTANT_DISCLOSURE_STRICT_ADDITIONS = frozenset(
+    {
+        "src/sciplot_core/assistant_provider/facts.py",
+        "src/sciplot_core/assistant_provider/disclosure.py",
+        "src/sciplot_core/openai_provider/observations.py",
+    }
+)
 FINAL_STRICT_ADDITIONS = (
     ROUND2_STRICT_ADDITIONS
     | CATEGORICAL_EDIT_STRICT_ADDITIONS
@@ -423,6 +430,7 @@ FINAL_STRICT_ADDITIONS = (
     | SOURCE_ARTIFACT_STRICT_ADDITIONS
     | VERIFICATION_PROJECT_CORE_STRICT_ADDITIONS
     | CI_FEEDBACK_STRICT_ADDITIONS
+    | ASSISTANT_DISCLOSURE_STRICT_ADDITIONS
 )
 
 
@@ -650,6 +658,7 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
         SOURCE_ARTIFACT_STRICT_ADDITIONS,
         VERIFICATION_PROJECT_CORE_STRICT_ADDITIONS,
         CI_FEEDBACK_STRICT_ADDITIONS,
+        ASSISTANT_DISCLOSURE_STRICT_ADDITIONS,
     )
     assert all(
         scope.isdisjoint(other)

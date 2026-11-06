@@ -29,6 +29,74 @@ TYPED_BEHAVIOR_PATHS = {
     "src/sciplot_core/veusz_worker/document_edit.py": "tests/test_native_document_edit.py",
 }
 
+ASSISTANT_DISCLOSURE_TYPED_PATHS = (
+    "src/sciplot_core/assistant_provider/facts.py",
+    "src/sciplot_core/assistant_provider/disclosure.py",
+    "src/sciplot_core/openai_provider/observations.py",
+)
+ASSISTANT_DISCLOSURE_GUI_PATHS = (
+    "src/sciplot_gui/assistant_runtime.py",
+    "src/sciplot_gui/studio_assistant/dock.py",
+    "src/sciplot_gui/studio_assistant/request_context.py",
+    "src/sciplot_gui/studio_assistant/request_flow.py",
+    "src/sciplot_gui/studio_assistant/context_history.py",
+    "src/sciplot_gui/studio_assistant/rejection.py",
+    "src/sciplot_gui/studio_assistant_history.py",
+)
+ASSISTANT_DISCLOSURE_TARGETS = {
+    "tests/test_assistant_disclosure_facts.py",
+    "tests/test_studio_assistant_disclosure.py",
+    "tests/test_assistant_contract.py",
+    "tests/test_ai_transport_lifecycle.py",
+}
+
+
+@pytest.mark.parametrize("path", [
+    *ASSISTANT_DISCLOSURE_TYPED_PATHS,
+    "src/sciplot_core/assistant_provider/request.py",
+    "src/sciplot_core/assistant_provider/response.py",
+    "src/sciplot_core/assistant_provider/errors.py",
+    "src/sciplot_core/openai_provider/provider.py",
+    "src/sciplot_core/openai_provider/sse.py",
+    "src/sciplot_core/openai_provider/transport.py",
+    "tests/test_assistant_disclosure_facts.py",
+    "tests/test_assistant_contract.py",
+    "tests/test_ai_transport_lifecycle.py",
+])
+def test_assistant_provider_changes_select_core_and_gui_disclosure_consumers(path):
+    plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+    assert plan["unowned_paths"] == []
+    assert "openai_assistant_provider" in {owner["owner_id"] for owner in plan["owners"]}
+    command = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
+    assert ASSISTANT_DISCLOSURE_TARGETS <= set(command)
+    assert "full_pytest" in plan["required_later"]["release"]
+
+
+@pytest.mark.parametrize("path", [*ASSISTANT_DISCLOSURE_GUI_PATHS, "tests/test_studio_assistant_disclosure.py"])
+def test_assistant_gui_changes_select_the_existing_gui_owner_and_core_consumers(path):
+    plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+    assert plan["unowned_paths"] == []
+    owners = {owner["owner_id"] for owner in plan["owners"]}
+    assert "native_assistant_dock" in owners
+    command = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
+    assert ASSISTANT_DISCLOSURE_TARGETS <= set(command)
+    if path.endswith("context_history.py"):
+        assert "native_document_edit" in owners
+        assert "tests/test_native_document_edit.py" in command
+
+
+def test_assistant_disclosure_adds_only_its_three_reviewed_strict_files():
+    config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["tool"]["mypy"]
+    assert config["strict"] is True and config["warn_unreachable"] is True
+    for path in ASSISTANT_DISCLOSURE_TYPED_PATHS:
+        assert config["files"].count(path) == 1
+        plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+        assert [check["command"] for check in plan["checks"]].count([sys.executable, "-m", "mypy"]) == 1
+    plan = build_changed_verification_plan(
+        ["src/sciplot_gui/studio_assistant/unreviewed_provider_flow.py"], repo_root=REPO_ROOT,
+    )
+    assert plan["unowned_paths"] == ["src/sciplot_gui/studio_assistant/unreviewed_provider_flow.py"]
+
 
 @pytest.mark.parametrize("source,target", TYPED_BEHAVIOR_PATHS.items())
 def test_external_control_sources_select_behavior_and_existing_strict_scope(

@@ -603,6 +603,9 @@ files = [
   "src/sciplot_core/verification/source_contracts.py",
   "src/sciplot_core/verification/ci_public_profiles.py",
   "src/sciplot_core/verification/main_commit_admission.py",
+  "src/sciplot_core/assistant_provider/facts.py",
+  "src/sciplot_core/assistant_provider/disclosure.py",
+  "src/sciplot_core/openai_provider/observations.py",
 ]
 mypy_path = "src"
 explicit_package_bases = true
