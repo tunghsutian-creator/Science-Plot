@@ -41,7 +41,10 @@ ASSISTANT_DISCLOSURE_GUI_PATHS = (
     "src/sciplot_gui/studio_assistant/request_flow.py",
     "src/sciplot_gui/studio_assistant/context_history.py",
     "src/sciplot_gui/studio_assistant/rejection.py",
-    "src/sciplot_gui/studio_assistant_history.py",
+)
+ASSISTANT_HISTORY_PATHS = tuple(
+    f"src/sciplot_gui/studio_assistant_history/{name}.py"
+    for name in ("__init__", "builder", "contracts", "operations", "storage", "validation", "values")
 )
 ASSISTANT_DISCLOSURE_TARGETS = {
     "tests/test_assistant_disclosure_facts.py",
@@ -53,17 +56,22 @@ ASSISTANT_DISCLOSURE_TARGETS = {
 
 @pytest.mark.parametrize("path", [
     *ASSISTANT_DISCLOSURE_TYPED_PATHS,
+    "src/sciplot_core/assistant_provider/__init__.py",
+    "src/sciplot_core/assistant_provider/provider.py",
     "src/sciplot_core/assistant_provider/request.py",
     "src/sciplot_core/assistant_provider/response.py",
-    "src/sciplot_core/assistant_provider/errors.py",
+    "src/sciplot_core/openai_provider/__init__.py",
+    "src/sciplot_core/openai_provider/errors.py",
     "src/sciplot_core/openai_provider/provider.py",
-    "src/sciplot_core/openai_provider/sse.py",
-    "src/sciplot_core/openai_provider/transport.py",
+    "src/sciplot_core/openai_provider/sse_client.py",
+    "src/sciplot_core/openai_provider/transport_helpers.py",
     "tests/test_assistant_disclosure_facts.py",
     "tests/test_assistant_contract.py",
     "tests/test_ai_transport_lifecycle.py",
 ])
 def test_assistant_provider_changes_select_core_and_gui_disclosure_consumers(path):
+    if path.startswith("src/"):
+        assert (REPO_ROOT / path).is_file()
     plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
     assert plan["unowned_paths"] == []
     assert "openai_assistant_provider" in {owner["owner_id"] for owner in plan["owners"]}
@@ -72,14 +80,24 @@ def test_assistant_provider_changes_select_core_and_gui_disclosure_consumers(pat
     assert "full_pytest" in plan["required_later"]["release"]
 
 
-@pytest.mark.parametrize("path", [*ASSISTANT_DISCLOSURE_GUI_PATHS, "tests/test_studio_assistant_disclosure.py"])
+@pytest.mark.parametrize("path", [
+    *ASSISTANT_DISCLOSURE_GUI_PATHS, *ASSISTANT_HISTORY_PATHS,
+    "tests/test_studio_assistant_disclosure.py",
+])
 def test_assistant_gui_changes_select_the_existing_gui_owner_and_core_consumers(path):
+    if path.startswith("src/"):
+        assert (REPO_ROOT / path).is_file()
     plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
     assert plan["unowned_paths"] == []
     owners = {owner["owner_id"] for owner in plan["owners"]}
     assert "native_assistant_dock" in owners
     command = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
     assert ASSISTANT_DISCLOSURE_TARGETS <= set(command)
+    assert "full_pytest" in plan["required_later"]["release"]
+    if path in ASSISTANT_HISTORY_PATHS:
+        assert "tests/test_iso_timestamps.py" in command
+        assert {p.relative_to(REPO_ROOT).as_posix()
+                for p in (REPO_ROOT / "src/sciplot_gui/studio_assistant_history").glob("*.py")} == set(ASSISTANT_HISTORY_PATHS)
     if path.endswith("context_history.py"):
         assert "native_document_edit" in owners
         assert "tests/test_native_document_edit.py" in command

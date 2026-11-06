@@ -18,6 +18,7 @@ PROJECT_INTEGRITY_OWNERS = (
     ),
     ChangedOwner(
         owner_id="native_assistant_dock",
+        path_prefixes=("src/sciplot_gui/studio_assistant_history/",),
         exact_paths=frozenset({
             "src/sciplot_gui/assistant_runtime.py",
             "src/sciplot_gui/studio_assistant/dock.py",
@@ -25,13 +26,14 @@ PROJECT_INTEGRITY_OWNERS = (
             "src/sciplot_gui/studio_assistant/request_flow.py",
             "src/sciplot_gui/studio_assistant/context_history.py",
             "src/sciplot_gui/studio_assistant/rejection.py",
-            "src/sciplot_gui/studio_assistant_history.py",
         }),
         owned_test_paths=frozenset({"tests/test_studio_assistant_disclosure.py"}),
         pytest_targets=("tests/test_assistant_contract.py", "tests/test_ai_transport_lifecycle.py",
-                        "tests/test_assistant_disclosure_facts.py", "tests/test_studio_assistant_disclosure.py"),
+                        "tests/test_assistant_disclosure_facts.py", "tests/test_studio_assistant_disclosure.py",
+                        "tests/test_iso_timestamps.py"),
         handoff_gates=("doctor",),
         final_milestone_gates=("smoke",),
+        release_gates=("full_pytest",),
     ),
     ChangedOwner(
         owner_id="material_metric_integrity",
