@@ -437,3 +437,31 @@ def test_cancel_before_send_does_not_invent_provider_identity_or_zero_usage():
         assert facts.usage_status == "not_observed"
     assert connection.request_calls == 0
     assert connection.close_calls == 1
+
+
+def test_usage_encoding_recursion_is_observed_invalid_without_vetoing_completed_text(monkeypatch):
+    from sciplot_core.assistant_provider import ProviderFacts
+
+    connection = _Connection(_Response(_observed_terminal()))
+    original = ProviderFacts.from_values
+    attempts = []
+
+    def metadata_factory(_cls, **values):
+        attempts.append(values["usage_status"])
+        if values.get("usage") is not None:
+            raise RecursionError("controlled optional usage encoding failure")
+        return original(**values)
+
+    with monkeypatch.context() as scope:
+        scope.setattr(ProviderFacts, "from_values", classmethod(metadata_factory))
+        result = _stream(connection)
+    assert ProviderFacts.from_values.__func__ is original.__func__
+    assert attempts == ["reported", "invalid"]
+    assert result.text == "bounded proposal"
+    assert result.refusal is result.incomplete_reason is None
+    facts = result.provider_facts
+    assert facts.response_id == _OBSERVED_ID and facts.model == "actual-offline-model"
+    assert facts.terminal_status == "completed"
+    assert facts.usage is None and facts.usage_status == "invalid"
+    assert facts.to_dict()["usage"] is None
+    assert connection.response.close_calls == connection.close_calls == 1
