@@ -28,6 +28,7 @@ from sciplot_core.openai_provider.validation import (
 from sciplot_core.openai_provider.config import (
     OpenAIResponsesConfig,
 )
+from sciplot_core.openai_provider.observations import _ResponseFacts
 
 from sciplot_core.openai_provider.transport_helpers import (
     _StreamResult,
@@ -56,6 +57,7 @@ class _ResponsesSSEClient:
         on_headers: Callable[[], None],
         on_text: Callable[[], None],
     ) -> _StreamResult:
+        facts = _ResponseFacts(self.config.api_key)
         encoded = json.dumps(
             payload,
             ensure_ascii=False,
@@ -114,19 +116,23 @@ class _ResponsesSSEClient:
                     response,
                     cancellation=cancellation,
                     on_text=on_text,
+                    facts=facts,
                 )
-        except AssistantCancelled:
+        except AssistantCancelled as exc:
+            exc.provider_facts = facts.value
             raise
-        except OpenAIProviderError:
+        except OpenAIProviderError as exc:
+            exc.provider_facts = facts.value
             raise
         except Exception as exc:
             if cancellation.cancelled:
                 raise AssistantCancelled(
-                    "Assistant request cancelled by the user."
+                    "Assistant request cancelled by the user.", provider_facts=facts.value,
                 ) from None
             safe = _redact(exc, secrets=(self.config.api_key,))
             raise OpenAIProviderError(
-                f"OpenAI Responses request failed: {type(exc).__name__}: {safe}"
+                f"OpenAI Responses request failed: {type(exc).__name__}: {safe}",
+                provider_facts=facts.value,
             ) from None
 
     def _read_events(
@@ -135,7 +141,9 @@ class _ResponsesSSEClient:
         *,
         cancellation: AssistantCancellationToken,
         on_text: Callable[[], None],
+        facts: _ResponseFacts | None = None,
     ) -> _StreamResult:
+        facts = facts if facts is not None else _ResponseFacts(self.config.api_key)
         event_name: str | None = None
         data_lines: list[str] = []
         text_parts: list[str] = []
@@ -208,7 +216,9 @@ class _ResponsesSSEClient:
                 raise OpenAIProviderError(
                     "OpenAI SSE event header and payload type disagree."
                 )
-            if payload_type == "response.output_text.delta":
+            if payload_type in {"response.created", "response.in_progress"}:
+                facts.observe(value.get("response"))
+            elif payload_type == "response.output_text.delta":
                 delta = value.get("delta")
                 if not isinstance(delta, str):
                     raise OpenAIProviderError("OpenAI output_text delta must be text.")
@@ -239,6 +249,7 @@ class _ResponsesSSEClient:
                     final_refusal = refusal
             elif payload_type == "response.completed":
                 completed = value.get("response")
+                facts.observe(completed, terminal=True)
                 if not isinstance(completed, dict):
                     raise OpenAIProviderError(
                         "OpenAI completed event has no response object."
@@ -260,6 +271,7 @@ class _ResponsesSSEClient:
                 terminal = True
             elif payload_type == "response.incomplete":
                 incomplete = value.get("response")
+                facts.observe(incomplete, terminal=True)
                 details = (
                     incomplete.get("incomplete_details")
                     if isinstance(incomplete, dict)
@@ -271,6 +283,7 @@ class _ResponsesSSEClient:
                 )
                 terminal = True
             elif payload_type in {"response.failed", "error"}:
+                facts.observe(value.get("response"), terminal=True)
                 error = value.get("error")
                 if error is None and isinstance(value.get("response"), dict):
                     error = value["response"].get("error")
@@ -329,4 +342,5 @@ class _ResponsesSSEClient:
             text=text,
             refusal=refusal,
             incomplete_reason=incomplete_reason,
+            provider_facts=facts.value,
         )

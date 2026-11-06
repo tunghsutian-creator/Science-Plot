@@ -10,6 +10,7 @@ from types import TracebackType
 from typing import Any
 
 from sciplot_core.assistant_provider import AssistantCancellationToken
+from sciplot_core.assistant_provider.facts import ProviderFacts
 from sciplot_core.openai_provider.errors import OpenAIProviderError
 
 from sciplot_core.openai_provider.validation import (
@@ -22,6 +23,7 @@ class _StreamResult:
     text: str = ""
     refusal: str | None = None
     incomplete_reason: str | None = None
+    provider_facts: ProviderFacts | None = None
 
 
 class _StreamTransport:

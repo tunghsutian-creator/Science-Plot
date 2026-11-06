@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from typing import Any, Callable, Mapping
 from sciplot_core.assistant_operations import (
     VeuszSettingOperation,
@@ -10,12 +11,14 @@ from sciplot_core.assistant_operations import (
 )
 from sciplot_core.assistant_provider import (
     AssistantCancellationToken,
+    AssistantCancelled,
     AssistantProgressEvent,
     AssistantProviderDescriptor,
     AssistantRequest,
     AssistantResponse,
 )
 from sciplot_core.assistant_provider.capabilities import bind_setting_targets
+from sciplot_core.assistant_provider.disclosure import outbound_context
 
 from sciplot_core.openai_provider.contracts import (
     OPENAI_PROVIDER_ID,
@@ -86,9 +89,11 @@ class OpenAIResponsesProvider:
             "intent": request.intent,
             "base_revision": request.base_revision,
             "allowed_proposal_kinds": list(request.allowed_proposal_kinds),
-            "context": request.context,
+            "context": outbound_context(request.context, request.disclosure),
         }
-        preview = request.visual_preview
+        preview = request.visual_preview if request.disclosure == "visual" else None
+        if request.disclosure != "visual":
+            user_payload["disclosure"] = request.disclosure
         if preview is not None:
             user_payload["visual_preview"] = {
                 "sha256": preview["sha256"],
@@ -315,7 +320,11 @@ class OpenAIResponsesProvider:
             on_headers=headers_ready,
             on_text=text_started,
         )
-        cancellation.raise_if_cancelled()
+        try:
+            cancellation.raise_if_cancelled()
+        except AssistantCancelled as exc:
+            exc.provider_facts = result.provider_facts
+            raise
         if not proposing_emitted:
             text_started()
         progress(
@@ -325,14 +334,14 @@ class OpenAIResponsesProvider:
         )
         if result.refusal:
             refusal = _redact(result.refusal, secrets=())[:500]
-            return self._response(
+            response = self._response(
                 restored,
                 status="needs_human_confirmation",
                 understanding="The model declined to create a Veusz edit proposal.",
                 warnings=(refusal,),
             )
-        if result.incomplete_reason:
-            return self._response(
+        elif result.incomplete_reason:
+            response = self._response(
                 restored,
                 status="needs_rule_repair",
                 understanding=(
@@ -341,20 +350,22 @@ class OpenAIResponsesProvider:
                 ),
                 warnings=(f"Incomplete response: {result.incomplete_reason[:400]}",),
             )
-        try:
-            envelope = _model_envelope(result.text)
-            return self._typed_model_response(restored, envelope)
-        except ValueError as exc:
-            safe = _redact(exc, secrets=())[:420]
-            return self._response(
-                restored,
-                status="needs_rule_repair",
-                understanding=(
-                    "The model response could not be converted into a safe "
-                    "selected-object proposal. The figure was not changed."
-                ),
-                warnings=(f"Typed proposal rejected: {safe}",),
-            )
+        else:
+            try:
+                envelope = _model_envelope(result.text)
+                response = self._typed_model_response(restored, envelope)
+            except ValueError as exc:
+                safe = _redact(exc, secrets=())[:420]
+                response = self._response(
+                    restored,
+                    status="needs_rule_repair",
+                    understanding=(
+                        "The model response could not be converted into a safe "
+                        "selected-object proposal. The figure was not changed."
+                    ),
+                    warnings=(f"Typed proposal rejected: {safe}",),
+                )
+        return replace(response, provider_facts=result.provider_facts)
 
 
 def load_openai_provider_from_environment(

@@ -49,7 +49,7 @@ class ProviderFacts:
         _fact_text(self.response_id)
         _fact_text(self.model)
         _fact_text(self.terminal_status)
-        if self.usage_status not in _USAGE_STATUSES:
+        if not isinstance(self.usage_status, str) or self.usage_status not in _USAGE_STATUSES:
             raise ValueError("Unknown provider usage observation status.")
         if (self.usage_json is not None) != (self.usage_status == "reported"):
             raise ValueError("Only reported provider usage can carry counters.")
@@ -66,7 +66,7 @@ class ProviderFacts:
                     usage: dict[str, Any] | None = None, usage_status: str = "not_observed",
                     terminal_status: str | None = None) -> ProviderFacts:
         encoded = None if usage is None else json.dumps(
-            _usage_object(usage), sort_keys=True, separators=(",", ":"), allow_nan=False)
+            usage, sort_keys=True, separators=(",", ":"), allow_nan=False)
         return cls(response_id, model, encoded, usage_status, terminal_status)
 
     @property
