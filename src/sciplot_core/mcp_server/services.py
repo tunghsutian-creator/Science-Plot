@@ -22,6 +22,16 @@ def _preview_output(arguments: dict[str, Any]) -> Path:
 
 
 def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if name in {"sciplot_intake_prepare", "sciplot_intake_create", "sciplot_intake_table"}:
+        from sciplot_core.intake.session_adapter import create_session, prepare_session, preview_session_table
+
+        if name == "sciplot_intake_prepare":
+            return prepare_session(Path(arguments["source"]), output_root=Path(arguments["output_root"]),
+                                   rule_id=arguments.get("rule_id"))
+        if name == "sciplot_intake_table":
+            return preview_session_table(Path(arguments["session"]), group_index=arguments["group_index"],
+                                         file_index=arguments["file_index"], sheet=arguments.get("sheet"))
+        return create_session(Path(arguments["session"]))
     if name in {"sciplot_compose", "sciplot_compose_capabilities"}:
         from sciplot_core.panel_assembly.service import compose, composition_capabilities
 

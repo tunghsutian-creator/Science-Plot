@@ -17,6 +17,7 @@ from sciplot_core.cli.parsers.tasks import register_task_commands
 from sciplot_core.cli.parsers.rheology import register_rheology_commands
 from sciplot_core.cli.parsers.composition import register_composition_commands
 from sciplot_core.cli.parsers.host import register_host_commands
+from sciplot_core.cli.parsers.intake import register_intake_commands
 from sciplot_core.cli.parsers.quality_publication import (
     register_quality_publication_commands,
 )
@@ -44,6 +45,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     register_rheology_commands(subparsers)
     register_composition_commands(subparsers)
     register_host_commands(subparsers)
+    register_intake_commands(subparsers)
     register_quality_publication_commands(subparsers)
     internal_commands = {
         "readiness-probe",

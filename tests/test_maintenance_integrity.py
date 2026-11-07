@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 import sciplot_core.intake as intake
+from sciplot_core.intake import application
 from sciplot_core.studio import (
     StudioPreparationBlocked,
     _read_source_frame_records,
@@ -51,7 +52,8 @@ def test_intake_session_restore_requires_original_file_bytes(
         captured.update(kwargs)
         return {"kind": "captured"}
 
-    monkeypatch.setattr(intake, "create_intake_project", fake_create_intake_project)
+    monkeypatch.setattr(application, "create_intake_project", fake_create_intake_project)
+    assert intake.create_intake_project_from_session is application.create_intake_project_from_session
 
     assert intake.create_intake_project_from_session(payload) == {"kind": "captured"}
     groups = captured["groups"]

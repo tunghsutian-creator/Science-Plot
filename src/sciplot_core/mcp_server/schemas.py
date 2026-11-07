@@ -61,6 +61,14 @@ def tool_definitions() -> list[Tool]:
         ))
 
     semantic_path = {**string, "pattern": "^/"}
+    add("intake_prepare", "Prepare a local source-bound intake session for explicit sample/file groups, order, column roles, size and exports. Returns editable request/schema and non-authoritative context. No browser, model or original-data mutation; saves a local session, not a project.",
+        {"source": string, "output_root": string, "rule_id": string}, ["source", "output_root"])
+    add("intake_table", "Read one exact original file/worksheet selected from a local intake request, bound to its recorded path, size and SHA, with a stable snapshot for this read. Returns bounded original preview; never creates a project or silently chooses a replacement table.",
+        {"session": string, "group_index": {"type": "integer", "minimum": 0},
+         "file_index": {"type": "integer", "minimum": 0}, "sheet": string},
+        ["session", "group_index", "file_index"], read_only=True)
+    add("intake_create", "Create and export from the strict request in a confirmed local intake session. The existing reader rechecks original bindings; local rules and preparation/publication own science and outputs. Context is not executable. Repeated create reserves a new project using existing naming; do not retry native work blindly after reply loss.",
+        {"session": string}, ["session"], destructive=True)
     description = {"oneOf": [
         object_schema({"scope": {"const": "summary"}}, ["scope"]),
         object_schema({"scope": {"const": "edit"}, "target": string, "property": string},

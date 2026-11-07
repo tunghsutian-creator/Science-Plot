@@ -22,7 +22,9 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 
 def test_tool_discovery_uses_closed_shared_operation_schema():
     tools = {item.name: item for item in tool_definitions()}
-    assert len(tools) == 43
+    assert len(tools) == 46
+    assert {"sciplot_intake_prepare", "sciplot_intake_table", "sciplot_intake_create"} <= tools.keys()
+    assert tools["sciplot_intake_table"].annotations.read_only_hint is True
     assert {"sciplot_compose", "sciplot_compose_capabilities"} <= tools.keys()
     assert {"sciplot_project_open", "sciplot_plot_create", "sciplot_plot_describe", "sciplot_plot_patch",
             "sciplot_plot_intent", "sciplot_plot_render", "sciplot_plot_export", "sciplot_plot_rollback",

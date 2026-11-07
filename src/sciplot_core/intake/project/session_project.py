@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from collections.abc import Callable
@@ -10,10 +9,48 @@ from pathlib import Path
 from typing import Any
 from ..config import _DEFAULT_OUTPUT_ROOT
 from ..models import IncomingFile, IntakeGroupInput
+from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
 
 from sciplot_core.intake.project.project_builder import (
     create_intake_project,
 )
+
+
+def read_confirmed_source_file(item: dict[str, Any], *, label: str = "selected") -> tuple[IncomingFile, dict[str, Any]]:
+    """Read declared bytes and an operation-local witness; never persist host identity."""
+    source_text = str(item.get("source_path") or "").strip()
+    if not source_text:
+        raise ValueError(
+            "Intake session file "
+            f"{label} has no source_path."
+        )
+    source_path = Path(source_text).expanduser().resolve()
+    if not source_path.is_file():
+        raise FileNotFoundError(
+            f"Intake session source is missing or not a file: {source_path}"
+        )
+    expected_size = item.get("size_bytes")
+    if (
+        isinstance(expected_size, bool)
+        or not isinstance(expected_size, int)
+        or expected_size < 0
+    ):
+        raise ValueError(
+            f"Intake session source has no valid size record: {source_path}"
+        )
+    expected_sha256 = str(item.get("sha256") or "").strip().casefold()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
+        raise ValueError(
+            f"Intake session source has no valid SHA-256 record: {source_path}"
+        )
+    captured = stable_file_snapshot(source_path, label="Confirmed intake source")
+    content = captured["bytes"]
+    if len(content) != expected_size or captured["sha256"] != expected_sha256:
+        raise ValueError(
+            "Intake session source changed after the session was "
+            f"prepared: {source_path}"
+        )
+    return IncomingFile(name=str(item.get("name") or source_path.name), content=content), captured
 
 
 def create_intake_project_from_session(
@@ -41,44 +78,8 @@ def create_intake_project_from_session(
                     "Intake session file "
                     f"{group_index + 1}.{file_index + 1} must be an object."
                 )
-            source_text = str(item.get("source_path") or "").strip()
-            if not source_text:
-                raise ValueError(
-                    "Intake session file "
-                    f"{group_index + 1}.{file_index + 1} has no source_path."
-                )
-            source_path = Path(source_text).expanduser().resolve()
-            if not source_path.is_file():
-                raise FileNotFoundError(
-                    f"Intake session source is missing or not a file: {source_path}"
-                )
-            expected_size = item.get("size_bytes")
-            if (
-                isinstance(expected_size, bool)
-                or not isinstance(expected_size, int)
-                or expected_size < 0
-            ):
-                raise ValueError(
-                    f"Intake session source has no valid size record: {source_path}"
-                )
-            expected_sha256 = str(item.get("sha256") or "").strip().casefold()
-            if not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
-                raise ValueError(
-                    f"Intake session source has no valid SHA-256 record: {source_path}"
-                )
-            content = source_path.read_bytes()
-            actual_sha256 = hashlib.sha256(content).hexdigest()
-            if len(content) != expected_size or actual_sha256 != expected_sha256:
-                raise ValueError(
-                    "Intake session source changed after the session was "
-                    f"prepared: {source_path}"
-                )
-            files.append(
-                IncomingFile(
-                    name=str(item.get("name") or source_path.name),
-                    content=content,
-                )
-            )
+            incoming, _snapshot = read_confirmed_source_file(item, label=f"{group_index + 1}.{file_index + 1}")
+            files.append(incoming)
         groups.append(
             IntakeGroupInput(sample=str(group.get("sample") or ""), files=tuple(files))
         )

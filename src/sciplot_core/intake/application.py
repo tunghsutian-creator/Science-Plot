@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -18,10 +19,13 @@ from .project import (
 
 def create_intake_project_from_session(
     session: str | Path | dict[str, Any],
+    *,
+    project_factory: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return _create_intake_project_from_session(
         session,
         studio_preparer=partial(prepare_studio_document, _new_creation=True),
+        project_factory=project_factory or create_intake_project,
     )
 
 

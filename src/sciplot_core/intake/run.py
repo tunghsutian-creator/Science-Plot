@@ -49,6 +49,11 @@ def create_and_run_intake_project(
         column_confirmations=column_confirmations,
         replicate_mode=replicate_mode,
     )
+    return publish_prepared_intake_project(project)
+
+
+def publish_prepared_intake_project(project: dict[str, Any]) -> dict[str, Any]:
+    """Export one already-prepared project through the existing publication owner."""
     project_dir = Path(str(project["project_dir"]))
     plot_request_path = Path(str(project["plot_request"]))
     manifest: dict[str, Any] | None = None

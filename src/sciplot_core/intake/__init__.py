@@ -1,6 +1,6 @@
 """Headless intake domain and confirmed project preparation."""
 
-from .application import create_intake_project
+from .application import create_intake_project, create_intake_project_from_session
 from .catalog import (
     converge_material_review_notes,
     intake_catalog_payload,
@@ -15,7 +15,6 @@ from .packaging import (
     converge_intake_project_launchers,
     refresh_intake_project_zip,
 )
-from .project import create_intake_project_from_session as _restore_intake_session
 from .run import create_and_run_intake_project
 from .session import prepare_intake_session
 from .status import (
@@ -27,18 +26,6 @@ from .table_preview import (
     _tensile_export_dirs as _tensile_export_dirs,
     preview_table_payload,
 )
-
-
-def create_intake_project_from_session(session):
-    """Restore a confirmed session through the public project factory."""
-
-    from sciplot_core.studio import prepare_studio_document
-
-    return _restore_intake_session(
-        session,
-        studio_preparer=prepare_studio_document,
-        project_factory=create_intake_project,
-    )
 
 
 __all__ = [
