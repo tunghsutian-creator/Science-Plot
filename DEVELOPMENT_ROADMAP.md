@@ -13,8 +13,9 @@ The current authorized work is the ordered
 [core complexity reduction](docs/COMPLEXITY_REDUCTION_PLAN.md): immutable command
 admission and patch caller migration, explicit XY execution, shared observations
 and saved-evidence facts. Those components and the product UI retirement are
-implemented in the isolated batch; scientific column confirmation, output-location
-roles and the combined acceptance remain its current closure work. The product target is AI conversation
+implemented in the isolated batch, including scientific column confirmation and
+output-location roles. Combined frozen acceptance and supported-platform evidence
+remain its current closure work. The product target is AI conversation
 through local tools, with a separate PDF reference copy; no manual graph-editing
 frontend is being built. Retired manual UI and draft/history writers do not remain
 as alternate Core authority. Preserve their real scientific and file obligations.

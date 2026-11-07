@@ -84,6 +84,7 @@ PROJECT_INTEGRITY_OWNERS = (
             {
                 "tests/test_delivery_identity.py",
                 "tests/test_delivery_extra_formats.py",
+                "tests/test_svg_canvas_units.py",
                 "tests/test_delivery_output_identity.py",
                 "tests/test_delivery_legacy_history_native.py",
                 "tests/test_delivery_install.py",
@@ -100,6 +101,7 @@ PROJECT_INTEGRITY_OWNERS = (
         pytest_targets=(
             "tests/test_delivery_identity.py",
             "tests/test_delivery_extra_formats.py",
+            "tests/test_svg_canvas_units.py",
             "tests/test_delivery_output_identity.py",
             "tests/test_delivery_legacy_history_native.py",
             "tests/test_delivery_install.py",

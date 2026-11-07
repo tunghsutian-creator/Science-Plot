@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import ast
-import json
-import subprocess
-import sys
+from importlib.machinery import PathFinder
 import tomllib
 from pathlib import Path
 
@@ -22,18 +20,13 @@ def test_retired_qt_frontend_and_window_factories_stay_absent() -> None:
     retired = ["src/sciplot_gui", *("src/sciplot_core/studio_core/" + name + ".py"
                for name in ("qt_launch", "qt_window", "qt_safety"))]
     assert not [path for path in retired if (ROOT / path).exists()]
-    # An unrelated editable install in the shared test interpreter is not this
-    # checkout's distribution. Prove actual import absence without its finder.
-    code = "\n".join([
-        "import importlib.util, sys",
-        "sys.path.insert(0, " + json.dumps(str(ROOT / "src")) + ")",
-        "assert importlib.util.find_spec('sciplot_gui') is None",
-        *["assert importlib.util.find_spec('sciplot_core.studio_core." + name + "') is None"
-          for name in ("qt_launch", "qt_window", "qt_safety")],
-    ])
-    result = subprocess.run([sys.executable, "-I", "-S", "-c", code],
-                            capture_output=True, text=True, timeout=20)
-    assert result.returncode == 0, result.stdout + result.stderr
+    # Query this checkout's actual source finder, independently of another
+    # editable install in the shared interpreter. Wheel absence has its own
+    # distribution check; no child needs to disable the public startup guard.
+    assert PathFinder.find_spec("sciplot_gui", [str(ROOT / "src")]) is None
+    for name in ("qt_launch", "qt_window", "qt_safety"):
+        assert PathFinder.find_spec("sciplot_core.studio_core." + name,
+                                    [str(ROOT / "src/sciplot_core/studio_core")]) is None
     # Qt itself remains part of headless native loading, rendering and fonts.
     for name in ("qt_compat.py", "native_export_adapter.py", "veusz_save.py"):
         assert (ROOT / "src/sciplot_core/studio_core" / name).is_file()

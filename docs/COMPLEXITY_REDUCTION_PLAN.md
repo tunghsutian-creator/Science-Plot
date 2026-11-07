@@ -25,8 +25,10 @@ status/draft/history writers are also retired in the isolated batch. Actual
 scientific confirmation moves through CLI/MCP into the existing preparation owner;
 no GUI status layer is copied into Core. Registered legacy artifacts remain
 read-only compatibility inputs. Complete supported export formats, source-bound
-column semantics and output-vs-source locator roles are being checked on real
-producer paths before freezing the combined acceptance. The standard PDF parser
+column semantics and output-vs-source locator roles now have discriminating
+consumer checks and real five-format publication evidence. Combined frozen
+acceptance, supported-platform CI and strict access closure are still separate
+pending gates. The standard PDF parser
 still does not implement project-bound annotation-to-AI editing.
 
 ## Product boundary and target
