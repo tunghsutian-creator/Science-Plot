@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from sciplot_core.delivery_identity import DeliveryBinding
+from sciplot_core.delivery_binding import DeliveryBinding
 from sciplot_core.launchers.delivery_binding import DELIVERY_BINDING_PREFIX
 
 from sciplot_core.launchers.portable_shell import (
