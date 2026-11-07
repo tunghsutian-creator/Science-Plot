@@ -10,6 +10,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 import json
 from sciplot_core.plot_document import validate_patch
+from sciplot_core.plot_document.requests import PatchRequest, RequestInput
 from sciplot_core.plot_engine.contracts import validate_decide, validate_resume
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
@@ -22,7 +23,7 @@ from sciplot_core.workflow.native_suite_patch_contract import _changes as _chang
 from sciplot_core.workflow.native_suite_runtime import native_runtime, suite_runtime
 
 
-from sciplot_core.workflow.native_suite_admission import _admit_wire_before_runtime
+from sciplot_core.workflow.native_suite_admission import _admit_wire_before_runtime, admit_native_patch
 from sciplot_core.workflow.native_suite_command_records import _application, _request, _key, _preview_export
 from sciplot_core.workflow.native_suite_receipts import _public, _legacy_result, _current_exports
 from sciplot_core.workflow.native_suite_review_exports import _resume_preview_export, _publish_reviewed_exports
@@ -200,10 +201,13 @@ def _import_legacy_preview(context: dict[str, Any], record: dict[str, Any], path
     return imported
 
 
-@_admit_wire_before_runtime("patch")
+def patch_native(target: Path, request: RequestInput) -> dict[str, Any]:
+    return _patch_native(target, admit_native_patch(target, request))
+
+
 @native_runtime(repair=True)
-def patch_native(target: Path, request: dict[str, Any]) -> dict[str, Any]:
-    request = validate_patch(request)
+def _patch_native(target: Path, patch: PatchRequest) -> dict[str, Any]:
+    request = patch.to_payload()
     context = require_object(target, repair=True)
     store, app = _application(context)
     original = _request(context, request)
@@ -221,7 +225,7 @@ def patch_native(target: Path, request: dict[str, Any]) -> dict[str, Any]:
     legacy_path = operation_path(context, request["idempotency_key"])
     legacy = read_operation(legacy_path)
     if legacy is not None:
-        if legacy["request"] != request:
+        if canonical_json_sha256(legacy["request"], allow_nan=False) != patch.digest:
             raise EngineError("document_idempotency_conflict", "This key belongs to a preserved legacy request.")
         if legacy["phase"] in {"complete", "rejected"}:
             return _legacy_result(context, legacy, legacy_path, replayed=True)

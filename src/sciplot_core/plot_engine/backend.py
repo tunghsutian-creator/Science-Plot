@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Any, Protocol
+from sciplot_core.plot_document.requests import RequestInput
 
 
 class PlotOpener(Protocol):
@@ -12,7 +13,7 @@ class PlotCreator(PlotOpener, Protocol):
     def open_created(self, target: Path, *, series_ids: dict[str, str], recipe: dict[str, Any],
                      figure_id: str | None = None) -> dict[str, Any]: ...
 
-    def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
+    def patch(self, plot: Path, request: RequestInput) -> dict[str, Any]: ...
 
     def describe(self, plot: Path) -> dict[str, Any]: ...
 

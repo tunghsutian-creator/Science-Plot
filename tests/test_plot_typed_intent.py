@@ -42,7 +42,7 @@ def test_axis_plan_compiles_to_existing_patch_without_scientific_change(tmp_path
     source = tmp_path / "figure.csv"
     source_bytes = source.read_bytes()
     patch, plan = compile_intent(document, validate_intent(_request()))
-    assert patch == {"plot_id": "intent-test", "base_revision": 0, "idempotency_key": "same-key",
+    assert patch.to_payload() == {"plot_id": "intent-test", "base_revision": 0, "idempotency_key": "same-key",
                      "intent_class": "presentation", "changes": [{"op": "set", "target": ["axis:xb"],
                      "property": "axis.label", "value": "Frequency, Hz"}]}
     assert plan["target"] == {"id": "axis:xb", "kind": "axis", "label": "Frequency (Hz)"}
@@ -66,7 +66,7 @@ def test_annotation_text_and_exact_type_restrictions(tmp_path: Path) -> None:
                        value="Observed peak")
     request.pop("target_label")
     patch, plan = compile_intent(document, validate_intent(request))
-    assert patch["changes"][0]["target"] == ["annotation:peak"]
+    assert patch.to_payload()["changes"][0]["target"] == ["annotation:peak"]
     assert plan["target_context"] == {"space": "data", "view_id": "view:A",
                                        "x_scale": "scale:x", "y_scale": "scale:y", "x": 5, "y": 15}
     with pytest.raises(ValueError) as bad_value:
@@ -161,7 +161,7 @@ def test_plan_is_read_only_and_apply_delegates_to_patch(tmp_path: Path, monkeypa
 
     captured = []
     monkeypatch.setattr(service_module, "external_project_session", lambda _: nullcontext())
-    monkeypatch.setattr(service, "_patch", lambda _root, patch: captured.append(patch) or {"status": "complete"})
+    monkeypatch.setattr(service, "_patch", lambda _root, patch: captured.append(patch.to_payload()) or {"status": "complete"})
     assert service.intent(root, _request(mode="apply"))["status"] == "complete"
     assert captured == [result["patch_request"]]
 
@@ -239,7 +239,7 @@ def test_apply_retry_resolves_original_snapshot_not_renamed_label(tmp_path: Path
     monkeypatch.setattr(service_module, "external_project_session", lambda _: nullcontext())
     monkeypatch.setattr(service_module, "transaction_path", lambda *_: saved)
     monkeypatch.setattr(admission_module, "transaction_path", lambda *_: saved)
-    transaction = {"before": original, "request": patch, "request_hash": service_module.digest(patch),
+    transaction = {"before": original, "request": patch.to_payload(), "request_hash": service_module.digest(patch.to_payload()),
                    "phase": "complete"}
     monkeypatch.setattr(service_module, "read", lambda _: transaction)
     monkeypatch.setattr(admission_module, "read", lambda _: transaction)

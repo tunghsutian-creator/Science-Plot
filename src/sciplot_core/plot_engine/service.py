@@ -6,6 +6,7 @@ aggregate application; no native draft is silently promoted to Managed authority
 """
 from pathlib import Path
 from typing import Any
+from sciplot_core.plot_document.requests import RequestInput, admit_patch
 
 from sciplot_core.project_lifecycle.application import ProjectApplication
 from sciplot_core.project_lifecycle.composition import components
@@ -42,10 +43,8 @@ class PlotService(ProjectApplication):
         native = native_dispatch("describe", canonical_path(plot), description=description)
         return native if native is not None else super().describe(plot, description=description)
 
-    def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
-        from sciplot_core.plot_document import validate_patch
-
-        request = validate_patch(request)
+    def patch(self, plot: Path, request: RequestInput) -> dict[str, Any]:
+        request = admit_patch(request)
         native = native_dispatch("patch", canonical_path(plot), request=request)
         return native if native is not None else super().patch(plot, request)
 

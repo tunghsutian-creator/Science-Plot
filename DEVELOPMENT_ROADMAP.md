@@ -1,17 +1,30 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-11-06. External AI is the task interface. Current behavior belongs
+Status: 2026-11-07. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
 original local evidence retain that history; historical PASS is not a new
 snapshot's acceptance.
 
-## Immediate priority: bounded AI disclosure and provider facts
+## Immediate priority: reduce duplicated core responsibilities
+
+The current authorized work is the ordered
+[core complexity reduction](docs/COMPLEXITY_REDUCTION_PLAN.md): immutable command
+admission and complete patch caller migration first, then explicit XY execution,
+shared observations and saved-evidence facts. The product target is AI conversation
+through local tools, with a separate PDF reference copy; no manual graph-editing
+frontend is being built. Retire old manual UI, duplicate draft/history and their
+distribution constraints only with the complete dependency migration in that plan.
+Preserve scientific, file, process, permission and recovery boundaries while
+retiring replaced internal paths. The independent
+SavedWork release is cancelled and retained, not a new accepted main baseline.
+
+## Delivered AI disclosure boundary
 
 The native digest-cost batch was delivered at `7b243305`; its original local
 full/capture/access and candidate/main CI records remain external evidence.
-The current authorized P2 slice is local code and offline simulation only:
+The delivered P2 slice is local code and offline simulation only:
 explicit visual/properties outbound context and factual optional provider usage
 through the existing Assistant request, transport, cancellation and history chain.
 Migrate every target caller and keep the old visual request/history readers.

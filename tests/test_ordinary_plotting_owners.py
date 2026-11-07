@@ -371,6 +371,7 @@ WORKFLOW_PROJECT_STRICT_ADDITIONS = frozenset(
 )
 SOURCE_ARTIFACT_STRICT_ADDITIONS = frozenset(
     {
+        "src/sciplot_core/visual_review/pdf_annotations.py",
         "src/sciplot_core/studio_render/source_artifacts.py",
         "src/sciplot_core/studio_render/categorical_components.py",
         "src/sciplot_core/studio_render/frame_series.py",
@@ -398,6 +399,7 @@ CI_FEEDBACK_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/verification/task_timing_feedback.py",
         "src/sciplot_core/verification/source_contracts.py",
         "src/sciplot_core/verification/public_stage_selection.py",
+        "src/sciplot_core/verification/public_stage_environment.py",
     }
 )
 ASSISTANT_DISCLOSURE_STRICT_ADDITIONS = frozenset(

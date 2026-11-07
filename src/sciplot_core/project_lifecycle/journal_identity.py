@@ -34,7 +34,7 @@ def saved_command(transaction: dict[str, Any]) -> NormalizedCommand | None:
                     raise ValueError("The frozen legacy inverse patch does not bind this rollback.")
             if transaction["request_hash"] != canonical_json_sha256(execution, allow_nan=False):
                 raise ValueError("The frozen rollback execution request changed.")
-        if (command.to_payload() != saved or command.business_request != business
+        if (command.to_payload() != saved or command.request_digest != canonical_json_sha256(business, allow_nan=False)
                 or command.idempotency_key != transaction["request"]["idempotency_key"]
                 or token != RevisionToken.of(transaction["before"])):
             raise ValueError("Command and original journal disagree.")

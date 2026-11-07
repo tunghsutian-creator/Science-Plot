@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.plot_document import apply_patch, seal_document, validate_patch
+from sciplot_core.plot_document import apply_patch, seal_document
+from sciplot_core.plot_document.requests import PatchRequest, admit_patch
 from sciplot_core.plot_document.errors import fail
 
 from .errors import EngineError
@@ -13,9 +14,10 @@ from .errors import EngineError
 SPECIAL = {"theme", "source.sha256", "source.append", "transform.parameters", "transform.executor", "executor.registration"}
 
 
-def prepare_update(document: dict[str, Any], request: dict[str, Any], *, root: Path | None = None,
+def prepare_update(document: dict[str, Any], request: PatchRequest | dict[str, Any], *, root: Path | None = None,
                    datasets: dict[str, dict[str, Any]] | None = None) -> tuple[dict[str, Any], list[dict[str, Any]], str, bool]:
-    request = validate_patch(request)
+    admitted = admit_patch(request)
+    request = admitted.to_payload()
     if request["plot_id"] != document["plot_id"] or request["base_revision"] != document["revision"]:
         raise EngineError("document_revision_conflict", "The managed patch must identify the current plot and revision.",
                           current_revision=document["revision"])
@@ -29,7 +31,7 @@ def prepare_update(document: dict[str, Any], request: dict[str, Any], *, root: P
     if is_figure(document) and any(change["property"] in PROPERTIES for change in request["changes"]):
         return prepare_figure_update(document, request, datasets=datasets)
     if not any(change["property"] in SPECIAL for change in request["changes"]):
-        updated, diff, risk = apply_patch(document, request)
+        updated, diff, risk = apply_patch(document, admitted)
         return updated, diff, risk, False
     if any(change["property"] not in SPECIAL for change in request["changes"]):
         raise EngineError("managed_mixed_update", "Keep a scientific/theme update separate from ordinary object style changes.")

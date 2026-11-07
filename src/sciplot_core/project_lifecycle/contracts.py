@@ -1,11 +1,10 @@
 """Renderer-independent authority, command, version and outcome values."""
-from copy import deepcopy
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 import re
-from typing import Any
+from typing import Any, cast
 
-from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.plot_document.requests import PatchRequest, RequestBody
 
 
 class AuthorityMode(StrEnum):
@@ -59,57 +58,64 @@ class RevisionToken:
 class NormalizedCommand:
     kind: str
     idempotency_key: str
-    original_request: dict[str, Any]
+    original_request: RequestBody | PatchRequest | dict[str, Any]
     request_digest: str
-    business_request: dict[str, Any]
+    business_request: RequestBody | PatchRequest | dict[str, Any]
     original_request_digest: str
     expected_revision: RevisionToken | None
     authority: AuthorityMode
 
     def __post_init__(self) -> None:
-        self.validate()
-
-    @classmethod
-    def create(cls, kind: str, request: dict[str, Any], *, expected_revision: RevisionToken | None = None,
-               authority: AuthorityMode = AuthorityMode.LEGACY_NATIVE,
-               business_request: dict[str, Any] | None = None) -> "NormalizedCommand":
-        original = deepcopy(request)
-        if not isinstance(original, dict):
-            raise ValueError("A command requires an original request object.")
-        key = original.get("idempotency_key")
-        if not isinstance(key, str) or not 1 <= len(key) <= 128:
-            raise ValueError("Use a stable non-empty idempotency key of at most 128 characters.")
-        business = deepcopy(original if business_request is None else business_request)
-        return cls(kind, key, original, canonical_json_sha256(business, allow_nan=False), business,
-                   canonical_json_sha256(original, allow_nan=False), expected_revision,
-                   expected_revision.authority if expected_revision else authority)
-
-    def validate(self) -> None:
+        original = self._body(self.original_request)
+        business = original if self.business_request is self.original_request else self._body(self.business_request)
         if (not isinstance(self.kind, str) or self.kind not in {"create", "patch", "intent", "rollback", "reimport", "export"}
                 or not isinstance(self.authority, AuthorityMode)
-                or not isinstance(self.original_request, dict) or not isinstance(self.business_request, dict)
                 or not isinstance(self.idempotency_key, str) or not 1 <= len(self.idempotency_key) <= 128
-                or self.original_request.get("idempotency_key") != self.idempotency_key
-                or self.business_request.get("idempotency_key") != self.idempotency_key
-                or canonical_json_sha256(self.original_request, allow_nan=False) != self.original_request_digest
-                or canonical_json_sha256(self.business_request, allow_nan=False) != self.request_digest
+                or original.to_payload().get("idempotency_key") != self.idempotency_key
+                or business.to_payload().get("idempotency_key") != self.idempotency_key
+                or original.digest != self.original_request_digest or business.digest != self.request_digest
                 or self.expected_revision is not None and not isinstance(self.expected_revision, RevisionToken)):
             raise ValueError("The normalized command kind, identity, digest or authority is invalid.")
-        if self.expected_revision is not None:
-            self.expected_revision.__post_init__()
-            if self.expected_revision.authority != self.authority:
-                raise ValueError("Command and expected revision authorities disagree.")
+        if self.expected_revision is not None and self.expected_revision.authority != self.authority:
+            raise ValueError("Command and expected revision authorities disagree.")
         if self.kind == "create":
             if self.expected_revision is not None:
                 raise ValueError("A creation command has no previous revision.")
         elif self.expected_revision is None:
             raise ValueError("A mutation command requires its tagged expected revision.")
+        object.__setattr__(self, "original_request", original)
+        object.__setattr__(self, "business_request", business)
+
+    @staticmethod
+    def _body(value: RequestBody | PatchRequest | dict[str, Any]) -> RequestBody | PatchRequest:
+        return (cast(RequestBody | PatchRequest, value) if type(value) in {RequestBody, PatchRequest}
+                else RequestBody(cast(dict[str, Any], value)))
+
+    @classmethod
+    def create(cls, kind: str, request: RequestBody | PatchRequest | dict[str, Any], *, expected_revision: RevisionToken | None = None,
+               authority: AuthorityMode = AuthorityMode.LEGACY_NATIVE,
+               business_request: RequestBody | PatchRequest | dict[str, Any] | None = None) -> "NormalizedCommand":
+        original = cls._body(request)
+        key = original.to_payload().get("idempotency_key")
+        if not isinstance(key, str) or not 1 <= len(key) <= 128:
+            raise ValueError("Use a stable non-empty idempotency key of at most 128 characters.")
+        business = original if business_request is None or business_request is request else cls._body(business_request)
+        return cls(kind, key, original, business.digest, business,
+                   original.digest, expected_revision,
+                   expected_revision.authority if expected_revision else authority)
+
+    @property
+    def original_payload(self) -> dict[str, Any]:
+        return cast(RequestBody | PatchRequest, self.original_request).to_payload()
+
+    @property
+    def business_payload(self) -> dict[str, Any]:
+        return cast(RequestBody | PatchRequest, self.business_request).to_payload()
 
     def to_payload(self) -> dict[str, Any]:
-        self.validate()
         return {"version": 1, "kind": self.kind, "idempotency_key": self.idempotency_key,
-                "original_request": deepcopy(self.original_request), "original_request_digest": self.original_request_digest,
-                "business_request": deepcopy(self.business_request), "request_digest": self.request_digest,
+                "original_request": self.original_payload, "original_request_digest": self.original_request_digest,
+                "business_request": self.business_payload, "request_digest": self.request_digest,
                 "expected_revision": self.expected_revision.to_payload() if self.expected_revision else None,
                 "authority": self.authority.value}
 

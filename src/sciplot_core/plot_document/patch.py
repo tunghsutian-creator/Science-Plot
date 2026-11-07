@@ -7,20 +7,18 @@ from sciplot_core.style_values import normalize_physical_size
 from .errors import fail
 from .model import seal_document, validate_document
 from .properties import effective_risk, maximum_risk, validate_value
-from .schema import patch_schema
-from .validation import validate_wire
+from .requests import admit_patch
 
 
 def validate_patch(patch: Any) -> dict[str, Any]:
-    validate_wire(patch, patch_schema(), code="document_invalid_patch")
-    assert isinstance(patch, dict)
-    return deepcopy(patch)
+    """Compatibility projection for callers that explicitly request wire JSON."""
+    return admit_patch(patch).to_payload()
 
 
 def apply_patch(document: Any, patch: Any) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
     """Validate every target before returning changed state. Revision belongs to storage."""
     result = validate_document(document)
-    patch = validate_patch(patch)
+    patch = admit_patch(patch).to_payload()
     if patch["plot_id"] != result["plot_id"]:
         fail("document_identity_conflict", "The patch belongs to a different plot.", "/plot_id", "identity",
              expected=result["plot_id"])

@@ -6,6 +6,7 @@ from typing import Any
 from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
 from sciplot_core.plot_transforms import ordered_nodes
 from sciplot_core.plot_transforms.unit_relations import requires_unit_context
+from sciplot_core.plot_document.requests import PatchRequest, admit_patch
 from sciplot_core.source_tables.read_session import with_table_reads
 
 from .content_store import resolve_document_content, resolve_provenance_value
@@ -16,10 +17,12 @@ from .original_coordinate import coordinate_origins
 
 
 @with_table_reads
-def prepare_current_update(root: Path, document: dict[str, Any], request: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], str, bool]:
+def prepare_current_update(root: Path, document: dict[str, Any], request: PatchRequest | dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]], str, bool]:
     """Prepare an actual current diff before admitting its scientific closure."""
     from .managed_updates import prepare_update
 
+    admitted = admit_patch(request)
+    request = admitted.to_payload()
     before = resolve_document_content(root, document) if any(
         change["property"] == "source.append" for change in request["changes"]) else document
     datasets = None
@@ -29,7 +32,7 @@ def prepare_current_update(root: Path, document: dict[str, Any], request: dict[s
 
         if is_current_view(figure_spec(before)):
             datasets = resolve_provenance_value(root, before, "datasets")
-    result, diff, risk, scientific = prepare_update(before, request, root=root, datasets=datasets)
+    result, diff, risk, scientific = prepare_update(before, admitted, root=root, datasets=datasets)
     if scientific and diff:
         admit_current_units(root, result, previous=document)
     return result, diff, risk, scientific

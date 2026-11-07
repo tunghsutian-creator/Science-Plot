@@ -87,7 +87,12 @@ def test_saved_transaction_replay_does_not_reenter_new_admission(tmp_path, monke
     monkeypatch.setattr(current_unit_admission, "admit_current_units", forbidden)
     monkeypatch.setattr(publication_repair, "prepare_saved", lambda root, tx, request, backend: tx)
     monkeypatch.setattr(service, "replay", lambda root, tx, backend: tx)
-    assert PlotService(backend=object())._patch(tmp_path, {"idempotency_key": "saved"})["original"] == "frozen scientific request"
+    # Structural admission still applies to a received request. Replaying the
+    # saved scientific effect must not reinterpret it using today's unit rules.
+    request = {"plot_id": "saved-plot", "base_revision": 0, "idempotency_key": "saved",
+               "intent_class": "scientific", "changes": [{"op": "set", "target": ["source:A"],
+                   "property": "source.sha256", "value": "a" * 64}]}
+    assert PlotService(backend=object())._patch(tmp_path, request)["original"] == "frozen scientific request"
 
 
 def test_saved_creation_state_replay_bypasses_new_admission(tmp_path, monkeypatch):

@@ -15,8 +15,8 @@ from sciplot_core.plot_document import (
     apply_patch,
     seal_document,
     validate_document,
-    validate_patch,
 )
+from sciplot_core.plot_document.requests import RequestInput, admit_patch
 from sciplot_core.project_lifecycle.paths import canonical_path
 from sciplot_core.project_lifecycle.context import external_project_session, project_query
 
@@ -165,12 +165,12 @@ class ProjectApplication(CommandDispatch):
         return attach_object_operations(result, document)
 
     @usecase
-    def patch(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
-        request = validate_patch(request)
+    def patch(self, plot: Path, request: RequestInput) -> dict[str, Any]:
+        request = admit_patch(request)
         root = canonical_path(plot)
         from .context import scientific_source_scope
 
-        with external_project_session(root), admitted(root, "patch", request), scientific_source_scope(root, request):
+        with external_project_session(root), admitted(root, "patch", request), scientific_source_scope(root, request.to_payload()):
             return self._patch(root, request)
 
     @usecase
@@ -210,15 +210,13 @@ class ProjectApplication(CommandDispatch):
                 if pending and pending["phase"] not in {"complete", "rejected"}:
                     raise _pending_edit_error(root, pending, "An edit began while planning this request.")
                 return {"plot": str(root), **plan}
-        with external_project_session(root), admitted(root, "intent", request):
-            saved = transaction_path(root, request["idempotency_key"])
-            # Recompile a retry against the *original* snapshot. Resolving a
-            # label against the new head would break replay after the first edit.
-            document = read(saved)["before"] if exists(saved) else load_head(root)["document"]
-            patch, _ = compile_intent(document, request)
-            return self._patch(root, patch)
+        with external_project_session(root), admitted(root, "intent", request) as command:
+            # Admission resolved against current or saved.before exactly once.
+            return self._patch(root, admit_patch(command.business_request))
 
-    def _patch(self, root: Path, request: dict[str, Any], *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _patch(self, root: Path, request: RequestInput, *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:
+        patch = admit_patch(request)
+        request = patch.to_payload()
         saved = transaction_path(root, request["idempotency_key"])
         if exists(saved):
             from sciplot_core.project_lifecycle.publication_repair import prepare_saved
@@ -233,11 +231,11 @@ class ProjectApplication(CommandDispatch):
             from sciplot_core.plot_engine.managed_state import scientific_binding
             from sciplot_core.plot_engine.current_unit_admission import prepare_current_update
 
-            document, diff, risk, scientific_update = prepare_current_update(root, head["document"], request)
+            document, diff, risk, scientific_update = prepare_current_update(root, head["document"], patch)
             if scientific_update and diff:
                 binding = scientific_binding(binding, document)
         else:
-            document, diff, risk = apply_patch(head["document"], request)
+            document, diff, risk = apply_patch(head["document"], patch)
         require_current(self.backend, binding, input_document=document)
         from sciplot_core.project_lifecycle.publication_repair import authorize_pending, reserve_repair
 
@@ -245,7 +243,7 @@ class ProjectApplication(CommandDispatch):
         if diff:
             document["revision"] += 1
             document = seal_document(document)
-        tx = {"id": digest(request["idempotency_key"]), "request": request, "request_hash": digest(request),
+        tx = {"id": digest(request["idempotency_key"]), "request": request, "request_hash": patch.digest,
               "before": head["document"], "document": document, "binding": binding,
               "diff": diff, "risk": "review" if repair else risk, "phase": "resolving" if scientific_update and diff else "planned"}
         if rollback_request is not None:

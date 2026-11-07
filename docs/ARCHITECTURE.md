@@ -447,6 +447,16 @@ idempotency journals. Independent commit/export statuses and compact receipts
 project that same store; compatibility modules under `plot_engine/` delegate.
 Its sibling `.sciplot_documents/` storage is outside the native project inventory.
 Each new patch validates its entire batch and base revision before reserving work.
+`plot_document.requests` owns finite JSON snapshots. `RequestBody` retains exact
+literal values and a canonical digest; `PatchRequest` additionally owns the patch
+schema judgment. The public facade, semantic application, Managed preparation,
+Legacy application and NativeSuite pass that same immutable patch value within
+one invocation. Domain capabilities, currentness, sources, host grants and
+publication are separate judgments. Wire/journal boundaries project detached
+JSON; new persisted observations retain their integrity checks. NormalizedCommand
+retains its v1 payload and direct constructor contract without exposing mutable
+request state. Stored and received business identities compare canonical JSON,
+including numeric/boolean distinctions, rather than Python dictionary equality.
 Safe presentation changes with passed native scientific audit commit automatically;
 review-risk changes return one frozen preview. Apply recovery delegates to the
 existing native transaction, then commits the semantic head once. Export failures

@@ -9,7 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from sciplot_core.plot_document.patch import validate_patch
+from sciplot_core.plot_document.requests import PatchRequest, admit_patch
 from sciplot_core.plot_document.schema import IDENTIFIER, closed
 from sciplot_core.plot_document.validation import validate_wire
 from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
@@ -43,7 +43,7 @@ def validate_intent(request: Any) -> dict[str, Any]:
     return deepcopy(request)
 
 
-def compile_intent(document: dict[str, Any], request: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def compile_intent(document: dict[str, Any], request: dict[str, Any]) -> tuple[PatchRequest, dict[str, Any]]:
     """Resolve against one frozen revision and validate through the existing editor."""
     if document.get("plot_type") != "ManagedPlot" or not is_figure(document):
         raise EngineError("plot_intent_v2_required", "This edit requires a managed FigureSpec v2 plot.",
@@ -75,10 +75,9 @@ def compile_intent(document: dict[str, Any], request: dict[str, Any]) -> tuple[d
                               "The target label does not identify exactly one editable object.",
                               action="choose_target", candidates=_candidates(spec, objects, matches or candidates, kind))
         target = matches[0]
-    patch = {"plot_id": request["plot_id"], "base_revision": request["base_revision"],
+    patch = admit_patch({"plot_id": request["plot_id"], "base_revision": request["base_revision"],
              "idempotency_key": request["idempotency_key"], "intent_class": "presentation",
-             "changes": [{"op": "set", "target": [target], "property": prop, "value": request["value"]}]}
-    patch = validate_patch(patch)
+             "changes": [{"op": "set", "target": [target], "property": prop, "value": request["value"]}]})
     descriptor = contracts[target][prop]
     validate_wire(request["value"], descriptor["value_schema"], code="plot_intent_invalid_value")
     if descriptor["risk"] != "presentation":
@@ -100,7 +99,7 @@ def compile_intent(document: dict[str, Any], request: dict[str, Any]) -> tuple[d
             "base_revision": document["revision"], "target": {"id": target, "kind": kind,
                                                             "label": objects[target]["label"]},
             "property": prop, "before": before, "after": request["value"],
-            "effective_risk": descriptor["risk"], "target_context": target_context, "patch_request": patch}
+            "effective_risk": descriptor["risk"], "target_context": target_context, "patch_request": patch.to_payload()}
     return patch, plan
 
 

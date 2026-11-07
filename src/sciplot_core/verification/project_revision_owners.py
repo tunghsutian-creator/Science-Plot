@@ -117,14 +117,18 @@ PROJECT_REVISION_OWNERS = (
                 "src/sciplot_core/qa/pdf_graphics.py",
                 "src/sciplot_core/intake/artifact_previews.py",
                 "src/sciplot_core/visual_review/artifact_records.py",
+                "src/sciplot_core/visual_review/pdf_annotations.py",
             }
         ),
         pytest_targets=(
+            "tests/test_pdf_review_annotations.py",
             "tests/test_visual_review.py",
             "tests/test_artifact_raster_visibility.py",
             "tests/test_delivery_studio_lifecycle.py",
         ),
         handoff_gates=("doctor",),
         final_milestone_gates=("smoke",),
+        owned_test_paths=frozenset({"tests/test_pdf_review_annotations.py"}),
+        mypy_required=True,
     ),
 )

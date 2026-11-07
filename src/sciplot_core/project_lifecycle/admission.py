@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Concatenate, ParamSpec, TypeVar
 
 from sciplot_core.plot_document import DocumentError
+from sciplot_core.plot_document.requests import RequestInput
 
 from .context import command_scope, exists, load_head, read, repository_scope, transaction_path
 from .contracts import NormalizedCommand, RevisionToken
@@ -24,13 +25,14 @@ def usecase(operation: Callable[Concatenate[Any, P], R]) -> Callable[Concatenate
 
 
 @contextmanager
-def admitted(root: Path, kind: str, request: dict[str, Any]) -> Iterator[NormalizedCommand]:
+def admitted(root: Path, kind: str, request: RequestInput) -> Iterator[NormalizedCommand]:
     """An idempotency key binds the literal business command before compilation.
 
     Replays use their original base snapshot. Old journal payloads remain intact;
     their established request-hash validation stays in the old-format reader.
     """
-    path = transaction_path(root, request["idempotency_key"])
+    payload = request if isinstance(request, dict) else request.to_payload()
+    path = transaction_path(root, payload["idempotency_key"])
     saved = read(path) if exists(path) else None
     document = saved["before"] if saved is not None else load_head(root)["document"]
     token = RevisionToken.of(document)
@@ -38,12 +40,12 @@ def admitted(root: Path, kind: str, request: dict[str, Any]) -> Iterator[Normali
     if kind == "intent":
         from sciplot_core.plot_engine.typed_intent import compile_intent
 
-        business, _ = compile_intent(document, request)
+        business, _ = compile_intent(document, payload)
     command = NormalizedCommand.create(kind, request, expected_revision=token, business_request=business)
     if saved is None:
-        if request.get("plot_id", token.plot_id) != token.plot_id:
+        if payload.get("plot_id", token.plot_id) != token.plot_id:
             raise DocumentError("document_identity_conflict", "The command belongs to a different plot.")
-        if request["base_revision"] != token.revision:
+        if payload["base_revision"] != token.revision:
             raise DocumentError("document_revision_conflict", "The command requires the current revision.")
     else:
         from .context import validate_saved_command

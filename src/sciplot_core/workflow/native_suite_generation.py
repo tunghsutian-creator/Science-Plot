@@ -52,7 +52,7 @@ def saved_command(app: ProjectCommands, key: str, request: dict[str, Any]) -> Pr
     if record is None:
         return None
     command = ProjectCommand.from_payload(record["metadata"])
-    if command.to_payload()["request"] != request:
+    if canonical_json_sha256(command.to_payload()["request"], allow_nan=False) != canonical_json_sha256(request, allow_nan=False):
         from sciplot_core.plot_engine.errors import EngineError
         raise EngineError("document_idempotency_conflict", "This key belongs to a different immutable request.")
     return command

@@ -1,7 +1,9 @@
 """Route bound native figures through the public plot spine, without importing them."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+from sciplot_core.plot_document.requests import RequestInput
 
 from .errors import EngineError
 from .object_operations import attach_object_operations
@@ -9,7 +11,7 @@ from .object_operations import attach_object_operations
 
 def native_dispatch(operation: str, target: Path, *, figure_id: str | None = None,
                     description: dict[str, Any] | None = None,
-                    request: dict[str, Any] | None = None) -> dict[str, Any] | None:
+                    request: RequestInput | None = None) -> dict[str, Any] | None:
     # Existing canonical stores keep their semantic or legacy revision authority.
     if (target / "head.json").is_file():
         return None
@@ -31,7 +33,7 @@ def native_dispatch(operation: str, target: Path, *, figure_id: str | None = Non
     if operation == "patch":
         return dict(owner.patch_native_object(plot, request))
     if operation == "decide":
-        return dict(owner.decide_native_object(plot, request))
+        return dict(owner.decide_native_object(plot, cast(dict[str, Any], request)))
     if operation == "resume":
-        return dict(owner.resume_native_object(plot, request))
+        return dict(owner.resume_native_object(plot, cast(dict[str, Any], request)))
     raise EngineError("native_object_operation_unsupported", "This native object does not advertise that operation.")

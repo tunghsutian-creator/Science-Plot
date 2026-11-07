@@ -8,6 +8,8 @@ PLOT_TEST_PATHS = (
     "tests/test_veusz_identity_source_versions.py",
     "tests/test_project_lifecycle.py",
     "tests/test_project_lifecycle_contracts.py",
+    "tests/test_patch_admission.py",
+    "tests/test_managed_binding_resolution.py",
     "tests/test_project_lifecycle_native.py",
     "tests/test_family_style_overrides.py",
     "tests/test_rendering_profiles_helpers.py",

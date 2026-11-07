@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from sciplot_core.plot_document.requests import RequestInput
 
 from sciplot_core.workflow.native_suite_objects import (
     describe_native_object as describe_native_object,
@@ -11,7 +12,7 @@ from sciplot_core.workflow.native_suite_objects import (
 )
 
 
-def patch_native_object(target: Path, request: dict[str, Any]) -> dict[str, Any]:
+def patch_native_object(target: Path, request: RequestInput) -> dict[str, Any]:
     from sciplot_core.workflow.native_suite_transactions import patch_native
 
     return patch_native(target, request)

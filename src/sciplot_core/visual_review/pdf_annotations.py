@@ -9,9 +9,13 @@ the absence of other PDF annotations nor the absence of flattened visual marks.
 from __future__ import annotations
 
 from hashlib import sha256
-from typing import Any
+from typing import Any, Protocol, cast
 
 import pymupdf
+
+
+class _OpenPDF(Protocol):
+    def __call__(self, *, stream: bytes, filetype: str) -> pymupdf.Document: ...
 
 
 def _geometry_lists(value: Any) -> Any:
@@ -48,7 +52,9 @@ def inspect_pdf_annotations(pdf_bytes: bytes) -> dict[str, Any]:
     if not isinstance(pdf_bytes, bytes):
         raise TypeError("PDF reference input must be immutable bytes.")
     try:
-        with pymupdf.open(stream=pdf_bytes, filetype="pdf") as document:
+        # PyMuPDF's Document constructor is untyped; declare only the byte-open
+        # signature used at this library boundary, without weakening our gate.
+        with cast(_OpenPDF, pymupdf.open)(stream=pdf_bytes, filetype="pdf") as document:
             if not document.is_pdf:
                 raise ValueError("PDF reference input must contain a PDF document.")
             if document.needs_pass or document.is_encrypted or document.metadata.get("encryption"):

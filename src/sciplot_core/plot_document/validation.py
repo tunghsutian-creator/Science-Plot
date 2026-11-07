@@ -30,6 +30,11 @@ def finite_json(value: Any, path: str = "") -> None:
 
 def validate_wire(value: Any, schema: dict[str, Any], *, code: str) -> None:
     finite_json(value)
+    validate_schema(value, schema, code=code)
+
+
+def validate_schema(value: Any, schema: dict[str, Any], *, code: str) -> None:
+    """Check structure after the caller has captured its finite JSON value."""
     issues: list[dict[str, Any]] = []
     for error in Draft202012Validator(schema).iter_errors(value):
         issue: dict[str, Any] = {
