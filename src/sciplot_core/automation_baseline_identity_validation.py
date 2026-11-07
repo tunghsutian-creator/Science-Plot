@@ -122,7 +122,7 @@ def validate_scenario_evidence(
 def validate_cross_scenario_identity(
     scenarios: list[Mapping[str, Any]], *, session: Mapping[str, Any]
 ) -> None:
-    ready, confirmation, repair, visual = scenarios
+    ready, confirmation, repair = scenarios[:3]
     ready_stable = ready["samples"][0]["evidence_identity"]["stable"]
     confirmation_stable = confirmation["samples"][0]["evidence_identity"]["stable"]
     repair_stable = repair["samples"][0]["evidence_identity"]["stable"]
@@ -138,15 +138,17 @@ def validate_cross_scenario_identity(
         == repair_stable["current_semantic_contract_sha256"]
     ):
         raise ValueError("Automation baseline scientific owner identity is inconsistent.")
-    for ready_sample, visual_sample in zip(
-        ready["samples"], visual["samples"], strict=True
-    ):
+    for ready_sample in ready["samples"]:
         ready_rule = ready_sample["payload_components"]["rule_show"]
         if (
             ready_rule["bytes"] != session["selected_rule_payload_bytes"]
             or ready_rule["sha256"] != session["selected_rule_payload_sha256"]
         ):
             raise ValueError("Automation baseline ready rule payload size is inconsistent.")
+    if len(scenarios) == 3:
+        return
+    visual = scenarios[3]
+    for ready_sample, visual_sample in zip(ready["samples"], visual["samples"], strict=True):
         visual_context = visual_sample["payload_components"]["context"]
         if (
             visual_context["bytes"]

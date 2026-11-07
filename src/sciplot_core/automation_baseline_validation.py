@@ -18,6 +18,9 @@ from sciplot_core.automation_baseline_schema import (
     AUTOMATION_BASELINE_KIND,
     AUTOMATION_BASELINE_SCENARIOS,
     AUTOMATION_BASELINE_VERSION,
+    HEADLESS_AUTOMATION_BASELINE_VERSION,
+    HEADLESS_AUTOMATION_BASELINE_SCENARIOS,
+    HEADLESS_BASELINE_LIMITATIONS,
     BASELINE_LIMITATIONS,
     BASELINE_READY_RULE_FLOOR,
     DISTRIBUTION_FIELDS,
@@ -57,13 +60,17 @@ def validate_baseline_report(payload: Mapping[str, Any]) -> None:
     if payload.get("kind") != AUTOMATION_BASELINE_KIND:
         raise ValueError("Automation baseline kind is invalid.")
     if type(payload.get("version")) is not int or (
-        payload["version"] != AUTOMATION_BASELINE_VERSION
+        payload["version"] not in {AUTOMATION_BASELINE_VERSION, HEADLESS_AUTOMATION_BASELINE_VERSION}
     ):
         raise ValueError("Automation baseline version is invalid.")
+    scenario_ids = (AUTOMATION_BASELINE_SCENARIOS if payload["version"] == AUTOMATION_BASELINE_VERSION
+                    else HEADLESS_AUTOMATION_BASELINE_SCENARIOS)
+    expected_limitations = (BASELINE_LIMITATIONS if payload["version"] == AUTOMATION_BASELINE_VERSION
+                            else HEADLESS_BASELINE_LIMITATIONS)
     repetitions = payload.get("repetitions")
     if type(repetitions) is not int or repetitions < 1:
         raise ValueError("Automation baseline repetitions must be a positive integer.")
-    if payload.get("scenario_order") != list(AUTOMATION_BASELINE_SCENARIOS):
+    if payload.get("scenario_order") != list(scenario_ids):
         raise ValueError("Automation baseline scenario order is invalid.")
     require_zoned_iso_timestamp(
         payload.get("generated_at"),
@@ -96,15 +103,13 @@ def validate_baseline_report(payload: Mapping[str, Any]) -> None:
     ):
         raise ValueError("Automation baseline artifact locators are invalid.")
     limitations = payload.get("limitations")
-    if limitations != list(BASELINE_LIMITATIONS):
+    if limitations != list(expected_limitations):
         raise ValueError("Automation baseline limitations are invalid.")
     scenarios = payload.get("scenarios")
-    if not isinstance(scenarios, list) or len(scenarios) != len(
-        AUTOMATION_BASELINE_SCENARIOS
-    ):
+    if not isinstance(scenarios, list) or len(scenarios) != len(scenario_ids):
         raise ValueError("Automation baseline scenarios are incomplete.")
     for expected_id, scenario in zip(
-        AUTOMATION_BASELINE_SCENARIOS, scenarios, strict=True
+        scenario_ids, scenarios, strict=True
     ):
         if not isinstance(scenario, Mapping):
             raise ValueError("Automation baseline scenario must be an object.")
@@ -135,7 +140,8 @@ def validate_baseline_report(payload: Mapping[str, Any]) -> None:
         ),
         "raw_dataset_arrays_sent": any(
             not sample["checks"]["raw_dataset_arrays_absent"]
-            for sample in scenarios[-1]["samples"]
+            for scenario in scenarios if scenario["scenario_id"] == "selected_object_visual_edit"
+            for sample in scenario["samples"]
         ),
         "user_delivery_created": any(
             not sample["checks"]["source_parent_unchanged"]

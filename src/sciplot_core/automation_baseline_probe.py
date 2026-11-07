@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import builtins
 import gc
 import io
@@ -17,13 +16,12 @@ import time
 import tracemalloc
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, cast
+from unittest.mock import patch
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.automation_baseline import (
     AUTOMATION_BASELINE_KIND,
-    AUTOMATION_BASELINE_SCENARIOS,
-    AUTOMATION_BASELINE_VERSION,
     canonical_json_bytes,
     figure_plan_evidence_identity,
     figure_plan_fact_identity,
@@ -32,7 +30,9 @@ from sciplot_core.automation_baseline import (
 )
 from sciplot_core.automation_baseline_validation import validate_baseline_report
 from sciplot_core.automation_baseline_schema import (
-    BASELINE_LIMITATIONS,
+    HEADLESS_BASELINE_LIMITATIONS,
+    HEADLESS_AUTOMATION_BASELINE_SCENARIOS,
+    HEADLESS_AUTOMATION_BASELINE_VERSION,
     BASELINE_RULE_ID,
     BASELINE_TEMPLATE,
     SCENARIO_DESCRIPTIONS,
@@ -88,7 +88,7 @@ def run_automation_baseline_probe(
     output_root: Path,
     repetitions: int = 3,
 ) -> dict[str, Any]:
-    """Measure four current routes without using a model or user delivery path."""
+    """Measure three headless routes; old GUI reports remain read-only v1 evidence."""
 
     if isinstance(repetitions, bool) or not isinstance(repetitions, int):
         raise ValueError("Automation baseline repetitions must be an integer.")
@@ -148,7 +148,7 @@ def run_automation_baseline_probe(
     markdown_path = run_root / "automation_r0_baseline.md"
     report: dict[str, Any] = {
         "kind": AUTOMATION_BASELINE_KIND,
-        "version": AUTOMATION_BASELINE_VERSION,
+        "version": HEADLESS_AUTOMATION_BASELINE_VERSION,
         "generated_at": utc_now_iso(),
         "status": "passed" if passed else "failed",
         "platform": {
@@ -177,7 +177,7 @@ def run_automation_baseline_probe(
                 rule_payload, allow_nan=False
             ),
         },
-        "scenario_order": list(AUTOMATION_BASELINE_SCENARIOS),
+        "scenario_order": list(HEADLESS_AUTOMATION_BASELINE_SCENARIOS),
         "scenarios": scenarios,
         "summary": {
             "scenario_count": len(scenarios),
@@ -192,10 +192,7 @@ def run_automation_baseline_probe(
                 for scenario in scenarios
                 for sample in scenario["samples"]
             ),
-            "raw_dataset_arrays_sent": any(
-                not sample["checks"]["raw_dataset_arrays_absent"]
-                for sample in scenarios[-1]["samples"]
-            ),
+            "raw_dataset_arrays_sent": False,
             "user_delivery_created": any(
                 not sample["checks"]["source_parent_unchanged"]
                 for sample in scenarios[0]["samples"]
@@ -206,7 +203,7 @@ def run_automation_baseline_probe(
             "json": summary_path.relative_to(REPO_ROOT).as_posix(),
             "markdown": markdown_path.relative_to(REPO_ROOT).as_posix(),
         },
-        "limitations": list(BASELINE_LIMITATIONS),
+        "limitations": list(HEADLESS_BASELINE_LIMITATIONS),
     }
     validate_baseline_report(report)
     atomic_write_json(summary_path, json_safe(report))
@@ -228,9 +225,8 @@ def _collect_scenarios(
     ).resolve()
     try:
         ready_samples: list[dict[str, Any]] = []
-        documents: list[Path] = []
         for index in range(1, repetitions + 1):
-            sample, document = _ready_sample(
+            sample, _document = _ready_sample(
                 source,
                 source_sha256=source_sha256,
                 rule_payload=rule_payload,
@@ -238,7 +234,6 @@ def _collect_scenarios(
                 sample_index=index,
             )
             ready_samples.append(sample)
-            documents.append(document)
         confirmation_samples = [
             _confirmation_sample(
                 source,
@@ -254,16 +249,6 @@ def _collect_scenarios(
                 source=source,
                 registry=registry,
                 sample_root=work_root / "repair" / f"sample_{index:02d}",
-                sample_index=index,
-            )
-            for index in range(1, repetitions + 1)
-        ]
-        visual_samples = [
-            _visual_sample(
-                source,
-                document=documents[index - 1],
-                upstream_ready_sample=ready_samples[index - 1],
-                sample_root=work_root / "visual" / f"sample_{index:02d}",
                 sample_index=index,
             )
             for index in range(1, repetitions + 1)
@@ -286,12 +271,6 @@ def _collect_scenarios(
                 SCENARIO_DESCRIPTIONS["rule_repair"],
                 RULE_REPAIR_STATE,
                 repair_samples,
-            ),
-            (
-                "selected_object_visual_edit",
-                SCENARIO_DESCRIPTIONS["selected_object_visual_edit"],
-                READY_STATE,
-                visual_samples,
             ),
         )
         return [_scenario_record(*spec) for spec in specs]
@@ -613,300 +592,10 @@ def _repair_sample(
     )
 
 
-def _visual_sample(
-    source: Path,
-    *,
-    document: Path,
-    upstream_ready_sample: dict[str, Any],
-    sample_root: Path,
-    sample_index: int,
-) -> dict[str, Any]:
-    sample_root.mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-    def execute() -> tuple[dict[str, Any], int]:
-        with (
-            _temporary_workspace(sample_root / "tmp"),
-            _source_reads(source) as source_reads,
-            _ready_write_guard(source=source, allowed_root=sample_root) as writes,
-            _external_model_call_guard() as model_calls,
-        ):
-            result = _run_selected_object_cycle(
-                document,
-                output_root=sample_root,
-            )
-            result["model_calls"] = model_calls()
-            result["outside_write_attempts"] = writes()
-        return result, source_reads()
-
-    result, measured = _measure(execute)
-    checks = dict(result["checks"])
-    upstream_checks = upstream_ready_sample.get("checks")
-    upstream_evidence = upstream_ready_sample.get("evidence_identity")
-    upstream_evidence = (
-        upstream_evidence if isinstance(upstream_evidence, dict) else {}
-    )
-    upstream_sample_evidence = upstream_evidence.get("sample")
-    upstream_sample_evidence = (
-        upstream_sample_evidence
-        if isinstance(upstream_sample_evidence, dict)
-        else {}
-    )
-    checks["upstream_ready_document_is_bound"] = (
-        upstream_ready_sample.get("status") == "passed"
-        and upstream_ready_sample.get("observed_state") == READY_STATE
-        and isinstance(upstream_checks, dict)
-        and bool(upstream_checks)
-        and all(value is True for value in upstream_checks.values())
-        and upstream_sample_evidence.get("delivered_vsz_sha256")
-        == file_sha256(document)
-        == result["evidence_identity"]["sample"]["source_document_sha256"]
-    )
-    checks["source_data_was_not_read"] = result["raw_source_read_opens"] == 0
-    checks["instrumented_writes_confined_to_sample_root"] = (
-        result["outside_write_attempts"] == 0
-    )
-    stable_upstream = upstream_evidence.get("stable")
-    stable_upstream = stable_upstream if isinstance(stable_upstream, dict) else {}
-    result["evidence_identity"]["stable"]["upstream_plan_sha256"] = (
-        stable_upstream.get("plan_sha256")
-    )
-    return _sample_record(
-        sample_index=sample_index,
-        observed_state=str(upstream_ready_sample.get("observed_state")),
-        next_action="handoff_ready",
-        provider_mode="offline_fixture",
-        provider_outcome="completed",
-        measured=measured,
-        raw_source_read_opens=result["raw_source_read_opens"],
-        model_calls=result["model_calls"],
-        decision_payload_components=result["decision_payload_components"],
-        provider_payload_bytes=result["request_metrics"]["payload_bytes"],
-        provider_context_bytes=result["request_metrics"]["context_bytes"],
-        image_bytes=result["request_metrics"]["image_bytes"],
-        provider_requests=result["provider_request_count"],
-        submit_to_proposal_ms=result["timings_ms"]["submit_to_proposal"],
-        proposal_to_applied_ms=result["timings_ms"]["proposal_to_applied"],
-        evidence_identity=result["evidence_identity"],
-        reason_codes=[],
-        checks=checks,
-    )
 
 
-def _run_selected_object_cycle(
-    document: Path,
-    *,
-    output_root: Path,
-) -> dict[str, Any]:
-    """Run one offline submit/proposal/accept/Undo cycle in one Veusz document."""
-
-    from sciplot_core import studio_assistant_probe as assistant_probe
-    from sciplot_gui.studio_assistant_history import read_assistant_history
-
-    source_document = document.expanduser().resolve()
-    copied_document = output_root / "document.vsz"
-    source_document_sha256 = _copy_exact_current_document(
-        source_document,
-        copied_document,
-    )
-    before_png = output_root / "before.png"
-    applied_png = output_root / "applied.png"
-    undo_png = output_root / "undo.png"
-    window: Any | None = None
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-    try:
-        from PyQt6 import QtWidgets
-
-        from sciplot_core.studio import _ensure_veusz_on_path
-
-        _ensure_veusz_on_path()
-        application = QtWidgets.QApplication.instance()
-        if application is None:
-            application = QtWidgets.QApplication([])
-        application.setApplicationName("SciPlot R0 Selected-object Baseline")
-        application.setQuitOnLastWindowClosed(False)
-
-        provider = assistant_probe.DeterministicStudioAssistantProvider()
-        window, bridge = assistant_probe._create_window(
-            copied_document,
-            provider=provider,
-        )
-        window.resize(1200, 820)
-        window.show()
-        assistant_probe._wait_until(
-            application,
-            lambda: bool(window.isVisible()),
-            timeout_ms=2000,
-        )
-        axis = assistant_probe._axis_widget(window.document)
-        bridge.set_selected_widget(axis)
-        setting_path = f"{axis.path}/label"
-        label_setting = window.document.resolveSettingPath(None, setting_path)
-        original_label = json_safe(label_setting.get())
-        next_label = (
-            f"{original_label} · R0"
-            if str(original_label).strip()
-            else "Selected axis · R0"
-        )
-        before = assistant_probe._capture_plot(bridge, before_png)
-        applied_events: list[dict[str, Any]] = []
-        bridge.proposalApplied.connect(lambda value: applied_events.append(dict(value)))
-
-        provider.configure(next_value=next_label)
-        submit_started = time.perf_counter_ns()
-        request = bridge.submit_intent(
-            "Make the selected axis label visibly clearer in one bounded edit."
-        )
-        proposal_ready = assistant_probe._wait_until(
-            application,
-            lambda: bridge.pending_batch is not None and not bridge.runner.active,
-        )
-        proposal_ready_at = time.perf_counter_ns()
-        if not proposal_ready:
-            raise RuntimeError("The offline selected-object proposal did not complete.")
-        pending_response = bridge._pending_response
-        if pending_response is None:
-            raise RuntimeError("The offline selected-object response was not retained.")
-        provider_response_payload = pending_response.to_dict()
-        apply_result = bridge.accept_pending()
-        applied = assistant_probe._wait_until(
-            application,
-            lambda: bool(applied_events),
-        )
-        applied_at = time.perf_counter_ns()
-        if not applied or apply_result is None:
-            raise RuntimeError("The offline selected-object proposal was not applied.")
-
-        applied_capture = assistant_probe._capture_plot(bridge, applied_png)
-        provider_request = next(
-            item for item in provider.requests if item.request_id == request.request_id
-        )
-        request_payload = provider_request.to_dict()
-        request_metrics = _assistant_request_metrics(request_payload)
-        input_payload_components = {
-            "intent": request.intent,
-            "base_revision": request.base_revision,
-            "context": request.context,
-            "visual_preview_metadata": assistant_probe._visual_preview_metadata(
-                request.visual_preview
-            ),
-        }
-        history = [
-            event
-            for event in read_assistant_history(bridge.history_path)
-            if event.get("request_id") == request.request_id
-        ]
-        applied_value = json_safe(label_setting.get())
-        window.slotEditUndo()
-        undo_capture = assistant_probe._capture_plot(bridge, undo_png)
-        undo_value = json_safe(label_setting.get())
-        undo_evidence = {
-            "original_value": original_label,
-            "applied_value": applied_value,
-            "undo_value": undo_value,
-            "before_render_sha256": before["sha256"],
-            "applied_render_sha256": applied_capture["sha256"],
-            "undo_render_sha256": undo_capture["sha256"],
-            "source_document_sha256": source_document_sha256,
-            "copied_document_sha256": file_sha256(copied_document),
-        }
-        decision_payload_components = {
-            **input_payload_components,
-            "provider_response": provider_response_payload,
-            "apply_result": apply_result,
-            "transaction_history": history,
-            "undo_evidence": undo_evidence,
-        }
-        context = request_payload.get("context")
-        context = context if isinstance(context, dict) else {}
-        raw_arrays_absent = (
-            context.get("raw_dataset_arrays_included") is False
-            and "datasets" not in context
-        )
-        statuses = [str(event.get("status")) for event in history]
-        checks = {
-            "one_offline_provider_request": len(provider.requests) == 1,
-            "proposal_completed_before_apply": proposal_ready,
-            "manual_accept_applied_one_batch": (
-                applied_value == next_label
-                and len(applied_events) == 1
-                and apply_result["verification_status"] == "applied"
-            ),
-            "exact_current_preview_was_bound": (
-                request.base_revision == before["revision"]
-                and request.visual_preview is not None
-                and request.visual_preview["sha256"] == before["sha256"]
-                and request.payload_sha256 == provider_request.payload_sha256
-            ),
-            "raw_dataset_arrays_absent": raw_arrays_absent,
-            "render_changed_after_apply": applied_capture["sha256"] != before["sha256"],
-            "history_has_one_complete_transaction": statuses
-            == ["submitted", "proposal_ready", "apply_started", "applied"],
-            "native_undo_restores_prior_state": (
-                undo_value == original_label
-                and undo_capture["sha256"] == before["sha256"]
-            ),
-            "source_and_copy_bytes_remain_unchanged": (
-                file_sha256(source_document) == source_document_sha256
-                and file_sha256(copied_document) == source_document_sha256
-            ),
-        }
-        return {
-            "assistant_terminal_status": "applied",
-            "provider_request_count": len(provider.requests),
-            "request_metrics": request_metrics,
-            "decision_payload_components": decision_payload_components,
-            "timings_ms": {
-                "submit_to_proposal": round(
-                    (proposal_ready_at - submit_started) / 1_000_000,
-                    3,
-                ),
-                "proposal_to_applied": round(
-                    (applied_at - proposal_ready_at) / 1_000_000,
-                    3,
-                ),
-            },
-            "evidence_identity": {
-                "stable": {
-                    "provider_id": provider.descriptor.provider_id,
-                    "selected_widget_type": str(axis.typename),
-                    "setting_suffix": "/label",
-                    "history_statuses": statuses,
-                },
-                "sample": {
-                    "source_document_sha256": source_document_sha256,
-                    "request_sha256": request.payload_sha256,
-                    "context_sha256": request.context_sha256,
-                    "provider_payload_sha256": canonical_json_sha256(
-                        request_payload, allow_nan=False
-                    ),
-                    "base_revision": request.base_revision,
-                    "before_render_sha256": before["sha256"],
-                    "applied_render_sha256": applied_capture["sha256"],
-                    "undo_render_sha256": undo_capture["sha256"],
-                },
-            },
-            "checks": checks,
-        }
-    finally:
-        assistant_probe._close_window(window)
 
 
-def _copy_exact_current_document(source: Path, destination: Path) -> str:
-    """Copy one VSZ only when source and copied bytes share one stable identity."""
-
-    source_sha256_before = file_sha256(source)
-    shutil.copy2(source, destination)
-    source_sha256_after = file_sha256(source)
-    copied_sha256 = file_sha256(destination)
-    if not (
-        source_sha256_before == source_sha256_after == copied_sha256
-    ):
-        raise RuntimeError(
-            "Selected-object baseline copy is not the exact-current source document."
-        )
-    return source_sha256_before
 
 
 def _evaluation_bundle(
@@ -998,7 +687,7 @@ def _sample_record(
         **measured,
         "raw_source_read_opens": raw_source_read_opens,
         "full_decision_payload_bytes": sum(
-            component["bytes"] for component in payload_components.values()
+            cast(int, component["bytes"]) for component in payload_components.values()
         ),
         "provider_payload_bytes": provider_payload_bytes,
         "provider_context_bytes": provider_context_bytes,
@@ -1549,7 +1238,6 @@ def _ready_write_guard(
 
     builtins.open = guarded_open
     io.open = guarded_io_open
-    os.open = guarded_os_open
     os.mkdir = guarded_mkdir
     os.makedirs = guarded_makedirs
     os.rename = guarded_rename
@@ -1566,36 +1254,34 @@ def _ready_write_guard(
     os.mknod = guarded_path_mutation(original_mknod)
     os.chdir = blocked_chdir
     os.fchdir = blocked_chdir
-    subprocess.Popen = guarded_popen
     os.system = blocked_process_launch
     for name, original in original_spawn_functions.items():
         setattr(os, name, guarded_low_level_spawn(original))
-    try:
-        yield lambda: outside_attempts
-    finally:
-        builtins.open = original_open
-        io.open = original_io_open
-        os.open = original_os_open
-        os.mkdir = original_mkdir
-        os.makedirs = original_makedirs
-        os.rename = original_rename
-        os.replace = original_replace
-        os.remove = original_remove
-        os.unlink = original_unlink
-        os.rmdir = original_rmdir
-        os.symlink = original_symlink
-        os.link = original_link
-        os.chmod = original_chmod
-        os.utime = original_utime
-        os.truncate = original_truncate
-        os.mkfifo = original_mkfifo
-        os.mknod = original_mknod
-        os.chdir = original_chdir
-        os.fchdir = original_fchdir
-        subprocess.Popen = original_popen
-        os.system = original_system
-        for name, original in original_spawn_functions.items():
-            setattr(os, name, original)
+    with patch.object(os, "open", guarded_os_open), patch.object(subprocess, "Popen", guarded_popen):
+        try:
+            yield lambda: outside_attempts
+        finally:
+            builtins.open = original_open
+            io.open = original_io_open
+            os.mkdir = original_mkdir
+            os.makedirs = original_makedirs
+            os.rename = original_rename
+            os.replace = original_replace
+            os.remove = original_remove
+            os.unlink = original_unlink
+            os.rmdir = original_rmdir
+            os.symlink = original_symlink
+            os.link = original_link
+            os.chmod = original_chmod
+            os.utime = original_utime
+            os.truncate = original_truncate
+            os.mkfifo = original_mkfifo
+            os.mknod = original_mknod
+            os.chdir = original_chdir
+            os.fchdir = original_fchdir
+            os.system = original_system
+            for name, original in original_spawn_functions.items():
+                setattr(os, name, original)
 
 
 def _source_parent_snapshot(
@@ -1666,8 +1352,6 @@ def _external_model_call_guard() -> Iterator[Callable[[], int]]:
     from sciplot_core.openai_provider.provider import OpenAIResponsesProvider
     from sciplot_core.openai_provider.sse_client import _ResponsesSSEClient
 
-    original_generate = OpenAIResponsesProvider.generate
-    original_stream = _ResponsesSSEClient.stream
     count = 0
 
     def blocked(*_args: Any, **_kwargs: Any) -> Any:
@@ -1675,28 +1359,10 @@ def _external_model_call_guard() -> Iterator[Callable[[], int]]:
         count += 1
         raise RuntimeError("R0 automation baseline attempted an external model call.")
 
-    OpenAIResponsesProvider.generate = blocked
-    _ResponsesSSEClient.stream = blocked
-    try:
+    with patch.object(OpenAIResponsesProvider, "generate", blocked), patch.object(_ResponsesSSEClient, "stream", blocked):
         yield lambda: count
-    finally:
-        OpenAIResponsesProvider.generate = original_generate
-        _ResponsesSSEClient.stream = original_stream
 
 
-def _assistant_request_metrics(payload: dict[str, Any]) -> dict[str, int]:
-    visual = payload.get("visual_preview")
-    encoded = visual.get("base64") if isinstance(visual, dict) else None
-    image_bytes = (
-        len(base64.b64decode(encoded.encode("ascii"), validate=True))
-        if isinstance(encoded, str) and encoded
-        else 0
-    )
-    return {
-        "payload_bytes": canonical_json_bytes(payload),
-        "context_bytes": canonical_json_bytes(payload.get("context") or {}),
-        "image_bytes": image_bytes,
-    }
 
 
 def _outcome_vsz(plan: object) -> Path | None:

@@ -23,7 +23,6 @@ from sciplot_core.automation_baseline import (
 )
 from sciplot_core.automation_baseline_probe import (
     _confirmation_sample,
-    _copy_exact_current_document,
     _external_model_call_guard,
     _markdown_report,
     _repair_sample,
@@ -32,11 +31,13 @@ from sciplot_core.automation_baseline_probe import (
     _scenario_record,
     _source_parent_snapshot,
     _source_reads,
-    _visual_sample,
     run_automation_baseline_probe,
 )
 from sciplot_core.automation_baseline_schema import (
     BASELINE_LIMITATIONS,
+    HEADLESS_AUTOMATION_BASELINE_VERSION,
+    HEADLESS_AUTOMATION_BASELINE_SCENARIOS,
+    HEADLESS_BASELINE_LIMITATIONS,
     SCENARIO_CHECKS,
     SCENARIO_DESCRIPTIONS,
     SCENARIO_REASON_CODES,
@@ -1342,124 +1343,10 @@ def test_rule_repair_replay_blocks_injected_write_before_it_reaches_disk(
     assert io.open is original_io
 
 
-def test_visual_sample_keeps_replay_provider_separate_from_model_calls(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source = tmp_path / "source.csv"
-    document = tmp_path / "document.vsz"
-    source.write_text("x,y\n1,2\n", encoding="utf-8")
-    document.write_text("# Veusz saved document\n", encoding="utf-8")
-
-    monkeypatch.setattr(
-        "sciplot_core.automation_baseline_probe._run_selected_object_cycle",
-        lambda *_args, **_kwargs: {
-            "assistant_terminal_status": "applied",
-            "provider_request_count": 1,
-            "outside_write_attempts": 0,
-            "request_metrics": {
-                "payload_bytes": 100,
-                "context_bytes": 40,
-                "image_bytes": 20,
-            },
-            "decision_payload_components": {
-                "intent": "bounded edit",
-                "base_revision": 1,
-                "context": {},
-                "visual_preview_metadata": {"sha256": "a" * 64},
-            },
-            "timings_ms": {
-                "submit_to_proposal": 5.0,
-                "proposal_to_applied": 2.0,
-            },
-            "evidence_identity": {
-                "stable": {},
-                "sample": {"source_document_sha256": file_sha256(document)},
-            },
-            "checks": {
-                key: True
-                for key in SCENARIO_CHECKS["selected_object_visual_edit"]
-                if key
-                not in {"upstream_ready_document_is_bound", "source_data_was_not_read"}
-            },
-        },
-    )
-
-    sample = _visual_sample(
-        source,
-        document=document,
-        upstream_ready_sample={
-            **_sample(1, "ready_zero_ai", "ready"),
-            "evidence_identity": {
-                "stable": {"plan_sha256": "a" * 64},
-                "sample": {"delivered_vsz_sha256": file_sha256(document)},
-            },
-        },
-        sample_root=tmp_path / "visual",
-        sample_index=1,
-    )
-
-    assert sample["status"] == "passed"
-    assert sample["metrics"]["provider_requests"] == 1
-    assert sample["metrics"]["model_calls"] == 0
-    assert sample["metrics"]["raw_source_read_opens"] == 0
-    assert sample["metrics"]["submit_to_proposal_ms"] == 5.0
-    assert sample["token_usage"]["input_tokens"] is None
 
 
-def test_visual_replay_blocks_transient_raw_source_write(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source = tmp_path / "source.csv"
-    document = tmp_path / "document.vsz"
-    source.write_text("x,y\n1,2\n", encoding="utf-8")
-    document.write_text("# Veusz saved document\n", encoding="utf-8")
-    original_bytes = source.read_bytes()
-
-    def mutating_cycle(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        source.write_text("TRANSIENT", encoding="utf-8")
-        source.write_bytes(original_bytes)
-        return {}
-
-    monkeypatch.setattr(
-        "sciplot_core.automation_baseline_probe._run_selected_object_cycle",
-        mutating_cycle,
-    )
-
-    with pytest.raises(RuntimeError, match="forbidden raw-source write"):
-        _visual_sample(
-            source,
-            document=document,
-            upstream_ready_sample=_sample(1, "ready_zero_ai", "ready"),
-            sample_root=tmp_path / "visual",
-            sample_index=1,
-        )
-
-    assert source.read_bytes() == original_bytes
 
 
-def test_visual_copy_rejects_a_nonidentical_document_before_open(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source = tmp_path / "source.vsz"
-    copied = tmp_path / "copied.vsz"
-    source.write_text("# exact-current", encoding="utf-8")
-
-    def tampered_copy(_source: Path, destination: Path) -> None:
-        destination.write_text("# different document", encoding="utf-8")
-
-    monkeypatch.setattr(
-        "sciplot_core.automation_baseline_probe.shutil.copy2",
-        tampered_copy,
-    )
-
-    with pytest.raises(RuntimeError, match="not the exact-current source document"):
-        _copy_exact_current_document(source, copied)
-
-    assert source.read_text(encoding="utf-8") == "# exact-current"
-    assert copied.read_text(encoding="utf-8") == "# different document"
 
 
 def test_automation_baseline_is_one_hidden_diagnostics_command() -> None:
@@ -1506,17 +1393,6 @@ def test_scenario_collection_removes_source_derived_work_artifacts(
         document.write_text("# temporary", encoding="utf-8")
         return {"sample_index": sample_index}, document
 
-    def visual_sample(
-        _source: Path,
-        *,
-        sample_root: Path,
-        sample_index: int,
-        **_kwargs: Any,
-    ) -> dict[str, Any]:
-        sample_root.mkdir(parents=True)
-        (sample_root / "sensitive.png").write_bytes(b"temporary")
-        return {"sample_index": sample_index}
-
     monkeypatch.setattr(baseline_probe, "_ready_sample", ready_sample)
     monkeypatch.setattr(
         baseline_probe,
@@ -1528,7 +1404,6 @@ def test_scenario_collection_removes_source_derived_work_artifacts(
         "_repair_sample",
         lambda *_args, sample_index, **_kwargs: {"sample_index": sample_index},
     )
-    monkeypatch.setattr(baseline_probe, "_visual_sample", visual_sample)
     monkeypatch.setattr(
         baseline_probe,
         "_scenario_record",
@@ -1545,6 +1420,46 @@ def test_scenario_collection_removes_source_derived_work_artifacts(
     )
 
     assert [scenario["scenario_id"] for scenario in scenarios] == list(
-        AUTOMATION_BASELINE_SCENARIOS
+        HEADLESS_AUTOMATION_BASELINE_SCENARIOS
     )
     assert list(tmp_path.iterdir()) == [source]
+
+
+def _headless_report():
+    report = _report()
+    report["version"] = HEADLESS_AUTOMATION_BASELINE_VERSION
+    report["scenario_order"] = list(HEADLESS_AUTOMATION_BASELINE_SCENARIOS)
+    report["scenarios"] = report["scenarios"][:3]
+    report["limitations"] = list(HEADLESS_BASELINE_LIMITATIONS)
+    report["summary"].update(scenario_count=3, passed_count=3, provider_requests=0,
+                             raw_dataset_arrays_sent=False)
+    return report
+
+
+def test_headless_baseline_and_historical_gui_reports_have_distinct_closed_scopes():
+    legacy = _report()
+    headless = _headless_report()
+    validate_baseline_report(legacy)
+    validate_baseline_report(headless)
+    assert legacy["version"] == 1 and len(legacy["scenarios"]) == 4
+    assert headless["version"] == 2 and len(headless["scenarios"]) == 3
+    assert headless["summary"]["provider_requests"] == 0
+    assert all(sample["metrics"]["model_calls"] == 0
+               for scenario in headless["scenarios"] for sample in scenario["samples"])
+
+
+@pytest.mark.parametrize("mutation", ["missing-ready", "gui-added", "wrong-version", "provider", "rule-payload"])
+def test_headless_baseline_does_not_accept_missing_or_historical_gui_evidence(mutation):
+    report = _headless_report()
+    if mutation == "missing-ready":
+        report["scenarios"].pop(0)
+    elif mutation == "gui-added":
+        report["scenarios"].append(_report()["scenarios"][-1])
+    elif mutation == "wrong-version":
+        report["version"] = True
+    elif mutation == "provider":
+        report["scenarios"][0]["samples"][0]["metrics"]["provider_requests"] = 1
+    else:
+        report["session_payloads"]["selected_rule_payload_sha256"] = "0" * 64
+    with pytest.raises(ValueError):
+        validate_baseline_report(report)

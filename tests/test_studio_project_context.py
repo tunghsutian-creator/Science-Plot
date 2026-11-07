@@ -2,59 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.studio_project_probe import _copy_project_fixture
-from sciplot_gui.studio_project import context as context_module
-from sciplot_gui.studio_project.context import ContextMixin
 
 
-class _StatusView:
-    def setPlainText(self, _text: str) -> None:
-        pass
 
 
-class _Context(ContextMixin):
-    def __init__(self, document_path: Path) -> None:
-        self.document_path = document_path
-        self.project_dir = document_path.parent
-        self.window = object()
-        self.status_view = _StatusView()
-        self.status_snapshot: dict[str, Any] = {
-            "scientific_transform_review": {
-                "status": "available",
-                "semantic_family": "rheology_stress_relaxation",
-            }
-        }
-        self.published_status: dict[str, Any] | None = None
-
-    def _publish_status(self, status: dict[str, Any]) -> None:
-        self.published_status = status
 
 
-def test_document_context_change_clears_scientific_transform_review(
-    tmp_path: Path,
-    monkeypatch: Any,
-) -> None:
-    bound_document = tmp_path / "bound.vsz"
-    changed_document = tmp_path / "changed.vsz"
-    context = _Context(bound_document)
-    monkeypatch.setattr(
-        context_module,
-        "resolved_window_document_path",
-        lambda _window: changed_document,
-    )
-    monkeypatch.setattr(context_module, "_status_text", lambda _status: "blocked")
-
-    status = context.handle_document_context_changed()
-
-    assert status is not None
-    assert status["state"] == "document_context_changed"
-    assert status["scientific_transform_review"] is None
-    assert context.published_status is status
 
 
 def _copyable_project(tmp_path: Path) -> Path:
@@ -414,112 +372,59 @@ def test_probe_positive_legacy_setup_explicitly_admits_before_its_single_publica
     assert (original / "plot_request.json").read_bytes() == request
 
 
-def test_refresh_canonical_request_refusal_cannot_reuse_previously_current_provenance(tmp_path):
-    from types import SimpleNamespace
-    from sciplot_core.project_store import FileProjectStore
-    from sciplot_gui.studio_project.refresh import RefreshMixin
+def test_saved_query_refuses_changed_canonical_request_without_reusing_history(tmp_path):
+    from sciplot_core.project_store import FileProjectStore, ProjectConflict
+    from sciplot_core.studio_core.project_query import inspect_project
+    from sciplot_core.studio_core.source_content_observation import observe_studio_source_content
 
     project = _copyable_project(tmp_path)
+    (project / "studio/figure_set.json").unlink()  # This fixture is a legacy single figure.
     request = project / "plot_request.json"
-    payload = json.loads(request.read_bytes())
-    payload["input"] = payload.pop("source")
-    request.write_text(json.dumps(payload))
+    request.write_text(json.dumps({"input": str(project / "source/prepared.csv")}))
     store = FileProjectStore(project)
     before = store.snapshot(import_legacy=True)
     request.write_bytes(request.read_bytes() + b" ")
     inventory = {str(p): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
                  for p in project.rglob("*") if p.is_file()}
-    class Bridge(RefreshMixin):
-        def handle_document_context_changed(self):
-            return None
-        def _update_controls(self, _status):
-            pass
-        def _publish_status(self, status):
-            self.status_snapshot = status
-            return status
-    bridge = Bridge()
-    bridge.mode = "project"
-    bridge.document_path = project / "studio/document.vsz"
-    bridge.project_dir, bridge.request_path = project, request
-    bridge.document = SimpleNamespace(changeset=1, isModified=lambda: False)
-    bridge.status_view = _StatusView()
-    bridge.statusChanged = SimpleNamespace(emit=lambda _status: None)
-    bridge.status_snapshot = {
-        "mode": "project", "document": {"path": str(bridge.document_path), "revision": 1, "modified": False},
-        "source": {"audit_status": "matches_last_run_lineage"}, "mapping": {"status": "not_applied"},
-        "provenance": {"status": "current_full_project_evidence", "complete": True,
-            "full_project_evidence_current": True, "primary_figure_evidence_current": True,
-            "project_delivery_current": True, "source_current": True, "delivery_scope_known": True},
-        "qa": {"status": "passed_for_current_document", "ready_to_use": True,
-            "artifact_qa_current": True, "current_document": True,
-            "export_artifacts": {"current": True}, "evidence": "previous-saved-artifacts"},
-        "workflow": {"state": "ready", "audit_state": "current"},
-        "results": {"pdf": {"available": True, "current": True, "path": "previous.pdf"}},
-    }
-    result = bridge.refresh(audit_source=True)
-    assert result["audit_error"]["type"] == "ProjectConflict"
-    assert result["provenance"]["complete"] is False
-    assert result["provenance"]["full_project_evidence_current"] is False
-    assert result["provenance"]["project_delivery_current"] is False
-    assert result["workflow"]["audit_state"] == "failed"
-    assert result["workflow"]["result_ready"] is False
-    assert result["results"]["pdf"]["available"] is False
-    assert result["qa"]["status"] == "audit_failed"
-    assert result["qa"]["current_document"] is False
-    assert result["qa"]["export_artifacts"]["current"] is False
-    assert result["qa"]["last_validated_qa"]["status"] == "passed_for_current_document"
+    with pytest.raises(ProjectConflict):
+        inspect_project(project, native=False)
     assert store.snapshot()["generation"] == before["generation"]
     assert {str(p): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
             for p in project.rglob("*") if p.is_file()} == inventory
     request.write_bytes(request.read_bytes()[:-1])
-    from sciplot_core.studio import observe_studio_source_content
     current = observe_studio_source_content(project / "source/prepared.csv",
         project_dir=project, request_path=request, audit_source=True)
     assert current["exists"] is True
     assert current["content"]["sha256"] == file_sha256(project / "source/prepared.csv")
-    restored = bridge.refresh(audit_source=True)
-    assert "audit_error" not in restored
-    assert restored["project"]["request_status"] == "loaded"
 
 
 @pytest.mark.parametrize("previous", [False, True], ids=["no-prior-evidence", "historical-saved-evidence"])
-def test_unexpected_refresh_failure_never_claims_current_and_keeps_history_immutable(tmp_path, previous):
-    from copy import deepcopy
-    from types import SimpleNamespace
-    from sciplot_gui.studio_project.refresh import RefreshMixin
+def test_saved_query_propagates_observer_failure_without_reusing_history(tmp_path, monkeypatch, previous):
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.studio_core import project_query
 
-    document = tmp_path / "document.vsz"
-    document.write_bytes(b"saved native")
-    bridge = RefreshMixin()
-    bridge.mode = "project"
-    bridge.document_path = document
-    bridge.document = SimpleNamespace(changeset=1, isModified=lambda: False)
-    bridge.status_view = _StatusView()
-    bridge.statusChanged = SimpleNamespace(emit=lambda _status: None)
-    bridge._update_controls = lambda _status: None
-    old = {"mode": "project", "document": {"path": str(document), "modified": False, "revision": 1},
-        "source": {"audit_status": "matches_last_run_lineage"}, "mapping": {"status": "verified"},
-        "provenance": {"complete": True, "full_project_evidence_current": True,
-            "project_delivery_current": True, "delivery_scope_known": True},
-        "qa": {"status": "passed_for_current_document", "artifact_qa_current": True,
-            "ready_to_use": True, "evidence": "historical.json"},
-        "results": {"pdf": {"current": True, "available": True, "path": "historical.pdf"}}}
-    preserved = deepcopy(old)
-    bridge.status_snapshot = old if previous else {}
-    result = bridge._audit_failure_status(RuntimeError("unexpected observer failure"))
-    assert result["audit_error"] == {"type": "RuntimeError", "message": "unexpected observer failure"}
-    assert result["provenance"]["complete"] is False
-    assert result["qa"]["artifact_qa_current"] is False
-    assert result["workflow"]["result_ready"] is False
-    assert all(item["available"] is False for item in result["results"].values())
-    assert old == preserved
-    again = bridge._audit_failure_status(RuntimeError("still unavailable"))
+    project = _copyable_project(tmp_path)
+    (project / "studio/figure_set.json").unlink()
+    (project / "plot_request.json").write_text(json.dumps({"input": str(project / "source/prepared.csv")}))
     if previous:
-        assert result["qa"]["last_validated_qa"] == preserved["qa"]
-        assert again["qa"]["last_validated_qa"] == preserved["qa"]
-    else:
-        assert "last_validated_qa" not in again["qa"]
-    assert document.read_bytes() == b"saved native"
+        run = project / "runs/studio_001"
+        run.mkdir(parents=True)
+        (run / "manifest.json").write_text(json.dumps({"ready_to_use": True,
+            "qa": {"status": "passed"}, "historical": "not current authorization"}))
+    store = FileProjectStore(project)
+    before = store.snapshot(import_legacy=True)
+    inventory = {str(p): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                 for p in project.rglob("*") if p.is_file()}
+    error = RuntimeError("unexpected observer failure")
+    def fail(*_args, **_kwargs):
+        raise error
+    monkeypatch.setattr(project_query, "publication_indicators", fail)
+    with pytest.raises(RuntimeError) as result:
+        project_query.inspect_project(project, native=False)
+    assert result.value is error
+    assert store.snapshot()["generation"] == before["generation"]
+    assert {str(p): (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+            for p in project.rglob("*") if p.is_file()} == inventory
 
 
 @pytest.mark.parametrize("change", ["equivalent_restore", "unrelated", "request", "mode"])
@@ -565,44 +470,46 @@ def test_probe_producer_revisions_preserve_selected_editing_read_guards(
     assert (copied / "studio/document.vsz").read_bytes() == native
 
 
-@pytest.mark.parametrize("change", ["valid", "scope", "not-current", "not-verified", "revision-missing",
-    "revision-drift", "revision-extra", "revision-blank", "execution-drift", "execution-missing",
-    "confirmation-drift", "confirmation-missing", "proposal-drift", "proposal-missing"])
-def test_gui_finite_mapping_currentness_requires_the_same_complete_observation(tmp_path, change):
-    from copy import deepcopy
-    from sciplot_gui.studio_project_status.provenance_status import _provenance_status
+def test_surviving_native_diagnostics_import_without_a_gui_package():
+    import os
+    import subprocess
+    import sys
 
-    revision = {"project_id": "project", "generation": "generation", "request_sha256": "a" * 64}
-    source = {"audit_status": "matches_confirmed_mapping_sources", "scope": "mapping_selected_files",
-        "selected_files_current": True, "observation_revision": revision,
-        "mapping_execution": "/exact/execution.json", "confirmation_id": "confirmation", "proposal_sha256": "b" * 64}
-    mapping = {"status": "verified", "observation_revision": deepcopy(revision),
-        "execution": source["mapping_execution"], "confirmation_id": source["confirmation_id"],
-        "proposal_sha256": source["proposal_sha256"]}
-    if change == "scope":
-        source["scope"] = "whole_directory"
-    elif change == "not-current":
-        source["selected_files_current"] = False
-    elif change == "not-verified":
-        mapping["status"] = "audit_pending"
-    elif change == "revision-missing":
-        source.pop("observation_revision")
-    elif change == "revision-drift":
-        mapping["observation_revision"]["generation"] = "other"
-    elif change == "revision-extra":
-        source["observation_revision"]["unknown"] = "extra"
-        mapping["observation_revision"]["unknown"] = "extra"
-    elif change == "revision-blank":
-        source["observation_revision"]["generation"] = ""
-        mapping["observation_revision"]["generation"] = ""
-    elif change != "valid":
-        field, mutation = change.split("-")
-        key = {"execution": "mapping_execution", "confirmation": "confirmation_id", "proposal": "proposal_sha256"}[field]
-        if mutation == "missing":
-            source.pop(key)
-        else:
-            source[key] = "different"
-    result = _provenance_status(project_dir=tmp_path, latest_path=None, latest_run={},
-        transform_status="not_run", raw_archive_path=None, package={}, delivery={}, mapping=mapping, qa={}, source=source)
-    assert result["source_current"] is (change == "valid")
-    assert result["complete"] is False
+    root = Path(__file__).resolve().parents[1]
+    code = '''
+import importlib
+import importlib.abc
+import sys
+class NoProductGUI(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "sciplot_gui" or fullname.startswith("sciplot_gui."):
+            raise AssertionError("retired GUI imported: " + fullname)
+sys.meta_path.insert(0, NoProductGUI())
+project = importlib.import_module("sciplot_core.studio_project_probe")
+baseline = importlib.import_module("sciplot_core.automation_baseline_probe")
+importlib.import_module("sciplot_core.studio_figure_set_probe")
+assert not hasattr(project, "run_studio_project_probe")
+assert not hasattr(baseline, "_run_selected_object_cycle")
+assert "sciplot_gui" not in sys.modules
+'''
+    result = subprocess.run([sys.executable, "-c", code], cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root / "src")}, capture_output=True,
+        text=True, timeout=30, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (root / "src/sciplot_core/studio_assistant_probe.py").exists()
+
+
+def test_retired_project_dock_probe_is_not_a_silent_success(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    marker = tmp_path / "unchanged.vsz"
+    marker.write_bytes(b"user native bytes")
+    result = subprocess.run([sys.executable, "-m", "sciplot_core.studio_project_probe", str(marker)],
+        cwd=root, env={**os.environ, "PYTHONPATH": str(root / "src")},
+        capture_output=True, text=True, timeout=30, check=False)
+    assert result.returncode != 0
+    assert "studio_project_probe_retired" in result.stderr
+    assert marker.read_bytes() == b"user native bytes"

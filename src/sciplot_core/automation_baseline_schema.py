@@ -77,6 +77,19 @@ BASELINE_LIMITATIONS = (
     "the producer against live current-owner objects.",
 )
 
+# v1 remains an exact read-only schema for historical four-scenario evidence.
+# New execution has no selected-widget host or replacement visual benchmark.
+HEADLESS_AUTOMATION_BASELINE_VERSION = 2
+HEADLESS_AUTOMATION_BASELINE_SCENARIOS = AUTOMATION_BASELINE_SCENARIOS[:3]
+HEADLESS_BASELINE_LIMITATIONS = tuple(
+    item for item in BASELINE_LIMITATIONS
+    if not item.startswith("The selected-object provider")
+) + (
+    "Version 2 measures only headless ready, scientific-confirmation and rule-repair routes. "
+    "The retired GUI selected-object scenario is absent, not passed, and historical "
+    "four-scenario total timings are not comparable to this report.",
+)
+
 REPORT_FIELDS = frozenset(
     {
         "kind",
