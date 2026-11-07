@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.studio_core.source_update_commit import reject_symlink_path
@@ -19,10 +20,9 @@ from sciplot_core.project_store.runtime import literal_runtime_path, resolve_run
 
 
 @native_runtime(repair=True, role="prepared_request")
-def plot_prepared_suite(request_path: Path, *, resume: bool = False) -> dict:
+def plot_prepared_suite(request_path: Path, *, resume: bool = False) -> dict[str, Any]:
     """The AI owns all values and roles. This route only validates and draws them."""
-    from sciplot_core.rheology_tts_spec import compile_tts_spec
-    from sciplot_core.rheology_tts_style import prepare_tts_presentation
+    from sciplot_core.rheology_tts_spec import prepare_and_compile_tts_spec
     from sciplot_core.workflow.rheology_tts_creation import create_prepared_suite
 
     request_path = request_path.expanduser()
@@ -61,11 +61,12 @@ def plot_prepared_suite(request_path: Path, *, resume: bool = False) -> dict:
                            else _output_paths(source, requested_out))
     try:
         _check_sources(sources)
-        spec = prepare_tts_presentation(raw)
-        spec["source_binding"]["prepared_plan"] = {"path": literal_runtime_path(path), "sha256": input_sha,
-            "authority": "External AI processing; local plotting preserves the supplied numeric coordinates."}
         # Complete validation precedes directory allocation and native side effects.
-        compiled = compile_tts_spec(spec)
+        spec, compiled = prepare_and_compile_tts_spec({**raw, "source_binding": {
+            **raw["source_binding"], "prepared_plan": {
+                "path": literal_runtime_path(path), "sha256": input_sha,
+                "authority": "External AI processing; local plotting preserves the supplied numeric coordinates.",
+            }}})
         if file_sha256(path) != input_sha:
             raise ValueError("Prepared numerical plan changed while reading.")
         return create_prepared_suite(request_path, request, spec, compiled, delivery, workspace,

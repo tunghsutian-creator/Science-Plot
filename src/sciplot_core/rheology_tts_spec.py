@@ -36,13 +36,35 @@ def _numbers(value: object, name: str) -> list[float]:
     return result
 
 
-def compile_tts_spec(spec: dict[str, Any]) -> dict[str, Any]:
-    """Validate explicit presentation and retain its source/transform evidence."""
+def _require_source_bound_spec(spec: dict[str, Any]) -> None:
     if spec.get("version") != 1 or not isinstance(spec.get("source_binding"), dict):
         raise ValueError("A version-1 source-bound figure specification is required.")
-    governed = "presentation_policy" in spec
-    if governed:
+
+
+def compile_tts_spec(spec: dict[str, Any]) -> dict[str, Any]:
+    """Validate explicit presentation and retain its source/transform evidence."""
+    _require_source_bound_spec(spec)
+    if "presentation_policy" in spec:
         spec = prepare_tts_presentation(spec)
+    return _compile_tts_spec(spec)
+
+
+def prepare_and_compile_tts_spec(
+    spec: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Admit a governed plan once and return its saved spec and compiled value.
+
+    This accepts raw caller values, never a flag claiming prior preparation.
+    Serialized plans and later native calls still enter through their own
+    admission. The returned values belong to this operation.
+    """
+    normalized = prepare_tts_presentation(spec)
+    _require_source_bound_spec(normalized)
+    return normalized, _compile_tts_spec(normalized)
+
+
+def _compile_tts_spec(spec: dict[str, Any]) -> dict[str, Any]:
+    governed = "presentation_policy" in spec
     figures = spec.get("figures")
     if not isinstance(figures, list) or not figures:
         raise ValueError("At least one figure is required.")
@@ -99,7 +121,7 @@ def _compile_panel(
         )
     if left + panel_width > width + 1e-9 or top + panel_height > height + 1e-9:
         raise ValueError("Panel rectangle lies outside the native page.")
-    options = {
+    options: dict[str, Any] = {
         key: panel[key]
         for key in (
             "xscale",
