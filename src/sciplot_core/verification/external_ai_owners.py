@@ -8,7 +8,9 @@ EXTERNAL_AI_OWNERS = (
     ChangedOwner(
         owner_id="openai_assistant_provider",
         path_prefixes=("src/sciplot_core/openai_provider/", "src/sciplot_core/assistant_provider/"),
-        exact_paths=frozenset({"src/sciplot_core/openai_provider_probe.py"}),
+        exact_paths=frozenset({"src/sciplot_core/openai_provider_probe.py",
+                              "src/sciplot_core/assistant_operations.py",
+                              "src/sciplot_core/assistant_selection.py"}),
         owned_test_paths=frozenset({"tests/test_compatibility_facades.py", "tests/test_ai_transport_lifecycle.py",
                                     "tests/test_assistant_contract.py", "tests/test_assistant_disclosure_facts.py"}),
         pytest_targets=(
@@ -115,6 +117,8 @@ EXTERNAL_AI_OWNERS = (
         owner_id="native_document_edit",
         exact_paths=frozenset(
             {
+                "src/sciplot_core/assistant_operations.py",
+                "src/sciplot_core/assistant_selection.py",
                 "src/sciplot_core/native_settings.py",
                 "src/sciplot_core/style_values.py",
                 "src/sciplot_core/studio_core/veusz_line_joins.py",

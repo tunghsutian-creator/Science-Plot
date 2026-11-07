@@ -5,6 +5,52 @@ from __future__ import annotations
 from sciplot_core.verification.owner_model import ChangedOwner
 
 
+INTAKE_PROJECT_OWNER = ChangedOwner(
+    owner_id="intake_project",
+    path_prefixes=("src/sciplot_core/intake/",),
+    exact_paths=frozenset({
+        "src/sciplot_core/cli/parsers/intake.py", "src/sciplot_core/cli/dispatch/intake.py",
+        "src/sciplot_core/curate.py", "src/sciplot_core/acceptance/three_dpa_runs.py",
+        "src/sciplot_core/cli/parsers/governance.py", "src/sciplot_core/cli/dispatch/governance.py",
+        "tests/curation_fixture_helpers.py",
+    }),
+    owned_test_paths=frozenset(
+        {
+            "tests/test_curation_headless.py",
+            "tests/test_curation_headless_native.py",
+            "tests/test_intake_session_adapter.py",
+            "tests/test_intake_confirmation_semantics.py",
+            "tests/test_project_headless_export_command.py",
+            "tests/test_intake_session_native.py",
+            "tests/test_intake_path_safety.py",
+            "tests/test_intake_atomic_packaging.py",
+            "tests/test_intake_review_recovery.py",
+            "tests/test_mechanical_intake_contract.py",
+            "tests/test_maintenance_integrity.py",
+            "tests/test_source_recognition_contract.py",
+        }
+    ),
+    pytest_targets=(
+        "tests/test_curation_headless.py", "tests/test_curation_headless_native.py",
+        "tests/test_torque_source_contract.py", "tests/test_cli_surface.py",
+        "tests/test_readiness_registry_merge.py", "tests/test_rule_certification.py",
+        "tests/test_rule_invocation_contract.py",
+        "tests/test_visual_review.py",
+        "tests/test_intake_session_adapter.py",
+        "tests/test_intake_confirmation_semantics.py",
+        "tests/test_project_headless_export_command.py",
+        "tests/test_intake_session_native.py",
+        "tests/test_intake_path_safety.py",
+        "tests/test_intake_atomic_packaging.py",
+        "tests/test_intake_review_recovery.py",
+        "tests/test_mechanical_intake_contract.py",
+        "tests/test_source_recognition_contract.py",
+    ),
+    final_milestone_gates=("smoke",),
+    release_gates=("acceptance_rules", "full_pytest"),
+)
+
+
 PROJECT_INTEGRITY_OWNERS = (
     ChangedOwner(
         owner_id="fixture_provenance_evidence",
@@ -160,4 +206,4 @@ PROJECT_INTEGRITY_OWNERS = (
 )
 
 
-__all__ = ["PROJECT_INTEGRITY_OWNERS"]
+__all__ = ["INTAKE_PROJECT_OWNER", "PROJECT_INTEGRITY_OWNERS"]

@@ -32,8 +32,8 @@ raw files + hashes
 
 State authority and renderer choice are separate. The composition facade installs
 the Veusz backend router; `ManagedVeuszCompiler` compiles PlotIR into
-`document.vsz`, and native inspection, canvas editing and PDF/TIFF export use
-Veusz Documents. A Managed VSZ is rebuildable, whereas a Legacy VSZ remains the
+`document.vsz`. Native inspection, command-driven document edits and PDF/TIFF
+export use Veusz Documents. A Managed VSZ is rebuildable, whereas a Legacy VSZ remains the
 complete visual authority. Veusz is the long-term native rendering adapter, not
 the semantic application or storage authority. Its replacement would require
 rendering, editing, scientific-QA and existing-project migration evidence.
@@ -762,19 +762,14 @@ IO or a child process. Existing AI task/plot commands own preview, decision,
 save, replay and export; they do not create a second browser revision/history.
 The native `document_edit` adapter remains and preserves opaque native state.
 
-Fresh ordinary packages omit the browser launcher. Prior recorded v1 launchers
-are preserved only after exact content, regular-file, executable-mode and
-contract checks; unregistered or changed files refuse replacement. Both workflow
-and saved-project publication obtain the previous record from committed project
-state and pass it to the shared delivery owner. The record is data, not permission.
-The public package builder and direct prepared-publication path share that owner.
-
-Delivery identity and modified-visible-copy detection still use their original
-currentness contracts. Removal of remaining executable launchers must first
-migrate their inert project/source/native bindings and all readers; deleting the
-shell without that migration would lose a real safety responsibility. Remaining
-Qt, assembly and intake UI code is outside this completed browser retirement,
-while headless Qt/Veusz and scientific QA remain long-term adapters.
+Fresh ordinary packages write the inert `SciPlot_delivery.json` binding through
+the shared delivery owner. Both workflow and saved-project publication obtain
+the previous record from committed project state. Exact registered legacy shell
+artifacts remain read-only compatibility inputs; unknown or changed bytes,
+file kinds, modes and contracts refuse replacement. A delivery record is data,
+not execution permission. Qt product workbenches, assembly desktop and Intake
+HTTP/static UI are also retired; headless Qt/Veusz and scientific QA remain
+long-term adapters.
 
 `task_repair` normalizes only the unambiguous misplaced `task_dir` transport alias,
 rejects conflicting locations, and projects bounded field/constraint errors from
@@ -1250,10 +1245,10 @@ gates, separate from independent-user and clean-machine acceptance. The welcome
 page emits a field-allowlisted feedback summary without source data, paths, logs
 or credentials. It never sends that summary or modifies client configuration.
 
-Veusz `MainWindow` remains a compatible native document tool. It owns its object
-tree, property editor, Datasets, canvas, menus, Save and Undo/Redo. External
-operations load the saved VSZ in a separate native worker and do not depend on
-the live window or its selection.
+Veusz native-file compatibility remains without a SciPlot workbench. A file saved
+by an external native tool is external state and must pass the existing binding
+and save-admission checks. Operations load saved VSZ in a separate native worker;
+they do not depend on a live window or its selection.
 
 SciPlot-specific Qt workbenches, the React/browser editor and the Intake HTTP
 server/static application are retired. Old CLI entries return retirement errors
