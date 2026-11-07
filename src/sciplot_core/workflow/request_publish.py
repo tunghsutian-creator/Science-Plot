@@ -62,6 +62,7 @@ def publish_request_result(
     rendered: RequestRenderResult,
     _staged_delivery: tuple[Path, Path] | None = None,
     _update_project: bool = True,
+    previous_delivery: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Attach lineage and quality evidence, then persist a complete manifest."""
 
@@ -176,6 +177,7 @@ def publish_request_result(
         completed_figure_plan=completed_figure_plan,
         staged_delivery=_staged_delivery,
         update_project=_update_project,
+        previous_delivery=previous_delivery,
     )
     return manifest
 
@@ -257,6 +259,7 @@ def _finalize_request_manifest(
     completed_figure_plan: ResolvedFigurePlan | None,
     staged_delivery: tuple[Path, Path] | None = None,
     update_project: bool = True,
+    previous_delivery: dict[str, Any] | None = None,
 ) -> None:
     manifest["layout_quality"] = _layout_quality_from_result(manifest["result"])
     manifest["revision_brief"] = _write_revision_brief(output_dir, manifest=manifest)
@@ -267,7 +270,8 @@ def _finalize_request_manifest(
         manifest=manifest,
     )
     if staged_delivery is None:
-        manifest["delivery_package"] = build_delivery_package(output_dir, manifest=manifest)
+        manifest["delivery_package"] = build_delivery_package(output_dir, manifest=manifest,
+            **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}))
     else:
         from sciplot_core.delivery.package_builder import _build_staged_delivery
 
@@ -275,7 +279,8 @@ def _finalize_request_manifest(
         if private.absolute() == destination.absolute() or private.is_relative_to(destination):
             raise ValueError("A project delivery must be prepared outside its active destination.")
         manifest["delivery_package"] = _build_staged_delivery(
-            output_dir, manifest=manifest, delivery_dir=private, final_root=destination)
+            output_dir, manifest=manifest, delivery_dir=private, final_root=destination,
+            **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}))
     manifest["one_step"] = build_one_step_project(
         input_path=input_path,
         request_path=request_path,

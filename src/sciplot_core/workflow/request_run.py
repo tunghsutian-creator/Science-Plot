@@ -37,7 +37,7 @@ from sciplot_core.study_model import study_model_from_request
 from sciplot_core.workflow.project_state import _write_one_step_status
 from sciplot_core.workflow.errors import WorkflowIntervention
 from sciplot_core.workflow.request_io import (
-    _archive_raw_input,
+    _archive_request_inputs,
     _load_request,
     _managed_output_transaction,
     _resolve_request_path,
@@ -107,6 +107,7 @@ def _run_request_in_managed_output(
     previous_request: dict[str, Any] | None = None,
     staged_delivery: tuple[Path, Path] | None = None,
     update_project: bool = True,
+    previous_delivery: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Resolve inputs, enforce semantic gates, then render and publish."""
 
@@ -270,35 +271,10 @@ def _run_request_in_managed_output(
         rendered=rendered,
         _staged_delivery=staged_delivery,
         _update_project=update_project,
+        previous_delivery=previous_delivery,
     )
 
 
-def _archive_request_inputs(
-    *,
-    original_input_path: Path,
-    input_path: Path,
-    output_dir: Path,
-    mapping_application: dict[str, Any] | None,
-    cleanup_application: dict[str, Any] | None,
-) -> dict[str, Any]:
-    raw_archive = _archive_raw_input(
-        original_input_path if mapping_application is not None else input_path,
-        output_dir,
-    )
-    if (
-        mapping_application is not None
-        and original_input_path.resolve() != input_path.resolve()
-    ):
-        raw_archive["effective_input"] = _archive_raw_input(input_path, output_dir)
-    if (
-        cleanup_application is not None
-        and original_input_path.resolve() != input_path.resolve()
-    ):
-        raw_archive["pre_cleanup_input"] = _archive_raw_input(
-            original_input_path,
-            output_dir,
-        )
-    return raw_archive
 
 
 def _initial_transform_steps(

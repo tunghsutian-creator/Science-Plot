@@ -216,3 +216,31 @@ def _archive_raw_input(input_path: Path, output_dir: Path) -> dict[str, Any]:
 def _figures_from_result(result: dict[str, Any]) -> list[str]:
     figures = result.get("figures") or result.get("outputs") or []
     return [str(path) for path in figures]
+
+
+def _archive_request_inputs(
+    *,
+    original_input_path: Path,
+    input_path: Path,
+    output_dir: Path,
+    mapping_application: dict[str, Any] | None,
+    cleanup_application: dict[str, Any] | None,
+) -> dict[str, Any]:
+    raw_archive = _archive_raw_input(
+        original_input_path if mapping_application is not None else input_path,
+        output_dir,
+    )
+    if (
+        mapping_application is not None
+        and original_input_path.resolve() != input_path.resolve()
+    ):
+        raw_archive["effective_input"] = _archive_raw_input(input_path, output_dir)
+    if (
+        cleanup_application is not None
+        and original_input_path.resolve() != input_path.resolve()
+    ):
+        raw_archive["pre_cleanup_input"] = _archive_raw_input(
+            original_input_path,
+            output_dir,
+        )
+    return raw_archive

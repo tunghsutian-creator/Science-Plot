@@ -675,7 +675,12 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
     assert ROUND2_STRICT_ADDITIONS <= SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert FINAL_STRICT_ADDITIONS <= SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert all(configured.count(path) == 1 for path in FINAL_STRICT_ADDITIONS)
-    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS - FINAL_STRICT_ADDITIONS) == 195
+    # The browser-only worker was explicitly retired with its complete UI owner;
+    # all remaining baseline strict responsibilities are retained.
+    retired = {"src/sciplot_core/veusz_worker/live_session.py"}
+    assert retired.isdisjoint(configured)
+    assert all(not (ROOT / path).exists() for path in retired)
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS - FINAL_STRICT_ADDITIONS) == 195 - len(retired)
     from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS, TYPE_SCOPE_PARTITION_TARGET
     from sciplot_core.verification.type_gate_owners import MYPY_SCOPE_CONFIGURATION_OWNER, SCIENTIFIC_TRANSACTION_TYPE_OWNER
 

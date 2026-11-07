@@ -225,11 +225,11 @@ def run_runtime_smoke(
         checks.append(
             _check(
                 "independent_mode",
-                "The saved-project canvas is the default human editor and the optional Veusz assistant stays independent and hidden",
-                normal_mode.get("frontend_default") == "live_editor"
-                and normal_mode.get("interactive_entrypoint") == "sciplot edit PROJECT_OR_DELIVERY"
-                and normal_mode.get("assistant_default") == "independent"
-                and normal_mode.get("assistant_visibility_default") == "hidden"
+                "External AI requests use the local task commands without a manual editor or a required model client",
+                normal_mode.get("frontend_default") == "external_ai"
+                and normal_mode.get("task_interface") == "external_ai"
+                and normal_mode.get("daily_entrypoint") == "sciplot task start --request REQUEST_JSON --json"
+                and "interactive_entrypoint" not in normal_mode
                 and normal_mode.get("codex_required") is False
                 and normal_mode.get("user_switch_required") is False,
                 detail=normal_mode,

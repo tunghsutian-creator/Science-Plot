@@ -180,6 +180,10 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
             project_runtime(repository, generation=before["generation"]), \
             mapping_input_reads(canonical_request.get("data_mapping_execution")) as mapping_reads, \
             current_preparation_runtime(repository, before) as verify_sources, ExitStack() as publication_scope:
+        # Reuse the one committed registry for legacy delivery evidence and the
+        # final projection; the command's full read binding still owns CAS.
+        registry = read_intake_project_manifest(project, store=repository)
+        previous_delivery = registry.get("delivery_package") if registry is not None else None
         if mapping_reads is not None:
             load_data_mapping_execution(mapping_reads.execution)
             mapping_reads.seal()
@@ -208,7 +212,8 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
             primary_native_audit = exported.get("document_audit")
         payload = prepare_studio_export_run(project_dir=project, request_path=request, document_path=document,
             exports=exports, export_document_sha256=native_hash, primary_native_audit=primary_native_audit,
-            output_dir=run, secondary_output_dir=secondary, delivery_dir=delivery, delivery_root=delivery_root)
+            output_dir=run, secondary_output_dir=secondary, delivery_dir=delivery, delivery_root=delivery_root,
+            **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}))
         payload["document_sha256"] = native_hash
         payload["figure_set"] = {"primary_figure_id": primary_figure_id, "figures": selected_figures}
         delivery_complete = payload["delivery_package"].get("complete") is True
@@ -260,7 +265,6 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
                 canonical_json_sha256(manifest["result"]["scientific_data_verification"])))
         # The authoritative registry and ZIP consume the same audited native
         # overlay as the one final command; neither builder publishes a head.
-        registry = read_intake_project_manifest(project, store=repository)
         if registry is not None:
             updated = studio_run_registration(deepcopy(registry), manifest, studio_run=payload)
             writes.update(stage_intake_project_manifest(project, updated, store=repository,

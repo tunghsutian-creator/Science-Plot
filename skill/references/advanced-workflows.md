@@ -21,47 +21,32 @@ repair the stale document. Never revive an older route from historical notes.
 
 ## Product boundary
 
-External AI is the task interface. The local canvas is the default human editing
-surface after delivery. Use the public local CLI and shared services; SciPlot
-does not need to host the caller's model or start an internal AI provider.
-`studio/document.vsz` is the saved visual authority. Headless edits use the
-native Veusz API, never a second renderer, document model or GUI selection.
+External AI is the task interface. Use the public local CLI/MCP and shared
+services for creation, changes, saving and export. The canonical Managed document
+owns represented semantics; legacy `studio/document.vsz` remains the visual
+baseline for properties outside that coverage. Native operations use the Veusz
+adapter, never a second renderer or GUI clicks.
 
-Veusz `MainWindow`, Project/selected-object AI docks and browser Intake remain
-compatible tools. Their retention does not make GUI workflows the development
-priority. Do not delete these surfaces as part of ordinary external-control work.
+The React manual editor and its live native session are retired. `sciplot edit`
+returns `manual_editor_retired`, including old check/fallback invocations, without
+opening or modifying its target. New ordinary deliveries omit its launcher.
+A recorded old launcher may be preserved as checked historical bytes, not as a
+current editing capability. Never execute it to establish currentness or infer
+scientific permission from it.
 
-The browser `app` is limited to initial source, grouping, naming, order, size,
-and export confirmation plus read-only result review. Post-render edits use
-native document operations through the local canvas or external control services.
-The compatible Veusz editor remains available. Do not automate Veusz with mouse
-clicks or patch VSZ text.
+Continue through the current task's identity, capabilities, preview, decision and
+recovery steps. Export failure after a saved edit does not undo that save or
+justify applying the edit again. Separately modified delivered native files still
+require explicit recovery; copying a delivery does not select a canonical owner.
 
-For direct visual editing, double-click `Open_in_SciPlot.command` in a delivery,
-or run `skill/scripts/sciplot edit PROJECT --figure FIGURE_ID`.
-This separate loopback editor presents existing native object capabilities, a
-live Veusz preview, native undo/redo, and bounded legend dragging. Browser fields
-do not own scientific mappings or saved history. Save verifies the displayed
-native frame against the existing preview/apply transaction. Save and update
-delivery saves the active figure, then runs the shared saved-project export task.
-If export fails after Save, retain the saved revision and retry export; do not
-apply its edits again. A saved edit is distinct from a current delivery. Select
-registered figures in the canvas; save or discard the active draft before switching.
-If another process changes the project or original source, reload the saved
-project before continuing; reload discards this session's unsaved draft.
+PDF comments belong on a separate review copy. The local byte reader exposes
+standard annotation text and geometry, not a completed project/version binding
+or an automatic AI command. Flattened or unsupported marks may need visual
+inspection. No real provider transmission is authorized by a PDF or by this route.
 
-The delivery launcher resumes its bound managed project and checks for separately
-edited visible VSZ copies before opening. Recover such changes through the existing
-delivery-recovery flow. The launcher's explicit portable fallback opens Veusz when
-the visible folder was copied/moved or no associated managed project is available;
-it cannot claim to update the original project. Old packages remain unchanged on
-open and receive the canvas launcher during their next normal successful export.
-
-Internal provider absence must not disable deterministic recognition, plotting,
-native editing, QA, export, or delivery. The external AI may use only the current
-advertised native editing capabilities. The retained in-app assistant remains
-limited to the selected object; that GUI-specific restriction does not apply to
-the explicit saved-figure/object references in the external API.
+SciPlot-specific Qt, assembly and intake surfaces are being retired in separate
+complete dependency batches. Their remaining code is not the target architecture.
+Headless Qt/Veusz rendering, font checks, old native readers and scientific QA stay.
 
 ## Source revisions, edits and related tasks
 

@@ -8,12 +8,19 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.delivery.runtime_evidence import recorded_editor_launcher_current
+from sciplot_core.launchers import inspect_delivery_editor_launcher_contract
+
 
 def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
     """Verify the small user-facing delivery surface and its CSV contract."""
 
     delivery_path = Path(str(delivery.get("path") or "")).expanduser().resolve()
-    expected_entries = {"data", "figures", "project", "Open_in_Veusz.command", "Open_in_SciPlot.command"}
+    expected_entries = {"data", "figures", "project", "Open_in_Veusz.command"}
+    editor_recorded = any(key in delivery for key in (
+        "open_in_sciplot", "open_in_sciplot_sha256", "editor_launcher_contract"))
+    if editor_recorded:
+        expected_entries.add("Open_in_SciPlot.command")
     actual_entries = (
         {path.name for path in delivery_path.iterdir()}
         if delivery_path.is_dir()
@@ -115,21 +122,9 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    editor_launcher = delivery_path / "Open_in_SciPlot.command"
-    editor_probe: dict[str, Any] = {"path": str(editor_launcher), "exists": editor_launcher.is_file()}
-    if editor_launcher.is_file():
-        editor_result = subprocess.run(
-            ["zsh", str(editor_launcher)],
-            text=True, capture_output=True, check=False,
-            env={**os.environ, "SCIPLOT_LAUNCH_DRY_RUN": "1"},
-        )
-        arguments = editor_result.stdout.splitlines()
-        editor_probe.update({
-            "returncode": editor_result.returncode,
-            "arguments": arguments,
-            "stderr": editor_result.stderr.strip(),
-            "target_current": arguments[1:] == ["edit", str(delivery_path), "--portable-fallback"],
-        })
+    editor_probe = inspect_delivery_editor_launcher_contract(delivery_path) if editor_recorded else None
+    editor_current = editor_probe is None or recorded_editor_launcher_current(
+        delivery, expected_root=delivery_path, contract=editor_probe)
 
     passed = (
         delivery_path.is_dir()
@@ -150,8 +145,7 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         and launcher_probe.get("exists") is True
         and launcher_probe.get("returncode") == 0
         and Path(launcher_probe.get("dry_run_path") or "").is_file()
-        and editor_probe.get("returncode") == 0
-        and editor_probe.get("target_current") is True
+        and editor_current
     )
     return {
         "passed": passed,
@@ -163,5 +157,5 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         "figures": figure_locations,
         "projects": project_locations,
         "launcher": launcher_probe,
-        "editor_launcher": editor_probe,
+        "legacy_editor_launcher": editor_probe,
     }

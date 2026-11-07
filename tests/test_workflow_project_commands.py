@@ -9,14 +9,17 @@ from sciplot_core.studio_core import preparation_commands
 from sciplot_core.workflow.project_requests import run_project_request
 
 
-def prepared(tmp_path):
+def prepared(tmp_path, *, previous_delivery=None):
     project, delivery = tmp_path / "project", tmp_path / "delivery"
     project.mkdir()
     delivery.mkdir()
     (project / "source.csv").write_bytes(b"x,y\n1,2\n")
     request = {"input": "source.csv", "output": str(project / "runs/run_001"), "delivery_output": str(delivery)}
     (project / "plot_request.json").write_text(json.dumps(request))
-    (project / "intake_manifest.json").write_text(json.dumps({"kind": "sciplot_intake_project", "version": 1, "project_slug": "project"}))
+    registry = {"kind": "sciplot_intake_project", "version": 1, "project_slug": "project"}
+    if previous_delivery is not None:
+        registry["delivery_package"] = previous_delivery
+    (project / "intake_manifest.json").write_text(json.dumps(registry))
     store = FileProjectStore(project, locations={"delivery": delivery, "snapshot": ResourceRoot(tmp_path, ("project.zip",))})
     before = store.snapshot(import_legacy=True)
     return project, request, store, before
@@ -83,4 +86,26 @@ def test_failed_native_audit_does_not_publish_any_analysis_or_project_members(tm
     assert (project / "plot_request.json").read_bytes() == original
     assert not (project / "runs").exists()
     assert not (tmp_path / "project.zip").exists()
+    assert not list((tmp_path / "delivery").iterdir())
+
+
+def test_request_preparation_forwards_committed_delivery_evidence(tmp_path, monkeypatch):
+    # This opaque record tests transport, not acceptance of any historical file.
+    previous = {"fixture": "committed delivery evidence", "version": 6}
+    project, request, store, before = prepared(tmp_path, previous_delivery=previous)
+    original = (project / "plot_request.json").read_bytes()
+    execute = execution([], project, original)
+    observed = []
+
+    def prepare(**kwargs):
+        observed.append(kwargs["previous_delivery"])
+        return execute(**kwargs)
+
+    monkeypatch.setattr(preparation_commands, "prepare_studio_candidate", lambda *_a, **_k: {})
+    monkeypatch.setattr(preparation_commands, "audit_studio_candidate", lambda *_a: ([], []))
+    run_project_request(project / "plot_request.json", request, execute=prepare,
+        classifier=lambda *a, **k: {}, new_creation=False, previous_request=None)
+    assert observed == [previous]
+    assert store.snapshot()["sequence"] == before["sequence"] + 1
+    assert (project / "source.csv").read_bytes() == b"x,y\n1,2\n"
     assert not list((tmp_path / "delivery").iterdir())

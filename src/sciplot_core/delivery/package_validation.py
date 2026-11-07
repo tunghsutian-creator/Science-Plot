@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Literal, TypedDict
-from sciplot_core.delivery.runtime_evidence import path_identity, launcher_contract_identity, recorded_artifacts_ready
+from sciplot_core.delivery.runtime_evidence import (
+    path_identity, launcher_contract_identity, recorded_artifacts_ready, recorded_editor_launcher_current,
+)
 
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
@@ -59,21 +61,6 @@ _DeliveryVerificationBindingPayload = (
 )
 
 
-def _recorded_editor_launcher_current(
-    record: dict[str, Any], *, expected_root: Path, contract: dict[str, object],
-) -> bool:
-    """Match every recorded legacy editor field; a partial record is invalid."""
-    path = record.get("open_in_sciplot")
-    return bool(
-        isinstance(path, str)
-        and path.strip()
-        and path_identity(Path(path).expanduser())
-        == path_identity(expected_root / DELIVERY_EDITOR_LAUNCHER)
-        and contract.get("ready") is True
-        and record.get("open_in_sciplot_sha256") == contract.get("content_sha256")
-        and launcher_contract_identity(record.get("editor_launcher_contract"))
-        == launcher_contract_identity(contract)
-    )
 
 
 def verify_delivery_package(
@@ -208,7 +195,7 @@ def verify_delivery_package(
     live_editor_contract = (
         inspect_delivery_editor_launcher_contract(expected) if editor_recorded else {}
     )
-    editor_launcher_current = not editor_recorded or _recorded_editor_launcher_current(
+    editor_launcher_current = not editor_recorded or recorded_editor_launcher_current(
         record, expected_root=expected, contract=live_editor_contract,
     )
     artifacts = record.get("artifacts")

@@ -69,6 +69,7 @@ def prepare_studio_export_run(
     secondary_output_dir: Path,
     delivery_dir: Path,
     delivery_root: Path,
+    previous_delivery: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate, archive, assess, package, and register one Studio run."""
 
@@ -162,4 +163,5 @@ def prepare_studio_export_run(
         figures=figures,
         delivery_dir=delivery_dir,
         delivery_root=delivery_root,
+        previous_delivery=previous_delivery,
     )

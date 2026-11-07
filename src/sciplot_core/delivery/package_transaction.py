@@ -23,10 +23,9 @@ from sciplot_core.policy import (
 )
 from sciplot_core.delivery.contracts import DELIVERY_PACKAGE_CONTRACT_VERSION
 from sciplot_core.delivery.package_validation import (
-    _recorded_editor_launcher_current,
     verify_delivery_package,
 )
-from sciplot_core.delivery.runtime_evidence import path_identity
+from sciplot_core.delivery.runtime_evidence import path_identity, recorded_editor_launcher_current
 from sciplot_core.delivery.filesystem_metadata import (
     FINDER_METADATA_NAME,
     is_delivery_finder_metadata,
@@ -168,7 +167,7 @@ def _preserve_recorded_editor(
         and prior.get("complete") is True
         and isinstance(root, str) and root.strip()
         and path_identity(Path(root).expanduser()) == path_identity(previous)
-        and _recorded_editor_launcher_current(
+        and recorded_editor_launcher_current(
             prior, expected_root=previous, contract=contract,
         )
         and snapshot.get(DELIVERY_EDITOR_LAUNCHER)

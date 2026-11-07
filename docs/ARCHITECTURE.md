@@ -758,40 +758,25 @@ explicit direct path. This keeps the task orchestrator independent of
 `PlotService`, whose source-only compatibility entry can still use ordinary
 tasks. A common lower error leaf preserves the public task exception identity.
 
-The `edit` CLI opens the default post-delivery human editing surface for an existing
-saved figure. `Open_in_SciPlot.command` opens its bound delivery through this CLI;
-the retained `Open_in_Veusz.command` is the advanced and portable native route.
-`live_editor` owns session binding, serialized browser commands and the
-loopback HTTP adapter. `veusz_worker/live_session.py` keeps one Veusz Document on
-its process main thread, applies advertised native operations, uses native undo/
-redo and renders through the existing preview function. A PaintHelper built from
-the same document and render parameters performs revision-bound pixel hit testing.
-Rendered keys expose their native ControlKey bounds; revision-bound pixel drags
-use the native alignment/manual-position mapping as one validated undo operation.
-There is no Matplotlib renderer or independently persistent browser document.
-The private document copy is an unsaved session; the saved VSZ remains authority.
+The manual React `edit` surface, loopback server and persistent live native
+session are retired. The CLI keeps a bounded compatibility error without target
+IO or a child process. Existing AI task/plot commands own preview, decision,
+save, replay and export; they do not create a second browser revision/history.
+The native `document_edit` adapter remains and preserves opaque native state.
 
-The browser owns input drafts and request coalescing, not scientific decisions.
-Commands bind a session revision and expected native setting values. Source,
-project and delivery changes reject stale edits. Save derives the final changes
-from native values, calls `preview_document_edit`, compares its native pixels with
-the displayed frame, then calls `apply_document_edit`; client candidate bytes are
-never trusted. Native undo survives Save, and undoing a saved change creates a new
-unsaved difference. Export requires a saved document and delegates to the existing
-export task. Reload replaces the unsaved session from current saved authority.
-The combined publish command saves the active draft before calling that export
-owner; an export failure retains the saved revision for export-only retry. Figure
-selection follows registered IDs and requires saving or discarding the current
-draft. Delivery entry resolution preserves explicit secondary-figure targets and
-rejects separately modified visible copies before selecting canonical authority.
-The launcher's explicit portable fallback opens an unbound/moved copy in Veusz;
-it never creates a replacement managed binding. Opening old packages does not
-rewrite them; a subsequent normal export adds the default canvas launcher.
-Session reads detect a stopped native worker, retain the last frame and require
-reload before further edits. A completed export receipt is accepted only when
-fresh QA and delivery evidence both identify the current saved result.
-The server binds only 127.0.0.1, validates Host/Origin and session proof, and serves
-only packaged UI assets and the current identified native frame.
+Fresh ordinary packages omit the browser launcher. Prior recorded v1 launchers
+are preserved only after exact content, regular-file, executable-mode and
+contract checks; unregistered or changed files refuse replacement. Both workflow
+and saved-project publication obtain the previous record from committed project
+state and pass it to the shared delivery owner. The record is data, not permission.
+The public package builder and direct prepared-publication path share that owner.
+
+Delivery identity and modified-visible-copy detection still use their original
+currentness contracts. Removal of remaining executable launchers must first
+migrate their inert project/source/native bindings and all readers; deleting the
+shell without that migration would lose a real safety responsibility. Remaining
+Qt, assembly and intake UI code is outside this completed browser retirement,
+while headless Qt/Veusz and scientific QA remain long-term adapters.
 
 `task_repair` normalizes only the unambiguous misplaced `task_dir` transport alias,
 rejects conflicting locations, and projects bounded field/constraint errors from

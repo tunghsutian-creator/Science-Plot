@@ -277,8 +277,6 @@ def current_result(state: dict[str, Any]) -> dict[str, Any]:
             summary["next_step"] = {"action": "review_exports_and_deliver", "task": state["task_dir"],
                 **handoff_paths(state),
                 "delivery": state["delivery_result"]["delivery"],
-                "manual_edit": {"launcher": state["delivery_result"]["delivery"]["native_launcher"],
-                                "scope": "Independent native snapshot; does not replace Managed scientific authority."},
                 "message": "Review the actual exported images. The Managed document is the scientific authority; retain original attachments and its .sciplot_documents directory."}
         elif not native_delivery_current:
             summary.update(status="blocked", next_step={"action": "finish_native_delivery", "task": state["task_dir"],

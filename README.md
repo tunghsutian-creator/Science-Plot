@@ -443,19 +443,21 @@ Keep working with the same AI assistant:
 
 > Show me three style alternatives for this figure so I can choose one.
 
-For direct adjustments, double-click **`Open_in_SciPlot.command`** in the delivery
-folder. Select a curve or sample, adjust its supported visual properties, and see
-the figure redraw. Native undo and redo let you explore changes.
+Saved edits use the same local task and document commands as creation. The AI
+queries the current figure and its advertised operations, previews a bounded
+change, then saves and exports through the existing transaction and QA owners.
+A failed export resumes the saved operation instead of applying it twice.
 
-- **Save** updates the editable project.
-- **Save and update delivery** also refreshes the delivered VSZ, PDF, and TIFF
-  through the existing checks.
+The React canvas and its browser session are retired. `sciplot edit` reports
+`manual_editor_retired` without opening or changing the target. New ordinary
+deliveries do not create `Open_in_SciPlot.command`. Recorded historical launchers
+remain checked legacy artifacts; reading them does not execute or upgrade them.
 
-The canvas resumes the original managed project. For advanced native editing,
-use `Open_in_Veusz.command`. A copied delivery can open its portable Veusz file;
-editing that copy does not update the original project. See the
-[editing and continuation guide](skill/references/advanced-workflows.md) for
-source updates, moved deliveries, and separately edited files.
+Keep PDF review notes on a separate copy so canonical export hashes stay valid.
+A byte-only reader can extract standard PDF comments and geometry, but the full
+project-bound annotation-to-AI workflow is not implemented. PDF coordinates and
+comments do not authorize data or unit changes. See the
+[editing and continuation guide](skill/references/advanced-workflows.md).
 
 ## Get started
 

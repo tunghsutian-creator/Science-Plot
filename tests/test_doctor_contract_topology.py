@@ -82,17 +82,18 @@ def test_doctor_prefers_external_tasks_and_retains_native_compatibility() -> Non
     assert routes["project_control"]["command"] == "project"
     assert routes["mcp_transport"]["command"] == "mcp"
     assert routes["mcp_transport"]["internal_model_required"] is False
-    assert normal["interactive_entrypoint"] == routes["interactive_family"]["interactive"]
-    assert normal["interactive_entrypoint"] == "sciplot edit PROJECT_OR_DELIVERY"
-    assert normal["frontend_default"] == "live_editor"
-    assert normal["frontend_default_scope"] == "saved_project_visual_adjustments"
-    assert routes["interactive_family"]["command"] == "edit"
-    assert routes["interactive_family"]["document_authority"] == "saved_vsz"
-    assert normal["native_editor_entrypoint"] == routes["native_compatibility"]["interactive"]
+    assert "interactive_entrypoint" not in normal
+    assert "native_editor_entrypoint" not in normal
+    assert "interactive_family" not in routes
+    assert normal["frontend_default"] == "external_ai"
+    assert normal["frontend_default_scope"] == "ai_requests"
+    assert routes["saved_edits"]["command"] == "task"
+    assert routes["saved_edits"]["context"] == "sciplot task edit-context TARGET --operation OPERATION --json"
     assert routes["native_compatibility"]["command"] == "studio"
-    assert payload["vsz_lifecycle"]["editor"] == "live_editor"
-    assert payload["vsz_lifecycle"]["native_editor"] == "veusz_mainwindow"
-    assert any("Open_in_SciPlot.command" in item for item in _next_actions([]))
+    assert "editor" not in payload["vsz_lifecycle"]
+    assert payload["vsz_lifecycle"]["editing"] == "local_ai_commands"
+    assert payload["vsz_lifecycle"]["renderer"] == "veusz_qt"
+    assert not any("Open_in_SciPlot.command" in item for item in _next_actions([]))
     assert routes["automation_family"]["command"] == "autoplot"
     assert routes["automation_family"]["separate_renderer"] is False
     assert "not directly resumable" in routes["automation_family"]["role"]

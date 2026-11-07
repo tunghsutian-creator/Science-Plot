@@ -79,6 +79,24 @@ def test_managed_export_requests_inline_science_and_passes_only_this_call_eviden
     assert calls[1][1]["primary_native_audit"] == {"kind": "current call native evidence"}
 
 
+def test_native_publication_forwards_committed_delivery_evidence(publication):
+    project, calls, _ = publication
+    # Imported before the first Store snapshot; matching old bytes is the
+    # delivery owner's responsibility, which is not mocked into this assertion.
+    previous = {"fixture": "committed delivery evidence", "version": 6}
+    (project / "intake_manifest.json").write_text(json.dumps({
+        "kind": "sciplot_intake_project", "version": 1, "project_slug": "project",
+        "delivery_package": previous,
+    }))
+    native = (project / "studio/document.vsz").read_bytes()
+    source = (project / "source/data.csv").read_bytes()
+    result = export_project_document(project_dir=project, formats=["pdf"])
+    assert result.ready_to_use
+    assert calls[1][1]["previous_delivery"] == previous
+    assert (project / "studio/document.vsz").read_bytes() == native
+    assert (project / "source/data.csv").read_bytes() == source
+
+
 def test_failed_inline_export_audit_never_enters_publication(publication, monkeypatch):
     from sciplot_core.studio_core import native_export_adapter
     from sciplot_core.project_store import FileProjectStore

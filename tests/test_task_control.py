@@ -443,7 +443,7 @@ def test_failed_current_query_does_not_offer_historical_edit_targets(tmp_path, m
 
 
 @pytest.mark.parametrize("has_launcher", [False, True])
-def test_current_handoff_exposes_canvas_without_rewriting_old_deliveries(
+def test_current_handoff_reviews_exports_without_rewriting_old_deliveries(
     tmp_path, monkeypatch, has_launcher,
 ):
     from sciplot_core.policy import DELIVERY_EDITOR_LAUNCHER
@@ -463,15 +463,11 @@ def test_current_handoff_exposes_canvas_without_rewriting_old_deliveries(
              "request": {"action": "create"}, "result": receipt(project)}
     result = compact_task_result(control._current_result(state))
     assert result["next_step"]["action"] == "review_exports_and_deliver"
-    expected = {"command": ["sciplot", "edit", str(project)]}
-    if has_launcher:
-        expected["launcher"] = str(launcher)
-    assert result["next_step"]["manual_edit"] == expected
+    assert "manual_edit" not in result["next_step"]
     assert {p.name: p.read_bytes() for p in delivery.iterdir()} == before
     state["request"] = {"action": "edit", "figure_id": "secondary"}
-    assert control._current_result(state)["next_step"]["manual_edit"]["command"] == [
-        "sciplot", "edit", str(project), "--figure", "secondary",
-    ]
+    assert control._current_result(state)["next_step"]["action"] == "review_exports_and_deliver"
+    assert "manual_edit" not in control._current_result(state)["next_step"]
     current["delivery"]["current"] = False
     assert "manual_edit" not in control._current_result(state)["next_step"]
 

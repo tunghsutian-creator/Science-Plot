@@ -177,20 +177,12 @@ def doctor_payload() -> dict[str, Any]:
             "task_interface": "external_ai",
             "daily_entrypoint": "sciplot task start --request REQUEST_JSON --json",
             "capabilities_entrypoint": "sciplot task capabilities --json",
-            "interactive_entrypoint": "sciplot edit PROJECT_OR_DELIVERY",
-            "native_editor_entrypoint": "sciplot studio PATH",
             "headless_export_entrypoint": (
                 "sciplot studio PATH --out /path/to/Visible_Figure_Project "
                 "--export pdf,tiff_300 --json"
             ),
-            "explicit_intent_entrypoint": (
-                "sciplot studio PATH --rule RULE_ID --template TEMPLATE_ID "
-                "--out /path/to/Visible_Figure_Project"
-            ),
-            "frontend_default": "live_editor",
-            "frontend_default_scope": "saved_project_visual_adjustments",
-            "assistant_default": "independent",
-            "assistant_visibility_default": "hidden",
+            "frontend_default": "external_ai",
+            "frontend_default_scope": "ai_requests",
             "codex_required": False,
             "user_switch_required": False,
             "automatic_recognition_required": False,
@@ -216,17 +208,15 @@ def doctor_payload() -> dict[str, Any]:
                 "role": "optional stdio transport for the same task and project services",
                 "internal_model_required": False,
             },
-            "interactive_family": {
-                "command": "edit",
-                "interactive": "sciplot edit PROJECT_OR_DELIVERY",
-                "role": "default post-delivery canvas with native rendering, history, saved edits, and delivery updates",
-                "document_authority": "saved_vsz",
+            "saved_edits": {
+                "command": "task",
+                "context": "sciplot task edit-context TARGET --operation OPERATION --json",
+                "role": "AI-requested changes use current local capabilities, preview, decision and saved command recovery",
             },
             "native_compatibility": {
                 "command": "studio",
-                "interactive": "sciplot studio PATH",
                 "headless": ("sciplot studio PATH --export pdf,tiff_300 --json"),
-                "role": "compatible project preparation, native Veusz editing, exact-current export, QA, and delivery",
+                "role": "compatible project preparation, exact-current headless export, QA, and delivery",
             },
             "automation_family": {
                 "command": "autoplot",
@@ -254,8 +244,8 @@ def doctor_payload() -> dict[str, Any]:
         "vsz_lifecycle": {
             "capability_contract": lifecycle,
             "canonical_artifact": "studio/document.vsz",
-            "editor": "live_editor",
-            "native_editor": "veusz_mainwindow",
+            "editing": "local_ai_commands",
+            "renderer": "veusz_qt",
             "open_preserves_document": True,
             "manual_edit_detection": "sha256",
             "archive_before_explicit_regeneration": True,

@@ -42,6 +42,7 @@ def finalize_studio_run(
     figures: list[str],
     delivery_dir: Path,
     delivery_root: Path,
+    previous_delivery: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Write review artifacts, delivery contracts, publish state, and registry."""
 
@@ -117,6 +118,7 @@ def finalize_studio_run(
         copied_exports=copied_exports,
         delivery_dir=delivery_dir,
         delivery_root=delivery_root,
+        previous_delivery=previous_delivery,
     )
     prerequisite_state = (
         RULE_REPAIR_STATE if inventory.publication_rule_blocked else None
@@ -292,6 +294,7 @@ def _finalize_delivery_contracts(
     copied_exports: list[dict[str, Any]],
     delivery_dir: Path,
     delivery_root: Path,
+    previous_delivery: dict[str, Any] | None = None,
 ) -> None:
     failure_stage = "package_delivery_finalization"
     try:
@@ -308,6 +311,7 @@ def _finalize_delivery_contracts(
             manifest=manifest,
             delivery_dir=delivery_dir,
             final_root=delivery_root,
+            **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}),
         )
         _attach_complete_figure_set_delivery(
             inventory.figure_set_export_scope,

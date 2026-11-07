@@ -11,8 +11,16 @@ recovery boundaries remain. Managed bindings reuse captured content in the real
 pure compiler; public-stage admission shares one observation of independently
 checked environments and observes again on exit. A local byte-only PDF annotation
 reader exists, without a project binding or outbound AI route. These are completed
-components of the sequence below, not completion of XY orchestration replacement,
-manual UI retirement, all-family migration or release acceptance.
+components of the sequence below, not completion of all-family migration, remaining UI retirement or release acceptance.
+
+The next integrated slice removes the real XY preview duplicate: the admitted
+preparation supplies the same IR after fresh post-persistence canonical/CAS/source
+checks; cold apply/export still reconstruct independently. One matched generated
+native lifecycle keeps science, IR and rendered TIFF bytes equal and reduces
+compilation calls from nine to eight. Its single wall-time pair is not a stable
+performance claim. React/browser sessions and assets are removed; CLI retirement,
+fresh/legacy delivery records and all production callers close that component.
+Assembly desktop, Qt product UI and intake retirement remain separate work below.
 
 ## Product boundary and target
 
@@ -86,7 +94,7 @@ remove the replaced internal raw path. Original and business requests stay disti
 
 Then replace the XY orchestration with explicit document/data/capability inputs,
 detached native candidates and the existing Store stage/decision/publication
-owner. Reuse the real pure compiler, not ManagedBackend.preview/make_binding as an
+owner. Reuse the real pure compiler, not ManagedBackend.preview/prepare_binding as an
 imaginary side-effect-free port. Preserve canonical document and old ready-project
 readers; do not create a second project database or transaction engine.
 

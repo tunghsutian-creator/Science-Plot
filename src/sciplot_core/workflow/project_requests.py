@@ -99,12 +99,17 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
             candidate.mapping_inputs[mapping_reads.execution] = mapping_reads
         private_output = candidate.resource_path((output_name + "/" if output_name else "") + "manifest.json").parent
         private_delivery = candidate.resource_path((delivery_name + "/" if delivery_name else "") + "delivery_manifest.json").parent
+        # This is the committed registry copied into this exact private snapshot,
+        # not a guessed manifest discovered from the visible delivery's shell.
+        previous_registry = read_intake_project_manifest(candidate.project_dir)
+        previous_delivery = previous_registry.get("delivery_package") if previous_registry is not None else None
         try:
             with private_run_output(candidate, output_name):
                 manifest = execute(request_path=private_request, source_request=deepcopy(request),
                     base_dir=candidate.project_dir, output_dir=private_output, classifier=classifier,
                     new_creation=new_creation, previous_request=previous_request,
-                    staged_delivery=(private_delivery, delivery), update_project=False)
+                    staged_delivery=(private_delivery, delivery), update_project=False,
+                    **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}))
         except WorkflowIntervention as exc:
             publish_intervention(candidate, baseline=baseline, output=output_name, intent=intent, error=str(exc))
             raise

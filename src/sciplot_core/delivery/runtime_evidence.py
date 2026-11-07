@@ -5,6 +5,7 @@ from contextlib import ExitStack
 from typing import Any
 
 from sciplot_core.foundation.source_locations import literal_source_path
+from sciplot_core.policy import DELIVERY_EDITOR_LAUNCHER
 from sciplot_core.project_store.runtime import projected_runtime_artifact, project_read_window
 
 
@@ -40,3 +41,20 @@ def recorded_artifacts_ready(artifacts: Any) -> bool:
             if not recorded_path_exists(item["path"]):
                 return False
         return True
+
+
+def recorded_editor_launcher_current(
+    record: dict[str, Any], *, expected_root: Path, contract: dict[str, object],
+) -> bool:
+    """Match every recorded legacy editor field; a partial record is invalid."""
+    path = record.get("open_in_sciplot")
+    return bool(
+        isinstance(path, str)
+        and path.strip()
+        and path_identity(Path(path).expanduser())
+        == path_identity(expected_root / DELIVERY_EDITOR_LAUNCHER)
+        and contract.get("ready") is True
+        and record.get("open_in_sciplot_sha256") == contract.get("content_sha256")
+        and launcher_contract_identity(record.get("editor_launcher_contract"))
+        == launcher_contract_identity(contract)
+    )
