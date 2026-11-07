@@ -89,31 +89,28 @@ def make_delivery_binding(
         else None
     )
     source = None
-    if (
-        request_path is not None
-        and request_path.name == "plot_request.json"
-        and request_path.is_file()
-    ):
-        try:
-            request = json.loads(request_path.read_text(encoding="utf-8"))
-            delivery = (
-                request.get("delivery_output") if isinstance(request, dict) else None
-            )
-            source_value = request.get("input") if isinstance(request, dict) else None
-            if (
-                not isinstance(delivery, str)
-                or literal_source_path(Path(delivery).expanduser()) != logical_root
-            ):
-                request_path = None
-            elif isinstance(source_value, str) and source_value.strip():
-                source_path = Path(source_value).expanduser()
-                if not source_path.is_absolute():
-                    source_path = request_path.parent / source_path
-                source = str(source_path.resolve())
-            else:
-                request_path = None
-        except (OSError, ValueError):
-            request_path = None
+    if request_path is not None and request_path.name == "plot_request.json":
+        # A named canonical request is an observation, not an optional hint.
+        # Preserve permission, missing-file and JSON failures instead of claiming
+        # a successful ownerless package after losing the declared evidence.
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        if not isinstance(request, dict):
+            raise ValueError("The declared canonical plotting request must be an object.")
+        delivery = request.get("delivery_output")
+        if delivery is None:
+            request_path = None  # This request does not bind a visible package.
+        elif not isinstance(delivery, str) or not delivery.strip():
+            raise ValueError("The declared delivery output must be a non-empty path.")
+        elif literal_source_path(Path(delivery).expanduser()) != logical_root:
+            request_path = None  # A package for another destination is portable.
+        else:
+            source_value = request.get("input")
+            if not isinstance(source_value, str) or not source_value.strip():
+                raise ValueError("The bound canonical plotting request has no source.")
+            source_path = Path(source_value).expanduser()
+            if not source_path.is_absolute():
+                source_path = request_path.parent / source_path
+            source = str(source_path.resolve())
     else:
         request_path = None
     plan = manifest.get("resolved_figure_plan")
@@ -166,6 +163,8 @@ def read_delivery_binding(root: Path) -> DeliveryBinding | None:
                 or type(value["version"]) is not int or value["version"] != DELIVERY_IDENTITY_VERSION):
             raise ValueError("The delivery identity record is malformed.")
         return delivery_binding_from_payload(value["binding"]) if value["binding"] is not None else None
+    if path.is_symlink():
+        raise ValueError("The legacy delivery identity is not a valid SciPlot launcher.")
     if not path.exists():
         return None
     # The only compatibility format is the complete known v1 shell. It is never
@@ -173,13 +172,17 @@ def read_delivery_binding(root: Path) -> DeliveryBinding | None:
     from sciplot_core.launchers.delivery_inspection import inspect_delivery_launcher_contract
     from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
 
-    if path.is_symlink() or inspect_delivery_launcher_contract(root).get("ready") is not True:
+    if inspect_delivery_launcher_contract(root).get("ready") is not True:
         raise ValueError("The legacy delivery identity is not a valid SciPlot launcher.")
     return delivery_binding_from_content(path.read_text(encoding="utf-8"))
 
 
 def inspect_delivery_identity(root: Path) -> dict[str, object]:
-    """Observe exact non-executable identity bytes, without claiming source QA."""
+    """Observe inert JSON bytes, without executing it or claiming source QA.
+
+    An executable mode bit does not make JSON a product entry/capability; Store
+    admission still binds registered member modes independently.
+    """
     path = root / DELIVERY_IDENTITY
     binding = None
     error = None

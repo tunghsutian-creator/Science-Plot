@@ -15,8 +15,7 @@ from sciplot_core.delivery.package_builder import _build_staged_delivery
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
-from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding
-from delivery_identity_helpers import write_legacy_delivery_launcher
+from delivery_identity_helpers import write_legacy_delivery_launcher, make_generated_v6_fixture
 from sciplot_core.launchers.delivery_inspection import inspect_delivery_launcher_contract
 from sciplot_core.project_store import FileProjectStore, ResourceRoot
 from sciplot_core.project_store.runtime import project_runtime, projected_runtime_directory, projected_runtime_project_root, resolve_runtime_path
@@ -65,17 +64,7 @@ def _project_and_delivery(tmp_path: Path, *, foreign_binding: str | None = None,
     if legacy_identity:
         # Preserve all original executable-mode/cache/forgery assertions against
         # their actual v6 format. New inert controls are separate below.
-        binding = read_delivery_binding(delivery)
-        launcher = write_legacy_delivery_launcher(delivery, binding=binding)
-        (delivery / DELIVERY_IDENTITY).unlink()
-        record["version"] = 6
-        for key in ("identity", "identity_sha256", "identity_contract"):
-            record.pop(key)
-        contract = inspect_delivery_launcher_contract(delivery)
-        record.update(open_in_veusz=str(launcher), open_in_veusz_sha256=contract["content_sha256"], launcher_contract=contract)
-        for artifact in record["artifacts"]:
-            if artifact["id"] == "delivery_identity":
-                artifact.update(id="open_in_veusz", path=str(launcher), details=contract)
+        record = make_generated_v6_fixture(delivery, record)
         record["verification"] = verify_delivery_package(record, expected_root=delivery, expected_manifest=manifest)
         assert record["verification"]["passed"], record["verification"]
     if foreign_binding is not None:

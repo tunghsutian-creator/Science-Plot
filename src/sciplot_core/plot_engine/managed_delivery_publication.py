@@ -85,7 +85,7 @@ def publish(root: Path, state: dict[str, Any], *, checkpoint: Callable[[], None]
                                   "tiff_300": f"tiff/{stem}_300dpi.tiff"}})
     manifest = {"kind": "sciplot_managed_delivery", "version": 1, "title": state["request"]["title"],
                 "mode": "native_snapshot", "managed_project_included": False, "items": entries,
-                "continuation": "Local ManagedPlot paths are provenance, not portable registry bindings. Edit the independent VSZ snapshot in Veusz; it never updates the originals.",
+                "continuation": "Local ManagedPlot paths are provenance, not portable registry bindings. Continue changes through the current original ManagedPlot AI commands; these independent native snapshots never update the originals.",
                 "publication_qa": "Each original ManagedPlot passed its existing export owner; native Save preserved its complete state.",
                 "journal_acceptance_evaluated": False}
     (candidate / "README.txt").write_text(
@@ -93,7 +93,7 @@ def publish(root: Path, state: dict[str, Any], *, checkpoint: Callable[[], None]
         "This package contains independent native snapshots. Continue canonical changes through the original ManagedPlot AI commands; snapshots do not update originals.\n"
         "Original source bytes are retained under data/originals. Exact sealed PlotIR and per-dataset CSVs are under data/plotted. CSVs retain each dataset length and round-trip numeric values; roles/units/provenance remain in the IR and index.json.\n"
         "This is not a portable ManagedPlot project. Local continuation paths only work while their original bindings remain current.\n"
-        "Figures.zip contains this frozen delivery before any later manual edits.\n", encoding="utf-8")
+        "Figures.zip contains this frozen delivery; later package changes are not included.\n", encoding="utf-8")
     manifest["snapshot_files"] = file_inventory(candidate)
     manifest["manifest_sha256"] = digest(manifest)
     (candidate / "index.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

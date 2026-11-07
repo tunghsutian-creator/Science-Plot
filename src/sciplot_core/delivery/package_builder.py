@@ -47,7 +47,7 @@ from sciplot_core.delivery.package_validation import (
 from sciplot_core.delivery.plan_binding import plan_source_figure_ids
 from sciplot_core.delivery.package_transaction import (
     _package_snapshot,
-    _preserve_recorded_editor,
+    _preserve_recorded_launchers,
     publish_delivery_transaction,
 )
 
@@ -307,7 +307,7 @@ def _build_staged_delivery(
         delivery_record["resolved_figure_plan"] = manifest.get("resolved_figure_plan")
     delivery_record["complete"] = all(item["exists"] for item in artifact_status)
     if delivery_record["complete"]:
-        _preserve_recorded_editor(
+        _preserve_recorded_launchers(
             final_root, delivery_dir,
             previous_record=(previous_delivery if previous_delivery is not None
                              else manifest.get("delivery_package")),

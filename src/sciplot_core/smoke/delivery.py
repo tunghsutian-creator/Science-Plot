@@ -6,8 +6,8 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.delivery.runtime_evidence import recorded_editor_launcher_current, recorded_delivery_identity
-from sciplot_core.launchers import inspect_delivery_editor_launcher_contract
+from sciplot_core.delivery.runtime_evidence import recorded_editor_launcher_current, recorded_delivery_identity, recorded_legacy_veusz_current
+from sciplot_core.launchers import inspect_delivery_editor_launcher_contract, inspect_delivery_launcher_contract
 
 
 def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
@@ -20,6 +20,9 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         "open_in_sciplot", "open_in_sciplot_sha256", "editor_launcher_contract"))
     if editor_recorded:
         expected_entries.add("Open_in_SciPlot.command")
+    native_legacy_recorded = delivery.get("version") == 7 and "legacy_veusz_launcher" in delivery
+    if native_legacy_recorded:
+        expected_entries.add("Open_in_Veusz.command")
     actual_entries = (
         {path.name for path in delivery_path.iterdir()}
         if delivery_path.is_dir()
@@ -102,6 +105,10 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
     editor_current = editor_probe is None or recorded_editor_launcher_current(
         delivery, expected_root=delivery_path, contract=editor_probe)
 
+    native_legacy_probe = inspect_delivery_launcher_contract(delivery_path) if native_legacy_recorded else None
+    native_legacy_current = native_legacy_probe is None or recorded_legacy_veusz_current(
+        delivery, expected_root=delivery_path, contract=native_legacy_probe)
+
     passed = (
         delivery_path.is_dir()
         and actual_entries == expected_entries
@@ -120,6 +127,7 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         and all(item["in_project"] and item["exists"] for item in project_locations)
         and all(identity_checks.values())
         and editor_current
+        and native_legacy_current
     )
     return {
         "passed": passed,
@@ -132,4 +140,5 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         "projects": project_locations,
         "identity": identity_probe,
         "legacy_editor_launcher": editor_probe,
+        "legacy_veusz_launcher": native_legacy_probe,
     }

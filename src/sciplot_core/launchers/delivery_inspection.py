@@ -21,7 +21,7 @@ def inspect_delivery_launcher_contract(
 
     root = Path(delivery_dir).expanduser().resolve()
     launcher = root / DELIVERY_LAUNCHER
-    exists = launcher.is_file()
+    exists = launcher.is_file() and not launcher.is_symlink()
     executable = bool(exists and launcher.stat().st_mode & 0o111)
     try:
         content = launcher.read_text(encoding="utf-8") if exists else ""

@@ -57,7 +57,7 @@ def resolve_delivery_target(path: Path) -> dict[str, Any] | None:
         else documents[0]
     )
     if primary not in documents:
-        primary = documents[0]
+        raise ValueError("The delivery is missing its explicitly bound primary document.")
     print(
         f"Opening portable Veusz copy: {primary}. This copy does not update the original SciPlot project.",
         file=sys.stderr,

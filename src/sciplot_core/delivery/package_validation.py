@@ -5,17 +5,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 from sciplot_core.delivery.runtime_evidence import (
-    path_identity, recorded_artifacts_ready, recorded_editor_launcher_current, recorded_delivery_identity,
+    path_identity, recorded_artifacts_ready, recorded_editor_launcher_current, recorded_delivery_identity, recorded_legacy_veusz_current,
 )
 
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.launchers import (
     inspect_delivery_editor_launcher_contract,
+    inspect_delivery_launcher_contract,
 )
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
     DELIVERY_EDITOR_LAUNCHER,
+    DELIVERY_LAUNCHER,
     DELIVERY_PDF_DIR,
     DELIVERY_PROJECT_DIR,
     DELIVERY_TIFF_DIR,
@@ -94,6 +96,9 @@ def verify_delivery_package(
     }
     if editor_recorded:
         expected_top_level.add(DELIVERY_EDITOR_LAUNCHER)
+    native_legacy_recorded = record.get("version") == DELIVERY_PACKAGE_CONTRACT_VERSION and "legacy_veusz_launcher" in record
+    if native_legacy_recorded:
+        expected_top_level.add(DELIVERY_LAUNCHER)
     metadata = inspect_delivery_metadata(expected, expected_top_level=expected_top_level)
     data_check = _recorded_file_set(
         record.get("data_csvs"),
@@ -164,6 +169,9 @@ def verify_delivery_package(
     editor_launcher_current = not editor_recorded or recorded_editor_launcher_current(
         record, expected_root=expected, contract=live_editor_contract,
     )
+    native_legacy_contract = inspect_delivery_launcher_contract(expected) if native_legacy_recorded else {}
+    native_legacy_current = not native_legacy_recorded or recorded_legacy_veusz_current(
+        record, expected_root=expected, contract=native_legacy_contract)
     artifacts = record.get("artifacts")
     plan_artifact = (
         next(
@@ -329,6 +337,7 @@ def verify_delivery_package(
         "resolved_figure_plan_figure_hashes": plan_figure_hashes_current,
         **identity_checks,
         "editor_launcher_current": editor_launcher_current,
+        "legacy_veusz_launcher_current": native_legacy_current,
         "artifact_records_current": artifact_records_ready,
     }
     return {
@@ -349,4 +358,5 @@ def verify_delivery_package(
         "resolved_figure_plan_binding": plan_record_binding,
         ("identity" if record.get("version") == DELIVERY_PACKAGE_CONTRACT_VERSION else "launcher"): live_identity,
         "editor_launcher": live_editor_contract if editor_recorded else None,
+        "legacy_veusz_launcher": native_legacy_contract if native_legacy_recorded else None,
     }

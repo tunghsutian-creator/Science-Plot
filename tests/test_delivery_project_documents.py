@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from delivery_identity_helpers import write_legacy_delivery_launcher
+from delivery_identity_helpers import write_legacy_delivery_launcher, make_generated_v6_fixture
 
 from copy import deepcopy
 from pathlib import Path
@@ -1469,22 +1469,14 @@ def test_delivery_metadata_preservation_does_not_overwrite_linked_candidate_targ
 
 
 def test_v6_delivery_migrates_to_inert_v7_without_losing_recorded_browser_history(tmp_path):
-    from sciplot_core.delivery_identity import read_delivery_binding, DELIVERY_IDENTITY
+    from sciplot_core.delivery_identity import DELIVERY_IDENTITY
 
     run, manifest, _ = _builder_manifest(tmp_path)
     previous = build_delivery_package(run, manifest=manifest)
     root = Path(previous["path"])
-    binding = read_delivery_binding(root)
-    launcher = write_legacy_delivery_launcher(root, binding=binding)
-    (root / DELIVERY_IDENTITY).unlink()
-    previous["version"] = 6
-    for key in ("identity", "identity_sha256", "identity_contract"):
-        previous.pop(key)
-    contract = inspect_delivery_launcher_contract(root)
-    previous.update(open_in_veusz=str(launcher), open_in_veusz_sha256=contract["content_sha256"], launcher_contract=contract)
-    for artifact in previous["artifacts"]:
-        if artifact["id"] == "delivery_identity":
-            artifact.update(id="open_in_veusz", path=str(launcher), details=contract)
+    previous = make_generated_v6_fixture(root, previous)
+    old_native = (root / "Open_in_Veusz.command").read_bytes()
+    old_mode = (root / "Open_in_Veusz.command").stat().st_mode
     _historical_editor(previous)
     old_editor = (root / "Open_in_SciPlot.command").read_bytes()
     assert verify_delivery_package(previous, expected_root=root, expected_manifest=manifest)["passed"]
@@ -1492,5 +1484,8 @@ def test_v6_delivery_migrates_to_inert_v7_without_losing_recorded_browser_histor
     assert record["version"] == 7 and record["complete"] is True
     assert (root / "Open_in_SciPlot.command").read_bytes() == old_editor
     assert (root / DELIVERY_IDENTITY).is_file()
-    assert not (root / "Open_in_Veusz.command").exists()
+    assert (root / "Open_in_Veusz.command").read_bytes() == old_native
+    assert (root / "Open_in_Veusz.command").stat().st_mode == old_mode
+    assert record["legacy_veusz_launcher"]["sha256"] == existing_file_sha256(root / "Open_in_Veusz.command")
+    assert record["verification"]["checks"]["legacy_veusz_launcher_current"]
     assert record["verification"]["passed"]
