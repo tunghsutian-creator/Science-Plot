@@ -444,6 +444,11 @@ arbitrary or historical observation plugins cannot establish supported closure.
 Review the original raw streams, process ownership and durable completion;
 never supply a self-asserted `capture_complete` flag as evidence.
 
+For a generated owned-server control under capture, reuse `audited_socket_directory`
+and pass its exact `engine.sock` through `SCIPLOT_ENGINE_SOCKET`.
+An arbitrary temporary socket is outside the captured public child's capability;
+ordinary unobserved success does not exercise that process boundary.
+
 Audit attachment pins the current absolute source path before inherited Python
 paths, so changing a child working directory cannot select another editable
 checkout. Seal durable identity against the actual public target environment;
