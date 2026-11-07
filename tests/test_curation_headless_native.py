@@ -98,10 +98,50 @@ def test_public_generated_torque_curation_prepares_once_then_exports_exact_selec
         run = published.run_payload
         assert published.ready_to_use, run
         assert run["qa"]["status"] == "passed", run
-        assert run["result"]["scientific_data_verification"]["status"] == "passed", run
+        # run_payload is the bounded publication summary. Scientific facts live
+        # in its explicitly returned, atomically installed full manifest.
+        manifest_path = Path(run["manifest"])
+        assert manifest_path == Path(run["output"]) / "manifest.json"
+        manifest_bytes = manifest_path.read_bytes()
+        assert (
+            store.read_bytes(
+                manifest_path.relative_to(project).as_posix(),
+                generation=run["project_command"]["generation"],
+            )
+            == manifest_bytes
+        )
+        manifest = json.loads(manifest_bytes)
+        for field in (
+            "output",
+            "figures",
+            "qa",
+            "package_contract",
+            "delivery_package",
+            "delivery_verification",
+            "state",
+            "ready_to_use",
+            "scope",
+        ):
+            assert run[field] == manifest[field], field
+        assert published.exports == run["exports"] == manifest["result"]["exports"]
+        assert (
+            manifest["result"]["scientific_data_verification"]["status"] == "passed"
+        ), manifest
+        assert (
+            published.document_sha256
+            == run["document_sha256"]
+            == manifest["exported_document_hash"]
+            == manifest["result"]["exported_document_hash"]
+            == file_sha256(document)
+        )
+        assert Path(manifest["veusz_document"]).read_bytes() == native_bytes
         assert run["delivery_verification"]["passed"] is True, run
         assert {item["format"] for item in published.exports} == {"pdf", "tiff_300"}
         assert all(Path(item["path"]).is_file() for item in published.exports)
+        for item in published.exports:
+            assert Path(item["path"]).read_bytes() == Path(item["source"]).read_bytes()
+            assert file_sha256(Path(item["path"])) == item["sha256"]
+            assert item["document_sha256"] == published.document_sha256
         assert len(preparations) == 1
         assert document.read_bytes() == native_bytes
         assert (
@@ -134,7 +174,9 @@ def test_public_generated_torque_curation_prepares_once_then_exports_exact_selec
                         len(points) for _, _, points in original.values()
                     ],
                     "qa": run["qa"]["status"],
-                    "scientific": run["result"]["scientific_data_verification"][
+                    "manifest": str(manifest_path),
+                    "manifest_sha256": file_sha256(manifest_path),
+                    "scientific": manifest["result"]["scientific_data_verification"][
                         "status"
                     ],
                     "delivery": run["delivery_verification"],
