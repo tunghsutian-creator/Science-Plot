@@ -1,6 +1,7 @@
 """Public operation continuity is projected from the current object authority."""
 
 from copy import deepcopy
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 import sys
 from types import ModuleType
@@ -12,6 +13,7 @@ from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.object_operations import attach_object_operations, plot_object_handle
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_engine.storage import commit
+from sciplot_core.plot_document.requests import PatchRequest
 
 
 def test_existing_editable_object_declares_real_operations(tmp_path: Path) -> None:
@@ -136,9 +138,23 @@ def test_native_object_uses_same_spine_without_semantic_import(native_owner, tmp
     decision = {"decision_id": "native-decision", "base_revision": 412, "accept": True}
     resume = {"plot_id": "native:main", "base_revision": 412, "idempotency_key": "legend-edit"}
     for name, request in (("patch", patch), ("decide", decision), ("resume", resume)):
+        count = len(calls)
         result = getattr(service, name)(target, request)
         assert result["operation"] == name
-        assert calls[-1] == (name, target, request)
+        assert len(calls) == count + 2
+        assert calls[count] == ("resolve", target, None)
+        if name == "patch":
+            operation, destination, admitted = calls[-1]
+            assert (operation, destination) == (name, target)
+            assert type(admitted) is PatchRequest
+            assert admitted.to_payload() == request
+            snapshot = admitted.to_payload()
+            snapshot["changes"][0]["value"] = "mutated outside the request"
+            assert admitted.to_payload() == request
+            with pytest.raises(FrozenInstanceError):
+                admitted.body = None
+        else:
+            assert calls[-1] == (name, target, request)
     assert service.export(target)["operation"] == "export"
     assert calls[-1] == ("export", target, None)
     assert not target.parent.exists()

@@ -34,24 +34,36 @@ ASSISTANT_DISCLOSURE_TYPED_PATHS = (
     "src/sciplot_core/assistant_provider/disclosure.py",
     "src/sciplot_core/openai_provider/observations.py",
 )
-ASSISTANT_DISCLOSURE_GUI_PATHS = (
-    "src/sciplot_gui/assistant_runtime.py",
-    "src/sciplot_gui/studio_assistant/dock.py",
-    "src/sciplot_gui/studio_assistant/request_context.py",
-    "src/sciplot_gui/studio_assistant/request_flow.py",
-    "src/sciplot_gui/studio_assistant/context_history.py",
-    "src/sciplot_gui/studio_assistant/rejection.py",
-)
-ASSISTANT_HISTORY_PATHS = tuple(
-    f"src/sciplot_gui/studio_assistant_history/{name}.py"
-    for name in ("__init__", "builder", "contracts", "operations", "storage", "validation", "values")
-)
 ASSISTANT_DISCLOSURE_TARGETS = {
     "tests/test_assistant_disclosure_facts.py",
-    "tests/test_studio_assistant_disclosure.py",
     "tests/test_assistant_contract.py",
     "tests/test_ai_transport_lifecycle.py",
 }
+ASSISTANT_PROVIDER_TARGETS = ASSISTANT_DISCLOSURE_TARGETS | {
+    "tests/test_compatibility_facades.py",
+    "tests/test_automation_baseline.py::test_external_model_call_guard_counts_and_blocks_the_production_adapter",
+}
+ASSISTANT_HISTORY_TARGETS = ASSISTANT_DISCLOSURE_TARGETS | {
+    "tests/test_assistant_history.py", "tests/test_iso_timestamps.py",
+}
+# Retain each old consumer's responsibility, without restoring its GUI writer.
+# History builders/appenders are test fixtures; production history is read-only.
+RETAINED_ASSISTANT_CONSUMERS = (
+    ("src/sciplot_gui/assistant_runtime.py", "src/sciplot_core/assistant_provider/progress.py"),
+    ("src/sciplot_gui/studio_assistant/dock.py", "src/sciplot_core/assistant_provider/provider.py"),
+    ("src/sciplot_gui/studio_assistant/request_context.py", "src/sciplot_core/assistant_provider/context_documents.py"),
+    ("src/sciplot_gui/studio_assistant/request_flow.py", "src/sciplot_core/assistant_provider/request.py"),
+    ("src/sciplot_gui/studio_assistant/context_history.py", "src/sciplot_core/assistant_history/storage.py"),
+    ("src/sciplot_gui/studio_assistant/rejection.py", "src/sciplot_core/assistant_provider/response.py"),
+    ("src/sciplot_gui/studio_assistant_history/__init__.py", "src/sciplot_core/assistant_history/__init__.py"),
+    ("src/sciplot_gui/studio_assistant_history/builder.py", "tests/assistant_history_fixtures/builder.py"),
+    ("src/sciplot_gui/studio_assistant_history/contracts.py", "src/sciplot_core/assistant_history/contracts.py"),
+    ("src/sciplot_gui/studio_assistant_history/operations.py", "tests/assistant_history_fixtures/operations.py"),
+    ("src/sciplot_gui/studio_assistant_history/storage.py", "src/sciplot_core/assistant_history/storage.py"),
+    ("src/sciplot_gui/studio_assistant_history/validation.py", "src/sciplot_core/assistant_history/validation.py"),
+    ("src/sciplot_gui/studio_assistant_history/values.py", "src/sciplot_core/assistant_history/values.py"),
+    ("tests/test_studio_assistant_disclosure.py", "tests/test_assistant_disclosure_facts.py"),
+)
 
 
 @pytest.mark.parametrize("path", [
@@ -69,38 +81,41 @@ ASSISTANT_DISCLOSURE_TARGETS = {
     "tests/test_assistant_contract.py",
     "tests/test_ai_transport_lifecycle.py",
 ])
-def test_assistant_provider_changes_select_core_and_gui_disclosure_consumers(path):
+def test_assistant_provider_changes_select_core_disclosure_consumers(path):
     if path.startswith("src/"):
         assert (REPO_ROOT / path).is_file()
     plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
     assert plan["unowned_paths"] == []
     assert "openai_assistant_provider" in {owner["owner_id"] for owner in plan["owners"]}
     command = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
-    assert ASSISTANT_DISCLOSURE_TARGETS <= set(command)
+    assert ASSISTANT_PROVIDER_TARGETS <= set(command)
+    assert "tests/test_studio_assistant_disclosure.py" not in command
     assert "full_pytest" in plan["required_later"]["release"]
 
 
-@pytest.mark.parametrize("path", [
-    *ASSISTANT_DISCLOSURE_GUI_PATHS, *ASSISTANT_HISTORY_PATHS,
-    "tests/test_studio_assistant_disclosure.py",
-])
-def test_assistant_gui_changes_select_the_existing_gui_owner_and_core_consumers(path):
-    if path.startswith("src/"):
-        assert (REPO_ROOT / path).is_file()
+@pytest.mark.parametrize("retired,path", RETAINED_ASSISTANT_CONSUMERS,
+    ids=[retired for retired, _path in RETAINED_ASSISTANT_CONSUMERS])
+def test_retired_assistant_consumers_keep_their_core_fact_and_history_evidence(retired, path):
+    assert not (REPO_ROOT / retired).exists()
+    retired_plan = build_changed_verification_plan([retired], repo_root=REPO_ROOT)
+    assert retired_plan["unowned_paths"] == [retired]
+    assert retired_plan["owners"] == []
+    assert (REPO_ROOT / path).is_file()
     plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
     assert plan["unowned_paths"] == []
     owners = {owner["owner_id"] for owner in plan["owners"]}
-    assert "native_assistant_dock" in owners
+    history = "/assistant_history/" in path or "/assistant_history_fixtures/" in path
+    assert ("assistant_history" if history else "openai_assistant_provider") in owners
+    assert "native_assistant_dock" not in owners
     command = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
-    assert ASSISTANT_DISCLOSURE_TARGETS <= set(command)
+    assert (ASSISTANT_HISTORY_TARGETS if history else ASSISTANT_PROVIDER_TARGETS) <= set(command)
+    assert "tests/test_studio_assistant_disclosure.py" not in command
     assert "full_pytest" in plan["required_later"]["release"]
-    if path in ASSISTANT_HISTORY_PATHS:
-        assert "tests/test_iso_timestamps.py" in command
+    if history:
         assert {p.relative_to(REPO_ROOT).as_posix()
-                for p in (REPO_ROOT / "src/sciplot_gui/studio_assistant_history").glob("*.py")} == set(ASSISTANT_HISTORY_PATHS)
-    if path.endswith("context_history.py"):
-        assert "native_document_edit" in owners
-        assert "tests/test_native_document_edit.py" in command
+                for p in (REPO_ROOT / "src/sciplot_core/assistant_history").glob("*.py")} == {
+            f"src/sciplot_core/assistant_history/{name}.py"
+            for name in ("__init__", "contracts", "storage", "validation", "values")}
 
 
 def test_assistant_disclosure_adds_only_its_three_reviewed_strict_files():
@@ -171,13 +186,13 @@ def test_external_control_regressions_select_their_behavior_owner(path: str) -> 
 @pytest.mark.parametrize(
     "path",
     [
-        "src/sciplot_gui/studio_assistant/proposal_application.py",
-        "src/sciplot_gui/studio_assistant/selection.py",
+        "src/sciplot_core/assistant_operations.py",
+        "src/sciplot_core/assistant_selection.py",
         "src/sciplot_core/veusz_worker/cli.py",
         "src/sciplot_core/veusz_worker/operations.py",
     ],
 )
-def test_shared_native_edit_boundaries_select_native_and_gui_regressions(
+def test_shared_native_edit_boundaries_select_native_and_core_contract_regressions(
     path: str,
 ) -> None:
     plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
@@ -185,6 +200,14 @@ def test_shared_native_edit_boundaries_select_native_and_gui_regressions(
     commands = {item["check_id"]: item["command"] for item in plan["checks"]}
     assert "tests/test_native_document_edit.py" in commands["pytest_changed_owners"]
     assert "tests/test_assistant_contract.py" in commands["pytest_changed_owners"]
+    assert "native_document_edit" in {owner["owner_id"] for owner in plan["owners"]}
+    retired = {
+        "src/sciplot_core/assistant_operations.py": "src/sciplot_gui/studio_assistant/proposal_application.py",
+        "src/sciplot_core/assistant_selection.py": "src/sciplot_gui/studio_assistant/selection.py",
+    }.get(path)
+    if retired is not None:
+        assert not (REPO_ROOT / retired).exists()
+        assert build_changed_verification_plan([retired], repo_root=REPO_ROOT)["unowned_paths"] == [retired]
 
 
 def test_external_control_batch_keeps_one_focused_pass_and_defers_full_gate() -> None:

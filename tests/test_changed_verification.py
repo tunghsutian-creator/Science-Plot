@@ -285,6 +285,7 @@ def test_changed_owners_build_one_deduplicated_focused_pass() -> None:
         "documentation_contract",
         "changed_verification",
         "intake_project",
+        "scientific_transaction_type_gate",
     ]
     checks = {check["check_id"]: check for check in payload["checks"]}
     pytest_command = checks["pytest_changed_owners"]["command"]
@@ -300,13 +301,15 @@ def test_changed_owners_build_one_deduplicated_focused_pass() -> None:
     assert set(checks) == {
         "ruff_changed_python",
         "pytest_shared_contracts",
+        "mypy_owned_scope",
         "pytest_changed_owners",
         "diff_whitespace",
     }
+    assert checks["mypy_owned_scope"]["command"] == [sys.executable, "-m", "mypy"]
     assert payload["required_later"] == {
         "handoff": ["doctor"],
         "final_milestone": ["smoke"],
-        "release": ["full_pytest"],
+        "release": ["acceptance_rules", "full_pytest"],
     }
     generated = " ".join(
         part for check in payload["checks"] for part in check["command"]
@@ -574,16 +577,18 @@ def test_scientific_transaction_type_owner_adds_mypy_once(path: str) -> None:
     assert commands.count([sys.executable, "-m", "mypy"]) == 1
 
 
-def test_unrelated_scientific_transform_path_does_not_add_mypy() -> None:
+def test_scientific_transform_path_keeps_its_configured_strict_type_gate() -> None:
     payload = build_changed_verification_plan(
         ["src/sciplot_core/semantic_sources/rheology_confirmation.py"],
         repo_root=REPO_ROOT,
     )
 
     assert [owner["owner_id"] for owner in payload["owners"]] == [
-        "scientific_transform"
+        "scientific_transform", "scientific_transaction_type_gate",
     ]
-    assert all(check["check_id"] != "mypy_owned_scope" for check in payload["checks"])
+    commands = {check["check_id"]: check["command"] for check in payload["checks"]}
+    assert commands["mypy_owned_scope"] == [sys.executable, "-m", "mypy"]
+    assert TYPE_SCOPE_PARTITION_TARGET in commands["pytest_changed_owners"]
 
 
 def test_studio_registry_state_selects_snapshot_binding_evidence() -> None:
