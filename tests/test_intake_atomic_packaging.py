@@ -1185,7 +1185,10 @@ def test_studio_package_preparation_failure_is_explicit(
 ) -> None:
     project_dir = tmp_path / "project"
     project_dir.mkdir()
-    convergence_calls: list[Path] = []
+    legacy = project_dir / "Open_SciPlot_Project.command"
+    legacy.write_bytes(b"historical registered UI entry; never rewritten or executed")
+    legacy.chmod(0o751)
+    original = legacy.read_bytes(), legacy.stat().st_mode
 
     def fail_prepare(
         command: list[str],
@@ -1197,16 +1200,7 @@ def test_studio_package_preparation_failure_is_explicit(
             stderr="synthetic Studio preparation failure",
         )
 
-    def record_convergence(path: str | Path, **_kwargs: object) -> dict[str, object]:
-        convergence_calls.append(Path(path))
-        return {}
-
     monkeypatch.setattr(packaging.subprocess, "run", fail_prepare)
-    monkeypatch.setattr(
-        packaging,
-        "converge_intake_project_launchers",
-        record_convergence,
-    )
 
     with pytest.raises(
         RuntimeError,
@@ -1214,7 +1208,7 @@ def test_studio_package_preparation_failure_is_explicit(
     ):
         packaging._prepare_studio_project_package(project_dir)
 
-    assert convergence_calls == []
+    assert (legacy.read_bytes(), legacy.stat().st_mode) == original
 
 
 def test_failed_studio_preparation_does_not_refresh_project_zip(

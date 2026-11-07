@@ -155,42 +155,34 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
     artifacts = {
         "manifest": _artifact_info(
             run_output / "manifest.json",
-            project_slug=project_slug,
             authorized_root=project_path,
         ),
         "analysis_report": _artifact_info(
             run_output / "analysis_report.md",
-            project_slug=project_slug,
             authorized_root=project_path,
         ),
         "analysis_metrics": _artifact_info(
             run_output / "tables" / "analysis_metrics.csv",
-            project_slug=project_slug,
             authorized_root=project_path,
         ),
         "revision_brief": _artifact_info(
             run_output / "revision_brief.md",
-            project_slug=project_slug,
             authorized_root=project_path,
         ),
         "review_html": _artifact_info(
             run_output / "review.html",
-            project_slug=project_slug,
             authorized_root=project_path,
         ),
         "intervention_request": _artifact_info(
             intervention_path,
-            project_slug=project_slug,
             authorized_root=project_path,
         ),
         "assisted_cleanup_request": _artifact_info(
             cleanup_request_path,
-            project_slug=project_slug,
             authorized_root=project_path,
         ),
         "cleanup_result": _artifact_info(
             cleanup_result_path,
-            project_slug=project_slug,
             authorized_root=project_path,
         ),
     }
@@ -206,13 +198,11 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
     if isinstance(project_file, str) and project_file.strip():
         artifacts["delivery_project"] = _artifact_info(
             Path(project_file),
-            project_slug=project_slug,
             authorized_root=project_path,
         )
     artifacts["delivery_data"] = [
         _artifact_info(
             Path(str(item.get("path"))),
-            project_slug=project_slug,
             authorized_root=project_path,
         )
         for item in data_csvs
@@ -231,14 +221,13 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         {
             **_artifact_info(
                 path,
-                project_slug=project_slug,
                 authorized_root=project_path,
             ),
             "canonical_figure_stem": canonical_figure_stem(path),
         }
         for path in figure_paths
     ]
-    preview_figure = _figure_preview_info(figure_paths, project_slug=project_slug)
+    preview_figure = _figure_preview_info(figure_paths)
     cleanup_result = _read_json_if_exists(cleanup_result_path)
     cleanup_ready = bool(
         cleanup_result and cleanup_result.get("ready_for_normal_mode") is True

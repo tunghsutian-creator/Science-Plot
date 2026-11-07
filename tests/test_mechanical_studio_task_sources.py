@@ -475,8 +475,6 @@ def test_exact_current_mechanical_reuse_rejects_missing_ready_secondary_artifact
     def record_registration(*_args: object, **_kwargs: object) -> None:
         metadata_writes.append("registration")
 
-    monkeypatch.setattr(prepare_existing, "_write_studio_launcher", record_launcher)
-    monkeypatch.setattr(prepare_existing, "_write_veusz_launcher", record_launcher)
     monkeypatch.setattr(
         prepare_existing,
         "_write_export_edited_launcher",

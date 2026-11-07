@@ -10,7 +10,6 @@ import sys
 import zipfile as zipfile
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import safe_filename
 from sciplot_core._paths import resolved_path_is_within
@@ -113,7 +112,6 @@ def _project_dir_fromslug(output_root: Path, project_slug: str) -> Path:
 def _artifact_info(
     path: Path,
     *,
-    project_slug: str,
     authorized_root: Path | None = None,
 ) -> dict[str, Any]:
     display_path = path
@@ -147,12 +145,7 @@ def _artifact_info(
         "mtime_ns": artifact_stat.st_mtime_ns if artifact_stat is not None else 0,
         "content_type": mimetypes.guess_type(path.name)[0]
         or "application/octet-stream",
-        "url": (
-            f"/api/projects/{quote(project_slug)}/artifact?"
-            f"path={quote(str(display_path), safe='')}"
-            if exists
-            else None
-        ),
+
     }
 
 
@@ -176,7 +169,6 @@ def _download_info(path: Path, *, authorized_root: Path) -> dict[str, Any]:
         "mtime_ns": download_stat.st_mtime_ns if download_stat is not None else 0,
         "content_type": mimetypes.guess_type(path.name)[0]
         or "application/octet-stream",
-        "url": f"/api/download/{quote(path.name)}" if exists else None,
     }
 
 
@@ -185,7 +177,6 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
     export_edited_launcher = project_dir / PROJECT_EXPORT_LAUNCHER
     export_edited_launcher_info = _artifact_info(
         export_edited_launcher,
-        project_slug=project_slug,
         authorized_root=project_dir,
     )
     export_edited_launcher_info["executable"] = bool(
@@ -195,7 +186,6 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
     studio_documents = [
         _artifact_info(
             path,
-            project_slug=project_slug,
             authorized_root=project_dir,
         )
         for path in sorted((project_dir / "studio").glob("*.vsz"))
@@ -203,7 +193,6 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
     sciplot_manifests = [
         _artifact_info(
             path,
-            project_slug=project_slug,
             authorized_root=project_dir,
         )
         for path in sorted(project_dir.glob("*.sciplot.json"))

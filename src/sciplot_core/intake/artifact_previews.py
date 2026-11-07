@@ -55,7 +55,7 @@ def _write_pdf_preview(source_path: Path, preview_path: Path) -> None:
         pixmap.save(str(preview_path))
 
 
-def _figure_preview_info(figures: list[Path], *, project_slug: str) -> dict[str, Any]:
+def _figure_preview_info(figures: list[Path]) -> dict[str, Any]:
     existing_images = [
         figure
         for figure in figures
@@ -64,7 +64,7 @@ def _figure_preview_info(figures: list[Path], *, project_slug: str) -> dict[str,
         and figure.suffix.casefold() in {".png", ".jpg", ".jpeg"}
     ]
     for image_path in existing_images:
-        info = _artifact_info(image_path, project_slug=project_slug)
+        info = _artifact_info(image_path)
         return {**info, "display_kind": "image", "source_path": str(image_path)}
 
     source_figures = [
@@ -82,7 +82,7 @@ def _figure_preview_info(figures: list[Path], *, project_slug: str) -> dict[str,
     for source_path in image_sources:
         preview_path = _preview_path_for_figure(source_path)
         if _preview_is_fresh(preview_path, source_path, min_width_px=600):
-            info = _artifact_info(preview_path, project_slug=project_slug)
+            info = _artifact_info(preview_path)
             return {**info, "display_kind": "image", "source_path": str(source_path)}
 
     for source_path in image_sources:
@@ -91,13 +91,13 @@ def _figure_preview_info(figures: list[Path], *, project_slug: str) -> dict[str,
             _write_image_preview(source_path, preview_path)
         except Exception:
             continue
-        info = _artifact_info(preview_path, project_slug=project_slug)
+        info = _artifact_info(preview_path)
         return {**info, "display_kind": "image", "source_path": str(source_path)}
 
     for source_path in pdf_sources:
         preview_path = _preview_path_for_figure(source_path)
         if _preview_is_fresh(preview_path, source_path):
-            info = _artifact_info(preview_path, project_slug=project_slug)
+            info = _artifact_info(preview_path)
             return {**info, "display_kind": "image", "source_path": str(source_path)}
 
     for source_path in pdf_sources:
@@ -106,11 +106,11 @@ def _figure_preview_info(figures: list[Path], *, project_slug: str) -> dict[str,
             _write_pdf_preview(source_path, preview_path)
         except Exception:
             continue
-        info = _artifact_info(preview_path, project_slug=project_slug)
+        info = _artifact_info(preview_path)
         return {**info, "display_kind": "image", "source_path": str(source_path)}
 
     for source_path in pdf_sources:
-        info = _artifact_info(source_path, project_slug=project_slug)
+        info = _artifact_info(source_path)
         return {**info, "display_kind": "pdf", "source_path": str(source_path)}
 
     return {
@@ -120,7 +120,6 @@ def _figure_preview_info(figures: list[Path], *, project_slug: str) -> dict[str,
         "size_bytes": 0,
         "mtime_ns": 0,
         "content_type": "",
-        "url": None,
         "display_kind": "none",
         "source_path": "",
     }
