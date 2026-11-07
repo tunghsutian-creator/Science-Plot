@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 from typing import Any
-from sciplot_core.policy.frame_export import export_suffix
+from sciplot_core.policy.export_formats import export_suffix
 from sciplot_core.foundation.file_hashing import (
     existing_file_sha256,
 )

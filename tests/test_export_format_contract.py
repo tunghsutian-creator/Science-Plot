@@ -46,3 +46,24 @@ def test_pdf_tiff_pairing_uses_one_canonical_stem_contract() -> None:
     assert canonical_figure_stem("Figure_A.pdf") == "figure_a"
     assert canonical_figure_stem("Figure_A_300dpi.tiff") == "figure_a"
     assert canonical_figure_stem("Figure_A_600DPI.png") == "figure_a"
+
+
+def test_native_filename_policy_is_outside_the_retained_rendering_closure() -> None:
+    import json
+    from pathlib import Path
+
+    from sciplot_core.policy import frame_export
+    from sciplot_core.policy.export_formats import export_format_from_path, export_suffix
+    from sciplot_core.rendering_contract import contract_binding, legacy_algorithms
+
+    root = Path(__file__).resolve().parents[1] / "src/sciplot_core"
+    pinned = json.loads((root / "rendering_contract/styles/sciplot-legacy-layout-algorithms-v1.json").read_text())
+    before = legacy_algorithms.extract_algorithm_binding(root)
+    assert before == pinned
+    assert legacy_algorithms.require_legacy_algorithms(contract_binding())["content_hash"] == pinned["content_hash"]
+    for fmt in frame_export.CANONICAL_EXPORT_FORMATS:
+        suffix, _dpi = export_suffix(fmt)
+        assert export_format_from_path("Generated figure" + suffix) == fmt
+    assert not hasattr(frame_export, "export_suffix") and not hasattr(frame_export, "export_format_from_path")
+    assert "policy/export_formats.py" not in before["sources"]
+    assert legacy_algorithms.extract_algorithm_binding(root) == before

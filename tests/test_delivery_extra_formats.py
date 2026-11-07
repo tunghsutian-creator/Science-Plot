@@ -12,7 +12,8 @@ import pytest
 from sciplot_core.delivery.package_builder import build_delivery_package
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.policy.frame_export import CANONICAL_EXPORT_FORMATS, export_format_from_path, export_suffix
+from sciplot_core.policy.frame_export import CANONICAL_EXPORT_FORMATS
+from sciplot_core.policy.export_formats import export_format_from_path, export_suffix
 from sciplot_core.qa.run import run_qa
 from sciplot_core.studio_core.export_verification import _verify_qa_artifact_hashes
 from test_delivery_project_documents import _builder_manifest

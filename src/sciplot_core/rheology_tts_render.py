@@ -129,7 +129,7 @@ def export_tts_documents(
 
 def _validate_export_batch(request: dict[str, Any]) -> list[tuple[Path, Path, dict[str, Any]]]:
     """Validate the transport and target set before any native side effects."""
-    from sciplot_core.policy.frame_export import export_suffix
+    from sciplot_core.policy.export_formats import export_suffix
 
     if set(request) != {"action", "documents"} or request["action"] != "export_batch":
         raise ValueError("Invalid native batch export request.")

@@ -9,7 +9,8 @@ from xml.etree import ElementTree
 
 import pymupdf as fitz
 
-from sciplot_core.policy.frame_export import canonical_figure_stem, export_format_from_path, export_suffix
+from sciplot_core.policy.frame_export import canonical_figure_stem
+from sciplot_core.policy.export_formats import export_format_from_path, export_suffix
 from sciplot_core.qa.artifacts import _canonical_artifacts, _raster_visual_qa
 from sciplot_core.qa.raster_inspection import _png_info
 from sciplot_core.style_values import physical_size_points

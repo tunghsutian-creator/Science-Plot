@@ -12,7 +12,8 @@ from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.delivery_identity import (
     inspect_delivery_identity, write_delivery_identity, make_delivery_binding,
 )
-from sciplot_core.policy.frame_export import CANONICAL_EXPORT_FORMATS, export_format_from_path
+from sciplot_core.policy.frame_export import CANONICAL_EXPORT_FORMATS
+from sciplot_core.policy.export_formats import export_format_from_path
 from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.plot_data import build_plot_data_exports
 from sciplot_core.policy import (

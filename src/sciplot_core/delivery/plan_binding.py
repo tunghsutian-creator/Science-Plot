@@ -9,7 +9,8 @@ from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.policy import canonical_figure_stem
-from sciplot_core.policy.frame_export import CANONICAL_EXPORT_FORMATS, export_format_from_path
+from sciplot_core.policy.frame_export import CANONICAL_EXPORT_FORMATS
+from sciplot_core.policy.export_formats import export_format_from_path
 
 
 class RecordSourceMismatchPayload(TypedDict):

@@ -86,7 +86,8 @@ def _recorded_file_set(
 def rendered_file_sets(records: object, *, directory: Path) -> dict[str, dict[str, Any]]:
     """The finite supported figure formats share one exact file-set owner."""
     from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadata
-    from sciplot_core.policy.frame_export import export_format_from_path, canonical_export_format
+    from sciplot_core.policy.frame_export import canonical_export_format
+    from sciplot_core.policy.export_formats import export_format_from_path
 
     result: dict[str, dict[str, Any]] = {}
     for kind, suffixes in (("pdf", {".pdf"}), ("tiff", {".tif", ".tiff"}), ("png", {".png"}), ("svg", {".svg"})):
@@ -119,7 +120,7 @@ def additional_figure_contract_current(records: object, manifest: dict[str, Any]
     """Requested extra formats cannot disappear with their entire record/file."""
     from sciplot_core.delivery.plan_binding import figure_artifact_hashes_current
     from sciplot_core.foundation.source_locations import literal_source_path
-    from sciplot_core.policy.frame_export import export_format_from_path
+    from sciplot_core.policy.export_formats import export_format_from_path
 
     def extra(path: object) -> bool:
         return isinstance(path, str) and export_format_from_path(path) in {"png_300", "png_600", "svg"}

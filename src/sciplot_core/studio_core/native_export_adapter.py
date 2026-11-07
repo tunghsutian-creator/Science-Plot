@@ -6,7 +6,7 @@ import json
 from importlib import import_module
 import subprocess
 import sys
-from sciplot_core.policy.frame_export import export_suffix
+from sciplot_core.policy.export_formats import export_suffix
 from sciplot_core.native_process import active_worker, run_worker
 from pathlib import Path
 from typing import Any

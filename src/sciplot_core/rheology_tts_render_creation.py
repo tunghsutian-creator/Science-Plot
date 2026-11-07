@@ -15,7 +15,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.studio_core.project_session import external_project_session
-from sciplot_core.policy.frame_export import export_suffix
+from sciplot_core.policy.export_formats import export_suffix
 from sciplot_core.studio_core.source_update_commit import reject_symlink_path
 
 from sciplot_core.rheology_tts_creation_bindings import _check_sources, _literal, _context
