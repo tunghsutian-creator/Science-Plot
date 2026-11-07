@@ -58,13 +58,26 @@ def document_evidence(root: Path, *, attachment: Attachment | None = None,
         attachment = Attachment(store, entry)
     assert snapshot is not None
     prefix = attachment.entry["namespace"] + "/"
-    members = {name.removeprefix(prefix): attachment.store.read_bytes(name, generation=snapshot["generation"])
-               for name in snapshot["files"] if name.startswith(prefix)}
-    for relative, logical in attachment.entry.get("archived_derivatives", {}).items():
+    names = tuple(name for name in snapshot["files"] if name.startswith(prefix))
+    aliases = tuple(attachment.entry.get("archived_derivatives", {}).items())
+    for relative, logical in aliases:
         if (not logical.startswith(prefix + "archive/") or str(Path(relative)) != relative
                 or Path(relative).is_absolute() or ".." in Path(relative).parts or not derived_relative(Path(relative))):
             raise ValueError("The attached document has an invalid immutable history resource.")
-        members[relative] = attachment.store.read_bytes(logical, generation=snapshot["generation"])
+    # One finite canonical capture; archive aliases name the same logical bytes.
+    # The original Store owner still reads/verifies every member in generation G.
+    observation = attachment.store.observe_members((*names, *(logical for _, logical in aliases)),
+        generation=snapshot["generation"], projection=False)
+    data = {}
+    for logical, member in observation.members.items():
+        if member.data is None:
+            from sciplot_core.project_store.errors import ProjectStoreError
+
+            raise ProjectStoreError("The logical resource is not a member of this generation.")
+        data[logical] = member.data
+    members = {name.removeprefix(prefix): data[name] for name in names}
+    for relative, logical in aliases:
+        members[relative] = data[logical]
     captured = FrozenNamespaceRepository(attachment.origin, attachment.root, members)
     with repository_scope(captured):
         # Validate the original sealed envelope before projecting runtime paths.

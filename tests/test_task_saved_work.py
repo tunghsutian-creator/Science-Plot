@@ -25,6 +25,223 @@ def inventory(root):
 
 
 @pytest.fixture
+def saved_fact_attachment(tmp_path):
+    from managed_plot_helpers import request_for_source
+    from test_attached_semantic_repository import application
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.project_lifecycle.attachment_index import Attachment, INDEX, encode, read_index
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+
+    project = tmp_path / 'project'
+    project.mkdir()
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    with project_runtime(store):
+        created = application().create(request_for_source(project))
+    snapshot = store.snapshot()
+    index = read_index(store, snapshot)
+    entry = next(iter(index['attachments'].values()))
+    prefix = entry['namespace'] + '/'
+    entry['archived_derivatives'] = {'renders/empty.bin': prefix + 'archive/empty.bin',
+        'ir/history.json': prefix + 'archive/bucket/history.json'}
+    writes = {INDEX: encode(index), prefix + 'archive/empty.bin': b'',
+              prefix + 'archive/bucket/history.json': b'{"fixture":"inert derived history"}'}
+    mutation = ProjectMutation(writes, {})
+    command = ProjectCommand.create('semantic_record', 'saved-fact-archive', project_id=snapshot['project_id'],
+        expected_generation=snapshot['generation'],
+        read_set={name: snapshot['files'].get(name, {}).get('sha256') for name in writes},
+        write_set=list(writes), request={'prepared_digest': mutation.prepared_digest})
+    ProjectCommands(store).publish_prepared(command, mutation)
+    snapshot = store.snapshot()
+    entry = next(iter(read_index(store, snapshot)['attachments'].values()))
+    attachment = Attachment(store, entry)
+    output = attachment.output
+    assert output is not None
+    for product in output.glob('artifacts/*/document.vsz'):
+        product.unlink()  # The existing pure adapter has no compiler marker.
+    return store, snapshot, attachment, created
+
+
+def test_saved_fact_namespace_has_one_admission_and_consumes_each_member(saved_fact_attachment, monkeypatch):
+    from collections import Counter
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_store import state
+    from sciplot_core.project_store.io import StoreIO
+
+    store, snapshot, attachment, created = saved_fact_attachment
+    prefix = attachment.entry['namespace'] + '/'
+    names = tuple(name for name in snapshot['files'] if name.startswith(prefix))
+    reads, gets, calls = Counter(), Counter(), []
+    original_history, original_get = state._read_checked_head, StoreIO.get
+    original_observe, original_evidence = store.observe_members, evidence._document_evidence
+    def history(io):
+        reads['head'] += 1
+        return original_history(io)
+    def get(io, entry):
+        gets[entry.get('file_id')] += 1
+        return original_get(io, entry)
+    def observe(requested=(), **kwargs):
+        calls.append((tuple(requested), kwargs))
+        result = original_observe(requested, **kwargs)
+        if len(calls) == 1:
+            # Count this finite capture, before the independent runtime/source
+            # admission and final fresh-generation fence enter their own reads.
+            assert reads['head'] == 1
+            assert set(requested) == set(names)
+            assert kwargs == {'generation': snapshot['generation'], 'projection': False}
+            assert all(gets[snapshot['files'][name]['file_id']] == 2 for name in names)
+        return result
+    def semantic(*args, **kwargs):
+        # An empty archived object is valid data, not an absent member.
+        from sciplot_core.project_lifecycle.context import content_snapshot
+        assert content_snapshot(attachment.origin / 'renders/empty.bin')['bytes'] == b''
+        return original_evidence(*args, **kwargs)
+    before = inventory(store.root)
+    monkeypatch.setattr(state, '_read_checked_head', history)
+    monkeypatch.setattr(StoreIO, 'get', get)
+    monkeypatch.setattr(store, 'observe_members', observe)
+    monkeypatch.setattr(evidence, '_document_evidence', semantic)
+    result = evidence.document_evidence(attachment.root, attachment=attachment, snapshot=snapshot)
+    assert calls and all(not any(name.startswith(prefix) for name in requested)
+                         for requested, _ in calls[1:])
+    assert result['current'] and result['scientific_hash'] == created['scientific_hash']
+    assert inventory(store.root) == before
+
+
+@pytest.mark.parametrize('changed', ['head', 'member'])
+def test_saved_fact_batch_rejects_changed_head_or_member(saved_fact_attachment, monkeypatch, changed):
+    import os
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_store import ProjectStoreError
+    from sciplot_core.project_store.io import StoreIO
+
+    store, snapshot, attachment, created = saved_fact_attachment
+    logical = attachment.entry['namespace'] + '/archive/empty.bin'
+    target = snapshot['files'][logical]
+    path = store.root / '.sciplot_store' / ('head.json' if changed == 'head' else
+        'objects/' + target['sha256'][:2] + '/' + target['sha256'])
+    info, data = path.stat(), path.read_bytes()
+    before = inventory(store.root)
+    reads = 0
+    original = StoreIO.get
+    def get(io, entry):
+        nonlocal reads
+        if entry.get('file_id') == target['file_id']:
+            reads += 1
+            if reads == 2:
+                # The current head has admitted the object. Its requested
+                # member read must still observe and reject new bytes.
+                path.write_bytes(b'changed after admission')
+        return original(io, entry)
+    if changed == 'head':
+        value = json.loads(data)
+        value['sha256'] = 'f' * 64
+        path.write_text(json.dumps(value))
+    else:
+        monkeypatch.setattr(StoreIO, 'get', get)
+    try:
+        with pytest.raises(ProjectStoreError):
+            evidence.document_evidence(attachment.root, attachment=attachment, snapshot=snapshot)
+        if changed == 'member':
+            assert reads == 2
+    finally:
+        path.write_bytes(data)
+        os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns))
+    assert inventory(store.root) == before
+    monkeypatch.setattr(StoreIO, 'get', original)
+    result = evidence.document_evidence(attachment.root, attachment=attachment, snapshot=snapshot)
+    assert result['current'] and result['scientific_hash'] == created['scientific_hash']
+    assert inventory(store.root) == before
+
+
+@pytest.mark.parametrize('kind', ['missing', 'directory'])
+def test_saved_fact_archive_nonfile_keeps_the_store_error(saved_fact_attachment, kind):
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_lifecycle.attachment_index import Attachment
+    from sciplot_core.project_store import ProjectStoreError
+
+    store, snapshot, attachment, _ = saved_fact_attachment
+    logical = attachment.entry['namespace'] + ('/archive/missing.bin' if kind == 'missing' else '/archive/bucket')
+    entry = {**attachment.entry, 'archived_derivatives': {'renders/absent.bin': logical}}
+    before = inventory(store.root)
+    with pytest.raises(ProjectStoreError, match='not a member of this generation'):
+        evidence.document_evidence(attachment.root, attachment=Attachment(store, entry), snapshot=snapshot)
+    assert inventory(store.root) == before
+
+
+def test_saved_fact_capture_consumes_only_the_admitted_archive_pairs(saved_fact_attachment, monkeypatch):
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_lifecycle.context import content_snapshot
+
+    store, snapshot, attachment, created = saved_fact_attachment
+    aliases = attachment.entry['archived_derivatives']
+    original_observe, original_evidence = store.observe_members, evidence._document_evidence
+    changed = False
+    def observe(names=(), **kwargs):
+        nonlocal changed
+        result = original_observe(names, **kwargs)
+        if not changed and any(name.startswith(attachment.entry['namespace'] + '/') for name in names):
+            changed = True
+            aliases.clear()
+            aliases['sources/injected.bin'] = attachment.entry['namespace'] + '/archive/empty.bin'
+        return result
+    def semantic(*args, **kwargs):
+        assert content_snapshot(attachment.origin / 'renders/empty.bin')['bytes'] == b''
+        with pytest.raises(FileNotFoundError):
+            content_snapshot(attachment.origin / 'sources/injected.bin')
+        return original_evidence(*args, **kwargs)
+    before = inventory(store.root)
+    monkeypatch.setattr(store, 'observe_members', observe)
+    monkeypatch.setattr(evidence, '_document_evidence', semantic)
+    result = evidence.document_evidence(attachment.root, attachment=attachment, snapshot=snapshot)
+    assert changed and result['current'] and result['scientific_hash'] == created['scientific_hash']
+    with pytest.raises(ValueError, match='invalid immutable history resource'):
+        evidence.document_evidence(attachment.root, attachment=attachment, snapshot=snapshot)
+    assert inventory(store.root) == before
+
+
+@pytest.mark.parametrize('relative,logical_suffix', [('../raw.csv', 'archive/empty.bin'),
+    ('renders/claimed.bin', '../A.csv'), ('sources/claimed.csv', 'archive/empty.bin')])
+def test_saved_fact_archive_cannot_expand_a_source_role(saved_fact_attachment, monkeypatch, relative, logical_suffix):
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_lifecycle.attachment_index import Attachment
+
+    store, snapshot, attachment, _ = saved_fact_attachment
+    entry = {**attachment.entry, 'archived_derivatives': {relative: attachment.entry['namespace'] + '/' + logical_suffix}}
+    before = inventory(store.root)
+    monkeypatch.setattr(store, 'observe_members', lambda *_a, **_k: pytest.fail('An invalid archive role reached Store IO.'))
+    with pytest.raises(ValueError, match='invalid immutable history resource'):
+        evidence.document_evidence(attachment.root, attachment=Attachment(store, entry), snapshot=snapshot)
+    assert inventory(store.root) == before
+
+
+def test_saved_fact_batch_does_not_hide_a_generation_published_after_capture(saved_fact_attachment, monkeypatch):
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+
+    store, snapshot, attachment, _ = saved_fact_attachment
+    original = store.observe_members
+    changed = False
+    def observe(names=(), **kwargs):
+        nonlocal changed
+        result = original(names, **kwargs)
+        if not changed and any(name.startswith(attachment.entry['namespace'] + '/') for name in names):
+            changed = True
+            mutation = ProjectMutation({'independent.txt': b'new generation'}, {})
+            command = ProjectCommand.create('semantic_record', 'after-query-capture', project_id=snapshot['project_id'],
+                expected_generation=snapshot['generation'], read_set={'independent.txt': None},
+                write_set=['independent.txt'], request={'prepared_digest': mutation.prepared_digest})
+            ProjectCommands(store).publish_prepared(command, mutation)
+        return result
+    raw = (store.root / 'A.csv').read_bytes()
+    monkeypatch.setattr(store, 'observe_members', observe)
+    with pytest.raises(ValueError, match='generation changed'):
+        evidence.document_evidence(attachment.root, attachment=attachment, snapshot=snapshot)
+    assert changed and (store.root / 'A.csv').read_bytes() == raw
+
+
+@pytest.fixture
 def managed(tmp_path):
     root, document, binding = _canonical(tmp_path)
     commit(root, document, binding, "managed_creation")
