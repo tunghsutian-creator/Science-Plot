@@ -55,8 +55,6 @@ from sciplot_core.studio_core.figure_task_evidence import (
 from sciplot_core.studio_core.json_files import _read_json
 from sciplot_core.studio_core.launchers import (
     _write_export_edited_launcher,
-    _write_studio_launcher,
-    _write_veusz_launcher,
 )
 from sciplot_core.studio_core.mechanical_plan_context import (
     initial_studio_study_model,
@@ -322,15 +320,11 @@ def generate_studio_document(
         figure_set_path_replacer=figure_set_path_replacer,
     )
     spec_path = _veusz_spec_path(document_path)
-    launcher = _write_studio_launcher(project_dir)
-    veusz_launcher = _write_veusz_launcher(project_dir, Path(require_preparation_candidate(project_dir).logical_path(str(document_path))))
     export_edited_launcher = _write_export_edited_launcher(project_dir)
     generated_hash = existing_file_sha256(document_path)
     studio_block = _studio_block(
         document_path=document_path,
         spec_path=spec_path,
-        launcher=launcher,
-        veusz_launcher=veusz_launcher,
         export_edited_launcher=export_edited_launcher,
         request_path=request_path,
         series_count=len(series),
@@ -359,8 +353,6 @@ def generate_studio_document(
         "project_dir": str(project_dir),
         "request": str(request_path),
         "document": str(document_path),
-        "launcher": str(launcher),
-        "veusz_launcher": str(veusz_launcher),
         "export_edited_launcher": str(export_edited_launcher),
         "series_count": len(series),
         "document_state": studio_block["document_state"],

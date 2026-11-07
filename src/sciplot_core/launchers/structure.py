@@ -27,7 +27,7 @@ from sciplot_core.launchers.delivery_binding import (
 )
 
 from sciplot_core.launchers.project_launcher import (
-    _canonical_project_launcher_lines,
+    _project_export_command_lines,
 )
 
 from sciplot_core.launchers.portable_values import (
@@ -117,28 +117,20 @@ def _launcher_structure(
     }
 
 
-def _project_launcher_structure(
-    content: str,
-    *,
-    role: str,
-) -> dict[str, object]:
-    required_command_lines = {
-        "primary_veusz_first_project": (
-            'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}"'
-        ),
-        "supporting_direct_veusz_editor": (
-            'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}"'
-        ),
-        "supporting_exact_current_export": (
-            'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}" --export pdf,tiff_300 --json'
-        ),
-    }
-    return _launcher_structure(
-        content,
-        expected_lines=_canonical_project_launcher_lines(role),
-        required_command_line=required_command_lines[role],
-        directory_var="PROJECT_DIR",
-    )
+def _project_export_command_structure(content: str) -> dict[str, object]:
+    from sciplot_core.launchers.content_hashing import _mask_portable_assignments
+
+    required = 'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}" --export pdf,tiff_300 --json'
+    for legacy in (False, True):
+        result = _launcher_structure(
+            content,
+            expected_lines=_mask_portable_assignments(_project_export_command_lines(legacy_check=legacy)),
+            required_command_line=required,
+            directory_var="PROJECT_DIR",
+        )
+        if result["canonical_structure"] is True:
+            return {**result, "format": "legacy_export_check" if legacy else "headless_export"}
+    return {**result, "format": None}
 
 
 def _delivery_launcher_structure(content: str) -> dict[str, object]:

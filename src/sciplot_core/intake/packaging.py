@@ -1,4 +1,4 @@
-"""Project archive, launcher, manifest, and preparation packaging."""
+"""Project archive, headless export command, manifest and preparation packaging."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.foundation.path_names import safe_filename
 from sciplot_core._paths import resolved_path_is_within
 from sciplot_core.assisted_cleanup import (
@@ -20,11 +19,8 @@ from sciplot_core.assisted_cleanup import (
     write_cleanup_request,
 )
 from sciplot_core.launchers import (
-    LEGACY_WEB_WORKBENCH_LAUNCHER,
     PROJECT_EXPORT_LAUNCHER,
-    PROJECT_PRIMARY_LAUNCHER,
-    PROJECT_VEUSZ_LAUNCHER,
-    inspect_project_launcher_contract,
+    inspect_project_export_command,
 )
 
 from .path_security import _resolve_path_within_root
@@ -39,55 +35,13 @@ def _write_zip(project_dir: Path, zip_path: Path) -> None:
     _write_zip_snapshot_unlocked(project_dir.expanduser().resolve(strict=True), zip_path)
 
 
-def _apply_launcher_contract_to_manifest(
-    manifest: dict[str, Any],
-    *,
-    contract: dict[str, object],
+def _apply_export_command_to_manifest(
+    manifest: dict[str, Any], *, command: dict[str, object],
 ) -> None:
-    supplied = contract.get("primary")
-    primary = supplied if isinstance(supplied, dict) else {}
-    primary_path = primary.get("path")
-    if contract.get("ready") is True and isinstance(primary_path, str):
-        manifest["launcher"] = primary_path
-    else:
-        manifest.pop("launcher", None)
-    manifest["launcher_contract"] = json_safe(contract)
-
-
-def converge_intake_project_launchers(
-    project_dir: str | Path,
-    *,
-    update_manifests: bool = True,
-) -> dict[str, object]:
-    """Retire the ambiguous Web launcher and register the Veusz-first entry."""
-
-    project = Path(project_dir).expanduser().resolve()
-    from sciplot_core.project_manifest import read_intake_project_manifest, stage_intake_project_manifest
-    from sciplot_core.project_store.adapters import project_storage_scope, publish_files
-
-    with locked_intake_project_manifest(project), project_storage_scope(project) as store:
-        snapshot = store.snapshot()
-        contract = inspect_project_launcher_contract(project)
-        legacy = contract["legacy_web_workbench_launcher"]
-        assert isinstance(legacy, dict)
-        legacy["present"] = False
-        primary, supporting = contract["primary"], contract["supporting"]
-        assert isinstance(primary, dict) and isinstance(supporting, dict)
-        ready = primary.get("safe") is True and all(item.get("safe") is True for item in supporting.values())
-        contract.update(ready=ready, status="ready" if ready else "blocked")
-        writes: dict[str, bytes | PreparedFile | None] = {}
-        if LEGACY_WEB_WORKBENCH_LAUNCHER in snapshot["files"]:
-            writes[LEGACY_WEB_WORKBENCH_LAUNCHER] = None
-        manifest = read_intake_project_manifest(project) if update_manifests else None
-        if manifest is not None:
-            _apply_launcher_contract_to_manifest(
-                manifest,
-                contract=contract,
-            )
-            writes.update(stage_intake_project_manifest(project, manifest, include_snapshot=False, store=store))
-        if writes:
-            publish_files(store, writes, kind="publish", result={"launcher_contract": contract})
-    return contract
+    """Record a headless tool in an explicitly prepared new manifest only."""
+    manifest.pop("launcher", None)
+    manifest.pop("launcher_contract", None)
+    manifest["headless_export_command"] = json_safe(command)
 
 
 def refresh_intake_project_zip(project_dir: str | Path) -> Path:
@@ -227,25 +181,7 @@ def _download_info(path: Path, *, authorized_root: Path) -> dict[str, Any]:
 
 
 def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, Any]:
-    launcher_contract = inspect_project_launcher_contract(project_dir)
-    studio_launcher = project_dir / PROJECT_PRIMARY_LAUNCHER
-    studio_launcher_info = _artifact_info(
-        studio_launcher,
-        project_slug=project_slug,
-        authorized_root=project_dir,
-    )
-    studio_launcher_info["executable"] = bool(
-        studio_launcher_info["exists"] and (studio_launcher.stat().st_mode & 0o111)
-    )
-    veusz_launcher = project_dir / PROJECT_VEUSZ_LAUNCHER
-    veusz_launcher_info = _artifact_info(
-        veusz_launcher,
-        project_slug=project_slug,
-        authorized_root=project_dir,
-    )
-    veusz_launcher_info["executable"] = bool(
-        veusz_launcher_info["exists"] and (veusz_launcher.stat().st_mode & 0o111)
-    )
+    command = inspect_project_export_command(project_dir)
     export_edited_launcher = project_dir / PROJECT_EXPORT_LAUNCHER
     export_edited_launcher_info = _artifact_info(
         export_edited_launcher,
@@ -275,10 +211,7 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
     zip_path = project_dir.parent / safe_filename(f"{project_slug}.zip")
     zip_info = _download_info(zip_path, authorized_root=project_dir.parent)
     studio_complete = bool(
-        studio_launcher_info["exists"]
-        and studio_launcher_info["executable"]
-        and veusz_launcher_info["exists"]
-        and veusz_launcher_info["executable"]
+        command["safe"] is True
         and export_edited_launcher_info["exists"]
         and export_edited_launcher_info["executable"]
         and studio_documents
@@ -287,18 +220,14 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
     return {
         "kind": "sciplot_project_package_status",
         "complete": bool(
-            launcher_contract["ready"] is True
-            and studio_complete
+            studio_complete
+            and (project_dir / "plot_request.json").is_file()
             and sciplot_manifests
             and all(item["exists"] for item in sciplot_manifests)
             and zip_info["exists"]
         ),
-        "launcher": studio_launcher_info,
-        "primary_launcher": studio_launcher_info,
-        "launcher_contract": json_safe(launcher_contract),
+        "headless_export_command": json_safe(command),
         "studio": {
-            "launcher": studio_launcher_info,
-            "veusz_launcher": veusz_launcher_info,
             "export_edited_launcher": export_edited_launcher_info,
             "documents": studio_documents,
             "complete": studio_complete,
@@ -313,12 +242,6 @@ def _studio_prepare_env() -> dict[str, str]:
 
 
 def _prepare_studio_project_package(project_dir: Path) -> None:
-    legacy = project_dir / LEGACY_WEB_WORKBENCH_LAUNCHER
-    if legacy.exists() or legacy.is_symlink():
-        from sciplot_core.project_store.adapters import project_storage_scope, publish_files
-
-        with project_storage_scope(project_dir) as store:
-            publish_files(store, {LEGACY_WEB_WORKBENCH_LAUNCHER: None}, kind="publish")
     try:
         subprocess.run(
             [
@@ -349,4 +272,3 @@ def _prepare_studio_project_package(project_dir: Path) -> None:
         raise RuntimeError(
             f"SciPlot Studio package preparation could not start for {project_dir}."
         ) from exc
-    converge_intake_project_launchers(project_dir)

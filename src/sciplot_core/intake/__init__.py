@@ -12,7 +12,6 @@ from .config import (
 from .models import IncomingFile, IntakeGroupInput
 from .packaging import (
     _write_zip as _write_zip,
-    converge_intake_project_launchers,
     refresh_intake_project_zip,
 )
 from .run import create_and_run_intake_project
@@ -33,7 +32,6 @@ __all__ = [
     "IncomingFile",
     "IntakeGroupInput",
     "SAXS_SCALING_REVIEW_NOTE",
-    "converge_intake_project_launchers",
     "converge_material_review_notes",
     "create_and_run_intake_project",
     "create_intake_project",

@@ -160,25 +160,18 @@ class StudioPreparationCandidate:
                     paths(figure, ("document", "spec"))
             plan(value.get("resolved_figure_plan"))
 
-        paths(result, ("project_dir", "request", "document", "launcher", "veusz_launcher", "export_edited_launcher"))
+        paths(result, ("project_dir", "request", "document", "export_edited_launcher"))
         plan(result.get("resolved_figure_plan"))
         figures(result.get("figure_set"))
         studio = result.get("studio")
         if isinstance(studio, dict):
-            paths(studio, ("document", "spec", "launcher", "veusz_launcher", "export_edited_launcher",
+            paths(studio, ("document", "spec", "export_edited_launcher",
                            "generated_from", "figure_set_registry"))
             figures(studio.get("figure_set"))
             plan(studio.get("resolved_figure_plan"))
-        contract = result.get("launcher_contract")
-        if isinstance(contract, dict):
-            primary = contract.get("primary")
-            if isinstance(primary, dict):
-                paths(primary, ("path",))
-            supporting = contract.get("supporting")
-            if isinstance(supporting, dict):
-                for item in supporting.values():
-                    if isinstance(item, dict):
-                        paths(item, ("path",))
+        command = result.get("headless_export_command")
+        if isinstance(command, dict):
+            paths(command, ("path",))
         return result
 
     def capture(self) -> dict[str, PreparedFile | None]:
@@ -319,14 +312,9 @@ def register_prepared_studio_block(project: Path, block: dict[str, Any]) -> None
     """Update the candidate's mirrors without publishing a nested head or ZIP."""
     candidate = require_preparation_candidate(project)
     from sciplot_core.figure_plan import sync_figure_plan_projection
-    from sciplot_core.launchers import LEGACY_WEB_WORKBENCH_LAUNCHER, inspect_project_launcher_contract
-    from sciplot_core.intake.packaging import _apply_launcher_contract_to_manifest
+    from sciplot_core.launchers import inspect_project_export_command
+    from sciplot_core.intake.packaging import _apply_export_command_to_manifest
 
-    with candidate.root_descriptor() as root:
-        try:
-            os.unlink(LEGACY_WEB_WORKBENCH_LAUNCHER, dir_fd=root)
-        except FileNotFoundError:
-            pass
     paths = [project / "intake_manifest.json", *sorted(project.glob("*.sciplot.json"))]
     payload = None
     for path in paths:
@@ -339,7 +327,7 @@ def register_prepared_studio_block(project: Path, block: dict[str, Any]) -> None
         return
     payload["studio"] = block
     sync_figure_plan_projection(payload, block)
-    _apply_launcher_contract_to_manifest(payload, contract=inspect_project_launcher_contract(project))
+    _apply_export_command_to_manifest(payload, command=inspect_project_export_command(project))
     data = json.dumps(payload, ensure_ascii=False, indent=2)
     for path in paths:
         candidate.write_member(path.relative_to(project).as_posix(), data.encode())

@@ -4,11 +4,7 @@ from __future__ import annotations
 
 from sciplot_core.launchers.contracts import (  # noqa: F401
     DELIVERY_LAUNCHER_CONTRACT_VERSION,
-    PROJECT_LAUNCHER_CONTRACT_VERSION,
-    PROJECT_PRIMARY_LAUNCHER,
-    PROJECT_VEUSZ_LAUNCHER,
     PROJECT_EXPORT_LAUNCHER,
-    LEGACY_WEB_WORKBENCH_LAUNCHER,
     _PORTABLE_PATH_ASSIGNMENTS,
     _PORTABLE_PATH_PLACEHOLDER,
     _PORTABLE_VSZ_PATH_PLACEHOLDER,
@@ -28,7 +24,7 @@ from sciplot_core.launchers.delivery_launcher import (  # noqa: F401
     _canonical_delivery_launcher_lines,
 )
 from sciplot_core.launchers.project_launcher import (  # noqa: F401
-    _canonical_project_launcher_lines,
+    _project_export_command_lines,
 )
 from sciplot_core.launchers.portable_values import (  # noqa: F401
     _normalize_shell_assignment,
@@ -37,7 +33,7 @@ from sciplot_core.launchers.portable_values import (  # noqa: F401
 )
 from sciplot_core.launchers.structure import (  # noqa: F401
     _launcher_structure,
-    _project_launcher_structure,
+    _project_export_command_structure,
     _delivery_launcher_structure,
 )
 from sciplot_core.launchers.delivery_inspection import (  # noqa: F401
@@ -47,20 +43,15 @@ from sciplot_core.launchers.delivery_editor_launcher import (
     inspect_delivery_editor_launcher_contract,
 )
 from sciplot_core.launchers.project_inspection import (  # noqa: F401
-    _project_launcher_record,
-    inspect_project_launcher_contract,
+    inspect_project_export_command,
 )
 
 __all__ = [
     "DELIVERY_LAUNCHER_CONTRACT_VERSION",
-    "LEGACY_WEB_WORKBENCH_LAUNCHER",
     "PROJECT_EXPORT_LAUNCHER",
-    "PROJECT_LAUNCHER_CONTRACT_VERSION",
-    "PROJECT_PRIMARY_LAUNCHER",
-    "PROJECT_VEUSZ_LAUNCHER",
     "inspect_delivery_launcher_contract",
     "inspect_delivery_editor_launcher_contract",
-    "inspect_project_launcher_contract",
+    "inspect_project_export_command",
     "portable_sciplot_prelude",
     "portable_vsz_finder",
 ]

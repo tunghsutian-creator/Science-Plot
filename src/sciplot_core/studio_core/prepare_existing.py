@@ -46,8 +46,6 @@ from sciplot_core.studio_core.figure_task_evidence import (
 from sciplot_core.studio_core.json_files import _read_json
 from sciplot_core.studio_core.launchers import (
     _write_export_edited_launcher,
-    _write_studio_launcher,
-    _write_veusz_launcher,
 )
 from sciplot_core.studio_core.presentation_evidence import (
     validate_prepared_studio_presentation,
@@ -205,8 +203,6 @@ def reuse_existing_studio_document(
     finally:
         if staged_request is not None:
             staged_request.unlink(missing_ok=True)
-    launcher = _write_studio_launcher(project_dir)
-    veusz_launcher = _write_veusz_launcher(project_dir, Path(require_preparation_candidate(project_dir).logical_path(str(document_path))))
     export_edited_launcher = _write_export_edited_launcher(project_dir)
     registered_generated_hash = (
         _figure_set_primary_generated_hash(figure_set)
@@ -216,8 +212,6 @@ def reuse_existing_studio_document(
     studio_block = _studio_block(
         document_path=document_path,
         spec_path=_veusz_spec_path(document_path),
-        launcher=launcher,
-        veusz_launcher=veusz_launcher,
         export_edited_launcher=export_edited_launcher,
         request_path=request_path,
         series_count=_count_veusz_series(document_path),
@@ -243,8 +237,6 @@ def reuse_existing_studio_document(
         "project_dir": str(project_dir),
         "request": str(request_path),
         "document": str(document_path),
-        "launcher": str(launcher),
-        "veusz_launcher": str(veusz_launcher),
         "export_edited_launcher": str(export_edited_launcher),
         "series_count": studio_block["series_count"],
         "document_state": studio_block["document_state"],

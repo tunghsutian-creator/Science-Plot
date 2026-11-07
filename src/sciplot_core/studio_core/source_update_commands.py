@@ -147,10 +147,6 @@ def source_mutation(project: Path, candidate: Path, review: dict[str, Any], *,
                 raise ValueError("Annotated source installation requires reviewed provenance relocation")
             relocated = relocate_companion(value, relocated)
         path.write_text(json.dumps(relocated, ensure_ascii=False, indent=2))
-    if (candidate / "Open_in_Veusz.command").exists():
-        from sciplot_core.studio_core.launchers import _write_veusz_launcher
-
-        _write_veusz_launcher(candidate, project / "studio/document.vsz")
     writes: dict[str, bytes | Path | PreparedFile | None] = {}
     artifacts: dict[str, bytes | Path] = {"review.json": json.dumps(review, ensure_ascii=False, allow_nan=False).encode()}
     for logical in before:
