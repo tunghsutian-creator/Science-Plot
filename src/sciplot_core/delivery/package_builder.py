@@ -56,6 +56,7 @@ from sciplot_core.delivery.package_transaction import (
 def build_delivery_package(
     output_dir: Path, *, manifest: dict[str, Any],
     previous_delivery: dict[str, Any] | None = None,
+    output_namespace: Path | None = None,
 ) -> dict[str, Any]:
     """Build the small user-facing delivery surface.
 
@@ -78,6 +79,7 @@ def build_delivery_package(
             delivery_dir=stage,
             final_root=root,
             previous_delivery=previous_delivery,
+            output_namespace=output_namespace,
         ),
     )
 
@@ -89,6 +91,7 @@ def _build_staged_delivery(
     delivery_dir: Path,
     final_root: Path,
     previous_delivery: dict[str, Any] | None = None,
+    output_namespace: Path | None = None,
 ) -> dict[str, Any]:
     data_dir = delivery_dir / DELIVERY_DATA_DIR
     pdf_dir = delivery_dir / DELIVERY_PDF_DIR
@@ -137,7 +140,8 @@ def _build_staged_delivery(
     identity = write_delivery_identity(
         delivery_dir,
         binding=make_delivery_binding(
-            root=final_root, manifest=manifest, documents=project_records
+            root=final_root, manifest=manifest, documents=project_records,
+            output_namespace=output_namespace,
         ),
     )
     identity_contract = inspect_delivery_identity(delivery_dir)

@@ -22,10 +22,11 @@ def make_delivery_binding(
     root: Path,
     manifest: dict[str, Any],
     documents: list[dict[str, Any]],
+    output_namespace: Path | None = None,
 ) -> DeliveryBinding | None:
     if not documents:
         return None
-    logical_root = literal_source_path(root)
+    logical_root = _output_root_literal(root, namespace=output_namespace)
     baseline = tuple(
         (Path(str(item["path"])).name, str(item["delivery_sha256"]))
         for item in documents
@@ -49,7 +50,9 @@ def make_delivery_binding(
             request_path = None  # This request does not bind a visible package.
         elif not isinstance(delivery, str) or not delivery.strip():
             raise ValueError("The declared delivery output must be a non-empty path.")
-        elif literal_source_path(Path(delivery).expanduser()) != logical_root:
+        elif str(Path(delivery).expanduser().resolve()) not in {
+            str(root.expanduser().resolve()), logical_root,
+        }:
             request_path = None  # A package for another destination is portable.
         else:
             source_value = request.get("input")
@@ -78,6 +81,27 @@ def make_delivery_binding(
         primary=primary,
         documents=baseline,
     )
+
+
+def _output_root_literal(root: Path, *, namespace: Path | None) -> str:
+    """Project an admitted output position, never a future scientific source.
+
+    Only the publication host supplies a whole-directory namespace. Its exact
+    selected capability identifies the original root, including a cold move;
+    it does not certify future members or authorize their publication.
+    """
+    if namespace is None:
+        return literal_source_path(root)
+    from sciplot_core.foundation.canonical_paths import canonical_path
+    from sciplot_core.project_store.runtime import literal_runtime_project_root, selected_project_store
+
+    if selected_project_store() is None:
+        raise ValueError("A delivery output namespace requires an explicitly selected project capability.")
+    physical_root = canonical_path(root)
+    physical_namespace = canonical_path(namespace)
+    relative = physical_root.relative_to(physical_namespace)
+    original_namespace = literal_runtime_project_root(physical_namespace)
+    return str(Path(original_namespace) / relative)
 
 
 def delivery_identity_path(root: Path) -> Path:

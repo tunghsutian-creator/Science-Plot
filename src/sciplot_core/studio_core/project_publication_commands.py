@@ -169,6 +169,10 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
     delivery_root = repository.locations.get("delivery", project / "delivery" if
         (project / ".sciplot_store/local_locations.json").exists() else
         requested_delivery_root({"request": canonical_request}, run_output=project))
+    # Output positions can be absent from the read generation. Identify them
+    # through the existing whole host root, not scientific member resolution.
+    delivery_namespace = (delivery_root if repository.locations.get("delivery") == delivery_root
+                          else project if delivery_root.is_relative_to(project) else None)
     from sciplot_core.delivery.package_transaction import (
         _package_snapshot, _preserve_finder_metadata, _protect_editable_documents,
     )
@@ -213,6 +217,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         payload = prepare_studio_export_run(project_dir=project, request_path=request, document_path=document,
             exports=exports, export_document_sha256=native_hash, primary_native_audit=primary_native_audit,
             output_dir=run, secondary_output_dir=secondary, delivery_dir=delivery, delivery_root=delivery_root,
+            delivery_namespace=delivery_namespace,
             **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}))
         payload["document_sha256"] = native_hash
         payload["figure_set"] = {"primary_figure_id": primary_figure_id, "figures": selected_figures}
