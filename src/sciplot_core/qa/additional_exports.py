@@ -2,6 +2,7 @@
 
 from collections import Counter
 from hashlib import sha256
+import math
 from pathlib import Path
 from typing import Any, Protocol, cast
 from xml.etree import ElementTree
@@ -11,20 +12,56 @@ import pymupdf as fitz
 from sciplot_core.policy.frame_export import canonical_figure_stem, export_format_from_path, export_suffix
 from sciplot_core.qa.artifacts import _canonical_artifacts, _raster_visual_qa
 from sciplot_core.qa.raster_inspection import _png_info
+from sciplot_core.style_values import physical_size_points
 
 
 class _OpenDocument(Protocol):
     def __call__(self, *, stream: bytes, filetype: str) -> fitz.Document: ...
 
 
+def _svg_physical_canvas(root: ElementTree.Element) -> dict[str, Any]:
+    """Read explicit native viewport units, independently of decoder pixels."""
+    dimensions = {key: root.get(key) for key in ("width", "height")}
+    points = []
+    for dimension in dimensions.values():
+        if not isinstance(dimension, str):
+            raise ValueError("SVG physical width and height require explicit absolute units.")
+        value = dimension.strip()
+        if value.endswith("px"):
+            # SVG/CSS absolute px is 1/96in; PDF pt is 1/72in. The native
+            # Veusz exporter declares px with svgdpi=96. Do not resize bytes.
+            points.append(physical_size_points(value[:-2] + "pt") * 72 / 96)
+        elif value.endswith(("pt", "mm", "cm", "in")):
+            points.append(physical_size_points(value))
+        else:
+            raise ValueError("Unsupported SVG physical canvas unit; use explicit px, pt, mm, cm or in.")
+    if not all(math.isfinite(value) for value in points):
+        raise ValueError("SVG physical canvas dimensions must be finite.")
+    view_box = root.get("viewBox")
+    coordinates = None
+    if view_box is not None:
+        coordinates = [float(value) for value in view_box.replace(",", " ").split()]
+        if (len(coordinates) != 4 or not all(math.isfinite(value) for value in coordinates)
+                or coordinates[2] <= 0 or coordinates[3] <= 0):
+            raise ValueError("SVG viewBox must declare four finite coordinates and a positive canvas.")
+    return {"declared_dimensions": dimensions, "physical_size_pt": points,
+            "css_pixels_per_inch": 96, "declared_view_box": view_box, "view_box": coordinates}
+
+
 def _visual_info(path: Path, content: bytes) -> dict[str, Any]:
+    svg_canvas = None
     if path.suffix.casefold() == ".svg":
         root = ElementTree.fromstring(content)
         if root.tag != "{http://www.w3.org/2000/svg}svg":
             raise ValueError(f"Not a native SVG artifact: {path}")
+        if root.get("style") is not None:
+            raise ValueError("Stylesheet-dependent SVG physical dimensions are outside the native canvas contract.")
+        svg_canvas = _svg_physical_canvas(root)
         for node in root.iter():
             if node.tag.rsplit("}", 1)[-1] in {"script", "foreignObject"}:
                 raise ValueError(f"Active SVG content is not a native figure artifact: {path}")
+            if node.tag.rsplit("}", 1)[-1] == "style":
+                raise ValueError("Stylesheet-dependent SVG physical dimensions are outside the native canvas contract.")
             if any(key.rsplit("}", 1)[-1] == "href" and not value.startswith(("#", "data:"))
                    for key, value in node.attrib.items()):
                 raise ValueError(f"An SVG artifact cannot import external content: {path}")
@@ -34,8 +71,14 @@ def _visual_info(path: Path, content: bytes) -> dict[str, Any]:
         page = document.load_page(0)
         rectangle = page.rect
         visual = _raster_visual_qa(page.get_pixmap(alpha=False))
-    return {"path": str(path), "size_bytes": len(content), "sha256": sha256(content).hexdigest(),
-            "media_box_pt": [float(rectangle.width), float(rectangle.height)], "visual_qa": visual}
+    report = {"path": str(path), "size_bytes": len(content), "sha256": sha256(content).hexdigest(),
+              "visual_qa": visual}
+    canvas = [float(rectangle.width), float(rectangle.height)]
+    if svg_canvas is not None:
+        report.update(svg_canvas=svg_canvas, decoder_canvas_pt=canvas)
+    else:
+        report["media_box_pt"] = canvas
+    return report
 
 
 def additional_export_reports(output_dir: Path, pdfs: list[dict[str, Any]], *, required: set[str]) -> dict[str, list[dict[str, Any]]]:
@@ -69,7 +112,7 @@ def additional_export_reports(output_dir: Path, pdfs: list[dict[str, Any]], *, r
             report.update(raster, pixel_quantization_bound={"pdf_points": 1, "raster_pixels": 1})
             reports["pngs"].append(report)
         else:
-            if any(abs(actual - float(expected)) > 1.0 for actual, expected in zip(report["media_box_pt"], pdf["media_box_pt"], strict=True)):
+            if any(abs(actual - float(expected)) > 1.0 for actual, expected in zip(report["svg_canvas"]["physical_size_pt"], pdf["media_box_pt"], strict=True)):
                 raise ValueError(f"SVG does not match the same native figure canvas: {path}")
             report["coverage"] = "native byte binding, one canvas and raster visibility; no PDF font or journal claim"
             reports["svgs"].append(report)
