@@ -371,6 +371,155 @@ def test_saved_work_reads_the_current_attachment_without_materializing_or_adopti
     assert inventory(tmp_path) == before
 
 
+@pytest.fixture
+def attached_saved_work(tmp_path):
+    from managed_plot_helpers import request_for_source
+    from test_attached_semantic_repository import application
+    from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
+    from sciplot_core.project_lifecycle.attachment_index import Attachment, INDEX, encode, read_index
+    from sciplot_core.project_store import FileProjectStore
+    from sciplot_core.project_store.runtime import project_runtime
+
+    project = tmp_path / 'project'
+    project.mkdir()
+    (project / 'unrelated.bin').write_bytes(b'unrelated')
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    with project_runtime(store):
+        created = application().create(request_for_source(project))
+    snapshot = store.snapshot()
+    index = read_index(store, snapshot)
+    entry = next(iter(index['attachments'].values()))
+    archive = entry['namespace'] + '/archive/old-ir.json'
+    entry['archived_derivatives'] = {'ir/old.json': archive}
+    mutation = ProjectMutation({archive: b'{"historical":true}\n', INDEX: encode(index)}, {})
+    command = ProjectCommand.create('semantic_record', 'archive-control', project_id=snapshot['project_id'],
+        expected_generation=snapshot['generation'], read_set={INDEX: snapshot['files'][INDEX]['sha256'], archive: None},
+        write_set=[INDEX, archive], request={'prepared_digest': mutation.prepared_digest})
+    ProjectCommands(store).publish_prepared(command, mutation)
+    attachment = Attachment(store, entry)
+    # Same documented missing-disposable fixture as the attached discovery controls.
+    for product in attachment.output.glob('artifacts/*/document.vsz'):
+        product.unlink()
+    return attachment, store.snapshot(), created
+
+
+@pytest.mark.parametrize('direct', [False, True], ids=['selected-attachment', 'direct-namespace'])
+def test_saved_work_batches_members_but_releases_the_proof_before_live_checks(attached_saved_work, tmp_path, monkeypatch, direct):
+    from collections import Counter
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_store.io import StoreIO, owned_io
+
+    attachment, snapshot, created = attached_saved_work
+    reads, captured = Counter(), Counter()
+    original_metadata, original_get = StoreIO._read_metadata, StoreIO.get
+    original_evidence = evidence._document_evidence
+    original_snapshot = evidence.read_snapshot
+
+    def metadata(io, name):
+        reads[name] += 1
+        return original_metadata(io, name)
+
+    def get(io, entry):
+        if io._checked_window is not None:
+            captured[entry['sha256']] += 1
+        return original_get(io, entry)
+
+    def live_checks(*args, **kwargs):
+        assert owned_io(attachment.store.root) is None
+        # Direct discovery also reads its initial snapshot and attachment index.
+        # The source runtime is a separate, fresh admission after capture.
+        assert reads['head.json'] == (4 if direct else 2)
+        prefix = attachment.entry['namespace'] + '/'
+        requested = [name for name in snapshot['files'] if name.startswith(prefix)]
+        requested.extend(attachment.entry['archived_derivatives'].values())
+        assert captured == Counter(snapshot['files'][name]['sha256'] for name in requested)
+        return original_evidence(*args, **kwargs)
+
+    def artifact(path):
+        assert owned_io(attachment.store.root) is None
+        return original_snapshot(path)
+
+    monkeypatch.setattr(StoreIO, '_read_metadata', metadata)
+    monkeypatch.setattr(StoreIO, 'get', get)
+    monkeypatch.setattr(evidence, '_document_evidence', live_checks)
+    monkeypatch.setattr(evidence, 'read_snapshot', artifact)
+    monkeypatch.setattr(subprocess, 'run', lambda *_a, **_k: pytest.fail('SavedWork started native work.'))
+    before = inventory(tmp_path)
+    result = evidence.document_evidence(attachment.root, **({} if direct else {'attachment': attachment, 'snapshot': snapshot}))
+    assert result['plot_id'] == created['plot_id'] and result['current']
+    assert inventory(tmp_path) == before
+    assert owned_io(attachment.store.root) is None
+
+
+@pytest.mark.parametrize('tamper', ['consumed-archive', 'unconsumed-blob', 'history-next-call'])
+def test_saved_work_keeps_fresh_checks_after_capture_and_between_calls(attached_saved_work, monkeypatch, tamper):
+    import os
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_store import ProjectStoreError
+    from sciplot_core.project_store.io import owned_io
+
+    attachment, snapshot, _created = attached_saved_work
+    store = attachment.store
+    original_evidence = evidence._document_evidence
+    requested = []
+
+    def corrupt(path):
+        before = path.stat()
+        path.write_bytes(b'x' * before.st_size)
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+
+    if tamper == 'consumed-archive':
+        original_read = store.read_bytes
+        archive = attachment.entry['archived_derivatives']['ir/old.json']
+        def read(logical, **kwargs):
+            requested.append(logical)
+            result = original_read(logical, **kwargs)
+            if logical == archive:
+                identity = snapshot['files'][archive]['sha256']
+                corrupt(store.root / '.sciplot_store/objects' / identity[:2] / identity)
+            return result
+        monkeypatch.setattr(store, 'read_bytes', read)
+    elif tamper == 'unconsumed-blob':
+        def live_checks(*args, **kwargs):
+            assert owned_io(store.root) is None
+            result = original_evidence(*args, **kwargs)
+            identity = snapshot['files']['unrelated.bin']['sha256']
+            corrupt(store.root / '.sciplot_store/objects' / identity[:2] / identity)
+            return result
+        monkeypatch.setattr(evidence, '_document_evidence', live_checks)
+    else:
+        assert evidence.document_evidence(attachment.root, attachment=attachment, snapshot=snapshot)['current']
+        corrupt(store.root / '.sciplot_store/generations' / (snapshot['generation'] + '.json'))
+    with pytest.raises((ProjectStoreError, ValueError)):
+        evidence.document_evidence(attachment.root, attachment=attachment, snapshot=snapshot)
+    if tamper == 'consumed-archive':
+        assert requested.count(archive) == 2
+    assert owned_io(store.root) is None
+
+
+@pytest.mark.parametrize('invalid', ['relative-escape', 'foreign-logical', 'missing-member'])
+def test_saved_work_archive_refusals_release_the_capture_scope(attached_saved_work, tmp_path, monkeypatch, invalid):
+    from copy import deepcopy
+    from sciplot_core import task_saved_work_evidence as evidence
+    from sciplot_core.project_lifecycle.attachment_index import Attachment
+    from sciplot_core.project_store import ProjectStoreError
+    from sciplot_core.project_store.io import owned_io
+
+    attachment, snapshot, _created = attached_saved_work
+    entry = deepcopy(attachment.entry)
+    relative = '../ir/old.json' if invalid == 'relative-escape' else 'ir/old.json'
+    logical = (entry['archived_derivatives']['ir/old.json'] if invalid == 'relative-escape'
+               else 'unrelated.bin' if invalid == 'foreign-logical' else entry['namespace'] + '/archive/missing.json')
+    entry['archived_derivatives'] = {relative: logical}
+    before = inventory(tmp_path)
+    monkeypatch.setattr(evidence, '_document_evidence', lambda *_a, **_k: pytest.fail('Invalid archive reached live checks.'))
+    with pytest.raises((ValueError, ProjectStoreError)):
+        evidence.document_evidence(attachment.root, attachment=Attachment(attachment.store, entry), snapshot=snapshot)
+    assert inventory(tmp_path) == before
+    assert owned_io(attachment.store.root) is None
+
+
 @pytest.mark.parametrize('ownership', ['unattached', 'retired', 'unindexed'])
 def test_core_project_discovery_distinguishes_unattached_history_from_retired_or_unindexed_state(tmp_path, monkeypatch, ownership):
     from sciplot_core import task_saved_work_evidence as evidence

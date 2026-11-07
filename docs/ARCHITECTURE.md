@@ -1407,7 +1407,14 @@ process/thread and exact root capabilities remain valid. Explicit finite
 `_validation_window` scopes share verified history in attached metadata/journal
 planning and publication after source capture, Veusz's pure source-fingerprint
 query, plain registered file-location pairs, and ordinary recorded-artifact
-existence batches. Effectful source expectations, private views, source capture,
+existence batches. SavedWork uses the same finite scope for one attached
+namespace's registered members and immutable archive aliases. It closes that
+scope before original-envelope projection, live source/native-artifact checks
+and its final fresh project-generation observation. Direct Managed discovery,
+project-figure discovery and continuation share this capture owner; standalone
+documents retain their original repository. No Store lease spans rendering or
+the entire multi-figure discovery operation.
+Effectful source expectations, private views, source capture,
 materialization and native execution retain their original boundaries; a helper
 name alone never establishes purity. Each borrowed child belongs to its window anchor;
 closing a child does not close its parent, and leaving the window expires its

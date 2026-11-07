@@ -1,26 +1,25 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-11-06. External AI is the task interface. Current behavior belongs
+Status: 2026-11-07. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
 original local evidence retain that history; historical PASS is not a new
 snapshot's acceptance.
 
-## Immediate priority: bounded AI disclosure and provider facts
+## Immediate priority: bounded SavedWork read cost
 
-The native digest-cost batch was delivered at `7b243305`; its original local
-full/capture/access and candidate/main CI records remain external evidence.
-The current authorized P2 slice is local code and offline simulation only:
-explicit visual/properties outbound context and factual optional provider usage
-through the existing Assistant request, transport, cancellation and history chain.
-Migrate every target caller and keep the old visual request/history readers.
-Preserve local PNG history and the separate path/revision/selection/expected-value
-admission; telemetry cannot authorize or veto a proposal. Do not send user data
-to a real provider, make paid calls, add fee estimates or expand DataMapping/P3.
-Development feedback uses affected offline contracts, complete static checks and
-the integrated caller/refusal controls. This local milestone is not a new release
-or whole-private-corpus certificate; merge/release gates retain their own scope.
+The bounded AI disclosure/provider-facts slice is delivered at `07505f5c`;
+its original full/capture/access and candidate/main CI records remain external
+evidence. Actual third-party tokens, fees and latency remain unknown.
+
+Continue the measured same-operation work below with attached SavedWork member
+capture. Reuse the existing Store proof only while reading that finite namespace
+and its archive aliases, preserving actual object reads, source/artifact checks
+and final generation revalidation. Keep standalone historical owners unchanged.
+Measure the complete query on identical inputs and distinguish its cost from
+native rendering, CLI startup and whole-suite acceptance. Do not add a cache
+framework, real AI calls or other P2/P3 features to this batch.
 
 ## Retained feedback and performance boundaries
 
@@ -41,10 +40,11 @@ cost at equal coverage. Add real historical-failure shadows and unknown/shared
 change counterexamples. Once these establish adequate local feedback and risk,
 continue the already authorized work without waiting for remote CI to begin
 development. Remote policy measurements and release gates remain their own
-explicit claims until actually observed. The current native digest change has
-matched development measurements in `docs/TASK_CAPABILITY_MEASUREMENTS.md`. Close its
-frozen full/capture/access and platform gates once before delivery. Do not add
-another cache framework, P2/P3 migration or feature to this batch.
+explicit claims until actually observed. Delivered native digest measurements
+remain in `docs/TASK_CAPABILITY_MEASUREMENTS.md`; their completed acceptance is
+historical evidence. Each new batch retains its own required full/capture/access
+and platform gates before delivery. Do not add another cache framework or an
+unrelated P2/P3 migration to the bounded SavedWork query batch.
 
 ## Next bounded architecture work
 
@@ -98,9 +98,11 @@ batch's actual results outside its input closure rather than rewriting them here
    resolution, physical capture and native execution stay outside new metadata
    scopes. Same-request canonical FD facts remove a second traversal without
    caching FD authority. Close their combined native/CI latency and refusal
-   controls on the final candidate. SavedWork member loops and other independent
-   calls still require their own measurements; finite counters and pure checks
-   do not establish whole-project or end-to-end performance closure.
+   controls on the final candidate. Attached SavedWork capture now has its own
+   matched generated-fixture query measurements and refusal controls in
+   `docs/TASK_CAPABILITY_MEASUREMENTS.md`. Other independent calls and complete
+   native tasks retain their own measurement requirements; these API results
+   do not establish whole-project or whole-suite performance closure.
 3. **Close the remaining independent contracts.** Move lifecycle use cases off
    direct legacy-engine dependencies through concrete domain ports and adapters,
    retiring each replaced call path. State the supported numerical runtime for

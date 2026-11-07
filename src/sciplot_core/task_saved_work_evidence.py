@@ -58,13 +58,17 @@ def document_evidence(root: Path, *, attachment: Attachment | None = None,
         attachment = Attachment(store, entry)
     assert snapshot is not None
     prefix = attachment.entry["namespace"] + "/"
-    members = {name.removeprefix(prefix): attachment.store.read_bytes(name, generation=snapshot["generation"])
-               for name in snapshot["files"] if name.startswith(prefix)}
-    for relative, logical in attachment.entry.get("archived_derivatives", {}).items():
-        if (not logical.startswith(prefix + "archive/") or str(Path(relative)) != relative
-                or Path(relative).is_absolute() or ".." in Path(relative).parts or not derived_relative(Path(relative))):
-            raise ValueError("The attached document has an invalid immutable history resource.")
-        members[relative] = attachment.store.read_bytes(logical, generation=snapshot["generation"])
+    # Capture this finite namespace under one checked history. Every member is
+    # still read and verified; live source/artifact checks and the final fresh
+    # generation observation remain outside the Store lease.
+    with attachment.store._validation_window():
+        members = {name.removeprefix(prefix): attachment.store.read_bytes(name, generation=snapshot["generation"])
+                   for name in snapshot["files"] if name.startswith(prefix)}
+        for relative, logical in attachment.entry.get("archived_derivatives", {}).items():
+            if (not logical.startswith(prefix + "archive/") or str(Path(relative)) != relative
+                    or Path(relative).is_absolute() or ".." in Path(relative).parts or not derived_relative(Path(relative))):
+                raise ValueError("The attached document has an invalid immutable history resource.")
+            members[relative] = attachment.store.read_bytes(logical, generation=snapshot["generation"])
     captured = FrozenNamespaceRepository(attachment.origin, attachment.root, members)
     with repository_scope(captured):
         # Validate the original sealed envelope before projecting runtime paths.

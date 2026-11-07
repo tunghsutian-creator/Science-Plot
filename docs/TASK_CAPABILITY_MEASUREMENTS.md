@@ -1056,3 +1056,58 @@ retain the publication-QA error `non_color_series_distinction`: their two solid
 curves differ only in color. Their target is inferred and ordinary QA passed;
 a confirmed target would block packaging on that error. The optimization keeps
 the original style and makes no journal-compliance claim.
+
+## 2026-11-07 — finite attached SavedWork member capture
+
+The read owner `task_saved_work_evidence.document_evidence` now uses the existing
+Store validation window for its registered namespace-member and archive-alias
+loops. The original `read_bytes` calls still consume and verify every requested
+object. Original-envelope validation, source and disposable-artifact observations,
+the source runtime and the final fresh project snapshot remain outside this
+window. Direct Managed and project-figure discovery/continuation share this owner;
+standalone documents keep their original repository. No persistent cache or
+second state owner is introduced.
+
+A generated Managed fixture used the existing controlled application backend,
+10 style edits, 101 complete generations, 39 semantic namespace members and 40
+project members. Its disposable synthetic native cache was absent, as in the
+existing attached-discovery tests. Each measured Python API was called twice,
+with counters enabled and the pure canonical-digest memo cold for each call.
+Fixture content, modes and mtimes were checked before and after every operation.
+The complete returned structures, including scientific/presentation hashes and
+currentness, were exactly equal. Native/provider child processes were forbidden.
+
+| Instrumented Python API | Baseline mean | Candidate query mean | Reduction |
+| --- | ---: | ---: | ---: |
+| `document_evidence` | 4.165 s | 1.009 s | 75.77% |
+| `find_saved_work` | 4.154 s | 0.995 s | 76.05% |
+
+Each call reduced complete-history admissions from 45 to 7, generation metadata
+reads from 4,546 to 708, metadata bytes returned from 682,128,646 to 121,981,438,
+JSON decodes from 9,100 to 5,224, and object gets from 1,886 to 328. These byte
+counts describe repeated returned data, not unique disk traffic, physical I/O or
+peak memory. Remaining independent admissions and detached metadata copies were
+retained. The small archive-alias regression separately verifies both actual
+reads of an aliased object; this timing fixture had no archive aliases.
+
+The matched experiment fixed the original scientific/IO host and explicitly
+loaded only the candidate query module. Loading the entire second worktree
+instead reported 22 different absolute builtin host paths while
+preserving the scientific hash. That refusal is retained; it was not bypassed
+or counted as candidate acceptance. Independent candidate-worktree behavior
+checks create their bindings against that worktree. Thus the table isolates the
+query change on identical input and host identities; it is not a cross-install
+compatibility claim, CLI/startup timing, native-task benchmark, statistical
+population estimate or whole-CI speedup.
+
+Local raw results, the profiling recipe, exact query source hashes, unchanged
+fixture inventory and the rejected cross-worktree/reporting attempts are retained
+in the ignored `SAVEDWORK_READ_BATCH_20261107_01/measurement` evidence directory.
+The initial reporting attempt was rejected because `platform.platform()` tried
+to spawn `uname`; the corrected report reads `os.uname()` without a child.
+
+The added refusal controls cover same-size/mtime consumed and unconsumed object
+tampering, history changes between calls, archive confinement and missing
+members, scope release before live/artifact checks and zero-write discovery.
+A finite capture proves neither readiness nor scientific/journal acceptance;
+release gates remain separate from this development measurement.
