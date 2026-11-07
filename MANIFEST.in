@@ -1,6 +1,3 @@
-# Ship the preferred source and reproducible build material for the browser UI.
-recursive-include web/editor *.md *.json *.ts *.tsx *.css *.html *.mjs *.py *.txt
-include web/editor/.gitignore
-prune web/editor/node_modules
+# The read-only offline review still uses Tavotto-derived presentation.
 recursive-include third_party/tavotto-ui *
 include docs/THIRD_PARTY_NOTICES.md

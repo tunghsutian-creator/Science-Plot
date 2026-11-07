@@ -97,7 +97,6 @@ SOURCE_LOCATOR_PATHS = frozenset({
 
 NATIVE_PROJECT_PATHS = frozenset({
     'src/sciplot_core/data_mapping/raw_tables.py',
-    'src/sciplot_core/live_editor/session.py',
     'src/sciplot_core/plot_backends/veusz.py',
     'src/sciplot_core/plot_backends/veusz_identity.py',
     'src/sciplot_core/plot_backends/veusz_import.py',

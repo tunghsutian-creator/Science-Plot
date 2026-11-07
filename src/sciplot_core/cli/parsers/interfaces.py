@@ -8,16 +8,17 @@ from typing import Any
 
 
 def register_interfaces_commands(subparsers: Any) -> None:
-    edit_parser = subparsers.add_parser("edit", help="Open a live native figure editor in the local browser.")
-    edit_parser.add_argument("target", type=Path, help="Existing SciPlot project, saved VSZ or associated delivery.")
-    edit_parser.add_argument("--figure", help="Exact figure ID; defaults to the project's primary figure.")
-    edit_parser.add_argument("--port", type=int, default=0)
-    edit_parser.add_argument("--session-dir", type=Path, help="New session evidence directory outside source/project/delivery.")
-    edit_parser.add_argument("--no-open", action="store_true")
+    edit_parser = subparsers.add_parser("edit", help="Retired manual editor; use AI-driven task edit or plot describe.")
+    edit_parser.add_argument("target", type=Path, help="Historical target argument; never opened or changed.")
+    edit_parser.add_argument("--figure", help=argparse.SUPPRESS)
+    edit_parser.add_argument("--port", type=int, default=0, help=argparse.SUPPRESS)
+    edit_parser.add_argument("--session-dir", type=Path, help=argparse.SUPPRESS)
+    edit_parser.add_argument("--no-open", action="store_true", help=argparse.SUPPRESS)
     edit_parser.add_argument("--portable-fallback", action="store_true",
-                             help="Open detached delivery copies in the compatible Veusz editor.")
+                             help=argparse.SUPPRESS)
     edit_parser.add_argument("--check", action="store_true",
-                             help="Validate and report the saved figure target without starting an editor.")
+                             help=argparse.SUPPRESS)
+    edit_parser.add_argument("--json", action="store_true", help="Report the retirement through the CLI error contract.")
 
     app_parser = subparsers.add_parser(
         "app",

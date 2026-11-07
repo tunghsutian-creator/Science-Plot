@@ -13,6 +13,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPO_ROOT / "src"
 FIRST_PARTY_PACKAGES = ("sciplot_core", "sciplot_gui", "sciplot_recipes")
 RETIRED_DISTRIBUTION_PREFIXES = (
+    "sciplot_core/live_editor/",
+    "sciplot_core/live_editor_assets/",
+    "sciplot_core/veusz_worker/live_session.py",
+    "sciplot_core/verification/live_editor_owner.py",
+    "web/editor/",
     "sciplot_core/canvas",
     "sciplot_core/composition",
     "sciplot_core/promotion",

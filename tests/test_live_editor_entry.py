@@ -1,95 +1,119 @@
-"""Delivery entry selection, legacy visible edits and portable-copy boundaries."""
+"""Historical manual-editor argv are inert and use the common CLI error contract."""
+
+import builtins
+import json
+import os
 from pathlib import Path
-import shutil
+import subprocess
+import webbrowser
 
 import pytest
 
-from sciplot_core.live_editor.entry import resolve_editor_input
-from sciplot_core.launchers.delivery_editor_launcher import write_delivery_editor_launcher
-from test_delivery_project_continuation import _linked_delivery
-
-pytestmark = pytest.mark.focused
+from sciplot_core import cli
+from sciplot_core.cli.dispatch.interfaces import ManualEditorRetired, dispatch_interfaces
+from sciplot_core.cli.parsers.builder import build_parser
 
 
-def test_legacy_delivery_and_new_entry_preserve_current_project_target(tmp_path):
-    root, _, _, _ = _linked_delivery(tmp_path)
-    assert resolve_editor_input(root) == (root, False)
-    entry = write_delivery_editor_launcher(root)
-    assert resolve_editor_input(entry) == (root, False)
+LEGACY_OPTIONS = (
+    (),
+    ("--check",),
+    ("--portable-fallback",),
+    ("--portable-fallback", "--check", "--figure", "次图 有空格"),
+    ("--no-open", "--port", "8751", "--session-dir", "unused-session"),
+)
 
 
-@pytest.mark.parametrize("form", ["directory", "entry", "vsz"])
-def test_changed_visible_copy_blocks_editor_before_loading_another_document(tmp_path, form):
-    root, _, canonical, _ = _linked_delivery(tmp_path)
-    entry = write_delivery_editor_launcher(root)
-    visible = root / "project/primary.vsz"
-    visible.write_text("previous human edits")
-    target = {"directory": root, "entry": entry, "vsz": visible}[form]
-    with pytest.raises(ValueError, match="skip these edits"):
-        resolve_editor_input(target, portable_fallback=True)
-    assert visible.read_text() == "previous human edits"
-    assert canonical.read_bytes() == b"canonical Veusz project"
+@pytest.mark.parametrize("options", LEGACY_OPTIONS)
+@pytest.mark.parametrize("json_output", [False, True])
+def test_retired_editor_argv_returns_the_existing_cli_error_contract(
+    tmp_path, monkeypatch, capsys, options, json_output,
+):
+    target = tmp_path / "旧工程 有空格" / "Open_in_SciPlot.command"
+    original = builtins.__import__
 
+    def no_editor_import(name, *args, **kwargs):
+        forbidden = ("sciplot_core.live_editor", "sciplot_core.veusz_worker.live_session",
+                     "sciplot_core.studio", "sciplot_gui", "PyQt6", "veusz")
+        assert not any(name == prefix or name.startswith(prefix + ".")
+                       for prefix in forbidden), f"Retired command imported {name}"
+        return original(name, *args, **kwargs)
 
-@pytest.mark.parametrize("mode", ["copy", "move", "missing_project"])
-def test_portable_delivery_requires_explicit_fallback_and_never_reattaches(tmp_path, mode):
-    root, project, _, _ = _linked_delivery(tmp_path)
-    write_delivery_editor_launcher(root)
-    if mode == "copy":
-        target = tmp_path / "复制 交付"
-        shutil.copytree(root, target)
-    elif mode == "move":
-        target = tmp_path / "搬移 交付"
-        root.rename(target)
+    def no_effect(*_args, **_kwargs):
+        pytest.fail("Retired manual editing must not launch a process or browser")
+
+    monkeypatch.setattr(builtins, "__import__", no_editor_import)
+    monkeypatch.setattr(subprocess, "Popen", no_effect)
+    monkeypatch.setattr(webbrowser, "open", no_effect)
+    options = tuple(str(tmp_path / "unused-session") if item == "unused-session" else item for item in options)
+    argv = ["edit", str(target), *options, *(["--json"] if json_output else [])]
+    assert cli.main(argv) == 1
+    captured = capsys.readouterr()
+    if json_output:
+        payload = json.loads(captured.out)
+        assert payload["kind"] == "sciplot_cli_runtime_error"
+        assert payload["version"] == 1 and payload["status"] == "failed"
+        assert payload["category"] == "expected_runtime_failure"
+        assert payload["reason_code"] == "manual_editor_retired"
+        assert payload["exception_type"] == "ManualEditorRetired"
+        message = payload["message"]
+        assert captured.err == ""
     else:
-        target = root
-        shutil.rmtree(project)
-    with pytest.raises(ValueError, match="脱离原工程"):
-        resolve_editor_input(target)
-    assert resolve_editor_input(target, portable_fallback=True) == (target / "project/primary.vsz", True)
+        assert captured.out == ""
+        message = captured.err
+    assert "manual_editor_retired" in message
+    assert "sciplot task edit TARGET --intent INTENT" in message
+    assert "sciplot plot describe PLOT --scope edit --json" in message
+    assert not target.parent.exists()
+    assert not (tmp_path / "unused-session").exists()
 
 
-def test_modified_editor_launcher_is_rejected_even_for_directory_input(tmp_path):
-    root, _, _, _ = _linked_delivery(tmp_path)
-    launcher = write_delivery_editor_launcher(root)
-    launcher.write_text(launcher.read_text() + "echo changed\n")
-    with pytest.raises(ValueError, match="启动入口已变化"):
-        resolve_editor_input(root)
+@pytest.mark.parametrize("target_kind", ["project", "document", "launcher", "missing", "symlink"])
+@pytest.mark.parametrize("options", LEGACY_OPTIONS)
+def test_retirement_never_observes_or_changes_a_target(
+    tmp_path, monkeypatch, target_kind, options,
+):
+    root = tmp_path / "protected"
+    root.mkdir()
+    document = root / "document.vsz"
+    document.write_bytes(b"original saved native document")
+    source = root / "measurements.csv"
+    source.write_bytes(b"x,y\n1,2\n")
+    launcher = root / "Open_in_SciPlot.command"
+    launcher.write_bytes(b"historical launcher, never executed")
+    link = root / "link"
+    link.symlink_to(document)
+    target = {"project": root, "document": document, "launcher": launcher,
+              "missing": root / "missing", "symlink": link}[target_kind]
+    original_bytes = {path: path.read_bytes() for path in (document, source, launcher)}
+    args = build_parser().parse_args(["edit", str(target), *options])
+
+    def guarded(function):
+        def call(path, *arguments, **keywords):
+            if isinstance(path, (str, bytes, os.PathLike)):
+                candidate = Path(os.fsdecode(path))
+                if candidate == root or root in candidate.parents:
+                    pytest.fail("Retired command attempted target IO")
+            return function(path, *arguments, **keywords)
+        return call
+
+    with monkeypatch.context() as guard:
+        for owner, names in ((Path, ("stat", "resolve", "open", "mkdir", "unlink", "rename", "replace")),
+                             (os, ("open", "stat", "lstat")), (builtins, ("open",))):
+            for name in names:
+                guard.setattr(owner, name, guarded(getattr(owner, name)))
+        with pytest.raises(ManualEditorRetired, match="manual_editor_retired"):
+            dispatch_interfaces(args, None, serve_intake=None)
+    assert {path: path.read_bytes() for path in original_bytes} == original_bytes
+    assert link.is_symlink()
+    assert sorted(path.name for path in root.iterdir()) == [
+        "Open_in_SciPlot.command", "document.vsz", "link", "measurements.csv",
+    ]
 
 
-def test_missing_explicit_portable_document_does_not_silently_choose_primary(tmp_path):
-    root, _, _, _ = _linked_delivery(tmp_path)
-    copied = tmp_path / "copy"
-    shutil.copytree(root, copied)
-    with pytest.raises(FileNotFoundError, match="不存在"):
-        resolve_editor_input(copied / "project/missing.vsz", portable_fallback=True)
-
-
-def test_cli_portable_check_does_not_open_gui_or_serve_editor(tmp_path, monkeypatch, capsys):
-    from sciplot_core.cli.parsers.builder import build_parser
-    from sciplot_core.cli.dispatch.interfaces import dispatch_interfaces
-    from sciplot_core.live_editor import server
-    import sciplot_core.studio as studio
-    root, _, _, _ = _linked_delivery(tmp_path)
-    copied = tmp_path / "copy"
-    shutil.copytree(root, copied)
-    monkeypatch.setattr(server, "serve_editor", lambda *a, **k: pytest.fail("No browser server for portable copy"))
-    monkeypatch.setattr(studio, "run_studio_command", lambda **k: pytest.fail("Check must not start GUI"))
-    args = build_parser().parse_args(["edit", str(copied), "--portable-fallback", "--check"])
-    assert dispatch_interfaces(args, None, serve_intake=None) == 0
-    assert '"mode": "portable_veusz"' in capsys.readouterr().out
-
-
-def test_cli_portable_fallback_only_opens_the_copied_document(tmp_path, monkeypatch):
-    from sciplot_core.cli.parsers.builder import build_parser
-    from sciplot_core.cli.dispatch.interfaces import dispatch_interfaces
-    import sciplot_core.studio as studio
-    root, _, _, _ = _linked_delivery(tmp_path)
-    copied = tmp_path / "copy"
-    shutil.copytree(root, copied)
-    calls = []
-    monkeypatch.setattr(studio, "run_studio_command", lambda **k: calls.append(k) or 0)
-    args = build_parser().parse_args(["edit", str(copied), "--portable-fallback"])
-    assert dispatch_interfaces(args, None, serve_intake=None) == 0
-    assert calls[0]["target"] == copied / "project/primary.vsz"
-    assert Path(calls[0]["original_argv"][1]).is_relative_to(copied)
+def test_retired_editor_help_preserves_legacy_parser_without_advertising_an_editor(capsys):
+    with pytest.raises(SystemExit) as stopped:
+        cli.main(["edit", "--help"])
+    assert stopped.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "Historical target argument; never opened or changed." in help_text
+    assert "--portable-fallback" not in help_text and "--session-dir" not in help_text

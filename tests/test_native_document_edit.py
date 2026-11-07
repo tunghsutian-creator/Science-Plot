@@ -460,3 +460,128 @@ with loaded_native_document(Path({str(document)!r})) as d:
     undone = subprocess.run([sys.executable, "-c", undo_check], text=True,
                             capture_output=True, env=veusz_worker_environment(), timeout=60)
     assert undone.returncode == 0, undone.stderr
+
+
+@pytest.fixture(scope="module")
+def native_marker_figure(tmp_path_factory):
+    root = tmp_path_factory.mktemp("native-marker-figure")
+    source = root / "values.csv"
+    source.write_text(
+        "Time,Force,Time,Force,Time,Force,Time,Force,Time,Force\n"
+        "s,N,s,N,s,N,s,N,s,N\nA,A,B,B,C,C,D,D,E,E\n"
+        "0,1,0,2,0,3,0,4,0,5\n1,3,1,4,1,5,1,6,1,7\n2,2,2,3,2,4,2,5,2,6\n"
+    )
+    result = render_to_dir(source, template="curve", output_dir=root / "render",
+                          export_formats=("pdf",), options={"size": "60x55"})
+    return source, Path(result["veusz_documents"][0]), Path(result["veusz_specs"][0])
+
+
+def _marker_candidate(root, document, spec, changes, *, failed=False):
+    root.mkdir()
+    patch = root / "changes.json"
+    patch.write_text(json.dumps(changes))
+    candidate, image = root / "candidate.vsz", root / "preview.png"
+    result = _worker("edit-document", str(document), "--changes", str(patch),
+                     "--output-document", str(candidate), "--preview-png", str(image),
+                     "--audit-spec", str(spec), failed=failed)
+    return candidate, image, result
+
+
+@pytest.mark.comprehensive
+def test_native_marker_activation_and_removal_survive_save_and_cold_reopen(tmp_path, native_marker_figure):
+    source, document, spec = native_marker_figure
+    original = {path: path.read_bytes() for path in native_marker_figure}
+    curve = "/page1/graph1/series_1"
+    initial = _worker("inspect-document-state", str(document))["widgets"][curve]
+    fields = {field["field_id"]: field for field in initial["editable_fields"]}
+    assert fields["series_marker"]["current_value"] == "none"
+    assert "none" in fields["series_marker"]["choices"]
+    assert fields["series_marker_line_hidden"]["current_value"] is True
+    assert fields["series_fill_hidden"]["current_value"] is True
+    baseline = _worker("preview-document", str(document), "--out", str(tmp_path / "initial.png"))
+    current = document
+    circle_preview = None
+    for index, marker in enumerate(("circle", "none", "circle")):
+        before = _worker("inspect-document-state", str(current))["widgets"][curve]
+        candidate, _, result = _marker_candidate(tmp_path / f"candidate-{index}", current, spec, [{
+            "object_path": curve, "setting_path": curve + "/marker",
+            "expected_value": before["settings"]["marker"], "value": marker,
+        }])
+        assert result["document_audit"]["status"] == "passed"
+        reopened = _worker("inspect-document-state", str(candidate))["widgets"][curve]
+        assert reopened["settings"]["marker"] == marker
+        assert next(field["current_value"] for field in reopened["editable_fields"]
+                    if field["field_id"] == "series_marker_line_hidden") is False
+        preview = result["preview"]["sha256"]
+        if index == 0:
+            circle_preview = preview
+            assert preview != baseline["preview"]["sha256"]
+            assert result["changes"][-1] == {
+                "object_path": curve, "setting_path": curve + "/MarkerLine/hide",
+                "old_value": True, "new_value": False,
+            }
+        else:
+            assert preview == (baseline["preview"]["sha256"] if marker == "none" else circle_preview)
+        current = candidate
+    assert source.read_bytes() == original[source]
+    assert {path: path.read_bytes() for path in original} == original
+
+
+@pytest.mark.comprehensive
+def test_point_only_native_series_rejects_invisible_and_late_invalid_batches(tmp_path, native_marker_figure):
+    source, document, spec = native_marker_figure
+    original = {path: path.read_bytes() for path in native_marker_figure}
+    point_document = tmp_path / "point-only.vsz"
+    script = '''
+import sys
+from pathlib import Path
+from importlib import import_module
+from sciplot_core.veusz_worker.document_edit import loaded_native_document
+with loaded_native_document(Path(sys.argv[1])) as native:
+    operations = import_module('veusz.document.operations')
+    path = '/page1/graph1/series_1/'
+    values = {'PlotLine/hide': True, 'marker': 'circle', 'MarkerLine/hide': False, 'MarkerFill/hide': True}
+    native.applyOperation(operations.OperationMultiple([
+        operations.OperationSettingSet(path+suffix, value) for suffix, value in values.items()]))
+    import_module('veusz.document').CommandInterface(native).Save(sys.argv[2])
+'''
+    setup = subprocess.run([sys.executable, "-c", script, str(document), str(point_document)],
+                           capture_output=True, text=True, env=veusz_worker_environment(), timeout=60)
+    assert setup.returncode == 0, setup.stderr
+    curve = "/page1/graph1/series_1"
+    initial = _worker("inspect-document-state", str(point_document))["widgets"][curve]
+    marker = next(field for field in initial["editable_fields"] if field["field_id"] == "series_marker")
+    assert "none" not in marker["choices"]
+    saved = point_document.read_bytes()
+    rejected = (
+        ([("marker", "none")], "advertised choices"),
+        ([("MarkerLine/hide", True)], "must keep a visible marker"),
+        ([("marker", "diamond"), ("markerSize", "0pt")], "positive physical size"),
+    )
+    for index, (batch, reason) in enumerate(rejected):
+        candidate, image, result = _marker_candidate(tmp_path / f"rejected-{index}", point_document, spec, [
+            {"object_path": curve, "setting_path": curve + "/" + suffix,
+             "expected_value": initial["settings"][suffix], "value": value}
+            for suffix, value in batch
+        ], failed=True)
+        assert reason in result["error"]
+        assert not candidate.exists() and not image.exists()
+        assert point_document.read_bytes() == saved
+        assert _worker("inspect-document-state", str(point_document))["widgets"][curve] == initial
+    filled, _, fill_result = _marker_candidate(tmp_path / "fill-only", point_document, spec, [
+        {"object_path": curve, "setting_path": curve + "/" + suffix,
+         "expected_value": initial["settings"][suffix], "value": value}
+        for suffix, value in (("MarkerLine/hide", True), ("MarkerFill/hide", False))
+    ])
+    plus, _, result = _marker_candidate(tmp_path / "lineplus", filled, spec, [{
+        "object_path": curve, "setting_path": curve + "/marker",
+        "expected_value": "circle", "value": "lineplus",
+    }])
+    assert result["document_audit"]["status"] == "passed"
+    assert result["preview"]["sha256"] != fill_result["preview"]["sha256"]
+    reopened = _worker("inspect-document-state", str(plus))["widgets"][curve]
+    assert reopened["settings"]["marker"] == "lineplus"
+    assert next(field["current_value"] for field in reopened["editable_fields"]
+                if field["field_id"] == "series_marker_line_hidden") is False
+    assert point_document.read_bytes() == saved and source.read_bytes() == original[source]
+    assert {path: path.read_bytes() for path in original} == original

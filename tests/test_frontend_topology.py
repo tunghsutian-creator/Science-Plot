@@ -75,3 +75,21 @@ def test_retired_parallel_lifecycle_modules_stay_absent() -> None:
     }
 
     assert not {path.name for path in core_dir.iterdir()} & retired
+
+
+def test_retired_live_editor_source_assets_and_build_chain_are_absent() -> None:
+    root = Path(__file__).resolve().parents[1]
+    retired = (
+        "src/sciplot_core/live_editor",
+        "src/sciplot_core/live_editor_assets",
+        "src/sciplot_core/veusz_worker/live_session.py",
+        "src/sciplot_core/verification/live_editor_owner.py",
+        "web/editor",
+    )
+    assert not [path for path in retired if (root / path).exists()]
+    project = tomllib.loads((root / "pyproject.toml").read_text())
+    assert not any("live_editor" in path or "live_session" in path
+                   for path in project["tool"]["mypy"]["files"])
+    assert not any("live_editor" in path for path in
+                   project["tool"]["setuptools"]["package-data"]["sciplot_core"])
+    assert "web/editor" not in (root / "MANIFEST.in").read_text()
