@@ -54,6 +54,7 @@ def manage_mechanical_task_source_lifecycle(
                         source_attestation=kwargs.get("prepared_source_attestation"),
                         project_dir=kwargs["project_dir"],
                         request=kwargs["request"],
+                        resolved_scientific_source=kwargs.get("resolved_scientific_source"),
                     )
                 except StudioPreparationBlocked:
                     raise

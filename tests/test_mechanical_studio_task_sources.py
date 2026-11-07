@@ -283,6 +283,7 @@ def test_prebound_private_mechanical_queue_is_rejected(
             source_attestation=None,
             project_dir=project_dir,
             request=request,
+            resolved_scientific_source=None,
         )
 
 

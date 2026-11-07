@@ -240,6 +240,8 @@ def _render_resolved_bundle(
             _resolved_figure_plan=resolved_figure_plan,
         )
     if family == "mechanical":
+        if resolved_scientific_source is None:
+            raise ValueError("Mechanical rendering requires its resolved scientific source.")
         return _render_veusz_mechanical_bundle(
             input_path,
             source_input=source_input,
@@ -249,6 +251,7 @@ def _render_resolved_bundle(
             export_formats=export_formats,
             request=request,
             _resolved_figure_plan=resolved_figure_plan,
+            resolved_scientific_source=resolved_scientific_source,
         )
     if family == "dma_temperature":
         return _render_veusz_dma_temperature_bundle(

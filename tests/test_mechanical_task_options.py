@@ -3,12 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from sciplot_core._paths import resolve_fixture_path
-from sciplot_core.figure_plan import resolve_figure_plan
 from sciplot_core.materials_rules import get_rule, semantic_payload_from_rule
 from sciplot_core.mechanical_task_sources import build_mechanical_task_sources
 from sciplot_core.policy import DEFAULT_PALETTE_PRESET
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.semantic import prepare_semantic_source
+from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
+from sciplot_core.semantic_sources.mechanical_fact_models import MechanicalSourceFacts
 from sciplot_core.study_model import experiment_recommendation_payload
 
 
@@ -28,18 +29,21 @@ def test_summary_tasks_keep_style_without_curve_axis_or_series_options(
             "x_min",
         ],
     }
-    plan = resolve_figure_plan(
+    resolved = resolve_scientific_source(
+        source,
         rule_id=rule_id,
         template="curve",
         study_model=experiment_recommendation_payload(rule_id=rule_id),
-        input_path=source,
         request=request,
     )
+    assert resolved is not None
+    plan = resolved.figure_plan
     assert plan is not None
     prepared = prepare_semantic_source(
         source,
         output_dir=tmp_path / "prepared",
         semantic=semantic_payload_from_rule(get_rule(rule_id), confidence=1.0),
+        resolved_scientific_source=resolved,
     )
     attestation = prepared["source_attestation"]
     assert isinstance(attestation, PreparationSourceAttestation)
@@ -61,6 +65,7 @@ def test_summary_tasks_keep_style_without_curve_axis_or_series_options(
     records = build_mechanical_task_sources(
         Path(str(prepared["source"])),
         raw_source=source,
+        facts=resolved.require_domain(MechanicalSourceFacts),
         source_attestation=attestation,
         figure_plan=plan,
         output_dir=tmp_path / "terminal_sources",

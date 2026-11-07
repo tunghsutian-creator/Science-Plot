@@ -318,6 +318,7 @@ def generate_studio_document(
         source_bound_attestation=source_bound_attestation,
         figure_plan=figure_plan,
         figure_set_path_replacer=figure_set_path_replacer,
+        resolved_scientific_source=resolved_scientific_source,
     )
     spec_path = _veusz_spec_path(document_path)
     export_edited_launcher = _write_export_edited_launcher(project_dir)

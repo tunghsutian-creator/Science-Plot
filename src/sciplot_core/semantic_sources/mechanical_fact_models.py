@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from types import MappingProxyType
 from typing import NoReturn
 
 from sciplot_core.mechanical_figure_contract import (
@@ -71,6 +72,63 @@ class MechanicalSourceFacts:
     metric_units: tuple[tuple[str, str], ...]
     curve_source_kind: str
     individual_curves_complete: bool
+
+    def __post_init__(self) -> None:
+        # Only mechanical diagnostics cross this operation-owned immutable seam.
+        # Their sole nested value is the instrument's metric->header evidence.
+        frozen: dict[int, CurveSeriesPayload] = {}
+        for field, series in (
+            ("raw_series", self.raw_series),
+            ("individual_curve_series", self.individual_curve_series),
+            ("representative_curve_series", self.representative_curve_series),
+        ):
+            closed = []
+            for item in series:
+                if id(item) not in frozen:
+                    details = dict(item.diagnostics or {})
+                    for key, value in details.items():
+                        if key == "reported_metric_headers":
+                            if not isinstance(value, dict | MappingProxyType):
+                                raise ValueError("Mechanical metric headers must be a mapping.")
+                            if not all(
+                                isinstance(k, str) and isinstance(v, str)
+                                for k, v in value.items()
+                            ):
+                                raise ValueError("Mechanical metric headers must retain literal text.")
+                            details[key] = MappingProxyType(dict(value))
+                        elif not isinstance(value, str | int | float | bool | type(None)):
+                            raise ValueError(f"Unsupported mutable mechanical diagnostic: {key}")
+                    frozen[id(item)] = replace(
+                        item, diagnostics=(
+                            MappingProxyType(details)
+                            if item.diagnostics is not None else None
+                        ),
+                    )
+                closed.append(frozen[id(item)])
+            object.__setattr__(self, field, tuple(closed))
+
+    def require_selection(
+        self, *, source: Path, rule_id: str, series_order: object
+    ) -> None:
+        """Check the operation's effective selection without reading raw data."""
+        from sciplot_core.semantic_sources.series_ordering import _order_curve_series
+
+        if (
+            self.source_root != source.expanduser().resolve()
+            or self.rule_id != rule_id
+        ):
+            fail_mechanical_source_facts(
+                "mechanical_source_identity_mismatch",
+                "Mechanical facts belong to another source or rule.",
+            )
+        if (
+            tuple(_order_curve_series(list(self.raw_series), series_order))
+            != self.raw_series
+        ):
+            fail_mechanical_source_facts(
+                "mechanical_source_order_mismatch",
+                "Mechanical facts do not retain the requested curve order.",
+            )
 
     def curve_series_for_mode(
         self, mode: object = None

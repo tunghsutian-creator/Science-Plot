@@ -19,6 +19,7 @@ from sciplot_core.studio_core.figure_task_evidence import (
 )
 from sciplot_core.studio_core.semantic_source import _studio_source_for_request
 from sciplot_core.studio_render.models import StudioPreparationBlocked
+from sciplot_core.semantic_sources.mechanical_fact_models import MechanicalSourceFacts
 
 if TYPE_CHECKING:
     from sciplot_core.semantic_sources.scientific_source import (
@@ -74,6 +75,7 @@ def bind_mechanical_task_sources(
     source_attestation: PreparationSourceAttestation | None,
     project_dir: Path,
     request: dict[str, Any],
+    resolved_scientific_source: ResolvedScientificSource | None,
 ) -> list[dict[str, Any]]:
     """Materialize mechanical child tables inside the figure-set transaction."""
 
@@ -88,6 +90,15 @@ def bind_mechanical_task_sources(
         )
     if source_attestation is None:
         _blocked(figure_plan.rule_id, "Mechanical preparation lost its attestation.")
+    if (
+        resolved_scientific_source is None
+        or resolved_scientific_source.figure_plan != figure_plan
+    ):
+        _blocked(
+            figure_plan.rule_id,
+            "Mechanical preparation lost its resolved scientific source.",
+        )
+    facts = resolved_scientific_source.require_domain(MechanicalSourceFacts)
     from sciplot_core.mechanical_task_sources import build_mechanical_task_sources
 
     task_source_dir = (
@@ -101,6 +112,7 @@ def bind_mechanical_task_sources(
         records = build_mechanical_task_sources(
             Path(source_attestation.prepared_source.path),
             raw_source=Path(source_attestation.source_root),
+            facts=facts,
             source_attestation=source_attestation,
             figure_plan=figure_plan,
             output_dir=task_source_dir,

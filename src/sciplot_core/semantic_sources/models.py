@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -15,7 +16,7 @@ class CurveSeriesPayload:
     y_label: str
     y_unit: str
     points: tuple[tuple[float, float], ...]
-    diagnostics: dict[str, Any] | None = None
+    diagnostics: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)

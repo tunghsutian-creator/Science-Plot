@@ -14,6 +14,7 @@ from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.presentation_identity import SelectedPresentationIdentity
 from sciplot_core.studio_render.models import StudioSeries
+from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 
 from sciplot_core.studio_core.figure_set_prepare import _prepare_studio_figure_set
 from sciplot_core.studio_core.figure_task_evidence import (
@@ -45,6 +46,7 @@ def _prepare_generated_figure_set_transaction(
     source_bound_queue: list[dict[str, Any]],
     source_bound_attestation: PreparationSourceAttestation | None,
     figure_plan: ResolvedFigurePlan | None,
+    resolved_scientific_source: ResolvedScientificSource | None,
     figure_set_path_replacer: Callable[[Path, Path], None] | None,
 ) -> dict[str, Any] | None:
     """Stage and validate the primary document inside one figure-set transaction."""
@@ -100,6 +102,7 @@ def _prepare_generated_figure_set_transaction(
             queue_override=selected_figure_queue or source_bound_queue or None,
             figure_plan=figure_plan,
             prepared_source_attestation=source_bound_attestation,
+            resolved_scientific_source=resolved_scientific_source,
             path_replacer=figure_set_path_replacer,
         )
     finally:

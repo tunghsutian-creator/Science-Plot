@@ -8,7 +8,6 @@ from typing import Any
 import pandas as pd
 import pytest
 
-import sciplot_core.mechanical_task_sources as task_sources
 from sciplot_core.figure_plan import (
     CartesianMetricBinding,
     FigureTask,
@@ -30,6 +29,7 @@ from sciplot_core.semantic_sources.mechanical_fact_models import (
     MechanicalSummaryObservation,
 )
 from sciplot_core.semantic_sources.models import CurveSeriesPayload
+from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 from sciplot_core.terminal_source_binding import MaterializedTerminalSourceBinding
 from sciplot_core.workflow.mechanical_bundle import _render_veusz_mechanical_bundle
 
@@ -153,7 +153,6 @@ def _write_prepared(path: Path, series: tuple[CurveSeriesPayload, ...]) -> None:
 @pytest.mark.parametrize("mode", ["representative", "individual"])
 def test_task_source_builder_consumes_pair_shaped_counts_and_units(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     mode: str,
 ) -> None:
     facts, raw = _facts(tmp_path)
@@ -167,14 +166,10 @@ def test_task_source_builder_consumes_pair_shaped_counts_and_units(
         selected_sources=facts.selected_sources,
         prepared_source=prepared,
     )
-    monkeypatch.setattr(
-        task_sources,
-        "load_mechanical_source_facts",
-        lambda *_args, **_kwargs: facts,
-    )
     records = build_mechanical_task_sources(
         prepared,
         raw_source=raw,
+        facts=facts,
         source_attestation=attestation,
         figure_plan=plan,
         output_dir=tmp_path / "terminal_sources",
@@ -197,6 +192,7 @@ def _fake_source_builder(
     prepared: Path,
     *,
     raw_source: Path,
+    facts: MechanicalSourceFacts,
     source_attestation: PreparationSourceAttestation,
     figure_plan: ResolvedFigurePlan,
     output_dir: Path,
@@ -204,6 +200,7 @@ def _fake_source_builder(
     options: dict[str, Any],
 ) -> list[MechanicalTaskSource]:
     del raw_source, request, options
+    assert facts.source_sha256 == figure_plan.source_sha256
     output_dir.mkdir(parents=True)
     raw_sources = tuple(Path(item.path) for item in source_attestation.selected_sources)
     records: list[MechanicalTaskSource] = []
@@ -281,7 +278,7 @@ def _fake_renderer(
 
 def _bundle_inputs(
     tmp_path: Path,
-) -> tuple[Path, Path, PreparationSourceAttestation, ResolvedFigurePlan]:
+) -> tuple[Path, Path, PreparationSourceAttestation, ResolvedFigurePlan, ResolvedScientificSource]:
     facts, raw = _facts(tmp_path)
     prepared = tmp_path / "prepared.csv"
     _write_prepared(prepared, facts.representative_curve_series)
@@ -292,15 +289,21 @@ def _bundle_inputs(
         selected_sources=facts.selected_sources,
         prepared_source=prepared,
     )
-    return prepared, raw, attestation, _plan(facts, "representative")
+    plan = _plan(facts, "representative")
+    resolved = ResolvedScientificSource(
+        rule_id=facts.rule_id, source=raw, domain=facts,
+        figure_plan=plan, source_sha256=facts.source_sha256,
+    )
+    return prepared, raw, attestation, plan, resolved
 
 
 def test_bundle_installs_all_five_tensile_tasks_and_completed_plan(
     tmp_path: Path,
 ) -> None:
-    prepared, raw, attestation, plan = _bundle_inputs(tmp_path)
+    prepared, raw, attestation, plan, resolved = _bundle_inputs(tmp_path)
     result = _render_veusz_mechanical_bundle(
         prepared,
+        resolved_scientific_source=resolved,
         source_input=raw,
         source_attestation=attestation,
         output_dir=tmp_path / "out",
@@ -321,7 +324,7 @@ def test_bundle_installs_all_five_tensile_tasks_and_completed_plan(
 
 
 def test_bundle_failure_rolls_back_figures_and_terminal_sources(tmp_path: Path) -> None:
-    prepared, raw, attestation, plan = _bundle_inputs(tmp_path)
+    prepared, raw, attestation, plan, resolved = _bundle_inputs(tmp_path)
     output = tmp_path / "out"
     figures = output / "figures"
     figures.mkdir(parents=True)
@@ -345,6 +348,7 @@ def test_bundle_failure_rolls_back_figures_and_terminal_sources(tmp_path: Path) 
     with pytest.raises(RuntimeError, match="second task failed"):
         _render_veusz_mechanical_bundle(
             prepared,
+            resolved_scientific_source=resolved,
             source_input=raw,
             source_attestation=attestation,
             output_dir=output,

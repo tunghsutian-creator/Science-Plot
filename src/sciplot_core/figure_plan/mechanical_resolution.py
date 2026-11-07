@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from sciplot_core.mechanical_figure_contract import (
@@ -29,44 +28,34 @@ _REPLICATE_MODE_ALIASES = {
 }
 
 
-def resolve_mechanical_plan(
+def mechanical_plan_replicate_mode(
     *,
-    input_path: Path,
     rule_id: str,
     template: str,
     study_model: dict[str, Any],
     request: dict[str, Any],
-) -> ResolvedFigurePlan:
-    """Bind curve and every accepted descriptive summary to raw source facts."""
+) -> str:
+    """Reject conflicting scientific choices before any source observation."""
 
     contract = mechanical_figure_contract(rule_id)
     _validate_template(contract, template=template, request=request)
     _validate_study_model_queue(contract, study_model=study_model)
-    replicate_mode = _resolved_replicate_mode(
+    return _resolved_replicate_mode(
         contract,
         study_model=study_model,
         request=request,
     )
+
+
+def resolve_mechanical_plan(
+    *, facts: MechanicalSourceFacts, replicate_mode: str,
+) -> ResolvedFigurePlan:
+    """Bind every task to the operation's already selected mechanical facts."""
+    rule_id = facts.rule_id
+    contract = mechanical_figure_contract(rule_id)
     from sciplot_core.semantic_sources.mechanical_facts import (
         MechanicalSourceFactsError,
-        load_mechanical_source_facts,
     )
-
-    try:
-        facts = load_mechanical_source_facts(
-            input_path,
-            rule_id=rule_id,
-            series_order=request.get("series_order"),
-        )
-    except FigurePlanResolutionError:
-        raise
-    except MechanicalSourceFactsError as exc:
-        raise FigurePlanResolutionError(exc.reason_code, str(exc)) from exc
-    except (OSError, ValueError) as exc:
-        raise FigurePlanResolutionError(
-            "mechanical_source_contract_invalid",
-            f"The {rule_id} source could not be resolved without loss: {exc}",
-        ) from exc
     _validate_source_facts(contract, facts=facts)
     try:
         curve_series = facts.curve_series_for_mode(replicate_mode)
@@ -326,4 +315,4 @@ def _fail(reason_code: str, message: str) -> NoReturn:
     raise FigurePlanResolutionError(reason_code, message)
 
 
-__all__ = ["resolve_mechanical_plan"]
+__all__ = ["mechanical_plan_replicate_mode", "resolve_mechanical_plan"]

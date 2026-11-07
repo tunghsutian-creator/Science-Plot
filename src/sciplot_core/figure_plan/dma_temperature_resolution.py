@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import math
 from pathlib import Path
@@ -248,7 +249,7 @@ def dma_temperature_source_sha256(source: Path) -> str | None:
 
 
 def _require_diagnostic(
-    diagnostics: dict[str, Any],
+    diagnostics: Mapping[str, Any],
     key: str,
     expected: str,
 ) -> None:

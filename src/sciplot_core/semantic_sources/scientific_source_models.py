@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar, Any
 
 from sciplot_core.materials_rules import get_rule
+from sciplot_core.semantic_sources.mechanical_fact_models import MechanicalSourceFacts
 from sciplot_core.semantic_sources.rheology_sweep_domain import (
     ResolvedRheologySweepDomain,
 )
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
     from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 
 
-ScientificSourceDomain = ResolvedScientificTransform | ResolvedRheologySweepDomain
+ScientificSourceDomain = ResolvedScientificTransform | ResolvedRheologySweepDomain | MechanicalSourceFacts
 DomainT = TypeVar("DomainT")
 
 
@@ -44,12 +45,13 @@ class ResolvedScientificSource:
     def __post_init__(self) -> None:
         if self.source != self.source.expanduser().resolve():
             raise ValueError("Resolved scientific source path must be absolute.")
-        if isinstance(self.domain, ResolvedRheologySweepDomain):
+        if isinstance(self.domain, ResolvedRheologySweepDomain | MechanicalSourceFacts):
             if self.domain.rule_id != self.rule_id:
                 raise ValueError(
                     "Resolved scientific domain does not match its rule identity."
                 )
-            if self.domain.source != self.source:
+            domain_source = self.domain.source_root if isinstance(self.domain, MechanicalSourceFacts) else self.domain.source
+            if domain_source != self.source:
                 raise ValueError(
                     "Resolved scientific domain does not match its source path."
                 )

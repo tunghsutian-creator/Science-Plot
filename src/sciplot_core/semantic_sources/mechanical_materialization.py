@@ -7,6 +7,7 @@ from typing import Any
 
 import pandas as pd
 
+from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.materials_rules import ELONGATION_AT_BREAK_METRIC
 from sciplot_core.semantic_sources.curve_output import _write_curve_table
 from sciplot_core.semantic_sources.mechanical_fact_models import (
@@ -65,11 +66,22 @@ def prepare_exact_mechanical_source(
         raise ValueError(
             "mechanical_preparation_rule_mismatch: semantic family and rule differ."
         )
-    facts = load_mechanical_source_facts(
-        context.source,
-        rule_id=rule_id,
-        series_order=context.series_order,
-    )
+    if context.resolved_scientific_source is None:
+        # Independent raw preparation is an admission boundary, not a fallback
+        # for an orchestration path that already resolved its source.
+        facts = load_mechanical_source_facts(
+            context.source, rule_id=rule_id, series_order=context.series_order,
+        )
+    else:
+        facts = context.resolved_scientific_source.require_domain(MechanicalSourceFacts)
+        facts.require_selection(
+            source=context.source, rule_id=rule_id, series_order=context.series_order,
+        )
+        if source_tree_sha256(context.source) != facts.source_sha256:
+            raise ValueError(
+                "semantic_preparation_source_changed: mechanical source changed "
+                "before materialization."
+            )
     mode = normalize_mechanical_curve_mode(context.replicate_mode)
     selected_series = facts.curve_series_for_mode(mode)
     processed_source = _processed_curve_path(

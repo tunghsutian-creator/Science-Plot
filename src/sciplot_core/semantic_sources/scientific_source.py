@@ -39,6 +39,11 @@ def resolve_scientific_source(
 
     if request.get("column_confirmations"):
         request = {**request, "column_confirmations": require_supported_confirmations(rule, request_column_confirmations(request))}
+    if rule.figure_plan_adapter == "mechanical":
+        return _resolve_mechanical_scientific_source(
+            resolved_source, rule_id=normalized_rule, request=request,
+            template=template, study_model=study_model or {},
+        )
     adapter = rule.scientific_source_adapter
     if adapter == "stress_relaxation":
         return _resolve_stress_relaxation_scientific_source(
@@ -79,6 +84,47 @@ def resolve_scientific_source(
             template=template,
         )
     return None
+
+
+def _resolve_mechanical_scientific_source(
+    source: Path, *, rule_id: str, request: dict[str, Any],
+    template: str, study_model: dict[str, Any],
+) -> ResolvedScientificSource:
+    from sciplot_core.figure_plan.errors import FigurePlanResolutionError
+    from sciplot_core.figure_plan.mechanical_resolution import (
+        mechanical_plan_replicate_mode, resolve_mechanical_plan,
+    )
+    from sciplot_core.semantic_sources.mechanical_facts import (
+        MechanicalSourceFactsError, load_mechanical_source_facts,
+    )
+
+    try:
+        mode = mechanical_plan_replicate_mode(
+            rule_id=rule_id, template=template, study_model=study_model, request=request,
+        )
+    except FigurePlanResolutionError as exc:
+        raise ScientificSourceResolutionError(exc.reason_code, str(exc)) from exc
+    try:
+        facts = load_mechanical_source_facts(
+            source, rule_id=rule_id, series_order=request.get("series_order"),
+        )
+    except MechanicalSourceFactsError as exc:
+        raise ScientificSourceResolutionError(exc.reason_code, str(exc)) from exc
+    except (OSError, ValueError) as exc:
+        raise ScientificSourceResolutionError(
+            "mechanical_source_contract_invalid",
+            f"The {rule_id} source could not be resolved without loss: {exc}",
+        ) from exc
+    try:
+        plan = resolve_mechanical_plan(
+            facts=facts, replicate_mode=mode,
+        )
+    except FigurePlanResolutionError as exc:
+        raise ScientificSourceResolutionError(exc.reason_code, str(exc)) from exc
+    return ResolvedScientificSource(
+        rule_id=rule_id, source=source, domain=facts,
+        figure_plan=plan, source_sha256=facts.source_sha256,
+    )
 
 
 def _resolve_stress_relaxation_scientific_source(

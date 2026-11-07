@@ -120,7 +120,7 @@ def test_generated_mechanical_queue_guards_before_native_writes(tmp_path: Path, 
         for item in queue[:1] if shape == "partial" else queue:
             item["_mechanical_task_source"] = "forged source"
         with pytest.raises(StudioPreparationBlocked, match="fresh, complete mechanical task-source queue"):
-            bind_mechanical_task_sources(queue, figure_plan=plan, source_attestation=None, project_dir=project, request=request)
+            bind_mechanical_task_sources(queue, figure_plan=plan, source_attestation=None, project_dir=project, request=request, resolved_scientific_source=None)
     else:
         invalid = {"empty": [], "tuple": tuple(queue), "non_mapping": [object()],
                    "non_string_key": [{**queue[0], 1: "forged"}, *queue[1:]], "empty_mapping": [{}]}[shape]

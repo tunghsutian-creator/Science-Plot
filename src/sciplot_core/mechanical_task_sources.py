@@ -23,7 +23,6 @@ from sciplot_core.mechanical_render_options import (
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.semantic_sources.mechanical_facts import (
     MechanicalSourceFacts,
-    load_mechanical_source_facts,
 )
 from sciplot_core.source_tables import canonicalize_token, load_curve_table
 from sciplot_core.terminal_source_binding import MaterializedTerminalSourceBinding
@@ -62,6 +61,7 @@ def build_mechanical_task_sources(
     prepared_source: Path,
     *,
     raw_source: Path,
+    facts: MechanicalSourceFacts,
     source_attestation: PreparationSourceAttestation,
     figure_plan: ResolvedFigurePlan,
     output_dir: Path,
@@ -72,10 +72,8 @@ def build_mechanical_task_sources(
 
     prepared = prepared_source.expanduser().resolve()
     raw = raw_source.expanduser().resolve()
-    facts = load_mechanical_source_facts(
-        raw,
-        rule_id=figure_plan.rule_id,
-        series_order=request.get("series_order"),
+    facts.require_selection(
+        source=raw, rule_id=figure_plan.rule_id, series_order=request.get("series_order"),
     )
     curve_mode = require_mechanical_execution_plan(
         figure_plan,

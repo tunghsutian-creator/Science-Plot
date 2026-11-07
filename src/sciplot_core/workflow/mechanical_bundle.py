@@ -25,6 +25,8 @@ from sciplot_core.mechanical_task_sources import (
 )
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.render import render_to_dir
+from sciplot_core.semantic_sources.mechanical_fact_models import MechanicalSourceFacts
+from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 from sciplot_core.workflow.bundle_exports import _rename_metric_exports
 from sciplot_core.workflow.mechanical_execution_evidence import (
     build_mechanical_execution_evidence,
@@ -47,6 +49,7 @@ _MECHANICAL_FIGURE_CONTRACTS = MECHANICAL_FIGURE_CONTRACTS
 def _render_veusz_mechanical_bundle(
     input_path: Path,
     *,
+    resolved_scientific_source: ResolvedScientificSource,
     source_input: Path | None = None,
     source_attestation: PreparationSourceAttestation | None = None,
     output_dir: Path,
@@ -86,6 +89,12 @@ def _render_veusz_mechanical_bundle(
             "mechanical_preparation_attestation_missing: mechanical Workflow "
             "requires its raw source and typed prepare-time attestation."
         )
+    facts = resolved_scientific_source.require_domain(MechanicalSourceFacts)
+    facts.require_selection(
+        source=source_input, rule_id=rule_id, series_order=request.get("series_order"),
+    )
+    if resolved_scientific_source.figure_plan != plan:
+        raise ValueError("mechanical_figure_plan_mismatch: scientific source plan diverged.")
     if not {"pdf", "tiff_300"}.issubset(export_formats):
         raise ValueError(
             "mechanical_export_contract_mismatch: every selected task requires "
@@ -114,11 +123,15 @@ def _render_veusz_mechanical_bundle(
         records = _source_builder(
             input_path,
             raw_source=source_input,
+            facts=facts,
             source_attestation=source_attestation,
             figure_plan=plan,
             output_dir=source_root,
             request=request,
             options=options,
+        )
+        source_attestation.verify_current(
+            source_root=source_input, prepared_source=input_path,
         )
         if tuple(record.task for record in records) != plan.tasks:
             raise ValueError(

@@ -151,10 +151,12 @@ def resolve_figure_plan(
             request={**request, "template": template},
             source_resolution=dma_temperature_source_resolution,
         )
-    if adapter == "registered_single_curve":
+    if adapter in {"registered_single_curve", "mechanical"}:
         if input_path is None:
             raise FigurePlanResolutionError(
                 "figure_plan_source_required",
+                "Mechanical figure planning requires an explicit source path."
+                if adapter == "mechanical" else
                 "Registered single-curve planning requires an explicit source path.",
             )
         from sciplot_core.semantic_sources.scientific_source import (
@@ -178,23 +180,6 @@ def resolve_figure_plan(
                 "SciPlot could not resolve the registered single-curve source.",
             )
         return source_resolution.figure_plan
-    if adapter == "mechanical":
-        if input_path is None:
-            raise FigurePlanResolutionError(
-                "figure_plan_source_required",
-                "Mechanical figure planning requires an explicit source path.",
-            )
-        from sciplot_core.figure_plan.mechanical_resolution import (
-            resolve_mechanical_plan,
-        )
-
-        return resolve_mechanical_plan(
-            input_path=input_path,
-            rule_id=normalized_rule,
-            template=template,
-            study_model=study_model,
-            request=request,
-        )
     if adapter == "performance":
         if input_path is None:
             raise FigurePlanResolutionError(

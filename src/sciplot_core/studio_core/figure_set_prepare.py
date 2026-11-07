@@ -58,6 +58,7 @@ from sciplot_core.studio_core.registry_state import (
     _veusz_spec_path,
     _registered_generated_hash,
 )
+from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 
 
 @manage_mechanical_task_source_lifecycle
@@ -77,6 +78,7 @@ def _prepare_studio_figure_set(
     queue_override: list[dict[str, Any]] | None = None,
     figure_plan: ResolvedFigurePlan | None = None,
     prepared_source_attestation: PreparationSourceAttestation | None = None,
+    resolved_scientific_source: ResolvedScientificSource | None = None,
     path_replacer: Callable[[Path, Path], None] | None = None,
 ) -> dict[str, Any] | None:
     require_preparation_candidate(project_dir)
