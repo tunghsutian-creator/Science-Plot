@@ -163,14 +163,17 @@ def assert_stage_helpers(root: Path, environment: dict[str, str]) -> None:
         _no_alias(path, root)
 
 
-def validate_stage(root: Path, environment: dict[str, str]) -> dict[str, Any]:
-    """Validate the actual stage; a caller flag or missing corpus is insufficient."""
+def validate_stage(root: Path, environment: dict[str, str], *additional_environments: dict[str, str]) -> dict[str, Any]:
+    """Observe once for these owned environments; every call captures fresh facts."""
+    from . import public_stage_environment
+
     root = root.absolute()
+    environment, *others = [dict(item) for item in (environment, *additional_environments)]
+    for item in (environment, *others):
+        public_stage_environment.require_stage_environment(root, item)
     assert_private_absent(root, environment)
-    for key, expected in (("SCIPLOT_REPO", root), ("SCIPLOT_SOURCE_ROOT", root / "src"),
-                          ("SCIPLOT_RUNTIME_REPO", root), ("SCIPLOT_VEUSZ_ROOT", root / "third_party/veusz")):
-        if environment.get(key) != str(expected) or expected.resolve() != expected:
-            raise ValueError("Controlled public source/runtime environment does not bind the actual stage.")
+    if any((root / relative).resolve() != root / relative for _, relative in public_stage_environment.STAGE_ROOTS):
+        raise ValueError("Controlled public source/runtime environment does not bind the actual stage.")
     receipt_path = root / RECEIPT
     if receipt_path.is_symlink():
         raise ValueError("Public stage receipt cannot be an alias.")
@@ -186,10 +189,10 @@ def validate_stage(root: Path, environment: dict[str, str]) -> dict[str, Any]:
     origin = Path(receipt["origin_root"])
     if source_binding(origin) != receipt.get("origin_source_bytes") or _git(origin, "rev-parse", "HEAD").strip() != receipt.get("origin_head"):
         raise ValueError("Public stage actual origin source/config identity drift.")
-    loaded = Path(__file__).resolve()
-    expected_module = root / "src/sciplot_core/verification/public_stage.py"
-    if loaded != expected_module or _hash(loaded) != receipt["source_bytes"].get(str(loaded.relative_to(root))):
-        raise ValueError("Controlled public validator is not the bound loaded source.")
+    for filename, source in (("public_stage.py", __file__), ("public_stage_environment.py", public_stage_environment.__file__)):
+        loaded = Path(source).resolve()
+        if loaded != root / "src/sciplot_core/verification" / filename or _hash(loaded) != receipt["source_bytes"].get(str(loaded.relative_to(root))):
+            raise ValueError("Controlled public validator is not the bound loaded source.")
     return receipt
 
 

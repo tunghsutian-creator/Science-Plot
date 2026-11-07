@@ -94,10 +94,10 @@ def generated_control(environment: dict[str, str], command: list[str], cwd: Path
     root = Path(__file__).resolve().parents[3]
     if not _generated_port(root):
         raise PermissionError("Only the source-owned generated observer helper can use this port.")
-    before = validate_stage(root, dict(os.environ))
+    environment = dict(environment)
     # Check the real launch environment too; a caller cannot quietly inherit a
     # second source/reference/runtime namespace through an explicit child env.
-    validate_stage(root, environment)
+    before = validate_stage(root, dict(os.environ), environment)
     if durable and (directory is None or not directory.absolute().is_relative_to(cwd.absolute() / ".tmp_verify")):
         raise ValueError("Generated durable launch must bind its exact ignored directory.")
     child = {key: value for key, value in environment.items() if key not in _KEYS}

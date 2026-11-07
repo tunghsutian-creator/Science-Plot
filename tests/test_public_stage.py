@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from sciplot_core.verification import public_stage
+from sciplot_core.verification import public_stage, public_stage_environment
 from sciplot_core.verification.public_control_boundary import generated_control
 from sciplot_core.verification.public_input_guard import BOOTSTRAP_KEY, ENVIRONMENT_KEY, configure_environment
 
@@ -146,9 +146,10 @@ def _origin(tmp_path: Path) -> Path:
     (root / ".gitignore").write_text(".tmp_verify/\n.local\n*.so\n")
     (root / "src").mkdir()
     (root / "src/generated.py").write_text("VALUE = 'generated software control'\n")
-    owner = root / "src/sciplot_core/verification/public_stage.py"
-    owner.parent.mkdir(parents=True)
-    owner.write_bytes(Path(public_stage.__file__).read_bytes())
+    for module in (public_stage, public_stage_environment):
+        owner = root / "src/sciplot_core/verification" / Path(module.__file__).name
+        owner.parent.mkdir(parents=True, exist_ok=True)
+        owner.write_bytes(Path(module.__file__).read_bytes())
     private = root / "tests/fixtures/rendering_profiles/generated/input.csv"
     private.parent.mkdir(parents=True)
     private.write_text("generated private-namespace sentinel; no scientific data\n")
@@ -273,6 +274,7 @@ def test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_
     # This unit fixture substitutes only the loaded-path witness; real staged
     # interpreter controls separately exercise the actual unmodified owner.
     monkeypatch.setattr(public_stage, "__file__", str(stage / "src/sciplot_core/verification/public_stage.py"))
+    monkeypatch.setattr(public_stage_environment, "__file__", str(stage / "src/sciplot_core/verification/public_stage_environment.py"))
     if mutation == "private_member":
         private = stage / "tests/fixtures/real_world"
         private.parent.mkdir(parents=True, exist_ok=True)
@@ -306,6 +308,118 @@ def test_stage_revalidation_blocks_actual_drift_with_explicit_synthetic_runtime_
     else:
         with pytest.raises(ValueError):
             public_stage.validate_stage(stage, environment)
+
+
+@pytest.fixture
+def observed_stage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Real source/Git/helper files, explicitly synthetic loaded-runtime facts."""
+    origin = _origin(tmp_path)
+    runtime = {"version": 0}
+
+    def synthetic_runtime(root, environment):
+        return {"claim": "synthetic loaded-runtime instrumentation, not native acceptance",
+                "version": runtime["version"], "helpers": {
+                    name: public_stage._hash(path) for name, path in public_stage._helper_paths(root, environment).items()}}
+
+    monkeypatch.setattr(public_stage, "runtime_binding", synthetic_runtime)
+    stage, environment, receipt = public_stage.create_stage(origin, origin / ".tmp_verify/stage", {"SCIPLOT_RUNTIME_REPO": str(origin)})
+    for module in (public_stage, public_stage_environment):
+        monkeypatch.setattr(module, "__file__", str(stage / "src/sciplot_core/verification" / Path(module.__file__).name))
+    return origin, stage, environment, receipt, runtime
+
+
+@pytest.mark.parametrize("position", (0, 1))
+@pytest.mark.parametrize("key", ("SCIPLOT_REPO", "SCIPLOT_SOURCE_ROOT", "SCIPLOT_RUNTIME_REPO", "SCIPLOT_VEUSZ_ROOT", "SCIPLOT_REFERENCE_DATA"))
+def test_one_observation_still_rejects_either_environment(observed_stage, monkeypatch, position, key):
+    _origin_root, stage, environment, _receipt, _runtime = observed_stage
+    environments = [dict(environment), dict(environment)]
+    environments[position][key] = "" if key == "SCIPLOT_REFERENCE_DATA" else str(stage / "other")
+    monkeypatch.setattr(public_stage, "source_binding", lambda *_: pytest.fail("Invalid environment reached source observation"))
+    with pytest.raises(ValueError):
+        public_stage.validate_stage(stage, *environments)
+
+
+def test_owned_observation_is_shared_only_within_one_call(observed_stage, monkeypatch):
+    origin, stage, environment, receipt, _runtime = observed_stage
+    source_binding, runtime_binding = public_stage.source_binding, public_stage.runtime_binding
+    sources, runtimes = [], []
+
+    def source(root):
+        sources.append(root)
+        return source_binding(root)
+
+    def runtime(root, env):
+        runtimes.append(root)
+        return runtime_binding(root, env)
+
+    monkeypatch.setattr(public_stage, "source_binding", source)
+    monkeypatch.setattr(public_stage, "runtime_binding", runtime)
+    observed = public_stage.validate_stage(stage, environment, dict(environment))
+    assert observed == receipt and sources == [stage, origin] and runtimes == [stage]
+    observed["source_bytes"].clear()
+    # Returned JSON is a detached result, never a caller-provided admission.
+    assert public_stage.validate_stage(stage, environment) == receipt
+    assert sources == [stage, origin, stage, origin] and runtimes == [stage, stage]
+    with pytest.raises(TypeError):
+        public_stage.validate_stage(stage, environment, observed=receipt)
+
+
+@pytest.mark.parametrize("mutation", ("stage", "origin", "runtime", "helper_alias", "environment_owner", "private"))
+def test_later_observation_refuses_new_physical_facts(observed_stage, monkeypatch, mutation):
+    origin, stage, environment, _receipt, runtime = observed_stage
+    public_stage.validate_stage(stage, environment, dict(environment))
+    if mutation in {"stage", "origin"}:
+        ((stage if mutation == "stage" else origin) / "src/generated.py").write_text("changed source\n")
+    elif mutation == "runtime":
+        runtime["version"] += 1
+    elif mutation == "helper_alias":
+        helper = next(iter(public_stage._helper_paths(stage, environment).values()))
+        target = origin / "same-helper.so"
+        target.write_bytes(helper.read_bytes())
+        helper.unlink()
+        helper.symlink_to(target)
+    elif mutation == "environment_owner":
+        monkeypatch.setattr(public_stage_environment, "__file__", str(origin / "src/sciplot_core/verification/public_stage_environment.py"))
+    else:
+        (stage / "tests/fixtures/real_world").mkdir(parents=True)
+    with pytest.raises(ValueError):
+        public_stage.validate_stage(stage, environment)
+
+
+@pytest.mark.parametrize("mutation", ("none", "source", "runtime", "ambient"))
+def test_generated_control_keeps_fresh_exit_and_owns_its_child_environment(observed_stage, monkeypatch, mutation):
+    from sciplot_core.verification import public_control_boundary as boundary
+
+    _origin_root, stage, environment, _receipt, runtime = observed_stage
+    # This unit enters only the control lifetime, with no process launch and no
+    # native/runtime acceptance. Real caller/guard controls remain separate.
+    monkeypatch.setattr(boundary, "__file__", str(stage / "src/sciplot_core/verification/public_control_boundary.py"))
+    monkeypatch.setattr(boundary, "_generated_port", lambda _root: True)
+    for key in ("SCIPLOT_REPO", "SCIPLOT_SOURCE_ROOT", "SCIPLOT_RUNTIME_REPO", "SCIPLOT_VEUSZ_ROOT"):
+        monkeypatch.setenv(key, environment[key])
+    monkeypatch.delenv("SCIPLOT_REFERENCE_DATA", raising=False)
+    if ENVIRONMENT_KEY not in os.environ:
+        monkeypatch.setenv(ENVIRONMENT_KEY, json.dumps([str(stage / "tests/fixtures")]))
+    supplied = dict(os.environ)
+
+    def operation():
+        with boundary.generated_control(supplied, [sys.executable, "-c", "pass"], stage, durable=False) as child:
+            supplied["SCIPLOT_SOURCE_ROOT"] = "changed caller mapping"
+            assert child["SCIPLOT_SOURCE_ROOT"] == environment["SCIPLOT_SOURCE_ROOT"]
+            assert ENVIRONMENT_KEY not in child
+            if mutation == "source":
+                (stage / "src/generated.py").write_text("changed during operation\n")
+            elif mutation == "runtime":
+                runtime["version"] += 1
+            elif mutation == "ambient":
+                monkeypatch.setenv("SCIPLOT_SOURCE_ROOT", "changed ambient mapping")
+
+    if mutation == "none":
+        operation()
+    else:
+        with pytest.raises(ValueError):
+            operation()
+    assert boundary._grant.get() is None
 
 
 @pytest.mark.parametrize("mutation", ("healthy", "missing_body", "unreviewed_skip", "failure", "duplicate_call", "unexpected_node", "unexpected_phase"))
