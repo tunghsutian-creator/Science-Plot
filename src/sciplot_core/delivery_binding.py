@@ -58,4 +58,3 @@ def delivery_binding_from_payload(value: object) -> DeliveryBinding:
         primary=value["primary"],
         documents=tuple(sorted(documents.items())),
     )
-
