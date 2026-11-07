@@ -14,10 +14,7 @@ from sciplot_core.delivery import (
     DELIVERY_BINDING_POLICY_LEGACY,
     DELIVERY_PACKAGE_CONTRACT_VERSION,
 )
-from sciplot_core.launchers import (
-    inspect_delivery_launcher_contract,
-    write_delivery_launcher,
-)
+from sciplot_core.delivery_identity import write_delivery_identity, inspect_delivery_identity, make_delivery_binding
 from sciplot_core.materials_rules import get_rule, semantic_payload_from_rule
 from sciplot_core.one_step import (
     _readiness,
@@ -78,8 +75,9 @@ def _write_probe_delivery(root: Path) -> dict[str, Any]:
     pdf.write_bytes(b"pdf")
     tiff.write_bytes(b"tiff")
     project.write_text("# Veusz saved document\n", encoding="utf-8")
-    launcher = write_delivery_launcher(root)
-    launcher_contract = inspect_delivery_launcher_contract(root)
+    identity = write_delivery_identity(root, binding=make_delivery_binding(root=root, manifest={}, documents=[
+        {"path": str(project), "delivery_sha256": existing_file_sha256(project)}]))
+    identity_contract = inspect_delivery_identity(root)
     return {
         "kind": "sciplot_user_delivery_package",
         "version": DELIVERY_PACKAGE_CONTRACT_VERSION,
@@ -96,15 +94,15 @@ def _write_probe_delivery(root: Path) -> dict[str, Any]:
                 "delivery_sha256": existing_file_sha256(project),
             }
         ],
-        "open_in_veusz": str(launcher),
-        "open_in_veusz_sha256": launcher_contract["content_sha256"],
-        "launcher_contract": launcher_contract,
+        "identity": str(identity),
+        "identity_sha256": identity_contract["content_sha256"],
+        "identity_contract": identity_contract,
         "artifacts": [
             {"id": "data", "path": str(data_dir), "exists": True},
             {"id": "pdf", "path": str(pdf_dir), "exists": True},
             {"id": "tiff", "path": str(tiff_dir), "exists": True},
             {"id": "project", "path": str(project_dir), "exists": True},
-            {"id": "launcher", "path": str(launcher), "exists": True},
+            {"id": "delivery_identity", "path": str(identity), "exists": True},
         ],
         "complete": True,
     }

@@ -10,10 +10,7 @@ from typing import Any
 from sciplot_core.figure_plan import resolved_figure_plan_from_payload
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
-from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
-from sciplot_core.launchers.delivery_inspection import (
-    inspect_delivery_launcher_contract,
-)
+from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding, delivery_identity_path
 from sciplot_core.policy import DELIVERY_LAUNCHER
 from sciplot_core.studio_core.delivery_target import _managed_project
 from sciplot_core.studio_core.figure_set_state import _read_studio_figure_set
@@ -31,10 +28,8 @@ def read_object(path: Path) -> dict[str, Any]:
 def bound_delivery_project(root: Path) -> Path:
     """Identify ownership even when a visible VSZ has outstanding edits."""
     root = canonical_path(root)
-    launcher = canonical_path(root / DELIVERY_LAUNCHER)
-    if inspect_delivery_launcher_contract(root).get("ready") is not True:
-        raise ValueError(f"The delivery has no valid SciPlot launcher: {root}")
-    binding = delivery_binding_from_content(launcher.read_text(encoding="utf-8"))
+    canonical_path(delivery_identity_path(root))
+    binding = read_delivery_binding(root)
     if binding is None or binding.request is None:
         raise ValueError("Portable delivery has no associated managed project.")
     project = _managed_project(root, binding)
@@ -75,14 +70,12 @@ def resolve_project_path(value: Path) -> Path:
                 )
         elif path.parent.name == "project":
             project = bound_delivery_project(path.parent.parent)
-            binding = delivery_binding_from_content(
-                (path.parent.parent / DELIVERY_LAUNCHER).read_text(encoding="utf-8")
-            )
+            binding = read_delivery_binding(path.parent.parent)
             if binding is None or path.name not in dict(binding.documents):
                 raise ValueError("The visible VSZ is not registered in this delivery.")
         else:
             raise ValueError("Standalone VSZ has no managed project binding.")
-    elif path.is_dir() or path.name == DELIVERY_LAUNCHER:
+    elif path.is_dir() or path.name in {DELIVERY_LAUNCHER, DELIVERY_IDENTITY}:
         root = path if path.is_dir() else path.parent
         if (root / "plot_request.json").is_file():
             project = root
@@ -188,9 +181,7 @@ def select_figure(
         if matches:
             identity = matches[0]["figure_id"]
         elif path.parent.name == "project":
-            binding = delivery_binding_from_content(
-                (path.parent.parent / DELIVERY_LAUNCHER).read_text(encoding="utf-8")
-            )
+            binding = read_delivery_binding(path.parent.parent)
             if binding is None or path.name != binding.primary:
                 raise ValueError(
                     "Select the figure_id explicitly for a secondary visible VSZ."

@@ -1,0 +1,197 @@
+"""The non-executable delivery identity and its bounded v1 shell reader."""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.source_locations import literal_source_path
+from sciplot_core.policy import DELIVERY_LAUNCHER
+
+DELIVERY_IDENTITY = "SciPlot_delivery.json"
+DELIVERY_IDENTITY_KIND = "sciplot_delivery_identity"
+DELIVERY_IDENTITY_VERSION = 1
+
+
+@dataclass(frozen=True)
+class DeliveryBinding:
+    root: str
+    request: str | None
+    source: str | None
+    primary: str
+    documents: tuple[tuple[str, str], ...]
+
+    def to_payload(self) -> dict[str, Any]:
+        return {"root": self.root, "request": self.request, "source": self.source,
+                "primary": self.primary, "documents": dict(self.documents)}
+
+def delivery_binding_from_payload(value: object) -> DeliveryBinding:
+    if not isinstance(value, dict) or set(value) != {
+        "root",
+        "request",
+        "source",
+        "primary",
+        "documents",
+    }:
+        raise ValueError("The delivery identity is malformed.")
+    for key in ("root", "request", "source"):
+        path = value[key]
+        if key != "root" and path is None:
+            continue
+        if not isinstance(path, str) or not path or not Path(path).is_absolute():
+            raise ValueError(f"The delivery identity {key} must be an absolute path.")
+    documents = value["documents"]
+    if not isinstance(documents, dict) or not documents:
+        raise ValueError("The delivery identity requires editable documents.")
+    for name, digest in documents.items():
+        if (
+            not isinstance(name, str)
+            or Path(name).name != name
+            or Path(name).suffix.lower() != ".vsz"
+            or not isinstance(digest, str)
+            or re.fullmatch(r"[a-f0-9]{64}", digest) is None
+        ):
+            raise ValueError("The delivery editable-document baseline is malformed.")
+    if not isinstance(value["primary"], str) or value["primary"] not in documents:
+        raise ValueError("The delivery primary document is not in its baseline.")
+    if (value["request"] is None) != (value["source"] is None):
+        raise ValueError("The delivery project identity is incomplete.")
+    return DeliveryBinding(
+        root=value["root"],
+        request=value["request"],
+        source=value["source"],
+        primary=value["primary"],
+        documents=tuple(sorted(documents.items())),
+    )
+
+
+def make_delivery_binding(
+    *,
+    root: Path,
+    manifest: dict[str, Any],
+    documents: list[dict[str, Any]],
+) -> DeliveryBinding | None:
+    if not documents:
+        return None
+    logical_root = literal_source_path(root)
+    baseline = tuple(
+        (Path(str(item["path"])).name, str(item["delivery_sha256"]))
+        for item in documents
+    )
+    request_value = manifest.get("request_path")
+    request_path = (
+        Path(request_value).expanduser().resolve()
+        if isinstance(request_value, str)
+        else None
+    )
+    source = None
+    if (
+        request_path is not None
+        and request_path.name == "plot_request.json"
+        and request_path.is_file()
+    ):
+        try:
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            delivery = (
+                request.get("delivery_output") if isinstance(request, dict) else None
+            )
+            source_value = request.get("input") if isinstance(request, dict) else None
+            if (
+                not isinstance(delivery, str)
+                or literal_source_path(Path(delivery).expanduser()) != logical_root
+            ):
+                request_path = None
+            elif isinstance(source_value, str) and source_value.strip():
+                source_path = Path(source_value).expanduser()
+                if not source_path.is_absolute():
+                    source_path = request_path.parent / source_path
+                source = str(source_path.resolve())
+            else:
+                request_path = None
+        except (OSError, ValueError):
+            request_path = None
+    else:
+        request_path = None
+    plan = manifest.get("resolved_figure_plan")
+    primary_id = plan.get("primary_figure_id") if isinstance(plan, dict) else None
+    primary = next(
+        (
+            Path(str(item["path"])).name
+            for item in documents
+            if item.get("figure_id") == primary_id
+        ),
+        baseline[0][0],
+    )
+    return DeliveryBinding(
+        root=logical_root,
+        request=literal_source_path(request_path) if request_path else None,
+        source=literal_source_path(Path(source)) if source is not None else None,
+        primary=primary,
+        documents=baseline,
+    )
+
+
+def delivery_identity_path(root: Path) -> Path:
+    """Present new records own identity; malformed records never select v1."""
+    current = root / DELIVERY_IDENTITY
+    return current if current.exists() or current.is_symlink() else root / DELIVERY_LAUNCHER
+
+
+def write_delivery_identity(root: Path, *, binding: DeliveryBinding | None) -> Path:
+    """Write only to the caller's detached publication candidate."""
+    path = root / DELIVERY_IDENTITY
+    payload = {"kind": DELIVERY_IDENTITY_KIND, "version": DELIVERY_IDENTITY_VERSION,
+               "binding": binding.to_payload() if binding is not None else None}
+    path.write_text(json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+    return path
+
+
+def read_delivery_binding(root: Path) -> DeliveryBinding | None:
+    path = delivery_identity_path(root)
+    if path.name == DELIVERY_IDENTITY:
+        from sciplot_core.project_store.runtime import projected_runtime_artifact
+
+        # Immutable directory caches may contain identical JSON; they are source
+        # views, not current visible delivery evidence or new host permissions.
+        projected_runtime_artifact(path)
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("The delivery identity must be a regular non-symlink file.")
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if (not isinstance(value, dict) or set(value) != {"kind", "version", "binding"}
+                or value["kind"] != DELIVERY_IDENTITY_KIND
+                or type(value["version"]) is not int or value["version"] != DELIVERY_IDENTITY_VERSION):
+            raise ValueError("The delivery identity record is malformed.")
+        return delivery_binding_from_payload(value["binding"]) if value["binding"] is not None else None
+    if not path.exists():
+        return None
+    # The only compatibility format is the complete known v1 shell. It is never
+    # executed, granted capability or rewritten on read.
+    from sciplot_core.launchers.delivery_inspection import inspect_delivery_launcher_contract
+    from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
+
+    if path.is_symlink() or inspect_delivery_launcher_contract(root).get("ready") is not True:
+        raise ValueError("The legacy delivery identity is not a valid SciPlot launcher.")
+    return delivery_binding_from_content(path.read_text(encoding="utf-8"))
+
+
+def inspect_delivery_identity(root: Path) -> dict[str, object]:
+    """Observe exact non-executable identity bytes, without claiming source QA."""
+    path = root / DELIVERY_IDENTITY
+    binding = None
+    error = None
+    try:
+        if not path.exists() and not path.is_symlink():
+            raise ValueError("The delivery identity record is missing.")
+        binding = read_delivery_binding(root)
+    except (OSError, ValueError, UnicodeError) as exc:
+        error = str(exc)
+    return {"kind": DELIVERY_IDENTITY_KIND, "version": DELIVERY_IDENTITY_VERSION,
+            "path": str(path), "name": path.name,
+            "exists": path.is_file() and not path.is_symlink(),
+            "content_sha256": existing_file_sha256(path) if path.is_file() and not path.is_symlink() else None,
+            "ready": binding is not None and error is None,
+            "error": error}

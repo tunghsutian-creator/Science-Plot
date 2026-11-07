@@ -1,5 +1,7 @@
 """Saved-work discovery never promotes hashes, copies or stale records to authority."""
 
+from delivery_identity_helpers import write_legacy_delivery_launcher
+
 import json
 import shutil
 import subprocess
@@ -10,8 +12,7 @@ import pytest
 from sciplot_core import task_saved_work as work
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.launchers import write_delivery_launcher
-from sciplot_core.launchers.delivery_binding import DeliveryBinding
+from sciplot_core.delivery_identity import DeliveryBinding
 from sciplot_core.plot_engine.storage import commit
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_storage import save_task
@@ -55,7 +56,7 @@ def delivery(root, source, owner=None):
     binding = DeliveryBinding(root=str(root), source=str(source),
         request=str(owner / "plot_request.json") if owner else str(root.parent / "gone/plot_request.json"),
         primary=native.name, documents=((native.name, file_sha256(native)),))
-    write_delivery_launcher(root, binding=binding)
+    write_legacy_delivery_launcher(root, binding=binding)
     return root
 
 

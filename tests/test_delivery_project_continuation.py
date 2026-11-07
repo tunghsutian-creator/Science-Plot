@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from delivery_identity_helpers import write_legacy_delivery_launcher
+
 import json
 import shutil
 from pathlib import Path
@@ -9,9 +11,8 @@ import pytest
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.launchers import (
     inspect_delivery_launcher_contract,
-    write_delivery_launcher,
 )
-from sciplot_core.launchers.delivery_binding import make_delivery_binding
+from sciplot_core.delivery_identity import make_delivery_binding
 from sciplot_core.studio_core.delivery_target import resolve_delivery_target
 from sciplot_core.studio_core.studio_prepare import prepare_studio_document
 import sciplot_core.studio_core.studio_prepare_core as preparation
@@ -49,7 +50,7 @@ def _linked_delivery(tmp_path: Path, *, multiple: bool = False):
         },
         documents=documents,
     )
-    launcher = write_delivery_launcher(root, binding=binding)
+    launcher = write_legacy_delivery_launcher(root, binding=binding)
     return root, project, canonical, launcher
 
 

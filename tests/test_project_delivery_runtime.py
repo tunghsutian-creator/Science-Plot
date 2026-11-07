@@ -15,6 +15,8 @@ from sciplot_core.delivery.package_builder import _build_staged_delivery
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
+from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding
+from delivery_identity_helpers import write_legacy_delivery_launcher
 from sciplot_core.launchers.delivery_inspection import inspect_delivery_launcher_contract
 from sciplot_core.project_store import FileProjectStore, ResourceRoot
 from sciplot_core.project_store.runtime import project_runtime, projected_runtime_directory, projected_runtime_project_root, resolve_runtime_path
@@ -22,12 +24,12 @@ from sciplot_core.studio_core.project_query import inspect_project
 
 
 def _project_and_delivery(tmp_path: Path, *, foreign_binding: str | None = None, snapshot: bool = False,
-                          internal: bool = False):
+                          internal: bool = False, legacy_identity: bool = True, bind_internal: bool = False):
     project = legacy_project.__wrapped__(tmp_path)
     delivery = project / "delivery" if internal else tmp_path / "visible"
     request_path = project / "plot_request.json"
     request = json.loads(request_path.read_bytes())
-    if not internal:
+    if not internal or bind_internal:
         request["delivery_output"] = str(delivery)
     request_path.write_text(json.dumps(request))
     registry_path = project / "studio/figure_set.json"
@@ -60,10 +62,25 @@ def _project_and_delivery(tmp_path: Path, *, foreign_binding: str | None = None,
     record = _build_staged_delivery(run, manifest=manifest,
                                    delivery_dir=delivery, final_root=delivery)
     assert record["complete"] and record["verification"]["passed"], record["verification"]
+    if legacy_identity:
+        # Preserve all original executable-mode/cache/forgery assertions against
+        # their actual v6 format. New inert controls are separate below.
+        binding = read_delivery_binding(delivery)
+        launcher = write_legacy_delivery_launcher(delivery, binding=binding)
+        (delivery / DELIVERY_IDENTITY).unlink()
+        record["version"] = 6
+        for key in ("identity", "identity_sha256", "identity_contract"):
+            record.pop(key)
+        contract = inspect_delivery_launcher_contract(delivery)
+        record.update(open_in_veusz=str(launcher), open_in_veusz_sha256=contract["content_sha256"], launcher_contract=contract)
+        for artifact in record["artifacts"]:
+            if artifact["id"] == "delivery_identity":
+                artifact.update(id="open_in_veusz", path=str(launcher), details=contract)
+        record["verification"] = verify_delivery_package(record, expected_root=delivery, expected_manifest=manifest)
+        assert record["verification"]["passed"], record["verification"]
     if foreign_binding is not None:
         launcher = delivery / "Open_in_Veusz.command"
-        content = launcher.read_text()
-        binding = delivery_binding_from_content(content)
+        binding = delivery_binding_from_content(launcher.read_text())
         assert binding is not None
         if foreign_binding == "root":
             forged = replace(binding, root=str(tmp_path / "foreign-root"))
@@ -71,7 +88,7 @@ def _project_and_delivery(tmp_path: Path, *, foreign_binding: str | None = None,
             foreign = tmp_path / "foreign-project"
             shutil.copytree(project, foreign)
             forged = replace(binding, request=str(foreign / "plot_request.json"))
-        launcher.write_text(content.replace(binding.to_line(), forged.to_line()))
+        write_legacy_delivery_launcher(delivery, binding=forged)
         record["open_in_veusz_sha256"] = file_sha256(launcher)
         record["launcher_contract"] = inspect_delivery_launcher_contract(delivery)
         assert verify_delivery_package(record, expected_root=delivery, expected_manifest=manifest)["passed"]

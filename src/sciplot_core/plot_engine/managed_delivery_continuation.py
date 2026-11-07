@@ -42,7 +42,7 @@ def local_managed_target(root: Path, figure_id: str | None) -> dict[str, Any]:
     actual = {name: value for name, value in delivery_inventory(root).items() if name not in {"index.json", "Figures.zip"}}
     if actual != manifest["snapshot_files"]:
         raise EngineError("managed_delivery_snapshot_changed", "Snapshot members are added, missing or changed. Keep those edits; do not silently reconnect to an older original.",
-                          action="open_native_snapshot", native_launcher=str(root / "Open_in_Veusz.command"))
+                          action="inspect_snapshot_index", index=str(root / "index.json"))
     items = manifest["items"]
     matches = items if figure_id is None else [item for item in items if item["id"] == figure_id]
     if len(matches) != 1:
@@ -55,7 +55,7 @@ def local_managed_target(root: Path, figure_id: str | None) -> dict[str, Any]:
         head = load_head(plot)
     except (OSError, ValueError) as exc:
         raise EngineError("managed_delivery_native_snapshot_only", "The original local ManagedPlot is unavailable. This package contains an independent native snapshot, not a portable ManagedPlot registry.",
-                          action="open_native_snapshot", native_launcher=str(root / "Open_in_Veusz.command")) from exc
+                          action="inspect_native_snapshot", document=str(root / item["files"]["editable"])) from exc
     document = head["document"]
     if (document.get("plot_type") != "ManagedPlot" or (document["plot_id"], document["revision"],
             document["scientific_hash"], document["presentation_hash"]) != (

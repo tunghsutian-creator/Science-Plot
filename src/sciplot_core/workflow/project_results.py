@@ -40,7 +40,10 @@ def project_workflow_result(payload: dict[str, Any], logical_path: Callable[[str
     # scientific locator and is deliberately not included in this projection.
     delivery = result.get("delivery_package")
     if isinstance(delivery, dict):
-        for field in ("figures", "projects", "data"):
+        for field in ("open_in_veusz", "open_in_sciplot", "identity", "data_dir", "pdf_dir", "tiff_dir", "project_file", "editable"):
+            if isinstance(delivery.get(field), str):
+                delivery[field] = logical_path(delivery[field])
+        for field in ("figures", "project_documents", "data_csvs"):
             for item in delivery.get(field, []):
                 if isinstance(item, dict) and isinstance(item.get("source"), str):
                     item["source"] = logical_path(item["source"])

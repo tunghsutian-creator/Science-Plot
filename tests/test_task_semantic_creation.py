@@ -320,7 +320,7 @@ def test_semantic_plan_is_one_question_before_any_render(tmp_path, monkeypatch):
 
 def test_task_owns_retry_key_and_scientific_rejection_can_revise(tmp_path, monkeypatch):
     from sciplot_core import task_semantic_delivery
-    monkeypatch.setattr(task_semantic_delivery, "execute_delivery", lambda wire: {"status": "complete", "ready_to_use": True, "delivery": {"native_launcher": "/mock/launcher"}})
+    monkeypatch.setattr(task_semantic_delivery, "execute_delivery", lambda wire: {"status": "complete", "ready_to_use": True, "delivery": {"index": "/mock/index.json"}})
     from sciplot_core import task_control as control, task_semantic_creation as semantic
     source = tmp_path / "source.csv"
     source.write_text("t,Mass\ns,%\n0,100\n1,99\n")
@@ -458,7 +458,7 @@ def test_semantic_directory_error_is_not_an_experiment_question(tmp_path):
 
 def test_explicit_unambiguous_intent_does_not_add_a_confirmation_round(tmp_path, monkeypatch):
     from sciplot_core import task_semantic_delivery
-    monkeypatch.setattr(task_semantic_delivery, "execute_delivery", lambda wire: {"status": "complete", "ready_to_use": True, "delivery": {"native_launcher": "/mock/launcher"}})
+    monkeypatch.setattr(task_semantic_delivery, "execute_delivery", lambda wire: {"status": "complete", "ready_to_use": True, "delivery": {"index": "/mock/index.json"}})
     from sciplot_core import task_control as control, task_semantic_creation as semantic
     source = tmp_path / "data.csv"
     source.write_text("Time,Mass\ns,%\n0,100\n1,99\n")

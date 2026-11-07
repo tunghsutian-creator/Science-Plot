@@ -8,10 +8,7 @@ from typing import Any
 
 from sciplot_core.cli.value_io import _print_json
 from sciplot_core.foundation.json_io import atomic_write_json
-from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
-from sciplot_core.launchers.delivery_inspection import (
-    inspect_delivery_launcher_contract,
-)
+from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding, delivery_identity_path
 from sciplot_core.policy import DELIVERY_LAUNCHER
 from sciplot_core.studio_core.delivery_target import _managed_project
 from sciplot_core.studio_core.delivery_recovery import (
@@ -30,16 +27,13 @@ def revision_project(target: Path) -> Path:
         path = path.parent
     if path.is_dir() and (path / "plot_request.json").is_file():
         return path
-    launcher = path / DELIVERY_LAUNCHER if path.is_dir() else path
-    if launcher.name == DELIVERY_LAUNCHER and launcher.is_file():
-        root = launcher.parent
-        if inspect_delivery_launcher_contract(root).get("ready") is True:
-            binding = delivery_binding_from_content(
-                launcher.read_text(encoding="utf-8")
-            )
-            project = _managed_project(root, binding) if binding is not None else None
-            if project is not None:
-                return project
+    identity = delivery_identity_path(path) if path.is_dir() else path
+    if identity.name in {DELIVERY_IDENTITY, DELIVERY_LAUNCHER} and identity.is_file():
+        root = identity.parent
+        binding = read_delivery_binding(root)
+        project = _managed_project(root, binding) if binding is not None else None
+        if project is not None:
+            return project
     raise ValueError(
         "Select an existing project or its still-associated visible delivery for this revision."
     )

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
-from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
+from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding, delivery_identity_path
 from sciplot_core.output_contract import resolve_user_output_layout
 from sciplot_core.policy import DELIVERY_LAUNCHER
 from sciplot_core.studio_core.project_query_evidence import _tree_hash
@@ -96,7 +96,7 @@ def find_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             issue(directory, exc)
             continue
         authority_directory = any((directory / name).is_file() for name in ("plot_request.json", "head.json", "task.json"))
-        authority_directory = authority_directory or ((directory / DELIVERY_LAUNCHER).is_file()
+        authority_directory = authority_directory or (delivery_identity_path(directory).is_file()
                                                       and (directory / "project").is_dir())
         for entry in entries:
             if scanned >= MAX_SCAN_ENTRIES:
@@ -121,7 +121,7 @@ def find_saved_work(source: Path, *, search_roots: list[Path] | None = None,
                 elif entry.name == "head.json":
                     _small_file(entry)
                     documents.add(directory)
-                elif entry.name == DELIVERY_LAUNCHER and (directory / "project").is_dir():
+                elif entry.name in {DELIVERY_LAUNCHER, DELIVERY_IDENTITY} and (directory / "project").is_dir():
                     _small_file(entry)
                     deliveries.add(directory)
                 elif entry.name == "task.json":
@@ -177,8 +177,8 @@ def find_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             issue(document, exc)
     for delivery in sorted(deliveries):
         try:
-            launcher = _small_file(delivery / DELIVERY_LAUNCHER)
-            binding = delivery_binding_from_content(launcher.read_text(encoding="utf-8"))
+            _small_file(delivery_identity_path(delivery))
+            binding = read_delivery_binding(delivery)
             if binding is None or binding.source is None:
                 continue
             recorded = record_path(binding.source)

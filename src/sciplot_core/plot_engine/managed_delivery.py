@@ -146,7 +146,7 @@ def _summary(root: Path, state: dict[str, Any]) -> dict[str, Any]:
     return {"kind": "sciplot_managed_delivery_result", "version": 1, "status": state["status"],
             "mode": "native_snapshot", "managed_project_included": False, "ready_to_use": complete,
             "capabilities": {"local_managed_semantic_continuation": True, "portable_managed_project": False,
-                             "independent_native_snapshot_editor": complete, "human_managed_editor_provided": False},
+                             "independent_native_snapshot_editor": False, "human_managed_editor_provided": False},
             "checkpoint": str(root), "out": state["request"]["out"],
             "items": [{"plot": selection["plot"], "plot_id": selection["plot_id"], "revision": selection["revision"],
                        "label": selection["label"], "status": item["status"],
@@ -155,8 +155,7 @@ def _summary(root: Path, state: dict[str, Any]) -> dict[str, Any]:
                        **({"error": item["error"]} if "error" in item else {})}
                       for selection, item in zip(state["request"]["items"], state["items"], strict=True)],
             "delivery": ({"index": str(Path(state["request"]["out"]) / "index.json"),
-                          "archive": str(Path(state["request"]["out"]) / "Figures.zip"),
-                          "native_launcher": str(Path(state["request"]["out"]) / "Open_in_Veusz.command")} if complete else None),
+                          "archive": str(Path(state["request"]["out"]) / "Figures.zip")} if complete else None),
             "next_step": {"action": "deliver" if complete else "retry_same_request", "method": "plot.deliver"},
             **({"blocker": state["blocker"]} if "blocker" in state else {})}
 

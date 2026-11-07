@@ -25,7 +25,6 @@ from sciplot_core.launchers.content_hashing import (  # noqa: F401
 )
 from sciplot_core.launchers.delivery_launcher import (  # noqa: F401
     _delivery_launcher_lines,
-    write_delivery_launcher,
     _canonical_delivery_launcher_lines,
 )
 from sciplot_core.launchers.project_launcher import (  # noqa: F401
@@ -64,5 +63,4 @@ __all__ = [
     "inspect_project_launcher_contract",
     "portable_sciplot_prelude",
     "portable_vsz_finder",
-    "write_delivery_launcher",
 ]

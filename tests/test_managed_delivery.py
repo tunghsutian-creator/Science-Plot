@@ -96,12 +96,12 @@ def case(tmp_path, monkeypatch):
     return service, request, heads, calls, failures
 
 
-def test_product_generates_index_originals_canonical_launcher_and_archive(case):
+def test_product_generates_index_originals_and_archive_without_manual_launcher(case):
     service, request, heads, calls, _ = case
     result = service.deliver(request)
     assert result["status"] == "complete", result
     assert result["capabilities"] == {"local_managed_semantic_continuation": True, "portable_managed_project": False,
-                                      "independent_native_snapshot_editor": True, "human_managed_editor_provided": False}
+                                      "independent_native_snapshot_editor": False, "human_managed_editor_provided": False}
     out = Path(request["out"])
     index = json.loads((out / "index.json").read_text())
     assert [item["label"] for item in index["items"]] == [item["label"] for item in request["items"]]
@@ -110,8 +110,9 @@ def test_product_generates_index_originals_canonical_launcher_and_archive(case):
         assert (out / item["files"]["editable"]).is_file()
         for source in item["sources"]:
             assert file_sha256(out / source["path"]) == source["sha256"]
-    launcher = (out / "Open_in_Veusz.command").read_text()
-    assert 'find_sciplot()' in launcher and 'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}"' in launcher
+    assert not (out / "Open_in_Veusz.command").exists()
+    assert "native_launcher" not in result["delivery"]
+    assert result["delivery"]["index"] == str(out / "index.json")
     with zipfile.ZipFile(out / "Figures.zip") as archive:
         assert "Figures.zip" not in archive.namelist()
         assert all(archive.read(name) == (out / name).read_bytes() for name in archive.namelist())

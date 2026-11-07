@@ -12,7 +12,6 @@ import zipfile
 
 from sciplot_core.delivery.install import install_new_delivery
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.launchers import write_delivery_launcher
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.storage import digest
 from sciplot_core.studio_core.source_update_commit import file_inventory
@@ -91,11 +90,10 @@ def publish(root: Path, state: dict[str, Any], *, checkpoint: Callable[[], None]
                 "journal_acceptance_evaluated": False}
     (candidate / "README.txt").write_text(
         "Independent native snapshots / 独立原生快照\n"
-        "Open_in_Veusz.command opens a copied VSZ. Save changes in this package; originals and local ManagedPlots are not updated.\n"
+        "This package contains independent native snapshots. Continue canonical changes through the original ManagedPlot AI commands; snapshots do not update originals.\n"
         "Original source bytes are retained under data/originals. Exact sealed PlotIR and per-dataset CSVs are under data/plotted. CSVs retain each dataset length and round-trip numeric values; roles/units/provenance remain in the IR and index.json.\n"
         "This is not a portable ManagedPlot project. Local continuation paths only work while their original bindings remain current.\n"
         "Figures.zip contains this frozen delivery before any later manual edits.\n", encoding="utf-8")
-    write_delivery_launcher(candidate)
     manifest["snapshot_files"] = file_inventory(candidate)
     manifest["manifest_sha256"] = digest(manifest)
     (candidate / "index.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

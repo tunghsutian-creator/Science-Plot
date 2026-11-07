@@ -42,7 +42,7 @@ def _timed_semantic_backend(tmp_path, monkeypatch, *, decisions, fail_delivery=F
             return {"status": "partial", "ready_to_use": False,
                     "next_step": {"action": "retry_same_request"}}
         return {"status": "complete", "ready_to_use": True,
-                "delivery": {"native_launcher": "/delivery/Open_in_Veusz.command"}}
+                "delivery": {"index": "/delivery/index.json"}}
     def describe(method, params):
         assert method == "plot.describe"
         calls["describe"] += 1
@@ -142,7 +142,7 @@ def test_delivery_failure_resumes_same_frozen_request_without_create_or_retransf
             return {"status": "partial", "ready_to_use": False, "checkpoint": "/checkpoint",
                     "items": [{"error": {"reason_code": "interrupted_publication", "message": "saved for retry"}}],
                     "next_step": {"action": "retry_same_request", "method": "plot.deliver"}}
-        return {"status": "complete", "ready_to_use": True, "delivery": {"native_launcher": "/delivery/Open_in_Veusz.command"}}
+        return {"status": "complete", "ready_to_use": True, "delivery": {"index": "/delivery/index.json"}}
     monkeypatch.setattr(delivery, "execute_delivery", package)
     task = tmp_path / "task"
     first = start_task(request, task_dir=task)

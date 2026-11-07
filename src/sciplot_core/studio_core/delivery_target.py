@@ -10,31 +10,21 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.project_store.runtime import literal_runtime_project_root, projected_runtime_artifact, selected_project_store
-from sciplot_core.launchers.delivery_binding import (
-    DeliveryBinding,
-    delivery_binding_from_content,
-)
-from sciplot_core.launchers.delivery_inspection import (
-    inspect_delivery_launcher_contract,
+from sciplot_core.delivery_identity import (
+    DeliveryBinding, DELIVERY_IDENTITY, read_delivery_binding, delivery_identity_path,
 )
 from sciplot_core.policy import DELIVERY_LAUNCHER, DELIVERY_PROJECT_DIR
 
 
 def resolve_delivery_target(path: Path) -> dict[str, Any] | None:
-    """Resolve a generated launcher without executing or trusting shell content."""
-    launcher = path / DELIVERY_LAUNCHER if path.is_dir() else path
-    if launcher.name != DELIVERY_LAUNCHER or not launcher.is_file():
+    """Resolve current inert identity or a historical shell without executing it."""
+    identity = delivery_identity_path(path) if path.is_dir() else path
+    if identity.name not in {DELIVERY_IDENTITY, DELIVERY_LAUNCHER} or not identity.is_file():
         return None
-    root = launcher.parent.resolve()
-    # A project has its own identically named launcher; only visible packages
-    # with editable copies belong to this resolver.
+    root = identity.parent.resolve()
     if not (root / DELIVERY_PROJECT_DIR).is_dir():
         return None
-    if inspect_delivery_launcher_contract(root).get("ready") is not True:
-        raise ValueError(
-            f"The delivery launcher is not a valid SciPlot launcher: {launcher}"
-        )
-    binding = delivery_binding_from_content(launcher.read_text(encoding="utf-8"))
+    binding = read_delivery_binding(root)
     managed = _managed_project(root, binding) if binding is not None else None
     if managed is not None and binding is not None:
         changed = [
@@ -51,7 +41,7 @@ def resolve_delivery_target(path: Path) -> dict[str, Any] | None:
                 "skip these edits. All files were preserved: "
                 + ", ".join(changed)
                 + ". Preview recovery with studio DELIVERY --recover-delivery --preview-out PREVIEW.json, "
-                "or use Recover visible edits in the managed Project dock."
+                "then apply the returned recovery through the same command."
             )
         return {
             "mode": "project",
@@ -76,7 +66,7 @@ def resolve_delivery_target(path: Path) -> dict[str, Any] | None:
         print(
             "Other portable figures: "
             + ", ".join(item.name for item in documents)
-            + ". Pass a filename to Open_in_Veusz.command to choose another figure.",
+            + ". Select a registered figure explicitly through the local commands.",
             file=sys.stderr,
         )
     return {"mode": "vsz", "document": primary}
@@ -84,7 +74,7 @@ def resolve_delivery_target(path: Path) -> dict[str, Any] | None:
 
 def _managed_project(root: Path, binding: DeliveryBinding) -> Path | None:
     original_root = literal_runtime_project_root(root)
-    projected_runtime_artifact(root / DELIVERY_LAUNCHER)
+    projected_runtime_artifact(delivery_identity_path(root))
     if binding.root != original_root or binding.request is None:
         return None
     request_path = resolve_source_path(binding.request)

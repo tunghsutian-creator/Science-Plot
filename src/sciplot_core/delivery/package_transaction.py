@@ -11,7 +11,7 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
-from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
+from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding
 from sciplot_core.launchers.delivery_editor_launcher import inspect_delivery_editor_launcher_contract
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
@@ -21,7 +21,7 @@ from sciplot_core.policy import (
     DELIVERY_PROJECT_DIR,
     DELIVERY_TIFF_DIR,
 )
-from sciplot_core.delivery.contracts import DELIVERY_PACKAGE_CONTRACT_VERSION
+from sciplot_core.delivery.contracts import DELIVERY_PACKAGE_CONTRACT_VERSION, LEGACY_DELIVERY_PACKAGE_CONTRACT_VERSION
 from sciplot_core.delivery.package_validation import (
     verify_delivery_package,
 )
@@ -45,6 +45,7 @@ def _package_snapshot(root: Path) -> dict[str, tuple[str, int | None]]:
         DELIVERY_TIFF_DIR,
         DELIVERY_PROJECT_DIR,
         DELIVERY_LAUNCHER,
+        DELIVERY_IDENTITY,
         DELIVERY_EDITOR_LAUNCHER,
     }
     unknown = {
@@ -86,13 +87,8 @@ def _protect_editable_documents(root: Path, candidate: Path) -> None:
         path for path in (root / DELIVERY_PROJECT_DIR).rglob("*")
         if path.is_file() and not is_delivery_finder_metadata(path)
     )
-    launcher = root / DELIVERY_LAUNCHER
     try:
-        binding = (
-            delivery_binding_from_content(launcher.read_text(encoding="utf-8"))
-            if launcher.is_file()
-            else None
-        )
+        binding = read_delivery_binding(root)
     except (OSError, ValueError) as exc:
         raise ValueError(
             f"Cannot verify the prior delivery at {root}; all files were preserved."
@@ -163,7 +159,8 @@ def _preserve_recorded_editor(
     contract = inspect_delivery_editor_launcher_contract(previous)
     if not (
         prior.get("kind") == "sciplot_user_delivery_package"
-        and prior.get("version") == DELIVERY_PACKAGE_CONTRACT_VERSION
+        and type(prior.get("version")) is int
+        and prior.get("version") in {DELIVERY_PACKAGE_CONTRACT_VERSION, LEGACY_DELIVERY_PACKAGE_CONTRACT_VERSION}
         and prior.get("complete") is True
         and isinstance(root, str) and root.strip()
         and path_identity(Path(root).expanduser()) == path_identity(previous)

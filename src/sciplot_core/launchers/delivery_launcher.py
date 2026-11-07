@@ -1,10 +1,10 @@
-"""Generate and write the canonical delivery launcher."""
+"""Pure canonical formatting used to recognize historical v1 launchers."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from sciplot_core.policy import DELIVERY_LAUNCHER
-from sciplot_core.launchers.delivery_binding import DeliveryBinding
+import json
+from sciplot_core.delivery_identity import DeliveryBinding
+from sciplot_core.launchers.delivery_binding import DELIVERY_BINDING_PREFIX
 
 from sciplot_core.launchers.portable_shell import (
     portable_sciplot_prelude,
@@ -83,26 +83,8 @@ def _delivery_launcher_lines(
         'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}"',
     ]
     if binding is not None:
-        lines.append(binding.to_line())
+        lines.append(DELIVERY_BINDING_PREFIX + json.dumps(binding.to_payload(), sort_keys=True, ensure_ascii=True, separators=(",", ":")))
     return lines
-
-
-def write_delivery_launcher(
-    delivery_dir: str | Path,
-    *,
-    binding: DeliveryBinding | None = None,
-) -> Path:
-    """Write the canonical portable launcher for one minimal delivery."""
-
-    root = Path(delivery_dir).expanduser().resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    launcher = root / DELIVERY_LAUNCHER
-    launcher.write_text(
-        "\n".join(_delivery_launcher_lines(binding)) + "\n",
-        encoding="utf-8",
-    )
-    launcher.chmod(0o755)
-    return launcher
 
 
 def _canonical_delivery_launcher_lines(*, bound: bool = False) -> list[str]:

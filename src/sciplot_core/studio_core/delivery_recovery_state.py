@@ -9,10 +9,7 @@ from typing import Any
 from sciplot_core.figure_plan import resolved_figure_plan_from_payload
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.project_store.runtime import inspect_runtime_source_tree
-from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
-from sciplot_core.launchers.delivery_inspection import (
-    inspect_delivery_launcher_contract,
-)
+from sciplot_core.delivery_identity import read_delivery_binding, delivery_identity_path
 from sciplot_core.source_coverage.managed_documents import source_records
 from sciplot_core.studio_core.delivery_target import _managed_project
 from sciplot_core.studio_core.figure_set_state import _read_studio_figure_set
@@ -130,14 +127,8 @@ def capture_recovery_state(project_dir: Path, candidate: Path | None) -> dict[st
             "delivery_unbound", "This project has no absolute visible delivery binding."
         )
     root = canonical_path(Path(root_value))
-    launcher = root / "Open_in_Veusz.command"
-    canonical_path(launcher)
-    if inspect_delivery_launcher_contract(root).get("ready") is not True:
-        raise RecoveryBlocked(
-            "invalid_launcher",
-            "The visible delivery launcher is not a valid SciPlot launcher.",
-        )
-    binding = delivery_binding_from_content(launcher.read_text(encoding="utf-8"))
+    identity = canonical_path(delivery_identity_path(root))
+    binding = read_delivery_binding(root)
     if binding is None or _managed_project(root, binding) != project:
         raise RecoveryBlocked(
             "foreign_delivery",
@@ -240,7 +231,7 @@ def capture_recovery_state(project_dir: Path, candidate: Path | None) -> dict[st
         },
         "fingerprints": {
             "request": file_sha256(request_path),
-            "launcher": file_sha256(launcher),
+            "launcher": file_sha256(identity),  # Historical recovery wire key, one current identity.
             "registry": file_sha256(registry_path),
             "spec": file_sha256(spec_path),
             "evidence": file_sha256(manifest_path),

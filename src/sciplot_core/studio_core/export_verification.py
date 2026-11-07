@@ -328,8 +328,8 @@ def _verify_studio_delivery_binding(
         )
 
     delivery_file(
-        delivery.get("open_in_veusz"),
-        role="Open_in_Veusz launcher",
+        delivery.get("identity") if delivery.get("version") == 7 else delivery.get("open_in_veusz"),
+        role="delivery identity",
     )
     if delivery.get("complete") is not True:
         issues.append("The delivery package contract is incomplete.")

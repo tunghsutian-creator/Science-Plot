@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import csv
-import os
-import subprocess
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.delivery.runtime_evidence import recorded_editor_launcher_current
+from sciplot_core.delivery.runtime_evidence import recorded_editor_launcher_current, recorded_delivery_identity
 from sciplot_core.launchers import inspect_delivery_editor_launcher_contract
 
 
@@ -16,7 +14,8 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
     """Verify the small user-facing delivery surface and its CSV contract."""
 
     delivery_path = Path(str(delivery.get("path") or "")).expanduser().resolve()
-    expected_entries = {"data", "figures", "project", "Open_in_Veusz.command"}
+    identity_checks, identity_probe, identity_name = recorded_delivery_identity(delivery, delivery_path)
+    expected_entries = {"data", "figures", "project", identity_name}
     editor_recorded = any(key in delivery for key in (
         "open_in_sciplot", "open_in_sciplot_sha256", "editor_launcher_contract"))
     if editor_recorded:
@@ -99,29 +98,6 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         if isinstance(record, dict)
     ]
 
-    launcher = delivery_path / "Open_in_Veusz.command"
-    launcher_probe: dict[str, Any] = {
-        "path": str(launcher),
-        "exists": launcher.is_file(),
-    }
-    if launcher.is_file():
-        env = os.environ.copy()
-        env["SCIPLOT_LAUNCH_DRY_RUN"] = "1"
-        completed = subprocess.run(
-            ["zsh", str(launcher)],
-            text=True,
-            capture_output=True,
-            check=False,
-            env=env,
-        )
-        launcher_probe.update(
-            {
-                "returncode": completed.returncode,
-                "dry_run_path": completed.stdout.strip(),
-                "stderr": completed.stderr.strip(),
-            }
-        )
-
     editor_probe = inspect_delivery_editor_launcher_contract(delivery_path) if editor_recorded else None
     editor_current = editor_probe is None or recorded_editor_launcher_current(
         delivery, expected_root=delivery_path, contract=editor_probe)
@@ -142,9 +118,7 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         and all(item["in_expected_folder"] for item in figure_locations)
         and bool(project_locations)
         and all(item["in_project"] and item["exists"] for item in project_locations)
-        and launcher_probe.get("exists") is True
-        and launcher_probe.get("returncode") == 0
-        and Path(launcher_probe.get("dry_run_path") or "").is_file()
+        and all(identity_checks.values())
         and editor_current
     )
     return {
@@ -156,6 +130,6 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         "data": data_checks,
         "figures": figure_locations,
         "projects": project_locations,
-        "launcher": launcher_probe,
+        "identity": identity_probe,
         "legacy_editor_launcher": editor_probe,
     }

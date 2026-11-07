@@ -9,12 +9,10 @@ from typing import Any
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.foundation.file_hashing import existing_file_sha256
-from sciplot_core.launchers import (
-    inspect_delivery_launcher_contract,
-    write_delivery_launcher,
+from sciplot_core.delivery_identity import (
+    inspect_delivery_identity, write_delivery_identity, make_delivery_binding,
 )
 from sciplot_core.output_contract import requested_delivery_root
-from sciplot_core.launchers.delivery_binding import make_delivery_binding
 from sciplot_core.plot_data import build_plot_data_exports
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
@@ -132,13 +130,13 @@ def _build_staged_delivery(
     project_records = _copy_project_documents(
         manifest, output_dir=output_dir, project_dir=project_dir
     )
-    launcher = write_delivery_launcher(
+    identity = write_delivery_identity(
         delivery_dir,
         binding=make_delivery_binding(
             root=final_root, manifest=manifest, documents=project_records
         ),
     )
-    launcher_contract = inspect_delivery_launcher_contract(delivery_dir)
+    identity_contract = inspect_delivery_identity(delivery_dir)
     figure_pairing = _delivery_figure_pairing(figure_records)
     qa_hash_evidence = _qa_hash_evidence(manifest, figure_records)
     qa_hashes_match = bool(qa_hash_evidence) and all(
@@ -187,10 +185,10 @@ def _build_staged_delivery(
             "details": project_records,
         },
         {
-            "id": "open_in_veusz",
-            "path": str(launcher),
-            "exists": launcher_contract.get("ready") is True and bool(project_records),
-            "details": launcher_contract,
+            "id": "delivery_identity",
+            "path": str(identity),
+            "exists": identity_contract.get("ready") is True and bool(project_records),
+            "details": identity_contract,
         },
         {
             "id": "qa_passed",
@@ -297,9 +295,9 @@ def _build_staged_delivery(
         "project_dir": str(project_dir),
         "project_file": project_file,
         "project_documents": project_records,
-        "open_in_veusz": str(launcher),
-        "open_in_veusz_sha256": launcher_contract["content_sha256"],
-        "launcher_contract": launcher_contract,
+        "identity": str(identity),
+        "identity_sha256": identity_contract["content_sha256"],
+        "identity_contract": identity_contract,
         "editable": str(project_dir),
         "editable_vsz": editable_vsz,
         "editable_vsz_projects": project_records,

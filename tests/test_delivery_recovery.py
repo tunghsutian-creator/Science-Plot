@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from delivery_identity_helpers import write_legacy_delivery_launcher
+
 import json
 import shutil
 import stat
@@ -11,8 +13,7 @@ import pytest
 from sciplot_core.figure_plan import FigureTask, ResolvedFigurePlan
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.launchers.delivery_binding import DeliveryBinding
-from sciplot_core.launchers.delivery_launcher import write_delivery_launcher
+from sciplot_core.delivery_identity import DeliveryBinding
 from sciplot_core.studio_core import delivery_recovery as recovery
 from sciplot_core.studio_core import delivery_recovery_state as state
 
@@ -85,7 +86,7 @@ def recoverable(tmp_path: Path, monkeypatch):
         {"figures": [{"document": str(document)}]},
     )
     baseline = file_sha256(document)
-    write_delivery_launcher(
+    write_legacy_delivery_launcher(
         visible,
         binding=DeliveryBinding(
             root=str(visible),
@@ -326,7 +327,7 @@ def test_recovery_rejects_an_unbound_or_multiple_document_delivery(recoverable):
         primary=candidate.name,
         documents=((candidate.name, file_sha256(document)), ("other.vsz", "0" * 64)),
     )
-    write_delivery_launcher(root, binding=binding)
+    write_legacy_delivery_launcher(root, binding=binding)
     assert (
         recovery.preview_delivery_recovery(project)["reason_code"] == "multiple_figures"
     )
@@ -339,7 +340,7 @@ def test_recovery_rejects_an_unbound_or_multiple_document_delivery(recoverable):
         primary=candidate.name,
         documents=((candidate.name, file_sha256(document)),),
     )
-    write_delivery_launcher(root, binding=binding)
+    write_legacy_delivery_launcher(root, binding=binding)
     foreign_wire = launcher.read_bytes()
     changed = recovery.preview_delivery_recovery(project)
     assert changed["reason_code"] == "recovery_validation_failed"

@@ -58,3 +58,32 @@ def recorded_editor_launcher_current(
         and launcher_contract_identity(record.get("editor_launcher_contract"))
         == launcher_contract_identity(contract)
     )
+
+
+def recorded_delivery_identity(record: dict[str, Any], root: Path) -> tuple[dict[str, bool], dict[str, object], str]:
+    """Keep v6 executable evidence and v7 inert evidence explicitly distinct."""
+    from sciplot_core.delivery_identity import DELIVERY_IDENTITY, inspect_delivery_identity
+    from sciplot_core.launchers import inspect_delivery_launcher_contract
+    from sciplot_core.policy import DELIVERY_LAUNCHER
+
+    current = record.get("version") == 7
+    name = DELIVERY_IDENTITY if current else DELIVERY_LAUNCHER
+    prefix = "identity" if current else "launcher"
+    field = "identity" if current else "open_in_veusz"
+    observed = inspect_delivery_identity(root) if current else inspect_delivery_launcher_contract(root)
+    recorded_path = record.get(field)
+    path_current = bool(isinstance(recorded_path, str) and recorded_path.strip()
+                        and path_identity(Path(recorded_path).expanduser()) == path_identity(root / name))
+    digest = record.get(field + "_sha256")
+    checks = {
+        prefix + "_path_current": path_current,
+        prefix + "_hash_current": bool(digest and digest == observed.get("content_sha256")),
+        prefix + "_structure_current": observed.get("ready") is True,
+        prefix + "_contract_current": bool(record.get(prefix + "_contract")
+            and launcher_contract_identity(record[prefix + "_contract"]) == launcher_contract_identity(observed)),
+    }
+    if not current:
+        checks["launcher_structure_current"] = bool(checks["launcher_structure_current"]
+            and observed.get("canonical_structure") is True and observed.get("required_command_present") is True)
+    checks[prefix + "_current"] = all(checks.values())
+    return checks, observed, name

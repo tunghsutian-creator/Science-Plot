@@ -5,19 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 from sciplot_core.delivery.runtime_evidence import (
-    path_identity, launcher_contract_identity, recorded_artifacts_ready, recorded_editor_launcher_current,
+    path_identity, recorded_artifacts_ready, recorded_editor_launcher_current, recorded_delivery_identity,
 )
 
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.launchers import (
     inspect_delivery_editor_launcher_contract,
-    inspect_delivery_launcher_contract,
 )
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
     DELIVERY_EDITOR_LAUNCHER,
-    DELIVERY_LAUNCHER,
     DELIVERY_PDF_DIR,
     DELIVERY_PROJECT_DIR,
     DELIVERY_TIFF_DIR,
@@ -26,7 +24,7 @@ from sciplot_core.policy import (
 from sciplot_core.delivery.contracts import (
     DELIVERY_BINDING_POLICY_LEGACY,
     DELIVERY_BINDING_POLICY_RESOLVED_PLAN,
-    DELIVERY_PACKAGE_CONTRACT_VERSION,
+    DELIVERY_PACKAGE_CONTRACT_VERSION, LEGACY_DELIVERY_PACKAGE_CONTRACT_VERSION,
 )
 
 from sciplot_core.delivery.figure_pairing import (
@@ -86,12 +84,13 @@ def verify_delivery_package(
         key in record
         for key in ("open_in_sciplot", "open_in_sciplot_sha256", "editor_launcher_contract")
     )
+    identity_checks, live_identity, identity_name = recorded_delivery_identity(record, expected)
     expected_top_level = {
         DELIVERY_DATA_DIR,
         DELIVERY_PDF_DIR,
         DELIVERY_TIFF_DIR,
         DELIVERY_PROJECT_DIR,
-        DELIVERY_LAUNCHER,
+        identity_name,
     }
     if editor_recorded:
         expected_top_level.add(DELIVERY_EDITOR_LAUNCHER)
@@ -159,39 +158,6 @@ def verify_delivery_package(
         if path.is_file() and path.suffix.casefold() in suffixes
     ]
     pairing = _delivery_figure_pairing(live_figure_records)
-    launcher = expected / DELIVERY_LAUNCHER
-    live_launcher_contract = inspect_delivery_launcher_contract(expected)
-    recorded_launcher_contract = (
-        record.get("launcher_contract")
-        if isinstance(record.get("launcher_contract"), dict)
-        else {}
-    )
-    recorded_launcher_path = record.get("open_in_veusz")
-    launcher_path_current = bool(
-        isinstance(recorded_launcher_path, str)
-        and recorded_launcher_path.strip()
-        and path_identity(Path(recorded_launcher_path).expanduser()) == path_identity(launcher)
-    )
-    recorded_launcher_sha256 = str(record.get("open_in_veusz_sha256") or "").strip()
-    launcher_hash_current = bool(
-        recorded_launcher_sha256
-        and recorded_launcher_sha256 == live_launcher_contract.get("content_sha256")
-    )
-    launcher_structure_current = bool(
-        live_launcher_contract.get("ready") is True
-        and live_launcher_contract.get("canonical_structure") is True
-        and live_launcher_contract.get("required_command_present") is True
-    )
-    launcher_contract_current = bool(
-        recorded_launcher_contract
-        and launcher_contract_identity(recorded_launcher_contract) == launcher_contract_identity(live_launcher_contract)
-    )
-    launcher_ready = bool(
-        launcher_path_current
-        and launcher_hash_current
-        and launcher_structure_current
-        and launcher_contract_current
-    )
     live_editor_contract = (
         inspect_delivery_editor_launcher_contract(expected) if editor_recorded else {}
     )
@@ -341,7 +307,8 @@ def verify_delivery_package(
     artifact_records_ready = recorded_artifacts_ready(artifacts)
     checks = {
         "record_kind_current": record.get("kind") == "sciplot_user_delivery_package"
-        and record.get("version") == DELIVERY_PACKAGE_CONTRACT_VERSION,
+        and type(record.get("version")) is int
+        and record.get("version") in {DELIVERY_PACKAGE_CONTRACT_VERSION, LEGACY_DELIVERY_PACKAGE_CONTRACT_VERSION},
         "recorded_complete": record.get("complete") is True,
         "binding_policy_current": binding_policy_current,
         "canonical_root": root_ready,
@@ -360,11 +327,7 @@ def verify_delivery_package(
         "resolved_figure_plan_project_document_hashes": (plan_project_hashes_current),
         "resolved_figure_plan_record_bindings": plan_record_binding["passed"],
         "resolved_figure_plan_figure_hashes": plan_figure_hashes_current,
-        "launcher_path_current": launcher_path_current,
-        "launcher_hash_current": launcher_hash_current,
-        "launcher_structure_current": launcher_structure_current,
-        "launcher_contract_current": launcher_contract_current,
-        "launcher_current": launcher_ready,
+        **identity_checks,
         "editor_launcher_current": editor_launcher_current,
         "artifact_records_current": artifact_records_ready,
     }
@@ -384,6 +347,6 @@ def verify_delivery_package(
         "project": project_check,
         "pairing": pairing,
         "resolved_figure_plan_binding": plan_record_binding,
-        "launcher": live_launcher_contract,
+        ("identity" if record.get("version") == DELIVERY_PACKAGE_CONTRACT_VERSION else "launcher"): live_identity,
         "editor_launcher": live_editor_contract if editor_recorded else None,
     }

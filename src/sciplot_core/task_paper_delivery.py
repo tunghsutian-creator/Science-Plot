@@ -15,7 +15,7 @@ from sciplot_core.delivery.package_transaction import publish_delivery_transacti
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.launchers import write_delivery_launcher, inspect_delivery_launcher_contract
+from sciplot_core.delivery_identity import write_delivery_identity, inspect_delivery_identity, make_delivery_binding
 from sciplot_core.plot_data.exports import build_plot_data_exports
 from sciplot_core.policy import DELIVERY_DATA_DIR, DELIVERY_PDF_DIR, DELIVERY_TIFF_DIR, DELIVERY_PROJECT_DIR
 from sciplot_core.studio_core.source_update_commit import file_inventory
@@ -98,8 +98,8 @@ def publish_paper(root: Path, state: dict[str, Any], *, checkpoint: Callable[[],
                                  *[item["version"][key] for key in ("document_sha256", "spec_sha256", "request_sha256", "source_sha256")],
                                  item["scientific_sha256"], item["portable_native"]["portable_sha256"]])
         data_records.append({"path": str(sources_csv), "sha256": file_sha256(sources_csv)})
-        launcher = write_delivery_launcher(stage)
-        contract = inspect_delivery_launcher_contract(stage)
+        identity = write_delivery_identity(stage, binding=make_delivery_binding(root=destination, manifest={}, documents=documents))
+        contract = inspect_delivery_identity(stage)
         for selection in state["selections"]:
             assert_selection_current(selection)
         if destination.exists():
@@ -107,8 +107,8 @@ def publish_paper(root: Path, state: dict[str, Any], *, checkpoint: Callable[[],
         record = {"kind": "sciplot_user_delivery_package", "version": DELIVERY_PACKAGE_CONTRACT_VERSION,
                 "binding_policy": DELIVERY_BINDING_POLICY_LEGACY, "path": str(stage), "complete": True,
                 "figures": figures, "project_documents": documents, "data_csvs": data_records,
-                "open_in_veusz": str(launcher), "open_in_veusz_sha256": contract["content_sha256"],
-                "launcher_contract": contract, "artifacts": [{"id": "selected_sources_and_native_state",
+                "identity": str(identity), "identity_sha256": contract["content_sha256"],
+                "identity_contract": contract, "artifacts": [{"id": "selected_sources_and_native_state",
                                                               "path": str(manifest_file), "exists": True}],
                 "paper_manifest": manifest, "paper_manifest_sha256": canonical_json_sha256(manifest, allow_nan=False)}
         verification = verify_delivery_package(record, expected_root=stage, expected_manifest={})

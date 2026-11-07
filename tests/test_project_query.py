@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from delivery_identity_helpers import write_legacy_delivery_launcher
+
 import json
 import shutil
 from pathlib import Path
@@ -8,8 +10,7 @@ import pytest
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.launchers import write_delivery_launcher
-from sciplot_core.launchers.delivery_binding import make_delivery_binding
+from sciplot_core.delivery_identity import make_delivery_binding
 from sciplot_core.studio_core import project_query as query
 from sciplot_core.studio_core import project_query_evidence as evidence
 from sciplot_core.studio_core.project_query_evidence import source_indicators
@@ -97,7 +98,7 @@ def _delivery(project: Path) -> Path:
             }
         ],
     )
-    write_delivery_launcher(root, binding=binding)
+    write_legacy_delivery_launcher(root, binding=binding)
     return root
 
 

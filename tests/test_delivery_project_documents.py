@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from delivery_identity_helpers import write_legacy_delivery_launcher
+
 from copy import deepcopy
 from pathlib import Path
 import shutil
 import pytest
 
-from sciplot_core.delivery import DELIVERY_PACKAGE_CONTRACT_VERSION
 from sciplot_core.delivery.contracts import (
     DELIVERY_BINDING_POLICY_LEGACY,
     DELIVERY_BINDING_POLICY_RESOLVED_PLAN,
@@ -30,7 +31,6 @@ from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.launchers import (
     inspect_delivery_editor_launcher_contract,
     inspect_delivery_launcher_contract,
-    write_delivery_launcher,
 )
 from sciplot_core.launchers.delivery_editor_launcher import _delivery_editor_launcher_lines
 
@@ -204,7 +204,7 @@ def _delivery_record(
             )
     manifest_path = run / "manifest.json"
     manifest_path.write_text("{}\n", encoding="utf-8")
-    launcher = write_delivery_launcher(delivery)
+    launcher = write_legacy_delivery_launcher(delivery)
     launcher_contract = inspect_delivery_launcher_contract(delivery)
     plan_details = figure_plan_gate(plan.to_payload())
     assert plan_details is not None
@@ -223,7 +223,7 @@ def _delivery_record(
     return (
         {
             "kind": "sciplot_user_delivery_package",
-            "version": DELIVERY_PACKAGE_CONTRACT_VERSION,
+            "version": 6,  # Explicit historical v1 launcher fixture.
             "binding_policy": DELIVERY_BINDING_POLICY_RESOLVED_PLAN,
             "path": str(delivery),
             "data_csvs": [
@@ -896,13 +896,14 @@ def test_fresh_delivery_has_no_editor_entry_or_requirement(tmp_path: Path):
     record = build_delivery_package(run, manifest=manifest)
     root = Path(record["path"])
     assert record["complete"] is True
-    assert record["version"] == 6
+    assert record["version"] == 7
     assert not (root / "Open_in_SciPlot.command").exists()
     assert not {"open_in_sciplot", "open_in_sciplot_sha256", "editor_launcher_contract"} & record.keys()
     assert "open_in_sciplot" not in {item["id"] for item in record["artifacts"]}
     assert record["verification"]["checks"]["editor_launcher_current"] is True
     assert record["verification"]["editor_launcher"] is None
-    assert (root / "Open_in_Veusz.command").is_file()
+    assert (root / "SciPlot_delivery.json").is_file()
+    assert not (root / "Open_in_Veusz.command").exists()
 
 
 def test_recorded_legacy_editor_remains_readable_and_preserved_on_publication(tmp_path: Path):
@@ -1465,3 +1466,31 @@ def test_delivery_metadata_preservation_does_not_overwrite_linked_candidate_targ
         build_delivery_package(run, manifest=manifest)
     assert _package_bytes(root) == before
     assert target.read_bytes() == b"outside content"
+
+
+def test_v6_delivery_migrates_to_inert_v7_without_losing_recorded_browser_history(tmp_path):
+    from sciplot_core.delivery_identity import read_delivery_binding, DELIVERY_IDENTITY
+
+    run, manifest, _ = _builder_manifest(tmp_path)
+    previous = build_delivery_package(run, manifest=manifest)
+    root = Path(previous["path"])
+    binding = read_delivery_binding(root)
+    launcher = write_legacy_delivery_launcher(root, binding=binding)
+    (root / DELIVERY_IDENTITY).unlink()
+    previous["version"] = 6
+    for key in ("identity", "identity_sha256", "identity_contract"):
+        previous.pop(key)
+    contract = inspect_delivery_launcher_contract(root)
+    previous.update(open_in_veusz=str(launcher), open_in_veusz_sha256=contract["content_sha256"], launcher_contract=contract)
+    for artifact in previous["artifacts"]:
+        if artifact["id"] == "delivery_identity":
+            artifact.update(id="open_in_veusz", path=str(launcher), details=contract)
+    _historical_editor(previous)
+    old_editor = (root / "Open_in_SciPlot.command").read_bytes()
+    assert verify_delivery_package(previous, expected_root=root, expected_manifest=manifest)["passed"]
+    record = build_delivery_package(run, manifest=manifest, previous_delivery=previous)
+    assert record["version"] == 7 and record["complete"] is True
+    assert (root / "Open_in_SciPlot.command").read_bytes() == old_editor
+    assert (root / DELIVERY_IDENTITY).is_file()
+    assert not (root / "Open_in_Veusz.command").exists()
+    assert record["verification"]["passed"]
