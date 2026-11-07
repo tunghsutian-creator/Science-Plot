@@ -1,7 +1,6 @@
-"""Headless intake domain and loopback confirmation application."""
+"""Headless intake domain and confirmed project preparation."""
 
 from .application import create_intake_project
-from .browser_app import serve_intake
 from .catalog import (
     converge_material_review_notes,
     intake_catalog_payload,
@@ -58,5 +57,4 @@ __all__ = [
     "prepare_intake_session",
     "preview_table_payload",
     "refresh_intake_project_zip",
-    "serve_intake",
 ]

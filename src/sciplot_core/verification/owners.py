@@ -340,10 +340,10 @@ CHANGED_OWNERS = (
     ),
     ChangedOwner(
         owner_id="intake_project",
-        path_prefixes=("src/sciplot_core/intake/", "src/sciplot_core/intake_server/"),
+        path_prefixes=("src/sciplot_core/intake/",),
         owned_test_paths=frozenset(
             {
-                "tests/test_browser_surface.py",
+                "tests/test_intake_path_safety.py",
                 "tests/test_intake_atomic_packaging.py",
                 "tests/test_intake_review_recovery.py",
                 "tests/test_mechanical_intake_contract.py",
@@ -352,7 +352,7 @@ CHANGED_OWNERS = (
             }
         ),
         pytest_targets=(
-            "tests/test_browser_surface.py",
+            "tests/test_intake_path_safety.py",
             "tests/test_intake_atomic_packaging.py",
             "tests/test_intake_review_recovery.py",
             "tests/test_mechanical_intake_contract.py",

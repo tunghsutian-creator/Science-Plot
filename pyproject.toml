@@ -625,7 +625,6 @@ where = ["src"]
 sciplot_core = [
   "human_daily_use_validation.json",
   "validated_envelopes.json",
-  "intake/intake_static/*",
   "task_review_assets/*",
   "policy/plot_contract.json",
   "rendering_contract/styles/*.json",

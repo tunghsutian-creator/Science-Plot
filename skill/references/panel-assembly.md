@@ -1,13 +1,12 @@
 # Arrange existing figures and images
 
-Use `skill/scripts/sciplot compose open` for the native local workbench. Select
-saved figures across projects or add a PNG, JPEG, single-frame TIFF or one-page
-unencrypted PDF diagram. Drag whole panels; set rows/columns, spans, horizontal
-and vertical gaps in mm, and automatic or custom panel letters. Cropping applies
-to images without changing source bytes. Undo/redo includes layout operations.
-Save a layout JSON and reopen it with `compose open /absolute/layout.json`.
-Replacing a source keeps placement. Use the current source version explicitly
-when it changed; export refuses stale references rather than silently rebinding.
+Use the AI client with the existing local composition commands. Panels may be
+saved figures across projects, PNG/JPEG, single-frame TIFF or one-page unencrypted
+PDF diagrams. The saved layout owns placement, grid spans, mm spacing, crop and
+panel letters. Replacing a source keeps placement and explicitly captures its
+current version; export refuses stale references rather than silently rebinding.
+The manual workbench is retired. Historical `compose open` returns a nonzero
+`manual_composer_retired` result without opening or changing a layout.
 
 For AI layout intent, read `compose capabilities --json` once, then use the
 closed operation contract with the returned revision:
@@ -26,8 +25,7 @@ skill/scripts/sciplot compose export /absolute/layout.json --out /absolute/new-p
 ```
 
 Project references identify the saved project and exact figure ID. Managed
-references identify the canonical document root and exact plot ID. The native
-project chooser resolves the correct authority. An attempted legacy reference
+references identify the canonical document root and exact plot ID. The local source resolver selects the correct authority. An attempted legacy reference
 to a canonical ManagedPlot returns its managed reference without converting it.
 Source versions are captured locally on add/replace. Ordinary layout operations
 read no scientific source and call no model. MCP exposes the same owner through
@@ -47,7 +45,7 @@ a figure whose requested export size fails native QA.
 
 The new export directory contains PDF/TIFF, saved layout, manifest, source copies
 and editable native files. Keep original source roots for layout re-export;
-portable VSZ/import copies support native manual editing, but relocated layout
+native VSZ/import copies retain their represented state; relocated layout
 references are not automatically rebound. Custom outer panel letters use up to
 16 printable ASCII characters (empty hides, null means automatic); scientific
 labels inside plots retain their existing text contract. Font portability and

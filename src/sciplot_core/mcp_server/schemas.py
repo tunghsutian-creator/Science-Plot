@@ -93,7 +93,7 @@ def tool_definitions() -> list[Tool]:
     from sciplot_core.panel_assembly.service import composition_request_schema
 
     add("compose_capabilities", "Read the compact local panel assembly intent contract. Placement never calls a model or changes scientific state.", {}, [], read_only=True)
-    add("compose", "Create, inspect, arrange or export a local panel layout. Add/replace binds exact existing figures/images locally; apply requires expected_revision. Export reflows supported native panels at target mm, preserves text sizes and rejects source drift. Dragging and spacing use the same deterministic local owner.",
+    add("compose", "Create, inspect, arrange or export a local panel layout. Add/replace binds exact existing figures/images locally; apply requires expected_revision. Export reflows supported native panels at target mm, preserves text sizes and rejects source drift. AI layout batches use the same deterministic local owner; no manual workbench is started.",
         {"request": composition_request_schema()}, ["request"], destructive=True)
     add("task_capabilities", "Read a small task capability index or one exact schema. Pass its contract_sha256 as expected_contract_sha256 when fetching sections; server validation remains complete.",
         {"section": {"enum": ["request", "response", "operations", "table_region", "common_edit", "paper_request", "semantic_intent"]}, "name": string,

@@ -231,18 +231,19 @@ A package can reconnect to an unchanged original ManagedPlot on this Mac; its
 independent VSZ remains editable after relocation. The package does not contain
 a portable Managed document registry or a standalone human Managed editor.
 
-A local panel workbench brings saved figures and microscopy images or diagrams
-onto one physical page. Run `sciplot compose open` to select figures across
-projects, drag whole panels, set grid spans and millimetre gaps, edit panel
-letters, crop images, and undo or redo changes. Save the layout to reopen it.
+AI-driven panel assembly brings saved figures and microscopy images or diagrams
+onto one physical page. `compose capabilities/new/inspect/apply/export` and the
+matching MCP tools use one saved layout, revision and history. A bounded batch
+sets panels, grid spans, millimetre gaps, panel letters and image crops. There is
+no manual workbench: historical `compose open` reports `manual_composer_retired`
+without reading or changing the layout.
+
 Supported scientific panels reflow through native Veusz at the target size;
-PDF text and scientific graphics retain physical size. Export produces a vector
+PDF text and scientific graphics retain physical size. Export produces vector
 PDF, TIFF and editable layout/native sources. Source drift, unsupported native
 geometry and actual text clipping block export with a reason. Preview images
-show selected sources and do not certify target-size export readiness.
-AI clients can send one short typed layout batch through CLI or MCP;
-subsequent local dragging and spacing need no AI calls. See the
-[panel assembly route](skill/references/panel-assembly.md) for commands and limits.
+do not certify target-size export readiness. See the
+[panel assembly route](skill/references/panel-assembly.md).
 
 [Performance radar figures](skill/references/performance-radar.md) now show units,
 raw axis ranges, improvement direction and the declared normalization formulas.

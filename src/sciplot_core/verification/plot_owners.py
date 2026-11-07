@@ -108,6 +108,7 @@ PLOT_TEST_PATHS = (
     "tests/test_semantic_edit_recovery_contract.py",
     "tests/test_plot_object_operations.py",
     "tests/test_plot_engine_native.py",
+    "tests/test_xy_ai_lifecycle_native.py",
     "tests/test_snapshot_consumer_source_versions.py",
 )
 
