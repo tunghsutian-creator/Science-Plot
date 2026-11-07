@@ -24,6 +24,36 @@ class Observer:
         self.frames.append(value)
 
 
+def test_capture_bootstrap_does_not_preload_historical_business_owners(tmp_path):
+    import json
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    from frozen_semantic_597 import read_manifest, read_operational_closure
+    from sciplot_core.verification.private_observer import write_bootstrap
+    from sciplot_core.verification.public_input_guard import configure_environment
+
+    root = Path(__file__).resolve().parents[1]
+    plugin = tmp_path / "capture-bootstrap"
+    write_bootstrap(plugin)
+    environment = configure_environment(root, dict(os.environ), bootstrap=plugin)
+    program = ("import json,sys;print(json.dumps({name:str(getattr(module,'__file__','')) "
+               "for name,module in sys.modules.items() if name.startswith('sciplot_core')}))")
+    completed = subprocess.run([sys.executable, "-c", program], env=environment,
+                               text=True, capture_output=True, timeout=30, check=True)
+    loaded = json.loads(completed.stdout)
+    manifest = read_manifest()
+    closure = read_operational_closure(manifest)
+    historical = {*manifest["owners"], *closure["import_dependencies"],
+                  *(name for name, record in closure["helpers"].items()
+                    if record["mode"] == "frozen_original_module")}
+    print(json.dumps({"capture_startup_loaded_modules": loaded, "historical_overlap": sorted(historical & loaded.keys())}))
+    assert "sciplot_core.verification.private_socket_ports" in loaded
+    assert not historical & loaded.keys()
+    assert "sciplot_core.plot_protocol" not in loaded
+
+
 @pytest.mark.parametrize("peer_errno,error_class", [(errno.ENOTCONN, "OSError"), (errno.EACCES, "PermissionError")],
                          ids=["disconnected", "permission-denied"])
 def test_successful_connect_is_not_changed_by_peer_observation_failure(monkeypatch, peer_errno, error_class):
@@ -56,7 +86,7 @@ def test_successful_connect_is_not_changed_by_peer_observation_failure(monkeypat
     with monkeypatch.context() as control:
         control.setattr(socket_ports, "socket", SimpleNamespace(socket=Socket, AF_UNIX=socket.AF_UNIX))
         control.setattr(socket_ports, "_endpoint", lambda address: (path, identity))
-        control.setattr(socket_ports, "kernel_peer_pid", unavailable)
+        control.setattr(paths, "kernel_peer_pid", unavailable)
         control.setattr(paths, "read_owner", lambda _: owner)
         runtime.install_socket_ports(observer)
         assert Socket().connect(str(path)) is None
@@ -68,6 +98,65 @@ def test_successful_connect_is_not_changed_by_peer_observation_failure(monkeypat
     assert frames[0] == {"event": "audit_socket_connect", "socket": str(path), "endpoint": identity,
                          "local_binding_token": None, "socket_owner": owner, "peer_pid": None,
                          "peer_lookup_error": {"error_class": error_class, "errno": peer_errno}}
+
+
+def test_first_actual_socket_connect_keeps_peer_facts_and_business_result(tmp_path):
+    import json
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    from sciplot_core.verification.private_observer import write_bootstrap
+    from sciplot_core.verification.public_input_guard import configure_environment
+
+    root = Path(__file__).resolve().parents[1]
+    plugin = tmp_path / "capture-bootstrap"
+    write_bootstrap(plugin)
+    environment = configure_environment(root, dict(os.environ), bootstrap=plugin)
+    program = '''import errno,json,os,socket,sys,threading
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+from sciplot_core.verification.private_socket_ports import install_socket_ports
+assert 'sciplot_core.plot_protocol' not in sys.modules
+frames=[]
+observer=SimpleNamespace(guard=threading.local(),record=lambda value,**_:frames.append(value))
+install_socket_ports(observer)
+with TemporaryDirectory(prefix='sp-peer-',dir='/tmp') as directory:
+    path=Path(directory)/'engine.sock'
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as listener:
+        listener.settimeout(3)
+        listener.bind(str(path))
+        listener.listen(2)
+        for denied in (False,True):
+            if denied:
+                from sciplot_core.plot_protocol import paths
+                def unavailable(connection):
+                    assert connection.fileno()>=0
+                    raise PermissionError(errno.EACCES,'generated kernel peer denial')
+                paths.kernel_peer_pid=unavailable
+            with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as client:
+                client.settimeout(3)
+                client.connect(str(path))
+                connection,_=listener.accept()
+                with connection:
+                    connection.settimeout(3)
+                    client.sendall(b'owned socket exchange')
+                    assert connection.recv(64)==b'owned socket exchange'
+print(json.dumps({'pid':os.getpid(),'connected':[row for row in frames if row['event']=='audit_socket_connect']}))
+'''
+    completed = subprocess.run([sys.executable, "-c", program], env=environment,
+                               text=True, capture_output=True, timeout=30, check=True)
+    result = json.loads(completed.stdout)
+    print(json.dumps({"actual_first_connect": result}))
+    connected, denied = result["connected"]
+    for facts in (connected, denied):
+        assert facts["socket_owner"] is None  # An absent owner record is not invented.
+        assert facts["local_binding_token"] is not None
+        assert "endpoint_observation_error" not in facts
+    assert connected["peer_pid"] == result["pid"] and "peer_lookup_error" not in connected
+    assert denied["peer_pid"] is None
+    assert denied["peer_lookup_error"] == {"error_class": "PermissionError", "errno": errno.EACCES}
 
 
 def _closed_peer_facts():

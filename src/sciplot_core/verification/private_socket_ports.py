@@ -10,7 +10,6 @@ from typing import Any
 import weakref
 from uuid import uuid4
 
-from sciplot_core.plot_protocol.paths import kernel_peer_pid
 from sciplot_core.verification.native_exit_boundary import endpoint_identity as _endpoint
 from sciplot_core.verification.private_process_boundaries import owned_caller
 
@@ -67,7 +66,7 @@ def install_socket_ports(observer: Any) -> None:
             token = None
             if local is not None and (owned := local[0]()) is not None and owned.fileno() >= 0 and local[1]["endpoint"] == identity:
                 token = local[1]["binding_token"]
-            from sciplot_core.plot_protocol.paths import read_owner
+            from sciplot_core.plot_protocol.paths import kernel_peer_pid, read_owner
             try:
                 owner = read_owner(path)
             except (OSError, ValueError):
