@@ -10,9 +10,7 @@ from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.launchers import (
-    inspect_delivery_editor_launcher_contract,
     inspect_delivery_launcher_contract,
-    write_delivery_editor_launcher,
     write_delivery_launcher,
 )
 from sciplot_core.output_contract import requested_delivery_root
@@ -49,11 +47,16 @@ from sciplot_core.delivery.package_validation import (
     verify_delivery_package,
 )
 from sciplot_core.delivery.plan_binding import plan_source_figure_ids
-from sciplot_core.delivery.package_transaction import publish_delivery_transaction
+from sciplot_core.delivery.package_transaction import (
+    _package_snapshot,
+    _preserve_recorded_editor,
+    publish_delivery_transaction,
+)
 
 
 def build_delivery_package(
-    output_dir: Path, *, manifest: dict[str, Any]
+    output_dir: Path, *, manifest: dict[str, Any],
+    previous_delivery: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the small user-facing delivery surface.
 
@@ -75,6 +78,7 @@ def build_delivery_package(
             manifest=manifest,
             delivery_dir=stage,
             final_root=root,
+            previous_delivery=previous_delivery,
         ),
     )
 
@@ -85,6 +89,7 @@ def _build_staged_delivery(
     manifest: dict[str, Any],
     delivery_dir: Path,
     final_root: Path,
+    previous_delivery: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     data_dir = delivery_dir / DELIVERY_DATA_DIR
     pdf_dir = delivery_dir / DELIVERY_PDF_DIR
@@ -134,8 +139,6 @@ def _build_staged_delivery(
         ),
     )
     launcher_contract = inspect_delivery_launcher_contract(delivery_dir)
-    editor_launcher = write_delivery_editor_launcher(delivery_dir)
-    editor_launcher_contract = inspect_delivery_editor_launcher_contract(delivery_dir)
     figure_pairing = _delivery_figure_pairing(figure_records)
     qa_hash_evidence = _qa_hash_evidence(manifest, figure_records)
     qa_hashes_match = bool(qa_hash_evidence) and all(
@@ -182,12 +185,6 @@ def _build_staged_delivery(
             "path": str(project_dir),
             "exists": project_files_exist,
             "details": project_records,
-        },
-        {
-            "id": "open_in_sciplot",
-            "path": str(editor_launcher),
-            "exists": editor_launcher_contract.get("ready") is True and bool(project_records),
-            "details": editor_launcher_contract,
         },
         {
             "id": "open_in_veusz",
@@ -303,9 +300,6 @@ def _build_staged_delivery(
         "open_in_veusz": str(launcher),
         "open_in_veusz_sha256": launcher_contract["content_sha256"],
         "launcher_contract": launcher_contract,
-        "open_in_sciplot": str(editor_launcher),
-        "open_in_sciplot_sha256": editor_launcher_contract["content_sha256"],
-        "editor_launcher_contract": editor_launcher_contract,
         "editable": str(project_dir),
         "editable_vsz": editable_vsz,
         "editable_vsz_projects": project_records,
@@ -314,6 +308,13 @@ def _build_staged_delivery(
     if plan_gate is not None:
         delivery_record["resolved_figure_plan"] = manifest.get("resolved_figure_plan")
     delivery_record["complete"] = all(item["exists"] for item in artifact_status)
+    if delivery_record["complete"]:
+        _preserve_recorded_editor(
+            final_root, delivery_dir,
+            previous_record=(previous_delivery if previous_delivery is not None
+                             else manifest.get("delivery_package")),
+            record=delivery_record, snapshot=_package_snapshot(final_root),
+        )
     verification = verify_delivery_package(
         delivery_record,
         expected_root=delivery_dir,

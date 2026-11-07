@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from stat import S_IMODE
 from collections.abc import Callable
 from pathlib import Path
 from tempfile import mkdtemp
@@ -11,6 +12,7 @@ from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
+from sciplot_core.launchers.delivery_editor_launcher import inspect_delivery_editor_launcher_contract
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
     DELIVERY_EDITOR_LAUNCHER,
@@ -19,14 +21,19 @@ from sciplot_core.policy import (
     DELIVERY_PROJECT_DIR,
     DELIVERY_TIFF_DIR,
 )
-from sciplot_core.delivery.package_validation import verify_delivery_package
+from sciplot_core.delivery.contracts import DELIVERY_PACKAGE_CONTRACT_VERSION
+from sciplot_core.delivery.package_validation import (
+    _recorded_editor_launcher_current,
+    verify_delivery_package,
+)
+from sciplot_core.delivery.runtime_evidence import path_identity
 from sciplot_core.delivery.filesystem_metadata import (
     FINDER_METADATA_NAME,
     is_delivery_finder_metadata,
 )
 
 
-def _package_snapshot(root: Path) -> dict[str, str]:
+def _package_snapshot(root: Path) -> dict[str, tuple[str, int | None]]:
     if root.is_symlink() or (root.exists() and not root.is_dir()):
         raise ValueError(
             "The visible SciPlot output must be a dedicated real directory."
@@ -67,7 +74,9 @@ def _package_snapshot(root: Path) -> dict[str, str]:
                 raise RuntimeError(
                     f"Cannot establish the existing delivery snapshot: {path}"
                 )
-            snapshot[str(path.relative_to(root))] = digest
+            relative = str(path.relative_to(root))
+            mode = S_IMODE(path.stat().st_mode) if relative == DELIVERY_EDITOR_LAUNCHER else None
+            snapshot[relative] = (digest, mode)
     return snapshot
 
 
@@ -140,6 +149,53 @@ def _preserve_finder_metadata(previous: Path, candidate: Path) -> None:
         shutil.copy2(path, target, follow_symlinks=False)
         if not is_delivery_finder_metadata(path) or not is_delivery_finder_metadata(target):
             raise ValueError(f"Finder metadata changed identity during preservation: {path}")
+
+
+def _preserve_recorded_editor(
+    previous: Path, candidate: Path, *, previous_record: object,
+    record: dict[str, Any], snapshot: dict[str, tuple[str, int | None]],
+) -> None:
+    """Preserve one registered legacy member, never adopt a same-named file."""
+    source = previous / DELIVERY_EDITOR_LAUNCHER
+    if not source.exists():
+        return
+    prior = previous_record if isinstance(previous_record, dict) else {}
+    root = prior.get("path")
+    contract = inspect_delivery_editor_launcher_contract(previous)
+    if not (
+        prior.get("kind") == "sciplot_user_delivery_package"
+        and prior.get("version") == DELIVERY_PACKAGE_CONTRACT_VERSION
+        and prior.get("complete") is True
+        and isinstance(root, str) and root.strip()
+        and path_identity(Path(root).expanduser()) == path_identity(previous)
+        and _recorded_editor_launcher_current(
+            prior, expected_root=previous, contract=contract,
+        )
+        and snapshot.get(DELIVERY_EDITOR_LAUNCHER)
+        == (contract.get("content_sha256"), S_IMODE(source.stat().st_mode))
+    ):
+        raise ValueError(
+            "The prior browser launcher is unregistered or changed; all files "
+            "were preserved. Use a new output directory or provide its original "
+            "delivery record."
+        )
+    target = candidate / DELIVERY_EDITOR_LAUNCHER
+    shutil.copy2(source, target, follow_symlinks=False)
+    preserved = inspect_delivery_editor_launcher_contract(candidate)
+    if (
+        preserved.get("ready") is not True
+        or (preserved.get("content_sha256"), S_IMODE(target.stat().st_mode))
+        != snapshot[DELIVERY_EDITOR_LAUNCHER]
+        or S_IMODE(source.stat().st_mode) != S_IMODE(target.stat().st_mode)
+    ):
+        raise RuntimeError("The prior browser launcher changed during preservation.")
+    # These optional v6 fields describe bytes observed and preserved in this
+    # transaction; no shell is generated, executed or granted a new capability.
+    record.update(
+        open_in_sciplot=str(target),
+        open_in_sciplot_sha256=preserved["content_sha256"],
+        editor_launcher_contract=preserved,
+    )
 
 
 def _relocate_value(value: Any, source: Path, target: Path) -> Any:

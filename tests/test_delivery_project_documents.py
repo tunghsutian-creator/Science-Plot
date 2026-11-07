@@ -28,9 +28,11 @@ from sciplot_core.figure_plan import (
 )
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.launchers import (
+    inspect_delivery_editor_launcher_contract,
     inspect_delivery_launcher_contract,
     write_delivery_launcher,
 )
+from sciplot_core.launchers.delivery_editor_launcher import _delivery_editor_launcher_lines
 
 
 def _complete_plan(
@@ -875,35 +877,89 @@ def _package_bytes(root: Path) -> dict[str, bytes]:
     }
 
 
-def test_delivery_builder_publishes_default_editor_entry_and_rejects_tampering(tmp_path: Path):
+def _historical_editor(record: dict[str, object]) -> Path:
+    root = Path(record["path"])
+    path = root / "Open_in_SciPlot.command"
+    path.write_text("\n".join(_delivery_editor_launcher_lines()) + "\n", encoding="utf-8")
+    path.chmod(0o751)
+    contract = inspect_delivery_editor_launcher_contract(root)
+    record.update(open_in_sciplot=str(path),
+                  open_in_sciplot_sha256=existing_file_sha256(path),
+                  editor_launcher_contract=contract)
+    record["artifacts"].append({"id": "open_in_sciplot", "path": str(path),
+                                "exists": True, "details": contract})
+    return path
+
+
+def test_fresh_delivery_has_no_editor_entry_or_requirement(tmp_path: Path):
     run, manifest, _ = _builder_manifest(tmp_path)
     record = build_delivery_package(run, manifest=manifest)
     root = Path(record["path"])
-    editor = Path(record["open_in_sciplot"])
-    assert editor == root / "Open_in_SciPlot.command"
     assert record["complete"] is True
+    assert record["version"] == 6
+    assert not (root / "Open_in_SciPlot.command").exists()
+    assert not {"open_in_sciplot", "open_in_sciplot_sha256", "editor_launcher_contract"} & record.keys()
+    assert "open_in_sciplot" not in {item["id"] for item in record["artifacts"]}
     assert record["verification"]["checks"]["editor_launcher_current"] is True
-    assert record["open_in_sciplot_sha256"] == existing_file_sha256(editor)
-    assert record["editor_launcher_contract"]["path"] == str(editor)
+    assert record["verification"]["editor_launcher"] is None
     assert (root / "Open_in_Veusz.command").is_file()
+
+
+def test_recorded_legacy_editor_remains_readable_and_preserved_on_publication(tmp_path: Path):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    historical = build_delivery_package(run, manifest=manifest)
+    root = Path(historical["path"])
+    editor = _historical_editor(historical)
+    before = _package_bytes(root)
+    mode = editor.stat().st_mode
+    assert verify_delivery_package(historical, expected_root=root, expected_manifest=manifest)["passed"] is True
+    assert _package_bytes(root) == before
+    manifest["delivery_package"] = historical
+    record = build_delivery_package(run, manifest=manifest)
+    assert record["complete"] is True
+    assert record["verification"]["passed"] is True
+    assert record["open_in_sciplot_sha256"] == historical["open_in_sciplot_sha256"]
+    assert editor.stat().st_mode == mode
+    assert _package_bytes(root) == before
+    assert "open_in_sciplot" not in {item["id"] for item in record["artifacts"]}
     editor.write_text(editor.read_text() + "# changed after publication\n")
     result = verify_delivery_package(record, expected_root=root, expected_manifest=manifest)
     assert result["passed"] is False
     assert "editor_launcher_current" in result["failed_checks"]
 
 
-def test_legacy_delivery_record_remains_valid_and_is_upgraded_on_publication(tmp_path: Path):
+def test_explicit_previous_delivery_binds_staged_and_public_builder(tmp_path: Path):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    historical = build_delivery_package(run, manifest=manifest)
+    root = Path(historical["path"])
+    editor = _historical_editor(historical)
+    before = _package_bytes(root)
+    # Explicit saved evidence takes priority over an unrelated run field.
+    manifest["delivery_package"] = {"path": str(tmp_path / "other")}
+    stage = tmp_path / "private_preparation"
+    staged = package_builder._build_staged_delivery(
+        run, manifest=manifest, delivery_dir=stage, final_root=root,
+        previous_delivery=historical,
+    )
+    assert staged["complete"] is True
+    assert staged["verification"]["passed"] is True
+    assert (stage / editor.name).read_bytes() == editor.read_bytes()
+    assert _package_bytes(root) == before
+    installed = build_delivery_package(run, manifest=manifest, previous_delivery=historical)
+    assert installed["verification"]["passed"] is True
+    assert _package_bytes(root) == before
+
+
+def test_delivery_without_legacy_editor_stays_without_it_on_publication(tmp_path: Path):
     run, manifest, _ = _builder_manifest(tmp_path)
     record = build_delivery_package(run, manifest=manifest)
     root = Path(record["path"])
-    Path(record.pop("open_in_sciplot")).unlink()
-    record.pop("open_in_sciplot_sha256")
-    record.pop("editor_launcher_contract")
-    record["artifacts"] = [item for item in record["artifacts"] if item["id"] != "open_in_sciplot"]
     assert verify_delivery_package(record, expected_root=root, expected_manifest=manifest)["passed"] is True
+    manifest["delivery_package"] = record
     upgraded = build_delivery_package(run, manifest=manifest)
     assert upgraded["complete"] is True
-    assert Path(upgraded["open_in_sciplot"]).is_file()
+    assert "open_in_sciplot" not in upgraded
+    assert not (root / "Open_in_SciPlot.command").exists()
 
 
 @pytest.mark.parametrize("missing", ["open_in_sciplot", "open_in_sciplot_sha256", "editor_launcher_contract"])
@@ -911,10 +967,166 @@ def test_partial_editor_entry_record_is_not_treated_as_legacy(tmp_path: Path, mi
     run, manifest, _ = _builder_manifest(tmp_path)
     record = build_delivery_package(run, manifest=manifest)
     root = Path(record["path"])
+    _historical_editor(record)
     record.pop(missing)
     result = verify_delivery_package(record, expected_root=root, expected_manifest=manifest)
     assert result["passed"] is False
     assert "editor_launcher_current" in result["failed_checks"]
+    before = _package_bytes(root)
+    manifest["delivery_package"] = record
+    with pytest.raises(ValueError, match="unregistered or changed"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+
+
+def test_unregistered_canonical_editor_is_not_adopted_or_deleted(tmp_path: Path):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    record = build_delivery_package(run, manifest=manifest)
+    root = Path(record["path"])
+    manifest["delivery_package"] = deepcopy(record)
+    _historical_editor(record)
+    before = _package_bytes(root)
+    unregistered = verify_delivery_package(manifest["delivery_package"], expected_root=root, expected_manifest=manifest)
+    assert "minimal_top_level" in unregistered["failed_checks"]
+    with pytest.raises(ValueError, match="unregistered or changed"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+
+
+@pytest.mark.parametrize("change", ["command", "hash", "executable", "symlink", "directory"])
+def test_changed_legacy_editor_is_refused_without_replacing_package(tmp_path: Path, change: str):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    record = build_delivery_package(run, manifest=manifest)
+    root = Path(record["path"])
+    editor = _historical_editor(record)
+    manifest["delivery_package"] = record
+    if change == "command":
+        editor.write_text(editor.read_text().replace('edit "${DELIVERY_DIR}"', 'studio "${DELIVERY_DIR}"'))
+    elif change == "hash":
+        # Portable assignments remain structurally valid but exact bytes differ.
+        editor.write_text(editor.read_text().replace("FALLBACK_REPO=", "FALLBACK_REPO=/other"))
+        assert inspect_delivery_editor_launcher_contract(root)["ready"] is True
+    elif change == "executable":
+        editor.chmod(0o644)
+    elif change == "symlink":
+        target = tmp_path / "old_editor"
+        editor.rename(target)
+        editor.symlink_to(target)
+    else:
+        editor.unlink()
+        editor.mkdir()
+    before = _package_bytes(root)
+    with pytest.raises(ValueError):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+
+
+def test_legacy_editor_copy_failure_preserves_original_package(tmp_path: Path, monkeypatch):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    record = build_delivery_package(run, manifest=manifest)
+    root = Path(record["path"])
+    editor = _historical_editor(record)
+    manifest["delivery_package"] = record
+    before = _package_bytes(root)
+    original = shutil.copy2
+
+    def fail_editor(source, target, *args, **kwargs):
+        result = original(source, target, *args, **kwargs)
+        if Path(source) == editor:
+            raise OSError("legacy preservation copy failure")
+        return result
+
+    monkeypatch.setattr(package_transaction.shutil, "copy2", fail_editor)
+    with pytest.raises(OSError, match="legacy preservation copy failure"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+    assert not list(root.parent.glob(f".{root.name}.sciplot-*"))
+
+
+@pytest.mark.parametrize("change", ["bytes", "mode"])
+def test_legacy_editor_race_is_refused_without_losing_concurrent_bytes(tmp_path: Path, monkeypatch, change: str):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    record = build_delivery_package(run, manifest=manifest)
+    root = Path(record["path"])
+    editor = _historical_editor(record)
+    manifest["delivery_package"] = record
+    original = shutil.copy2
+    observed = {}
+
+    def change_editor(source, target, *args, **kwargs):
+        result = original(source, target, *args, **kwargs)
+        if Path(source) == editor:
+            if change == "bytes":
+                editor.write_bytes(b"concurrent user change must survive")
+            else:
+                editor.chmod(0o700)
+            observed.update(_package_bytes(root))
+        return result
+
+    monkeypatch.setattr(package_transaction.shutil, "copy2", change_editor)
+    with pytest.raises(RuntimeError, match="changed during"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == observed
+    if change == "mode":
+        assert editor.stat().st_mode & 0o777 == 0o700
+    assert not list(root.parent.glob(f".{root.name}.sciplot-*"))
+
+
+def test_legacy_editor_mode_change_after_staging_is_not_lost(tmp_path: Path, monkeypatch):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    record = build_delivery_package(run, manifest=manifest)
+    root = Path(record["path"])
+    editor = _historical_editor(record)
+    manifest["delivery_package"] = record
+    before = _package_bytes(root)
+    original = package_builder._build_staged_delivery
+
+    def change_after_staging(*args, **kwargs):
+        result = original(*args, **kwargs)
+        editor.chmod(0o700)
+        return result
+
+    monkeypatch.setattr(package_builder, "_build_staged_delivery", change_after_staging)
+    with pytest.raises(RuntimeError, match="visible delivery changed"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+    assert editor.stat().st_mode & 0o777 == 0o700
+    assert not list(root.parent.glob(f".{root.name}.sciplot-*"))
+
+
+def test_non_launcher_modes_keep_existing_hash_only_snapshot_contract(tmp_path: Path):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    record = build_delivery_package(run, manifest=manifest)
+    root = Path(record["path"])
+    before = package_transaction._package_snapshot(root)
+    Path(record["figures"][0]["path"]).chmod(0o600)
+    Path(record["data_csvs"][0]["path"]).chmod(0o600)
+    Path(record["project_documents"][0]["path"]).chmod(0o600)
+    assert package_transaction._package_snapshot(root) == before
+
+
+def test_legacy_editor_final_verification_failure_restores_complete_original(tmp_path: Path, monkeypatch):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    record = build_delivery_package(run, manifest=manifest)
+    root = Path(record["path"])
+    editor = _historical_editor(record)
+    manifest["delivery_package"] = record
+    before = _package_bytes(root)
+    mode = editor.stat().st_mode
+    original = package_transaction.verify_delivery_package
+
+    def reject_installed(*args, **kwargs):
+        result = original(*args, **kwargs)
+        assert result["passed"] is True
+        assert editor.read_bytes() == before[editor.name]
+        return {**result, "passed": False}
+
+    monkeypatch.setattr(package_transaction, "verify_delivery_package", reject_installed)
+    with pytest.raises(RuntimeError, match="previous package was restored"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+    assert editor.stat().st_mode == mode
+    assert not list(root.parent.glob(f".{root.name}.sciplot-*"))
 
 
 def test_delivery_copy_failure_keeps_previous_visible_package(

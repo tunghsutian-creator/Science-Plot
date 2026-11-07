@@ -1,4 +1,4 @@
-"""Write and inspect the default delivery entry to the native live editor."""
+"""Read the retired v1 browser-editor launcher in historical deliveries."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ _EDIT_COMMAND = 'exec "${SCIPLOT_CMD}" edit "${DELIVERY_DIR}" --portable-fallbac
 
 
 def _delivery_editor_launcher_lines() -> list[str]:
+    """Describe the historical format; this module never writes or runs it."""
     return [
         *portable_sciplot_prelude(directory_var="DELIVERY_DIR"),
         "",
@@ -24,19 +25,6 @@ def _delivery_editor_launcher_lines() -> list[str]:
         "fi",
         _EDIT_COMMAND,
     ]
-
-
-def write_delivery_editor_launcher(delivery_dir: str | Path) -> Path:
-    """Write an executable entry that resolves managed or portable edit targets."""
-
-    root = Path(delivery_dir).expanduser().resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    launcher = root / DELIVERY_EDITOR_LAUNCHER
-    launcher.write_text(
-        "\n".join(_delivery_editor_launcher_lines()) + "\n", encoding="utf-8"
-    )
-    launcher.chmod(0o755)
-    return launcher
 
 
 def inspect_delivery_editor_launcher_contract(
