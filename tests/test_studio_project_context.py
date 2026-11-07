@@ -492,8 +492,10 @@ assert not hasattr(project, "run_studio_project_probe")
 assert not hasattr(baseline, "_run_selected_object_cycle")
 assert "sciplot_gui" not in sys.modules
 '''
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = os.pathsep.join(filter(None, (environment.get("PYTHONPATH", ""), str(root / "src"))))
     result = subprocess.run([sys.executable, "-c", code], cwd=root,
-        env={**os.environ, "PYTHONPATH": str(root / "src")}, capture_output=True,
+        env=environment, capture_output=True,
         text=True, timeout=30, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert not (root / "src/sciplot_core/studio_assistant_probe.py").exists()
@@ -507,8 +509,10 @@ def test_retired_project_dock_probe_is_not_a_silent_success(tmp_path):
     root = Path(__file__).resolve().parents[1]
     marker = tmp_path / "unchanged.vsz"
     marker.write_bytes(b"user native bytes")
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = os.pathsep.join(filter(None, (environment.get("PYTHONPATH", ""), str(root / "src"))))
     result = subprocess.run([sys.executable, "-m", "sciplot_core.studio_project_probe", str(marker)],
-        cwd=root, env={**os.environ, "PYTHONPATH": str(root / "src")},
+        cwd=root, env=environment,
         capture_output=True, text=True, timeout=30, check=False)
     assert result.returncode != 0
     assert "studio_project_probe_retired" in result.stderr
