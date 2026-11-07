@@ -13,6 +13,7 @@ from sciplot_core.verification import private_audit_runtime as runtime
 from sciplot_core.verification import private_socket_ports as socket_ports
 from sciplot_core.verification import private_exclusion_boundary as boundary
 from sciplot_core.verification import private_observer as observation
+from socket_fixture_helpers import audited_socket_directory as audited_socket_directory
 
 
 class Observer:
@@ -100,7 +101,7 @@ def test_successful_connect_is_not_changed_by_peer_observation_failure(monkeypat
                          "peer_lookup_error": {"error_class": error_class, "errno": peer_errno}}
 
 
-def test_first_actual_socket_connect_keeps_peer_facts_and_business_result(tmp_path):
+def test_first_actual_socket_connect_keeps_peer_facts_and_business_result(tmp_path, audited_socket_directory):
     import json
     from pathlib import Path
     import subprocess
@@ -113,36 +114,35 @@ def test_first_actual_socket_connect_keeps_peer_facts_and_business_result(tmp_pa
     plugin = tmp_path / "capture-bootstrap"
     write_bootstrap(plugin)
     environment = configure_environment(root, dict(os.environ), bootstrap=plugin)
+    environment["SCIPLOT_ENGINE_SOCKET"] = str(audited_socket_directory / "engine.sock")
     program = '''import errno,json,os,socket,sys,threading
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from sciplot_core.verification.private_socket_ports import install_socket_ports
 assert 'sciplot_core.plot_protocol' not in sys.modules
 frames=[]
 observer=SimpleNamespace(guard=threading.local(),record=lambda value,**_:frames.append(value))
 install_socket_ports(observer)
-with TemporaryDirectory(prefix='sp-peer-',dir='/tmp') as directory:
-    path=Path(directory)/'engine.sock'
-    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as listener:
-        listener.settimeout(3)
-        listener.bind(str(path))
-        listener.listen(2)
-        for denied in (False,True):
-            if denied:
-                from sciplot_core.plot_protocol import paths
-                def unavailable(connection):
-                    assert connection.fileno()>=0
-                    raise PermissionError(errno.EACCES,'generated kernel peer denial')
-                paths.kernel_peer_pid=unavailable
-            with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as client:
-                client.settimeout(3)
-                client.connect(str(path))
-                connection,_=listener.accept()
-                with connection:
-                    connection.settimeout(3)
-                    client.sendall(b'owned socket exchange')
-                    assert connection.recv(64)==b'owned socket exchange'
+path=Path(os.environ['SCIPLOT_ENGINE_SOCKET'])
+with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as listener:
+    listener.settimeout(3)
+    listener.bind(str(path))
+    listener.listen(2)
+    for denied in (False,True):
+        if denied:
+            from sciplot_core.plot_protocol import paths
+            def unavailable(connection):
+                assert connection.fileno()>=0
+                raise PermissionError(errno.EACCES,'generated kernel peer denial')
+            paths.kernel_peer_pid=unavailable
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as client:
+            client.settimeout(3)
+            client.connect(str(path))
+            connection,_=listener.accept()
+            with connection:
+                connection.settimeout(3)
+                client.sendall(b'owned socket exchange')
+                assert connection.recv(64)==b'owned socket exchange'
 print(json.dumps({'pid':os.getpid(),'connected':[row for row in frames if row['event']=='audit_socket_connect']}))
 '''
     completed = subprocess.run([sys.executable, "-c", program], env=environment,
