@@ -102,14 +102,17 @@ def resolved_ir(root: Path, document: dict[str, Any]) -> dict[str, Any]:
 
 
 def make_binding(root: Path, document: dict[str, Any], *, output: Path) -> dict[str, Any]:
+    from sciplot_core.plot_ir import compile_document
     from sciplot_core.plot_transforms.graph import dependency_graph
+    from sciplot_core.project_lifecycle.context import capability_profile
 
     document = validate_document(document)
     if not is_managed(document):
         raise EngineError("managed_authority_required", "Only an explicit ManagedPlot can own disposable backend artifacts.")
     require_inputs(document)
     expanded = resolve_document_content(root, document)
-    ir = resolved_ir(root, document)
+    datasets = expanded["scientific"]["provenance"]["datasets"]
+    ir = compile_document(document, datasets, capabilities=capability_profile())
     model_path = root / "models" / (digest(document) + ".json")
     ir_path = root / "ir" / (ir["ir_hash"] + ".json")
     for path, value in ((model_path, document), (ir_path, ir)):
@@ -124,7 +127,7 @@ def make_binding(root: Path, document: dict[str, Any], *, output: Path) -> dict[
             "ir_path": str(ir_path), "ir_hash": ir["ir_hash"], "document": str(native),
             "scientific_content_files": referenced_files(root, document),
             "fingerprint": {"files": files, "artifacts": {str(native): ir["ir_hash"]}},
-            "graph": dependency_graph(document, expanded["scientific"]["provenance"]["datasets"])}
+            "graph": dependency_graph(document, datasets)}
 
 
 def read_canonical(binding: dict[str, Any]) -> dict[str, Any]:
