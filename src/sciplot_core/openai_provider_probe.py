@@ -7,7 +7,6 @@ import struct
 import tempfile
 import threading
 import time
-import warnings
 import zlib
 from pathlib import Path
 from typing import Any
@@ -575,51 +574,6 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
                 insecure_rejected,
             )
         )
-        from sciplot_gui.assistant_runtime import resolve_assistant_provider
-
-        auto_provider = resolve_assistant_provider(
-            environ={
-                "SCIPLOT_OPENAI_API_KEY": _PROBE_KEY,
-                "SCIPLOT_OPENAI_BASE_URL": "http://127.0.0.1:8765/v1",
-                "SCIPLOT_OPENAI_MODEL": "probe-model",
-            }
-        )
-        explicitly_disabled = resolve_assistant_provider(
-            None,
-            environ={"SCIPLOT_OPENAI_API_KEY": _PROBE_KEY},
-        )
-        with warnings.catch_warnings(record=True) as caught_warnings:
-            warnings.simplefilter("always")
-            invalid_config_provider = resolve_assistant_provider(
-                environ={
-                    "SCIPLOT_OPENAI_API_KEY": _PROBE_KEY,
-                    "SCIPLOT_OPENAI_BASE_URL": "http://api.example.com/v1",
-                }
-            )
-        checks.append(
-            _check(
-                "assistant_automatic_activation",
-                "Studio activates a valid provider and keeps the independent path for absent, disabled, or invalid configuration",
-                auto_provider is not None
-                and auto_provider.descriptor.provider_id == OPENAI_PROVIDER_ID
-                and explicitly_disabled is None
-                and invalid_config_provider is None
-                and len(caught_warnings) == 1
-                and "continuing without its optional AI assistant"
-                in str(caught_warnings[0].message),
-                {
-                    "automatic_provider": (
-                        auto_provider.descriptor.to_dict()
-                        if auto_provider is not None
-                        else None
-                    ),
-                    "explicit_none_preserved": explicitly_disabled is None,
-                    "invalid_config_falls_back": invalid_config_provider is None,
-                    "warning_count": len(caught_warnings),
-                },
-            )
-        )
-
         wire = OpenAIProviderWireFixture()
         provider = wire.provider()
         success_request = _request("success")

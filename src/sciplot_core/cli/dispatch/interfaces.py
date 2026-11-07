@@ -1,4 +1,4 @@
-"""Dispatch browser, Studio, publication, and QA commands."""
+"""Dispatch headless Studio, publication and QA commands."""
 
 from __future__ import annotations
 
@@ -16,8 +16,12 @@ class ManualEditorRetired(ValueError):
     reason_code = "manual_editor_retired"
 
 
+class BrowserIntakeRetired(ValueError):
+    reason_code = "browser_intake_retired"
+
+
 def dispatch_interfaces(
-    args: Any, argv: list[str] | None, *, serve_intake
+    args: Any, argv: list[str] | None,
 ) -> int | None:
     if args.command == "edit":
         raise ManualEditorRetired(
@@ -42,17 +46,11 @@ def dispatch_interfaces(
         return dispatch_project_control(args)
 
     if args.command == "app":
-        serve_kwargs: dict[str, Any] = {
-            "input_path": args.input.expanduser() if args.input else None,
-            "host": args.host,
-            "port": args.port,
-            "output_root": args.out.expanduser(),
-            "open_browser": not args.no_open,
-        }
-        if args.project:
-            serve_kwargs["project_slug"] = args.project
-        serve_intake(**serve_kwargs)
-        return 0
+        raise BrowserIntakeRetired(
+            "browser_intake_retired: Use task create for local original sources, "
+            "then answer its source-bound table and scientific questions. "
+            "The retired browser command does not open or change the input."
+        )
 
     if args.command == "studio":
         from sciplot_core.cli.dispatch.project_revision import dispatch_project_revision
@@ -62,10 +60,14 @@ def dispatch_interfaces(
             return revision_result
         from sciplot_core.studio import run_studio_command
 
-        if not (args.json or args.export or args.prepare_only):
-            from sciplot_gui.main_window_menu import install_studio_window_presentation
+        if args.new or args.qt_smoke or not (args.json or args.export or args.prepare_only):
+            from sciplot_core.studio_core.studio_command import NativeInterfaceRetired
 
-            install_studio_window_presentation()
+            raise NativeInterfaceRetired(
+                "native_gui_retired: Use task create/edit or project inspect, "
+                "and studio --json/--export for saved native documents. "
+                "This command does not open a window or change the target."
+            )
         original_argv = list(sys.argv[1:] if argv is None else argv)
         studio_target = args.target.expanduser() if args.target else None
         if studio_target is not None:

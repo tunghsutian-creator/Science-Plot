@@ -30,7 +30,6 @@ def main(
     argv: list[str] | None = None,
     *,
     run_autoplot_impl: Callable[..., dict[str, Any]],
-    serve_intake_impl: Callable[..., None],
 ) -> int:
     arguments = sys.argv[1:] if argv is None else argv
     parser = build_parser(json_errors=requests_json(arguments))
@@ -56,7 +55,6 @@ def main(
             lambda: dispatch_interfaces(
                 args,
                 argv,
-                serve_intake=serve_intake_impl,
             ),
         )
         for handler in handlers:

@@ -11,8 +11,12 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPO_ROOT / "src"
-FIRST_PARTY_PACKAGES = ("sciplot_core", "sciplot_gui", "sciplot_recipes")
+FIRST_PARTY_PACKAGES = ("sciplot_core", "sciplot_recipes")
 RETIRED_DISTRIBUTION_PREFIXES = (
+    "sciplot_gui/",
+    "sciplot_core/studio_core/qt_launch.py",
+    "sciplot_core/studio_core/qt_window.py",
+    "sciplot_core/studio_core/qt_safety.py",
     "sciplot_core/live_editor/",
     "sciplot_core/live_editor_assets/",
     "sciplot_core/veusz_worker/live_session.py",

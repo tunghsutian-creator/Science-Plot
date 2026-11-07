@@ -7,7 +7,6 @@ from pathlib import Path
 import stat
 import subprocess
 import sys
-from types import SimpleNamespace
 
 import pytest
 
@@ -17,8 +16,18 @@ from sciplot_core.studio_core import project_session as sessions
 from sciplot_core.studio_core.project_query import inspect_project
 
 
-def _window() -> SimpleNamespace:
-    return SimpleNamespace(filename="", document=SimpleNamespace(save=lambda *_args: None))
+def _admit(project: Path, target: Path) -> dict:
+    """Exercise the existing Store/adoption primitives, without a Window adapter."""
+    from sciplot_core.studio_core.native_adoption import adopt_saved_native
+    from sciplot_core.studio_core.project_command_scope import figure_read_state, project_store
+    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_store.runtime import project_runtime
+
+    selected = resolve_project_figure(target)
+    store = project_store(project)
+    store.admit_open(before_import=lambda: figure_read_state(project, selected))
+    with project_runtime(store):
+        return adopt_saved_native(project, selected)
 
 
 def _files(root: Path, *, include_store: bool = True) -> dict[str, tuple[bytes, int]]:
@@ -32,28 +41,20 @@ def test_first_explicit_native_open_imports_original_files_once_and_binds_only_s
     target = project / figure
     original = _files(project)
     assert not (project / ".sciplot_store").exists()
-    window = _window()
-    try:
-        with sessions.window_document_session(window, target, loading=True):
-            window.filename = str(target)
-        store = FileProjectStore(project)
-        before = store.snapshot()
-        witness = window.document._sciplot_project_read_set
-        assert before["origin"] == "explicit_legacy_import" and before["sequence"] == 0
-        assert witness["generation"] == before["generation"]
-        assert figure in witness["files"] and "source/data.csv" in witness["files"]
-        other = "studio/figures/second.vsz" if figure == "studio/document.vsz" else "studio/document.vsz"
-        assert other not in witness["files"]
-        assert _files(project, include_store=False) == original
-        # Existing Core opens reuse its exact authority; they do not import again.
-        with sessions.window_document_session(window, target, loading=True):
-            pass
-        assert store.snapshot()["generation"] == before["generation"]
-        assert _files(project, include_store=False) == original
-        with sessions.ProjectSessionLease(project, native=False):
-            pass
-    finally:
-        sessions.close_window_session(window)
+    witness = _admit(project, target)
+    store = FileProjectStore(project)
+    before = store.snapshot()
+    assert before["origin"] == "explicit_legacy_import" and before["sequence"] == 0
+    assert witness["generation"] == before["generation"]
+    assert figure in witness["files"] and "source/data.csv" in witness["files"]
+    other = "studio/figures/second.vsz" if figure == "studio/document.vsz" else "studio/document.vsz"
+    assert other not in witness["files"]
+    assert _files(project, include_store=False) == original
+    assert _admit(project, target) == witness
+    assert store.snapshot()["generation"] == before["generation"]
+    assert _files(project, include_store=False) == original
+    with sessions.ProjectSessionLease(project, native=False):
+        pass
 
 
 def test_cold_native_first_open_uses_this_project_without_preseeding_its_store(project):
@@ -61,19 +62,13 @@ def test_cold_native_first_open_uses_this_project_without_preseeding_its_store(p
     code = """
 from pathlib import Path
 import sys
-from types import SimpleNamespace
-from sciplot_core.studio_core.project_session import window_document_session, close_window_session
+from test_project_session_bootstrap import _admit
 from sciplot_core.project_store import FileProjectStore
 project = Path(sys.argv[1])
-target = project / 'studio/document.vsz'
 assert not (project / '.sciplot_store').exists()
-window = SimpleNamespace(filename='', document=SimpleNamespace(save=lambda *_args: None))
-with window_document_session(window, target, loading=True):
-    window.filename = str(target)
-binding = window.document._sciplot_project_read_set
+binding = _admit(project, project / 'studio/document.vsz')
 assert binding['project_id'] == FileProjectStore(project).snapshot()['project_id']
 assert 'studio/figures/second.vsz' not in binding['files']
-close_window_session(window)
 """
     result = subprocess.run([sys.executable, "-c", code, str(project)], capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -85,19 +80,12 @@ def test_existing_core_open_after_directory_move_retains_original_source_locator
     original = _files(project, include_store=False)
     moved = project.with_name("moved-project")
     project.rename(moved)
-    target = moved / "studio/document.vsz"
-    window = _window()
-    try:
-        with sessions.window_document_session(window, target, loading=True):
-            window.filename = str(target)
-        binding = window.document._sciplot_project_read_set
-        assert binding["project_id"] == before["project_id"]
-        assert binding["generation"] == before["generation"]
-        assert "source/data.csv" in binding["files"]
-        assert not project.exists()
-        assert _files(moved, include_store=False) == original
-    finally:
-        sessions.close_window_session(window)
+    binding = _admit(moved, moved / "studio/document.vsz")
+    assert binding["project_id"] == before["project_id"]
+    assert binding["generation"] == before["generation"]
+    assert "source/data.csv" in binding["files"]
+    assert not project.exists()
+    assert _files(moved, include_store=False) == original
 
 
 @pytest.mark.parametrize("partial", ["empty", "missing-head", "foreign-head"])
@@ -113,47 +101,18 @@ def test_explicit_open_never_reimports_partial_or_foreign_core(project, partial)
             value = json.loads(head.read_bytes())
             head.write_text(json.dumps({**value, "project_id": "0" * 32}))
     original = _files(project)
-    window = _window()
     with pytest.raises((ProjectConflict, ProjectRecoveryRequired)):
-        with sessions.window_document_session(window, project / "studio/document.vsz", loading=True):
-            pytest.fail("partial or foreign Core reached native loading")
+        _admit(project, project / "studio/document.vsz")
     assert _files(project) == original
-    assert getattr(window, "_sciplot_project_session", None) is None
-    assert not hasattr(window.document, "_sciplot_project_read_set")
 
 
 def test_source_drift_cannot_become_a_registered_first_open_witness(project):
     (project / "source/data.csv").write_bytes(b"x,y\n1,999\n")
     original = _files(project)
-    window = _window()
-    try:
-        with sessions.window_document_session(window, project / "studio/document.vsz", loading=True):
-            window.filename = str(project / "studio/document.vsz")
-        assert not (project / ".sciplot_store").exists()
-        assert not hasattr(window.document, "_sciplot_project_read_set")
-        with pytest.raises(sessions.ProjectSessionBusy):
-            sessions.ProjectSessionLease(project, native=False)
-        assert _files(project) == original
-    finally:
-        sessions.close_window_session(window)
-
-
-def test_failed_native_load_retains_prior_draft_identity_and_leaves_original_files(project):
-    target = project / "studio/document.vsz"
-    window = _window()
-    with sessions.window_document_session(window, target, loading=True):
-        window.filename = str(target)
-    original, witness = _files(project), window.document._sciplot_project_read_set
-    lease = window._sciplot_project_session
-    try:
-        with pytest.raises(OSError, match="controlled load failure"):
-            with sessions.window_document_session(window, project / "studio/figures/second.vsz", loading=True):
-                raise OSError("controlled load failure")
-        assert window._sciplot_project_session is lease
-        assert window.document._sciplot_project_read_set is witness
-        assert _files(project) == original
-    finally:
-        sessions.close_window_session(window)
+    with pytest.raises(ValueError, match="source changed"):
+        _admit(project, project / "studio/document.vsz")
+    assert not (project / ".sciplot_store").exists()
+    assert _files(project) == original
 
 
 def test_read_only_inspection_of_unregistered_project_does_not_admit_native_writes(project):
@@ -169,29 +128,19 @@ def test_existing_project_writer_scope_remains_reentrant_during_native_admission
 
     store = FileProjectStore(project)
     original = store.snapshot(import_legacy=True)
-    window = _window()
-    try:
-        with StoreIO(store.root, store.locations, store.location_members).locked():
-            with sessions.window_document_session(window, project / "studio/document.vsz", loading=True):
-                window.filename = str(project / "studio/document.vsz")
-        assert window.document._sciplot_project_read_set["generation"] == original["generation"]
-        assert store.snapshot()["generation"] == original["generation"]
-    finally:
-        sessions.close_window_session(window)
+    with StoreIO(store.root, store.locations, store.location_members).locked():
+        binding = _admit(project, project / "studio/document.vsz")
+    assert binding["generation"] == original["generation"]
+    assert store.snapshot()["generation"] == original["generation"]
 
 
 def test_unidentified_native_session_cannot_be_bypassed_by_first_open_import(project):
-    window = _window()
-    try:
-        with sessions.ProjectSessionLease(project, native=True):
-            with sessions.window_document_session(window, project / "studio/document.vsz", loading=True):
-                window.filename = str(project / "studio/document.vsz")
-            assert not (project / ".sciplot_store").exists()
-            assert not hasattr(window.document, "_sciplot_project_read_set")
-            with pytest.raises(sessions.ProjectSessionBusy):
-                sessions.ProjectSessionLease(project, native=False)
-    finally:
-        sessions.close_window_session(window)
+    original = _files(project)
+    with sessions.ProjectSessionLease(project, native=True):
+        with pytest.raises(sessions.ProjectSessionBusy):
+            _admit(project, project / "studio/document.vsz")
+        assert not (project / ".sciplot_store").exists()
+    assert _files(project) == original
 
 
 @pytest.mark.parametrize("intervening", ["empty", "partial", "complete"])
@@ -230,22 +179,16 @@ def test_first_open_rechecks_concurrent_store_creation_under_the_core_writer(pro
         monkeypatch.setattr(FileProjectStore, "admit_open", completed_before_admission)
     else:
         monkeypatch.setattr(project_command_scope, "figure_read_state", concurrent_import)
-    window = _window()
-    try:
-        if intervening in {"empty", "partial"}:
-            with pytest.raises(ProjectRecoveryRequired):
-                with sessions.window_document_session(window, project / "studio/document.vsz", loading=True):
-                    pytest.fail("concurrent incomplete Core reached native loading")
-            assert _files(project) == admitted[0]
-            assert not (project / ".sciplot_store/head.json").exists()
-        else:
-            with sessions.window_document_session(window, project / "studio/document.vsz", loading=True):
-                window.filename = str(project / "studio/document.vsz")
-            assert window.document._sciplot_project_read_set["generation"] == admitted[0]["generation"]
-            assert FileProjectStore(project).snapshot()["generation"] == admitted[0]["generation"]
-        assert _files(project, include_store=False) == original
-    finally:
-        sessions.close_window_session(window)
+    if intervening in {"empty", "partial"}:
+        with pytest.raises(ProjectRecoveryRequired):
+            _admit(project, project / "studio/document.vsz")
+        assert _files(project) == admitted[0]
+        assert not (project / ".sciplot_store/head.json").exists()
+    else:
+        binding = _admit(project, project / "studio/document.vsz")
+        assert binding["generation"] == admitted[0]["generation"]
+        assert FileProjectStore(project).snapshot()["generation"] == admitted[0]["generation"]
+    assert _files(project, include_store=False) == original
 
 
 @pytest.mark.comprehensive
@@ -262,7 +205,8 @@ ensure_veusz_loader_compat()
 from PyQt6.QtWidgets import QApplication
 from veusz import document, widgets, dataimport
 from veusz.document import CommandInterface
-from sciplot_core.studio_core.qt_window import _create_veusz_window
+from test_project_session_bootstrap import _admit
+from sciplot_core.veusz_worker.document_edit import loaded_native_document
 from sciplot_core.studio_core.project_session import ProjectSessionLease
 from sciplot_core.project_store import FileProjectStore
 app = QApplication([])
@@ -274,22 +218,20 @@ interface.Add('page', name='page1')
 interface.Save(str(target))
 original = target.read_bytes()
 assert not (project / '.sciplot_store').exists()
-window = _create_veusz_window(target)
-binding = window.document._sciplot_project_read_set
+binding = _admit(project, target)
 store = FileProjectStore(project)
 assert binding['generation'] == store.snapshot()['generation']
 assert 'studio/figures/second.vsz' not in binding['files']
-assert not window.document.isModified()
+with loaded_native_document(target) as loaded:
+    assert not loaded.isModified()
+    assert loaded.basewidget.children[0].name == 'page1'
 with ProjectSessionLease(project, native=False):
     pass
 generation = binding['generation']
-window.close()
-app.processEvents()
-reopened = _create_veusz_window(target)
-assert reopened.document._sciplot_project_read_set['generation'] == generation
+assert _admit(project, target)['generation'] == generation
+with loaded_native_document(target) as reopened:
+    assert reopened.basewidget.children[0].name == 'page1'
 assert target.read_bytes() == original
-reopened.close()
-app.processEvents()
 print('known native first open and reopen passed')
 """
     result = subprocess.run([sys.executable, "-c", code, str(project)],

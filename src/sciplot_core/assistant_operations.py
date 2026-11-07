@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
+from sciplot_core.foundation.json_values import validate_json_value as _validate_json_value
 from sciplot_core.json_contract import (
     reject_unknown_keys,
     require_json_bool,
@@ -28,26 +28,6 @@ def _required_text(value: object, label: str) -> str:
     if not text:
         raise ValueError(f"{label} must be a non-empty string.")
     return text
-
-
-def _validate_json_value(value: Any, *, path: str = "value") -> None:
-    if value is None or isinstance(value, str | bool | int):
-        return
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise ValueError(f"{path} must be finite.")
-        return
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            _validate_json_value(item, path=f"{path}[{index}]")
-        return
-    if isinstance(value, dict):
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise ValueError(f"{path} keys must be strings.")
-            _validate_json_value(item, path=f"{path}.{key}")
-        return
-    raise ValueError(f"{path} must be JSON-serializable, not {type(value).__name__}.")
 
 
 @dataclass(frozen=True)

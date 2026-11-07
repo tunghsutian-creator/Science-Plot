@@ -17,9 +17,9 @@ from sciplot_core.smoke.delivery import (  # noqa: F401
 from sciplot_core.smoke.runtime_environment import (  # noqa: F401
     _package_import_probe,
     _source_checkout_wrapper_probe,
-    _qt_mainwindow_probe,
-    _portable_launcher_probe,
-    _relocated_delivery_launcher_probe,
+    _native_document_probe,
+    _project_native_probe,
+    _relocated_delivery_native_probe,
     _standalone_export_probe,
 )
 from sciplot_core.smoke.data_mapping import (  # noqa: F401

@@ -14,7 +14,6 @@ from sciplot_core.mapping_contract import DataColumnMapping, DataMappingProposal
 from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.studio import observe_studio_source_content, resolve_studio_mapping_application
-from test_gui_source_currentness import Document
 from test_project_query_readonly_sources import inventory
 
 
@@ -113,15 +112,15 @@ def test_confirmed_originals_differ_from_canonical_input_without_granting_the_pa
 
 
 def test_single_original_keeps_legacy_file_digest_and_physical_open_target(tmp_path):
-    from sciplot_gui.studio_project_status.source_status import _source_status
     store, request, execution, raw, _canonical = mapped_project(tmp_path)
     _effective, _application, inputs = verified(store, request)
     source = raw / next(iter(execution['source_hashes']))
-    result = _source_status(source, transform_ledger=execution['transform_steps'] and {'steps': execution['transform_steps']},
-        audit_source=True, _content_observer=lambda path, **kwargs: observe(store, path, inputs, audit=kwargs['audit_source']))
+    result = observe(store, source, inputs)
     assert result['scope'] == 'mapping_source_file'
-    assert result['kind'] == 'file' and result['sha256'] == hashlib.sha256(source.read_bytes()).hexdigest()
-    assert result['audit_status'] == 'matches_last_run_lineage'
+    assert result['content']['kind'] == 'file'
+    assert result['content']['sha256'] == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert result['confirmation_id'] == execution['confirmation_id']
+    assert result['proposal_sha256'] == execution['proposal_sha256']
     assert result['path'] == result['identity_path'] == str(source)
 
 
@@ -209,19 +208,21 @@ def test_official_cold_mapping_stays_unknown_without_reading_old_raw_or_creating
 
 
 @pytest.mark.parametrize('count', [1, 2])
-def test_public_status_adapter_shares_one_mapping_observation_without_claiming_missing_qa(tmp_path, count):
-    from sciplot_gui.studio_project.status_adapter import build_studio_project_status
-    store, _request, execution, _raw, _canonical = mapped_project(tmp_path, count)
+def test_core_mapping_observation_cannot_manufacture_missing_publication_qa(tmp_path, count):
+    from sciplot_core.studio_core.project_query_evidence import publication_indicators
+    store, request, execution, _raw, canonical = mapped_project(tmp_path, count)
     before = inventory(tmp_path)
-    result = build_studio_project_status(document_path=store.root / 'studio/document.vsz', document=Document(),
-        project_dir=store.root, request_path=store.root / 'plot_request.json', audit_source=True,
-        _figure_set_scope_resolver=lambda **_kw: (None, 'not_applicable'))
-    source, mapping = result['source'], result['mapping']
-    assert source['audit_status'] == 'matches_confirmed_mapping_sources'
-    assert source['scope'] == 'mapping_selected_files' and source['member_count'] == count
-    assert source['observation_revision'] == mapping['observation_revision']
-    assert set(source['observation_revision']) == {'project_id', 'generation', 'request_sha256'}
-    assert source['confirmation_id'] == mapping['confirmation_id'] == execution['confirmation_id']
-    assert mapping['status'] == 'unverified'  # no published native QA was manufactured by this fixture
-    assert result['provenance']['source_current'] is False and result['provenance']['complete'] is False
+    revision = observe(store, None, audit=False)
+    _effective, application, inputs = verified(store, request)
+    result = observe(store, canonical, inputs, revision=revision)
+    assert result['audit_status'] == 'matches_confirmed_mapping_sources'
+    assert result['scope'] == 'mapping_selected_files' and result['content']['member_count'] == count
+    assert result['observation_revision'] == {key: revision[key] for key in ('project_id', 'generation', 'request_sha256')}
+    assert result['confirmation_id'] == application['confirmation_id'] == execution['confirmation_id']
+    assert result['proposal_sha256'] == application['proposal_sha256'] == execution['proposal_sha256']
+    assert application['status'] == 'validated' and application['outputs_verified'] is True
+    # Numeric mapping evidence is not publication/native/QA evidence.
+    publication = publication_indicators(store.root, request, [], {'current': None})
+    assert publication['last_run'] is None
+    assert publication['qa']['current'] is None and publication['delivery']['current'] is None
     assert inventory(tmp_path) == before

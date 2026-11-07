@@ -2,32 +2,38 @@
 
 from __future__ import annotations
 
+from sciplot_core.foundation.iso_timestamps import utc_now_iso as _now
+
 from typing import Any
 from uuid import uuid4
 from sciplot_core.assistant_provider import ProviderFacts, canonical_payload_sha256
 
-from sciplot_gui.studio_assistant_history.contracts import (
+from sciplot_core.assistant_history.contracts import (
     ASSISTANT_HISTORY_KIND,
     ASSISTANT_HISTORY_VERSION,
     ASSISTANT_HISTORY_STATUSES,
     ASSISTANT_HISTORY_REASON_CODES,
 )
 
-from sciplot_gui.studio_assistant_history.values import (
-    _now,
+from sciplot_core.assistant_history.values import (
     _required_text,
-    _optional_text,
     _uuid_text,
     _sha256,
 )
 
-from sciplot_gui.studio_assistant_history.operations import (
+from assistant_history_fixtures.operations import (
     _operation_payload,
 )
 
-from sciplot_gui.studio_assistant_history.validation import (
+from sciplot_core.assistant_history.validation import (
     validate_assistant_history_event,
 )
+
+
+def _optional_text(value, label, *, maximum=512):
+    if value is None:
+        return None
+    return _required_text(value, label, maximum=maximum)
 
 
 def build_assistant_history_event(

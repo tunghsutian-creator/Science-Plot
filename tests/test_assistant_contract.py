@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from copy import deepcopy
 from dataclasses import replace
-from types import SimpleNamespace
 
 import sciplot_core.setting_catalog as setting_catalog
 from sciplot_core.assistant_provider import (
@@ -95,20 +93,6 @@ def test_setting_catalog_exposes_specs_without_legacy_inspector_models() -> None
     assert setting_catalog.specs_for_object_type("unsupported") == ()
 
 
-def test_large_installed_font_catalog_keeps_current_font_and_native_choices():
-    from sciplot_gui.studio_assistant.selection import _bounded_font_choices
-    from sciplot_core.assistant_provider.contracts import _MAX_CAPABILITY_CHOICES
-
-    fonts = [f'Font-{index:03}' for index in range(400)]
-    field = {'choices': fonts, 'setting_path': '/page1/graph1/x/Label/font',
-             'current_value': 'Font-399', 'help_text': 'Native font family.'}
-    bounded = _bounded_font_choices(field)
-    assert len(bounded['choices']) == _MAX_CAPABILITY_CHOICES
-    assert 'Font-399' in bounded['choices']
-    assert set(bounded['choices']) <= set(fonts)
-    assert field['choices'] == fonts and len(fonts) == 400
-    assert bounded['current_value'] == field['current_value']
-    assert _bounded_font_choices({**field, 'choices': ['Font-399']})['choices'] == ['Font-399']
 
 
 def _request_and_batch():
@@ -233,57 +217,8 @@ def test_model_adapter_checks_duplicate_noops_before_filtering_and_preserves_noo
     assert response.proposal["operations"][0]["arguments"] == operation.arguments
 
 
-def test_gui_rejects_whole_out_of_scope_batch_before_native_validation(monkeypatch):
-    from sciplot_gui.studio_assistant import proposal_application as gui
-
-    request, batch = _request_and_batch()
-    operation, = batch.operations
-    bad = replace(operation, operation_id="bad", target_id="unadvertised-object")
-    batch = replace(batch, operations=(operation, bad))
-    monkeypatch.setattr(gui, "validate_native_setting", lambda *_args, **_kw: pytest.fail("Native work before admission"))
-    context = SimpleNamespace(document=SimpleNamespace(changeset=request.base_revision))
-    before = deepcopy(request.to_dict())
-    with pytest.raises(ValueError, match="advertised setting catalog"):
-        gui.ProposalApplicationMixin._prepare_native_operations(context, batch, request=request)
-    assert request.to_dict() == before
 
 
-@pytest.mark.parametrize("late_cancel", [False, True])
-def test_provider_worker_has_one_terminal_outcome_before_gui_admission(late_cancel):
-    from sciplot_core.assistant_provider import AssistantCancellationToken
-    from sciplot_gui.assistant_runtime import _AssistantProviderWorker
-
-    request, batch = _request_and_batch()
-    descriptor = AssistantProviderDescriptor(
-        provider_id=request.provider_id, display_name="Local fixture",
-        capabilities=("veusz_setting_operation_batch", "cancellation"),
-    )
-    cancellation = AssistantCancellationToken()
-    if not late_cancel:
-        operation, = batch.operations
-        batch = replace(batch, operations=(replace(operation, target_id="unadvertised"),))
-
-    def generate(_request, **_kwargs):
-        if late_cancel:
-            cancellation.cancel()
-        return _response(request, batch)
-
-    worker = _AssistantProviderWorker(
-        provider=SimpleNamespace(descriptor=descriptor, generate=generate),
-        descriptor=descriptor, request=request, cancellation=cancellation,
-    )
-    responses, failures, finished = [], [], []
-    worker.response.connect(responses.append)
-    worker.failed.connect(failures.append)
-    worker.finished.connect(lambda: finished.append(True))
-    worker.run()
-    assert finished == [True]
-    if late_cancel:
-        assert failures == [] and len(responses) == 1
-        assert responses[0].status == "cancelled" and responses[0].proposal is None
-    else:
-        assert responses == [] and len(failures) == 1
-        assert "advertised setting catalog" in failures[0]["error"]
 
 
 def test_legacy_response_wire_omits_optional_provider_facts_and_keeps_local_identity():

@@ -15,10 +15,10 @@ from sciplot_core.foundation.iso_timestamps import (
 )
 from sciplot_core.mapping_contract import values
 from sciplot_core.one_step import confidence as one_step_confidence
-from sciplot_gui.studio_assistant_history import (
+from sciplot_core.assistant_history import (
     validation as history_validation,
-    values as history_values,
 )
+from assistant_history_fixtures import builder as history_fixtures
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
@@ -37,7 +37,7 @@ def test_contract_packages_share_one_timestamp_validator() -> None:
     assert assistant_operations._now is utc_now_iso
     assert assisted_cleanup._timestamp is utc_now_iso
     assert data_mapping_contracts._now is utc_now_iso
-    assert history_values._now is utc_now_iso
+    assert history_fixtures._now is utc_now_iso
     assert one_step_confidence._now is utc_now_iso
     assert readiness._now is utc_now_iso
 

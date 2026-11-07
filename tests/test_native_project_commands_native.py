@@ -124,7 +124,7 @@ def _public_native_scenario(root: Path) -> None:
     assert not (root / ".document_edit_history").exists()
     _external_output_scenario(root, cold, owned_workers)
     gui = FileProjectStore.import_bundle(cold.export_bundle(root / "gui-bundle"), root / "gui-project")
-    _gui_save_scenario(root, gui)
+    _headless_save_scenario(root, gui)
     subprocess.Popen, subprocess.run = original_popen, original_run
     assert owned_workers and all(process.poll() is not None for process, _ in owned_workers)
     (root / "native-public-evidence.json").write_text(json.dumps({"pid": os.getpid(), "parent_pid": os.getppid(),
@@ -186,34 +186,29 @@ def _external_output_scenario(root, source_store, workers):
         "output_has_separate_artifact_authority", "no_raw_source_shipping", "old_complete_outputs_survive_failure",
         "retry_uses_same_frozen_candidate_without_native_rerun"]}))
 
-def _gui_save_scenario(root, store):
-    from PyQt6 import QtCore, QtWidgets
+def _headless_save_scenario(root, store):
+    from PyQt6 import QtWidgets
     from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
     from sciplot_core.studio_core.qt_compat import ensure_veusz_loader_compat
     ensure_veusz_runtime_path()
-    from veusz import qtall
-    class Settings(QtCore.QSettings):
-        def __init__(self, *_args, **_kwargs):
-            super().__init__(str(root / "gui-test-preferences.ini"), QtCore.QSettings.Format.IniFormat)
-            self.setFallbacksEnabled(False)
-    qtall.QSettings = Settings
     ensure_veusz_loader_compat()
-    from veusz.document import CommandInterface
-    from veusz.document.operations import OperationSettingSet
-    from sciplot_core.studio_core.qt_window import _create_veusz_window
+    from veusz.document import CommandInterface, Document
     from sciplot_core.project_store import ProjectConflict
     from sciplot_core.project_store.adapters import publish_files
-    from sciplot_gui.studio_assistant import native_batch
-    from sciplot_core.studio_core.persistence import atomic_save_veusz_document
-    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from sciplot_core.studio_core.native_adoption import adopt_saved_native
+    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.studio_core.persistence import atomic_save_veusz_document, bind_project_document_save
+
+    _application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     target = store.root / "studio/document.vsz"
-    window = _create_veusz_window(target)
-    window._sciplot_save_error_handler = lambda _error: None
-    document = window.document
-    assert document._sciplot_project_store.root == store.root
+    document = Document()
+    document.load(str(target))
+    document._sciplot_project_read_set = adopt_saved_native(store.root, resolve_project_figure(target))
+    document._sciplot_project_store = store
+    bind_project_document_save(document, store.root, target)
     commands = CommandInterface(document)
     binding = document._sciplot_project_read_set
-    publish_files(document._sciplot_project_store, {"studio/exports/unrelated.pdf": b"unrelated B export"}, kind="export")
+    publish_files(store, {"studio/exports/unrelated.pdf": b"unrelated B export"}, kind="export")
     assert document._sciplot_project_read_set is binding
     commands.Set("/page1/graph1/y/label", "Unsaved manual native label (N)")
     history = list(document.historyundo)
@@ -226,49 +221,48 @@ def _gui_save_scenario(root, store):
     commands.Set("/page1/graph1/y/label", "Unsaved draft must survive conflict (N)")
     history = list(document.historyundo)
     foreign = target.read_bytes() + b"\n# independent same-figure native save\n"
-    publish_files(document._sciplot_project_store, {"studio/document.vsz": foreign}, kind="save")
-    try:
-        document.save(str(target))
-        raise AssertionError("A stale GUI baseline overwrote the foreign native save")
-    except ProjectConflict:
-        pass
-    assert target.read_bytes() == foreign and document.historyundo == history and document.isModified()
-    window.slotFileSave()
-    assert window._sciplot_save_error and document.isModified() and target.read_bytes() == foreign
-    original_do, original_restore = OperationSettingSet.do, native_batch._Snapshot.restore
-    def fail(self, doc):
-        original_do(self, doc)
-        raise RuntimeError("generated native partial mutation")
-    def restore_failure(*_args):
-        raise RuntimeError("generated unprovable restoration")
-    OperationSettingSet.do, native_batch._Snapshot.restore = fail, restore_failure
-    try:
+    publish_files(store, {"studio/document.vsz": foreign}, kind="save")
+    for save in (lambda: document.save(str(target)), lambda: commands.Save(str(target)),
+                 lambda: atomic_save_veusz_document(document, target)):
         try:
-            native_batch.apply_native_setting_batch(document,
-                [OperationSettingSet("/page1/graph1/x/Label/size", "14pt")], description="Generated quarantine")
-            raise AssertionError("Generated quarantine fault was missed")
-        except native_batch.NativeBatchExecutionError as error:
-            assert not error.restored
-    finally:
-        OperationSettingSet.do, native_batch._Snapshot.restore = original_do, original_restore
-    forbidden = root / "quarantined-save-as.vsz"
-    for action in (lambda: document.save(str(target)), lambda: commands.Save(str(target)),
-                   lambda: atomic_save_veusz_document(document, target), lambda: document.save(str(forbidden))):
-        try:
-            action()
-            raise AssertionError("A quarantined native draft was saved")
-        except OSError as error:
-            assert "quarantined" in str(error)
-    window.slotFileSave()
-    assert target.read_bytes() == foreign and not forbidden.exists() and document.isModified()
-    # Explicitly discard only this generated test draft after all assertions.
-    document.setModified(False)
-    window.close()
-    app.processEvents()
-    (root / "gui-save-evidence.json").write_text(json.dumps({"project": str(store.root),
-        "checks": ["real_gui_load_baseline", "unrelated_B_does_not_rebase_A", "direct_native_save_one_generation",
-                   "command_interface_save", "same_A_conflict_preserves_unsaved_Undo", "Qt_save_failure_boundary",
-                   "quarantine_blocks_direct_command_atomic_save_and_save_as"]}))
+            save()
+            raise AssertionError("A stale native baseline overwrote the foreign save")
+        except ProjectConflict:
+            pass
+        assert target.read_bytes() == foreign and document.historyundo == history and document.isModified()
+
+    # A real failed staged validation must preserve both the saved authority and
+    # the unsaved caller state. No GUI quarantine/undo facade is retained.
+    document = Document()
+    document.load(str(target))
+    document._sciplot_project_read_set = adopt_saved_native(store.root, resolve_project_figure(target))
+    document._sciplot_project_store = store
+    bind_project_document_save(document, store.root, target)
+    CommandInterface(document).Set("/page1/graph1/y/label", "Current draft survives failed validation (N)")
+    generation = store.snapshot()["generation"]
+    state = document.filename, document.modified, document.changeset, list(document.historyundo)
+    def reject_stage(*_args, **_kwargs):
+        raise OSError("generated failed native reopen validation")
+    try:
+        atomic_save_veusz_document(document, target, staged_validator=reject_stage)
+        raise AssertionError("Failed validation installed native bytes")
+    except OSError as error:
+        assert "failed native reopen validation" in str(error)
+    assert target.read_bytes() == foreign and store.snapshot()["generation"] == generation
+    assert (document.filename, document.modified, document.changeset, list(document.historyundo)) == state
+    forbidden = root / "failed-save-as.vsz"
+    unbound = Document()
+    unbound.load(str(target))
+    try:
+        atomic_save_veusz_document(unbound, forbidden, staged_validator=reject_stage)
+        raise AssertionError("Failed Save As validation installed an output")
+    except OSError as error:
+        assert "failed native reopen validation" in str(error)
+    assert not forbidden.exists() and target.read_bytes() == foreign
+    (root / "headless-save-evidence.json").write_text(json.dumps({"project": str(store.root),
+        "checks": ["real_headless_load_baseline", "unrelated_B_does_not_rebase_A", "direct_native_save_one_generation",
+                   "command_interface_save", "same_A_conflict_preserves_unsaved_Undo",
+                   "failed_stage_preserves_generation_bytes_and_unsaved_state", "failed_save_as_leaves_no_output"]}))
 
 def test_public_native_edit_and_cold_open_export_use_same_generation(tmp_path):
     completed = subprocess.run([sys.executable, __file__, str(tmp_path)], env=veusz_worker_environment(),

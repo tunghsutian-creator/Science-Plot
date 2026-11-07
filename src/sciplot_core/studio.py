@@ -57,10 +57,6 @@ from sciplot_core.studio_render.table_io import (
     _coerced_numeric_frame as _coerced_numeric_frame,
     _read_source_frame_records as _read_source_frame_records,
 )
-from sciplot_core.studio_core.qt_window import (
-    _create_veusz_window as _create_veusz_window,
-    configure_studio_window_presentation as configure_studio_window_presentation,
-)
 from sciplot_core.studio_render.categorical_values import (
     _deterministic_category_positions as _deterministic_category_positions,
     _veusz_axis_label as _veusz_axis_label,
@@ -186,9 +182,6 @@ from sciplot_core.studio_core.standalone_receipt import (
 from sciplot_core.studio_core.publish_run import (
     publish_studio_export_run as publish_studio_export_run,
 )
-from sciplot_core.studio_core.qt_launch import (
-    qt_smoke_payload as qt_smoke_payload,
-)
 from sciplot_core.studio_core.context import (
     resolve_studio_project_context as resolve_studio_project_context,
 )
@@ -265,7 +258,6 @@ __all__ = [
     "can_revert_veusz_series_revision",
     "commit_project_series_revision",
     "has_pending_veusz_series_revision",
-    "configure_studio_window_presentation",
     "ensure_veusz_qsettings_compat",
     "export_studio_document",
     "export_native_document_artifacts",
@@ -278,7 +270,6 @@ __all__ = [
     "preview_veusz_series_revision",
     "publish_standalone_export_receipt",
     "publish_studio_export_run",
-    "qt_smoke_payload",
     "read_studio_figure_set",
     "revert_veusz_series_revision",
     "resolve_series_encodings",

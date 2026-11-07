@@ -102,7 +102,7 @@ def test_retirement_never_observes_or_changes_a_target(
             for name in names:
                 guard.setattr(owner, name, guarded(getattr(owner, name)))
         with pytest.raises(ManualEditorRetired, match="manual_editor_retired"):
-            dispatch_interfaces(args, None, serve_intake=None)
+            dispatch_interfaces(args, None)
     assert {path: path.read_bytes() for path in original_bytes} == original_bytes
     assert link.is_symlink()
     assert sorted(path.name for path in root.iterdir()) == [
@@ -117,3 +117,24 @@ def test_retired_editor_help_preserves_legacy_parser_without_advertising_an_edit
     help_text = capsys.readouterr().out
     assert "Historical target argument; never opened or changed." in help_text
     assert "--portable-fallback" not in help_text and "--session-dir" not in help_text
+
+
+@pytest.mark.parametrize("argv,reason", [
+    (["app", "--json"], "browser_intake_retired"),
+    (["studio", "--qt-smoke", "--json"], "native_gui_retired"),
+    (["studio", "--new", "--json"], "native_gui_retired"),
+])
+def test_retired_browser_and_native_window_argv_never_launch_or_read_target(
+    tmp_path, monkeypatch, capsys, argv, reason,
+):
+    target = tmp_path / "never-created"
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("A retired frontend attempted a process or browser launch")
+
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    monkeypatch.setattr(webbrowser, "open", forbidden)
+    assert cli.main([argv[0], str(target), *argv[1:]]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed" and payload["reason_code"] == reason
+    assert not target.exists()

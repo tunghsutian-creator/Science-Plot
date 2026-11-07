@@ -179,6 +179,6 @@ def test_all_headless_studio_writes_exclude_native_sessions_without_loading_gui(
     lease = ProjectSessionLease(tmp_path, native=True)
     try:
         with pytest.raises(ProjectSessionBusy):
-            dispatch_interfaces(args, [], serve_intake=lambda **_: None)
+            dispatch_interfaces(args, [])
     finally:
         lease.close()

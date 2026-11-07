@@ -170,6 +170,8 @@ def test_explicit_object_has_saved_hash_target_and_scoped_native_capabilities(
         lambda path: {
             "document": {"path": str(path), "sha256": file_sha256(path)},
             "widgets": widgets,
+            "datasets": ["source_x", "source_y"], "pages": ["page1"],
+            "linked_files": [],
         },
     )
     result = query.inspect_project(

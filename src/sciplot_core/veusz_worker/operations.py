@@ -113,6 +113,11 @@ def inspect_document_state(
             }
 
         loaded_document.walkNodes(collect, nodetypes=("widget",))
+        datasets = sorted(str(name) for name in loaded_document.data)
+        pages = [str(page.name) for page in loaded_document.basewidget.children]
+        linked_files = sorted(
+            str(link.filename) for link in loaded_document.getLinkedFiles()
+        )
         if include_font_evidence:
             from sciplot_core.veusz_worker.font_evidence import collect_font_preflight
 
@@ -123,6 +128,7 @@ def inspect_document_state(
         "kind": "sciplot_veusz_document_state", "version": 1, "status": "passed",
         "document": {"path": str(resolved_document), "sha256": before},
         "widgets": materialized_widgets, "widget_count": len(materialized_widgets),
+        "datasets": datasets, "pages": pages, "linked_files": linked_files,
     }
     if include_font_evidence:
         result["font_evidence"] = font_evidence

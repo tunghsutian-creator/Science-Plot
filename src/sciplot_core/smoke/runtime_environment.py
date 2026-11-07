@@ -1,4 +1,4 @@
-"""Probe imports, source wrappers, Qt windows, launchers, and standalone export."""
+"""Probe imports, source wrappers, saved native closure, and standalone export."""
 
 from __future__ import annotations
 
@@ -103,185 +103,76 @@ def _source_checkout_wrapper_probe() -> dict[str, Any]:
     }
 
 
-def _qt_mainwindow_probe(document_path: Path | None = None) -> dict[str, Any]:
-    """Construct the complete Veusz editor without requiring an Aqua session."""
-    env = os.environ.copy()
-    env["QT_QPA_PLATFORM"] = "offscreen"
-    command = [sys.executable, "-m", "sciplot_core.cli", "studio"]
-    if document_path is not None:
-        command.append(str(document_path.expanduser().resolve()))
-    command.append("--qt-smoke")
-    completed = subprocess.run(
-        command,
-        text=True,
-        capture_output=True,
-        check=False,
-        env=env,
-        timeout=30,
-    )
-    try:
-        payload = json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        payload = {}
-    settings_noise = "Error interpreting item" in completed.stderr
-    passed = (
-        completed.returncode == 0
-        and payload.get("status") == "passed"
-        and payload.get("window") == "MainWindow"
-        and payload.get("main_window_constructed") is True
-        and payload.get("fail_closed_close_installed") is True
-        and payload.get("atomic_save_installed") is True
-        and payload.get("integrated_window_factory_installed") is True
-        and payload.get("initial_widget_path") not in {None, "", "/"}
-        and all(
-            value is True
-            for value in (
-                payload.get("close_safety")
-                if isinstance(payload.get("close_safety"), dict)
-                else {}
-            ).values()
-        )
-        and len(
-            payload.get("close_safety")
-            if isinstance(payload.get("close_safety"), dict)
-            else {}
-        )
-        == 6
-        and not settings_noise
-    )
-    if document_path is not None:
-        passed = (
-            passed
-            and payload.get("document_loaded") is True
-            and bool(payload.get("datasets"))
-            and bool(payload.get("pages"))
-        )
-    return {
-        "passed": passed,
-        "returncode": completed.returncode,
-        "window": payload.get("window"),
-        "main_window_constructed": payload.get("main_window_constructed"),
-        "window_title": payload.get("window_title"),
-        "initial_widget_path": payload.get("initial_widget_path"),
-        "fail_closed_close_installed": payload.get("fail_closed_close_installed"),
-        "atomic_save_installed": payload.get("atomic_save_installed"),
-        "integrated_window_factory_installed": payload.get(
-            "integrated_window_factory_installed"
-        ),
-        "close_safety": payload.get("close_safety"),
-        "document": payload.get("document"),
-        "document_loaded": payload.get("document_loaded"),
-        "datasets": payload.get("datasets"),
-        "pages": payload.get("pages"),
-        "settings_noise": settings_noise,
-        "stderr": completed.stderr.strip(),
-    }
-
-
-def _portable_launcher_probe(
-    project_dir: Path,
-    *,
-    ignore_runtime_overrides: bool = False,
-    launcher_names: tuple[str, ...] = (
-        "Open_in_SciPlot_Studio.command",
-        "Open_in_Veusz.command",
-        "Export_Edited_Veusz.command",
-    ),
+def _native_document_probe(
+    documents: list[Path], *, portable_root: Path | None = None
 ) -> dict[str, Any]:
-    """Exercise generated launcher discovery without starting an interactive GUI."""
+    """Safely cold-load every saved member without a window or launcher."""
+    from sciplot_core.smoke.contracts import _inspect_veusz_document_state
 
     results: list[dict[str, Any]] = []
-    env = os.environ.copy()
-    if ignore_runtime_overrides:
-        for key in (
-            "SCIPLOT_REPO",
-            "SCIPLOT_RUNTIME_REPO",
-            "SCIPLOT_VEUSZ_ROOT",
-            "SCIPLOT_SOURCE_ROOT",
-            "SCIPLOT_PYTHON",
-        ):
-            env.pop(key, None)
-    for name in launcher_names:
-        launcher = project_dir / name
-        if not launcher.is_file():
-            results.append(
-                {
-                    "launcher": str(launcher),
-                    "exists": False,
-                    "returncode": None,
-                    "qt_smoke_passed": False,
-                    "settings_noise": False,
-                    "stderr": "Launcher is missing.",
-                }
-            )
-            continue
-        completed = subprocess.run(
-            [str(launcher), "--check"],
-            text=True,
-            capture_output=True,
-            check=False,
-            env=env,
-            timeout=30,
-        )
-        settings_noise = "Error interpreting item" in completed.stderr
-        results.append(
-            {
-                "launcher": str(launcher),
-                "exists": launcher.is_file(),
-                "returncode": completed.returncode,
-                "qt_smoke_passed": '"status": "passed"' in completed.stdout,
-                "settings_noise": settings_noise,
-                "stderr": completed.stderr.strip(),
-            }
-        )
-    return {
-        "passed": bool(results)
-        and all(
-            item["exists"]
-            and item["returncode"] == 0
-            and item["qt_smoke_passed"]
-            and not item["settings_noise"]
-            for item in results
-        ),
-        "launchers": results,
-    }
+    root = portable_root.resolve() if portable_root is not None else None
+    for document in documents:
+        before = file_sha256(document)
+        state = _inspect_veusz_document_state(document)
+        links = state.get("linked_files")
+        if not isinstance(links, list) or not all(isinstance(link, str) for link in links):
+            raise ValueError("Native inspection did not observe linked-source metadata.")
+        dependencies = []
+        for filename in links:
+            path = Path(filename).expanduser()
+            path = (document.parent / path).resolve() if not path.is_absolute() else path.resolve()
+            dependencies.append({"path": str(path), "exists": path.is_file(),
+                                 "inside_package": root is None or path.is_relative_to(root)})
+        current = file_sha256(document)
+        results.append({
+            "document": str(document), "sha256": before,
+            "passed": before == current
+            and state.get("document") == {"path": str(document.resolve()), "sha256": before}
+            and bool(state.get("datasets")) and bool(state.get("pages"))
+            and all(item["exists"] and item["inside_package"] for item in dependencies),
+            "datasets": state.get("datasets"), "pages": state.get("pages"),
+            "linked_sources": dependencies,
+        })
+    return {"passed": bool(results) and all(item["passed"] for item in results),
+            "documents": results}
 
 
-def _relocated_delivery_launcher_probe(
+def _project_native_probe(project_dir: Path) -> dict[str, Any]:
+    from sciplot_core.studio_core.project_query_paths import project_snapshot
+
+    _request, _primary, figures = project_snapshot(project_dir)
+    documents = [Path(entry["document"]) for entry in figures if entry.get("status") == "ready"]
+    return _native_document_probe(documents)
+
+
+def _relocated_delivery_native_probe(
     run_root: Path, delivery: dict[str, Any]
 ) -> dict[str, Any]:
-    """Copy an editable delivery elsewhere and prove its launchers still load the VSZ."""
-
+    """Verify copied VSZ bytes and actual cold-load dependency closure."""
     source_value = delivery.get("path")
     if not source_value:
-        return {
-            "passed": False,
-            "reason": "Delivery did not publish a portable package path.",
-        }
+        return {"passed": False, "reason": "Delivery did not publish a portable package path."}
     source = Path(str(source_value)).expanduser().resolve()
     if not source.is_dir():
-        return {
-            "passed": False,
-            "reason": "Delivery package path is not a directory.",
-            "source": str(source),
-        }
+        return {"passed": False, "reason": "Delivery package path is not a directory.",
+                "source": str(source)}
+    original = {path.relative_to(source).as_posix(): file_sha256(path)
+                for path in sorted((source / "project").rglob("*.vsz")) if path.is_file()}
     relocated = run_root / "relocated_delivery" / source.name
-    if relocated.exists():
-        shutil.rmtree(relocated)
     relocated.parent.mkdir(parents=True, exist_ok=True)
+    # An existing destination is an unexpected state, never a license to delete it.
     shutil.copytree(source, relocated)
-    probe = _portable_launcher_probe(
-        relocated,
-        ignore_runtime_overrides=True,
-        launcher_names=("Open_in_Veusz.command",),
-    )
-    probe.update(
-        {
-            "source": str(source),
-            "relocated": str(relocated),
-            "runtime_overrides_ignored": True,
-        }
-    )
+    copied = {path.relative_to(relocated).as_posix(): file_sha256(path)
+              for path in sorted((relocated / "project").rglob("*.vsz")) if path.is_file()}
+    if not original or copied != original:
+        raise ValueError("Relocation changed the complete native document membership or bytes.")
+    probe = _native_document_probe([relocated / name for name in original], portable_root=relocated)
+    after = {path.relative_to(source).as_posix(): file_sha256(path)
+             for path in sorted((source / "project").rglob("*.vsz")) if path.is_file()}
+    if after != original:
+        raise ValueError("The original native delivery changed during relocation inspection.")
+    probe.update({"source": str(source), "relocated": str(relocated),
+                  "native_copy_sha256": copied})
     return probe
 
 

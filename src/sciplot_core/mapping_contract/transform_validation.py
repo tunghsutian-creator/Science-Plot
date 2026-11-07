@@ -12,7 +12,7 @@ from sciplot_core.json_contract import (
     require_json_number,
     require_json_object,
 )
-from sciplot_core.assistant_operations import _validate_json_value
+from sciplot_core.foundation.json_values import validate_json_value as _validate_json_value
 
 from sciplot_core.mapping_contract.constants import (
     DATA_MAPPING_REQUEST_PATCH_KEYS,

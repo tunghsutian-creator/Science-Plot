@@ -8,14 +8,8 @@ from sciplot_core.scientific_review import (
     build_scientific_transform_review,
     scientific_transform_review_from_ledger,
 )
-from sciplot_gui import studio_project_status
 
 
-class _Document:
-    changeset = 1
-
-    def isModified(self) -> bool:
-        return False
 
 
 def _contract(anchor_time: float) -> dict[str, object]:
@@ -291,38 +285,3 @@ def test_intake_status_reads_prepared_review_from_canonical_request(
 
     request_path.unlink()
     assert intake_project_status(project_dir)["scientific_transform_review"] is None
-
-
-def test_primary_studio_status_reads_current_request_review_before_export(
-    tmp_path: Path,
-) -> None:
-    project_dir = tmp_path / "project"
-    document_path = project_dir / "studio" / "document.vsz"
-    request_path = project_dir / "plot_request.json"
-    document_path.parent.mkdir(parents=True)
-    document_path.write_text("# minimal Veusz document\n", encoding="utf-8")
-    request_path.write_text(
-        json.dumps(
-            {
-                "input": "missing.csv",
-                "rule_id": "example_curve",
-                "template": "curve",
-                "transform_ledger": _ledger(0.271),
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    status = studio_project_status.build_studio_project_status(
-        document_path=document_path,
-        document=_Document(),
-        project_dir=project_dir,
-        request_path=request_path,
-        _figure_set_scope_resolver=lambda **_kwargs: (None, "not_applicable"),
-    )
-
-    review = status["scientific_transform_review"]
-    assert review["anchors"][0]["source_time"] == 0.271
-    text = studio_project_status._status_text(status)
-    assert "Scientific review:" in text
-    assert "sample A: 0.271 [s] (retained)" in text

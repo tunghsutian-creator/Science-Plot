@@ -163,6 +163,13 @@ def test_inspection_default_response_is_unchanged_and_opt_in_adds_field(tmp_path
     node = SimpleNamespace(path="/page/label", name="label", typename="label", settings=None)
 
     class Document:
+        def __init__(self):
+            self.data = {"measured_x": object(), "measured_y": object()}
+            self.basewidget = SimpleNamespace(children=[SimpleNamespace(name="page1")])
+
+        def getLinkedFiles(self):
+            return [SimpleNamespace(filename="source/measurements.csv")]
+
         def walkNodes(self, collect, **_kwargs):
             collect(node.path, node)
 
@@ -181,6 +188,10 @@ def test_inspection_default_response_is_unchanged_and_opt_in_adds_field(tmp_path
 
     monkeypatch.setattr(font_evidence, "collect_font_preflight", preflight)
     normal = operations.inspect_document_state(Path(path))
+    assert normal["datasets"] == ["measured_x", "measured_y"]
+    assert normal["pages"] == ["page1"]
+    assert normal["linked_files"] == ["source/measurements.csv"]
+    assert "values" not in normal and path.read_text() == "# exact native document\n"
     assert "font_evidence" not in normal
     assert calls == []
     opted = operations.inspect_document_state(Path(path), include_font_evidence=True)

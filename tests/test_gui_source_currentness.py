@@ -1,18 +1,16 @@
 """Source currentness follows an admitted clone, never a preserved old locator."""
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
 from sciplot_core.project_store import FileProjectStore
 from test_initial_request_source_capture import prepared_request as prepared_request
-from sciplot_gui.studio_project.status_adapter import build_studio_project_status
+from sciplot_core.studio_core.source_content_observation import observe_studio_source_content
 
 
-class Document:
-    changeset = 1
-    def isModified(self):
-        return False
+
 
 
 def legacy_record(directory):
@@ -55,20 +53,19 @@ def test_clone_status_uses_current_physical_source_and_preserved_lineage_identit
     before = source.read_bytes(), source.stat().st_mode, source.stat().st_mtime_ns
     if change:
         (copied / 'source/data.csv').write_bytes(b'x,y\n1,9\n')
-    status = build_studio_project_status(document_path=copied / 'studio/document.vsz', document=Document(),
-        project_dir=copied, request_path=copied / 'plot_request.json', audit_source=True,
-        _figure_set_scope_resolver=lambda **_kw: (None, 'not_applicable'))
-    assert status['source']['audit_status'] == ('changed_since_last_run' if change else 'matches_last_run_lineage')
-    assert status['source']['path'] == str(copied / 'source')
-    assert status['source']['identity_path'] == str(original / 'source')
-    assert status['source']['sha256'] == legacy_record(copied / 'source')['sha256']
+    current = observation(copied)
+    assert current['path'] == str(copied / 'source')
+    assert current['identity_path'] == str(original / 'source')
+    assert current['content'] == legacy_record(copied / 'source')
+    assert (current['content']['sha256'] != legacy_record(original / 'source')['sha256']) is change
     assert (source.read_bytes(), source.stat().st_mode, source.stat().st_mtime_ns) == before
 
 
-def status(project, *, audit=True):
-    return build_studio_project_status(document_path=project / 'studio/document.vsz', document=Document(),
-        project_dir=project, request_path=project / 'plot_request.json', audit_source=audit,
-        _figure_set_scope_resolver=lambda **_kw: (None, 'not_applicable'))
+def observation(project, *, audit=True, expected_revision=None):
+    request = json.loads((project / 'plot_request.json').read_text())
+    return observe_studio_source_content(Path(request['input']), project_dir=project,
+        request_path=project / 'plot_request.json', audit_source=audit,
+        expected_revision=expected_revision)
 
 
 def test_plain_refresh_does_not_hash_registered_source_contents(tmp_path, monkeypatch):
@@ -76,8 +73,8 @@ def test_plain_refresh_does_not_hash_registered_source_contents(tmp_path, monkey
     _original, copied = clone(tmp_path)
     monkeypatch.setattr(core, '_files', lambda *_a, **_k: pytest.fail('Ordinary refresh must not hash the source tree.'))
     monkeypatch.setattr(core, 'read_file', lambda *_a, **_k: pytest.fail('Ordinary refresh must not read source contents.'))
-    source = status(copied, audit=False)['source']
-    assert source['exists'] is True and source['audit_status'] == 'not_computed'
+    source = observation(copied, audit=False)
+    assert source['exists'] is True and source['content'] == {'kind': 'directory'}
     assert 'sha256' not in source and source['path'] == str(copied / 'source')
 
 
@@ -103,9 +100,8 @@ def test_source_namespace_refusals_do_not_retry_original_or_read_unknown_bytes(t
         assert name != 'unknown.csv', 'Unknown bytes are not observation input.'
         return read(fd, name, **kwargs)
     monkeypatch.setattr(source_tree_io, 'read_file', confined)
-    source = status(copied)['source']
-    assert source['audit_status'] == 'audit_failed'
-    assert source['path'] is None and source['identity_path'] == str(original / 'source')
+    with pytest.raises(ValueError):
+        observation(copied)
     assert (original / 'source/data.csv').read_bytes() == before
 
 
@@ -113,8 +109,8 @@ def test_old_project_offline_does_not_break_clone_identity_match(tmp_path):
     original, copied = clone(tmp_path)
     old = str(original / 'source')
     original.rename(tmp_path / 'original-offline')
-    source = status(copied)['source']
-    assert source['audit_status'] == 'matches_last_run_lineage'
+    source = observation(copied)
+    assert source['content'] == legacy_record(copied / 'source')
     assert source['identity_path'] == old and source['path'] == str(copied / 'source')
 
 
@@ -129,19 +125,19 @@ def test_source_observer_cannot_read_another_registered_project_artifact(tmp_pat
 
 
 def test_invalid_canonical_request_refuses_before_gui_mapping_or_source_io(tmp_path, monkeypatch):
-    from sciplot_gui.studio_project_status import builder
+    from sciplot_core.studio_core import source_content_observation as core
     _original, copied = clone(tmp_path)
     (copied / 'plot_request.json').write_bytes(b'{"input":"/unadmitted/new-source"}')
-    monkeypatch.setattr(builder, '_mapping_status', lambda *_a, **_k: pytest.fail('An unregistered request reached mapping IO.'))
-    with pytest.raises(ValueError, match='registered generation'):
-        status(copied)
+    monkeypatch.setattr(core, '_record', lambda *_a, **_k: pytest.fail('An unregistered request reached source IO.'))
+    with pytest.raises(ValueError):
+        observation(copied)
 
 
 def test_status_observation_does_not_materialize_or_rewrite_project_members(tmp_path):
     from test_project_query_readonly_sources import inventory
     original, copied = clone(tmp_path)
     before = inventory(tmp_path)
-    assert status(copied)['source']['audit_status'] == 'matches_last_run_lineage'
+    assert observation(copied)['content'] == legacy_record(copied / 'source')
     assert inventory(tmp_path) == before
 
 
@@ -160,7 +156,8 @@ def test_post_observation_namespace_race_cannot_certify_a_current_path(tmp_path,
             (copied / 'source/new.csv').write_bytes(b'Unknown late bytes.')
         return result
     monkeypatch.setattr(core, '_files', race)
-    assert status(copied)['source']['audit_status'] == 'audit_failed'
+    with pytest.raises(ValueError):
+        observation(copied)
 
 
 def test_exact_registered_file_retains_legacy_record_shape_in_clone(tmp_path):
@@ -210,10 +207,9 @@ def test_managed_clone_mapping_cannot_read_old_origin_before_source_callback(tmp
     monkeypatch.setattr(execution_inputs, '_read', confined)
     with pytest.raises(ValueError, match='historical evidence'):
         resolve_studio_mapping_application(request, project_dir=copied.root, request_path=copied.root / 'plot_request.json')
-    gui = status(copied.root)
-    assert gui['mapping']['status'] == 'not_evaluated'
-    assert gui['source']['audit_status'] == 'not_currently_observed'
-    assert gui['provenance']['full_project_evidence_current'] is False
+    current = observation(copied.root)
+    assert current['status'] == 'not_observed' and current['exists'] is False
+    assert current['scope'] == 'mapping_selected_files' and current['audit_status'] == 'not_currently_observed'
     assert inventory(tmp_path) == before
     assert selected_source_resolver() is None
     assert (project / 'plot_request.json').is_file()
@@ -221,34 +217,28 @@ def test_managed_clone_mapping_cannot_read_old_origin_before_source_callback(tmp
 
 def test_status_builder_cannot_silently_switch_generations_after_precheck(tmp_path, monkeypatch):
     from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
-    from sciplot_gui.studio_project import status_adapter
+    from sciplot_core.studio_core import source_content_observation as core
     _original, copied = clone(tmp_path)
-    build = status_adapter._build_studio_project_status
-    def advance(**kwargs):
-        store = FileProjectStore(copied)
-        before = store.snapshot()
-        command = ProjectCommand.create('figure_set', 'concurrent-legitimate-metadata', project_id=before['project_id'],
-            expected_generation=before['generation'], read_set={'note.txt': None}, write_set=['note.txt'], request={})
-        ProjectCommands(store).execute(command, lambda: ProjectMutation({'note.txt': b'legitimate next generation'}, {}))
-        return build(**kwargs)
-    monkeypatch.setattr(status_adapter, '_build_studio_project_status', advance)
-    result = status(copied)
-    assert result['source']['audit_status'] == 'audit_failed'
-    assert 'revision changed' in result['source']['audit_error']
+    store = FileProjectStore(copied)
+    before = store.snapshot()
+    revision = {key: before[key] for key in ('project_id', 'generation')}
+    revision['request_sha256'] = before['files']['plot_request.json']['sha256']
+    command = ProjectCommand.create('figure_set', 'concurrent-legitimate-metadata', project_id=before['project_id'],
+        expected_generation=before['generation'], read_set={'note.txt': None}, write_set=['note.txt'], request={})
+    ProjectCommands(store).execute(command, lambda: ProjectMutation({'note.txt': b'legitimate next generation'}, {}))
+    monkeypatch.setattr(core, '_record', lambda *_a, **_k: pytest.fail('A stale revision reached original source contents.'))
+    with pytest.raises(ValueError, match='revision changed'):
+        observation(copied, expected_revision=revision)
 
 
 def test_cold_mapping_status_is_not_evaluated_instead_of_invalid(tmp_path, monkeypatch):
-    from sciplot_core.studio import resolve_studio_mapping_application
-    from sciplot_gui.studio_project_status.mapping_status import _mapping_status
+    from sciplot_core.studio_core.source_content_observation import CurrentMappingObservationUnavailable, resolve_studio_mapping_application
     from test_mapping_execution_portability import confirmed_project
     _origin, _project, store, request, _execution = confirmed_project(tmp_path, monkeypatch)
     copied = FileProjectStore.import_bundle(store.export_bundle(tmp_path / 'bundle-cold'), tmp_path / 'cold')
-    mapping, _effective = _mapping_status(request, request_path=copied.root / 'plot_request.json', latest_run={},
-        request_error=None, artifact_qa_current=True, audit_mapping=True,
-        _mapping_resolver=lambda payload: resolve_studio_mapping_application(payload, project_dir=copied.root,
-            request_path=copied.root / 'plot_request.json'))
-    assert mapping['status'] == 'not_evaluated'
-    assert mapping['verification_base_valid'] is False and mapping['evidence_current'] is False
+    with pytest.raises(CurrentMappingObservationUnavailable, match='historical evidence'):
+        resolve_studio_mapping_application(request, project_dir=copied.root,
+            request_path=copied.root / 'plot_request.json')
 
 
 @pytest.mark.parametrize('cold', [False, True])

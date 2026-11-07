@@ -134,29 +134,26 @@ def test_historical_v1_execution_with_directory_input_still_loads(tmp_path, monk
     assert verified["version"] == 1 and verified["handoff_allowed"] is True
     assert verified["confirmation_schema_version"] == 2
     assert verified["transform_steps"][0]["input_artifacts"][0]["path"] == str(source.parent)
-    _assert_mapping_gui_source_binding(verified, source.parent)
+    _assert_mapping_source_binding(verified, source.parent)
 
 
-def _assert_mapping_gui_source_binding(execution, expected_source):
-    from sciplot_gui.studio_project_status.mapping_status import _mapping_status
-    from sciplot_gui.studio_project_status.source_status import _source_status
-
+def _assert_mapping_source_binding(execution, expected_source):
     request_path = Path(execution["request_seed"])
     request = json.loads(request_path.read_text())
-    _effective, application = resolve_data_mapping_request(request, base_dir=request_path.parent)
-    mapping, _request = _mapping_status(
-        request, request_path=request_path,
-        latest_run={"data_mapping_application": application, "data_mapping_coverage": {"status": "passed"}},
-        request_error=None, artifact_qa_current=True, audit_mapping=True,
-    )
-    assert mapping["status"] == "verified"
-    assert mapping["source_audit_path"] == str(expected_source)
-    source = _source_status(Path(mapping["source_audit_path"]),
-                            transform_ledger=application["transform_ledger"], audit_source=True)
-    assert source["audit_status"] == "matches_last_run_lineage"
+    effective, application = resolve_data_mapping_request(request, base_dir=request_path.parent)
+    assert application["status"] == "validated" and application["outputs_verified"] is True
+    assert application["raw_inputs_preserved"] is True
+    assert effective["input"] == execution["effective_input"]
+    inputs = [item for step in application["transform_ledger"]["steps"]
+              for item in step.get("input_artifacts", []) if item.get("path") == str(expected_source)]
+    assert len(inputs) == 1
+    assert inputs[0]["kind"] == ("file" if expected_source.is_file() else "directory")
+    assert application["source_hashes"] == execution["source_hashes"]
+    for relative, digest in application["source_hashes"].items():
+        assert file_sha256(Path(application["source_root"]) / relative) == digest
 
 
-def test_v2_mapping_gui_audits_the_confirmed_file_not_its_parent_directory(tmp_path):
+def test_v2_mapping_audits_the_confirmed_file_not_its_parent_directory(tmp_path):
     source, execution = _direct_execution(tmp_path)
     (source.parent / "unselected.txt").write_text("This is outside the confirmed mapping input.")
-    _assert_mapping_gui_source_binding(execution, source)
+    _assert_mapping_source_binding(execution, source)

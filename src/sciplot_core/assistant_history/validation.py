@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any
-from sciplot_core.assistant_provider import ProviderFacts
+from typing import Any, cast
+from sciplot_core.assistant_provider.facts import ProviderFacts
 
 from sciplot_core.foundation.iso_timestamps import (
     require_zoned_iso_timestamp as _timestamp,
 )
-from sciplot_gui.studio_assistant_history.contracts import (
+from sciplot_core.assistant_history.contracts import (
     ASSISTANT_HISTORY_KIND,
     ASSISTANT_HISTORY_VERSION,
     ASSISTANT_HISTORY_STATUSES,
@@ -20,7 +20,7 @@ from sciplot_gui.studio_assistant_history.contracts import (
     _OPERATION_FIELDS,
 )
 
-from sciplot_gui.studio_assistant_history.values import (
+from sciplot_core.assistant_history.values import (
     _required_text,
     _uuid_text,
     _sha256,
@@ -131,8 +131,8 @@ def validate_assistant_history_event(payload: dict[str, Any]) -> dict[str, Any]:
                 f"operation has unknown fields: {sorted(unknown_operation)!r}"
             )
         if set(operation) != _OPERATION_FIELDS:
-            missing = sorted(_OPERATION_FIELDS - set(operation))
-            raise ValueError(f"operation is missing fields: {missing!r}")
+            missing_operation = sorted(_OPERATION_FIELDS - set(operation))
+            raise ValueError(f"operation is missing fields: {missing_operation!r}")
         _uuid_text(operation.get("operation_id"), "operation_id")
         _required_text(
             operation.get("operation_type"),
@@ -200,7 +200,7 @@ def validate_assistant_history_event(payload: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(
                 "applied_unverified history events cannot claim an after render."
             )
-    return json.loads(
+    return cast(dict[str, Any], json.loads(
         json.dumps(
             payload,
             ensure_ascii=False,
@@ -208,4 +208,4 @@ def validate_assistant_history_event(payload: dict[str, Any]) -> dict[str, Any]:
             separators=(",", ":"),
             allow_nan=False,
         )
-    )
+    ))

@@ -13,7 +13,6 @@ from sciplot_core.native_settings import editable_fields, validate_native_settin
 from sciplot_core.render import render_to_dir
 from sciplot_core.veusz_runtime import veusz_worker_environment
 from sciplot_core.veusz_worker.widget_bindings import _visible_data_bindings
-from sciplot_gui.studio_assistant.selection import SelectionMixin
 
 
 class Setting:
@@ -232,17 +231,6 @@ def test_manual_ticks_are_numeric_only_and_log_positions_remain_positive():
     assert editable_fields(doc, widget, safe_only=True) == []
 
 
-def test_gui_capabilities_keep_the_existing_selected_object_scope() -> None:
-    widget = SimpleNamespace(path="/g/x", typename="axis")
-    doc = Document({"/g/x/Label/size": "8pt", "/g/x/label": "Force (N)"})
-    context = SimpleNamespace(document=doc, _object_id=lambda _widget: "object-id")
-    capability = SelectionMixin._editing_capabilities(context, widget)
-    assert capability["scope"] == "selected_object"
-    assert capability["target_object_id"] == "object-id"
-    assert capability["allowed_operations"] == [
-        {"operation_type": "set_setting", "target_id": "object-id", **field}
-        for field in editable_fields(doc, widget)
-    ]
 
 
 def _worker(*args: str, failed: bool = False) -> dict:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sciplot_gui.studio_assistant_history.values import (
+from sciplot_core.assistant_history.values import (
     _required_text,
     _uuid_text,
     canonical_value_sha256,

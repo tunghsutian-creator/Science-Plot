@@ -1,4 +1,4 @@
-"""Register browser confirmation and native Studio commands."""
+"""Register saved native commands and explicit retired-interface errors."""
 
 from __future__ import annotations
 
@@ -22,29 +22,30 @@ def register_interfaces_commands(subparsers: Any) -> None:
 
     app_parser = subparsers.add_parser(
         "app",
-        help="Open optional browser source/grouping/export confirmation and read-only result review.",
+        help="Retired browser intake; use task create and source-bound confirmations.",
     )
 
-    app_parser.add_argument("input", nargs="?", type=Path)
+    app_parser.add_argument("input", nargs="?", type=Path, help=argparse.SUPPRESS)
 
-    app_parser.add_argument("--host", default="127.0.0.1")
+    app_parser.add_argument("--host", default="127.0.0.1", help=argparse.SUPPRESS)
 
-    app_parser.add_argument("--port", type=int, default=8765)
-
-    app_parser.add_argument(
-        "--out", type=Path, default=Path("outputs") / "intake_projects"
-    )
+    app_parser.add_argument("--port", type=int, default=8765, help=argparse.SUPPRESS)
 
     app_parser.add_argument(
-        "--project", help="Open an existing intake project under --out."
+        "--out", type=Path, default=Path("outputs") / "intake_projects", help=argparse.SUPPRESS
     )
 
     app_parser.add_argument(
-        "--no-open", action="store_true", help="Do not open a browser automatically."
+        "--project", help=argparse.SUPPRESS
     )
+
+    app_parser.add_argument(
+        "--no-open", action="store_true", help=argparse.SUPPRESS
+    )
+    app_parser.add_argument("--json", action="store_true", help="Report the retirement as machine-readable JSON.")
 
     studio_parser = subparsers.add_parser(
-        "studio", help="Prepare, open, or exact-current export a Veusz project."
+        "studio", help="Headless preparation or exact-current export of saved Veusz projects."
     )
 
     studio_parser.add_argument(
@@ -102,7 +103,7 @@ def register_interfaces_commands(subparsers: Any) -> None:
     )
 
     studio_parser.add_argument(
-        "--new", action="store_true", help="Open an empty native Veusz MainWindow."
+        "--new", action="store_true", help=argparse.SUPPRESS
     )
 
     studio_parser.add_argument(
@@ -112,7 +113,7 @@ def register_interfaces_commands(subparsers: Any) -> None:
     studio_parser.add_argument(
         "--json",
         action="store_true",
-        help="Emit machine-readable JSON and do not open the GUI.",
+        help="Emit the headless preparation or export result as JSON.",
     )
 
     studio_parser.add_argument(

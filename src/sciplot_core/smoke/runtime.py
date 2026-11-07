@@ -28,9 +28,9 @@ from sciplot_core.smoke.delivery import (
 from sciplot_core.smoke.runtime_environment import (
     _package_import_probe,
     _source_checkout_wrapper_probe,
-    _qt_mainwindow_probe,
-    _portable_launcher_probe,
-    _relocated_delivery_launcher_probe,
+    _native_document_probe,
+    _project_native_probe,
+    _relocated_delivery_native_probe,
     _standalone_export_probe,
 )
 
@@ -208,15 +208,6 @@ def run_runtime_smoke(
                 detail=style_template_audit,
             )
         )
-        qt_mainwindow_probe = _qt_mainwindow_probe()
-        checks.append(
-            _check(
-                "qt_mainwindow_constructs",
-                "The complete Veusz editor constructs without optional examples or macOS settings noise",
-                qt_mainwindow_probe.get("passed") is True,
-                detail=qt_mainwindow_probe,
-            )
-        )
         normal_mode = (
             doctor.get("normal_mode")
             if isinstance(doctor.get("normal_mode"), dict)
@@ -301,13 +292,13 @@ def run_runtime_smoke(
             )
         )
         scalar_document = Path(str(scalar_probe.get("document") or ""))
-        qt_scalar_document_probe = _qt_mainwindow_probe(scalar_document)
+        scalar_document_probe = _native_document_probe([scalar_document])
         checks.append(
             _check(
-                "qt_scalar_vsz_loads",
-                "The Studio GUI runtime loads a saved 2D scalar-field VSZ with its dataset and page",
-                qt_scalar_document_probe.get("passed") is True,
-                detail=qt_scalar_document_probe,
+                "scalar_vsz_cold_loads",
+                "The safe headless runtime loads the exact saved scalar-field VSZ with datasets and pages",
+                scalar_document_probe.get("passed") is True,
+                detail=scalar_document_probe,
             )
         )
 
@@ -435,52 +426,6 @@ def run_runtime_smoke(
                 detail=mapped_studio_probe,
             )
         )
-        from sciplot_core.studio_project_probe import (
-            run_studio_project_probe,
-        )
-
-        studio_project_probe = run_studio_project_probe(
-            project_dir,
-            output_root=run_root / "studio_project",
-            mapped_document=Path(str(mapped_studio_probe["document"])),
-        )
-        checks.append(
-            _check(
-                "veusz_mainwindow_project_integration",
-                "One native Veusz MainWindow keeps Project and AI docks opt-in, "
-                "tracks live VSZ/source/mapping/QA truth, rejects stale QA, and "
-                "exports both project and standalone exact-current receipts",
-                studio_project_probe.get("status") == "passed",
-                detail={
-                    "status": studio_project_probe.get("status"),
-                    "summary": studio_project_probe.get("summary"),
-                    "artifacts": studio_project_probe.get("artifacts"),
-                },
-            )
-        )
-        from sciplot_core.studio_assistant_probe import (
-            run_studio_assistant_probe,
-        )
-
-        studio_assistant_probe = run_studio_assistant_probe(
-            document_path,
-            output_root=run_root / "studio_assistant",
-        )
-        checks.append(
-            _check(
-                "veusz_mainwindow_assistant_integration",
-                "The optional selected-object Assistant shares the native Veusz "
-                "document, stays opt-in, applies bounded edits through native "
-                "undo, and preserves save/reopen/export authority",
-                studio_assistant_probe.get("status") == "passed",
-                detail={
-                    "status": studio_assistant_probe.get("status"),
-                    "summary": studio_assistant_probe.get("summary"),
-                    "artifacts": studio_assistant_probe.get("artifacts"),
-                    "limitations": studio_assistant_probe.get("limitations"),
-                },
-            )
-        )
         from sciplot_core.studio_figure_set_probe import (
             run_studio_figure_set_probe,
         )
@@ -517,13 +462,13 @@ def run_runtime_smoke(
                 },
             )
         )
-        launcher_probe = _portable_launcher_probe(project_dir)
+        project_native_probe = _project_native_probe(project_dir)
         checks.append(
             _check(
-                "portable_project_launchers",
-                "Generated Studio, Veusz, and exact-export launchers locate and load the moved project",
-                launcher_probe.get("passed") is True,
-                detail=launcher_probe,
+                "project_native_cold_loads",
+                "Every registered project native document safely cold-loads without a GUI launcher",
+                project_native_probe.get("passed") is True,
+                detail=project_native_probe,
             )
         )
         with document_path.open("a", encoding="utf-8") as handle:
@@ -566,7 +511,7 @@ def run_runtime_smoke(
             if isinstance(manifest.get("delivery_package"), dict)
             else {}
         )
-        relocated_delivery_probe = _relocated_delivery_launcher_probe(
+        relocated_delivery_probe = _relocated_delivery_native_probe(
             run_root, delivery
         )
         editable_vsz = (
@@ -682,8 +627,8 @@ def run_runtime_smoke(
                     },
                 ),
                 _check(
-                    "relocated_delivery_launchers",
-                    "A copied editable delivery locates SciPlot and loads its exact VSZ without runtime overrides",
+                    "relocated_delivery_native_closure",
+                    "Every relocated native document retains exact bytes and cold-loads with package-local linked sources",
                     relocated_delivery_probe.get("passed") is True,
                     detail=relocated_delivery_probe,
                 ),
@@ -872,7 +817,7 @@ def _run_quick_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             "deferred_to_full": ["mapping_and_scientific_contract_matrices", "ready_rule_envelopes",
                                  "scalar_field_visual_attacks", "gui_project_assistant_figure_set",
                                  "provider_wire_contract", "manual_edit_preservation",
-                                 "project_and_relocated_delivery_launchers", "standalone_export",
+                                 "project_and_relocated_delivery_native_closure", "standalone_export",
                                  "delivery_hash_failure_recovery"],
         },
         "limitations": ["Generated synthetic FTIR is not real-data acceptance.",

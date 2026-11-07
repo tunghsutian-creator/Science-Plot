@@ -1,38 +1,14 @@
-"""Append and read line-delimited assistant history events."""
+"""Read and validate existing line-delimited assistant history, without writes."""
 
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
-from sciplot_gui.studio_assistant_history.validation import (
+from sciplot_core.assistant_history.validation import (
     validate_assistant_history_event,
 )
-
-
-def append_assistant_history_event(
-    path: Path,
-    payload: dict[str, Any],
-) -> Path:
-    event = validate_assistant_history_event(payload)
-    target = path.expanduser().resolve()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    encoded = json.dumps(
-        event,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    )
-    with target.open("a", encoding="utf-8") as handle:
-        handle.write(encoded)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    return target
-
 
 def read_assistant_history(path: Path) -> list[dict[str, Any]]:
     target = path.expanduser()

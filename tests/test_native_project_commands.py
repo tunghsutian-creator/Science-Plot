@@ -88,25 +88,23 @@ def test_candidate_native_failure_after_private_write_is_unknown_and_never_retri
     assert not (project.parent / ".document_edit_history").exists()
 
 
-def test_identified_window_preserves_its_draft_witness_across_unrelated_figure_export(project):
-    from types import SimpleNamespace
-    from sciplot_core.studio_core.project_session import (
-        ProjectSessionLease, close_window_session, window_document_session,
-    )
+def test_identified_draft_preserves_its_read_witness_across_unrelated_figure_export(project):
+    from sciplot_core.studio_core.native_adoption import adopt_saved_native
+    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.studio_core.project_session import ProjectSessionLease
+    from sciplot_core.studio_core.project_command_scope import figure_read_witness
 
     target = project / "studio/document.vsz"
-    window = SimpleNamespace(filename="", document=SimpleNamespace(isModified=lambda: True, save=lambda *_args: None))
-    with window_document_session(window, target, loading=True):
-        window.filename = str(target)
-    binding = window.document._sciplot_project_read_set
+    FileProjectStore(project).snapshot(import_legacy=True)
+    binding = adopt_saved_native(project, resolve_project_figure(target))
     with ProjectSessionLease(project, native=False):
         pass
     other = publish_other_figure(project)
-    with window_document_session(window, target):
-        assert window.document._sciplot_project_read_set is binding
+    from sciplot_core.project_commands import FigureReadWitness
+
+    assert FigureReadWitness.from_binding(binding) == figure_read_witness(project, resolve_project_figure(target))
     assert binding["generation"] != other["generation"]
     assert "studio/figures/second.vsz" not in binding["files"]
-    close_window_session(window)
 
 
 @pytest.mark.parametrize("registered", [True, False])
