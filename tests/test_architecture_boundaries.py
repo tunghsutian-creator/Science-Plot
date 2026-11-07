@@ -27,9 +27,7 @@ OVERSIZED_VALIDATION_HARNESSES = {
     "src/sciplot_core/smoke/runtime.py",
     "src/sciplot_core/smoke/scalar_field.py",
     "src/sciplot_core/smoke/semantic_parser.py",
-    "src/sciplot_core/studio_assistant_probe.py",
     "src/sciplot_core/studio_figure_set_probe.py",
-    "src/sciplot_core/studio_project_probe.py",
 }
 
 
@@ -555,22 +553,6 @@ def test_low_level_packages_do_not_depend_on_higher_core_layers() -> None:
                 for target in targets
             ):
                 offenders.append(str(path.relative_to(REPO_ROOT)))
-
-    assert offenders == []
-
-
-def test_gui_uses_the_public_studio_api_not_studio_core_implementation() -> None:
-    known_modules = {_module_name(path) for path in _source_files()}
-    offenders: list[str] = []
-    for path in (SOURCE_ROOT / "sciplot_gui").rglob("*.py"):
-        module = _module_name(path)
-        targets = _import_targets(module, path, known_modules)
-        if any(
-            target == "sciplot_core.studio_core"
-            or target.startswith("sciplot_core.studio_core.")
-            for target in targets
-        ):
-            offenders.append(str(path.relative_to(REPO_ROOT)))
 
     assert offenders == []
 

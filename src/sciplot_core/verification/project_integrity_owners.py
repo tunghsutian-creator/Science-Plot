@@ -17,20 +17,13 @@ PROJECT_INTEGRITY_OWNERS = (
         release_gates=("acceptance_rules", "full_pytest"),
     ),
     ChangedOwner(
-        owner_id="native_assistant_dock",
-        path_prefixes=("src/sciplot_gui/studio_assistant_history/",),
-        exact_paths=frozenset({
-            "src/sciplot_gui/assistant_runtime.py",
-            "src/sciplot_gui/studio_assistant/dock.py",
-            "src/sciplot_gui/studio_assistant/request_context.py",
-            "src/sciplot_gui/studio_assistant/request_flow.py",
-            "src/sciplot_gui/studio_assistant/context_history.py",
-            "src/sciplot_gui/studio_assistant/rejection.py",
-        }),
-        owned_test_paths=frozenset({"tests/test_studio_assistant_disclosure.py"}),
-        pytest_targets=("tests/test_assistant_contract.py", "tests/test_ai_transport_lifecycle.py",
-                        "tests/test_assistant_disclosure_facts.py", "tests/test_studio_assistant_disclosure.py",
-                        "tests/test_iso_timestamps.py"),
+        owner_id="assistant_history",
+        path_prefixes=("src/sciplot_core/assistant_history/", "tests/assistant_history_fixtures/"),
+        owned_test_paths=frozenset({"tests/test_assistant_history.py"}),
+        pytest_targets=(
+            "tests/test_assistant_history.py", "tests/test_assistant_contract.py", "tests/test_ai_transport_lifecycle.py",
+            "tests/test_assistant_disclosure_facts.py", "tests/test_iso_timestamps.py"),
+        mypy_required=True,
         handoff_gates=("doctor",),
         final_milestone_gates=("smoke",),
         release_gates=("full_pytest",),
@@ -71,6 +64,9 @@ PROJECT_INTEGRITY_OWNERS = (
         ),
         exact_paths=frozenset(
             {
+                "src/sciplot_core/delivery_binding.py",
+                "src/sciplot_core/delivery_identity.py",
+                "tests/delivery_identity_helpers.py",
                 "src/sciplot_core/studio_core/delivery_target.py",
                 "src/sciplot_core/policy/__init__.py",
                 "src/sciplot_core/policy/render_options.py",
@@ -80,11 +76,12 @@ PROJECT_INTEGRITY_OWNERS = (
                 "src/sciplot_core/cli/dispatch/interfaces.py",
                 "src/sciplot_core/plot_data/exports.py",
                 "src/sciplot_core/plot_data/spec_tables.py",
-                "src/sciplot_gui/studio_project/export_helpers.py",
             }
         ),
         owned_test_paths=frozenset(
             {
+                "tests/test_delivery_identity.py",
+                "tests/test_delivery_legacy_history_native.py",
                 "tests/test_delivery_install.py",
                 "tests/test_delivery_project_documents.py",
                 "tests/test_delivery_editor_launcher.py",
@@ -97,6 +94,8 @@ PROJECT_INTEGRITY_OWNERS = (
     }
         ),
         pytest_targets=(
+            "tests/test_delivery_identity.py",
+            "tests/test_delivery_legacy_history_native.py",
             "tests/test_delivery_install.py",
             "tests/test_delivery_project_documents.py",
             "tests/test_delivery_editor_launcher.py",

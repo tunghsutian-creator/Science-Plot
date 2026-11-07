@@ -1,4 +1,4 @@
-"""Native Save and command Save share the original edit baseline and quarantine."""
+"""Native Save and command Save share the original generation and save baseline."""
 
 from pathlib import Path
 import sys
@@ -46,20 +46,6 @@ def test_live_draft_save_refuses_foreign_same_figure_revision(tmp_path, monkeypa
     with pytest.raises(ProjectConflict):
         document.save(str(target))
     assert target.read_bytes() == b"foreign saved native"
-    assert document.isModified()
-
-
-def test_native_save_checks_quarantine_installed_after_original_serializer(tmp_path, monkeypatch):
-    _root, target, document = fixture_document(tmp_path, monkeypatch)
-
-    class Quarantined:
-        def require_usable(self):
-            raise RuntimeError("native draft quarantined")
-
-    document._sciplot_native_setting_batch_adapter = Quarantined()
-    with pytest.raises(RuntimeError, match="quarantined"):
-        document.save(str(target))
-    assert target.read_bytes() == b"old native"
     assert document.isModified()
 
 

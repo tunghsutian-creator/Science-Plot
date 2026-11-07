@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 
@@ -31,23 +30,6 @@ def ensure_veusz_qsettings_compat() -> None:
     qt.QSettings = SciPlotQSettings
 
 
-def _ensure_veusz_examples_menu_compat(main_window_type: type[Any]) -> None:
-    """Treat the intentionally omitted upstream examples directory as optional."""
-    from veusz import utils
-
-    current = main_window_type.populateExamplesMenu
-    if getattr(current, "_sciplot_missing_examples_safe", False):
-        return
-
-    def populate_examples_menu(window: Any) -> Any:
-        if not Path(str(utils.exampleDirectory)).is_dir():
-            return None
-        return current(window)
-
-    populate_examples_menu._sciplot_missing_examples_safe = True  # type: ignore[attr-defined]
-    main_window_type.populateExamplesMenu = populate_examples_menu
-
-
 def _ensure_veusz_loader_compat() -> None:
     """Keep Veusz script loading alive when optional import commands are absent."""
     from importlib import import_module
@@ -59,9 +41,8 @@ def _ensure_veusz_loader_compat() -> None:
     ensure_veusz_line_joins()
     ensure_veusz_scientific_text()
 
-    # The upstream Veusz application imports this package during its startup
-    # thread.  SciPlot constructs MainWindow directly, so repeat the same
-    # registration step before loading a saved document.  Without it, native
+    # Register the upstream import commands before headless document loading.
+    # Without the same registration used by Veusz, native
     # Veusz dumps containing ImportString2D/ImportStringND fail with NameError.
     import_module("veusz.dataimport")
 

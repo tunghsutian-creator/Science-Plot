@@ -153,8 +153,6 @@ VERIFICATION_CAPTURE_STRICT_ADDITIONS = frozenset(
 )
 NATIVE_BATCH_ISOLATION_STRICT_ADDITIONS = frozenset(
     {
-        "src/sciplot_gui/studio_assistant/native_batch.py",
-        "src/sciplot_gui/studio_assistant/native_batch_window.py",
     }
 )
 HOST_EXECUTOR_STRICT_ADDITIONS = frozenset(
@@ -263,11 +261,6 @@ SOURCE_LOCATOR_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/source_tables/raw_readers.py',
         'src/sciplot_core/studio_core/source_snapshots.py',
         "src/sciplot_core/studio_core/source_content_observation.py",
-        "src/sciplot_gui/studio_project/status_adapter.py",
-        "src/sciplot_gui/studio_project_status/builder.py",
-        "src/sciplot_gui/studio_project_status/mapping_status.py",
-        "src/sciplot_gui/studio_project_status/source_status.py",
-        "src/sciplot_gui/studio_project_status/provenance_status.py",
         'src/sciplot_core/veusz_worker/cli.py',
         "src/sciplot_core/source_coverage/derivation.py",
         "src/sciplot_core/data_mapping/contracts.py",
@@ -301,7 +294,6 @@ NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/studio_core/project_query_sources.py',
         'src/sciplot_core/studio_core/publication_candidates.py',
         'src/sciplot_core/studio_core/publication_prepare.py',
-        'src/sciplot_core/studio_core/qt_window.py',
         'src/sciplot_core/studio_core/series_revision_persistence.py',
         'src/sciplot_core/studio_core/source_update_commands.py',
         'src/sciplot_core/studio_core/source_update_files.py',
@@ -310,7 +302,6 @@ NATIVE_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/studio_core/source_update_state.py',
         'src/sciplot_core/studio_core/source_update_styles.py',
         'src/sciplot_core/studio_core/studio_command.py',
-        'src/sciplot_gui/studio_project/export_helpers.py',
     }
 )
 STUDIO_PREPARATION_STRICT_ADDITIONS = frozenset(
@@ -371,6 +362,20 @@ WORKFLOW_PROJECT_STRICT_ADDITIONS = frozenset(
 )
 SOURCE_ARTIFACT_STRICT_ADDITIONS = frozenset(
     {
+        "src/sciplot_core/assistant_history/__init__.py",
+        "src/sciplot_core/assistant_history/contracts.py",
+        "src/sciplot_core/assistant_history/storage.py",
+        "src/sciplot_core/assistant_history/validation.py",
+        "src/sciplot_core/assistant_history/values.py",
+        "src/sciplot_core/intake/session_adapter.py",
+        "src/sciplot_core/intake/session_contract.py",
+        "src/sciplot_core/intake/project/session_project.py",
+        "src/sciplot_core/intake/application.py",
+        "src/sciplot_core/intake/run.py",
+        "src/sciplot_core/cli/parsers/intake.py",
+        "src/sciplot_core/cli/dispatch/intake.py",
+        "src/sciplot_core/delivery_binding.py",
+        "src/sciplot_core/delivery_identity.py",
         "src/sciplot_core/visual_review/pdf_annotations.py",
         "src/sciplot_core/studio_render/source_artifacts.py",
         "src/sciplot_core/studio_render/categorical_components.py",
@@ -677,10 +682,32 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
     assert all(configured.count(path) == 1 for path in FINAL_STRICT_ADDITIONS)
     # The browser-only worker was explicitly retired with its complete UI owner;
     # all remaining baseline strict responsibilities are retained.
-    retired = {"src/sciplot_core/veusz_worker/live_session.py"}
+    retired = {
+        "src/sciplot_core/studio_core/qt_window.py",
+        "src/sciplot_core/veusz_worker/live_session.py",
+        "src/sciplot_gui/studio_assistant/native_batch.py",
+        "src/sciplot_gui/studio_assistant/native_batch_window.py",
+        "src/sciplot_gui/studio_project/change_dialogs.py",
+        "src/sciplot_gui/studio_project/change_worker.py",
+        "src/sciplot_gui/studio_project/export_helpers.py",
+        "src/sciplot_gui/studio_project/services.py",
+        "src/sciplot_gui/studio_project/status_adapter.py",
+        "src/sciplot_gui/studio_project_services.py",
+        "src/sciplot_gui/studio_project_status/builder.py",
+        "src/sciplot_gui/studio_project_status/mapping_status.py",
+        "src/sciplot_gui/studio_project_status/provenance_status.py",
+        "src/sciplot_gui/studio_project_status/source_status.py",
+    }
+    retired_residual = {
+        "src/sciplot_core/veusz_worker/live_session.py",
+        "src/sciplot_gui/studio_project/change_dialogs.py",
+        "src/sciplot_gui/studio_project/change_worker.py",
+        "src/sciplot_gui/studio_project/services.py",
+        "src/sciplot_gui/studio_project_services.py",
+    }
     assert retired.isdisjoint(configured)
     assert all(not (ROOT / path).exists() for path in retired)
-    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS - FINAL_STRICT_ADDITIONS) == 195 - len(retired)
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS - FINAL_STRICT_ADDITIONS) == 195 - len(retired_residual)
     from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS, TYPE_SCOPE_PARTITION_TARGET
     from sciplot_core.verification.type_gate_owners import MYPY_SCOPE_CONFIGURATION_OWNER, SCIENTIFIC_TRANSACTION_TYPE_OWNER
 

@@ -264,6 +264,13 @@ def test_saved_layout_labels_crop_and_source_replacement_survive_without_a_windo
         assert load_document(layout)["panels"][0]["label"] == label
     result = compose({"action": "apply", "layout": str(layout), "expected_revision": result["revision"],
                       "operations": [{"op": "set_crop", "id": "panel:a", "crop": [.15, .2, .8, .9]}]})
+    assert load_document(layout)["panels"][0]["crop"] == [.15, .2, .8, .9]
+    result = compose({"action": "apply", "layout": str(layout), "expected_revision": result["revision"],
+                      "operations": [{"op": "set_crop", "id": "panel:a", "crop": None}]})
+    assert load_document(layout)["panels"][0]["crop"] is None
+    assert source.read_bytes() == source_bytes
+    result = compose({"action": "apply", "layout": str(layout), "expected_revision": result["revision"],
+                      "operations": [{"op": "set_crop", "id": "panel:a", "crop": [.15, .2, .8, .9]}]})
     before = load_document(layout)["panels"][0]
     replacement = tmp_path / "replacement.png"
     Image.new("RGB", (80, 60), "#dba37b").save(replacement)

@@ -123,8 +123,11 @@ def _public_native_scenario(root: Path) -> None:
     assert (moved / "source/values.csv").read_bytes() == raw
     assert not (root / ".document_edit_history").exists()
     _external_output_scenario(root, cold, owned_workers)
-    gui = FileProjectStore.import_bundle(cold.export_bundle(root / "gui-bundle"), root / "gui-project")
-    _headless_save_scenario(root, gui)
+    from sciplot_core.project_store.runtime import project_runtime
+
+    headless = FileProjectStore.import_bundle(cold.export_bundle(root / "headless-bundle"), root / "headless-project")
+    with project_runtime(headless):
+        _headless_save_scenario(root, headless)
     subprocess.Popen, subprocess.run = original_popen, original_run
     assert owned_workers and all(process.poll() is not None for process, _ in owned_workers)
     (root / "native-public-evidence.json").write_text(json.dumps({"pid": os.getpid(), "parent_pid": os.getppid(),

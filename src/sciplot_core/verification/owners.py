@@ -50,14 +50,12 @@ CHANGED_OWNERS = (
                 "tests/test_readiness_registry_merge.py",
                 "tests/test_rule_certification.py",
                 "tests/test_human_daily_use_validation.py",
-                "tests/test_studio_rule_readiness_gui.py",
             }
         ),
         pytest_targets=(
             "tests/test_readiness_registry_merge.py",
             "tests/test_human_daily_use_validation.py",
             "tests/test_rule_certification.py",
-            "tests/test_studio_rule_readiness_gui.py",
             "tests/test_cli_surface.py::test_readiness_merge_parser_accepts_base_summary_and_output",
             "tests/test_cli_surface.py::test_readiness_merge_cli_writes_the_same_registry_and_reports_selection",
             *ARCHITECTURE_CORE_TARGETS,
@@ -258,10 +256,6 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/workflow/rheology_task_plan.py",
                 "src/sciplot_core/workflow/scientific_source_resolution.py",
                 "src/sciplot_core/workflow/source_binding.py",
-                "src/sciplot_gui/studio_project_status/builder.py",
-                "src/sciplot_gui/studio_project_status/mapping_status.py",
-                "src/sciplot_gui/studio_project_status/messages.py",
-                "src/sciplot_gui/studio_project/context.py",
             }
         ),
         owned_test_paths=frozenset(
@@ -333,7 +327,6 @@ CHANGED_OWNERS = (
             "tests/test_semantic_path_authority.py",
             "tests/test_studio_figure_set_probe_native.py",
             "tests/test_gui_source_currentness.py", "tests/test_gui_mapping_source_currentness.py",
-            "tests/test_studio_project_status.py",
         ),
         final_milestone_gates=("smoke",),
         release_gates=("acceptance_rules", "full_pytest"),
@@ -341,8 +334,11 @@ CHANGED_OWNERS = (
     ChangedOwner(
         owner_id="intake_project",
         path_prefixes=("src/sciplot_core/intake/",),
+        exact_paths=frozenset({"src/sciplot_core/cli/parsers/intake.py", "src/sciplot_core/cli/dispatch/intake.py"}),
         owned_test_paths=frozenset(
             {
+                "tests/test_intake_session_adapter.py",
+                "tests/test_intake_session_native.py",
                 "tests/test_intake_path_safety.py",
                 "tests/test_intake_atomic_packaging.py",
                 "tests/test_intake_review_recovery.py",
@@ -352,6 +348,8 @@ CHANGED_OWNERS = (
             }
         ),
         pytest_targets=(
+            "tests/test_intake_session_adapter.py",
+            "tests/test_intake_session_native.py",
             "tests/test_intake_path_safety.py",
             "tests/test_intake_atomic_packaging.py",
             "tests/test_intake_review_recovery.py",

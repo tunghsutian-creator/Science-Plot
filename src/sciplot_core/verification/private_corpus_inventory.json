@@ -6,7 +6,7 @@
   "note": "Full current pytest collection and all test/helper source bytes reviewed. Completeness remains false until a bound full-suite Python access audit reports no unmapped private accesses; static profile manifest expansion covers native fixture dependencies. 2026-10-21 additive Darwin27.2 baseline: four original private-native cases retain every original dependency and add the exact new descriptor with its complete pinned capture/process closure; no private node or responsibility is removed and inventory completeness is not asserted. 2026-10-23 metadata collection01: actual unfiltered6552-node collection, zero bodies, exact14 generated public dispositions (13focused/1comprehensive) for the compiled metadata-producer and retained actor/node/receipt-byte boundaries. All old6538 node IDs/tiers,1710 reasons,private165 cases/dependencies,111 responsibilities and baseline-failure identity remain exact. Independent finite review file SHA256 acb2fce11ff40737c0a2dd6635c27cbb3ff6ec772c765735e1c7ef72fbfc7bda; existing 462-source membership reconstructed exactly to the old digest. No full, native, access or overall scientific acceptance is asserted; inventory_complete remains false. Original23 full body6538PASS/captureCOMPLETE/accessBLOCKED36 remains unchanged. 2026-11-04 Darwin27.3 additive closure: exactly four original private-native dependency lists append their explicit same-profile273 descriptor/profile_files; no prior dependency, private node or responsibility is removed or changed. The final9365-node review remains static-only and inventory_complete=false. 2026-11-04 exact metadata role closure:21 existing cases append23 explicit directory_metadata paths after all165 static path-role review; prior file/directory/profile_files dependencies remain complete ordered prefixes. New59 public controls retain scientific/private/native-golden exclusions. Current full capture and strict export remain separate required evidence.",
   "collection_audit": {
     "version": 1,
-    "static_review_complete": true,
+    "static_review_complete": false,
     "nodeid_count": 9769,
     "nodeids_sha256": "6aa6241958cb35e4368bf8f7bddf84c95818736cc023af587dafb35b752b713e",
     "test_sources_sha256": "4835d8690600fe596cf6ad7a665a9213744149c14b15f5e3eff9328e27221b2e",
@@ -1819,7 +1819,7 @@
       "tests/test_project_candidate_runtime.py::test_candidate_worker_distinguishes_new_document_outputs_from_scientific_inputs[save-spec]",
       "tests/test_project_candidate_runtime.py::test_candidate_worker_refuses_unbound_closed_fields_and_replaced_directory",
       "tests/test_project_candidate_runtime.py::test_managed_candidate_raw_reader_keeps_scientific_hash_uuid_and_cells",
-      "tests/test_project_change_ui_native.py::test_real_dsc_source_update_from_native_qt_project_dock",
+      "tests/test_project_change_core_native.py::test_real_dsc_source_update_from_headless_project_commands",
       "tests/test_project_commands.py::test_callback_cannot_add_or_omit_writes_after_admission",
       "tests/test_project_commands.py::test_captured_launcher_permissions_are_part_of_prepared_publication_identity",
       "tests/test_project_commands.py::test_command_owns_a_canonical_copy_and_preserves_legacy_key_strings",
@@ -26305,7 +26305,7 @@
       "evidence": "test_source_inspection"
     },
     {
-      "nodeid": "tests/test_project_change_ui_native.py::test_real_dsc_source_update_from_native_qt_project_dock",
+      "nodeid": "tests/test_project_change_core_native.py::test_real_dsc_source_update_from_headless_project_commands",
       "dependencies": [
         {
           "rule_id": "dsc_curve"

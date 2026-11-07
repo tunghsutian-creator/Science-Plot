@@ -5,47 +5,6 @@ from sciplot_core.verification.owner_model import ChangedOwner
 
 PROJECT_REVISION_OWNERS = (
     ChangedOwner(
-        owner_id="native_project_change_ui",
-        exact_paths=frozenset(
-            {
-                "src/sciplot_gui/studio_project/change_dialogs.py",
-                "src/sciplot_gui/studio_project/change_worker.py",
-                "src/sciplot_gui/studio_project/project_changes.py",
-                "src/sciplot_gui/studio_project_services.py",
-                "src/sciplot_gui/studio_project/services.py",
-                "src/sciplot_gui/main_window_menu.py",
-                "src/sciplot_gui/studio_project_status/provenance_status.py",
-                "src/sciplot_gui/studio_project_status/workflow_status.py",
-                "src/sciplot_gui/studio_project_status/builder.py",
-                "src/sciplot_gui/studio_project/bridge.py",
-                "src/sciplot_gui/studio_project/dock.py",
-                "src/sciplot_gui/studio_project/refresh.py",
-                "src/sciplot_gui/studio_project/export_action.py",
-                "src/sciplot_gui/studio_project/series_revision.py",
-                "src/sciplot_gui/studio_project/status_adapter.py",
-                "src/sciplot_gui/studio_project_status/source_status.py",
-            }
-        ),
-        owned_test_paths=frozenset(
-            {
-                "tests/test_project_change_ui.py",
-                "tests/test_project_change_ui_native.py",
-            }
-        ),
-        pytest_targets=(
-            "tests/test_project_change_ui.py",
-            "tests/test_project_change_ui_native.py",
-            "tests/test_studio_project_context.py",
-            "tests/test_studio_project_status.py",
-            "tests/test_architecture_boundaries.py",
-            "tests/test_gui_source_currentness.py", "tests/test_gui_mapping_source_currentness.py",
-            "tests/test_task_mapping_review.py",
-        ),
-        handoff_gates=("doctor",),
-        final_milestone_gates=("smoke",),
-        release_gates=("full_pytest",),
-    ),
-    ChangedOwner(
         owner_id="reviewed_project_revision",
         exact_paths=frozenset(
             {
@@ -74,6 +33,7 @@ PROJECT_REVISION_OWNERS = (
                 "tests/test_document_style_transfer.py",
                 "tests/test_style_transfer_projection.py",
                 "tests/test_project_source_update.py",
+                "tests/test_project_change_core_native.py",
                 "tests/test_project_source_update_transaction.py",
                 "tests/test_project_source_update_native.py",
                 "tests/test_project_revision_cli.py",
@@ -86,6 +46,7 @@ PROJECT_REVISION_OWNERS = (
             "tests/test_document_style_transfer.py",
             "tests/test_style_transfer_projection.py",
             "tests/test_project_source_update.py",
+            "tests/test_project_change_core_native.py",
             "tests/test_project_source_update_transaction.py",
             "tests/test_task_source_update.py",
             "tests/test_project_source_update_native.py",

@@ -131,7 +131,6 @@ NATIVE_PROJECT_PATHS = frozenset({
     'src/sciplot_core/studio_core/publish_finalize.py',
     'src/sciplot_core/studio_core/publish_inventory.py',
     'src/sciplot_core/studio_core/publish_run.py',
-    'src/sciplot_core/studio_core/qt_window.py',
     'src/sciplot_core/studio_core/registry_writes.py',
     'src/sciplot_core/studio_core/series_revision_persistence.py',
     'src/sciplot_core/studio_core/source_update.py',
@@ -150,7 +149,6 @@ NATIVE_PROJECT_PATHS = frozenset({
     'src/sciplot_core/task_source_update.py',
     'src/sciplot_core/veusz_worker/cli.py',
     'src/sciplot_core/veusz_worker/style_transfer.py',
-    'src/sciplot_gui/studio_project/export_helpers.py',
 })
 
 SCIENTIFIC_ARTIFACT_PATHS = frozenset({

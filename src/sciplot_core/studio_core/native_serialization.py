@@ -7,9 +7,6 @@ from typing import Any
 
 
 def serialize_native(document: Any, staged: Path, target: Path, mode: str) -> None:
-    adapter = getattr(document, "_sciplot_native_setting_batch_adapter", None)
-    if adapter is not None:
-        adapter.require_usable()
     if mode == "vsz" and callable(getattr(document, "saveToFile", None)):
         with staged.open("w", encoding="utf-8") as handle:
             # Veusz uses file.name only for linked source relativity. The byte

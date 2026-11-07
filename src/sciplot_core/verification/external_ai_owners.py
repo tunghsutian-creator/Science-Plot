@@ -16,7 +16,6 @@ EXTERNAL_AI_OWNERS = (
             "tests/test_assistant_contract.py",
             "tests/test_ai_transport_lifecycle.py",
             "tests/test_assistant_disclosure_facts.py",
-            "tests/test_studio_assistant_disclosure.py",
             "tests/test_automation_baseline.py::test_external_model_call_guard_counts_and_blocks_the_production_adapter",
             *ARCHITECTURE_CORE_TARGETS,
         ),
@@ -132,14 +131,6 @@ EXTERNAL_AI_OWNERS = (
                 "src/sciplot_core/veusz_worker/cli.py",
                 "src/sciplot_core/veusz_worker/font_evidence.py",
                 "src/sciplot_core/veusz_worker/operations.py",
-                "src/sciplot_gui/studio_assistant/proposal_application.py",
-                "src/sciplot_gui/studio_assistant/selection.py",
-                "src/sciplot_gui/studio_assistant/native_batch.py",
-                "src/sciplot_gui/studio_assistant/native_batch_window.py",
-                "src/sciplot_gui/studio_assistant/bridge.py",
-                "src/sciplot_gui/studio_assistant/context_history.py",
-                "src/sciplot_gui/studio_project/export_helpers.py",
-                "src/sciplot_gui/studio_project/series_revision.py",
             }
         ),
         owned_test_paths=frozenset(
@@ -151,8 +142,6 @@ EXTERNAL_AI_OWNERS = (
                 "tests/test_native_document_edit.py",
                 "tests/test_native_font_evidence.py",
                 "tests/test_assistant_contract.py",
-                "tests/test_gui_native_batch_isolation.py",
-                "tests/test_gui_native_batch_isolation_native.py",
             }
         ),
         pytest_targets=(
@@ -165,8 +154,6 @@ EXTERNAL_AI_OWNERS = (
             "tests/test_native_font_evidence.py",
             "tests/test_project_query.py",
             "tests/test_assistant_contract.py",
-            "tests/test_gui_native_batch_isolation.py",
-            "tests/test_gui_native_batch_isolation_native.py",
             *ARCHITECTURE_CORE_TARGETS,
         ),
         mypy_required=True,
@@ -196,7 +183,6 @@ EXTERNAL_AI_OWNERS = (
             "tests/test_project_source_update_transaction.py",
             *ARCHITECTURE_CORE_TARGETS,
             "tests/test_gui_source_currentness.py", "tests/test_gui_mapping_source_currentness.py",
-            "tests/test_studio_project_status.py",
             "tests/test_task_mapping_review.py",
             "tests/test_native_save_generations.py",
             "tests/test_studio_project_context.py",
