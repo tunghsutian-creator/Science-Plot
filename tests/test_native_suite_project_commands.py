@@ -189,7 +189,7 @@ def test_creation_native_reply_loss_discovers_sealed_artifacts_before_atomic_pub
         candidate_delivery.mkdir()
         (candidate_workspace / 'spec.json').write_bytes(b'{"science":[1,2,3]}')
         (candidate_delivery / 'A.vsz').write_bytes(b'opaque native')
-        launcher = candidate_delivery / 'Open.command'
+        launcher = candidate_delivery / 'Update_exports.command'
         launcher.write_text('#!/bin/zsh\n')
         launcher.chmod(0o755)
         return {'status': 'ready', 'workspace': str(candidate_workspace), 'delivery': str(candidate_delivery),
@@ -209,7 +209,12 @@ def test_creation_native_reply_loss_discovers_sealed_artifacts_before_atomic_pub
     result = create_project(workspace, delivery, {'prepared': 'same'}, sources, prepare, resume=True)
     assert result['status'] == 'ready' and calls == ['native']
     assert (delivery / 'A.vsz').read_bytes() == b'opaque native'
-    assert (delivery / 'Open.command').stat().st_mode & 0o100
+    launcher = delivery / 'Update_exports.command'
+    assert launcher.stat().st_mode & 0o100
+    import shlex
+    invocation = shlex.split(launcher.read_text().splitlines()[-1])
+    assert invocation[0] == 'exec'
+    assert invocation[2:] == ['rheology', 'export', str(workspace), '--json']
     assert source.read_bytes() == b'unchanged raw'
     assert not (workspace / 'creation_checkpoint.json').exists()
 

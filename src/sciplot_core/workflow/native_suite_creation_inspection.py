@@ -15,7 +15,7 @@ from sciplot_core.project_store.runtime import project_runtime, resolve_runtime_
 import sciplot_core.rheology_tts_render_creation as native_creation
 from sciplot_core.rheology_tts_spec import compile_tts_spec
 from sciplot_core.studio_core.source_update_commit import reject_symlink_path
-from sciplot_core.workflow.rheology_tts_creation_inputs import _publication_files
+from sciplot_core.workflow.rheology_tts_delivery_files import publication_files
 from sciplot_core.workflow.rheology_tts_saved_state import _check_sources
 
 
@@ -130,7 +130,7 @@ def inspect_creation_continuation(request: Path, workspace: Path) -> dict[str, A
         if json.loads((private / "request.json").read_bytes()) != expected_request:
             raise ValueError("Private request bindings changed.")
         delivery = working / "delivery"
-        if delivery.exists() and set(_members(delivery)) - _publication_files(binding["figure_ids"]):
+        if delivery.exists() and set(_members(delivery)) - publication_files(binding["figure_ids"]):
             raise ValueError("Unknown private publication files require inspection.")
         complete = _check_views(store, records, parent)
         fact = store.query(parent["command_id"] + ":native-fact")

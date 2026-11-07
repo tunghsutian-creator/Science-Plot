@@ -15,6 +15,8 @@ def _path(value: str, pairs: tuple[tuple[Path, Path], ...]) -> str:
 
 def _remap(value: Any, pairs: tuple[tuple[Path, Path], ...]) -> Any:
     """Translate only declared native receipt/host path fields, never science."""
+    # manual_edit is retained only as a path in historical receipts, never an
+    # instruction to generate or execute a current product launcher.
     fields = {"workspace", "delivery", "document", "export_dir", "native_audit_path", "spec_path",
               "path", "manual_edit", "plot", "out"}
     if isinstance(value, dict):

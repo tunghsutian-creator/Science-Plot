@@ -125,8 +125,10 @@ def test_prepared_resume_reuses_saved_native_after_each_creation_failure(tmp_pat
     manifest = json.loads((workspace / "suite.json").read_text())
     assert manifest == json.loads((delivery / "data/delivery_manifest.json").read_text())
     assert all(Path(d["path"]).is_relative_to(delivery) for d in manifest["documents"])
-    assert str(delivery / "editable/Custom.vsz") in (delivery / "editable/Open_Custom.command").read_text()
-    assert "publication_stages" not in (delivery / "Open_in_SciPlot.command").read_text()
+    assert not list(delivery.rglob("Open_*.command"))
+    assert "manual_edit" not in result
+    assert str(workspace) in (delivery / "Update_exports.command").read_text()
+    assert "publication_stages" not in (delivery / "Update_exports.command").read_text()
     assert Path(request["prepared_plan"]).is_file()
     before = file_inventory(delivery)
     calls = len(native_stub["calls"])
@@ -517,10 +519,59 @@ def test_pending_creation_cold_resume_uses_registered_original_request_and_nativ
     assert result["status"] == "ready" and native_stub["saves"] == 1 and len(native_stub["calls"]) == calls
     assert (moved.locations["delivery"] / "editable/Custom.vsz").is_file()
     assert moved.query(parent["command_id"])["phase"] == "unknown"
+    assert "manual_edit" not in result
+    assert not list(moved.locations["delivery"].rglob("Open_*.command"))
     manifest = json.loads(moved.read_bytes("suite.json"))
     assert manifest["sources"] == parent["metadata"]["request"]["binding"]["sources"]
     assert json.loads(moved.read_bytes("initial_render/Custom.spec.json"))["source_binding"] == json.loads(
         Path(moved.query(parent["command_id"] + ":native-fact")["artifact_paths"]["Custom.spec.json"]).read_bytes())["source_binding"]
+
+
+@pytest.mark.parametrize("name", ["Open_in_SciPlot.command", "Open_in_Veusz.command", "editable/Open_Custom.command"])
+def test_fresh_creation_cannot_publish_a_declared_manual_launcher(tmp_path, monkeypatch, native_stub, name):
+    from native_suite_legacy_creation_fixture import _launcher as historical_launcher
+    request_path, _, _ = _request(tmp_path)
+    workspace, delivery = _paths(tmp_path)
+    publish = creation._publish
+
+    def with_retired_entry(stage, candidate, spec, native):
+        documents = publish(stage, candidate, spec, native)
+        historical_launcher(candidate / name, ["studio", documents[0]["path"]])
+        return documents
+
+    monkeypatch.setattr(creation, "_publish", with_retired_entry)
+    with pytest.raises(ValueError, match="cannot contain manual editor launchers"):
+        plot_prepared_suite(request_path)
+    assert native_stub["saves"] == 1
+    assert not list(delivery.rglob("Open_*.command"))
+    assert not (workspace / "suite.json").exists()
+
+
+def test_saved_manual_hint_stays_history_without_returning_a_product_entry(tmp_path, monkeypatch, native_stub):
+    from sciplot_core.project_commands import ProjectCommands
+    from sciplot_core.project_store import FileProjectStore
+    request_path, _, _ = _request(tmp_path)
+    workspace, delivery = _paths(tmp_path)
+    result_for = creation._result
+
+    def historical_result(*args, **kwargs):
+        return {**result_for(*args, **kwargs),
+                "manual_edit": str(delivery / "Open_in_SciPlot.command")}
+
+    monkeypatch.setattr(creation, "_result", historical_result)
+    _interrupt(monkeypatch, ProjectCommands, "decide", after=True,
+               predicate=lambda self, command, **kwargs: command.kind.value == "create")
+    with pytest.raises(OSError, match="injected creation interruption"):
+        plot_prepared_suite(request_path)
+    store = FileProjectStore(workspace, locations={"delivery": delivery})
+    publication = next(record for record in store.commands()
+                       if record["metadata"]["request"].get("adapter") == "native_suite_create_publication")
+    assert publication["result"]["manual_edit"] == str(delivery / "Open_in_SciPlot.command")
+    monkeypatch.setattr(creation, "_result", result_for)
+    result = plot_prepared_suite(request_path, resume=True)
+    assert "manual_edit" not in result
+    assert native_stub["saves"] == 1
+    assert store.query(publication["command_id"])["result"] == publication["result"]
 
 
 def test_legacy_analysis_creation_resume_does_not_repeat_analysis_or_native_save(tmp_path, monkeypatch, native_stub):
@@ -552,6 +603,9 @@ def test_legacy_analysis_creation_resume_does_not_repeat_analysis_or_native_save
     calls = len(native_stub["calls"])
     result = suite.create_suite(request_path, resume=True)
     assert result["status"] == "ready" and (delivery / "editable/Custom.vsz").is_file()
+    assert "manual_edit" not in result
+    assert not list(delivery.rglob("Open_*.command"))
+    assert (delivery / "Update_exports.command").is_file()
     assert len(analyses) == 1 and native_stub["saves"] == 1 and len(native_stub["calls"]) == calls
     assert all((path.read_bytes(), path.stat().st_mtime_ns) == value for path, value in before.items())
     assert suite.create_suite(request_path, resume=True)["status"] == "ready"

@@ -29,7 +29,6 @@ from sciplot_core.workflow.rheology_tts_delivery_files import (
     _launcher as _launcher,
     _output_paths as _output_paths,
     _publish as _publish,
-    launcher_bytes as launcher_bytes,
 )
 
 
@@ -154,9 +153,7 @@ def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Pat
                 "scientific_scope": "empirical_superposition_not_strict_TTS_certification"}
     write_json(workspace / "suite.json", manifest)
     write_json(data / "delivery_manifest.json", manifest)
-    _launcher(delivery / "Open_in_SciPlot.command", ["studio", documents[0]["path"]])
-    _launcher(delivery / "Open_in_Veusz.command", ["studio", documents[0]["path"]])
-    _launcher(delivery / "Update_exports.command", ["rheology", "export", str(workspace), "--json"])
+    _launcher(delivery / "Update_exports.command", workspace)
     if layout == "separate_polymer_modulus":
         write_revision_methods(delivery, analysis, spec)
     from sciplot_core.studio_core.source_update_commit import file_inventory
@@ -164,7 +161,7 @@ def _create_suite_candidate(request_path: Path, *, output_paths: tuple[Path, Pat
     expected_files = creation_inventory(workspace, delivery, native_result, file_inventory(delivery),
         {"request.json": request, "analysis.json": analysis, "figure_plan.json": spec})
     return {"_candidate_files": expected_files, "status": "ready", "delivery": str(delivery), "workspace": str(workspace), "figures": len(documents),
-            "manual_edit": str(delivery / "Open_in_SciPlot.command"), "native_result": native_result,
+            "native_result": native_result,
             "scientific_scope": manifest["scientific_scope"]}
 
 

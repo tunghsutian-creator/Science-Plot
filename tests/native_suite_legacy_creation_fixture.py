@@ -5,13 +5,14 @@ These retired writers are not part of the application or a recovery entrypoint.
 from copy import deepcopy
 import json
 from pathlib import Path
+import shlex
 from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.workflow.rheology_tts_creation import (
-    _check_sources, _launcher, _publish, _result, _write_index,
+    _check_sources, _publish, _result, _write_index,
     write_json, write_plot_tables,
 )
 
@@ -20,6 +21,15 @@ from sciplot_core.workflow.rheology_tts_creation_history import (
     _existing, _known_workspace, _publication_evidence, _publication_inventory,
     _validate_checkpoint, _verify_bound_native, check_prepared_continuation,
 )
+
+
+def _launcher(path: Path, arguments: list[str]) -> None:
+    """Write synthetic v1 bytes for reader controls, never execute them."""
+    from sciplot_core._paths import REPO_ROOT
+    command = [str(REPO_ROOT / "skill/scripts/sciplot"), *arguments]
+    path.write_bytes(("#!/bin/zsh\nset -e\nexec "
+                      + " ".join(shlex.quote(value) for value in command) + "\n").encode())
+    path.chmod(0o755)
 
 
 def _install_delivery(candidate: Path, delivery: Path) -> None:

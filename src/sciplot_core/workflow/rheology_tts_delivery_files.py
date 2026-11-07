@@ -9,14 +9,27 @@ import shutil
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.workflow.rheology_tts_saved_state import _sha, _figure_folder
 
-def launcher_bytes(arguments: list[str]) -> bytes:
-    command = [str(REPO_ROOT / "skill/scripts/sciplot"), *arguments]
+def launcher_bytes(workspace: Path) -> bytes:
+    """Describe the remaining headless exact-export command, never a UI entry."""
+    command = [str(REPO_ROOT / "skill/scripts/sciplot"), "rheology", "export", str(workspace), "--json"]
     return ("#!/bin/zsh\nset -e\nexec " + " ".join(shlex.quote(value) for value in command) + "\n").encode()
 
 
-def _launcher(path: Path, arguments: list[str]) -> None:
-    path.write_bytes(launcher_bytes(arguments))
+def _launcher(path: Path, workspace: Path) -> None:
+    path.write_bytes(launcher_bytes(workspace))
     path.chmod(0o755)
+
+
+def publication_files(identifiers: list[str]) -> set[str]:
+    """Finite current prepared-delivery members, including headless export."""
+    names = {"index.html", "README.txt", "Update_exports.command",
+             "data/figure_plan.json", "data/delivery_manifest.json"}
+    for identifier in identifiers:
+        folder = _figure_folder(Path("/"), identifier).relative_to(Path("/"))
+        names.update({f"editable/{identifier}.vsz", f"data/{identifier}.csv"})
+        names.update(str(folder / (identifier + suffix))
+                     for suffix in (".pdf", "_300dpi.tiff", "_300dpi.png"))
+    return names
 
 
 def _output_paths(source: Path, requested: str | Path) -> tuple[Path, Path]:
@@ -94,5 +107,4 @@ def _publish(stage: Path, delivery: Path, spec: dict[str, Any], native_result: d
                 raise RuntimeError(f"Delivery byte mismatch: {target}")
             files.append(str(target))
         documents.append({"id": identifier, "path": str(native), "sha256": _sha(native), "exports": files})
-        _launcher(delivery / "editable" / f"Open_{identifier}.command", ["studio", str(native)])
     return documents

@@ -46,11 +46,9 @@ Start with Figure_X_UDC_Rheology.pdf (vector) or its 300 dpi TIFF.
 Separate panels are in panels/; temperature-resolved and sensitivity figures
 are in SI/. Original instrument CSV files remain outside this folder unchanged.
 
-Open_in_SciPlot.command opens the native Veusz editor supplied with SciPlot.
 For this multi-panel analysis route, the editable VSZ is the visual authority.
-Double-click a figure-specific launcher to edit another panel. Save in the editor,
-close it, then use Update_exports.command to export the exact saved documents.
-The ordinary browser canvas is not the editor for these multi-panel documents.
+Request figure changes through the AI conversation. Use Update_exports.command
+to export the exact saved documents. Original source files remain unchanged.
 
 Scientific scope
 The frequency sweeps are assigned nominal 210 C from the user's explicit request

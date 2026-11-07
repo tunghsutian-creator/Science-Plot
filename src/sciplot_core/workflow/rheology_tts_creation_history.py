@@ -10,8 +10,20 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.studio_core.source_update_commit import file_inventory, reject_symlink_path
 from sciplot_core.workflow.rheology_tts_saved_state import _check_sources, _compiled_figures
-from sciplot_core.workflow.rheology_tts_creation_inputs import CHECKPOINT, _input_file, _publication_files, _creation_binding
+from sciplot_core.workflow.rheology_tts_creation_inputs import CHECKPOINT, _input_file, _creation_binding
 from sciplot_core.workflow.rheology_tts_creation_repair import _blocked
+
+
+def _publication_files(identifiers: list[str]) -> set[str]:
+    """The exact retired v1 inventory, exclusively for read-only history."""
+    names = {"index.html", "README.txt", "Open_in_SciPlot.command", "Update_exports.command",
+             "data/figure_plan.json", "data/delivery_manifest.json"}
+    for identifier in identifiers:
+        folder = "" if identifier.startswith("Figure_X") else ("SI/" if identifier.startswith("SI_") else "panels/")
+        names.update({f"editable/{identifier}.vsz", f"editable/Open_{identifier}.command", f"data/{identifier}.csv"})
+        names.update(f"{folder}{identifier}{suffix}" for suffix in (".pdf", "_300dpi.tiff", "_300dpi.png"))
+    return names
+
 
 def _existing(request: Path, workspace: Path, delivery: Path) -> None:
     hidden, visible = workspace / "suite.json", delivery / "data/delivery_manifest.json"

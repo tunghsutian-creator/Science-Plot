@@ -118,6 +118,19 @@ def test_publication_uses_exact_names_without_prefix_duplicates(tmp_path):
     assert all(len(document["exports"]) == 3 for document in documents)
     assert all(len({Path(path).name for path in document["exports"]}) == 3 for document in documents)
     assert not any("HDPE" in Path(path).name for path in documents[0]["exports"])
+    assert not list((tmp_path / "delivery").rglob("*.command"))
+
+
+def test_current_publication_members_retain_data_and_retire_only_manual_entries():
+    from sciplot_core.workflow.rheology_tts_delivery_files import publication_files
+    from sciplot_core.workflow.rheology_tts_creation_history import _publication_files
+    identifiers = ["Figure_X_Main", "Panel", "SI_Other"]
+    current, historical = publication_files(identifiers), _publication_files(identifiers)
+    assert historical - current == {"Open_in_SciPlot.command",
+                                    *(f"editable/Open_{key}.command" for key in identifiers)}
+    assert not current - historical
+    assert {"Figure_X_Main.pdf", "panels/Panel.pdf", "SI/SI_Other.pdf",
+            "editable/Panel.vsz", "data/Panel.csv", "Update_exports.command"} <= current
 
 
 def test_publication_uses_sealed_root_outputs_despite_retained_export_attempts(tmp_path):

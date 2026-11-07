@@ -290,7 +290,7 @@ def _creation_result(tmp_path: Path) -> tuple[dict, Path]:
                                           "differences": [], "series": [{"matches": True}]}},
     }
     result = {"status": "ready", "delivery": str(delivery), "workspace": str(workspace),
-              "figures": 1, "manual_edit": str(delivery / "Open_in_SciPlot.command"),
+              "figures": 1,
               "scientific_scope": "External coordinates; no scientific certification.",
               "numerical_processing": False, "prepared_plan_sha256": "c" * 64,
               "native_result": {"kind": "sciplot_rheology_tts_render", "version": 1,

@@ -254,9 +254,9 @@ Original inputs remain unchanged outside this dedicated delivery folder.
 The core set is frequency sweeps (four), tanδ (two), TTS (four) and Arrhenius (two).
 Ea bar summaries and supporting diagnostics are separate from the core figure set.
 正文优先使用 12 张核心图；2 张活化能汇总图和 36 张补充/诊断图单独分类。
-Visible editable/*.vsz files are the visual authority. Use the supplied figure
-launchers to open them in the SciPlot-supplied Veusz editor. Save and close the
-native editor, then use Update_exports.command to refresh the exact saved exports.
+Visible editable/*.vsz files are the visual authority. Request figure changes
+through the AI conversation. Use Update_exports.command to refresh
+the exact saved exports without changing the original source files.
 
 Method change / 方法变更
 Old analysis: nominal temperatures, raw moduli, horizontal shifts only (bT = 1).

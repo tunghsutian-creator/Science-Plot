@@ -18,7 +18,7 @@ from sciplot_core.workflow.native_suite_generation import (
 )
 
 
-from sciplot_core.workflow.native_suite_creation_projection import _path, _remap
+from sciplot_core.workflow.native_suite_creation_projection import _remap
 from sciplot_core.workflow.native_suite_creation_facts import (
     _prepared_mutation, _seal_native_fact, _verify_native_fact, _finish_saved_exports,
 )
@@ -165,16 +165,9 @@ def create_project(workspace: Path, delivery: Path, request: dict[str, Any], sou
                         data = (json.dumps(mapped, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode()
                 elif source.suffix == ".command":
                     from sciplot_core.workflow.rheology_tts_delivery_files import launcher_bytes
-                    if source.name == "Update_exports.command":
-                        data = launcher_bytes(["rheology", "export", str(workspace), "--json"])
-                    elif source.name.startswith("Open_") and source.parent.name == "editable":
-                        identifier = source.stem[len("Open_"):]
-                        data = launcher_bytes(["studio", str(delivery / "editable" / (identifier + ".vsz"))])
-                    elif source.name in {"Open_in_SciPlot.command", "Open_in_Veusz.command"}:
-                        manifest = json.loads((candidate_workspace / "suite.json").read_bytes())
-                        data = launcher_bytes(["studio", _path(manifest["documents"][0]["path"], pairs)])
-                    elif any(str(before).encode() in data for before, _after in pairs):
-                        raise ValueError("An unknown launcher cannot publish private candidate paths.")
+                    if source.name != "Update_exports.command":
+                        raise ValueError("New NativeSuite deliveries cannot contain manual editor launchers.")
+                    data = launcher_bytes(workspace)
                     if not source.stat().st_mode & 0o100:
                         raise ValueError("A native launcher candidate must retain executable permission.")
                 mode = captured.mode
@@ -297,6 +290,7 @@ def create_project(workspace: Path, delivery: Path, request: dict[str, Any], sou
             result = {**result, "plot_objects": created_object_handles(manifest,
                       {"figures": list(_compiled_figures(manifest).values())})}
     result.update(workspace=str(workspace), delivery=str(delivery))
-    if "manual_edit" in result:
-        result["manual_edit"] = str(delivery / "Open_in_SciPlot.command")
+    # Old receipts remain byte-bound history; their former UI hint is no longer
+    # a product capability and does not become another launcher writer.
+    result.pop("manual_edit", None)
     return {**result, "generation": completed["generation"], "resumed": resume}

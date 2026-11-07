@@ -20,16 +20,6 @@ def _input_file(path: Path, value: dict[str, Any], *, create: bool = True) -> No
         atomic_write_json(path, value)
 
 
-def _publication_files(identifiers: list[str]) -> set[str]:
-    names = {"index.html", "README.txt", "Open_in_SciPlot.command", "Update_exports.command",
-             "data/figure_plan.json", "data/delivery_manifest.json"}
-    for identifier in identifiers:
-        folder = "" if identifier.startswith("Figure_X") else ("SI/" if identifier.startswith("SI_") else "panels/")
-        names.update({f"editable/{identifier}.vsz", f"editable/Open_{identifier}.command", f"data/{identifier}.csv"})
-        names.update(f"{folder}{identifier}{suffix}" for suffix in (".pdf", "_300dpi.tiff", "_300dpi.png"))
-    return names
-
-
 def _creation_binding(request: dict[str, Any], spec: dict[str, Any], compiled: dict[str, Any], delivery: Path,
                       workspace: Path, contract_sha256: str) -> dict[str, Any]:
     return {"request": {**request, "prepared_plan": spec["source_binding"]["prepared_plan"]["path"],

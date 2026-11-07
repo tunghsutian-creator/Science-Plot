@@ -28,7 +28,6 @@ def _result(manifest: dict, *, compiled: dict, resumed: bool, include_handles: b
     return {"status": "ready", "delivery": manifest["delivery"], "workspace": manifest["workspace"],
         "figures": len(manifest["documents"]), "numerical_processing": False,
         "prepared_plan_sha256": manifest["prepared_input"]["sha256"],
-        "manual_edit": str(Path(manifest["delivery"]) / "Open_in_SciPlot.command"),
         "native_result": manifest["native_result"], "scientific_scope": manifest["scientific_scope"],
         **({"plot_objects": created_object_handles(manifest, compiled)} if include_handles else {"_creation_handles": True}),
         **({"resumed": True} if resumed else {})}
@@ -163,8 +162,7 @@ def _prepare_candidate(request_path: Path, request: dict, spec: dict, compiled: 
         "scientific_scope": "Externally processed coordinates; no scientific calculations or interpretation performed by plot."}
     write_json(workspace / "suite.json", manifest)
     write_json(delivery / "data/delivery_manifest.json", manifest)
-    _launcher(delivery / "Open_in_SciPlot.command", ["studio", documents[0]["path"]])
-    _launcher(delivery / "Update_exports.command", ["rheology", "export", str(workspace), "--json"])
+    _launcher(delivery / "Update_exports.command", workspace)
     _check_sources(binding["sources"])
     result = _result(manifest, compiled=compiled, resumed=False, include_handles=False)
     result["_candidate_files"] = creation_inventory(workspace, delivery, native, file_inventory(delivery),
@@ -188,6 +186,7 @@ def _write_index(delivery: Path, spec: dict, documents: list[dict]) -> None:
         "resolves declared series roles through shared templates and exports native Veusz documents.\n"
         "Creation audits data fidelity and resolved native appearance; this is not scientific validity certification.\n"
         "Open index.html for individual files. Editable VSZ is visual authority after delivery.\n"
-        "Save and close native edits, then run Update_exports.command. Exact export records template\n"
-        "differences without resetting saved native edits. Original sources remain unchanged.\n\n"
+        "Request figure changes through the AI conversation. Use Update_exports.command for exact\n"
+        "saved-document export; template differences are recorded without resetting the document.\n"
+        "Original sources remain unchanged.\n\n"
         + json.dumps(spec.get("transform_ledger", {}), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
