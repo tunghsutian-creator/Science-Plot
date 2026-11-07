@@ -365,6 +365,7 @@ WORKFLOW_PROJECT_STRICT_ADDITIONS = frozenset(
 )
 SOURCE_ARTIFACT_STRICT_ADDITIONS = frozenset(
     {
+        "src/sciplot_core/policy/export_formats.py",
         "src/sciplot_core/assistant_history/__init__.py",
         "src/sciplot_core/assistant_history/contracts.py",
         "src/sciplot_core/assistant_history/storage.py",

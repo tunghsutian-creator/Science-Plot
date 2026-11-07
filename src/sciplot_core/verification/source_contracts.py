@@ -16,4 +16,5 @@ CHEAP_SOURCE_TARGETS = (
     *ARCHITECTURE_CORE_TARGETS,
     "tests/test_architecture_boundaries.py::test_non_probe_source_has_no_exact_duplicate_function_implementations",
     "tests/test_architecture_boundaries.py::test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint",
+    "tests/test_export_format_contract.py::test_native_filename_policy_is_outside_the_retained_rendering_closure",
 )

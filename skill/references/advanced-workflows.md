@@ -383,6 +383,9 @@ and the browser editor are retired. Existing saved selection files, including
 historical HTML references, remain readable without rewriting them. Continue
 through saved-project AI commands and headless exact-current export. The saved
 Legacy VSZ remains visual authority for native properties outside semantic coverage.
+The returned selection describes already registered science, not an editable
+draft. Do not rewrite its request or selection file in place; use an advertised
+scientific operation or a new task for a changed scientific selection.
 
 ## Test tiers and verification
 

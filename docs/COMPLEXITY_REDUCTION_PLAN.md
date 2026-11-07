@@ -24,12 +24,24 @@ Assembly desktop, Qt product UI, Intake HTTP/static application and their produc
 status/draft/history writers are also retired in the isolated batch. Actual
 scientific confirmation moves through CLI/MCP into the existing preparation owner;
 no GUI status layer is copied into Core. Registered legacy artifacts remain
-read-only compatibility inputs. Complete supported export formats, source-bound
+read-only compatibility inputs. Torque curation now constructs its complete
+scientific selection and CSV before initial project admission, using the existing
+Intake preparation port once. Its manual HTML editor and late rewrites of bound
+inputs are removed; legacy selection files remain readable. Read-only galleries
+can present saved facts and copy an AI instruction, without applying a command.
+Complete supported export formats, source-bound
 column semantics and output-vs-source locator roles now have discriminating
 consumer checks and real five-format publication evidence. Combined frozen
 acceptance, supported-platform CI and strict access closure are still separate
 pending gates. The standard PDF parser
 still does not implement project-bound annotation-to-AI editing.
+
+Export filename/DPI metadata has a separate owner from the byte-pinned historical
+layout implementation. The original layout bytes and pins remain unchanged.
+Their existing pure binding control now runs in the shared quick/CI source gate,
+before native builds and long profiles. Historical writer tests also retain the
+original client's finite helper and import-ABI closure; current permission and
+input guards remain live. Neither arrangement is a second production executor.
 
 ## Product boundary and target
 

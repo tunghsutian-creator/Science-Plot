@@ -771,6 +771,15 @@ not execution permission. Qt product workbenches, assembly desktop and Intake
 HTTP/static UI are also retired; headless Qt/Veusz and scientific QA remain
 long-term adapters.
 
+`curate.py` constructs its generated scientific selection, plotting CSV and
+canonical request through the existing Intake `studio_preparer` port before the
+first project generation. It then prepares once and uses the original manifest
+publication/packaging owners. It does not rewrite an admitted selection or
+request. The browser selection editor is retired; old selection JSON and its HTML
+references remain read-only inputs. A preparation failure retains the existing
+blocked-project receipt and propagates the same exception. This does not promise
+rollback of every initial creation effect.
+
 `task_repair` normalizes only the unambiguous misplaced `task_dir` transport alias,
 rejects conflicting locations, and projects bounded field/constraint errors from
 the shared schemas and explicit domain issues. Candidate IDs, selected-pair bounds

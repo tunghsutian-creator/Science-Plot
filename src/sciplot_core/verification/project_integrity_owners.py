@@ -112,6 +112,7 @@ PROJECT_INTEGRITY_OWNERS = (
             {
                 "src/sciplot_core/delivery_binding.py",
                 "src/sciplot_core/delivery_identity.py",
+                "src/sciplot_core/policy/export_formats.py",
                 "src/sciplot_core/qa/additional_exports.py",
                 "src/sciplot_core/qa/raster_inspection.py",
                 "tests/delivery_identity_helpers.py",
