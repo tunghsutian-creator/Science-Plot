@@ -10,8 +10,9 @@ from sciplot_core.plot_backends.managed import ManagedVeuszCompiler, compiler_id
 from sciplot_core.plot_document import validate_document
 
 from .errors import EngineError
+from .content_store import verify_document_content
 from .builtin_history import fingerprint_for_read
-from .managed_state import declared_host_files, declared_input_files, make_binding, read_canonical, require_inputs, resolved_ir, scientific_binding, source_input_path
+from .managed_state import declared_host_files, declared_input_files, prepare_binding, read_canonical, require_inputs, resolved_ir, scientific_binding, source_input_path
 from .managed_source_groups import physical_path, source_groups
 from .storage import read, write
 from sciplot_core.project_lifecycle.context import exists
@@ -146,6 +147,11 @@ class ManagedBackend:
         ir_path = Path(binding["ir_path"])
         if not exists(ir_path):
             write(ir_path, ir)
+        return self._materialize_native(binding, canonical, ir)
+
+    def _materialize_native(self, binding: dict[str, Any], canonical: dict[str, Any],
+                            ir: dict[str, Any]) -> tuple[dict[str, Any], Path]:
+        """Render one locally compiled plan after its caller's fresh input check."""
         native = Path(binding["document"])
         marker = native.parent / "build.json"
         intent = self._owned_intent(binding)
@@ -190,8 +196,19 @@ class ManagedBackend:
 
     def preview(self, document: dict[str, Any], binding: dict[str, Any], new_document: dict[str, Any],
                 diff: list[dict[str, Any]], output: Path) -> dict[str, Any]:
-        candidate = make_binding(Path(binding["root"]), new_document, output=Path(binding["output"]))
-        ir, native = self._ensure(candidate)
+        prepared = prepare_binding(Path(binding["root"]), new_document, output=Path(binding["output"]))
+        candidate = prepared.binding
+        # Persistence is a fresh observation boundary even within this call.
+        # Verify its canonical/CAS bytes without decoding and compiling them a
+        # second time; no later operation receives this local IR calculation.
+        canonical = read_canonical(candidate)
+        verify_document_content(Path(candidate["root"]), canonical)
+        if prepared.ir["ir_hash"] != candidate["ir_hash"]:
+            raise EngineError("managed_ir_conflict", "The local compilation does not match its prepared binding.")
+        # This replaces _ensure's fresh input admission after model/IR writes;
+        # the same invocation's pure compilation need not be performed again.
+        require_inputs(canonical)
+        ir, native = self._materialize_native(candidate, canonical, prepared.ir)
         output.mkdir(parents=True, exist_ok=True)
         preview = self.compiler.render_ir(ir, native, output / "preview.png")
         review = {"scientific_audit": preview["scientific_audit"], "preview": preview.get("preview", preview),

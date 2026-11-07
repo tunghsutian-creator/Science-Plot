@@ -11,7 +11,7 @@ from sciplot_core.plot_engine.current import changed_inputs
 from sciplot_core.plot_engine.managed_backend import ManagedBackend
 from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
 from sciplot_core.plot_engine.managed_sources import load_sources
-from sciplot_core.plot_engine.managed_state import input_files, make_binding, require_inputs
+from sciplot_core.plot_engine.managed_state import input_files, prepare_binding, require_inputs
 from sciplot_core.plot_ir import create_managed_document
 from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
 from sciplot_core.project_lifecycle.context import repository_scope
@@ -183,7 +183,7 @@ def test_managed_cold_source_io_and_currentness_keep_original_literal_and_seal(t
         assert raw["A"]["columns"]["column:1"]["values"] == [2.0, 4.0, 8.0]
         assert raw["A"]["provenance"]["sources"][0]["sha256"] == source["sha256"]
         resolved, _ = resolve_science(tmp_path / "semantic", document)
-        binding = make_binding(tmp_path / "semantic", resolved, output=tmp_path / "output")
+        binding = prepare_binding(tmp_path / "semantic", resolved, output=tmp_path / "output").binding
         assert source["path"] in binding["fingerprint"]["files"]
         assert str(actual) not in binding["fingerprint"]["files"]
         assert source["path"] in input_files(resolved)
@@ -256,7 +256,7 @@ def test_canonical_fingerprint_key_keeps_the_declared_source_literal(tmp_path):
     repo = FileProjectRepository(lease=lambda _: nullcontext())
     with source_location_scope(locator), repository_scope(repo, capabilities=COMPATIBILITY_CAPABILITIES):
         resolved, _ = resolve_science(tmp_path / "semantic", document)
-        binding = make_binding(tmp_path / "semantic", resolved, output=tmp_path / "output")
+        binding = prepare_binding(tmp_path / "semantic", resolved, output=tmp_path / "output").binding
         assert str(Path(source["path"]).resolve()) in binding["fingerprint"]["files"]
         assert changed_inputs(ManagedBackend.__new__(ManagedBackend), binding) == []
         assert resolved["scientific"]["data_sources"] == document["scientific"]["data_sources"]
@@ -305,7 +305,7 @@ def test_currentness_does_not_replace_refused_source_io_with_the_original(tmp_pa
     repo = FileProjectRepository(lease=lambda _: nullcontext())
     with source_location_scope(SelectedSource(source, actual)), repository_scope(repo, capabilities=COMPATIBILITY_CAPABILITIES):
         resolved, _ = resolve_science(tmp_path / "semantic", document)
-        binding = make_binding(tmp_path / "semantic", resolved, output=tmp_path / "output")
+        binding = prepare_binding(tmp_path / "semantic", resolved, output=tmp_path / "output").binding
 
     class Refused(SelectedSource):
         def resolve_path(self, original, *, expected_sha256=None, source_id=None):

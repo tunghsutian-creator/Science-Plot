@@ -103,7 +103,7 @@ def test_legacy_preview_uses_current_native_not_adjacent_pdf_and_does_not_accept
 @pytest.mark.comprehensive
 def test_managed_preview_compiles_current_semantics_without_native_save_or_qa_claim(tmp_path):
     from test_panel_assembly_export import managed_source
-    from sciplot_core.plot_engine.managed_state import make_binding
+    from sciplot_core.plot_engine.managed_state import prepare_binding
     from sciplot_core.plot_engine.storage import commit, load_head
     from sciplot_core.plot_ir.figure_document import figure_spec, store_spec
 
@@ -116,7 +116,7 @@ def test_managed_preview_compiles_current_semantics_without_native_save_or_qa_cl
                              "x": .5, "y": .5, "text": "W" * 100, "visible": True, "style": {}}]
     document = store_spec(head["document"], spec)
     document["revision"] += 1
-    binding = make_binding(root, document, output=tmp_path / "managed-output")
+    binding = prepare_binding(root, document, output=tmp_path / "managed-output").binding
     commit(root, document, binding, "source-preview-control")
     source = capture_source({"kind": "managed", "project": str(root), "plot_id": document["plot_id"]})
     before = {path: file_inventory(path) for path in (root, tmp_path / "figure.csv")}

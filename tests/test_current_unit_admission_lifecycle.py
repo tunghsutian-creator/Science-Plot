@@ -28,7 +28,7 @@ def patch_for(document, *, parameters=None):
 def test_create_rejects_before_creation_journal_or_executor_or_native_effect(tmp_path, monkeypatch):
     wire = expert_wire(tmp_path, header="Charge_C", rename=True)
     monkeypatch.setattr(managed_creation, "resolve_science", forbidden)
-    monkeypatch.setattr(managed_creation, "make_binding", forbidden)
+    monkeypatch.setattr(managed_creation, "prepare_binding", forbidden)
     monkeypatch.setattr(managed_creation, "write", forbidden)
     before = (tmp_path / "figure.csv").read_bytes()
     with pytest.raises(ValueError) as error:

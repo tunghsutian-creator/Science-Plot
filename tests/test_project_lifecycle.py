@@ -15,7 +15,7 @@ from test_plot_engine import FakeBackend, request
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_document import seal_document
-from sciplot_core.plot_engine.managed_state import make_binding
+from sciplot_core.plot_engine.managed_state import prepare_binding
 from sciplot_core.plot_engine.managed_backend import fingerprint_input_roles
 from sciplot_core.project_lifecycle.application import ProjectApplication
 from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
@@ -73,7 +73,7 @@ class ManagedBackend:
 
     def preview(self, before, binding, document, diff, output):
         self.calls["preview"] += 1
-        candidate = make_binding(Path(binding["root"]), document, output=Path(binding["output"]))
+        candidate = prepare_binding(Path(binding["root"]), document, output=Path(binding["output"])).binding
         return {"scientific_audit": {"status": "passed"}, "_binding": candidate}
 
     def apply(self, binding, review):

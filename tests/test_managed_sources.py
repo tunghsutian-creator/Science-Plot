@@ -247,7 +247,7 @@ def test_resolution_graph_binds_final_canonical_document_after_content_interning
 
     from sciplot_core.plot_engine.content_store import resolve_document_content
     from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
-    from sciplot_core.plot_engine.managed_state import make_binding
+    from sciplot_core.plot_engine.managed_state import prepare_binding
     from sciplot_core.plot_ir import create_managed_document
 
     request = request_for_figure(tmp_path)
@@ -261,6 +261,6 @@ def test_resolution_graph_binds_final_canonical_document_after_content_interning
     assert canonical["scientific_hash"] != expanded["scientific_hash"]
     compile_node = next(node for node in resolution["graph"]["nodes"] if node["id"] == "compile")
     assert compile_node["parameters"]["scientific_hash"] == canonical["scientific_hash"]
-    binding = make_binding(store, canonical, output=tmp_path / "output")
+    binding = prepare_binding(store, canonical, output=tmp_path / "output").binding
     assert resolution["graph"] == binding["graph"]
     assert expanded["scientific"]["provenance"]["large_original_fact"] == {"text": "x" * 70000}

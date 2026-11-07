@@ -38,7 +38,7 @@ def managed_source(tmp_path):
     from test_figure_document import request_for_figure
     from sciplot_core.plot_ir import create_managed_document
     from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
-    from sciplot_core.plot_engine.managed_state import make_binding
+    from sciplot_core.plot_engine.managed_state import prepare_binding
     from sciplot_core.plot_engine.storage import commit
 
     request = request_for_figure(tmp_path)
@@ -46,7 +46,7 @@ def managed_source(tmp_path):
     document = create_managed_document(request["template_definition"], request["data_binding"], plot_id="assembly-managed")
     document = resolved_metadata(document, rule_id=request["rule_id"], executors={})
     document, _ = resolve_science(root, document)
-    binding = make_binding(root, document, output=tmp_path / "managed-output")
+    binding = prepare_binding(root, document, output=tmp_path / "managed-output").binding
     commit(root, document, binding, "assembly-test")
     return root, capture_source({"kind": "managed", "project": str(root), "plot_id": document["plot_id"]})
 

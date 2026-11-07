@@ -322,7 +322,7 @@ def test_real_managed_binding_artifact_cannot_acquire_saved_studio_admission(tmp
 
     from test_managed_source_append import bound_document
     from test_series_display import _saved_native_baseline
-    from sciplot_core.plot_engine.managed_state import make_binding
+    from sciplot_core.plot_engine.managed_state import prepare_binding
     from sciplot_core.studio_core import request_overrides, studio_prepare
 
     def no_process(*_args, **_kwargs):
@@ -333,7 +333,7 @@ def test_real_managed_binding_artifact_cannot_acquire_saved_studio_admission(tmp
     managed_source = tmp_path / "managed-source"
     managed_source.mkdir()
     managed = bound_document(managed_source)
-    binding = make_binding(managed_source / "store", managed, output=root / "managed-output")
+    binding = prepare_binding(managed_source / "store", managed, output=root / "managed-output").binding
     assert managed["plot_type"] == "ManagedPlot" and binding["kind"] == "sciplot_managed_binding"
     native = Path(binding["document"])
     native.parent.mkdir(parents=True)

@@ -48,11 +48,11 @@ def append_request(document, tmp_path, name='B', *, samples=True):
 
 def _scientific_observation_case(tmp_path, operation='append'):
     from sciplot_core.plot_engine.current_unit_admission import prepare_current_update
-    from sciplot_core.plot_engine.managed_state import make_binding, scientific_binding
+    from sciplot_core.plot_engine.managed_state import prepare_binding, scientific_binding
 
     original = bound_document(tmp_path)
     root = tmp_path / 'store'
-    binding = make_binding(root, original, output=tmp_path / 'output')
+    binding = prepare_binding(root, original, output=tmp_path / 'output').binding
     if operation == 'append':
         request = append_request(original, tmp_path)
     else:

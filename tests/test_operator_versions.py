@@ -181,7 +181,7 @@ def test_installing_actual_new_related_or_unrelated_code_keeps_old_versions_exec
 def test_cache_and_ir_deletion_reconstruct_saved_science_after_version_install(tmp_path, monkeypatch, legacy, installed_kind):
     from managed_plot_helpers import request_for_source
     from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
-    from sciplot_core.plot_engine.managed_state import make_binding, resolved_ir
+    from sciplot_core.plot_engine.managed_state import prepare_binding, resolved_ir
     from sciplot_core.plot_ir import create_managed_document
     from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
     from sciplot_core.project_lifecycle.context import repository_scope
@@ -198,7 +198,7 @@ def test_cache_and_ir_deletion_reconstruct_saved_science_after_version_install(t
     repo = FileProjectRepository(lease=lambda _: nullcontext())
     with repository_scope(repo, capabilities=COMPATIBILITY_CAPABILITIES):
         original, first = resolve_science(root, document)
-        binding = make_binding(root, original, output=tmp_path / "output")
+        binding = prepare_binding(root, original, output=tmp_path / "output").binding
         ir = resolved_ir(root, original)
         original_bytes = deepcopy(original)
         assert first["executed"] and list((root / "transform-cache").glob("*.result.json"))
@@ -237,7 +237,7 @@ def test_old_complete_pin_fingerprint_uses_retained_bytes_without_rewriting_hist
     from sciplot_core.plot_engine.current import changed_inputs
     from sciplot_core.plot_engine.managed_backend import ManagedBackend
     from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
-    from sciplot_core.plot_engine.managed_state import make_binding
+    from sciplot_core.plot_engine.managed_state import prepare_binding
     from sciplot_core.plot_ir import create_managed_document
     from sciplot_core.plot_transforms.versions.catalog import LEGACY_ORIGINAL_PATHS
     from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
@@ -251,7 +251,7 @@ def test_old_complete_pin_fingerprint_uses_retained_bytes_without_rewriting_hist
     repo = FileProjectRepository(lease=lambda _: nullcontext())
     with repository_scope(repo, capabilities=COMPATIBILITY_CAPABILITIES):
         resolved, _ = resolve_science(root, document)
-        binding = make_binding(root, resolved, output=tmp_path / "output")
+        binding = prepare_binding(root, resolved, output=tmp_path / "output").binding
         pins = {str(tmp_path / "historic-install" / relative): sha for relative, sha in LEGACY_ORIGINAL_PATHS.items()}
         if partial:
             pins.pop(next(path for path in pins if path.endswith("/lineage.py")))

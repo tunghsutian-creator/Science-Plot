@@ -6,7 +6,7 @@ import pytest
 
 from sciplot_core.panel_assembly.errors import AssemblyError
 from sciplot_core.panel_assembly.sources import assert_source_current, capture_source, project_reference, project_references
-from sciplot_core.plot_engine.managed_state import make_binding
+from sciplot_core.plot_engine.managed_state import prepare_binding
 from sciplot_core.plot_engine.storage import commit, document_root, load_head
 
 
@@ -16,7 +16,7 @@ def canonical_managed(tmp_path, project, figure_id):
     old_root, _source = managed_source(tmp_path)
     document = load_head(old_root)["document"]
     root = document_root(project, figure_id)
-    binding = make_binding(root, document, output=tmp_path / "canonical-output")
+    binding = prepare_binding(root, document, output=tmp_path / "canonical-output").binding
     commit(root, document, binding, "managed-authority-control")
     return root, document
 

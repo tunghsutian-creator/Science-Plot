@@ -17,7 +17,7 @@ from sciplot_core.plot_engine.current_unit_admission import admit_current_units
 from sciplot_core.project_lifecycle.exports import export_head
 from sciplot_core.plot_engine.external_mutation import authority_status
 from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
-from sciplot_core.plot_engine.managed_state import make_binding
+from sciplot_core.plot_engine.managed_state import prepare_binding
 from sciplot_core.plot_engine.object_operations import plot_object_handle
 from sciplot_core.project_lifecycle.context import commit, digest, load_head, read, write
 
@@ -56,7 +56,7 @@ def create_managed(request: dict[str, Any], backend: PlotBackend, *, location: M
                 state.update({"document": document, "resolution": evidence, "phase": "resolved"})
                 write(path, state)
             document = state["document"]
-            binding = make_binding(root, document, output=output)
+            binding = prepare_binding(root, document, output=output).binding
             commit(root, document, binding, "managed_creation")
             state["phase"] = "committed"
             write(path, state)

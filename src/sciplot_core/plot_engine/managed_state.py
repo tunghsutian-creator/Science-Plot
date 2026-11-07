@@ -3,7 +3,7 @@
 from copy import deepcopy
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
@@ -101,7 +101,17 @@ def resolved_ir(root: Path, document: dict[str, Any]) -> dict[str, Any]:
     return compile_document(document, datasets, capabilities=capability_profile())
 
 
-def make_binding(root: Path, document: dict[str, Any], *, output: Path) -> dict[str, Any]:
+class ManagedPreparation(NamedTuple):
+    binding: dict[str, Any]
+    ir: dict[str, Any]
+
+
+def prepare_binding(root: Path, document: dict[str, Any], *, output: Path) -> ManagedPreparation:
+    """Observe and persist one binding, retaining this invocation's compilation.
+
+    The returned calculation is local data, not a stored or caller-supplied
+    currentness certificate. Later operations reconstruct from canonical state.
+    """
     from sciplot_core.plot_ir import compile_document
     from sciplot_core.plot_transforms.graph import dependency_graph
     from sciplot_core.project_lifecycle.context import capability_profile
@@ -113,21 +123,23 @@ def make_binding(root: Path, document: dict[str, Any], *, output: Path) -> dict[
     expanded = resolve_document_content(root, document)
     datasets = expanded["scientific"]["provenance"]["datasets"]
     ir = compile_document(document, datasets, capabilities=capability_profile())
-    model_path = root / "models" / (digest(document) + ".json")
+    canonical_sha256 = digest(document)
+    model_path = root / "models" / (canonical_sha256 + ".json")
     ir_path = root / "ir" / (ir["ir_hash"] + ".json")
     for path, value in ((model_path, document), (ir_path, ir)):
-        if exists(path) and read(path) != value:
+        if exists(path) and digest(read(path)) != digest(value):
             raise EngineError("managed_state_corrupt", "An immutable managed state file changed.")
         if not exists(path):
             write(path, value)
     native = output / "artifacts" / ir["ir_hash"] / "document.vsz"
     files = input_files(document)
-    return {"kind": "sciplot_managed_binding", "version": 1, "root": str(root), "output": str(output),
-            "canonical_document": str(model_path), "canonical_sha256": digest(document),
+    binding = {"kind": "sciplot_managed_binding", "version": 1, "root": str(root), "output": str(output),
+            "canonical_document": str(model_path), "canonical_sha256": canonical_sha256,
             "ir_path": str(ir_path), "ir_hash": ir["ir_hash"], "document": str(native),
             "scientific_content_files": referenced_files(root, document),
             "fingerprint": {"files": files, "artifacts": {str(native): ir["ir_hash"]}},
             "graph": dependency_graph(document, datasets)}
+    return ManagedPreparation(binding, ir)
 
 
 def read_canonical(binding: dict[str, Any]) -> dict[str, Any]:

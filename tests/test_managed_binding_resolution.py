@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -61,7 +62,7 @@ def test_binding_resolves_one_snapshot_and_preserves_complete_ir_and_graph(scien
         return original(*args)
 
     monkeypatch.setattr(managed_state, "resolve_document_content", observe)
-    binding = managed_state.make_binding(root, document, output=root / "generated")
+    binding = managed_state.prepare_binding(root, document, output=root / "generated").binding
 
     assert len(resolved) == 1
     assert document == before
@@ -78,10 +79,10 @@ def test_binding_resolves_one_snapshot_and_preserves_complete_ir_and_graph(scien
 
 def test_later_binding_observes_every_content_blob_again(scientific_binding_case):
     repository, root, document, _ = scientific_binding_case
-    first = managed_state.make_binding(root, document, output=root / "generated")
+    first = managed_state.prepare_binding(root, document, output=root / "generated").binding
     first_reads = list(repository.content_reads)
     repository.content_reads.clear()
-    second = managed_state.make_binding(root, document, output=root / "generated")
+    second = managed_state.prepare_binding(root, document, output=root / "generated").binding
     assert second == first
     assert repository.content_reads == first_reads
 
@@ -89,26 +90,26 @@ def test_later_binding_observes_every_content_blob_again(scientific_binding_case
 @pytest.mark.parametrize("change", ["missing", "different_bytes"])
 def test_later_binding_refuses_original_source_change(scientific_binding_case, change):
     _, root, document, _ = scientific_binding_case
-    managed_state.make_binding(root, document, output=root / "generated")
+    managed_state.prepare_binding(root, document, output=root / "generated")
     source = Path(document["scientific"]["data_sources"][0]["path"])
     if change == "missing":
         source.unlink()
     else:
         source.write_bytes(source.read_bytes().replace(b"0,2", b"0,3"))
     with pytest.raises(EngineError) as failure:
-        managed_state.make_binding(root, document, output=root / "generated")
+        managed_state.prepare_binding(root, document, output=root / "generated")
     assert failure.value.reason_code == "managed_inputs_changed"
 
 
 @pytest.mark.parametrize("resource", ["canonical_document", "ir_path"])
 def test_existing_immutable_binding_files_cannot_be_replaced(scientific_binding_case, resource):
     repository, root, document, _ = scientific_binding_case
-    binding = managed_state.make_binding(root, document, output=root / "generated")
+    binding = managed_state.prepare_binding(root, document, output=root / "generated").binding
     path = Path(binding[resource])
     repository.write(path, {"corrupted": True})
     corrupted = path.read_bytes()
     with pytest.raises(EngineError) as failure:
-        managed_state.make_binding(root, document, output=root / "generated")
+        managed_state.prepare_binding(root, document, output=root / "generated")
     assert failure.value.reason_code == "managed_state_corrupt"
     assert path.read_bytes() == corrupted
 
@@ -117,7 +118,7 @@ def test_invalid_document_does_not_allocate_binding_products(scientific_binding_
     _, root, document, _ = scientific_binding_case
     document["unrepresented_field"] = {}
     with pytest.raises(DocumentError):
-        managed_state.make_binding(root, document, output=root / "generated")
+        managed_state.prepare_binding(root, document, output=root / "generated")
     assert not (root / "models").exists()
     assert not (root / "ir").exists()
 
@@ -131,12 +132,12 @@ def test_later_content_drift_is_not_hidden_by_the_prior_expansion(tmp_path):
         document = resolved_metadata(document, rule_id=source["rule_id"], executors={})
         document, _ = resolve_science(root, document)
         document = intern_document(root, document, minimum_bytes=2)
-        binding = managed_state.make_binding(root, document, output=root / "generated")
+        binding = managed_state.prepare_binding(root, document, output=root / "generated").binding
         content = Path(next(iter(binding["scientific_content_files"])))
         before = content.read_bytes()
         content.write_bytes(bytes([before[0] ^ 1]) + before[1:])
         with pytest.raises(EngineError) as failure:
-            managed_state.make_binding(root, document, output=root / "generated")
+            managed_state.prepare_binding(root, document, output=root / "generated")
         assert failure.value.reason_code == "document_content_corrupt"
 
 
@@ -145,6 +146,87 @@ def test_missing_resolved_datasets_refuses_before_binding_writes(scientific_bind
     del expanded["scientific"]["provenance"]["datasets"]
     document = seal_document(expanded)
     with pytest.raises(KeyError, match="datasets"):
-        managed_state.make_binding(root, document, output=root / "generated")
+        managed_state.prepare_binding(root, document, output=root / "generated")
     assert not (root / "models").exists()
     assert not (root / "ir").exists()
+
+
+def test_preview_uses_one_compilation_but_later_ensure_reconstructs(scientific_binding_case, monkeypatch):
+    from sciplot_core.plot_engine.managed_backend import ManagedBackend
+    from sciplot_core import plot_ir
+
+    _repository, root, document, _expanded = scientific_binding_case
+    compiler, observations = plot_ir.compile_document, []
+
+    def compile_once(*args, **kwargs):
+        observations.append("compile")
+        return compiler(*args, **kwargs)
+
+    monkeypatch.setattr(plot_ir, "compile_document", compile_once)
+    backend = object.__new__(ManagedBackend)
+    backend.compiler = SimpleNamespace(render_ir=lambda *_: {
+        "scientific_audit": {"status": "passed"}, "preview": {"path": "synthetic preview"}})
+    monkeypatch.setattr(backend, "_materialize_native", lambda binding, _canonical, ir: (ir, Path(binding["document"])))
+    before = deepcopy(document)
+    review = backend.preview(document, {"root": str(root), "output": str(root / "generated")},
+                             document, [], root / "preview")
+    assert observations == ["compile"] and document == before
+    binding = review["_managed_binding"]
+    expected = _repository.read(Path(binding["ir_path"]))
+    assert backend._ensure(binding)[0] == expected
+    assert observations == ["compile", "compile"]
+
+
+@pytest.mark.parametrize("resource", ["canonical", "payload", "source", "ir_identity"])
+def test_preview_reobserves_persistence_before_any_native_effect(scientific_binding_case, monkeypatch, resource):
+    from sciplot_core.plot_engine import managed_backend
+
+    repository, root, document, _expanded = scientific_binding_case
+    prepare = managed_backend.prepare_binding
+    expected = "managed_state_corrupt" if resource == "canonical" else "managed_inputs_changed"
+    if resource == "ir_identity":
+        expected = "managed_ir_conflict"
+    if resource == "payload":
+        expected = "document_content_corrupt" if managed_state.referenced_files(root, document) else "document_hash_mismatch"
+
+    def corrupt_after_persist(*args, **kwargs):
+        prepared = prepare(*args, **kwargs)
+        if resource == "ir_identity":
+            prepared.ir["ir_hash"] = "0" * 64
+        elif resource == "source":
+            path = Path(document["scientific"]["data_sources"][0]["path"])
+            path.write_bytes(path.read_bytes() + b"changed after persistence\n")
+        elif resource == "payload" and managed_state.referenced_files(root, document):
+            path = Path(next(iter(managed_state.referenced_files(root, document))))
+            content = path.read_bytes()
+            path.write_bytes(bytes([content[0] ^ 1]) + content[1:])
+        else:
+            path = Path(prepared.binding["canonical_document"])
+            changed = repository.read(path)
+            if resource == "canonical":
+                changed["revision"] += 1
+            else:
+                changed["scientific"]["provenance"]["datasets"]["A"]["columns"]["column:0"]["values"][0] = 123
+            repository.write(path, changed)
+        return prepared
+
+    monkeypatch.setattr(managed_backend, "prepare_binding", corrupt_after_persist)
+    backend = object.__new__(managed_backend.ManagedBackend)
+    monkeypatch.setattr(backend, "_materialize_native", lambda *_: pytest.fail("changed persistence reached native compilation"))
+    with pytest.raises(ValueError) as failure:
+        backend.preview(document, {"root": str(root), "output": str(root / "generated")}, document, [], root / "review")
+    assert failure.value.reason_code == expected
+
+
+def test_existing_model_preserves_literal_json_identity(scientific_binding_case):
+    repository, root, document, _expanded = scientific_binding_case
+    prepared = managed_state.prepare_binding(root, document, output=root / "generated")
+    path = Path(prepared.binding["canonical_document"])
+    changed = repository.read(path)
+    changed["revision"] = float(changed["revision"])
+    assert changed == document
+    repository.write(path, changed)
+    original = path.read_bytes()
+    with pytest.raises(EngineError) as failure:
+        managed_state.prepare_binding(root, document, output=root / "generated")
+    assert failure.value.reason_code == "managed_state_corrupt" and path.read_bytes() == original

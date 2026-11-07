@@ -13,7 +13,7 @@ from sciplot_core.plot_backends.managed_plan import native_name
 from sciplot_core.plot_engine.external_mutation import require_managed_representability
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.managed_external import inspect_managed_mutation
-from sciplot_core.plot_engine.managed_state import make_binding, resolved_ir
+from sciplot_core.plot_engine.managed_state import prepare_binding, resolved_ir
 from sciplot_core.plot_engine.storage import write
 from sciplot_core.plot_ir import create_managed_document
 from sciplot_core.plot_transforms import resolve_transforms
@@ -30,7 +30,7 @@ def _canonical(tmp_path):
         datasets[source["source_id"]]["provenance"]["sources"][0]["sha256"] = source["sha256"]
     document = resolve_transforms(create_managed_document(template, binding, plot_id="managed-external"), datasets)["document"]
     root = tmp_path / "plot"
-    return root, document, make_binding(root, document, output=root / "generated")
+    return root, document, prepare_binding(root, document, output=root / "generated").binding
 
 
 @pytest.mark.comprehensive

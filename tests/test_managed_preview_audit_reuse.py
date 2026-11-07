@@ -16,6 +16,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
 from sciplot_core.plot_document import DocumentError
 from sciplot_core.plot_engine import managed_backend
+from sciplot_core.plot_engine.managed_state import ManagedPreparation
 from sciplot_core.plot_engine.service import PlotService
 
 
@@ -46,11 +47,15 @@ def test_render_returns_the_actual_passed_scientific_audit(tmp_path, monkeypatch
 def test_backend_preview_consumes_render_audit_without_reinspection(tmp_path, monkeypatch):
     backend = object.__new__(managed_backend.ManagedBackend)
     audit = {"status": "passed", "coordinates": {"series:A": "exact"}}
-    candidate = {"root": str(tmp_path), "output": str(tmp_path / "output")}
+    candidate = {"root": str(tmp_path), "output": str(tmp_path / "output"), "ir_hash": managed_ir()["ir_hash"]}
     backend.compiler = SimpleNamespace(render_ir=lambda *_: {
         "scientific_audit": audit, "preview": {"path": "preview.png"}})
-    monkeypatch.setattr(managed_backend, "make_binding", lambda *_args, **_kwargs: candidate)
-    monkeypatch.setattr(backend, "_ensure", lambda _: (managed_ir(), tmp_path / "document.vsz"))
+    monkeypatch.setattr(managed_backend, "prepare_binding", lambda *_args, **_kwargs:
+                        ManagedPreparation(candidate, managed_ir()))
+    monkeypatch.setattr(managed_backend, "read_canonical", lambda _: {})
+    monkeypatch.setattr(managed_backend, "verify_document_content", lambda *_: None)
+    monkeypatch.setattr(managed_backend, "require_inputs", lambda _: None)
+    monkeypatch.setattr(backend, "_materialize_native", lambda *_: (managed_ir(), tmp_path / "document.vsz"))
 
     result = backend.preview({}, candidate, {}, [], tmp_path / "review")
 
