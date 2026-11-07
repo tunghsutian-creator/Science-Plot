@@ -180,6 +180,10 @@ def _child(operation, case, phase):
     assert result["loaded_owners"] == {name: str(FIXTURE / record["fixture"])
         for name, record in manifest["owners"].items()}
     assert result["current_enforcement"]["claim"] == "Current source identity only; not frozen597 scientific certification."
+    print(json.dumps({"historical_operation": operation, "phase": phase,
+        "historical_operational_closure": result["historical_operational_closure"],
+        "backend_calls": result["backend_calls"], "operation_error": result.get("error"),
+        "functional_calls": result["functional_calls"]}))
     return result
 
 
@@ -210,6 +214,105 @@ def test_historical_fixture_pins_original_source_commit_and_bytes():
         "6b2a2975a5bc2fc466034e672c534e9045887916b13c4a8317c7feaffe31dbd0")
 
 
+def test_versioned_operational_closure_retains_all_original_helper_authorities():
+    import frozen_semantic_597 as counter
+
+    original = (FIXTURE / "manifest.json").read_bytes()
+    manifest = read_manifest()
+    closure = counter.read_operational_closure(manifest)
+    assert closure["source_commit"] == manifest["source_commit"]
+    assert closure["original_manifest_sha256"] == hashlib.sha256(original).hexdigest()
+    assert len(closure["helpers"]) == len(manifest["operational_helpers"]) == 26
+    assert {record["mode"] for record in closure["helpers"].values()} == {
+        "frozen_original_module", "shared_original_file", "shared_original_functions"}
+    assert (FIXTURE / "manifest.json").read_bytes() == original
+
+
+def test_shared_original_function_checks_loaded_code_and_rejects_new_functions(tmp_path, monkeypatch):
+    import frozen_semantic_597 as counter
+    from types import ModuleType
+
+    monkeypatch.setattr(counter, "ROOT", tmp_path)
+    monkeypatch.setattr(counter, "FIXTURE", tmp_path / "frozen")
+    path = tmp_path / "src/sciplot_core/shared.py"
+    path.parent.mkdir(parents=True)
+    original = "def kept(value):\n    return value\n"
+    path.write_text(original + "\ndef added(value):\n    return value + 1\n")
+    fixture = counter.FIXTURE / "original.py.txt"
+    fixture.parent.mkdir()
+    fixture.write_text(original)
+    module = ModuleType("owned_shared_history_test")
+    module.__file__ = str(path)
+    exec(compile(path.read_text(), str(path), "exec"), module.__dict__)
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    record = {"module_source_path": "src/sciplot_core/shared.py", "fixture": fixture.name,
+              "mode": "shared_original_functions", "functions": {
+                  "kept": {"sha256": hashlib.sha256(original.encode()).hexdigest()}}}
+    closure = {"helpers": {module.__name__: record}}
+    manifest = {"operational_helpers": {record["module_source_path"]: {
+        "sha256": hashlib.sha256(original.encode()).hexdigest()}}}
+    counter.validate_operational_helpers(manifest, {(str(path), "kept", 1)}, closure=closure)
+    with pytest.raises(AssertionError, match="unknown historical function"):
+        counter.validate_operational_helpers(manifest, {(str(path), "added", 4)}, closure=closure)
+    # The disk still contains the original function. A different loaded body
+    # with the same module/path/qualified name must nevertheless be refused.
+    exec(compile("def kept(value):\n    return value + 2\n", str(path), "exec"), module.__dict__)
+    with pytest.raises(AssertionError, match="changed loaded function"):
+        counter.validate_operational_helpers(manifest, {(str(path), "kept", 1)}, closure=closure)
+
+
+def test_versioned_closure_refuses_unregistered_fixture_calls():
+    import frozen_semantic_597 as counter
+
+    with pytest.raises(AssertionError, match="unknown frozen helper"):
+        counter.validate_operational_helpers(read_manifest(), {
+            (str(FIXTURE / "unregistered.py.txt"), "invented", 1)}, closure={"helpers": {}})
+
+
+def test_original_import_abi_does_not_authorize_operational_calls():
+    import frozen_semantic_597 as counter
+
+    with pytest.raises(AssertionError, match="import-only ABI executed"):
+        counter.validate_operational_helpers(read_manifest(), {
+            (str(FIXTURE / "unused-abi.py.txt"), "unselected_business", 1)}, closure={
+                "helpers": {}, "import_dependencies": {"owned_unused_abi": {
+                    "fixture": "unused-abi.py.txt", "mode": "frozen_original_import_abi"}}})
+
+
+def test_historical_loader_does_not_replace_a_preloaded_business_owner(monkeypatch):
+    import frozen_semantic_597 as counter
+    from types import ModuleType
+
+    name = "owned_preloaded_history_test"
+    original = ModuleType(name)
+    monkeypatch.setitem(sys.modules, name, original)
+    with pytest.raises(AssertionError):
+        counter.FrozenOwners({"owners": {name: {"fixture": "unused.py.txt"}}})
+    assert sys.modules[name] is original
+
+
+@pytest.mark.parametrize("section", ["owners", "slices"])
+def test_original_frozen_files_are_rechecked_after_loading(monkeypatch, tmp_path, section):
+    import frozen_semantic_597 as counter
+    from types import ModuleType
+
+    monkeypatch.setattr(counter, "FIXTURE", tmp_path)
+    source = tmp_path / "original.py.txt"
+    source.write_text("def original():\n    return 1\n")
+    manifest = {"owners": {}, "slices": {}}
+    manifest[section]["original"] = {"fixture": source.name,
+        "sha256": hashlib.sha256(source.read_bytes()).hexdigest()}
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    before = counter.read_manifest()
+    loaded = ModuleType("owned_after_import_history_test")
+    exec(compile(source.read_bytes(), str(source), "exec"), loaded.__dict__)
+    assert loaded.original() == 1
+    source.write_text("def original():\n    return 2\n")
+    assert loaded.original() == 1  # Loaded objects are not fresh disk evidence.
+    with pytest.raises(AssertionError):
+        assert counter.read_manifest() == before
+
+
 @pytest.mark.parametrize("phase", ["prepared", "applying"])
 @pytest.mark.parametrize("attached", [False, True], ids=["before-transfer", "after-transfer"])
 @pytest.mark.focused
@@ -233,6 +336,10 @@ def test_original_pending_writer_has_no_native_or_state_write_after_attachment(t
     before_files = _files(tmp_path)
     before_snapshot = store.snapshot() if store is not None else None
     result = _child("resume", tmp_path, phase)
+    assert result["historical_operational_closure"]["version"] == 2
+    assert result["historical_operational_closure"]["source_commit"] == read_manifest()["source_commit"]
+    assert not any(path == str(ROOT / "src/sciplot_core/plot_document/requests.py")
+                   for path, _name, _line in result["functional_calls"])
     assert hashlib.sha256((native / "raw.csv").read_bytes()).hexdigest() == raw_hash
     if attached:
         assert result["backend_calls"]["apply"] == 0

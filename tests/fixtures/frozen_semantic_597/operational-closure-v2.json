@@ -1,0 +1,273 @@
+{
+  "kind": "sciplot_frozen_operational_closure",
+  "version": 2,
+  "source_commit": "597fee38f99b92f5f18860801f4630d81323012d",
+  "original_manifest_sha256": "86c87c45674674f3dcc62750945398bbe92bb2dd901a274f2eb99146be23d6d0",
+  "scope": "Original pending-writer prepare/resume operational closure only; current verification and namespace fence stay live.",
+  "helpers": {
+    "sciplot_core.foundation.file_hashing": {
+      "module_source_path": "src/sciplot_core/foundation/file_hashing.py",
+      "original_source_path": "src/sciplot_core/foundation/file_hashing.py",
+      "fixture": "operational/src/sciplot_core/foundation/file_hashing.py.txt",
+      "sha256": "a9860b84714e27bb16dcea16f6948dc2264085ea0efa6b2a086d53300f26e5af",
+      "git_blob": "e014a71c0596839d0cce3eeb54a906f3edc47979",
+      "mode": "shared_original_file"
+    },
+    "sciplot_core.foundation.json_hashing": {
+      "module_source_path": "src/sciplot_core/foundation/json_hashing.py",
+      "original_source_path": "src/sciplot_core/foundation/json_hashing.py",
+      "fixture": "operational/src/sciplot_core/foundation/json_hashing.py.txt",
+      "sha256": "a2025df42ffb362c609b809706280642a749a296a2de66ceb4bc3ee5b9655108",
+      "git_blob": "10b73d51211dac28fe3e2a76bb2c27debc647c4b",
+      "mode": "shared_original_file"
+    },
+    "sciplot_core.foundation.json_io": {
+      "module_source_path": "src/sciplot_core/foundation/json_io.py",
+      "original_source_path": "src/sciplot_core/foundation/json_io.py",
+      "fixture": "operational/src/sciplot_core/foundation/json_io.py.txt",
+      "sha256": "e5ad44ac44ee9bfaee686c819f4f16056b19a7345a2ff3316e9dee6ed65f99b4",
+      "git_blob": "b7d60ba063b7c95f8f2130604cff32b8b24b23a5",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.foundation.json_values": {
+      "module_source_path": "src/sciplot_core/foundation/json_values.py",
+      "original_source_path": "src/sciplot_core/foundation/json_values.py",
+      "fixture": "operational/src/sciplot_core/foundation/json_values.py.txt",
+      "sha256": "576a66e558d148b4b23d3bf8ba704feadb63f30816164e8aeceaa7477362483f",
+      "git_blob": "817249e27e8d8bee8a100dd18e983ebd7df693f1",
+      "mode": "shared_original_functions",
+      "functions": {
+        "json_safe": {
+          "source_path": "src/sciplot_core/foundation/json_values.py",
+          "source_sha256": "576a66e558d148b4b23d3bf8ba704feadb63f30816164e8aeceaa7477362483f",
+          "source_start_line": 9,
+          "source_end_line": 18,
+          "sha256": "459b5a543298b57a1b4a472ecbb6e228db17519cea9db0e741706d90592e1f64"
+        }
+      }
+    },
+    "sciplot_core.native_process.identity": {
+      "module_source_path": "src/sciplot_core/native_process/identity.py",
+      "original_source_path": "src/sciplot_core/native_process/identity.py",
+      "fixture": "operational/src/sciplot_core/native_process/identity.py.txt",
+      "sha256": "7b525abdfbbe20ee0d5175c24e2faee6fd73bd8801f25023250e5f14c03e9c64",
+      "git_blob": "c587a42613e887fbca321c751a4def6d29f8a342",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.native_process.session": {
+      "module_source_path": "src/sciplot_core/native_process/session.py",
+      "original_source_path": "src/sciplot_core/native_process/session.py",
+      "fixture": "operational/src/sciplot_core/native_process/session.py.txt",
+      "sha256": "8222ad78b921c9e5273bb7d0ca9ab1338bdb92ac6ebafa845fb0a620c14c3b96",
+      "git_blob": "cd1e9c1352785764ab97437179b862beba8ea553",
+      "mode": "shared_original_functions",
+      "functions": {
+        "verified_runtime_identity": {
+          "source_path": "src/sciplot_core/native_process/session.py",
+          "source_sha256": "8222ad78b921c9e5273bb7d0ca9ab1338bdb92ac6ebafa845fb0a620c14c3b96",
+          "source_start_line": 182,
+          "source_end_line": 188,
+          "sha256": "d0d580b7af82c881a4c85d121e5bbabf033d4bad07d7f44e1e40e90a87a35acf"
+        }
+      }
+    },
+    "sciplot_core.plot_document.dependency": {
+      "module_source_path": "src/sciplot_core/plot_document/dependency.py",
+      "original_source_path": "src/sciplot_core/plot_document/dependency.py",
+      "fixture": "operational/src/sciplot_core/plot_document/dependency.py.txt",
+      "sha256": "45603325b9df63cc9e78c41d4fa31bfe46d6a83754764abf9f027658cbcf568e",
+      "git_blob": "ab8667168836444b4bab76c018e0ac866ca1e2f0",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.plot_document.model": {
+      "module_source_path": "src/sciplot_core/plot_document/model.py",
+      "original_source_path": "src/sciplot_core/plot_document/model.py",
+      "fixture": "operational/src/sciplot_core/plot_document/model.py.txt",
+      "sha256": "6295e06edb03455b7e9ca3326348e7ba1f41ea92b9bc898d0bc222187394b08f",
+      "git_blob": "9a95d83e9b08f169238a6d5b3eea670a07fab194",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.plot_document.patch": {
+      "module_source_path": "src/sciplot_core/plot_document/patch.py",
+      "original_source_path": "src/sciplot_core/plot_document/patch.py",
+      "fixture": "operational/src/sciplot_core/plot_document/patch.py.txt",
+      "sha256": "e32585cce26eb952ffdb8fd1435d8d45ab0acaec35450d502ce7f86611a644d6",
+      "git_blob": "ad580438125f945b27a5fea0e29c9f7fff6ec3c3",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.plot_document.properties": {
+      "module_source_path": "src/sciplot_core/plot_document/properties.py",
+      "original_source_path": "src/sciplot_core/plot_document/properties.py",
+      "fixture": "operational/src/sciplot_core/plot_document/properties.py.txt",
+      "sha256": "b0d4a52e33b3ab0ea5e8c68e19fe647a56d217fc8a1aca4753c1bc6861b180e2",
+      "git_blob": "e4532e1e6f2db45badfcb4b1fe2fecad729af586",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.plot_document.schema": {
+      "module_source_path": "src/sciplot_core/plot_document/schema.py",
+      "original_source_path": "src/sciplot_core/plot_document/schema.py",
+      "fixture": "operational/src/sciplot_core/plot_document/schema.py.txt",
+      "sha256": "498c3c5297a785b60cfcbb121269329cf3e4cc0d6703ab02e49a1c0c88570639",
+      "git_blob": "e55da8a6e4f48db293e6f66b4560c244d3b46d66",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.plot_document.validation": {
+      "module_source_path": "src/sciplot_core/plot_document/validation.py",
+      "original_source_path": "src/sciplot_core/plot_document/validation.py",
+      "fixture": "operational/src/sciplot_core/plot_document/validation.py.txt",
+      "sha256": "c2f5e50f006cf80fc0de278bd56104189790d936b104b66de350c473d34863f7",
+      "git_blob": "98d66b7ca57d5f3bb1c604db600cfb770d714675",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.plot_engine.cache_identity": {
+      "module_source_path": "src/sciplot_core/plot_engine/cache_identity.py",
+      "original_source_path": "src/sciplot_core/plot_engine/cache_identity.py",
+      "fixture": "operational/src/sciplot_core/plot_engine/cache_identity.py.txt",
+      "sha256": "d9e48c5ad9b0cfe128d02056bb78cda078483105678d47a853b639decc82a4e3",
+      "git_blob": "979d46ed6433a718c706c4560968124d7ecdf4fa",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.plot_engine.content_store": {
+      "module_source_path": "src/sciplot_core/plot_engine/content_store.py",
+      "original_source_path": "src/sciplot_core/plot_engine/content_store.py",
+      "fixture": "operational/src/sciplot_core/plot_engine/content_store.py.txt",
+      "sha256": "4e785caa0ae5158a8c22365af24240c8df036366adeb621eae7cd36b66d9298f",
+      "git_blob": "48e2d5e8fce8f88025ecc2897686a0171bb8b381",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.project_lifecycle.aggregate_validation": {
+      "module_source_path": "src/sciplot_core/project_lifecycle/aggregate_validation.py",
+      "original_source_path": "src/sciplot_core/project_lifecycle/aggregate_validation.py",
+      "fixture": "operational/src/sciplot_core/project_lifecycle/aggregate_validation.py.txt",
+      "sha256": "5995d7f6c6c242fe4e6d4a63d271e18e3b2bdec1cdc305d1d968348184001b55",
+      "git_blob": "5a3e6f42a0f5ea833cd1cd86b60dc36de9a8d406",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.project_lifecycle.content_references": {
+      "module_source_path": "src/sciplot_core/project_lifecycle/content_references.py",
+      "original_source_path": "src/sciplot_core/project_lifecycle/content_references.py",
+      "fixture": "operational/src/sciplot_core/project_lifecycle/content_references.py.txt",
+      "sha256": "05656ed0f1016c5716e55e4ed90225c418e34b33cf773feb3f0a4a7264fc2445",
+      "git_blob": "2d0657b04b3fe3bb3993035ad5fda4bb8dc5b49b",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.project_lifecycle.contracts": {
+      "module_source_path": "src/sciplot_core/project_lifecycle/contracts.py",
+      "original_source_path": "src/sciplot_core/project_lifecycle/contracts.py",
+      "fixture": "operational/src/sciplot_core/project_lifecycle/contracts.py.txt",
+      "sha256": "c3ce4a3e65901454422b886aa8a3ad0011b5bc007bf94f70dcf81b703f4538bb",
+      "git_blob": "42a86211cb33dabfc49dc6b8b2ffb5f6575feb76",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.project_lifecycle.errors": {
+      "module_source_path": "src/sciplot_core/project_lifecycle/errors.py",
+      "original_source_path": "src/sciplot_core/project_lifecycle/errors.py",
+      "fixture": "operational/src/sciplot_core/project_lifecycle/errors.py.txt",
+      "sha256": "a99e7cb80a20f6e30340cf35744e432cc773722212ae86f9ae7e5c04f9098e9f",
+      "git_blob": "fba24ae665cc6416a1b286e81be2c3421c29187b",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.project_lifecycle.journal_identity": {
+      "module_source_path": "src/sciplot_core/project_lifecycle/journal_identity.py",
+      "original_source_path": "src/sciplot_core/project_lifecycle/journal_identity.py",
+      "fixture": "operational/src/sciplot_core/project_lifecycle/journal_identity.py.txt",
+      "sha256": "5efc1462c2fe2362d351593540b1ca067e30e021d644f7797bf3c6fae991109c",
+      "git_blob": "a09f296d81880ee3a29b243585e7e5239d9e4947",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.project_lifecycle.paths": {
+      "module_source_path": "src/sciplot_core/project_lifecycle/paths.py",
+      "original_source_path": "src/sciplot_core/project_lifecycle/paths.py",
+      "fixture": "operational/src/sciplot_core/project_lifecycle/paths.py.txt",
+      "sha256": "23f7019534c6f964c58572e1ee1e42a4006dd8517f107d8c36cccea3806b5861",
+      "git_blob": "a1c8595ef65ad21ba7198f4bbc1bd9d66491d2f0",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.project_lifecycle.publication_repair": {
+      "module_source_path": "src/sciplot_core/project_lifecycle/publication_repair.py",
+      "original_source_path": "src/sciplot_core/project_lifecycle/publication_repair.py",
+      "fixture": "operational/src/sciplot_core/project_lifecycle/publication_repair.py.txt",
+      "sha256": "eeb4126cdbd781c19fcaf8d8a893c31aa8bd8353f96a284eda56f94bd24e9126",
+      "git_blob": "4c445746375faa0ccf37679bf9aef96de3aff1c7",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.project_lifecycle.receipts": {
+      "module_source_path": "src/sciplot_core/project_lifecycle/receipts.py",
+      "original_source_path": "src/sciplot_core/project_lifecycle/receipts.py",
+      "fixture": "operational/src/sciplot_core/project_lifecycle/receipts.py.txt",
+      "sha256": "88b230869bfc239d574c0a30ee229e1dd993708724cbec428a0458892d12a929",
+      "git_blob": "0a14edc31147d9c2413a976ca985b8178279babf",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.project_lifecycle.target_adapter": {
+      "module_source_path": "src/sciplot_core/project_lifecycle/target_adapter.py",
+      "original_source_path": "src/sciplot_core/project_lifecycle/target_adapter.py",
+      "fixture": "operational/src/sciplot_core/project_lifecycle/target_adapter.py.txt",
+      "sha256": "fae3d8aa4bc5e4867171444ed33d8e0a564df3b961e382a5105f10b5a6c92313",
+      "git_blob": "8b731c4f617f1ae820e9de285ffb8683856252c2",
+      "mode": "shared_original_functions",
+      "functions": {
+        "FilesystemProjectTargets.__init__": {
+          "source_path": "src/sciplot_core/project_lifecycle/target_adapter.py",
+          "source_sha256": "fae3d8aa4bc5e4867171444ed33d8e0a564df3b961e382a5105f10b5a6c92313",
+          "source_start_line": 16,
+          "source_end_line": 18,
+          "sha256": "018b41b414f048917c5cbb3737b1f95ff8942f61c104f077961bbc3ad9a74c71"
+        }
+      }
+    },
+    "sciplot_core.studio_core.source_update_files": {
+      "module_source_path": "src/sciplot_core/studio_core/source_update_files.py",
+      "original_source_path": "src/sciplot_core/studio_core/source_update_commit.py",
+      "fixture": "operational/src/sciplot_core/studio_core/source_update_commit.py.txt",
+      "sha256": "bc831509197e229a29cd591a7ec4d5985794a1acb1eff81b0e03182ca1fa1bff",
+      "git_blob": "488ab8c4511b9ed363f2f4d8ebb959713226bf63",
+      "mode": "shared_original_functions",
+      "functions": {
+        "reject_symlink_path": {
+          "source_path": "src/sciplot_core/studio_core/source_update_commit.py",
+          "source_sha256": "bc831509197e229a29cd591a7ec4d5985794a1acb1eff81b0e03182ca1fa1bff",
+          "source_start_line": 20,
+          "source_end_line": 23,
+          "sha256": "61878e7be8ea3fa780148c9ef91f61e7884d79a37adc62d2e8ef39e41b64f234"
+        }
+      }
+    },
+    "sciplot_core.style_values": {
+      "module_source_path": "src/sciplot_core/style_values.py",
+      "original_source_path": "src/sciplot_core/style_values.py",
+      "fixture": "operational/src/sciplot_core/style_values.py.txt",
+      "sha256": "012f9c8dcc7f900670be95d76aaf6b46a7edaea244a373b4b342cafb57e9e1a4",
+      "git_blob": "89885474daf568e3d4f14475cca65f8a959c0be3",
+      "mode": "frozen_original_module"
+    },
+    "sciplot_core.veusz_runtime": {
+      "module_source_path": "src/sciplot_core/veusz_runtime.py",
+      "original_source_path": "src/sciplot_core/veusz_runtime.py",
+      "fixture": "operational/src/sciplot_core/veusz_runtime.py.txt",
+      "sha256": "1058ef930ab970ab0dadc8d9984af20a0ca007f57db21b8317befe9db7738236",
+      "git_blob": "01ea79c2251d965438edfbcc80671196534574d6",
+      "mode": "frozen_original_module"
+    }
+  },
+  "import_dependencies": {
+    "sciplot_core.project_lifecycle.command_dispatch": {
+      "module_source_path": "src/sciplot_core/project_lifecycle/command_dispatch.py",
+      "original_source_path": "src/sciplot_core/project_lifecycle/command_dispatch.py",
+      "fixture": "operational/src/sciplot_core/project_lifecycle/command_dispatch.py.txt",
+      "sha256": "f1303da3f98952aa3456cdb72877534839f4401713b62217fc0f5a218c5d631b",
+      "git_blob": "463a4516a16af9e1346d4857eb11c1ed5b191d43",
+      "mode": "frozen_original_import_abi",
+      "imported_by": "sciplot_core.project_lifecycle.application"
+    },
+    "sciplot_core.plot_engine.backend": {
+      "module_source_path": "src/sciplot_core/plot_engine/backend.py",
+      "original_source_path": "src/sciplot_core/plot_engine/backend.py",
+      "fixture": "operational/src/sciplot_core/plot_engine/backend.py.txt",
+      "sha256": "2abb508b522f746aa5220b6e15428ef4d25fd3bf56e39cdbb2d1830707e71208",
+      "git_blob": "a4c88e0e1e7400363e4ae20f5132f496a05e56ca",
+      "mode": "frozen_original_import_abi",
+      "imported_by": "sciplot_core.project_lifecycle.application"
+    }
+  }
+}
