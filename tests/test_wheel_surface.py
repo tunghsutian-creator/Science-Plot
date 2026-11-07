@@ -18,6 +18,7 @@ RETIRED_DISTRIBUTION_PREFIXES = (
     "sciplot_core/veusz_worker/live_session.py",
     "sciplot_core/verification/live_editor_owner.py",
     "web/editor/",
+    "sciplot_core/panel_assembly/desktop",
     "sciplot_core/canvas",
     "sciplot_core/composition",
     "sciplot_core/promotion",

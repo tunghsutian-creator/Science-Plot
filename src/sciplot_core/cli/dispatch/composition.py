@@ -11,12 +11,15 @@ def dispatch_composition(args: Any) -> int | None:
     if args.command != "compose":
         return None
     if args.compose_action == "open":
-        from sciplot_core.studio_core.runtime import maybe_reexec_with_qt_runtime
+        from sciplot_core.panel_assembly.errors import AssemblyError
 
-        maybe_reexec_with_qt_runtime(["compose", "open", *([str(args.layout)] if args.layout else [])])
-        from sciplot_core.panel_assembly.desktop import open_workbench
-
-        return int(open_workbench(args.layout))
+        raise AssemblyError(
+            "manual_composer_retired",
+            "manual_composer_retired: The manual composition workbench has been retired. "
+            "Ask your AI client to use sciplot compose capabilities --json, then "
+            "compose new/inspect/apply/export with the current layout revision. "
+            "This command does not inspect or change a layout.",
+        )
     from sciplot_core.panel_assembly.service import compose, composition_capabilities
 
     if args.compose_action == "capabilities":

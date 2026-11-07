@@ -68,7 +68,7 @@ def _summary(document: dict[str, Any], path: Path, *, sources_checked: bool = Fa
                        | {"source_kind": panel["source"]["kind"]} for panel in document["panels"]],
             "resolved_layout": resolve_document(document),
             "source_validation": "current" if sources_checked else "deferred_until_export",
-            "next_step": "compose open LAYOUT, or apply a layout intent at the returned revision"}
+            "next_step": "Read compose capabilities --json, then use compose apply LAYOUT with the returned expected_revision; inspect or export the saved layout."}
 
 
 def _bind_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
