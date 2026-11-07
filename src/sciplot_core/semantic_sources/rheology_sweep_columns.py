@@ -7,8 +7,11 @@ from sciplot_core.foundation.text_values import clean_text as _clean_text, token
 from sciplot_core.materials_rules.unit_formatting import format_unit_label
 from sciplot_core.semantic_sources.models import _RHEOLOGY_SWEEP_METRICS
 from sciplot_core.semantic_sources.rheology_frequency_metrics import is_rheology_magnitude_header
-from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit
-from sciplot_core.semantic_sources.table_scanning import _find_column, _axis_match, _unit_for, _unit_row_score
+from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit, axis_match as _axis_match
+from sciplot_core.semantic_sources.table_scanning import _find_column, _unit_for, _unit_row_score
+
+FREQUENCY_X_ALIASES = ("angularfrequency", "frequency", "omega", "ω")
+TEMPERATURE_X_ALIASES = ("temperature", "temp", "温度")
 
 
 def _find_rheology_sweep_headers(

@@ -50,7 +50,8 @@ def read_confirmed_source_file(item: dict[str, Any], *, label: str = "selected")
             "Intake session source changed after the session was "
             f"prepared: {source_path}"
         )
-    return IncomingFile(name=str(item.get("name") or source_path.name), content=content), captured
+    return IncomingFile(name=str(item.get("name") or source_path.name), content=content,
+                        source_path=str(captured["path"])), captured
 
 
 def create_intake_project_from_session(

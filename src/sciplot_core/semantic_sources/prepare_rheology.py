@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.materials_rules import get_rule
+from sciplot_core.semantic_sources.confirmation_contract import has_column_intent, normalize_column_confirmations, require_supported_confirmations
 
 from sciplot_core.semantic_sources.preparation_context import SemanticPreparationContext
 
@@ -25,8 +27,7 @@ from sciplot_core.semantic_sources.preparation_support import (
 )
 
 from sciplot_core.semantic_sources.rheology_confirmation import (
-    _confirmed_column_items,
-    _read_confirmed_rheology_sweep_samples,
+    read_rheology_sweep_samples,
 )
 
 from sciplot_core.semantic_sources.rheology_interval import (
@@ -78,10 +79,14 @@ def prepare_rheology_source(
     processed_dir = context.processed_dir
     family = context.family
     series_order = context.series_order
-    column_confirmations = context.column_confirmations
+    column_confirmations = normalize_column_confirmations(context.column_confirmations)
     replicate_mode = context.replicate_mode
+    if family in {"rheology_frequency", "rheology_temperature_sweep"}:
+        rule_id = "rheology_frequency_sweep" if family == "rheology_frequency" else "rheology_temperature_sweep"
+        column_confirmations = require_supported_confirmations(get_rule(rule_id), column_confirmations)
+    explicit_columns = any(has_column_intent(item) for item in column_confirmations or [])
 
-    if family == "rheology_frequency" and actual.is_file() and source.suffix.lower() in {".xlsx", ".xls"}:
+    if family == "rheology_frequency" and not explicit_columns and actual.is_file() and source.suffix.lower() in {".xlsx", ".xls"}:
         import pandas as pd
         from sciplot_core.semantic_sources.rheology_frequency_metrics import complete_frequency_frame
 
@@ -145,7 +150,7 @@ def prepare_rheology_source(
             },
         )
 
-    if family == "rheology_frequency" and actual.is_dir():
+    if family == "rheology_frequency" and (actual.is_dir() or explicit_columns):
         processed_source = processed_dir / "rheology_frequency_comparison.xlsx"
         frequency_domain = (
             context.resolved_scientific_source.require_domain(
@@ -159,25 +164,9 @@ def prepare_rheology_source(
             samples = list(frequency_domain.prepared_samples)
             available_metrics = frequency_domain.facts.available_metrics
         else:
-            try:
-                source_samples = _read_rheology_frequency_comparison_samples(source)
-            except ValueError as automatic_error:
-                if not _confirmed_column_items(column_confirmations):
-                    raise
-                try:
-                    source_samples = _read_confirmed_rheology_sweep_samples(
-                        source,
-                        column_confirmations,
-                        x_label="Angular Frequency",
-                        default_x_unit="rad/s",
-                        metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
-                    )
-                except ValueError as confirmed_error:
-                    raise ValueError(
-                        "Rheology frequency preparation failed both automatic and "
-                        f"confirmed parsing (automatic: {automatic_error}; "
-                        f"confirmed: {confirmed_error})."
-                    ) from confirmed_error
+            source_samples = read_rheology_sweep_samples(source, column_confirmations,
+                _read_rheology_frequency_comparison_samples, rule_id="rheology_frequency_sweep", x_label="Angular Frequency",
+                default_x_unit="rad/s", metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS)
             samples = _coalesce_replicate_sweep_samples(
                 source_samples,
                 replicate_mode=replicate_mode,
@@ -233,25 +222,9 @@ def prepare_rheology_source(
             source_samples = list(temperature_domain.raw_samples)
             samples = list(temperature_domain.prepared_samples)
         else:
-            try:
-                source_samples = _read_rheology_temperature_comparison_samples(source)
-            except ValueError as automatic_error:
-                if not _confirmed_column_items(column_confirmations):
-                    raise
-                try:
-                    source_samples = _read_confirmed_rheology_sweep_samples(
-                        source,
-                        column_confirmations,
-                        x_label="Temperature",
-                        default_x_unit="°C",
-                        metrics=_RHEOLOGY_SWEEP_METRICS,
-                    )
-                except ValueError as confirmed_error:
-                    raise ValueError(
-                        "Rheology temperature preparation failed both automatic "
-                        f"and confirmed parsing (automatic: {automatic_error}; "
-                        f"confirmed: {confirmed_error})."
-                    ) from confirmed_error
+            source_samples = read_rheology_sweep_samples(source, column_confirmations,
+                _read_rheology_temperature_comparison_samples, rule_id="rheology_temperature_sweep", x_label="Temperature",
+                default_x_unit="°C", metrics=_RHEOLOGY_SWEEP_METRICS)
             samples = _coalesce_replicate_sweep_samples(
                 source_samples,
                 replicate_mode=replicate_mode,

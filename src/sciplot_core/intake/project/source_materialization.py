@@ -39,6 +39,7 @@ def materialize_intake_groups(
             group_files.append(
                 {
                     "original_name": incoming.name,
+                    **({"original_source_path": incoming.source_path} if incoming.source_path is not None else {}),
                     "raw_path": str(raw_path),
                     "source_path": str(source_path),
                     "size_bytes": len(incoming.content),

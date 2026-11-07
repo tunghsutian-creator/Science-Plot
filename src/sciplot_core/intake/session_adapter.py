@@ -12,6 +12,7 @@ from sciplot_core.contract import load_plot_contract
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.request_contract import normalize_exports, normalize_render_options
 from sciplot_core.source_coverage.file_snapshots import _assert_snapshot_current
+from sciplot_core.semantic_sources.confirmation_contract import confirmation_capabilities, has_column_intent, require_supported_confirmations
 from . import application
 from .catalog import intake_catalog_payload
 from .config import _REPLICATE_MODES
@@ -34,7 +35,9 @@ def prepare_session(source: Path, *, output_root: Path, rule_id: str | None = No
     envelope = {"kind": "sciplot_local_intake_session", "version": 1, "request": request,
                 "context": {key: value for key, value in observed.items() if key not in fields},
                 "capabilities": {
-                    "request_schema": session_request_schema(), "catalog": intake_catalog_payload(),
+                    "request_schema": session_request_schema(observed["rule_id"]), "catalog": intake_catalog_payload(),
+                    "scientific_choices": (confirmation_capabilities(get_rule(observed["rule_id"]))
+                                           if observed.get("rule_id") else {"requires_ready_rule_selection": True}),
                     "template_editable_options": {name: list(spec.editable_options)
                                                   for name, spec in load_plot_contract().templates.items()},
                     "replicate_modes": sorted(_REPLICATE_MODES),
@@ -49,7 +52,8 @@ def prepare_session(source: Path, *, output_root: Path, rule_id: str | None = No
 
 
 def _checked_request(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict) and value.get("kind") == "sciplot_intake_session" and value.get("version") == 1:
+    if (isinstance(value, dict) and value.get("kind") == "sciplot_intake_session"
+            and type(value.get("version")) is int and value["version"] == 1):
         fields = set(session_request_schema()["properties"])
         context = {"kind", "version", "created_at", "session_id", "session_path", "input_path",
                    "data_type_label", "experiment_label", "rule_id", "confidence", "reason", "warnings",
@@ -101,7 +105,7 @@ def _selected_rule(request: dict[str, Any]) -> str:
     raise IntakeSessionError("Choose a currently ready data_type_id/experiment_type_id from the local intake catalog.")
 
 
-def _validate_columns(request: dict[str, Any], groups: list[IntakeGroupInput]) -> None:
+def _validate_columns(request: dict[str, Any], groups: list[IntakeGroupInput], *, rule_id: str) -> None:
     files = [(group.sample.strip(), item.name, reference, item.content)
              for group, declared in zip(groups, request["groups"], strict=True)
              for item, reference in zip(group.files, declared["files"], strict=True)]
@@ -130,6 +134,10 @@ def _validate_columns(request: dict[str, Any], groups: list[IntakeGroupInput]) -
                     or ("inferred_type" in column and column["inferred_type"] != actual["inferred_type"])):
                 raise IntakeSessionError("Column identities must match the original preview; indices must be unique.")
             indices.add(column["index"])
+        if has_column_intent(confirmation):
+            from sciplot_core.semantic_sources.rheology_confirmation import check_confirmed_rheology_bytes
+
+            check_confirmed_rheology_bytes(confirmation["file_name"], content, confirmation, rule_id=rule_id)
 
 
 def create_session(session: Path) -> dict[str, Any]:
@@ -137,6 +145,7 @@ def create_session(session: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     request = _checked_request(value)
     rule = _selected_rule(request)
+    require_supported_confirmations(get_rule(rule), request.get("column_confirmations"))
     normalize_render_options(request.get("render_options"), template=get_rule(rule).template)
     _new_plot_output(request)
     # Only explicit choices enter the existing reader. Model-supplied recognition,
@@ -144,12 +153,14 @@ def create_session(session: Path) -> dict[str, Any]:
     payload = {**request, "rule_id": rule, "reason": "Explicit local intake selection, not recognition confidence."}
 
     def checked_factory(**arguments: Any) -> dict[str, Any]:
-        _validate_columns(request, arguments["groups"])
+        _validate_columns(request, arguments["groups"], rule_id=rule)
         return application.create_intake_project(**arguments)
 
     prepared = application.create_intake_project_from_session(payload, project_factory=checked_factory)
     result = publish_prepared_intake_project(prepared)
-    return {**result, "confirmed_session": str(path),
+    failed = bool(result.get("run_failed") or (result.get("last_run") or {}).get("ready_to_use") is False)
+    return {**result, "status": "failed" if failed else "complete", "ready_to_use": not failed,
+            "confirmed_session": str(path),
             "selection": {"rule_id": rule, "authority": "explicit_request", "recognition_confidence": None},
             "context_is_non_authoritative": True}
 

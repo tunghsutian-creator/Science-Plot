@@ -35,6 +35,10 @@ def resolve_scientific_source(
         return None
     if rule.fixture_status != "ready":
         return None
+    from sciplot_core.semantic_sources.confirmation_contract import request_column_confirmations, require_supported_confirmations
+
+    if request.get("column_confirmations"):
+        request = {**request, "column_confirmations": require_supported_confirmations(rule, request_column_confirmations(request))}
     adapter = rule.scientific_source_adapter
     if adapter == "stress_relaxation":
         return _resolve_stress_relaxation_scientific_source(

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 class IncomingFile:
     name: str
     content: bytes
+    source_path: str | None = None
 
 
 @dataclass(frozen=True)

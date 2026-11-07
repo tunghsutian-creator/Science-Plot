@@ -94,19 +94,10 @@ def resolve_single_curve_transform(
     series_order: object = None,
     column_confirmations: object = None,
 ) -> ResolvedScientificTransform:
+    from sciplot_core.semantic_sources.confirmation_contract import require_supported_confirmations
+
+    column_confirmations = require_supported_confirmations(rule, column_confirmations)
     adapter = rule.scientific_source_adapter
-    if (
-        adapter != "registered_paired_curve"
-        and isinstance(column_confirmations, list | tuple)
-        and any(
-            isinstance(item, dict) and item.get("sheet_selected") is True
-            for item in column_confirmations
-        )
-    ):
-        raise ValueError(
-            f"Explicit worksheet selection is not supported for {rule.rule_id}; "
-            "the selected worksheet cannot be ignored."
-        )
     if adapter == "ftir":
         from sciplot_core.semantic_sources.ftir_sources import (
             resolve_ftir_scientific_transform,

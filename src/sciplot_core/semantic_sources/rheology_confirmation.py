@@ -3,6 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
+from tempfile import TemporaryDirectory
+from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_locations import literal_source_path
+from sciplot_core.semantic_sources.confirmation_contract import has_column_intent, require_supported_confirmations
+from sciplot_core.semantic_sources.instrument_regions import rheology_instrument_regions
+from sciplot_core.semantic_sources.paired_curve_data_block import first_paired_curve_data_block
+from sciplot_core.foundation.path_names import safe_filename
+from sciplot_core.materials_rules import get_rule
 from sciplot_core.semantic_sources.rheology_frequency_metrics import complete_sweep_metrics
 from typing import Any
 from sciplot_core.foundation.text_values import (
@@ -17,13 +26,18 @@ from sciplot_core.materials_rules import (
 from sciplot_core.semantic_sources.models import (
     RheologySweepSample,
     _RHEOLOGY_COMPLEX_MODULUS_METRIC,
+    _RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
+    _RHEOLOGY_SWEEP_METRICS,
 )
 
 from sciplot_core.semantic_sources.table_scanning import (
-    _unit_for,
+    _unit_row_score,
     _float,
     _read_raw_table_normalized,
 )
+from sciplot_core.semantic_sources.rheology_sweep_columns import FREQUENCY_X_ALIASES, TEMPERATURE_X_ALIASES, _find_rheology_sweep_headers, _rheology_sweep_units, _sweep_source_unit
+from sciplot_core.semantic_sources.paired_curve_table_metadata import header_quantity_text
+from sciplot_core.semantic_sources.rheology_frequency_metrics import is_rheology_magnitude_header
 
 from sciplot_core.semantic_sources.series_labels import (
     _source_display_sample,
@@ -39,55 +53,22 @@ from sciplot_core.semantic_sources.rheology_ordering import (
 )
 
 
-def _confirmed_column_items(column_confirmations: object) -> list[dict[str, Any]]:
-    if not isinstance(column_confirmations, list | tuple):
-        return []
-    return [item for item in column_confirmations if isinstance(item, dict)]
-
-
-def _confirmation_names(confirmation: dict[str, Any]) -> set[str]:
-    names: set[str] = set()
-    file_name = _clean_text(confirmation.get("file_name"))
-    if file_name:
-        names.add(file_name)
-    source_path = _clean_text(confirmation.get("source_path"))
-    if source_path:
-        names.add(Path(source_path).name)
-    return names
-
-
-def _candidate_names(candidate: Path) -> set[str]:
-    names = {candidate.name}
-    if "__" in candidate.name:
-        _sample, original = candidate.name.split("__", 1)
-        if original:
-            names.add(original)
-    return names
-
-
-def _matching_column_confirmation(
-    candidate: Path,
-    column_confirmations: object,
-) -> dict[str, Any] | None:
-    candidate_names = _candidate_names(candidate)
-    for confirmation in _confirmed_column_items(column_confirmations):
-        if candidate_names & _confirmation_names(confirmation):
-            return confirmation
-    return None
-
-
 def _metric_key_from_label(
     label: object,
     metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
 ) -> str | None:
-    token = _token(label)
+    text = header_quantity_text(label).casefold()
+    token = _token(text)
     if not token:
         return None
     for key, metric_label, aliases, _default_unit in metrics:
-        metric_tokens = {_token(metric_label), *(_token(alias) for alias in aliases)}
-        if any(
-            metric_token and metric_token in token for metric_token in metric_tokens
-        ):
+        if key in {"complex_modulus", "complex_viscosity"}:
+            matched = is_rheology_magnitude_header(label, metric=key)
+        else:
+            names = (metric_label, *aliases)
+            matched = any(text == name.casefold() or
+                          len(_token(name)) > 1 and _token(name) in token for name in names)
+        if matched:
             return key
     return None
 
@@ -108,35 +89,35 @@ def _confirmed_rheology_sweep_sample(
     default_x_unit: str,
     metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
 ) -> RheologySweepSample:
-    raw = _read_raw_table_normalized(source).dropna(axis=1, how="all").dropna(how="all")
-    columns = confirmation.get("columns")
-    if not isinstance(columns, list | tuple):
-        raise ValueError("Column confirmation does not contain columns.")
+    raw = _read_raw_table_normalized(source)
+    if rheology_instrument_regions(raw) is not None:
+        raise ValueError("Explicit columns support one plain table, not instrument Test/Result/Interval scope; select the exact source region through task mapping.")
+    columns = confirmation["columns"]
 
     x_index: int | None = None
     metric_indexes: dict[str, int] = {}
     match_metrics = (*metrics, _RHEOLOGY_COMPLEX_MODULUS_METRIC)
     for column in columns:
-        if not isinstance(column, dict):
-            continue
-        try:
-            index = int(column.get("index"))
-        except (TypeError, ValueError):
-            continue
+        index = column["index"]
         if index < 0 or index >= raw.shape[1]:
-            continue
+            raise ValueError("A confirmed column is outside the current original table.")
         confirmed_type = _clean_text(column.get("confirmed_type")).casefold()
         if confirmed_type == "ignore":
             continue
         role = _clean_text(column.get("role")).casefold()
-        if role == "x" and x_index is None:
+        if role == "x":
+            if x_index is not None:
+                raise ValueError("An explicit source has conflicting X columns.")
             x_index = index
             continue
         if role != "y":
             continue
         metric_key = _metric_key_from_label(column.get("name"), match_metrics)
-        if metric_key and metric_key not in metric_indexes:
-            metric_indexes[metric_key] = index
+        if metric_key is None:
+            raise ValueError("Unsupported explicit Y quantity; select its scientific meaning through source-bound task mapping.")
+        if metric_key in metric_indexes:
+            raise ValueError(f"An explicit source has conflicting {metric_key} columns.")
+        metric_indexes[metric_key] = index
 
     if x_index is None:
         raise ValueError(f"No confirmed X column found in {source}.")
@@ -144,25 +125,38 @@ def _confirmed_rheology_sweep_sample(
         raise ValueError(f"No confirmed storage modulus column found in {source}.")
 
     default_units = _metric_default_units(match_metrics)
+    block = first_paired_curve_data_block(raw, data_start=0,
+        pairs=tuple((x_index, index) for index in metric_indexes.values()))
     numeric_rows = [
         row_index
-        for row_index in range(raw.shape[0])
-        if _float(raw.iat[row_index, x_index]) is not None
+        for row_index in block.rows
+        if _float(raw.iat[row_index, x_index], decimal_comma=block.decimal_comma) is not None
         and any(
-            _float(raw.iat[row_index, metric_index]) is not None
+            _float(raw.iat[row_index, metric_index], decimal_comma=block.decimal_comma) is not None
             for metric_index in metric_indexes.values()
         )
     ]
     if not numeric_rows:
         raise ValueError(f"No numeric rheology sweep points found in {source}.")
 
-    unit_index = numeric_rows[0] - 1
-    units = (
-        [_clean_text(value) for value in raw.iloc[unit_index].tolist()]
-        if unit_index >= 0
-        else []
-    )
-    source_x_unit = _unit_for(units, x_index, default_x_unit)
+    selected_columns = (x_index, *metric_indexes.values())
+    explicit_units = _token(x_label) == "angularfrequency"
+    try:
+        header_indexes = _find_rheology_sweep_headers(raw,
+            x_aliases=FREQUENCY_X_ALIASES if explicit_units else TEMPERATURE_X_ALIASES, metrics=match_metrics)
+    except ValueError:
+        # The original explicit-column route also serves opaque headers. Its
+        # adjacent observed unit row is evidence, never an invented source unit.
+        adjacent = numeric_rows[0] - 1
+        has_units = adjacent >= 0 and _unit_row_score(raw, adjacent, selected_columns) > 0
+        header_index = adjacent - 1 if has_units else adjacent
+    else:
+        if len(header_indexes) != 1:
+            raise ValueError("Explicit columns require one source table; select repeated intervals through task mapping.")
+        header_index = header_indexes[0]
+    headers = [_clean_text(value) for value in raw.iloc[header_index].tolist()] if header_index >= 0 else [""] * raw.shape[1]
+    units = _rheology_sweep_units(raw, header_index=header_index, columns=selected_columns) if header_index >= 0 else []
+    source_x_unit, x_authority = _sweep_source_unit(headers, units, x_index, default_x_unit, explicit=explicit_units)
     x_unit, x_factor, x_method = _unit_conversion(source_x_unit, default_x_unit)
     if x_method == "source_unit_preserved":
         raise ValueError(
@@ -175,7 +169,7 @@ def _confirmed_rheology_sweep_sample(
     metric_conversions: dict[str, dict[str, Any]] = {}
     for key, metric_index in metric_indexes.items():
         default_unit = default_units.get(key, "")
-        source_unit = _unit_for(units, metric_index, default_unit)
+        source_unit, unit_authority = _sweep_source_unit(headers, units, metric_index, default_unit, explicit=explicit_units)
         output_unit, factor, method = _unit_conversion(source_unit, default_unit)
         if method == "source_unit_preserved":
             raise ValueError(
@@ -190,15 +184,17 @@ def _confirmed_rheology_sweep_sample(
             "output_unit": output_unit,
             "factor": factor,
             "method": method,
+            "source_header": headers[metric_index], "source_column": metric_index,
+            "source_unit_authority": unit_authority,
         }
     rows: list[dict[str, float]] = []
     for row_index in numeric_rows:
-        x_value = _float(raw.iat[row_index, x_index])
+        x_value = _float(raw.iat[row_index, x_index], decimal_comma=block.decimal_comma)
         if x_value is None:
             continue
         row: dict[str, float] = {"x": x_value * x_factor}
         for key, metric_index in metric_indexes.items():
-            y_value = _float(raw.iat[row_index, metric_index])
+            y_value = _float(raw.iat[row_index, metric_index], decimal_comma=block.decimal_comma)
             if y_value is not None:
                 row[key] = y_value * metric_factors[key]
         rows.append(row)
@@ -225,6 +221,8 @@ def _confirmed_rheology_sweep_sample(
             "output_unit": x_unit,
             "factor": x_factor,
             "method": x_method,
+            "source_header": headers[x_index], "source_column": x_index,
+            "source_unit_authority": x_authority,
         },
         metric_conversions=metric_conversions,
     )
@@ -232,23 +230,36 @@ def _confirmed_rheology_sweep_sample(
 
 def _read_confirmed_rheology_sweep_samples(
     source: Path,
-    column_confirmations: object,
+    column_confirmations: list[dict[str, Any]],
     *,
     x_label: str,
     default_x_unit: str,
     metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
 ) -> list[RheologySweepSample]:
-    confirmations = _confirmed_column_items(column_confirmations)
+    confirmations = [item for item in column_confirmations if has_column_intent(item)]
     if not confirmations:
         return []
     samples: list[RheologySweepSample] = []
     errors: list[str] = []
-    matched_confirmation_ids: set[int] = set()
-    for candidate in _sweep_source_files(source):
-        confirmation = _matching_column_confirmation(candidate, column_confirmations)
-        if confirmation is None:
-            continue
-        matched_confirmation_ids.add(id(confirmation))
+    candidates = _sweep_source_files(source)
+    assignments: dict[Path, dict[str, Any]] = {}
+    for confirmation in confirmations:
+        locator = confirmation.get("source_path")
+        if not isinstance(locator, str) or not Path(locator).is_absolute():
+            raise ValueError("Confirmed rheology history requires its exact recorded source path; reconfirm the source.")
+        matches = [candidate for candidate in candidates
+                   if literal_source_path(candidate) == literal_source_path(Path(locator))]
+        if len(matches) != 1:
+            raise ValueError("A confirmation does not identify one exact selected source; reconfirm ambiguous history.")
+        candidate = matches[0]
+        if candidate in assignments:
+            raise ValueError("Duplicate or conflicting confirmations for one source.")
+        if confirmation.get("source_sha256") and file_sha256(candidate) != confirmation["source_sha256"]:
+            raise ValueError("The confirmed rheology source version changed; reconfirm the current bytes.")
+        assignments[candidate] = confirmation
+    if set(assignments) != set(candidates):
+        raise ValueError("Explicit rheology columns must cover every selected source; silent partial datasets are not allowed.")
+    for candidate, confirmation in assignments.items():
         try:
             samples.append(
                 _confirmed_rheology_sweep_sample(
@@ -261,14 +272,6 @@ def _read_confirmed_rheology_sweep_samples(
             )
         except (OSError, ValueError) as exc:
             errors.append(f"{candidate.name}: {exc}")
-    for confirmation in confirmations:
-        if id(confirmation) in matched_confirmation_ids:
-            continue
-        names = sorted(_confirmation_names(confirmation))
-        errors.append(
-            "unmatched confirmation "
-            + (f"for {', '.join(names)}" if names else "without a source name")
-        )
     if errors:
         raise ValueError(
             "Confirmed rheology sweep preparation rejected one or more "
@@ -280,3 +283,30 @@ def _read_confirmed_rheology_sweep_samples(
             "Confirmed rheology sweep preparation found no confirmed samples."
         )
     return sorted(samples, key=_sweep_sample_order_key)
+
+
+def check_confirmed_rheology_bytes(name: str, content: bytes, confirmation: dict[str, Any], *, rule_id: str) -> None:
+    """Check executable choice on captured bytes before allocating a project."""
+    frequency = get_rule(rule_id).scientific_source_adapter == "rheology_frequency"
+    with TemporaryDirectory(prefix="sciplot-intake-confirmation-") as directory:
+        path = Path(directory) / safe_filename(name)
+        path.write_bytes(content)
+        _confirmed_rheology_sweep_sample(path, confirmation,
+            x_label="Angular Frequency" if frequency else "Temperature",
+            default_x_unit="rad/s" if frequency else "°C",
+            metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS if frequency else _RHEOLOGY_SWEEP_METRICS)
+
+
+def read_rheology_sweep_samples(
+    source: Path, column_confirmations: object,
+    automatic_reader: Callable[[Path], list[RheologySweepSample]], *,
+    rule_id: str,
+    x_label: str, default_x_unit: str,
+    metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
+) -> list[RheologySweepSample]:
+    """Explicit scientific intent wins; auto preview evidence never overrides it."""
+    confirmations = require_supported_confirmations(get_rule(rule_id), column_confirmations)
+    if any(has_column_intent(item) for item in confirmations):
+        return _read_confirmed_rheology_sweep_samples(source, confirmations, x_label=x_label,
+            default_x_unit=default_x_unit, metrics=metrics)
+    return automatic_reader(source)

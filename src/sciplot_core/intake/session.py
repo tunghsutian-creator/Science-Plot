@@ -19,7 +19,9 @@ from sciplot_core.semantic import (
 from sciplot_core.request_contract import normalize_exports, normalize_render_options
 
 from .catalog import _catalog_item, _catalog_item_for_rule
-from .config import _COLUMN_ROLES, _COLUMN_TYPES, _DEFAULT_OUTPUT_ROOT, _REPLICATE_MODES
+from .config import _DEFAULT_OUTPUT_ROOT, _REPLICATE_MODES
+from sciplot_core.semantic_sources.confirmation_contract import normalize_column_confirmations
+
 from .table_preview import (
     _duplicate_source_warnings,
     _file_payload,
@@ -28,6 +30,8 @@ from .table_preview import (
     _tensile_export_dirs,
     _torque_files,
 )
+
+_selected_column_confirmations = normalize_column_confirmations
 
 
 def _group_payload(sample: str, files: list[Path]) -> dict[str, Any]:
@@ -254,56 +258,6 @@ def _experiment_template(experiment: dict[str, Any]) -> str | None:
 def _experiment_render_options(experiment: dict[str, Any]) -> dict[str, Any]:
     options = experiment.get("render_options")
     return dict(options) if isinstance(options, dict) else {}
-
-
-def _selected_column_confirmations(
-    column_confirmations: object,
-) -> list[dict[str, Any]]:
-    if not isinstance(column_confirmations, list | tuple):
-        return []
-    selected: list[dict[str, Any]] = []
-    for item in column_confirmations:
-        if not isinstance(item, dict):
-            continue
-        columns: list[dict[str, Any]] = []
-        for column in item.get("columns", []):
-            if not isinstance(column, dict):
-                continue
-            try:
-                column_index = int(column.get("index"))
-            except (TypeError, ValueError):
-                continue
-            confirmed_type = str(
-                column.get("confirmed_type") or column.get("type") or "auto"
-            ).strip()
-            role = str(column.get("role") or "auto").strip()
-            columns.append(
-                {
-                    "index": column_index,
-                    "name": str(column.get("name") or f"Column {column_index + 1}"),
-                    "inferred_type": str(column.get("inferred_type") or "auto"),
-                    "confirmed_type": confirmed_type
-                    if confirmed_type in _COLUMN_TYPES
-                    else "auto",
-                    "role": role if role in _COLUMN_ROLES else "auto",
-                }
-            )
-        if not columns and item.get("sheet_selected") is not True:
-            continue
-        selected.append(
-            {
-                "sample": str(item.get("sample") or ""),
-                "file_name": str(item.get("file_name") or item.get("name") or ""),
-                "source_path": str(item.get("source_path") or ""),
-                "sheet": str(item.get("sheet") or "") or None,
-                **({
-                    "sheet_selected": True,
-                    "source_sha256": str(item.get("source_sha256") or ""),
-                } if item.get("sheet_selected") is True else {}),
-                "columns": columns,
-            }
-        )
-    return selected
 
 
 def _selected_replicate_mode(replicate_mode: object) -> str:

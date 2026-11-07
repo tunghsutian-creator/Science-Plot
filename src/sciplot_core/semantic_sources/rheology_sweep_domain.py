@@ -18,9 +18,9 @@ from sciplot_core.semantic_sources.models import (
     _RHEOLOGY_SWEEP_METRICS,
 )
 from sciplot_core.semantic_sources.rheology_confirmation import (
-    _confirmed_column_items,
-    _read_confirmed_rheology_sweep_samples,
+    read_rheology_sweep_samples,
 )
+from sciplot_core.semantic_sources.confirmation_contract import request_column_confirmations
 from sciplot_core.semantic_sources.rheology_ordering import _ordered_sweep_samples
 from sciplot_core.semantic_sources.rheology_replicates import (
     _coalesce_replicate_sweep_samples,
@@ -116,26 +116,9 @@ def resolve_rheology_frequency_domain(
             "SciPlot could not fingerprint the rheology-frequency source.",
         )
     try:
-        try:
-            raw_samples = _read_rheology_frequency_comparison_samples(source)
-        except ValueError as automatic_error:
-            column_confirmations = request.get("column_confirmations")
-            if not _confirmed_column_items(column_confirmations):
-                raise
-            try:
-                raw_samples = _read_confirmed_rheology_sweep_samples(
-                    source,
-                    column_confirmations,
-                    x_label="Angular Frequency",
-                    default_x_unit="rad/s",
-                    metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
-                )
-            except ValueError as confirmed_error:
-                raise ValueError(
-                    "Rheology frequency preparation failed both automatic and "
-                    f"confirmed parsing (automatic: {automatic_error}; "
-                    f"confirmed: {confirmed_error})."
-                ) from confirmed_error
+        raw_samples = read_rheology_sweep_samples(source, request_column_confirmations(request),
+            _read_rheology_frequency_comparison_samples, rule_id=FREQUENCY_RULE_ID, x_label="Angular Frequency",
+            default_x_unit="rad/s", metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS)
     except (OSError, ValueError) as exc:
         raise RheologySweepDomainError(
             "frequency_source_unavailable",
@@ -184,26 +167,8 @@ def _resolve_rheology_temperature_domain(
             "SciPlot could not fingerprint the rheology-temperature source.",
         )
     try:
-        try:
-            raw_samples = automatic_reader(source)
-        except ValueError as automatic_error:
-            column_confirmations = request.get("column_confirmations")
-            if not _confirmed_column_items(column_confirmations):
-                raise
-            try:
-                raw_samples = _read_confirmed_rheology_sweep_samples(
-                    source,
-                    column_confirmations,
-                    x_label="Temperature",
-                    default_x_unit="°C",
-                    metrics=_RHEOLOGY_SWEEP_METRICS,
-                )
-            except ValueError as confirmed_error:
-                raise ValueError(
-                    "Rheology temperature preparation failed both automatic "
-                    f"and confirmed parsing (automatic: {automatic_error}; "
-                    f"confirmed: {confirmed_error})."
-                ) from confirmed_error
+        raw_samples = read_rheology_sweep_samples(source, request_column_confirmations(request),
+            automatic_reader, rule_id=TEMPERATURE_RULE_ID, x_label="Temperature", default_x_unit="°C", metrics=_RHEOLOGY_SWEEP_METRICS)
     except (OSError, ValueError) as exc:
         raise RheologySweepDomainError(
             "temperature_source_unavailable",

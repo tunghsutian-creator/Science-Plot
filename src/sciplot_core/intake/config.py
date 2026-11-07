@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 from sciplot_core.policy import FIGURE_SIZE_PRESETS
+from sciplot_core.semantic_sources.confirmation_contract import COLUMN_ROLES, COLUMN_TYPES
+
+_COLUMN_ROLES = COLUMN_ROLES
+_COLUMN_TYPES = COLUMN_TYPES
 
 _DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
 
@@ -18,19 +22,6 @@ _PREVIEW_SCAN_ROWS = 80
 _PREVIEW_DISPLAY_ROWS = 24
 
 _PREVIEW_DISPLAY_COLUMNS = 24
-
-_COLUMN_ROLES = {"auto", "x", "y", "series", "sample", "unit", "metadata", "ignore"}
-
-_COLUMN_TYPES = {
-    "auto",
-    "numeric",
-    "text",
-    "categorical",
-    "datetime",
-    "unit",
-    "metadata",
-    "ignore",
-}
 
 _REPLICATE_MODES = {"mean", "representative", "individual"}
 

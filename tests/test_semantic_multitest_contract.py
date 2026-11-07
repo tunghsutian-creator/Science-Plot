@@ -122,7 +122,8 @@ def test_stress_relaxation_uses_internal_test_labels_and_deduplicates_exports(
             "_confirmed_rheology_sweep_sample",
             lambda source: rheology_confirmation._read_confirmed_rheology_sweep_samples(
                 source,
-                [{"file_name": "source.csv"}],
+                [{"file_name": "source.csv", "source_path": str(source / "source.csv"),
+                  "columns": [{"index": 0, "name": "x", "role": "x", "confirmed_type": "numeric"}]}],
                 x_label="Angular Frequency",
                 default_x_unit="rad/s",
                 metrics=(),

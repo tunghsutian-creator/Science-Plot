@@ -27,6 +27,7 @@ from sciplot_core.semantic_sources.models import (
 from sciplot_core.semantic_sources.numeric_separators import (
     selected_columns_use_decimal_comma,
 )
+from sciplot_core.semantic_sources.rheology_sweep_columns import FREQUENCY_X_ALIASES, TEMPERATURE_X_ALIASES
 
 from sciplot_core.semantic_sources.table_scanning import (
     _sample_from_interval_metadata,
@@ -124,7 +125,7 @@ def _frequency_result_sections(
     for position, (start, text, nominal_text, nominal) in enumerate(results):
         stop = results[position + 1][0] if position + 1 < len(results) else len(raw)
         block = raw.iloc[start:stop]
-        header_indexes = _find_rheology_sweep_headers(block, x_aliases=("angularfrequency", "frequency", "omega", "ω"), metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS)
+        header_indexes = _find_rheology_sweep_headers(block, x_aliases=FREQUENCY_X_ALIASES, metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS)
         if len(header_indexes) != 1:
             raise ValueError("Each temperature-labelled frequency Result must contain exactly one original interval.")
         header = header_indexes[0]
@@ -360,7 +361,7 @@ def _read_rheology_frequency_comparison_samples(
 ) -> list[RheologySweepSample]:
     return _read_rheology_sweep_comparison_samples(
         source,
-        x_aliases=("angularfrequency", "frequency", "omega", "ω"),
+        x_aliases=FREQUENCY_X_ALIASES,
         x_label="Angular Frequency",
         default_x_unit="rad/s",
         metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
@@ -375,7 +376,7 @@ def _read_rheology_temperature_comparison_samples(
 ) -> list[RheologySweepSample]:
     return _read_rheology_sweep_comparison_samples(
         source,
-        x_aliases=("temperature", "temp", "温度"),
+        x_aliases=TEMPERATURE_X_ALIASES,
         x_label="Temperature",
         default_x_unit="°C",
         interval_selection="last_numeric_interval",

@@ -5,9 +5,12 @@ from typing import Any
 from .config import _COLUMN_ROLES, _COLUMN_TYPES, _REPLICATE_MODES
 from sciplot_core.policy import SUPPORTED_EXPORT_FORMATS
 from sciplot_core.policy.render_options import RENDER_OPTION_KEYS
+from sciplot_core.materials_rules import get_rule
+from sciplot_core.semantic_sources.confirmation_contract import confirmation_capabilities
 
 
-def session_request_schema() -> dict[str, Any]:
+def session_request_schema(rule_id: str | None = None) -> dict[str, Any]:
+    choices = confirmation_capabilities(get_rule(rule_id)) if rule_id else None
     text = {"type": "string", "minLength": 1, "pattern": r"\S"}
     digest = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
     file = {"type": "object", "additionalProperties": False,
@@ -17,10 +20,10 @@ def session_request_schema() -> dict[str, Any]:
     column = {"type": "object", "additionalProperties": False,
               "properties": {"index": {"type": "integer", "minimum": 0}, "name": text,
                              "inferred_type": {"enum": sorted(_COLUMN_TYPES)},
-                             "confirmed_type": {"enum": sorted(_COLUMN_TYPES)},
-                             "role": {"enum": sorted(_COLUMN_ROLES)}},
+                             "confirmed_type": {"enum": choices["column_types"] if choices else sorted(_COLUMN_TYPES)},
+                             "role": {"enum": choices["column_roles"] if choices else sorted(_COLUMN_ROLES)}},
               "required": ["index", "name", "confirmed_type", "role"]}
-    confirmation = {"type": "object", "additionalProperties": False,
+    confirmation: dict[str, Any] = {"type": "object", "additionalProperties": False,
                     "properties": {"sample": text, "file_name": text, "source_path": text,
                                    "sheet": {"type": ["string", "null"]},
                                    "sheet_selected": {"type": "boolean"}, "source_sha256": digest,
@@ -30,6 +33,9 @@ def session_request_schema() -> dict[str, Any]:
                     "then": {"properties": {"sheet": text}, "required": ["sheet"]},
                     "allOf": [{"if": {"properties": {"sheet": {"type": "string"}}, "required": ["sheet"]},
                                "then": {"properties": {"sheet_selected": {"const": True}}, "required": ["sheet_selected"]}}]}
+    if choices and not choices["worksheet"]:
+        confirmation["properties"]["sheet"] = {"type": "null"}
+        confirmation["properties"]["sheet_selected"] = {"const": False}
     return {"type": "object", "additionalProperties": False,
             "properties": {
                 "project_name": text, "data_type_id": text, "experiment_type_id": text,

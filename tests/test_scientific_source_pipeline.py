@@ -662,7 +662,7 @@ def test_rheology_temperature_snapshot_drives_plan_and_prepare_without_reparse(
     )
     monkeypatch.setattr(
         preparation,
-        "_read_confirmed_rheology_sweep_samples",
+        "read_rheology_sweep_samples",
         no_reparse,
     )
     monkeypatch.setattr(
@@ -752,7 +752,7 @@ def test_rheology_frequency_snapshot_drives_plan_and_prepare_without_reparse(
     )
     monkeypatch.setattr(
         preparation,
-        "_read_confirmed_rheology_sweep_samples",
+        "read_rheology_sweep_samples",
         no_reparse,
     )
     monkeypatch.setattr(

@@ -11,12 +11,13 @@ from typing import Any
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import reserve_unique_directory, slug
+from sciplot_core.launchers import inspect_project_export_command
 from sciplot_core.figure_plan import sync_figure_plan_projection
 from sciplot_core.materials_rules import (
     get_rule,
-    resolve_rule_template,
     semantic_payload_from_rule,
 )
+from sciplot_core.materials_rules.catalog import resolve_rule_template
 from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
 from sciplot_core.publication import (
     build_publication_intent,
@@ -30,22 +31,21 @@ from ..catalog import _catalog_item, converge_material_review_notes
 from ..config import _DEFAULT_OUTPUT_ROOT
 from ..models import IntakeGroupInput
 from ..packaging import (
-    _apply_launcher_contract_to_manifest,
+    _apply_export_command_to_manifest,
     _read_json_if_exists,
     _write_zip,
-    converge_intake_project_launchers,
 )
 from ..session import (
     _experiment_render_options,
     _experiment_template,
     _resolve_plot_output,
-    _selected_column_confirmations,
     _selected_exports,
     _selected_render_options,
     _selected_replicate_mode,
 )
 from ..table_preview import _duplicate_source_warnings
 from .source_materialization import materialize_intake_groups
+from sciplot_core.semantic_sources.confirmation_contract import bind_materialized_confirmations, require_supported_confirmations
 
 
 def create_intake_project(
@@ -67,6 +67,8 @@ def create_intake_project(
     studio_preparer: Callable[[Path], dict[str, Any]],
 ) -> dict[str, Any]:
     _, experiment = _catalog_item(data_type_id, experiment_type_id)
+    if experiment.get("rule_id"):
+        column_confirmations = require_supported_confirmations(get_rule(experiment["rule_id"]), column_confirmations)
     cleaned_groups = [group for group in groups if group.sample.strip() and group.files]
     if not cleaned_groups:
         raise ValueError("At least one named sample group with files is required.")
@@ -185,9 +187,10 @@ def _create_intake_project_in_reserved_directory(
     contract_template = selected_template
     if contract_template is None and isinstance(experiment.get("chart"), str):
         contract_template = str(experiment.get("chart") or "").strip() or None
+    semantic_options = recognition_payload.get("render_options")
     semantic_render_options = (
-        dict(recognition_payload.get("render_options"))
-        if isinstance(recognition_payload.get("render_options"), dict)
+        dict(semantic_options)
+        if isinstance(semantic_options, dict)
         else {}
     )
     explicit_user_render_options = _selected_render_options(
@@ -204,18 +207,20 @@ def _create_intake_project_in_reserved_directory(
         **semantic_render_options,
         **selected_user_render_options,
     }
+    axis_value = recognition_payload.get("axis_plan")
     axis_plan = (
-        recognition_payload.get("axis_plan")
-        if isinstance(recognition_payload.get("axis_plan"), dict)
+        axis_value
+        if isinstance(axis_value, dict)
         else {}
     )
     for axis_name, option_name in (
         ("x", "x_label_override"),
         ("y", "y_label_override"),
     ):
+        axis_item = axis_plan.get(axis_name)
         axis_payload = (
-            axis_plan.get(axis_name)
-            if isinstance(axis_plan.get(axis_name), dict)
+            axis_item
+            if isinstance(axis_item, dict)
             else {}
         )
         display_label = axis_payload.get("display_label")
@@ -229,13 +234,15 @@ def _create_intake_project_in_reserved_directory(
         if isinstance(render_series_order, list | tuple)
         else []
     )
-    selected_column_confirmations = _selected_column_confirmations(column_confirmations)
+    selected_column_confirmations = bind_materialized_confirmations(column_confirmations, manifest_groups)
+    if effective_rule_id:
+        selected_column_confirmations = require_supported_confirmations(get_rule(effective_rule_id), selected_column_confirmations)
     selected_replicate_mode = _selected_replicate_mode(
         replicate_mode
         if replicate_mode is not None
         else experiment.get("default_replicate_mode")
     )
-    plot_request = {
+    plot_request: dict[str, Any] = {
         "recipe": "auto",
         "input": str(source_dir),
         "output": str(selected_output),
@@ -367,14 +374,7 @@ def _create_intake_project_in_reserved_directory(
                 manifest["journal_profile"] = get_publication_profile(
                     intent["target_profile_id"]
                 )
-    launcher_contract = converge_intake_project_launchers(
-        project_dir,
-        update_manifests=False,
-    )
-    _apply_launcher_contract_to_manifest(
-        manifest,
-        contract=launcher_contract,
-    )
+    _apply_export_command_to_manifest(manifest, command=inspect_project_export_command(project_dir))
     commit_intake_project_manifest(
         project_dir,
         manifest,
