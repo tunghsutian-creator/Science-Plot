@@ -109,6 +109,9 @@ ZERO_SD_STRICT_ADDITIONS = frozenset(
 )
 SOURCE_FACT_STRICT_ADDITIONS = frozenset(
     {
+        "src/sciplot_core/semantic_sources/confirmation_contract.py",
+        "src/sciplot_core/semantic_sources/rheology_confirmation.py",
+        "src/sciplot_core/semantic_sources/rheology_sweep_columns.py",
         "src/sciplot_core/data_mapping/plan_binding.py",
         "src/sciplot_core/data_mapping/original_tables.py",
         "src/sciplot_core/materials_rules/catalog.py",
@@ -368,6 +371,11 @@ SOURCE_ARTIFACT_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/assistant_history/validation.py",
         "src/sciplot_core/assistant_history/values.py",
         "src/sciplot_core/intake/session_adapter.py",
+        "src/sciplot_core/intake/config.py",
+        "src/sciplot_core/intake/models.py",
+        "src/sciplot_core/intake/project/project_builder.py",
+        "src/sciplot_core/intake/project/source_materialization.py",
+        "src/sciplot_core/intake/session.py",
         "src/sciplot_core/intake/session_contract.py",
         "src/sciplot_core/intake/project/session_project.py",
         "src/sciplot_core/intake/application.py",

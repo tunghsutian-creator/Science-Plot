@@ -88,7 +88,6 @@ NATIVE_SERIES_REVISION_OWNER = ChangedOwner(
         "tests/test_studio_figure_task_chain.py::test_spec_task_mismatch_rolls_back_document_spec_and_registry",
         "tests/test_architecture_boundaries.py::test_studio_entry_modules_import_in_fresh_interpreters",
         "tests/test_architecture_boundaries.py::test_core_business_and_data_layers_do_not_depend_on_the_gui_layer",
-        "tests/test_architecture_boundaries.py::test_gui_uses_the_public_studio_api_not_studio_core_implementation",
         *ARCHITECTURE_CORE_TARGETS,
         "tests/test_gui_source_currentness.py", "tests/test_gui_mapping_source_currentness.py",
         "tests/test_task_mapping_review.py",

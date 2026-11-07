@@ -208,6 +208,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/semantic_sources/paired_curve_table_metadata.py",
                 "src/sciplot_core/semantic_sources/registered_paired_curve_contract.py",
                 "src/sciplot_core/semantic_sources/rheology_confirmation.py",
+                "src/sciplot_core/semantic_sources/confirmation_contract.py",
                 "src/sciplot_core/semantic_sources/rheology_frequency_metrics.py",
                 "src/sciplot_core/semantic_sources/rheology_units.py",
                 "src/sciplot_core/semantic_sources/rheology_interval.py",
@@ -273,6 +274,7 @@ CHANGED_OWNERS = (
                 "tests/test_saxs_source_contract.py",
                 "tests/test_scientific_review.py",
                 "tests/test_scientific_source_pipeline.py",
+                "tests/test_intake_confirmation_semantics.py",
                 "tests/test_scientific_transform_contract.py",
                 "tests/test_semantic_multitest_contract.py",
                 "tests/test_instrument_source_regions.py",
@@ -303,6 +305,7 @@ CHANGED_OWNERS = (
             "tests/test_saxs_source_contract.py",
             "tests/test_scientific_review.py",
             "tests/test_scientific_source_pipeline.py",
+            "tests/test_intake_confirmation_semantics.py",
             "tests/test_dma_named_recipe_plan_binding.py::test_dma_named_recipe_preflight_binds_the_exact_plan",
             "tests/test_scientific_transform_contract.py",
             "tests/test_semantic_multitest_contract.py",
@@ -338,6 +341,8 @@ CHANGED_OWNERS = (
         owned_test_paths=frozenset(
             {
                 "tests/test_intake_session_adapter.py",
+                "tests/test_intake_confirmation_semantics.py",
+                "tests/test_project_headless_export_command.py",
                 "tests/test_intake_session_native.py",
                 "tests/test_intake_path_safety.py",
                 "tests/test_intake_atomic_packaging.py",
@@ -349,6 +354,8 @@ CHANGED_OWNERS = (
         ),
         pytest_targets=(
             "tests/test_intake_session_adapter.py",
+            "tests/test_intake_confirmation_semantics.py",
+            "tests/test_project_headless_export_command.py",
             "tests/test_intake_session_native.py",
             "tests/test_intake_path_safety.py",
             "tests/test_intake_atomic_packaging.py",

@@ -271,7 +271,7 @@ def _finalize_request_manifest(
     )
     if staged_delivery is None:
         manifest["delivery_package"] = build_delivery_package(output_dir, manifest=manifest,
-            **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}))
+            previous_delivery=previous_delivery)
     else:
         from sciplot_core.delivery.package_builder import _build_staged_delivery
 
@@ -280,7 +280,7 @@ def _finalize_request_manifest(
             raise ValueError("A project delivery must be prepared outside its active destination.")
         manifest["delivery_package"] = _build_staged_delivery(
             output_dir, manifest=manifest, delivery_dir=private, final_root=destination,
-            **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}))
+            previous_delivery=previous_delivery)
     manifest["one_step"] = build_one_step_project(
         input_path=input_path,
         request_path=request_path,
