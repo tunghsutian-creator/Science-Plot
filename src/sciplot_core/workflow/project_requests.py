@@ -133,9 +133,9 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         manifest = project_workflow_result(manifest, candidate.logical_path)
         (private_output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         candidate.finalize()
+        # Capture is already a delta, including actual missing members as None.
+        # Resetting the whole delivery would delete unchanged, omitted members.
         writes: dict[str, bytes | PreparedFile | None] = dict(candidate.capture())
-        if delivery_complete:
-            writes = {**{name: None for name in baseline["files"] if name.startswith(delivery_name + "/")}, **writes}
         updated = read_intake_project_manifest(candidate.project_dir)
         if updated is not None:
             updated = _project_manifest_after_run(updated, manifest)
