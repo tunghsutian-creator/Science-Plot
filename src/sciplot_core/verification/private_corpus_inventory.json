@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 9987,
-    "nodeids_sha256": "f837eadf6346936b1db2a78d34d62d352430c48d80bd0da7aabd173394dc9553",
-    "test_sources_sha256": "9241f25320dba464d492c448a6886e4cd5076f98114fb707681a8632c92ee2ee",
+    "nodeid_count": 9989,
+    "nodeids_sha256": "4c0f3d7b488c78b89b65a0cc6601150cf5484f4de50894cf4b0664cd316e6a27",
+    "test_sources_sha256": "6c4fea6e9bafdd22dffc5739124cc32831375b144224ad7e54a7ba34dbf7860c",
     "test_source_count": 654,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
@@ -5414,7 +5414,9 @@
       "tests/test_zero_sd_bar_outline.py::test_bar_outline_contract_is_independent_of_error_segment_eligibility[zero-bar_error]",
       "tests/test_zero_sd_bar_outline.py::test_bar_outline_contract_is_independent_of_error_segment_eligibility[zero-grouped_bar_error]",
       "tests/test_zero_sd_bar_outline.py::test_public_zero_sd_grouped_bar_preserves_replicates_and_passes_create_and_cold_export[mean_sample_sd]",
-      "tests/test_zero_sd_bar_outline.py::test_public_zero_sd_grouped_bar_preserves_replicates_and_passes_create_and_cold_export[mean_sample_sd_n]"
+      "tests/test_zero_sd_bar_outline.py::test_public_zero_sd_grouped_bar_preserves_replicates_and_passes_create_and_cold_export[mean_sample_sd_n]",
+      "tests/test_private_audit_runtime.py::test_capture_bootstrap_does_not_preload_historical_business_owners",
+      "tests/test_private_audit_runtime.py::test_first_actual_socket_connect_keeps_peer_facts_and_business_result"
     ],
     "synthetic_candidates": [
       {
@@ -26368,9 +26370,17 @@
       {
         "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/policy/export_formats.py]",
         "reason": "The existing parameterized changed-plan control receives the new source-controlled metadata-only export_formats.py path. It constructs the exact owner/strict-mypy plan and asserts one configured type gate; it executes no selected test, renderer or scientific data."
+      },
+      {
+        "nodeid": "tests/test_private_audit_runtime.py::test_capture_bootstrap_does_not_preload_historical_business_owners",
+        "reason": "actual fresh source-owned capture bootstrap; generated temp directory; inspects only imported module locations and public frozen code manifest, no scientific raw input"
+      },
+      {
+        "nodeid": "tests/test_private_audit_runtime.py::test_first_actual_socket_connect_keeps_peer_facts_and_business_result",
+        "reason": "actual fresh source-owned bootstrap and two owned local AF_UNIX exchanges in generated /tmp directory; first real kernel peer, then injected EACCES; no native plot/server or raw data"
       }
     ],
-    "review_method": "2026-11-07 integrated AI-only migration, actual unfiltered zero-body INTEGRATION_COLLECTION_06 SHA 6756a66da587f2c0dd6d8a278da302f66a28d47c3e81cc98efa53f2d23970009;9987 nodes (9492 focused/495 comprehensive), stable source before/after and exit0. Previous collection05 qualifications retain the reviewed353 added public and246 retired UI responsibilities. This bounded delta independently qualifies55 new public IDs and34 exact old-to-new responsibility renames, including7 frozen597 closure refusal controls,12 generated curation controls (one authored true-native comprehensive body, not yet run), one pure retained24-pin/five-format contract, the existing strict-owner new-source parameter and34 retained AI/type/immutable-command plan controls. See INPUT_SCOPE_DELTA_B7_REVIEW_01, CURATION_SCOPE_DELTA_REVIEW_01, CI_TEST_CONTRACT_ALIGNMENT_20261108_01, EXPORT_POLICY_SOURCE_CLOSURE_REVIEW_01 and INTEGRATION_NODE_QUALIFICATION_DELTA_04. Historical597 original manifest/7 owners/backend slice remain original;26 helpers plus2 import-only ABI blobs are tracked source-code evidence, not measured or native-golden inputs. The28 source blobs are independently matched to original Git597; live guards are not historical algorithm exemptions. All165 private case objects/210 dependencies/23 directory-metadata entries and all111 original failure responsibilities/baseline digest remain unchanged. Retained local ignored baseline capture Python support remains in the full test/helper fingerprint; current bytes do not authenticate historical production. Actual8 cheap source contracts now include the existing pinned-rendering closure before long CI profiles. This is static source/collection qualification only: inventory_complete=false, with no full,native,science,capture/access or CI PASS claim. Earlier versions and failed original110/CI272F18E remain unchanged.",
+    "review_method": "2026-11-07 AI-only integrated static qualification: actual unfiltered INTEGRATION_COLLECTION_07 (SHA1d0d7d39069326188567c7dc0dfedd652d1f5ff82eb53e9f286c1e3e59d31d5c),9989 nodes/9494focused/495comprehensive,0bodies,exit0,2026 source before=after. Retain all prior353 added-public/246 retired-UI qualifications and the collection06 bounded55 qualifications/34 one-to-one lineage records (INTEGRATION_NODE_QUALIFICATION_DELTA_04 and independent review). This delta adds exactly2 generated public-focused fresh capture-bootstrap/owned AF_UNIX kernel-peer and EACCES controls, with no removed or retiered ID; see HISTORICAL_CAPTURE_STARTUP_IMPLEMENTATION_01 and INTEGRATION_NODE_QUALIFICATION_DELTA_05_INDEPENDENT_REVIEW_01. Existing curation native test keeps its scientific assertions and reads the exact returned full manifest, compares Store same-generation bytes and adds summary/export/native/copy checks; its changed source and the new observer control source are in current654-helper fingerprint. All165private case objects/210dependencies/23directory roles/111failure responsibilities and baseline digest remain unchanged. Original597 manifest/owners/backend/helper source closure and current guards are preserved;24 rendering pins/22 retained scientific transform files remain exact. Retained ignored baseline Python support remains in the test/helper fingerprint; present hashes do not authenticate historical production. OriginalD2 126P5F/exit1 is preserved; bounded matched-capture4P/COMPLETE/realwait0 and generated-native1P6.35s repair evidence are not full/scientific/access acceptance. Static qualification only; inventory_complete=false. Final same-source capture, strict access, full and CI are separate gates.",
     "scope": [
       "real_world",
       "polymer_corpus",

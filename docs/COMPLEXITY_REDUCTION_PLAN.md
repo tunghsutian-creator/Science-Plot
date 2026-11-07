@@ -43,6 +43,18 @@ before native builds and long profiles. Historical writer tests also retain the
 original client's finite helper and import-ABI closure; current permission and
 input guards remain live. Neither arrangement is a second production executor.
 
+The generated Torque lifecycle has now executed with one actual native
+preparation: full selected arrays, scientific QA, same-generation Store facts and
+exact PDF/TIFF delivery copies passed. Its bounded run summary is deliberately
+not the full manifest; consumers use the returned manifest path for full facts.
+The private capture bootstrap also defers protocol imports until an actual
+connection, avoiding premature loading of a historical business owner. A fresh
+bootstrap and real owned-socket peer/EACCES counterexample cover that boundary;
+the original pending-writer four states passed in the matching capture mode.
+These are component proofs. The failed integrated 131-item run is retained, and
+the new frozen batch still requires its own combined capture, strict access,
+unfiltered suite and CI evidence.
+
 ## Product boundary and target
 
 Users request creation and changes through an AI conversation. Existing CLI/MCP
