@@ -251,17 +251,20 @@ lineage remain in the hidden runtime workspace.
 - `project`: external-AI creation from an expected plan, saved-project inspection,
   native preview/edit and durable operation queries. Creation alone prepares
   the source through the existing Studio lifecycle; queries and edits do not.
-- `edit`: default post-delivery human canvas over existing saved native figures;
-  live rendering, native history, figure selection, saved edits and delivery updates.
-- `studio`: exact-current export and compatible native interactive command family.
+- `edit`: retired manual canvas command; returns `manual_editor_retired` before
+  target IO. Continue through the current AI task/document commands.
+- `studio`: headless preparation, JSON inspection and exact-current export.
+  Interactive window modes return `native_gui_retired`.
 - `autoplot`: compatible one-time raw-path/QA/delivery route using the same
   renderer. Its run-only project layout is not a canonical Studio project and
   must not be advertised as directly resumable by `project inspect/edit`.
 - `run`: replay a confirmed `plot_request.json`.
-- `app`: optional first-time confirmation and read-only result review.
+- `app`: retired Intake browser command; returns `browser_intake_retired`.
+  Scientific confirmation uses the local `intake prepare/table/create` services.
 - `render` and `recipe`: low-level development/testing primitives.
-- `curate torque`: scientific selection and Studio preparation, not final
-  rendering or delivery.
+- `curate torque`: source-bound scientific selection JSON, plotting CSV and
+  headless project preparation, not final rendering or delivery. Plain output
+  names `selection_path`; it does not create or open a browser selection editor.
 - `readiness`, `cleanup`, `mapping`, and `publication`: maintenance or metadata
   commands, not plotting entrypoints.
 - `batch`, `smoke`, and `acceptance`: development evidence routes.
@@ -371,14 +374,15 @@ skill/scripts/sciplot curate torque INPUT \
   --out /原始数据所在目录/Torque_SciPlot \
   --json
 
-skill/scripts/sciplot app INPUT \
-  --out /原始数据所在目录/SOURCE_SciPlot
-
 skill/scripts/sciplot qa OUTDIR --strict-publication
 skill/scripts/sciplot batch INPUT_DIR --out .tmp_verify/batch --mode smoke
 ```
 
-These routes do not replace Studio as final editor and visual authority.
+Curation returns the source-bound selection JSON for the AI workflow; `--open`
+and the browser editor are retired. Existing saved selection files, including
+historical HTML references, remain readable without rewriting them. Continue
+through saved-project AI commands and headless exact-current export. The saved
+Legacy VSZ remains visual authority for native properties outside semantic coverage.
 
 ## Test tiers and verification
 

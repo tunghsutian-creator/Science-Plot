@@ -115,7 +115,6 @@ def _run_torque_acceptance(*, project_dir: Path, torque_dir: Path) -> dict[str, 
         torque_dir,
         output_root=project_dir / "_torque_curation_projects",
         project_name="3D PA torque acceptance",
-        open_review=False,
     )
     request_path = Path(str(curation["plot_request"]))
     manifest = run_request(request_path)
@@ -128,7 +127,6 @@ def _run_torque_acceptance(*, project_dir: Path, torque_dir: Path) -> dict[str, 
             "project_dir": curation.get("project_dir"),
             "selection_path": curation.get("selection_path"),
             "plot_data_path": curation.get("plot_data_path"),
-            "review_html": curation.get("review_html"),
         },
     }
 

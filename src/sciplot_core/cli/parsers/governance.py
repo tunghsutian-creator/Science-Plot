@@ -90,7 +90,7 @@ def register_governance_commands(subparsers: Any) -> None:
 
     curate_parser = subparsers.add_parser(
         "curate",
-        help="Prepare a reviewable scientific curation project for Studio; does not replace Studio export or delivery.",
+        help="Prepare source-bound scientific selection JSON and a saved project; export and delivery remain separate.",
     )
 
     curate_subparsers = curate_parser.add_subparsers(
@@ -113,10 +113,6 @@ def register_governance_commands(subparsers: Any) -> None:
 
     curate_torque_parser.add_argument(
         "--json", action="store_true", help="Emit machine-readable JSON."
-    )
-
-    curate_torque_parser.add_argument(
-        "--open", action="store_true", help="Open the review HTML after export."
     )
 
     rules_parser = subparsers.add_parser(

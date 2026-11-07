@@ -73,12 +73,11 @@ def dispatch_governance(args: Any, argv: list[str] | None) -> int | None:
                 args.input.expanduser(),
                 output_root=args.out.expanduser(),
                 project_name=args.name,
-                open_review=args.open,
             )
             if args.json:
                 _print_json(payload)
             else:
-                print(payload["review_html"])
+                print(payload["selection_path"])
             return 0
 
     if args.command == "rules":
