@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from sciplot_core._paths import REPO_ROOT, resolve_fixture_path
+from sciplot_core.delivery_identity import DELIVERY_IDENTITY
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.materials_rules import get_rule
 
@@ -52,12 +53,18 @@ def test_dsc_public_delivery_continues_project_and_copied_package_exports_indepe
     canonical = Path(first["document"])
     project = Path(first["project_dir"])
     original_hash = existing_file_sha256(canonical)
-    launcher = visible / "Open_in_Veusz.command"
+    identity = visible / DELIVERY_IDENTITY
+    package = first["studio_run"]["delivery_package"]
+    assert package["version"] == 7
+    assert package["identity"] == str(identity)
+    assert identity.is_file()
+    assert not (visible / "Open_in_Veusz.command").exists()
+    assert not (visible / "Open_in_SciPlot.command").exists()
 
-    opened, _ = _studio(str(launcher), "--prepare-only")
+    opened, _ = _studio(str(identity), "--prepare-only")
     assert Path(opened["document"]) == canonical
     assert Path(opened["project_dir"]) == project
-    second, _ = _studio(str(launcher), "--export", "pdf,tiff_300")
+    second, _ = _studio(str(identity), "--export", "pdf,tiff_300")
     assert second["studio_run"]["ready_to_use"] is True
     assert Path(second["document"]) == canonical
     assert existing_file_sha256(canonical) == original_hash
@@ -71,7 +78,7 @@ def test_dsc_public_delivery_continues_project_and_copied_package_exports_indepe
 
     copied = tmp_path / "Portable copy"
     shutil.copytree(visible, copied)
-    portable, stderr = _studio(str(copied / launcher.name), "--export", "pdf,tiff_300")
+    portable, stderr = _studio(str(copied / identity.name), "--export", "pdf,tiff_300")
     assert "portable Veusz copy" in stderr
     assert portable["mode"] == "vsz"
     assert "studio_run" not in portable
@@ -85,7 +92,7 @@ def test_dsc_public_delivery_continues_project_and_copied_package_exports_indepe
     } == original_delivery
     moved = tmp_path / "Moved portable copy"
     copied.rename(moved)
-    reopened, moved_stderr = _studio(str(moved / launcher.name), "--prepare-only")
+    reopened, moved_stderr = _studio(str(moved / identity.name), "--prepare-only")
     assert reopened["mode"] == "vsz"
     assert Path(reopened["document"]).is_relative_to(moved)
     assert "portable Veusz copy" in moved_stderr

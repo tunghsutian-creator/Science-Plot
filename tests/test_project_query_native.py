@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from sciplot_core._paths import REPO_ROOT
+from sciplot_core.delivery_identity import DELIVERY_IDENTITY
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.studio_core.project_query import (
     inspect_project,
@@ -54,7 +55,12 @@ def test_real_project_query_reopens_saved_native_objects_without_mutating_delive
     assert exported["studio_run"]["ready_to_use"] is True
     project = Path(exported["project_dir"])
     before = _inventory(tmp_path)
-    summary = inspect_project(visible / "Open_in_Veusz.command")
+    identity = visible / DELIVERY_IDENTITY
+    assert exported["studio_run"]["delivery_package"]["version"] == 7
+    assert exported["studio_run"]["delivery_package"]["identity"] == str(identity)
+    assert identity.is_file()
+    assert not (visible / "Open_in_Veusz.command").exists()
+    summary = inspect_project(identity)
     assert summary["project"] == str(project)
     assert summary["source"]["current"] is True
     assert summary["qa"]["current"] is True, summary["qa"]
