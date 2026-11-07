@@ -82,6 +82,9 @@ def test_doctor_prefers_external_tasks_and_retains_native_compatibility() -> Non
     assert routes["project_control"]["command"] == "project"
     assert routes["mcp_transport"]["command"] == "mcp"
     assert routes["mcp_transport"]["internal_model_required"] is False
+    assert "browser_confirmation" not in routes
+    assert routes["intake_confirmation"]["command"] == "intake"
+    assert routes["intake_confirmation"]["create"] == "sciplot intake create SESSION --json"
     assert "interactive_entrypoint" not in normal
     assert "native_editor_entrypoint" not in normal
     assert "interactive_family" not in routes

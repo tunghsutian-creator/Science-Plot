@@ -11,16 +11,23 @@ recovery boundaries remain. Managed bindings reuse captured content in the real
 pure compiler; public-stage admission shares one observation of independently
 checked environments and observes again on exit. A local byte-only PDF annotation
 reader exists, without a project binding or outbound AI route. These are completed
-components of the sequence below, not completion of all-family migration, remaining UI retirement or release acceptance.
+components of the sequence below, not completion of all-family migration or release acceptance.
 
-The next integrated slice removes the real XY preview duplicate: the admitted
+The integrated XY slice removes a real preview duplicate: the admitted
 preparation supplies the same IR after fresh post-persistence canonical/CAS/source
 checks; cold apply/export still reconstruct independently. One matched generated
 native lifecycle keeps science, IR and rendered TIFF bytes equal and reduces
 compilation calls from nine to eight. Its single wall-time pair is not a stable
 performance claim. React/browser sessions and assets are removed; CLI retirement,
 fresh/legacy delivery records and all production callers close that component.
-Assembly desktop, Qt product UI and intake retirement remain separate work below.
+Assembly desktop, Qt product UI, Intake HTTP/static application and their product
+status/draft/history writers are also retired in the isolated batch. Actual
+scientific confirmation moves through CLI/MCP into the existing preparation owner;
+no GUI status layer is copied into Core. Registered legacy artifacts remain
+read-only compatibility inputs. Complete supported export formats, source-bound
+column semantics and output-vs-source locator roles are being checked on real
+producer paths before freezing the combined acceptance. The standard PDF parser
+still does not implement project-bound annotation-to-AI editing.
 
 ## Product boundary and target
 

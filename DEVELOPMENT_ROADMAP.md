@@ -11,29 +11,26 @@ snapshot's acceptance.
 
 The current authorized work is the ordered
 [core complexity reduction](docs/COMPLEXITY_REDUCTION_PLAN.md): immutable command
-admission and complete patch caller migration first, then explicit XY execution,
-shared observations and saved-evidence facts. The product target is AI conversation
+admission and patch caller migration, explicit XY execution, shared observations
+and saved-evidence facts. Those components and the product UI retirement are
+implemented in the isolated batch; scientific column confirmation, output-location
+roles and the combined acceptance remain its current closure work. The product target is AI conversation
 through local tools, with a separate PDF reference copy; no manual graph-editing
-frontend is being built. Retire old manual UI, duplicate draft/history and their
-distribution constraints only with the complete dependency migration in that plan.
+frontend is being built. Retired manual UI and draft/history writers do not remain
+as alternate Core authority. Preserve their real scientific and file obligations.
 Preserve scientific, file, process, permission and recovery boundaries while
 retiring replaced internal paths. The independent
 SavedWork release is cancelled and retained, not a new accepted main baseline.
 
-## Delivered AI disclosure boundary
+## Retained AI disclosure boundary
 
-The native digest-cost batch was delivered at `7b243305`; its original local
-full/capture/access and candidate/main CI records remain external evidence.
-The delivered P2 slice is local code and offline simulation only:
-explicit visual/properties outbound context and factual optional provider usage
-through the existing Assistant request, transport, cancellation and history chain.
-Migrate every target caller and keep the old visual request/history readers.
-Preserve local PNG history and the separate path/revision/selection/expected-value
-admission; telemetry cannot authorize or veto a proposal. Do not send user data
-to a real provider, make paid calls, add fee estimates or expand DataMapping/P3.
-Development feedback uses affected offline contracts, complete static checks and
-the integrated caller/refusal controls. This local milestone is not a new release
-or whole-private-corpus certificate; merge/release gates retain their own scope.
+Pure provider request/disclosure/cancellation and factual optional usage contracts
+remain available to existing integrations. The product uses an external AI client;
+the native dock and its image/history writer are retired. Historical records have
+a strict read-only reader. Current document capabilities and expected revisions
+belong to local edit admission; telemetry cannot authorize or veto a proposal.
+Do not send user data to a real provider, make paid calls or add fee estimates.
+Historical component evidence does not certify this new integrated snapshot.
 
 ## Retained feedback and performance boundaries
 
@@ -177,7 +174,7 @@ deployment remain separate actions.
 ## Native backend and further cleanup
 
 VSZ/Veusz remains the active plotting backend. Ordinary users create, edit and
-export through the AI assistant and SciPlot canvas without manipulating VSZ.
+export through AI requests and local CLI/MCP commands without manipulating VSZ.
 LegacyPlot retains saved VSZ visual authority; ManagedPlot owns its semantic
 document and still compiles VSZ for native rendering. Replacing that backend
 would require a separately approved rendering, editing, scientific-QA, recovery
@@ -185,9 +182,10 @@ and existing-project migration contract. No replacement is planned by this clean
 
 Further retirement needs evidence about runtime imports, dynamic registration,
 public compatibility promises, packaging and persisted references. Preserve live
-archive/rollback behavior, GUI and Intake compatibility, executable worker
-entrypoints, safety refusals and historical rendering evidence. Source and
-packaged browser assets have distinct build, runtime and license obligations.
+archive/rollback behavior, old projects and scientific choices, executable worker
+entrypoints, safety refusals and historical rendering evidence. Product Qt,
+React/browser and manual assembly workbenches are retired; headless Qt/Veusz
+remains the native adapter. New and historical file responsibilities are distinct.
 
 ## Private scientific acceptance and complete access capture
 
@@ -547,12 +545,11 @@ the changed pytest subset. Do not add another full just to obtain a profile.
 
 Resume complete real ordinary plotting, TTS and panel-assembly tasks and the
 plotting/AI-communication/edit module-boundary review from stable main. The first
-bounded implementation centralizes assistant proposal admission in the existing
-capability owner, removing provider/GUI duplicates without a new command bus,
-renderer or durable state. Each provider's response must belong to its request's
-catalog before native work; live selection/revision/value checks and the external
-worker's narrower science-safe scope remain separate. Validate draft/no-op,
-custom-provider, stale/live native, cancellation, Undo and save/reopen/export paths.
+bounded implementation centralized provider proposal admission in its capability
+owner. The current AI-only target retires the GUI selection/status/draft/history
+orchestration; pure provider request/cancellation/usage and read-only old history
+remain. Validate document capabilities, revision/expected values, whole-command
+refusal, detached preview/decision and save/reopen/export on the Core path.
 Use changed-owner fast checks for development, then the unchanged complete
 merge/release requirements on the frozen batch. Remote CI for an isolated
 experiment does not hold all subsequent development hostage.

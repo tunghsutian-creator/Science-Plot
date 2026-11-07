@@ -227,10 +227,12 @@ def doctor_payload() -> dict[str, Any]:
                 "command": "run",
                 "role": "repeat an already confirmed plot_request.json",
             },
-            "browser_confirmation": {
-                "command": "app",
-                "role": "pre-render data confirmation and read-only result review",
-                "drawing_frontend": False,
+            "intake_confirmation": {
+                "command": "intake",
+                "role": "source-bound sample groups and table confirmation through local AI requests",
+                "prepare": "sciplot intake prepare SOURCE --out SESSIONS --json",
+                "table": "sciplot intake table SESSION --group GROUP --file FILE --json",
+                "create": "sciplot intake create SESSION --json",
             },
             "developer_primitives": ["render", "recipe"],
             "developer_validation_routes": [

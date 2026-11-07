@@ -44,8 +44,9 @@ standard annotation text and geometry, not a completed project/version binding
 or an automatic AI command. Flattened or unsupported marks may need visual
 inspection. No real provider transmission is authorized by a PDF or by this route.
 
-SciPlot-specific Qt, assembly and intake surfaces are being retired in separate
-complete dependency batches. Their remaining code is not the target architecture.
+SciPlot-specific Qt, manual assembly and Intake HTTP/browser surfaces are retired.
+CLI/MCP retain scientific confirmation and AI-driven assembly. Historical files
+and recovery refusals remain separate from current frontend capabilities.
 Headless Qt/Veusz rendering, font checks, old native readers and scientific QA stay.
 
 ## Source revisions, edits and related tasks
@@ -232,9 +233,12 @@ SOURCE_SciPlot/  # or a source-adjacent explicit --out
   figures/*.pdf
   figures/*_300dpi.tiff
   project/*.vsz
-  Open_in_SciPlot.command
-  Open_in_Veusz.command
+  SciPlot_delivery.json
 ```
+
+Explicit supported PNG/SVG exports appear beside those figures. Old registered
+launchers may remain as checked historical artifacts, not current editing routes.
+Managed native-snapshot packages retain their existing sealed-index contract.
 
 Raw snapshots, manifests, analysis tables, QA, provenance, and transform
 lineage remain in the hidden runtime workspace.

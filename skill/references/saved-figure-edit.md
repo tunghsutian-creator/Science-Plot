@@ -242,8 +242,8 @@ without a preview; follow its next step. Use `"export":false` only for intended
 successive saved edits, reuse each returned SHA, then export once at the end.
 
 At `review_exports_and_deliver`, view returned final TIFF `images`, require ready
-export and current source/QA/delivery evidence, and deliver PDF/TIFF/editable VSZ
-plus `next_step.manual_edit`. Visual review remains required. Success needs no
+export and current source/QA/delivery evidence, and deliver PDF/TIFF/editable VSZ.
+Continue changes through AI task/document commands. Visual review remains required. Success needs no
 further query, audit, export or script. Read command output directly; do not save
 and reopen receipts merely to build the next request. The task saves its own
 durable records; extra client report files are unnecessary for ordinary plotting.

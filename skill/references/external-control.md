@@ -103,7 +103,8 @@ skill/scripts/sciplot task resume TASK_DIRECTORY --response ACCEPT.json --json
 
 The default continuation applies and exports once, then returns fresh
 `current_project` evidence. At `next_step.action=review_exports_and_deliver`,
-view its final TIFF `images` and deliver PDF/TIFF/VSZ with `next_step.manual_edit`.
+view its final TIFF `images` and deliver PDF/TIFF/VSZ. Further changes use the
+same AI task/document commands and current version bindings.
 Require the returned current source/QA/delivery evidence and ready export result.
 Do not follow success with another project query, native audit, export, ad hoc
 data/hash script, or development test. The existing services own the scientific,
@@ -232,13 +233,12 @@ saved historical evidence is never substituted for it. A later source, document
 or delivery change requires another query. `task inspect` remains the entrypoint
 for a new session or an existing task.
 
-Completed current deliveries also return `next_step.manual_edit`: its argument
-list opens the same managed project in the local SciPlot canvas, and `launcher`
-is present when the visible package already contains `Open_in_SciPlot.command`.
-Include this entry at handoff so the user can adjust the figure without another
-AI turn. In the canvas, Save updates the managed VSZ; Save and update delivery
-also refreshes VSZ/PDF/TIFF through existing QA. A saved draft alone is not a new
-publication receipt. Older packages are not rewritten merely to add this entry.
+Continue requested changes through the current task/document capabilities and
+expected version. The manual SciPlot canvas and its launchers are retired.
+Historical registered files remain preserved; reading an older package does not
+rewrite it. Keep PDF review marks on a separate copy. Annotation parsing alone
+does not bind that copy to a current project or authorize an edit. A saved draft
+alone is not a new publication receipt.
 
 Task `start`, `resume` and `inspect` use the same compact response in CLI and MCP.
 Successful responses omit duplicate artifact inventories and healthy-check detail;

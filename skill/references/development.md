@@ -264,7 +264,8 @@ declared under `[tool.mypy]` in `pyproject.toml`.
 Its exact scope and strictness belong to `pyproject.toml`. The existing reviewed-additions
 partition contract also runs in the shared early source checks and type/config
 owner selection: each new configured file needs one reviewed category, preserving
-the 195-file residual. A clean mypy run checks types, not this ownership partition;
+every surviving baseline residual leaf; retired UI leaves are explicitly accounted
+for in the partition. A clean mypy run checks types, not this ownership partition;
 keep both existing contracts. CI feedback helpers belong to the existing reviewed
 CI additions group, and limited affected plans retain the same partition check. Full-risk CI runs the same
 shared source contracts after lint and before mypy/native/long public bodies,
@@ -276,18 +277,14 @@ unreachable-code error on the other target. Retain the runtime platform/ABI
 rejections and `warn_unreachable`; target selection never changes the host OS.
 Do not weaken checks or remove coverage to pass a gate.
 
-Selected-object assistant edits bind through the existing pure capability owner.
-Provider drafts resolve all advertised target/path pairs before no-op filtering;
-typed responses and GUI preparation share the same revision/expected-value
-admission. Keep model-specific JSON coercion in its provider, and current native
-values, selection, Undo, local history and save/export in their existing owners.
-The GUI's pending capability map is only a display projection, not edit authority.
-Version-2 contexts remain readable for non-proposal responses; a missing catalog
-cannot authorize edits. Invalid custom-provider proposals now fail at the runner's
-response boundary before reaching a ready GUI proposal. Cancellation retains its
-existing ordering; valid late replies become cancelled and carry no proposal.
-Do not apply the GUI's broader Inspector catalog to the external worker's narrower
-scientific-safe edit route.
+Provider drafts resolve their advertised target/path pairs before no-op filtering;
+the provider owns its model-specific JSON coercion. Pure request admission,
+disclosure, cancellation and factual usage contracts remain separate from local
+edit authorization. Valid late replies become cancelled and carry no proposal.
+Current document capabilities and expected revision/value belong to the Core
+command path. Historical native-assistant JSONL has a strict read-only reader;
+the Qt selection/draft/status/Undo/history-writer orchestration is retired.
+Do not recreate that state alongside the task/document command authority.
 
 Historical native goldens bind the actual Python binary, Qt and font identities.
 An upgraded Homebrew `opt` link can drift an existing venv. Restore the matching
@@ -605,5 +602,7 @@ Pytest collection imports test modules and may execute their collection hooks.
 For every non-trivial development turn, update `DEVELOPMENT_LOG.md` with the
 change, current state, next steps and verification before reporting.
 
-Retained GUI/editor/Intake compatibility is not permission to delete those
-surfaces or replace the external-AI product direction.
+Old project, native-file and registered-artifact compatibility does not require
+retaining retired GUI/browser writers. Migrate real scientific and recovery
+responsibilities to their Core owners, preserve historical bytes and refusal
+boundaries, then remove the replaced paths. The product remains external-AI driven.

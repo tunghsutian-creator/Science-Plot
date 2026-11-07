@@ -111,11 +111,11 @@ This is a recipe default, not a universal journal rule: published
 
 4. At `review_exports_and_deliver`, view returned TIFF images and hand off using
    fresh source/QA/delivery evidence, figure IDs and document hashes already in the
-   response. An unchanged result needs no extra query, preview or export. Include
-   `next_step.manual_edit`: the default human surface is `Open_in_SciPlot.command`.
-   Its canvas Save updates the managed VSZ; Save and update delivery also refreshes
-   VSZ/PDF/TIFF through existing QA. Veusz remains the advanced/portable fallback.
-   Opening an old delivery must not rewrite it; its next export adds the launcher.
+   response. An unchanged result needs no extra query, preview or export.
+   Continue changes through the current AI task/document commands. Existing
+   registered launchers are historical artifacts, not new editing entry points;
+   opening an old delivery must not rewrite it. Put PDF review marks on a
+   separate copy, preserving the delivered artifact and its QA binding.
 
 In a later session, query current state for the returned task/project once.
 `task find SOURCE --json` helps when only the original path is known; multiple
@@ -351,18 +351,17 @@ uncertain reply, `task resume TASK --retry --json` continues that frozen attempt
 and its export; it cannot replace committed science or create another figure.
 The task automatically packages its verified export through the existing
 Managed native-snapshot delivery owner. Final delivery includes plotted CSV,
-source copies, portable VSZ, PDF/TIFF, ZIP and the actual native launcher.
+source copies, portable VSZ, PDF/TIFF and ZIP with their current byte inventory.
 Hidden artifacts and final `--out` are distinct; an existing destination is never
 overwritten. The package request is frozen before publication. A packaging
 interruption resumes only that same delivery, never creation or scientific
 transforms. Only its complete current byte inventory can produce
 `review_exports_and_deliver`. View the
 returned TIFF and keep the original sources and `.sciplot_documents` authority.
-Managed saved edits use guarded task edit/plot patch; the ordinary browser canvas
-does not currently open a Managed document root. Its returned VSZ can be opened
-through the existing native `studio VSZ` route for advanced editing, preferably
-as an independent copy. An external native save does not replace Managed
-scientific authority; explicit reconciliation or semantic editing is required.
+Managed saved edits use guarded task edit/plot patch. The manual browser and
+SciPlot native workbenches are retired. External Veusz may open an independent
+portable VSZ copy; an external save does not replace Managed scientific authority.
+Explicit reconciliation or semantic editing is required.
 
 CLI `--intent`, `--request`, `--response` and `task table-region --query` take
 **JSON file paths**, never inline JSON text. MCP takes the corresponding JSON
