@@ -31,14 +31,29 @@ def _visible_command_choices() -> set[str]:
 
 
 def test_retired_user_commands_are_not_parseable() -> None:
-    retired = {"one-step", "quick", "prepare", "intake", "workbench"}
+    retired = {"one-step", "quick", "prepare", "workbench"}
     assert retired.isdisjoint(_command_choices())
+    # Intake now means the source-bound local request adapter, not an HTTP UI.
+    parser = cli._build_parser()
+    prepared = parser.parse_args(["intake", "prepare", "original.csv", "--out", "sessions", "--json"])
+    assert prepared.command == "intake" and prepared.intake_action == "prepare"
+    assert prepared.source == Path("original.csv") and prepared.out == Path("sessions")
+    table = parser.parse_args(["intake", "table", "session.json", "--group", "0", "--file", "1", "--json"])
+    assert table.intake_action == "table" and table.group == 0 and table.file == 1
+    created = parser.parse_args(["intake", "create", "session.json", "--json"])
+    assert created.intake_action == "create" and created.session == Path("session.json")
+    with pytest.raises(SystemExit):
+        parser.parse_args(["intake", "serve"])
 
 
 @pytest.mark.parametrize("option", ["--catalog", "--all", "--json"])
-def test_app_has_no_hidden_catalog_submode(option: str) -> None:
-    with pytest.raises(SystemExit):
-        cli._build_parser().parse_args(["app", option])
+def test_app_has_no_hidden_catalog_submode(option: str, capsys) -> None:
+    if option == "--json":
+        assert cli.main(["app", option]) != 0
+        assert json.loads(capsys.readouterr().out)["reason_code"] == "browser_intake_retired"
+    else:
+        with pytest.raises(SystemExit):
+            cli._build_parser().parse_args(["app", option])
 
 
 def test_help_exposes_one_studio_family_and_hides_internal_probes() -> None:
