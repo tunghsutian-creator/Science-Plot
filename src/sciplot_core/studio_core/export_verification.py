@@ -5,13 +5,13 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 from typing import Any
+from sciplot_core.policy.frame_export import export_suffix
 from sciplot_core.foundation.file_hashing import (
     existing_file_sha256,
 )
 
 from sciplot_core.studio_core.runtime import (
     _normalize_export_format,
-    _export_suffix,
 )
 
 
@@ -62,7 +62,7 @@ def _verify_exact_current_export_binding(
             raise RuntimeError(
                 f"Exact-current export reuses one artifact path: {artifact_path}"
             )
-        expected_suffix, _dpi = _export_suffix(normalized_format)
+        expected_suffix, _dpi = export_suffix(normalized_format)
         actual_hash = existing_file_sha256(artifact_path)
         actual_size = artifact_path.stat().st_size if artifact_path.is_file() else 0
         if (
@@ -112,12 +112,15 @@ def _verify_qa_artifact_hashes(
     for qa_key, normalized_format in (
         ("pdfs", "pdf"),
         ("tiffs", "tiff_300"),
+        ("pngs", "png_300"), ("pngs", "png_600"), ("svgs", "svg"),
     ):
         records = qa.get(qa_key)
         if normalized_format not in canonical_covered or not isinstance(records, list):
             continue
         for item in records:
             if not isinstance(item, dict):
+                continue
+            if qa_key == "pngs" and item.get("export_format") != normalized_format:
                 continue
             actual_records[
                 (

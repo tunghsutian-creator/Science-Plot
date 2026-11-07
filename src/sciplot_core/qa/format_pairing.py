@@ -13,7 +13,7 @@ def _normalized_export_format(value: object) -> str | None:
         normalized = canonical_export_format(value, allow_legacy=True)
     except ValueError:
         return None
-    return normalized if normalized in {"pdf", "tiff_300"} else None
+    return normalized
 
 
 def _required_export_formats(
@@ -24,9 +24,8 @@ def _required_export_formats(
 
     profile_formats = profile.get("required_formats")
     if not isinstance(profile_formats, list):
-        formats_block = (
-            profile.get("formats") if isinstance(profile.get("formats"), dict) else {}
-        )
+        formats_value = profile.get("formats")
+        formats_block = formats_value if isinstance(formats_value, dict) else {}
         profile_formats = formats_block.get("required")
     if isinstance(profile_formats, list):
         sources.append("publication_profile")

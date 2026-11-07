@@ -6,6 +6,7 @@ import json
 from importlib import import_module
 import subprocess
 import sys
+from sciplot_core.policy.frame_export import export_suffix
 from sciplot_core.native_process import active_worker, run_worker
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,6 @@ from sciplot_core.policy import (
 from sciplot_core.studio_core.runtime import (
     _ensure_veusz_on_path,
     _capture_process_stderr,
-    _export_suffix,
 )
 
 from sciplot_core.studio_core.launchers import (
@@ -156,7 +156,7 @@ def _export_studio_document(
                 interface = CommandInterface(doc)
                 export_dir.mkdir(parents=True, exist_ok=True)
                 for fmt in normalized_formats:
-                    suffix, dpi = _export_suffix(fmt)
+                    suffix, dpi = export_suffix(fmt)
                     output_path = export_dir / f"{document_path.stem}{suffix}"
                     temporary_path = export_dir / (
                         f".{document_path.stem}.{uuid4().hex}{suffix}"

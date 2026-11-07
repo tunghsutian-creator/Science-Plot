@@ -127,7 +127,7 @@ def build_studio_publication_evidence(
         _verify_qa_artifact_hashes(
             qa,
             exports=copied_exports,
-            covered_formats={"pdf", "tiff_300"},
+            covered_formats={str(item["format"]) for item in copied_exports},
         )
     semantic = _semantic_payload_with_exact_current_axes(
         sources.semantic,

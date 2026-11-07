@@ -25,7 +25,7 @@ from sciplot_core.qa.pdf_graphics import (  # noqa: F401
 from sciplot_core.qa.pdf_inspection import (  # noqa: F401
     _pdf_info,
 )
-from sciplot_core.qa.tiff_inspection import (  # noqa: F401
+from sciplot_core.qa.raster_inspection import (  # noqa: F401
     _tiff_info,
 )
 from sciplot_core.qa.audit_support import (  # noqa: F401

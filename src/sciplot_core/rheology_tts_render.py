@@ -129,7 +129,7 @@ def export_tts_documents(
 
 def _validate_export_batch(request: dict[str, Any]) -> list[tuple[Path, Path, dict[str, Any]]]:
     """Validate the transport and target set before any native side effects."""
-    from sciplot_core.studio_core.runtime import _export_suffix
+    from sciplot_core.policy.frame_export import export_suffix
 
     if set(request) != {"action", "documents"} or request["action"] != "export_batch":
         raise ValueError("Invalid native batch export request.")
@@ -157,7 +157,7 @@ def _validate_export_batch(request: dict[str, Any]) -> list[tuple[Path, Path, di
             raise ValueError("Batch export document paths and stems must be unique.")
         paths.add(path_key)
         stems.add(stem_key)
-        suffixes = [_export_suffix(fmt)[0] for fmt in ("pdf", "tiff_300", "png_300")]
+        suffixes = [export_suffix(fmt)[0] for fmt in ("pdf", "tiff_300", "png_300")]
         for suffix in [*suffixes, ".native-audit.json"]:
             target = out_base.parent / f"{out_base.name}{suffix}"
             target_key = str(target.resolve()).casefold()

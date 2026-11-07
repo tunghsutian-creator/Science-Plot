@@ -6,10 +6,10 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.policy.frame_export import export_suffix
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 
 from sciplot_core.studio_core.runtime import (
-    _export_suffix,
     _normalize_export_format,
 )
 
@@ -31,10 +31,10 @@ def copy_studio_run_exports(
         expected_hash = str(item.get("sha256") or "")
         figure_id = str(item.get("figure_id") or "").strip()
         if isinstance(figure_set_export_scope, dict) and figure_id:
-            export_suffix, _dpi = _export_suffix(
+            suffix, _dpi = export_suffix(
                 _normalize_export_format(str(item.get("format") or ""))
             )
-            destination = figures_dir / f"{figure_id}{export_suffix}"
+            destination = figures_dir / f"{figure_id}{suffix}"
         else:
             destination = figures_dir / source.name
         shutil.copy2(source, destination)

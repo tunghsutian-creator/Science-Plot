@@ -12,9 +12,10 @@ from sciplot_core.qa.artifacts import (
 )
 
 from sciplot_core.qa.format_pairing import _required_export_formats
+from sciplot_core.qa.additional_exports import additional_export_reports
 from sciplot_core.qa.pdf_inspection import _pdf_info
 
-from sciplot_core.qa.tiff_inspection import (
+from sciplot_core.qa.raster_inspection import (
     _tiff_info,
 )
 
@@ -79,9 +80,8 @@ def run_qa(
                     )
             golden_reports.append(golden)
     profile = resolve_publication_profile(publication_profile)
-    required_formats = (
-        _required_export_formats(output_dir, profile) if profile else None
-    )
+    required_formats = _required_export_formats(output_dir, profile or {})
+    additional = additional_export_reports(output_dir, pdf_reports, required=set(required_formats["formats"]))
     discovered_veusz_documents = _discover_veusz_documents(output_dir, veusz_documents)
     veusz_audit, veusz_audit_error = (
         _run_veusz_audit(discovered_veusz_documents) if profile else (None, None)
@@ -118,6 +118,10 @@ def run_qa(
         "goldens_skipped": skipped_goldens,
         "scientific_outcome_agnostic": True,
     }
+    for key, reports in additional.items():
+        if reports:
+            payload[key] = reports
+            payload[key[:-1] + "_count"] = len(reports)
     if publication is not None:
         if veusz_audit_error:
             publication["veusz_document_audit_error"] = veusz_audit_error

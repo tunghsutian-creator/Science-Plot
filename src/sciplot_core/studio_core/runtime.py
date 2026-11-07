@@ -122,18 +122,3 @@ def _split_formats(value: str) -> list[str]:
 
 def _normalize_export_format(fmt: str) -> str:
     return canonical_export_format(fmt)
-
-
-def _export_suffix(fmt: str) -> tuple[str, int | None]:
-    normalized = _normalize_export_format(fmt)
-    if normalized == "tiff_300":
-        return "_300dpi.tiff", 300
-    if normalized == "png_300":
-        return "_300dpi.png", 300
-    if normalized == "png_600":
-        return "_600dpi.png", 600
-    if normalized == "svg":
-        return ".svg", None
-    if normalized == "pdf":
-        return ".pdf", None
-    raise AssertionError(f"Unhandled normalized export format: {normalized}")

@@ -12,6 +12,7 @@ from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.delivery_identity import (
     inspect_delivery_identity, write_delivery_identity, make_delivery_binding,
 )
+from sciplot_core.policy.frame_export import CANONICAL_EXPORT_FORMATS, export_format_from_path
 from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.plot_data import build_plot_data_exports
 from sciplot_core.policy import (
@@ -104,9 +105,12 @@ def _build_staged_delivery(
             continue
         source = Path(figure_value).expanduser()
         suffix = source.suffix.casefold()
-        if not source.is_file() or suffix not in {".pdf", ".tif", ".tiff"}:
+        if not source.is_file() or suffix not in {".pdf", ".tif", ".tiff", ".png", ".svg"}:
             continue
-        target_dir = pdf_dir if suffix == ".pdf" else tiff_dir
+        export_format = export_format_from_path(source)
+        if export_format is None:
+            raise ValueError(f"Figure has a noncanonical native export filename: {source}")
+        target_dir = pdf_dir if suffix in {".pdf", ".png", ".svg"} else tiff_dir
         destination = target_dir / source.name
         shutil.copy2(source, destination)
         source_hash = existing_file_sha256(source)
@@ -116,8 +120,8 @@ def _build_staged_delivery(
                 "source": str(source),
                 "path": str(destination),
                 "relative_path": str(destination.relative_to(delivery_dir)),
-                "format": "pdf" if suffix == ".pdf" else "tiff",
-                "export_format": "pdf" if suffix == ".pdf" else "tiff_300",
+                "format": "tiff" if export_format == "tiff_300" else "png" if suffix == ".png" else export_format,
+                "export_format": export_format,
                 "figure_id": figure_ids_by_path.get(str(source.resolve())),
                 "source_sha256": source_hash,
                 "delivery_sha256": delivery_hash,
@@ -338,7 +342,7 @@ def _figure_ids_by_path(manifest: dict[str, Any]) -> dict[str, str]:
         values = {
             path: figure_id
             for path, figure_id in plan_source_figure_ids(plan).items()
-            if Path(path).suffix.casefold() in {".pdf", ".tif", ".tiff"}
+            if export_format_from_path(path) in CANONICAL_EXPORT_FORMATS
         }
     for item in result.get("exports", []):
         if not isinstance(item, dict):
@@ -346,7 +350,7 @@ def _figure_ids_by_path(manifest: dict[str, Any]) -> dict[str, str]:
         path_value = item.get("path")
         if not isinstance(path_value, str) or not path_value.strip():
             continue
-        if Path(path_value).suffix.casefold() not in {".pdf", ".tif", ".tiff"}:
+        if export_format_from_path(path_value) not in CANONICAL_EXPORT_FORMATS:
             continue
         figure_id = str(item.get("figure_id") or single_id or "").strip()
         if plan is not None and figure_id == "primary":

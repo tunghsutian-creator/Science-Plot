@@ -15,7 +15,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.studio_core.project_session import external_project_session
-from sciplot_core.studio_core.runtime import _export_suffix
+from sciplot_core.policy.frame_export import export_suffix
 from sciplot_core.studio_core.source_update_commit import reject_symlink_path
 
 from sciplot_core.rheology_tts_creation_bindings import _check_sources, _literal, _context
@@ -33,7 +33,7 @@ def _ordinary(path: Path, *, directory: bool = False) -> None:
 
 
 def _names(identifier: str) -> dict[str, str]:
-    return {fmt: identifier + _export_suffix(fmt)[0] for fmt in _FORMATS} | {
+    return {fmt: identifier + export_suffix(fmt)[0] for fmt in _FORMATS} | {
         "audit": f"{identifier}.native-audit.json"}
 
 
@@ -90,7 +90,7 @@ def _inventory(out: Path, identifiers: list[str]) -> None:
                     allowed = (_names(identifier).values() if directory.name == "exports"
                                else {"veusz_export_stderr.log"})
                     for artifact in directory.iterdir():
-                        suffixes = "|".join(re.escape(_export_suffix(fmt)[0]) for fmt in _FORMATS)
+                        suffixes = "|".join(re.escape(export_suffix(fmt)[0]) for fmt in _FORMATS)
                         partial = (directory.name == "exports" and stage.name != state.get("sealed_attempt")
                                    and re.fullmatch(rf"\.{identifier}\.[0-9a-f]{{32}}({suffixes})", artifact.name))
                         if artifact.name not in allowed and not partial:

@@ -9,6 +9,7 @@ from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.policy import canonical_figure_stem
+from sciplot_core.policy.frame_export import CANONICAL_EXPORT_FORMATS, export_format_from_path
 
 
 class RecordSourceMismatchPayload(TypedDict):
@@ -82,8 +83,10 @@ def plan_source_figure_ids(plan: ResolvedFigurePlan) -> dict[str, str]:
         }
         primary = outcome.figure_id == plan.primary_figure_id
         single = len(plan.tasks) == 1
-        for role in ("pdf", "tiff_300"):
+        for role in set(role_paths) - {"vsz"}:
             path = Path(next(iter(role_paths[role])))
+            if path.parent != pdf_path.parent:
+                raise ValueError("All rendered artifacts for a selected figure must share its run-local directory.")
             artifact_stem = canonical_figure_stem(path)
             if artifact_stem not in allowed_stems and not (
                 artifact_stem == "document" and (primary or single)
@@ -124,7 +127,7 @@ def delivery_records_match_plan(
     expected_figure_sources = {
         path
         for path in bindings
-        if Path(path).suffix.casefold() in {".pdf", ".tif", ".tiff"}
+        if export_format_from_path(path) in CANONICAL_EXPORT_FORMATS
     }
     expected_project_sources = {
         path for path in bindings if Path(path).suffix.casefold() == ".vsz"
@@ -147,23 +150,13 @@ def delivery_records_match_plan(
 
 
 def _outcome_role_paths(artifacts: tuple[str, ...]) -> dict[str, set[str]]:
-    return {
-        "pdf": {
-            str(Path(path).expanduser().resolve())
-            for path in artifacts
-            if Path(path).suffix.casefold() == ".pdf"
-        },
-        "tiff_300": {
-            str(Path(path).expanduser().resolve())
-            for path in artifacts
-            if Path(path).name.casefold().endswith("_300dpi.tiff")
-        },
-        "vsz": {
-            str(Path(path).expanduser().resolve())
-            for path in artifacts
-            if Path(path).suffix.casefold() == ".vsz"
-        },
-    }
+    roles: dict[str, set[str]] = {role: set() for role in ("pdf", "tiff_300", "vsz")}
+    for path in artifacts:
+        resolved = str(Path(path).expanduser().resolve())
+        role = "vsz" if Path(path).suffix.casefold() == ".vsz" else export_format_from_path(path)
+        if role is not None:
+            roles.setdefault(role, set()).add(resolved)
+    return roles
 
 
 def _vsz_path_matches_task(
@@ -287,7 +280,7 @@ def project_document_hashes_current(value: object) -> bool:
 
 
 def figure_artifact_hashes_current(value: object) -> bool:
-    """Verify exact source/delivery hashes for plan-bound PDF/TIFF artifacts."""
+    """Verify exact source/delivery hashes for plan-bound rendered artifacts."""
 
     if not isinstance(value, list) or not value:
         return False

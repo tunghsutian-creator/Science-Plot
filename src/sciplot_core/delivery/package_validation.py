@@ -34,7 +34,7 @@ from sciplot_core.delivery.figure_pairing import (
 )
 
 from sciplot_core.delivery.file_set_validation import (
-    _recorded_file_set,
+    _recorded_file_set, rendered_file_sets, additional_figure_contract_current,
 )
 from sciplot_core.delivery.filesystem_metadata import (
     inspect_delivery_metadata,
@@ -107,38 +107,8 @@ def verify_delivery_package(
         hash_field="sha256",
     )
     figure_records = record.get("figures")
-    pdf_records = (
-        [
-            item
-            for item in figure_records
-            if isinstance(item, dict)
-            and Path(str(item.get("path") or "")).suffix.casefold() == ".pdf"
-        ]
-        if isinstance(figure_records, list)
-        else None
-    )
-    tiff_records = (
-        [
-            item
-            for item in figure_records
-            if isinstance(item, dict)
-            and Path(str(item.get("path") or "")).suffix.casefold() in {".tif", ".tiff"}
-        ]
-        if isinstance(figure_records, list)
-        else None
-    )
-    pdf_check = _recorded_file_set(
-        pdf_records,
-        directory=expected / DELIVERY_PDF_DIR,
-        suffixes={".pdf"},
-        hash_field="delivery_sha256",
-    )
-    tiff_check = _recorded_file_set(
-        tiff_records,
-        directory=expected / DELIVERY_TIFF_DIR,
-        suffixes={".tif", ".tiff"},
-        hash_field="delivery_sha256",
-    )
+    rendered = rendered_file_sets(figure_records, directory=expected / DELIVERY_PDF_DIR)
+    pdf_check, tiff_check = rendered["pdf"], rendered["tiff"]
     recorded_pairing = (
         _delivery_figure_pairing(
             [item for item in figure_records if isinstance(item, dict)]
@@ -325,6 +295,10 @@ def verify_delivery_package(
         "data_files_current": data_check["passed"],
         "pdf_files_current": pdf_check["passed"],
         "tiff_files_current": tiff_check["passed"],
+        "png_files_current": rendered["png"]["passed"],
+        "svg_files_current": rendered["svg"]["passed"],
+        "all_figure_files_current": rendered["all_formats"]["passed"],
+        "additional_figure_contract_current": additional_figure_contract_current(figure_records, expected_manifest),
         "project_files_current": project_check["passed"],
         "canonical_pdf_tiff_pairs": pairing["passed"],
         "resolved_figure_plan_record_current": plan_record_current,
@@ -353,6 +327,8 @@ def verify_delivery_package(
         "data": data_check,
         "pdf": pdf_check,
         "tiff": tiff_check,
+        "png": rendered["png"], "svg": rendered["svg"],
+        "all_formats": rendered["all_formats"],
         "project": project_check,
         "pairing": pairing,
         "resolved_figure_plan_binding": plan_record_binding,

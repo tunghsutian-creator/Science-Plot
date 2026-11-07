@@ -14,12 +14,13 @@ from sciplot_core.delivery.contracts import (
 def _qa_hash_evidence(
     manifest: dict[str, Any], figure_records: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    qa_payload = manifest.get("qa") if isinstance(manifest.get("qa"), dict) else {}
+    qa_value = manifest.get("qa")
+    qa_payload = qa_value if isinstance(qa_value, dict) else {}
     qa_hashes = {
         str(Path(str(report.get("path"))).expanduser().resolve()): str(
             report.get("sha256")
         )
-        for report_group in (qa_payload.get("pdfs"), qa_payload.get("tiffs"))
+        for report_group in (qa_payload.get(key) for key in ("pdfs", "tiffs", "pngs", "svgs"))
         if isinstance(report_group, list)
         for report in report_group
         if isinstance(report, dict) and report.get("path") and report.get("sha256")
