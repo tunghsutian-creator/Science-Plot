@@ -5,8 +5,9 @@ from dataclasses import replace
 
 import pytest
 
+from sciplot_core.delivery_binding import DeliveryBinding
 from sciplot_core.delivery_identity import (
-    DeliveryBinding, delivery_identity_path,
+    delivery_identity_path,
     inspect_delivery_identity, read_delivery_binding, write_delivery_identity,
 )
 from sciplot_core.foundation.file_hashing import file_sha256

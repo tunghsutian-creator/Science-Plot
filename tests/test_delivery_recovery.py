@@ -13,7 +13,7 @@ import pytest
 from sciplot_core.figure_plan import FigureTask, ResolvedFigurePlan
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.delivery_identity import DeliveryBinding
+from sciplot_core.delivery_binding import DeliveryBinding
 from sciplot_core.studio_core import delivery_recovery as recovery
 from sciplot_core.studio_core import delivery_recovery_state as state
 

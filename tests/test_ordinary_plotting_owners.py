@@ -376,6 +376,8 @@ SOURCE_ARTIFACT_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/cli/dispatch/intake.py",
         "src/sciplot_core/delivery_binding.py",
         "src/sciplot_core/delivery_identity.py",
+        "src/sciplot_core/qa/additional_exports.py",
+        "src/sciplot_core/qa/raster_inspection.py",
         "src/sciplot_core/visual_review/pdf_annotations.py",
         "src/sciplot_core/studio_render/source_artifacts.py",
         "src/sciplot_core/studio_render/categorical_components.py",

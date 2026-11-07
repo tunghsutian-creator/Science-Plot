@@ -10,9 +10,8 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.project_store.runtime import literal_runtime_project_root, projected_runtime_artifact, selected_project_store
-from sciplot_core.delivery_identity import (
-    DeliveryBinding, DELIVERY_IDENTITY, read_delivery_binding, delivery_identity_path,
-)
+from sciplot_core.delivery_binding import DeliveryBinding
+from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding, delivery_identity_path
 from sciplot_core.policy import DELIVERY_LAUNCHER, DELIVERY_PROJECT_DIR
 
 

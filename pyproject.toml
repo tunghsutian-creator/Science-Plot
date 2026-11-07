@@ -196,6 +196,8 @@ files = [
   "src/sciplot_core/delivery/file_set_validation.py",
   "src/sciplot_core/delivery_binding.py",
   "src/sciplot_core/delivery_identity.py",
+  "src/sciplot_core/qa/additional_exports.py",
+  "src/sciplot_core/qa/raster_inspection.py",
   "src/sciplot_core/assistant_history/__init__.py",
   "src/sciplot_core/assistant_history/contracts.py",
   "src/sciplot_core/assistant_history/storage.py",

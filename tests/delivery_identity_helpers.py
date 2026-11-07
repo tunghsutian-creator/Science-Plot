@@ -2,7 +2,8 @@
 
 from pathlib import Path
 from copy import deepcopy
-from sciplot_core.delivery_identity import DeliveryBinding, DELIVERY_IDENTITY, read_delivery_binding
+from sciplot_core.delivery_binding import DeliveryBinding
+from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding
 from sciplot_core.launchers.delivery_inspection import inspect_delivery_launcher_contract
 from sciplot_core.launchers.delivery_launcher import _delivery_launcher_lines
 from sciplot_core.policy import DELIVERY_LAUNCHER

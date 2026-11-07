@@ -66,6 +66,8 @@ PROJECT_INTEGRITY_OWNERS = (
             {
                 "src/sciplot_core/delivery_binding.py",
                 "src/sciplot_core/delivery_identity.py",
+                "src/sciplot_core/qa/additional_exports.py",
+                "src/sciplot_core/qa/raster_inspection.py",
                 "tests/delivery_identity_helpers.py",
                 "src/sciplot_core/studio_core/delivery_target.py",
                 "src/sciplot_core/policy/__init__.py",
@@ -81,6 +83,7 @@ PROJECT_INTEGRITY_OWNERS = (
         owned_test_paths=frozenset(
             {
                 "tests/test_delivery_identity.py",
+                "tests/test_delivery_extra_formats.py",
                 "tests/test_delivery_legacy_history_native.py",
                 "tests/test_delivery_install.py",
                 "tests/test_delivery_project_documents.py",
@@ -95,6 +98,7 @@ PROJECT_INTEGRITY_OWNERS = (
         ),
         pytest_targets=(
             "tests/test_delivery_identity.py",
+            "tests/test_delivery_extra_formats.py",
             "tests/test_delivery_legacy_history_native.py",
             "tests/test_delivery_install.py",
             "tests/test_delivery_project_documents.py",

@@ -12,7 +12,7 @@ import pytest
 from sciplot_core import task_saved_work as work
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.delivery_identity import DeliveryBinding
+from sciplot_core.delivery_binding import DeliveryBinding
 from sciplot_core.plot_engine.storage import commit
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_storage import save_task
