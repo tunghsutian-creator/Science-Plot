@@ -6,12 +6,11 @@ from typing import Any
 
 import pytest
 
+from public_multitask_inputs import mechanical_source
 import sciplot_core.plan_preview as preview_module
 from sciplot_core._paths import resolve_fixture_path
 from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
-    FigureTask,
-    ResolvedFigurePlan,
 )
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.mechanical_figure_contract import (
@@ -24,7 +23,9 @@ from sciplot_core.semantic_sources.scientific_transform import (
 )
 from sciplot_core.semantic_sources.models import CurveSeriesPayload
 from sciplot_core.semantic_sources.scientific_source import (
+    ResolvedScientificSource,
     ScientificSourceResolutionError,
+    resolve_scientific_source,
 )
 
 
@@ -114,7 +115,11 @@ def test_plan_preview_returns_one_complete_planned_payload_without_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = tmp_path / "mechanical"
-    source.write_text("source", encoding="utf-8")
+    for sample in ("sample_a", "sample_b"):
+        group = mechanical_source(source / sample, "tensile_curve")
+        for path in group.glob("*.csv"):
+            path.rename(path.with_name(path.name.replace("Cedar", sample)))
+        group.rename(group.with_name(f"{sample}.is_tens_exports"))
     request: dict[str, Any] = {
         "rule_id": "tensile_curve",
         "template": "curve",
@@ -127,7 +132,12 @@ def test_plan_preview_returns_one_complete_planned_payload_without_mutation(
         "template": "curve",
     }
     study_model = {"kind": "sciplot_study_model", "figure_queue": []}
-    plan = _two_task_plan()
+    resolved = resolve_scientific_source(
+        source, rule_id="tensile_curve", template="curve", request=request,
+    )
+    assert resolved is not None and resolved.figure_plan is not None
+    plan = resolved.figure_plan
+    assert all(task.sample_order == tuple(request["series_order"]) for task in plan.tasks)
     captured: dict[str, object] = {}
 
     def fake_classify(
@@ -150,13 +160,18 @@ def test_plan_preview_returns_one_complete_planned_payload_without_mutation(
         captured["study_source"] = input_path
         return study_model
 
-    def fake_resolve(**kwargs: Any) -> ResolvedFigurePlan:
+    def fake_resolve(input_path: Path, **kwargs: Any) -> ResolvedScientificSource:
+        captured["resolver_source"] = input_path
         captured["resolver"] = kwargs
-        return plan
+        return resolved
 
     monkeypatch.setattr(preview_module, "classify_source", fake_classify)
     monkeypatch.setattr(preview_module, "study_model_from_request", fake_study_model)
-    monkeypatch.setattr(preview_module, "resolve_figure_plan", fake_resolve)
+    monkeypatch.setattr(preview_module, "resolve_scientific_source", fake_resolve)
+    monkeypatch.setattr(
+        preview_module, "resolve_figure_plan",
+        lambda **_kwargs: pytest.fail("resolved scientific plan was parsed again"),
+    )
 
     payload = preview_module.build_plan_preview(source, request=request)
 
@@ -168,11 +183,11 @@ def test_plan_preview_returns_one_complete_planned_payload_without_mutation(
     assert captured["study_request"] is not request
     assert captured["study_semantic"] is semantic
     assert captured["study_source"] == resolved_source
+    assert captured["resolver_source"] == resolved_source
     assert captured["resolver"] == {
         "rule_id": "tensile_curve",
         "template": "curve",
         "study_model": study_model,
-        "input_path": resolved_source,
         "request": captured["study_request"],
     }
     assert payload == {
@@ -445,13 +460,17 @@ def test_plan_preview_projects_one_known_resolution_blocker(
         lambda **_kwargs: {},
     )
 
-    def blocked_resolver(**_kwargs: Any) -> None:
-        raise FigurePlanResolutionError(
+    def blocked_resolver(*_args: object, **_kwargs: Any) -> None:
+        raise ScientificSourceResolutionError(
             "mechanical_source_facts_unavailable",
             "Mechanical source facts are unavailable.",
         )
 
-    monkeypatch.setattr(preview_module, "resolve_figure_plan", blocked_resolver)
+    monkeypatch.setattr(preview_module, "resolve_scientific_source", blocked_resolver)
+    monkeypatch.setattr(
+        preview_module, "resolve_figure_plan",
+        lambda **_kwargs: pytest.fail("blocked scientific source reached fallback"),
+    )
 
     payload = preview_module.build_plan_preview(
         source,
@@ -464,6 +483,63 @@ def test_plan_preview_projects_one_known_resolution_blocker(
         "reason_code": "mechanical_source_facts_unavailable",
         "message": "Mechanical source facts are unavailable.",
     }
+
+
+def test_preview_preserves_fallback_figure_plan_resolution_error(tmp_path, monkeypatch):
+    source = tmp_path / "generic.csv"
+    source.write_text("x,y\n1,2\n")
+    monkeypatch.setattr(preview_module, "classify_source", lambda *_a, **_k: {
+        "rule_id": None, "template": "curve",
+    })
+    monkeypatch.setattr(preview_module, "study_model_from_request", lambda **_k: {})
+    monkeypatch.setattr(preview_module, "resolve_scientific_source", lambda *_a, **_k: None)
+
+    def blocked(**_kwargs):
+        raise FigurePlanResolutionError("selected_source_unavailable", "Source unavailable.")
+
+    monkeypatch.setattr(preview_module, "resolve_figure_plan", blocked)
+    payload = preview_module.build_plan_preview(source, request={})
+    assert payload["status"] == "blocked"
+    assert payload["resolved_figure_plan"] is None
+    assert payload["blocker"] == {
+        "reason_code": "selected_source_unavailable", "message": "Source unavailable.",
+    }
+
+
+@pytest.mark.parametrize("rule_id", ("tensile_curve", "compression_curve", "flexural_curve"))
+def test_mechanical_preview_observes_once_without_reparsing_or_mutation(
+    tmp_path, monkeypatch, rule_id,
+):
+    from sciplot_core.semantic_sources import mechanical_facts
+
+    source = mechanical_source(tmp_path / "raw", rule_id)
+    files = [source] if source.is_file() else list(source.rglob("*.csv"))
+    before = {path: path.read_bytes() for path in files}
+    request = {"rule_id": rule_id, "template": "curve", "replicate_mode": "individual"}
+    request_before = deepcopy(request)
+    reads = []
+    read = mechanical_facts._read_source
+
+    def observed(*args, **kwargs):
+        facts = read(*args, **kwargs)
+        reads.append(facts)
+        return facts
+
+    monkeypatch.setattr(mechanical_facts, "_read_source", observed)
+    monkeypatch.setattr(preview_module, "resolve_figure_plan", lambda **_k: pytest.fail(
+        "mechanical preview must consume its scientific owner's plan",
+    ))
+    first = preview_module.build_plan_preview(source, request=request)
+    assert first["status"] == "planned"
+    assert first["blocker"] is None
+    assert len(reads) == 1
+    assert first["resolved_figure_plan"]["source_sha256"] == first["preview_identity"]["source_tree_sha256"]
+    assert all(task["sample_order"] for task in first["resolved_figure_plan"]["tasks"])
+    assert request == request_before
+    assert {path: path.read_bytes() for path in files} == before
+    # The next independent observation is fresh, not a cached prior receipt.
+    assert preview_module.build_plan_preview(source, request=request) == first
+    assert len(reads) == 2
 
 
 def test_scientific_source_keeps_its_figure_plan_reason(
@@ -629,38 +705,6 @@ def test_stress_plan_blocks_before_figure_plan_when_transform_is_invalid(
         "reason_code": "stress_relaxation_transform_invalid",
         "message": "anchor missing",
     }
-
-
-def _two_task_plan() -> ResolvedFigurePlan:
-    tasks = (
-        FigureTask(
-            figure_id="stress_vs_strain",
-            order=1,
-            title="Stress vs Strain",
-            x_metric="strain",
-            y_metric="stress",
-            template="curve",
-            artifact_stem="stress_vs_strain",
-            document_stem="stress_vs_strain",
-        ),
-        FigureTask(
-            figure_id="strength",
-            order=2,
-            title="Tensile Strength",
-            x_metric="sample",
-            y_metric="strength_MPa",
-            template="box_strip",
-            artifact_stem="strength",
-            document_stem="strength",
-        ),
-    )
-    return ResolvedFigurePlan.planned(
-        rule_id="tensile_curve",
-        selection_policy="fixture",
-        primary_figure_id="stress_vs_strain",
-        tasks=tasks,
-        source_sha256="a" * 64,
-    )
 
 
 def _minimal_transform_contract(

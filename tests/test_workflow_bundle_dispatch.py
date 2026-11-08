@@ -6,11 +6,16 @@ from typing import Any
 
 import pytest
 
+from public_multitask_inputs import mechanical_source
 import sciplot_core.workflow as workflow_facade
 import sciplot_core.workflow.auto_split as auto_split
 import sciplot_core.workflow.impact_bundle as impact_bundle
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY
+from sciplot_core.semantic_sources.scientific_source import (
+    ResolvedScientificSource,
+    resolve_scientific_source,
+)
 
 
 _BUNDLE_ATTRIBUTES = {
@@ -26,6 +31,7 @@ def _install_render_spies(
     monkeypatch: pytest.MonkeyPatch,
     *,
     bundle_results: dict[str, dict[str, Any] | None] | None = None,
+    mechanical_snapshot: ResolvedScientificSource | None = None,
 ) -> list[tuple[str, Path]]:
     calls: list[tuple[str, Path]] = []
     effective_results = (
@@ -45,6 +51,8 @@ def _install_render_spies(
             _family: str = family,
             **_kwargs: object,
         ) -> dict[str, Any] | None:
+            if _family == "mechanical":
+                assert _kwargs["resolved_scientific_source"] is mechanical_snapshot
             calls.append((_family, input_path))
             return effective_results.get(_family)
 
@@ -60,6 +68,15 @@ def _install_render_spies(
 
     monkeypatch.setattr(auto_split, "render_to_dir", fake_generic)
     return calls
+
+
+def _mechanical_snapshot(tmp_path: Path) -> ResolvedScientificSource:
+    source = mechanical_source(tmp_path / "mechanical", "tensile_curve")
+    resolved = resolve_scientific_source(
+        source, rule_id="tensile_curve", template="curve", request={},
+    )
+    assert resolved is not None and resolved.figure_plan is not None
+    return resolved
 
 
 @pytest.mark.parametrize(
@@ -141,7 +158,8 @@ def test_render_dispatch_calls_only_the_resolved_family(
     expected_family: str,
     uses_raw_source: bool,
 ) -> None:
-    calls = _install_render_spies(monkeypatch)
+    resolved = _mechanical_snapshot(tmp_path) if expected_family == "mechanical" else None
+    calls = _install_render_spies(monkeypatch, mechanical_snapshot=resolved)
     prepared = tmp_path / "prepared.csv"
     raw = tmp_path / "raw.xlsx"
 
@@ -153,6 +171,8 @@ def test_render_dispatch_calls_only_the_resolved_family(
         options={},
         export_formats=["pdf"],
         request={"rule_id": rule_id},
+        _resolved_scientific_source=resolved,
+        _resolved_figure_plan=resolved.figure_plan if resolved is not None else None,
     )
 
     assert result["family"] == expected_family
@@ -278,14 +298,49 @@ def test_selected_bundle_can_fall_back_only_to_generic_renderer(
         output_dir=tmp_path / "out",
         options={},
         export_formats=["pdf"],
-        request={"rule_id": "tensile_curve"},
+        # An unplanned adapter may decline. A mechanical source always owns a
+        # selected plan, whose refusal must not downgrade to generic rendering.
+        request={"rule_id": "performance_comparison"},
     )
 
     assert result["family"] == "generic"
     assert calls == [
-        ("mechanical", prepared),
+        ("performance", tmp_path / "raw.csv"),
         ("generic", prepared),
     ]
+    assert not (tmp_path / "out").exists()
+
+
+def test_mechanical_dispatch_requires_its_resolved_source_before_any_adapter(
+    tmp_path, monkeypatch,
+):
+    calls = _install_render_spies(monkeypatch)
+    with pytest.raises(ValueError, match="requires its resolved scientific source"):
+        auto_split._render_with_auto_split(
+            tmp_path / "prepared.csv", template="curve", output_dir=tmp_path / "out",
+            options={}, export_formats=["pdf"], request={"rule_id": "tensile_curve"},
+        )
+    assert calls == []
+    assert not (tmp_path / "out").exists()
+
+
+def test_mechanical_selected_plan_cannot_fall_back_to_generic_renderer(
+    tmp_path, monkeypatch,
+):
+    resolved = _mechanical_snapshot(tmp_path)
+    calls = _install_render_spies(
+        monkeypatch, mechanical_snapshot=resolved,
+        bundle_results={family: None for family in _BUNDLE_ATTRIBUTES},
+    )
+    prepared = tmp_path / "prepared.csv"
+    with pytest.raises(ValueError, match="workflow_planned_bundle_unavailable"):
+        auto_split._render_with_auto_split(
+            prepared, source_input=resolved.source, template="curve",
+            output_dir=tmp_path / "out", options={}, export_formats=["pdf"],
+            request={"rule_id": "tensile_curve"},
+            _resolved_scientific_source=resolved, _resolved_figure_plan=resolved.figure_plan,
+        )
+    assert calls == [("mechanical", prepared)]
     assert not (tmp_path / "out").exists()
 
 
@@ -336,6 +391,7 @@ def test_tensile_curve_does_not_enter_impact_template_validation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
+    resolved = _mechanical_snapshot(tmp_path)
     monkeypatch.setattr(
         auto_split,
         "_render_veusz_performance_bundle",
@@ -359,6 +415,8 @@ def test_tensile_curve_does_not_enter_impact_template_validation(
             "rule_id": "tensile_curve",
             "template": "curve",
         },
+        _resolved_scientific_source=resolved,
+        _resolved_figure_plan=resolved.figure_plan,
     )
 
     assert result == {"family": "mechanical"}
