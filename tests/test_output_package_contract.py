@@ -9,6 +9,8 @@ import pytest
 from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.project_store import ProjectConflict
 from sciplot_core.project_store.runtime import project_candidate_runtime
+from sciplot_core.study_model import package_contract as package_owner
+from sciplot_core.study_model import run_artifacts as artifacts_owner
 from sciplot_core.study_model.package_contract import _source_exists
 from sciplot_core.study_model.run_artifacts import _json_contract_matches
 from test_study_artifact_locations import seed
@@ -367,22 +369,50 @@ def test_json_contract_reads_selected_members_and_propagates_each_permission_bou
         _write_contract(path, kind=kind)
         resolver = selected_source_resolver()
         assert resolver is not None
-        for owner, attribute in ((resolver, 'resolve_path'), (Path, 'stat'), (Path, 'read_text')):
-            original = getattr(owner, attribute)
+        real_path_methods = Path.stat, Path.lstat, Path.read_text
+        real_resolve_source = artifacts_owner.resolve_source_path
+        assert package_owner.resolve_source_path is real_resolve_source
+        for attribute in ('resolve_path', 'stat', 'read_text'):
             refusal = PermissionError('generated ' + attribute + ' refusal')
+            original = getattr(resolver if attribute == 'resolve_path' else Path, attribute)
+
             def deny_selected(actual, *args, _refusal=refusal, _original=original, **kwargs):
                 if Path(actual) == path:
                     raise _refusal
                 return _original(actual, *args, **kwargs)
-            with monkeypatch.context() as patch:
-                patch.setattr(owner, attribute, deny_selected)
+
+            class RefusingSelectedPath(type(path)):
+                """Fault only the path returned to the package owner."""
+
+            def invoke_selected(owner, operation, *arguments, _attribute=attribute,
+                                _deny=deny_selected, _selected_path=RefusingSelectedPath):
+                with monkeypatch.context() as patch:
+                    if _attribute == 'resolve_path':
+                        patch.setattr(resolver, _attribute, _deny)
+                    else:
+                        patch.setattr(_selected_path, _attribute, _deny)
+                        original_resolve = owner.resolve_source_path
+
+                        def selected_io(actual, *args, **kwargs):
+                            selected = original_resolve(actual, *args, **kwargs)
+                            return _selected_path(selected) if selected == path else selected
+
+                        # Admit the real source first; only this owner's returned
+                        # Path has faulty IO. Global Path methods also serve the
+                        # input guard and must remain real through its FD checks.
+                        patch.setattr(owner, 'resolve_source_path', selected_io)
+                    return operation(*arguments)
+
+            with pytest.raises(PermissionError) as error:
+                invoke_selected(artifacts_owner, _json_contract_matches, path, kind)
+            assert error.value is refusal
+            if attribute == 'read_text':
+                assert invoke_selected(package_owner, _source_exists, path) is True
+            else:
                 with pytest.raises(PermissionError) as error:
-                    _json_contract_matches(path, kind)
+                    invoke_selected(package_owner, _source_exists, path)
                 assert error.value is refusal
-                if attribute == 'read_text':
-                    assert _source_exists(path) is True
-                else:
-                    with pytest.raises(PermissionError) as error:
-                        _source_exists(path)
-                    assert error.value is refusal
+            assert (Path.stat, Path.lstat, Path.read_text) == real_path_methods
+            assert artifacts_owner.resolve_source_path is real_resolve_source
+            assert package_owner.resolve_source_path is real_resolve_source
     assert source.read_bytes() == (private / source.name).read_bytes() and store.snapshot() == snapshot
