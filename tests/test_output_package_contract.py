@@ -4,6 +4,15 @@ from copy import deepcopy
 import json
 from pathlib import Path
 
+import pytest
+
+from sciplot_core.foundation.source_locations import selected_source_resolver
+from sciplot_core.project_store import ProjectConflict
+from sciplot_core.project_store.runtime import project_candidate_runtime
+from sciplot_core.study_model.package_contract import _source_exists
+from sciplot_core.study_model.run_artifacts import _json_contract_matches
+from test_study_artifact_locations import seed
+
 from sciplot_core.figure_plan import (
     FigureOutcome,
     FigureTask,
@@ -290,3 +299,90 @@ def test_output_package_contract_preserves_figure_plan_gate_states(
     assert complete_gate["details"]["valid"] is True
     assert complete_gate["details"]["complete"] is True
     assert complete_gate["details"]["plan_id"] == plan.plan_id
+
+
+def test_package_presence_uses_candidate_view_for_literal_members_and_preserves_directories(tmp_path):
+    project, source, store, snapshot, private, *_ = seed(tmp_path)
+    output = private / 'package'
+    manifest = _base_manifest(output)
+    archive = private / 'raw/copy.csv'
+    archive.parent.mkdir()
+    archive.write_bytes(source.read_bytes())
+    manifest['raw_archive'] = {'path': str(project / 'raw/copy.csv')}
+    manifest['figures'] = [str(project / Path(path).relative_to(private)) for path in manifest['figures']]
+    before = deepcopy(manifest), source.read_bytes(), archive.read_bytes()
+    assert not (project / 'package').exists() and not (project / 'raw').exists()
+    with project_candidate_runtime(store, private):
+        physical = build_output_package_contract(output, manifest=manifest)
+        literal = build_output_package_contract(project / 'package', manifest=manifest)
+        assert physical['complete'] is True and literal['complete'] is True
+        assert [(row['id'], row['exists']) for row in physical['artifacts']] == [
+            (row['id'], row['exists']) for row in literal['artifacts']]
+        assert _artifact_by_id(physical)['raw_archive']['path'] == manifest['raw_archive']['path']
+        assert verify_output_package_contract(physical, output_dir=output, manifest=manifest)['passed'] is True
+        directory_manifest = {**manifest, 'raw_archive': {'path': str(project / 'raw')}}
+        assert _artifact_by_id(build_output_package_contract(output, manifest=directory_manifest))['raw_archive']['exists'] is True
+        assert _json_contract_matches(project / 'raw', 'sciplot_publication_intent') is False
+    assert (manifest, source.read_bytes(), archive.read_bytes()) == before and store.snapshot() == snapshot
+
+
+def test_package_presence_distinguishes_missing_from_source_alias_and_version_refusals(tmp_path):
+    project, source, store, snapshot, private, *_ = seed(tmp_path)
+    output = private / 'package'
+    manifest = _base_manifest(output)
+    original = source.read_bytes()
+    with project_candidate_runtime(store, private):
+        manifest['raw_archive'] = {'path': str(project / 'absent.csv')}
+        assert _artifact_by_id(build_output_package_contract(output, manifest=manifest))['raw_archive']['exists'] is False
+        alias = private / 'alias.csv'
+        alias.symlink_to(private / source.name)
+        try:
+            manifest['raw_archive'] = {'path': str(project / alias.name)}
+            with pytest.raises(ProjectConflict, match='cannot traverse aliases'):
+                build_output_package_contract(output, manifest=manifest)
+        finally:
+            alias.unlink()
+        manifest['raw_archive'] = {'path': str(source)}
+        (private / source.name).write_bytes(b'changed protected source')
+        try:
+            with pytest.raises(ProjectConflict, match='exact requested bytes'):
+                build_output_package_contract(output, manifest=manifest)
+        finally:
+            (private / source.name).write_bytes(original)
+    assert source.read_bytes() == original and store.snapshot() == snapshot
+
+
+def test_json_contract_reads_selected_members_and_propagates_each_permission_boundary(tmp_path, monkeypatch):
+    project, source, store, snapshot, private, *_ = seed(tmp_path)
+    path = private / 'contract.json'
+    kind = 'sciplot_publication_intent'
+    _write_contract(path, kind=kind)
+    with project_candidate_runtime(store, private):
+        assert _json_contract_matches(path, kind) and _json_contract_matches(project / path.name, kind)
+        assert not _json_contract_matches(private / 'missing.json', kind)
+        assert not _json_contract_matches(private, kind)
+        for invalid in (b'{', b'\xff', b'{"kind":"other"}'):
+            path.write_bytes(invalid)
+            assert _json_contract_matches(path, kind) is False
+        _write_contract(path, kind=kind)
+        resolver = selected_source_resolver()
+        assert resolver is not None
+        for owner, attribute in ((resolver, 'resolve_path'), (Path, 'stat'), (Path, 'read_text')):
+            original = getattr(owner, attribute)
+            refusal = PermissionError('generated ' + attribute + ' refusal')
+            def deny_selected(actual, *args, _refusal=refusal, _original=original, **kwargs):
+                if Path(actual) == path:
+                    raise _refusal
+                return _original(actual, *args, **kwargs)
+            with monkeypatch.context() as patch:
+                patch.setattr(owner, attribute, deny_selected)
+                with pytest.raises(PermissionError) as error:
+                    _json_contract_matches(path, kind)
+                assert error.value is refusal
+                if attribute == 'read_text':
+                    assert _source_exists(path) is True
+                else:
+                    with pytest.raises(PermissionError) as error:
+                        _source_exists(path)
+                    assert error.value is refusal
+    assert source.read_bytes() == (private / source.name).read_bytes() and store.snapshot() == snapshot
