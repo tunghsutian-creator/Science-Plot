@@ -9,6 +9,13 @@ import pytest
 
 from sciplot_core.figure_plan import FigureOutcome, FigureTask, ResolvedFigurePlan
 from sciplot_core.figure_plan.artifact_locations import artifact_is_file, literal_artifact_path
+from sciplot_core.figure_plan.artifact_locations import artifact_path_key
+from sciplot_core.delivery.package_builder import _figure_ids_by_path
+from sciplot_core.delivery.plan_binding import (
+    delivery_records_match_plan, figure_artifact_hashes_current, project_document_hashes_current,
+)
+from sciplot_core.delivery.project_documents import _copy_project_documents
+from sciplot_core.delivery.publication_evidence import _qa_hash_evidence
 from sciplot_core.figure_plan.execution import (
     finalize_figure_plan_result, merge_figure_outcomes, outcomes_for_artifact_map,
 )
@@ -18,6 +25,7 @@ from sciplot_core.foundation.source_locations import literal_source_path, resolv
 from sciplot_core.project_store import FileProjectStore, ProjectConflict
 from sciplot_core.project_store.runtime import project_candidate_runtime, resolve_runtime_output_path
 from sciplot_core.study_model.run_artifacts import attach_run_artifacts_to_study_model
+from sciplot_core.studio_core.export_verification import _verify_qa_artifact_hashes
 from sciplot_core.terminal_request import project_terminal_render_request
 from sciplot_core.workflow.request_rendering import RequestRenderResult
 from sciplot_core.workflow.route_intent import resolve_workflow_route_intent
@@ -217,3 +225,91 @@ def test_selected_csv_and_project_root_keep_read_projection_without_output_write
         finally:
             selected.write_bytes(original)
     assert source.read_bytes() == original and store.snapshot() == snapshot
+
+
+def test_literal_outcomes_bind_physical_delivery_copies_and_mixed_qa_observations(tmp_path):
+    project, source, store, snapshot, private, output, artifacts, plan, model = seed(tmp_path)
+    svg = output / 'figures/signal.svg'
+    svg.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
+    figures = [*artifacts[1:], svg]
+    def literal(path):
+        return str(project / path.relative_to(private))
+    completed = merge_figure_outcomes(plan, (FigureOutcome(figure_id='signal', status='ready',
+        artifacts=tuple(literal(path) for path in [*artifacts, svg])),))
+    qa = {'pdfs': [{'path': str(artifacts[1]), 'sha256': file_sha256(artifacts[1])}],
+        'tiffs': [{'path': literal(artifacts[2]), 'sha256': file_sha256(artifacts[2])}],
+        'svgs': [{'path': literal(svg), 'sha256': file_sha256(svg)}]}
+    manifest = {'resolved_figure_plan': completed.to_payload(), 'qa': qa,
+        'result': {'exports': [{'path': str(path), 'figure_id': 'signal'} for path in figures]},
+        'veusz_documents': [str(artifacts[0])],
+        'veusz_document_hashes': {literal(artifacts[0]): file_sha256(artifacts[0])}}
+    before = deepcopy(manifest), deepcopy(model), source.read_bytes()
+    delivery = private / 'delivery'
+    (delivery / 'figures').mkdir(parents=True)
+    with project_candidate_runtime(store, private):
+        ids = _figure_ids_by_path(manifest)
+        assert ids == {literal(path): 'signal' for path in figures}
+        documents = _copy_project_documents(manifest, output_dir=output, project_dir=delivery / 'project')
+        assert len(documents) == 1 and documents[0]['figure_id'] == 'signal'
+        assert documents[0]['source'] == str(artifacts[0]) and documents[0]['hash_matches_export'] is True
+        records = []
+        for path in figures:
+            target = delivery / 'figures' / path.name
+            shutil.copy2(path, target)
+            digest = file_sha256(target)
+            records.append({'source': str(path), 'path': str(target), 'figure_id': ids[artifact_path_key(path)],
+                'source_sha256': file_sha256(path), 'delivery_sha256': digest, 'copy_hash_matches': True})
+        binding = delivery_records_match_plan(completed, figure_records=records, project_records=documents)
+        assert binding['passed'] is True
+        assert figure_artifact_hashes_current(records) and project_document_hashes_current(documents)
+        evidence = _qa_hash_evidence(manifest, records)
+        assert len(evidence) == len(figures)
+        assert all(row['qa_sha256'] == row['source_sha256'] == row['delivery_sha256'] for row in evidence)
+        assert [row['source'] for row in evidence] == list(map(str, figures))
+        study = attach_run_artifacts_to_study_model(model, output_dir=output,
+            figures=list(map(str, figures)), qa=qa, resolved_figure_plan=completed.to_payload())
+        assert study['run']['unbound_figure_artifacts'] == [] and study['run']['qa'] == qa
+    assert (manifest, model, source.read_bytes()) == before and store.snapshot() == snapshot
+
+
+def test_artifact_namespace_join_cannot_bind_foreign_unselected_or_wrong_hash_evidence(tmp_path):
+    project, source, store, snapshot, private, output, artifacts, plan, _model = seed(tmp_path)
+    def literal(path):
+        return str(project / path.relative_to(private))
+    completed = merge_figure_outcomes(plan, (FigureOutcome(figure_id='signal', status='ready',
+        artifacts=tuple(literal(path) for path in artifacts)),))
+    exports = [{'path': str(path), 'figure_id': 'signal', 'format': fmt, 'sha256': file_sha256(path)}
+        for path, fmt in zip(artifacts[1:], ('pdf', 'tiff_300'), strict=True)]
+    qa = {'pdfs': [{'path': literal(artifacts[1]), 'sha256': file_sha256(artifacts[1])}],
+        'tiffs': [{'path': str(artifacts[2]), 'sha256': file_sha256(artifacts[2])}]}
+    manifest = {'resolved_figure_plan': completed.to_payload(), 'result': {'exports': exports}, 'qa': qa}
+    foreign = tmp_path / 'foreign' / artifacts[1].name
+    unselected = output / 'not-selected' / artifacts[1].name
+    for path in (foreign, unselected):
+        path.parent.mkdir()
+        path.write_bytes(artifacts[1].read_bytes())
+    original = deepcopy(manifest), source.read_bytes()
+    with project_candidate_runtime(store, private):
+        for path in (foreign, unselected):
+            assert path.name == artifacts[1].name and file_sha256(path) == file_sha256(artifacts[1])
+            assert artifact_path_key(path) != artifact_path_key(artifacts[1])
+            changed = deepcopy(manifest)
+            changed['result']['exports'][0]['path'] = str(path)
+            with pytest.raises(ValueError, match='not bound to a selected FigureOutcome'):
+                _figure_ids_by_path(changed)
+            records = [{'source': str(path), 'path': str(private / 'delivery/signal.pdf'), 'figure_id': 'signal'}]
+            assert delivery_records_match_plan(completed, figure_records=records, project_records=[])['passed'] is False
+            assert _qa_hash_evidence(manifest, records)[0]['qa_sha256'] is None
+        changed = deepcopy(manifest)
+        changed['result']['exports'][0]['figure_id'] = 'not-selected'
+        with pytest.raises(ValueError, match='figure_id conflicts'):
+            _figure_ids_by_path(changed)
+        changed = deepcopy(manifest)
+        changed['qa']['pdfs'][0]['sha256'] = '0' * 64
+        with pytest.raises(RuntimeError, match='QA hashes do not match'):
+            _verify_qa_artifact_hashes(changed['qa'], exports=exports, covered_formats={'pdf', 'tiff_300'})
+        bad_document = {**manifest, 'veusz_documents': [str(artifacts[0])],
+            'veusz_document_hashes': {literal(artifacts[0]): '0' * 64}}
+        documents = _copy_project_documents(bad_document, output_dir=output, project_dir=private / 'bad-copy')
+        assert documents[0]['expected_sha256'] == '0' * 64 and documents[0]['hash_matches_export'] is False
+    assert (manifest, source.read_bytes()) == original and store.snapshot() == snapshot

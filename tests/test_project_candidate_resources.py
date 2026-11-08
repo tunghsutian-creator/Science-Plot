@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from sciplot_core.figure_plan.artifact_locations import artifact_is_file, literal_artifact_path
+from sciplot_core.figure_plan.artifact_locations import artifact_is_file, artifact_path_key, literal_artifact_path
 from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path, selected_source_resolver
 from sciplot_core.project_store import FileProjectStore, ProjectConflict, ProjectStoreError, ResourceRoot
 from sciplot_core.project_store.io import sha
@@ -250,6 +250,7 @@ def test_future_artifact_projection_preserves_exact_finite_grants_without_creati
         target = resources / "future/nested/result.pdf"
         assert literal_artifact_path(target) == str(output / "nested/result.pdf")
         assert literal_artifact_path(output / "nested/result.pdf") == str(output / "nested/result.pdf")
+        assert artifact_path_key(target) == artifact_path_key(output / "nested/result.pdf")
         assert literal_artifact_path(resources / "future") == str(output)
         assert not list((resources / "future").iterdir()) and not artifact_is_file(target)
         for reader in (resolve_source_path, literal_source_path):
@@ -258,6 +259,8 @@ def test_future_artifact_projection_preserves_exact_finite_grants_without_creati
         for refused in (resources / "future/nested/other.pdf", resources / "future/other.pdf"):
             with pytest.raises(ProjectConflict, match="finite host capability"):
                 literal_artifact_path(refused)
+            with pytest.raises(ProjectConflict, match="finite host capability"):
+                artifact_path_key(refused)
         for refused in (resources / "future", resources / "future/nested"):
             with pytest.raises(ProjectConflict):
                 resolve_runtime_output_path(refused)
