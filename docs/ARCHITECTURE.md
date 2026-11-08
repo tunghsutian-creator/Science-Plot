@@ -60,8 +60,9 @@ this registered-project route.
 
 The mutable reference location also retains the creating Store's actual local
 root identity and its explicitly selected review-directory identity. These
-restrictions are checked before record-derived external access, including command
-replay. A portable import's new project/root registration cannot inherit that
+restrictions are checked before opening or reading the referenced PDF, including
+command replay. Path resolution may still observe directory metadata. A portable
+import's new project/root registration cannot inherit that
 old path authorization. The actual directory FD is checked before file open;
 the PDF inode may change during a normal external editor's atomic save. Original
 publication PDFs enter through registered Store resources before byte capture.
