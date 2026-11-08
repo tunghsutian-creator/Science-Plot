@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10052,
-    "nodeids_sha256": "2b0c5bc757c6e1728aa9d97449c5686d131f9a5e6a14d9e766b0a24bac089f10",
-    "test_sources_sha256": "83fb8e5f676b1a51d5dd238aa24dbb19db40a9a14858da62bc79649b864e2233",
+    "nodeid_count": 10053,
+    "nodeids_sha256": "b574988b9a5472b8fc7bad13df9012c7091e7caec9c4d79274a24e0e2725c8b5",
+    "test_sources_sha256": "4bc4a09a512bc2ff1f030ed097cb8ac722f904781099ea1f5bc7e5691dfe73e0",
     "test_source_count": 657,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
@@ -5479,7 +5479,8 @@
       "tests/test_study_artifact_locations.py::test_artifact_namespace_join_cannot_bind_foreign_unselected_or_wrong_hash_evidence",
       "tests/test_study_artifact_locations.py::test_literal_outcomes_bind_physical_delivery_copies_and_mixed_qa_observations",
       "tests/test_study_artifact_locations.py::test_selected_csv_and_project_root_keep_read_projection_without_output_write_grants",
-      "tests/test_study_artifact_locations.py::test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files"
+      "tests/test_study_artifact_locations.py::test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files",
+      "tests/test_changed_scope_selectors.py::test_ai_only_owner_boundaries_keep_business_absence_and_unknown_refusals"
     ],
     "synthetic_candidates": [
       {
@@ -26693,9 +26694,13 @@
       {
         "nodeid": "tests/test_study_artifact_locations.py::test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files",
         "reason": "Generated temporary Store/project/source and staged PDF/TIFF/VSZ bytes distinguish declarative future artifact addresses from actual source reads. Real candidate projection and plan/study gates retain no-mkdir, no-member-creation, source-missing and incomplete-artifact refusals while preserving source bytes, plan and generation. No private source, native golden, renderer, network or model is used."
+      },
+      {
+        "nodeid": "tests/test_changed_scope_selectors.py::test_ai_only_owner_boundaries_keep_business_absence_and_unknown_refusals",
+        "reason": "Source-only calls to the existing changed-owner planner with declared QA/CLI, retired namespace, exact historical rename and unknown ordinary source path names inspect actual current owner targets and required full gates. The planner returns command descriptions without running them; no tests, mypy, native process, private scientific source, golden, network or model operation is executed by this generated control. Existing unknown-path failure and history ownership remain explicit."
       }
     ],
-    "review_method": "2026-11-08 final same-operation consolidation: original unfiltered zero-body collection INTEGRATION_COLLECTION_11.txt (SHA58222ceb7a6f820a997c1237e0fdecab813a6119a4373e802cf8d0760d0e812c),10052 nodes. Preserved every09904 private case/dependency,111 historical responsibilities, and all existing reviewed qualifications including the55 REBIND02 additions. Appended only8 independently reviewed generated artifact/presence controls in the three exact existing test leaves; retained original audit arrays as ordered prefixes. Current source hashes bind this static proposal only. No full execution, native lifecycle, capture/access completeness or scientific acceptance is asserted; inventory_complete remains false.",
+    "review_method": "2026-11-08 final same-operation consolidation: original unfiltered zero-body collection INTEGRATION_COLLECTION_13.txt (SHA16ce7e0bc4f48dcf71816347f59e3ac2d3e68bb9e17aed9a0519ae434c9229e4),10053 nodes. Preserved every09904 private case/dependency,111 historical responsibilities, and all existing reviewed qualifications including all63 retained REBIND03 additions. Appended only1 independently reviewed source-only owner-selection control in the exact existing changed-scope selector leaf; retained original audit arrays as ordered prefixes. Current source hashes bind this static proposal only. No full execution, native lifecycle, capture/access completeness or scientific acceptance is asserted; inventory_complete remains false.",
     "scope": [
       "real_world",
       "polymer_corpus",

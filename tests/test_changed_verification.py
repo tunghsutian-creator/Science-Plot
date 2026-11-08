@@ -354,6 +354,9 @@ def test_automation_baseline_has_one_focused_evidence_owner() -> None:
                 "tests/test_publish_state.py::test_publish_state_preserves_a_scientific_confirmation_blocker",
                 "tests/test_frontend_topology.py::test_package_has_one_cli_and_no_standalone_frontend_entrypoint",
                 *ARCHITECTURE_CORE_TARGETS,
+                "tests/test_frontend_topology.py",
+                "tests/test_headless_native_probe.py",
+                "tests/test_live_editor_entry.py",
             ],
         }
     ]

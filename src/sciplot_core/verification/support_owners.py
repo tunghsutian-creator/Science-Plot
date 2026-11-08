@@ -14,6 +14,9 @@ WORKFLOW_BUNDLE_EXPORT_OWNER = ChangedOwner(
 
 WHEEL_DISTRIBUTION_OWNER = ChangedOwner(
     owner_id="wheel_distribution",
+    exact_paths=frozenset({
+        'MANIFEST.in',
+    }),
     owned_test_paths=frozenset({"tests/test_wheel_surface.py"}),
     pytest_targets=("tests/test_wheel_surface.py",),
     release_gates=("full_pytest",),

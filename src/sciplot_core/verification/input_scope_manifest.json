@@ -9891,7 +9891,8 @@
       "tests/test_study_artifact_locations.py::test_artifact_namespace_join_cannot_bind_foreign_unselected_or_wrong_hash_evidence",
       "tests/test_study_artifact_locations.py::test_literal_outcomes_bind_physical_delivery_copies_and_mixed_qa_observations",
       "tests/test_study_artifact_locations.py::test_selected_csv_and_project_root_keep_read_projection_without_output_write_grants",
-      "tests/test_study_artifact_locations.py::test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files"
+      "tests/test_study_artifact_locations.py::test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files",
+      "tests/test_changed_scope_selectors.py::test_ai_only_owner_boundaries_keep_business_absence_and_unknown_refusals"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -19619,7 +19620,8 @@
       "tests/test_study_artifact_locations.py::test_artifact_namespace_join_cannot_bind_foreign_unselected_or_wrong_hash_evidence",
       "tests/test_study_artifact_locations.py::test_literal_outcomes_bind_physical_delivery_copies_and_mixed_qa_observations",
       "tests/test_study_artifact_locations.py::test_selected_csv_and_project_root_keep_read_projection_without_output_write_grants",
-      "tests/test_study_artifact_locations.py::test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files"
+      "tests/test_study_artifact_locations.py::test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files",
+      "tests/test_changed_scope_selectors.py::test_ai_only_owner_boundaries_keep_business_absence_and_unknown_refusals"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",

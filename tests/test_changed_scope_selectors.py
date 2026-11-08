@@ -122,3 +122,39 @@ def test_mcp_adapter_retains_new_public_recovery_schema_and_forwarding_contract(
                                            repo_root=Path(__file__).resolve().parents[1])
     command = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
     assert {"tests/test_mcp_server.py", "tests/test_plot_protocol.py"} <= set(command)
+
+
+def test_ai_only_owner_boundaries_keep_business_absence_and_unknown_refusals():
+    root = Path(__file__).resolve().parents[1]
+    cases = (
+        ("src/sciplot_core/qa/run.py", "delivery_project_integrity",
+         {"tests/test_export_format_contract.py", "tests/test_render_export_integrity.py"}),
+        ("src/sciplot_core/cli/adapters.py", "ai_autoplot_invocation",
+         {"tests/test_cli_surface.py", "tests/test_autoplot_integrity.py"}),
+        ("src/sciplot_core/smoke/runtime_environment.py", "automation_baseline_evidence",
+         {"tests/test_frontend_topology.py", "tests/test_headless_native_probe.py"}),
+        ("src/sciplot_gui/reintroduced.py", "automation_baseline_evidence",
+         {"tests/test_frontend_topology.py", "tests/test_headless_native_probe.py"}),
+        ("web/editor/src/reintroduced.tsx", "automation_baseline_evidence",
+         {"tests/test_frontend_topology.py", "tests/test_headless_native_probe.py"}),
+        ("src/sciplot_core/intake_server/reintroduced.py", "intake_project",
+         {"tests/test_frontend_topology.py::test_headless_intake_domain_has_no_http_or_browser_adapter",
+          "tests/test_curation_headless.py"}),
+    )
+    for path, owner_id, targets in cases:
+        plan = build_changed_verification_plan([path], repo_root=root)
+        assert plan["status"] == "planned" and plan["unowned_paths"] == []
+        assert owner_id in {row["owner_id"] for row in plan["owners"]}
+        command = next(row["command"] for row in plan["checks"]
+                       if row["check_id"] == "pytest_changed_owners")
+        assert targets <= set(command)
+        assert "full_pytest" in plan["required_later"]["release"]
+    renamed = build_changed_verification_plan(
+        ["src/sciplot_gui/studio_assistant_history/contracts.py"], repo_root=root)
+    assert {row["owner_id"] for row in renamed["owners"]} == {"assistant_history"}
+    assert renamed["unowned_paths"] == []
+    unknown = build_changed_verification_plan(
+        ["src/sciplot_core/unreviewed_boundary.py"], repo_root=root)
+    assert unknown["status"] == "failed"
+    assert unknown["unowned_paths"] == ["src/sciplot_core/unreviewed_boundary.py"]
+    assert unknown["checks"] == []
