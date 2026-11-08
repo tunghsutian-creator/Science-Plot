@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 import json
 import shutil
 from pathlib import Path
@@ -18,6 +19,9 @@ from sciplot_core.figure_plan import (
     request_for_figure_task,
 )
 from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
+from sciplot_core.project_store import FileProjectStore, ProjectConflict
+from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.presentation_identity import SelectedPresentationIdentity
 from sciplot_core.studio_core.figure_set_state import (
     _figure_registry_entry,
@@ -517,6 +521,122 @@ def test_required_v2_registry_relocates_only_canonical_persisted_paths(
         for outcome in registry_plan.outcomes
         for artifact in outcome.artifacts
     )
+
+
+@pytest.mark.parametrize("member", ["studio/document.vsz", "studio/figures/performance_polar.vsz"])
+def test_registry_addresses_do_not_admit_unregistered_native_bytes(tmp_path, member):
+    project = tmp_path / "project"
+    plan = _write_mixed_project(project)
+    store = FileProjectStore(project)
+    before = store.snapshot(import_legacy=True)
+    document = project / member
+    original = document.read_bytes()
+    document.write_bytes(original + b"\n# saved native awaiting scientific adoption\n")
+
+    with project_runtime(store):
+        registry = _read_studio_figure_set(
+            project, expected_plan=plan, require_ready_artifacts=True
+        )
+        assert registry is not None
+        assert [entry["document"] for entry in registry["figures"]] == [
+            str(project / "studio/document.vsz"),
+            str(project / "studio/figures/performance_polar.vsz"),
+        ]
+        with pytest.raises(ProjectConflict, match="current resource view"):
+            resolve_source_path(document)
+        with pytest.raises(ProjectConflict, match="current resource view"):
+            literal_source_path(document)
+
+    after = store.snapshot()
+    assert after["generation"] == before["generation"]
+    assert set(after["outside_changes"]) == {member}
+    assert store.read_bytes(member, generation=before["generation"]) == original
+
+
+@pytest.mark.parametrize("fault", ["foreign-root", "wrong-member", "relative", "document-alias"])
+def test_selected_registry_still_rejects_noncanonical_outcome_addresses(tmp_path, fault):
+    project = tmp_path / "project"
+    plan = _write_mixed_project(project)
+    registry_path = project / "studio/figure_set.json"
+    registry = json.loads(registry_path.read_bytes())
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    head = project / ".sciplot_store/head.json"
+    head_before = head.read_bytes()
+    if fault == "document-alias":
+        target = tmp_path / "foreign.vsz"
+        target.write_text("Add('page')\n", encoding="utf-8")
+        document = project / "studio/figures/performance_polar.vsz"
+        document.unlink()
+        document.symlink_to(target)
+    else:
+        path = {
+            "foreign-root": str(tmp_path / "foreign/studio/document.vsz"),
+            "wrong-member": str(project / "studio/other.vsz"),
+            "relative": "studio/document.vsz",
+        }[fault]
+        registry["resolved_figure_plan"]["outcomes"][0]["artifacts"][0] = path
+        _write_json(registry_path, registry)
+    with project_runtime(store):
+        assert _read_studio_figure_set(
+            project, expected_plan=plan, require_ready_artifacts=True
+        ) is None
+    assert head.read_bytes() == head_before
+
+
+def test_unavailable_registry_addresses_need_no_physical_artifact(tmp_path):
+    project = tmp_path / "project"
+    plan = _write_mixed_project(project)
+    registry_path = project / "studio/figure_set.json"
+    registry = json.loads(registry_path.read_bytes())
+    entry = registry["figures"][1]
+    evidence = {"reason_code": "generated_unavailable", "message": "No selected observations"}
+    entry.update(status="unavailable", unavailable=evidence)
+    for key in ("document", "spec"):
+        Path(entry[key]).unlink()
+    registry_plan = ResolvedFigurePlan.from_payload(registry["resolved_figure_plan"])
+    unavailable = replace(registry_plan.outcomes[1], status="unavailable", artifacts=(), **evidence)
+    registry["resolved_figure_plan"] = replace(
+        registry_plan, outcomes=(registry_plan.outcomes[0], unavailable)
+    ).to_payload()
+    registry["status"] = "partially_available"
+    _write_json(registry_path, registry)
+    store = FileProjectStore(project)
+    before = store.snapshot(import_legacy=True)
+
+    with project_runtime(store):
+        actual = _read_studio_figure_set(
+            project, expected_plan=plan, require_ready_artifacts=True
+        )
+    assert actual is not None
+    assert actual["figures"][1]["status"] == "unavailable"
+    assert actual["resolved_figure_plan"]["outcomes"][1]["artifacts"] == []
+    assert all(not Path(entry[key]).exists() for key in ("document", "spec"))
+    assert store.snapshot() == before
+
+
+def test_cold_registry_addresses_do_not_read_the_old_project_root(tmp_path):
+    original = tmp_path / "original"
+    plan = _write_mixed_project(original)
+    store = FileProjectStore(original)
+    store.snapshot(import_legacy=True)
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "cold")
+    original.rename(tmp_path / "original_offline")
+    before = cold.snapshot()
+
+    with project_runtime(cold):
+        registry = _read_studio_figure_set(
+            cold.root, expected_plan=plan, require_ready_artifacts=True
+        )
+    assert registry is not None
+    assert not original.exists()
+    actual_plan = ResolvedFigurePlan.from_payload(registry["resolved_figure_plan"])
+    assert all(
+        Path(path).is_relative_to(cold.root) and Path(path).is_file()
+        for outcome in actual_plan.outcomes
+        for path in outcome.artifacts
+    )
+    assert cold.snapshot() == before
 
 
 @pytest.mark.parametrize(

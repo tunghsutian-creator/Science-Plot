@@ -13,10 +13,12 @@ from public_multitask_inputs import mechanical_source
 from sciplot_core.figure_plan import ResolvedFigurePlan
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.mechanical_figure_contract import mechanical_figure_contract
 from sciplot_core.native_process import run_cold_worker
 from sciplot_core.native_process.session import _close_workers
 from sciplot_core.project_host_factory import project_store
+from sciplot_core.project_store import ProjectConflict
 from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.studio import prepare_studio_document
 from sciplot_core.studio_core.project_export import export_project_document
@@ -199,5 +201,81 @@ def test_generated_mechanical_workflow_and_studio_cold_native_lifecycle(tmp_path
             "workflow_generation": workflow_store.snapshot()["generation"],
             "studio_generation": studio_store.snapshot()["generation"]})
         (tmp_path / "mechanical-native-lifecycle-evidence.json").write_text(json.dumps(evidence, indent=2))
+    finally:
+        _close_workers()
+
+
+@pytest.mark.focused
+def test_direct_publication_adopts_dirty_primary_and_secondary_in_one_generation(tmp_path, monkeypatch):
+    source = mechanical_source(tmp_path / "original", "compression_curve")
+    raw = source.read_bytes()
+    rows = list(csv.reader(raw.decode().splitlines()))
+    expected_curves = tuple(tuple((float(row[c]), float(row[c + 1])) for row in rows[3:])
+                            for c in (0, 2, 4))
+    project = tmp_path / "project"
+    project.mkdir()
+    request = project / "plot_request.json"
+    request.write_text(json.dumps({"input": str(source), "rule_id": "compression_curve",
+        "recipe": "auto", "template": "curve", "replicate_mode": "individual",
+        "exports": ["pdf", "tiff_300"], "delivery_output": str(tmp_path / "delivery")}))
+    try:
+        prepared = prepare_studio_document(request)
+        store = project_store(project, with_snapshot=True)
+        registry = json.loads((project / "studio/figure_set.json").read_bytes())
+        plan = ResolvedFigurePlan.from_payload(registry["resolved_figure_plan"])
+        documents = [Path(item["document"]) for item in registry["figures"]]
+        specs = [Path(item["spec"]) for item in registry["figures"]]
+        before, spec_bytes = _bound_files(store, specs)
+        assert len(documents) == 2
+        science = [_spec_science(json.loads(spec_bytes[spec]), task, expected_curves)
+                   for task, spec in zip(plan.tasks, specs, strict=True)]
+        observed = {}
+        for document in documents:
+            document.write_bytes(document.read_bytes() + b"\n# direct publication pending scientific adoption\n")
+            observed[store.logical_path(document)] = file_sha256(document)
+        with project_runtime(store, generation=before["generation"]):
+            for document in documents:
+                with pytest.raises(ProjectConflict, match="current resource view"):
+                    resolve_source_path(document)
+
+        def no_intermediate_adoption(*_args, **_kwargs):
+            pytest.fail("Direct publication must audit and adopt in its one final CAS.")
+
+        from sciplot_core.studio_core import native_adoption, native_export_commands
+        monkeypatch.setattr(native_adoption, "adopt_saved_native", no_intermediate_adoption)
+        monkeypatch.setattr(native_export_commands, "export_saved_native", no_intermediate_adoption)
+        published = export_project_document(project_dir=project, request_path=request,
+            document_path=Path(prepared["document"]), formats=["pdf", "tiff_300"])
+        store = project_store(project, with_snapshot=True)
+        after = store.snapshot()
+        assert published.ready_to_use and published.run_payload["project_command"]["phase"] == "complete"
+        assert after["sequence"] == before["sequence"] + 1
+        assert not after["outside_changes"]
+        assert len(set(after["commands"]) - set(before["commands"])) == 1
+        command = next(item for item in store.commands()
+                       if item["command_id"] == published.run_payload["project_command"]["command_id"])
+        assert command["phase"] == "complete" and command["metadata"]["kind"] == "native_import"
+        adoptions = command["metadata"]["native_adoptions"]
+        assert {item["resource"]: item["observed_sha256"] for item in adoptions} == observed
+        assert all(item["before_sha256"] == before["files"][item["resource"]]["sha256"] for item in adoptions)
+        manifest = json.loads(Path(published.run_payload["manifest"]).read_bytes())
+        scientific = manifest["result"]["scientific_data_verification"]
+        assert scientific["status"] == "passed" and scientific["document_count"] == 2
+        assert {item["document"]["sha256"] for item in scientific["documents"]} == set(observed.values())
+        assert all(item["audit_sha256"] == canonical_json_sha256(scientific) for item in adoptions)
+        assert manifest["delivery_verification"]["passed"] is True
+        assert manifest["publish_gates"]["passed"] is True
+        assert len(published.exports) == 4
+        assert all(Path(item["path"]).is_file() and file_sha256(Path(item["path"])) == item["sha256"]
+                   for item in published.exports)
+        assert all(file_sha256(project / name) == digest for name, digest in observed.items())
+        assert {path: path.read_bytes() for path in specs} == spec_bytes
+        assert [_spec_science(json.loads(path.read_bytes()), task, expected_curves)
+                for task, path in zip(plan.tasks, specs, strict=True)] == science
+        assert source.read_bytes() == raw
+        (tmp_path / "direct-publication-evidence.json").write_text(json.dumps({
+            "before_generation": before["generation"], "after_generation": after["generation"],
+            "adoptions": adoptions, "scientific": scientific,
+            "source_sha256": file_sha256(source), "exports": published.exports}, indent=2))
     finally:
         _close_workers()

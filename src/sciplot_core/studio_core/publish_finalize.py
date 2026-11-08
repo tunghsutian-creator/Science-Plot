@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.automation_states import RULE_REPAIR_STATE
-from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 from sciplot_core.delivery.package_builder import _build_staged_delivery
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_values import json_safe
@@ -336,8 +335,8 @@ def _finalize_delivery_contracts(
         primary_exports = [
             item
             for item in copied_exports
-            if artifact_path_key(str(item.get("document") or ""))
-            == artifact_path_key(inventory.document_path)
+            if Path(str(item.get("document") or "")).expanduser().resolve()
+            == inventory.document_path
         ]
         _verify_exact_current_export_binding(
             document_path=inventory.document_path,

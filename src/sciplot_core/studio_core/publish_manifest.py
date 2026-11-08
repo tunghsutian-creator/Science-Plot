@@ -9,7 +9,6 @@ from sciplot_core.figure_plan import (
     finalize_figure_plan_result,
     outcomes_for_artifact_map,
 )
-from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
@@ -40,7 +39,7 @@ def build_studio_export_result(
         inventory,
         snapshot_documents=veusz_documents,
     )
-    primary_document = document_map[artifact_path_key(inventory.document_path)]
+    primary_document = document_map[str(inventory.document_path.resolve())]
     snapshot_exports = _snapshot_bound_exports(
         copied_exports,
         document_map=document_map,
@@ -122,7 +121,7 @@ def build_studio_run_manifest(
         inventory,
         snapshot_documents=veusz_documents,
     )
-    primary_document = document_map[artifact_path_key(inventory.document_path)]
+    primary_document = document_map[str(inventory.document_path.resolve())]
     manifest = {
         "kind": "sciplot_run",
         "created_at": utc_now_iso(),
@@ -191,7 +190,7 @@ def _studio_plan_artifacts(
         return {}
     snapshot_documents, _snapshot_hashes = _studio_snapshot_documents(inventory)
     snapshots_by_source = {
-        artifact_path_key(source): snapshot
+        str(source.expanduser().resolve()): snapshot
         for source, snapshot in zip(
             inventory.veusz_documents,
             snapshot_documents,
@@ -212,7 +211,7 @@ def _studio_plan_artifacts(
                 artifact_path = Path(value)
                 if key == "document":
                     snapshot = snapshots_by_source.get(
-                        artifact_path_key(artifact_path)
+                        str(artifact_path.expanduser().resolve())
                     )
                     if snapshot is None:
                         raise RuntimeError(
@@ -236,7 +235,7 @@ def _studio_manifest_block(inventory: StudioExportInventory) -> dict[str, Any]:
         inventory,
         snapshot_documents=veusz_documents,
     )
-    primary_document = document_map[artifact_path_key(inventory.document_path)]
+    primary_document = document_map[str(inventory.document_path.resolve())]
     block = {
         "engine": "veusz",
         "render_engine": "veusz",
@@ -266,13 +265,11 @@ def _studio_snapshot_documents(
     documents: list[Path] = []
     hashes: dict[str, str] = {}
     studio_root = (inventory.project_dir / "studio").resolve()
-    expected_hashes = {
-        artifact_path_key(path): value
-        for path, value in inventory.veusz_document_hashes.items()
-    }
+    # The inventory emits documents and hash keys in one current IO namespace.
+    # Verify copied snapshot bytes below, without admitting pending live edits.
     for document in inventory.veusz_documents:
         resolved = document.expanduser().resolve()
-        expected_hash = expected_hashes.get(artifact_path_key(resolved))
+        expected_hash = inventory.veusz_document_hashes.get(str(resolved))
         if not expected_hash:
             raise RuntimeError(f"Studio snapshot has no expected VSZ hash: {resolved}")
         try:
@@ -304,7 +301,7 @@ def _studio_snapshot_document_map(
         else _studio_snapshot_documents(inventory)[0]
     )
     return {
-        artifact_path_key(source): snapshot
+        str(source.expanduser().resolve()): snapshot
         for source, snapshot in zip(
             inventory.veusz_documents,
             snapshots,
@@ -324,7 +321,7 @@ def _snapshot_bound_exports(
         document_value = current.get("document")
         if isinstance(document_value, str) and document_value.strip():
             document = document_map.get(
-                artifact_path_key(document_value)
+                str(Path(document_value).expanduser().resolve())
             )
             if document is None:
                 raise RuntimeError(

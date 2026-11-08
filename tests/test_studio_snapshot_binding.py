@@ -14,6 +14,9 @@ from sciplot_core.figure_plan import (
     merge_figure_outcomes,
 )
 from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.project_store import FileProjectStore, ProjectConflict
+from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.presentation_identity import (
     resolve_selected_presentation_identity,
 )
@@ -24,6 +27,8 @@ from sciplot_core.studio_core.rule_readiness import (
 from sciplot_core.studio_core.publish_manifest import (
     _studio_manifest_block,
     _studio_snapshot_documents,
+    _studio_snapshot_document_map,
+    _snapshot_bound_exports,
     build_studio_export_result,
     build_studio_run_manifest,
 )
@@ -174,6 +179,64 @@ def test_studio_snapshot_documents_never_fall_back_to_live_project(
 
     with pytest.raises(RuntimeError, match="snapshot is missing or changed"):
         _studio_snapshot_documents(inventory)
+
+
+@pytest.mark.parametrize("dirty_index", [0, 1], ids=["primary", "secondary"])
+def test_publication_snapshot_addresses_do_not_adopt_dirty_native_bytes(tmp_path, dirty_index):
+    inventory, sources, snapshots = _inventory(tmp_path)
+    store = FileProjectStore(inventory.project_dir)
+    before = store.snapshot(import_legacy=True)
+    document = sources[dirty_index]
+    original = document.read_bytes()
+    observed = original + b"\n# pending audited publication\n"
+    document.write_bytes(observed)
+    snapshots[dirty_index].write_bytes(observed)
+    current_hashes = {str(path.resolve()): str(existing_file_sha256(path)) for path in sources}
+    inventory = replace(inventory, veusz_document_hashes=current_hashes,
+                        export_document_sha256=current_hashes[str(sources[0].resolve())])
+
+    with project_runtime(store, generation=before["generation"]):
+        documents, hashes = _studio_snapshot_documents(inventory)
+        document_map = _studio_snapshot_document_map(inventory, snapshot_documents=documents)
+        exports = _snapshot_bound_exports(
+            [{"document": str(path), "format": "pdf"} for path in sources],
+            document_map=document_map,
+        )
+        assert documents == list(snapshots)
+        assert hashes == {str(path.resolve()): existing_file_sha256(path) for path in snapshots}
+        assert [item["document"] for item in exports] == list(map(str, snapshots))
+        with pytest.raises(ProjectConflict, match="current resource view"):
+            resolve_source_path(document)
+        snapshots[dirty_index].write_bytes(b"not the actually exported native bytes")
+        with pytest.raises(RuntimeError, match="snapshot is missing or changed"):
+            _studio_snapshot_documents(inventory)
+
+    after = store.snapshot()
+    assert after["generation"] == before["generation"]
+    assert store.read_bytes(document.relative_to(inventory.project_dir).as_posix()) == original
+
+
+def test_publication_inventory_rejects_mixed_old_literal_hash_keys(tmp_path):
+    inventory, sources, _snapshots = _inventory(tmp_path)
+    original = inventory.project_dir
+    store = FileProjectStore(original)
+    store.snapshot(import_legacy=True)
+    cold = FileProjectStore.import_bundle(store.export_bundle(tmp_path / "bundle"), tmp_path / "cold")
+    original.rename(tmp_path / "original_offline")
+    inventory = replace(
+        inventory, project_dir=cold.root,
+        document_path=cold.root / sources[0].relative_to(original),
+        veusz_documents=[cold.root / path.relative_to(original) for path in sources],
+        output_dir=cold.root / inventory.output_dir.relative_to(original),
+    )
+    # The sole production builder derives both fields from figure_documents in
+    # the current physical namespace. Saved-locator hash keys are not that input.
+    assert all(not Path(path).is_relative_to(cold.root) for path in inventory.veusz_document_hashes)
+    before = cold.snapshot()
+    with project_runtime(cold):
+        with pytest.raises(RuntimeError, match="no expected VSZ hash"):
+            _studio_snapshot_documents(inventory)
+    assert cold.snapshot() == before
 
 
 def test_studio_durable_document_fields_use_only_run_local_snapshots(
