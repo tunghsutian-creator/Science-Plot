@@ -96,6 +96,7 @@ PROJECT_INTEGRITY_OWNERS = (
             {
                 "src/sciplot_core/materials_rules/metric_tables.py",
                 "src/sciplot_core/materials_rules/curve_extrema_metrics.py",
+                "src/sciplot_core/materials_rules/curve_peak_metrics.py",
                 "src/sciplot_core/materials_rules/mechanical_metrics.py",
                 "src/sciplot_core/materials_rules/mechanical_rules.py",
                 "src/sciplot_core/semantic_sources/mechanical_fact_derivation.py",
@@ -111,6 +112,7 @@ PROJECT_INTEGRITY_OWNERS = (
                 "tests/test_mechanical_facts_flow.py",
                 "tests/test_mechanical_facts_flow_native.py",
                 "tests/test_mechanical_task_options.py",
+                "tests/test_analysis_metric_observation.py",
             }
         ),
         pytest_targets=(
@@ -119,6 +121,7 @@ PROJECT_INTEGRITY_OWNERS = (
             "tests/test_mechanical_facts_flow.py",
             "tests/test_mechanical_facts_flow_native.py",
             "tests/test_mechanical_task_options.py",
+            "tests/test_analysis_metric_observation.py",
             "tests/test_tensile_workbook_directory.py",
             "tests/test_tga_scientific_transform.py",
             "tests/test_resolved_mechanical_figure_plan.py",

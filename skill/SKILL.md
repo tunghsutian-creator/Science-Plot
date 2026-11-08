@@ -15,6 +15,7 @@ For routine plotting do not load other routes, source code, history or architect
 | User intent | Route |
 | --- | --- |
 | Change or export an existing ordinary saved figure | [Saved figure](references/saved-figure-edit.md) |
+| Mark a separate current PDF copy and read its bound annotations for an AI edit | [PDF reference](references/pdf-review.md) |
 | Find and continue an original after source/project movement or copying | [Saved work](references/saved-work-continuation.md) |
 | Package selected final figures across projects in manuscript order | [Paper figures](references/paper-figures.md) |
 | Package selected ManagedPlot native snapshots with guarded local continuation | [Managed delivery](references/managed-delivery.md) |
@@ -86,7 +87,7 @@ Managed Template/Binding/Theme creation uses document authority. FigureTemplate 
 For raw-input plotting, omit `--out` by default. Deliveries belong beside the original source in `SOURCE_SciPlot/`; hidden `.sciplot/` holds internal evidence.
 Do not put user plotting deliveries inside the SciPlot repository or its `outputs/`.
 Development evidence belongs under ignored `.tmp_verify/`.
-Require Doctor `status=ready` before artifact handoff; reuse current readiness. Deliver plotting CSVs, PDF/TIFF and editable VSZ. Continue changes through the current AI task/document commands; do not launch the retired browser editor. Keep PDF review marks on a separate copy. Standard annotation parsing alone is not a project-bound AI review workflow.
+Require Doctor `status=ready` before artifact handoff; reuse current readiness. Deliver plotting CSVs, PDF/TIFF and editable VSZ. Continue changes through the current AI task/document commands; do not launch the retired browser editor. Keep PDF review marks on a separate copy. Use the registered-project PDF reference route for a trusted current binding; a standalone parser result or an unknown PDF is not such a binding.
 
 ## Authority
 

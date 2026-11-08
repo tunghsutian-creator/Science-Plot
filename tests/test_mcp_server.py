@@ -22,7 +22,10 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 
 def test_tool_discovery_uses_closed_shared_operation_schema():
     tools = {item.name: item for item in tool_definitions()}
-    assert len(tools) == 46
+    assert len(tools) == 48
+    assert {"sciplot_pdf_review_create", "sciplot_pdf_review_read"} <= tools.keys()
+    assert tools["sciplot_pdf_review_read"].annotations.read_only_hint is True
+    assert tools["sciplot_pdf_review_create"].annotations.read_only_hint is False
     assert {"sciplot_intake_prepare", "sciplot_intake_table", "sciplot_intake_create"} <= tools.keys()
     assert tools["sciplot_intake_table"].annotations.read_only_hint is True
     assert {"sciplot_compose", "sciplot_compose_capabilities"} <= tools.keys()
@@ -42,6 +45,26 @@ def test_tool_discovery_uses_closed_shared_operation_schema():
     assert tools["sciplot_edit_apply"].annotations.read_only_hint is False
     assert tools["sciplot_task_start"].annotations.idempotent_hint is False
     assert tools["sciplot_task_find"].annotations.read_only_hint is True
+
+
+@pytest.mark.parametrize("action", ["create", "read"])
+def test_pdf_review_mcp_adapter_reaches_same_local_owner_without_a_model(tmp_path, monkeypatch, action):
+    from sciplot_core.mcp_server.services import invoke_owner
+    from sciplot_core.visual_review import pdf_review_binding
+
+    calls = []
+    payload = {"kind": "pdf_reference_test", "annotations": [{"text": "untrusted reference"}]}
+    monkeypatch.setattr(pdf_review_binding, action + "_pdf_review",
+                        lambda project, **kwargs: calls.append((project, kwargs)) or payload)
+    arguments = {"project": str(tmp_path)}
+    expected = {"review_id": "review-identity"}
+    if action == "create":
+        arguments.update(output_dir=str(tmp_path.parent / "review"), figure_id="figure-1")
+        expected = {"review_dir": tmp_path.parent / "review", "figure_id": "figure-1"}
+    else:
+        arguments.update(review_id="review-identity")
+    assert invoke_owner("sciplot_pdf_review_" + action, arguments) is payload
+    assert calls == [(tmp_path, expected)]
 
 
 def test_invalid_or_unknown_calls_never_reach_domain_owner(monkeypatch):

@@ -67,6 +67,7 @@ DOCUMENTATION_OWNER = ChangedOwner(
             "skill/references/external-control.md",
             "skill/references/advanced-workflows.md",
             "skill/references/saved-figure-edit.md",
+            "skill/references/pdf-review.md",
             "skill/references/ordinary-create.md",
             "skill/references/ordinary-categorical.md",
             "skill/references/categorical-presentation-edit.md",

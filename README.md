@@ -455,10 +455,13 @@ deliveries do not create `Open_in_SciPlot.command`. Recorded historical launcher
 remain checked legacy artifacts; reading them does not execute or upgrade them.
 
 Keep PDF review notes on a separate copy so canonical export hashes stay valid.
-A byte-only reader can extract standard PDF comments and geometry, but the full
-project-bound annotation-to-AI workflow is not implemented. PDF coordinates and
-comments do not authorize data or unit changes. See the
-[editing and continuation guide](skill/references/advanced-workflows.md).
+For a current registered ordinary figure, `project pdf-review-create` creates
+that independent copy and records its project/figure/document/export binding.
+After marking it in an external PDF tool, `project pdf-review-read` returns
+bounded standard annotations for the AI to interpret through the existing typed
+edit and preview flow. Reads recheck currentness; marks never execute commands,
+change science or send data to a model. Unknown standalone PDFs, flattened marks
+and OCR are outside this route. See the [PDF reference guide](skill/references/pdf-review.md).
 
 ## Get started
 

@@ -1,8 +1,51 @@
 # AI-only scientific application: complexity reduction
 
-Status: active target and implementation sequence, 2026-11-07.
-Baseline: main `07505f5c`. The cancelled SavedWork release is retained separately.
+Status: active target and implementation sequence, updated 2026-11-08.
+Original baseline: main `07505f5c`. The cancelled SavedWork release is retained separately.
 This plan replaces the earlier single-desktop/single-browser frontend proposals.
+
+The first combined batch is delivered as main `4b6bd72d`: the Mac suite completed
+10091 bodies successfully, capture and the declared execution's access closure
+completed, and the exact candidate's Linux CI succeeded. Main referenced that
+completed source approval rather than repeating its tests. Those results do not
+certify an exhaustive historical corpus, printed journal quality or completion
+of the whole simplification plan. The component descriptions below record what
+that batch changed; remaining work stays explicit.
+
+### Current bounded batch
+
+Three isolated worktrees continue from that verified commit. The integration
+owner alone changes shared owner/type registration and this plan.
+
+- Daily verification: use existing quick/changed selection and actual node overlap
+  to remove proven repeated work. Preserve fail-fast shared contracts, unknown
+  owner refusal, scientific/native coverage and the record mode's evidence
+  contract. Measure the same selected assertions and input before and after;
+  selected feedback is never release or reusable capture evidence.
+- Scientific preparation: consolidate the temperature-sweep analysis's repeated
+  paired-table observations inside its one synchronous operation. Preserve the
+  original calculators, ordering, missing values, units, tie choices and error
+  behavior. Independent callers and later IO/commit boundaries observe afresh;
+  different rheology algorithms are not interchangeable duplicates.
+- PDF references: bind a separately marked review copy to an existing registered
+  project/figure and exact current document/export. Read standard annotations as
+  untrusted reference material for the existing typed AI command path. A PDF's
+  own labels grant no project, scientific or command authority. No new frontend,
+  automatic interpretation of marks, model call or outbound disclosure is added.
+
+The previous Mac full took 17302.15 seconds; the exact candidate CI runtime job
+took 18950 seconds, of which comprehensive consumed 15486 step seconds. A retained
+generated A-G fixture's read-only fingerprint profile took 3.236 seconds,
+including 2.672 seconds in checked-head reads and 1856 JSON decodes. This profile
+uses a deliberately drifted test fixture and does not establish successful
+continuation or explain capture/load overhead. Fresh credential checks before
+and after an actual read are distinct boundaries and must remain.
+
+Each line first proves its finite equality/refusal and cost controls. Integrate
+the completed changes before selecting necessary native/platform and final
+acceptance gates; do not repeat the delivered commit's full suite or launch a
+full suite for each intermediate edit. Raw timings from different evidence modes
+or node sets are not algorithmic speedup evidence.
 
 First implementation checkpoint: immutable command/patch ownership now reaches
 all existing semantic and NativeSuite patch consumers; replaced in-memory schema

@@ -84,6 +84,29 @@ same 32 successful bodies and four checks in both modes: quick 11.00 seconds,
 unrecorded changed 10.09 seconds. This is an explicit daily entry and protection
 against accidental evidence collection, not an algorithmic speedup claim.
 
+Exact shared source targets execute once in the first shared gate, rather than
+again in the later owner command. A selected whole module still runs unchanged;
+the planner does not guess how to subtract a function from a module. An empty
+remaining owner selection never becomes a bare, unfiltered pytest command.
+Record mode declares the shared command as its original pytest input scope.
+
+Two reviewed test-only leaves, `test_workflow_bundle_dispatch.py` and
+`test_plan_preview.py`, select their complete focused leaf and the shared checks.
+They currently supply no shared runtime helpers, fixtures or pytest plugins;
+the mapping controls verify that role. Their production owners retain every
+original regression target. Mixed production changes broaden normally and an
+unknown owner still stops before checks. This is a finite responsibility split,
+not permission to narrow every test file by its name.
+
+Component measurements retained 47 unique assertions while removing five exact
+repetitions: the changed API took 17.75 then 14.03 seconds, excluding the outer
+Python/tool startup. One test-only owner comparison selected 253 then 70 unique
+focused bodies, keeping the complete 62-body leaf plus eight shared checks; its
+outer pipeline took 7.70 then 6.98 seconds. That second comparison changes the
+justified impact scope, and neither single pair proves a stable percentage or
+reduces the measured multi-hour release suite. Use these daily checks during
+implementation; freeze a coherent batch before its necessary full acceptance.
+
 Unrecorded feedback runs changed-file Ruff, eight shared source contracts and the
 complete configured type gate before the affected behavior bodies (when each
 gate applies), then whitespace. A failure stops that editing loop; later checks

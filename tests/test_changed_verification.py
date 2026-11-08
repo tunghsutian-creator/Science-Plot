@@ -35,6 +35,52 @@ from sciplot_core.verification.type_gate_owners import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize(("leaf", "owner", "production", "broad_target"), [
+    ("tests/test_workflow_bundle_dispatch.py", "workflow_dispatch_test_contract",
+     "src/sciplot_core/materials_rules/catalog.py", "tests/test_autoplot_run.py"),
+    ("tests/test_plan_preview.py", "plan_preview_test_contract",
+     "src/sciplot_core/semantic_sources/tga_transform.py", "tests/test_task_semantic_resolution_native.py"),
+])
+def test_reviewed_test_only_leaves_keep_local_assertions_and_broaden_with_production(leaf, owner, production, broad_target):
+    local = build_changed_verification_plan([leaf], repo_root=REPO_ROOT)
+    assert [row["owner_id"] for row in local["owners"]] == [owner]
+    assert leaf in local["owners"][0]["pytest_targets"]
+    assert local["required_later"]["release"]
+    mixed = build_changed_verification_plan([leaf, production], repo_root=REPO_ROOT)
+    assert broad_target in {target for row in mixed["owners"] for target in row["pytest_targets"]}
+    assert len(mixed["owners"]) > 1
+    unknown = build_changed_verification_plan([leaf, "src/sciplot_core/unregistered_science.py"], repo_root=REPO_ROOT)
+    assert unknown["status"] == "failed" and not unknown["checks"]
+
+
+def test_reviewed_test_only_leaves_do_not_supply_shared_runtime_helpers():
+    import ast
+
+    leaves = {"test_workflow_bundle_dispatch", "test_plan_preview"}
+    for stem in leaves:
+        tree = ast.parse((REPO_ROOT / "tests" / (stem + ".py")).read_bytes())
+        assert not any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("pytest_")
+                       for node in tree.body)
+        assert not any(isinstance(node, ast.Name) and node.id == "pytest_plugins" for node in ast.walk(tree))
+        assert not any(isinstance(node, ast.Attribute) and node.attr == "fixture" for node in ast.walk(tree))
+    for directory in (REPO_ROOT / "src", REPO_ROOT / "tests"):
+        for path in directory.rglob("*.py"):
+            if path.stem in leaves:
+                continue
+            for node in ast.walk(ast.parse(path.read_bytes())):
+                if isinstance(node, ast.Import):
+                    assert not any(alias.name.rsplit(".", 1)[-1] in leaves for alias in node.names), path
+                elif isinstance(node, ast.ImportFrom):
+                    assert not ((node.module or "").rsplit(".", 1)[-1] in leaves
+                                or any(alias.name in leaves for alias in node.names)), path
+                elif isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant):
+                    function = node.func
+                    dynamic_import = ((isinstance(function, ast.Name) and function.id == "__import__")
+                                      or (isinstance(function, ast.Attribute) and function.attr == "import_module"))
+                    if dynamic_import and isinstance(node.args[0].value, str):
+                        assert node.args[0].value.rsplit(".", 1)[-1] not in leaves, path
+
+
 @pytest.mark.parametrize(("path", "target"), [
     ("src/sciplot_core/studio_render/categorical_layout.py", "tests/test_task_ordinary_raw_points.py"),
     ("src/sciplot_core/task_series_edits.py", "tests/test_series_display.py"),

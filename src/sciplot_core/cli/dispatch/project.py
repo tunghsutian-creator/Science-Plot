@@ -25,6 +25,10 @@ def dispatch_project_control(args: Any) -> int:
         from sciplot_core.cli.dispatch.project_create import dispatch_project_create
 
         return dispatch_project_create(args)
+    if action in {"pdf-review-create", "pdf-review-read"}:
+        from sciplot_core.cli.dispatch.pdf_review import dispatch_pdf_review
+
+        return dispatch_pdf_review(args)
     if action == "capabilities":
         payload = project_control_capabilities()
     elif action == "style-capture":

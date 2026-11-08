@@ -32,6 +32,21 @@ from sciplot_core.verification.type_gate_owners import (
 )
 
 CHANGED_OWNERS = (
+    ChangedOwner(
+        owner_id="workflow_dispatch_test_contract",
+        owned_test_paths=frozenset({"tests/test_workflow_bundle_dispatch.py"}),
+        pytest_targets=("tests/test_workflow_bundle_dispatch.py", *ARCHITECTURE_CORE_TARGETS),
+        handoff_gates=("doctor",),
+        final_milestone_gates=("smoke",),
+        release_gates=("full_pytest",),
+    ),
+    ChangedOwner(
+        owner_id="plan_preview_test_contract",
+        owned_test_paths=frozenset({"tests/test_plan_preview.py"}),
+        pytest_targets=("tests/test_plan_preview.py", *ARCHITECTURE_CORE_TARGETS),
+        final_milestone_gates=("smoke",),
+        release_gates=("acceptance_rules", "full_pytest"),
+    ),
     *PROJECT_CORE_OWNERS,
     *ORDINARY_PLOTTING_OWNERS,
     PANEL_ASSEMBLY_OWNER,
@@ -122,7 +137,6 @@ CHANGED_OWNERS = (
             "tests/test_rule_invocation_contract.py",
             "tests/test_semantic_preparation_dispatch.py",
             "tests/test_style_template_contract.py",
-            "tests/test_workflow_bundle_dispatch.py",
             "tests/test_semantic_path_authority.py",
             'tests/test_autoplot_integrity.py',
         }),
@@ -164,6 +178,7 @@ CHANGED_OWNERS = (
         pytest_targets=(
             "tests/test_dtg_analysis.py",
             "tests/test_impact_unit_evidence.py",
+            "tests/test_analysis_metric_observation.py",
         ),
         release_gates=("full_pytest",),
     ),
@@ -268,7 +283,6 @@ CHANGED_OWNERS = (
         ),
         owned_test_paths=frozenset(
             {
-                "tests/test_plan_preview.py",
                 "tests/test_dma_named_recipe_plan_binding.py",
                 "tests/test_dma_temperature_scientific_transform.py",
                 "tests/test_ftir_scientific_transform.py",

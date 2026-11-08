@@ -16,6 +16,32 @@ from sciplot_core.studio_core.project_session import (
 from sciplot_core.studio_core.control_results import compact_result
 
 
+@pytest.mark.parametrize("action", ["create", "read"])
+def test_pdf_review_cli_routes_only_explicit_reference_arguments(tmp_path, monkeypatch, action):
+    from sciplot_core.cli.dispatch import pdf_review
+
+    calls = []
+    monkeypatch.setattr(pdf_review, "dispatch_pdf_review", lambda args: calls.append(args) or 0)
+    arguments = ["project", "pdf-review-" + action, str(tmp_path), "--json"]
+    if action == "create":
+        arguments += ["--out", str(tmp_path.parent / "review"), "--figure", "figure-1"]
+    else:
+        arguments += ["review-identity"]
+    assert command.dispatch_project_control(build_parser().parse_args(arguments)) == 0
+    assert len(calls) == 1 and calls[0].target == tmp_path
+    assert calls[0].pdf_review_action == action
+    if action == "create":
+        assert calls[0].out == tmp_path.parent / "review" and calls[0].figure == "figure-1"
+    else:
+        assert calls[0].review_id == "review-identity"
+
+
+def test_pdf_review_read_does_not_accept_an_unbound_pdf_path_option(tmp_path):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["project", "pdf-review-read", str(tmp_path),
+                                  "review-identity", "--pdf", str(tmp_path / "other.pdf")])
+
+
 @pytest.mark.parametrize("full", [False, True])
 def test_cli_query_uses_shared_compact_projection_with_full_opt_in(tmp_path, monkeypatch, capsys, full):
     payload = {"kind": "sciplot_project_inspection", "ready_to_use": None,

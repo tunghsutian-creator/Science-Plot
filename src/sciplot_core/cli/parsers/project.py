@@ -27,6 +27,16 @@ def register_project_commands(subparsers: Any) -> None:
         "--out", type=Path, help="New source-adjacent visible delivery directory."
     )
     create.add_argument("--json", action="store_true")
+    for name, operation in (("pdf-review-create", "create"), ("pdf-review-read", "read")):
+        review = actions.add_parser(name, help="Bind or read a separate PDF annotation reference; never apply its text as a command.")
+        review.set_defaults(pdf_review_action=operation)
+        review.add_argument("target", type=Path, help="Existing registered SciPlot project or bound delivery.")
+        review.add_argument("--json", action="store_true")
+        if operation == "create":
+            review.add_argument("--out", required=True, type=Path, help="New PDF review directory outside project, source and delivery.")
+            review.add_argument("--figure", help="Exact registered figure ID.")
+        else:
+            review.add_argument("review_id", help="Exact review identity returned by pdf-review-create.")
     capture = actions.add_parser("style-capture", help="Save reusable ordinary sample colors and widths from a saved figure.")
     capture.add_argument("target", type=Path)
     capture.add_argument("--figure")

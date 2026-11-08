@@ -70,6 +70,35 @@ PROJECT_REVISION_OWNERS = (
         release_gates=("acceptance_rules", "full_pytest"),
     ),
     ChangedOwner(
+        owner_id="bound_pdf_review",
+        exact_paths=frozenset({
+            "src/sciplot_core/visual_review/pdf_review_binding.py",
+            "src/sciplot_core/visual_review/pdf_review_content.py",
+            "src/sciplot_core/visual_review/pdf_review_files.py",
+            "src/sciplot_core/cli/dispatch/pdf_review.py",
+            "src/sciplot_core/cli/parsers/project.py",
+            "src/sciplot_core/cli/dispatch/project.py",
+            "src/sciplot_core/mcp_server/schemas.py",
+            "src/sciplot_core/mcp_server/services.py",
+        }),
+        owned_test_paths=frozenset({"tests/test_pdf_review_binding.py", "tests/test_pdf_review_binding_native.py",
+                                    "tests/test_pdf_review_interfaces.py"}),
+        pytest_targets=(
+            "tests/test_pdf_review_annotations.py",
+            "tests/test_pdf_review_binding.py",
+            "tests/test_pdf_review_binding_native.py",
+            "tests/test_pdf_review_interfaces.py",
+            "tests/test_project_control_cli.py::test_pdf_review_cli_routes_only_explicit_reference_arguments",
+            "tests/test_project_control_cli.py::test_pdf_review_read_does_not_accept_an_unbound_pdf_path_option",
+            "tests/test_mcp_server.py::test_pdf_review_mcp_adapter_reaches_same_local_owner_without_a_model",
+            "tests/test_mcp_server.py::test_tool_discovery_uses_closed_shared_operation_schema",
+        ),
+        mypy_required=True,
+        handoff_gates=("doctor",),
+        final_milestone_gates=("smoke",),
+        release_gates=("full_pytest",),
+    ),
+    ChangedOwner(
         owner_id="pymupdf_import_compatibility",
         exact_paths=frozenset(
             {
@@ -83,6 +112,8 @@ PROJECT_REVISION_OWNERS = (
         ),
         pytest_targets=(
             "tests/test_pdf_review_annotations.py",
+            "tests/test_pdf_review_binding.py",
+            "tests/test_pdf_review_binding_native.py",
             "tests/test_visual_review.py",
             "tests/test_artifact_raster_visibility.py",
             "tests/test_delivery_studio_lifecycle.py",

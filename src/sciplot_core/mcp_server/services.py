@@ -139,6 +139,12 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return inspect_task(task) if name == "sciplot_task_inspect" else resume_task(task, arguments["response"])
     project = Path(arguments["project"])
     figure_id = arguments.get("figure_id")
+    if name in {"sciplot_pdf_review_create", "sciplot_pdf_review_read"}:
+        from sciplot_core.visual_review.pdf_review_binding import create_pdf_review, read_pdf_review
+
+        if name == "sciplot_pdf_review_create":
+            return create_pdf_review(project, review_dir=Path(arguments["output_dir"]), figure_id=figure_id)
+        return read_pdf_review(project, review_id=arguments["review_id"])
     if name == "sciplot_project_inspect":
         from sciplot_core.studio_core.project_query import inspect_project
 

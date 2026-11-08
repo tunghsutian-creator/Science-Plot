@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-11-07. External AI is the task interface. Current behavior belongs
+Status: 2026-11-08. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -12,10 +12,13 @@ snapshot's acceptance.
 The current authorized work is the ordered
 [core complexity reduction](docs/COMPLEXITY_REDUCTION_PLAN.md): immutable command
 admission and patch caller migration, explicit XY execution, shared observations
-and saved-evidence facts. Those components and the product UI retirement are
-implemented in the isolated batch, including scientific column confirmation and
-output-location roles. Combined frozen acceptance and supported-platform evidence
-remain its current closure work. The product target is AI conversation
+and saved-evidence facts. The first combined batch and product UI retirement are
+delivered as main `4b6bd72d`; its exact Mac, access and platform evidence remains
+local rather than becoming proof for later changes. The active isolated batch
+removes exact shared verification repeats and two overbroad test-only mappings,
+shares one temperature-analysis table observation, and binds current registered
+PDF review copies to the existing typed edit workflow. Final combined acceptance
+for these new changes remains separate. The product target is AI conversation
 through local tools, with a separate PDF reference copy; no manual graph-editing
 frontend is being built. Retired manual UI and draft/history writers do not remain
 as alternate Core authority. Preserve their real scientific and file obligations.
@@ -52,10 +55,12 @@ cost at equal coverage. Add real historical-failure shadows and unknown/shared
 change counterexamples. Once these establish adequate local feedback and risk,
 continue the already authorized work without waiting for remote CI to begin
 development. Remote policy measurements and release gates remain their own
-explicit claims until actually observed. The current native digest change has
-matched development measurements in `docs/TASK_CAPABILITY_MEASUREMENTS.md`. Close its
-frozen full/capture/access and platform gates once before delivery. Do not add
-another cache framework, P2/P3 migration or feature to this batch.
+explicit claims until actually observed. Historical native digest measurements
+remain in `docs/TASK_CAPABILITY_MEASUREMENTS.md`; they do not measure this batch.
+The new shared-check and test-only owner comparisons save seconds, not hours.
+Native workflow bodies still dominate complete acceptance. Profile those bodies
+before claiming a full-suite speedup; do not add another cache framework to mask
+that cost. Close only the integrated batch's required gates once before delivery.
 
 ## Next bounded architecture work
 

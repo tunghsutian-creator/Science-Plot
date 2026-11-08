@@ -390,6 +390,10 @@ SOURCE_ARTIFACT_STRICT_ADDITIONS = frozenset(
         "src/sciplot_core/qa/additional_exports.py",
         "src/sciplot_core/qa/raster_inspection.py",
         "src/sciplot_core/visual_review/pdf_annotations.py",
+        "src/sciplot_core/visual_review/pdf_review_binding.py",
+        "src/sciplot_core/visual_review/pdf_review_content.py",
+        "src/sciplot_core/visual_review/pdf_review_files.py",
+        "src/sciplot_core/cli/dispatch/pdf_review.py",
         "src/sciplot_core/studio_render/source_artifacts.py",
         "src/sciplot_core/studio_render/categorical_components.py",
         "src/sciplot_core/studio_render/frame_series.py",
@@ -792,8 +796,10 @@ def test_project_core_domains_retain_all_owned_inputs_and_real_native_consumers(
             assert not plan["unowned_paths"]
             assert owner.owner_id in {row["owner_id"] for row in plan["owners"]}
             selected = _targets(plan)
-            # The existing selector owner folds exact nodes into a selected full
-            # module. That preserves their bodies without duplicate execution.
+            selected.update(next(check["command"][4:] for check in plan["checks"]
+                                 if check["check_id"] == "pytest_shared_contracts"))
+            # Shared contracts still execute first. Other exact targets can be
+            # covered by their complete selected module, without repeating them.
             assert all(target in selected or target.split("::", 1)[0] in selected
                        for target in owner.pytest_targets)
     shared = _plan(["src/sciplot_core/project_commands/contracts.py"])
