@@ -217,9 +217,8 @@ class ProjectCandidateResolver(ProjectSourceResolver):
                     raise ProjectConflict("The candidate member differs from its exact requested bytes.")
         return self._private_path(relative)
 
-    def output_path(self, original: str | Path) -> Path:
-        """An admitted renderer output may create only private ordinary members."""
-        relative = self.logical_resource(original)
+    def _output_member(self, relative: str | None) -> str:
+        """Apply the existing output role after held-namespace path admission."""
         local = relative.split("/", 1)[1] if relative is not None and relative.startswith("@") and "/" in relative else relative
         if (relative is None or relative == "." or relative in self._input_members
                 or local is None or local.split("/", 1)[0] in {"raw", "source"}):
@@ -228,6 +227,12 @@ class ProjectCandidateResolver(ProjectSourceResolver):
             key, _, member = relative[1:].partition("/")
             if not member or self.resources is None or not self.resources.admits(key, member, output=True):
                 raise ProjectConflict("A resource output requires an exact host-granted member.")
+        return relative
+
+    def output_path(self, original: str | Path) -> Path:
+        """An admitted renderer output may create only private ordinary members."""
+        relative = self._output_member(self.logical_resource(original))
+        local = relative.split("/", 1)[1] if relative.startswith("@") else relative
         components = parts(local)
         with self._namespace(relative) as (fd, _), directory(fd, components[:-1], create=True) as parent:
             try:
@@ -238,6 +243,22 @@ class ProjectCandidateResolver(ProjectSourceResolver):
                 if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                     raise ProjectConflict("A candidate output must be an ordinary unaliased private file.")
         return self._private_path(relative)
+
+    def literal_artifact_path(self, actual: Path) -> str:
+        """Project a read member or admitted future output without creating it."""
+        sealed = selected_sealed_view(self.store, self.snapshot, actual.expanduser().absolute())
+        if sealed is not None:
+            return super().literal_path(sealed)
+        relative = self.logical_resource(actual)
+        if relative is None:
+            return super().literal_path(actual)
+        if (relative == "." or relative in self.snapshot["files"]
+                or relative in {f"@{key}" for key in self.store.locations}
+                or any(name.startswith(relative + "/") for name in self.snapshot["files"])):
+            self.resolve_path(actual)
+        else:
+            self._output_member(relative)
+        return self._literal(relative)
 
     def literal_path(self, actual: Path) -> str:
         sealed = selected_sealed_view(self.store, self.snapshot, actual.expanduser().absolute())

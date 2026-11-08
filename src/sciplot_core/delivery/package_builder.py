@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
+from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.delivery_identity import (
@@ -126,7 +127,7 @@ def _build_staged_delivery(
                 "relative_path": str(destination.relative_to(delivery_dir)),
                 "format": "tiff" if export_format == "tiff_300" else "png" if suffix == ".png" else export_format,
                 "export_format": export_format,
-                "figure_id": figure_ids_by_path.get(str(source.resolve())),
+                "figure_id": figure_ids_by_path.get(artifact_path_key(source)),
                 "source_sha256": source_hash,
                 "delivery_sha256": delivery_hash,
                 "copy_hash_matches": bool(source_hash and source_hash == delivery_hash),
@@ -360,7 +361,7 @@ def _figure_ids_by_path(manifest: dict[str, Any]) -> dict[str, str]:
         figure_id = str(item.get("figure_id") or single_id or "").strip()
         if plan is not None and figure_id == "primary":
             figure_id = plan.primary_figure_id
-        resolved_path = str(Path(path_value).expanduser().resolve())
+        resolved_path = artifact_path_key(path_value)
         if plan is None:
             if figure_id:
                 values[resolved_path] = figure_id

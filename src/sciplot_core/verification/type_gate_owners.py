@@ -131,6 +131,7 @@ TYPED_CORE_CONTRACT_OWNER = ChangedOwner(
         }
     ),
     pytest_targets=(
+        "tests/test_mechanical_facts_flow.py",
         "tests/test_autoplot_evidence.py",
         "tests/test_foundation_text_values.py", "tests/test_source_version_error_contracts.py",
         "tests/test_foundation_json_io.py", "tests/test_writer_lease.py", "tests/test_iso_timestamps.py",
@@ -202,6 +203,7 @@ WORKFLOW_EXPORT_FORMAT_TYPE_OWNER = ChangedOwner(
         }
     ),
     pytest_targets=(
+        "tests/test_mechanical_facts_flow.py",
         "tests/test_workflow_bundle_dispatch.py",
         "tests/test_generic_single_task_plan.py",
         "tests/test_performance_figure_plan_activation.py",
@@ -240,6 +242,7 @@ STUDIO_FIGURE_SET_LIFECYCLE_TYPE_OWNER = ChangedOwner(
         }
     ),
     pytest_targets=(
+        "tests/test_mechanical_facts_flow.py",
         "tests/test_studio_figure_task_chain.py",
         "tests/test_mechanical_studio_task_sources.py",
         "tests/test_performance_figure_plan_activation.py",
@@ -288,6 +291,7 @@ STUDIO_FIGURE_SET_EXECUTION_TYPE_OWNER = ChangedOwner(
     owner_id="studio_figure_set_execution_type",
     exact_paths=STUDIO_FIGURE_SET_EXECUTION_TYPE_PATHS,
     pytest_targets=(
+        "tests/test_mechanical_facts_flow.py",
         'tests/test_preparation_generated_inputs.py',
         "tests/test_resolved_frequency_figure_plan.py",
         "tests/test_impact_condition_figure_set.py",

@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.figure_plan.metric_binding import CartesianMetricBinding
 from sciplot_core.figure_plan.artifact_locations import (
+    artifact_path_key,
     literal_artifact_path,
     literal_figure_plan_artifacts,
 )
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.figure_plan.task import FigureTask
 from sciplot_core.policy import canonical_figure_stem
+from sciplot_core.foundation.source_locations import resolve_source_path
 
 from sciplot_core.study_model.normalization import (
     normalize_study_model,
@@ -25,11 +28,12 @@ def _figure_artifact_key(path: str) -> str:
 
 
 def _json_contract_matches(path: Path, expected_kind: str) -> bool:
-    if not path.exists() or not path.is_file():
-        return False
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+        source = resolve_source_path(path)
+        if not stat.S_ISREG(source.stat().st_mode):
+            return False
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError):
         return False
     return isinstance(payload, dict) and payload.get("kind") == expected_kind
 
@@ -111,7 +115,7 @@ def attach_run_artifacts_to_study_model(
                 figure.pop("resolved_figure_ids", None)
         updated["figure_queue"] = queue
         bound_paths = {
-            str(Path(literal_artifact_path(path)).expanduser().resolve())
+            artifact_path_key(path)
             for outcome in figure_plan.outcomes
             for path in outcome.artifacts
         }
@@ -124,7 +128,7 @@ def attach_run_artifacts_to_study_model(
                 artifact
                 for group in grouped_artifacts
                 for artifact in group
-                if str(Path(str(artifact["path"])).expanduser().resolve())
+                if artifact_path_key(str(artifact["path"]))
                 not in bound_paths
             ],
             "artifact_binding_policy": "resolved_figure_plan",

@@ -6,6 +6,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 from sciplot_core.policy.export_formats import export_suffix
+from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 from sciplot_core.foundation.file_hashing import (
     existing_file_sha256,
 )
@@ -183,7 +184,7 @@ def _verify_studio_delivery_binding(
             return None
         return candidate
 
-    expected_exports: dict[Path, tuple[str, str]] = {}
+    expected_exports: dict[str, tuple[str, str]] = {}
     for item in exports:
         try:
             source = Path(str(item["path"])).expanduser().resolve()
@@ -195,9 +196,9 @@ def _verify_studio_delivery_binding(
         if not expected_hash:
             issues.append(f"Export {source} has no SHA-256.")
             continue
-        expected_exports[source] = (export_format, expected_hash)
+        expected_exports[artifact_path_key(source)] = (export_format, expected_hash)
 
-    matched_sources: set[Path] = set()
+    matched_sources: set[str] = set()
     figure_records = (
         delivery.get("figures") if isinstance(delivery.get("figures"), list) else []
     )
@@ -210,13 +211,14 @@ def _verify_studio_delivery_binding(
         except (OSError, RuntimeError, ValueError):
             issues.append("A delivery figure source path is invalid.")
             continue
-        expected = expected_exports.get(source)
+        source_key = artifact_path_key(source)
+        expected = expected_exports.get(source_key)
         if expected is None:
             issues.append(
                 f"Delivery figure is not bound to an exact-current export: {source}"
             )
             continue
-        if source in matched_sources:
+        if source_key in matched_sources:
             issues.append(
                 f"Delivery figure source is recorded more than once: {source}"
             )
@@ -246,7 +248,7 @@ def _verify_studio_delivery_binding(
         ):
             issues.append(f"Delivery figure hash or format binding failed: {source}")
             continue
-        matched_sources.add(source)
+        matched_sources.add(source_key)
     if set(expected_exports) != matched_sources:
         issues.append(
             "The delivery figures do not cover every exact-current export exactly once."
@@ -278,7 +280,7 @@ def _verify_studio_delivery_binding(
     if not project_records:
         issues.append("The delivery contains no editable Veusz document.")
     expected_document_hashes = {
-        str(Path(path).expanduser().resolve()): str(value)
+        artifact_path_key(path): str(value)
         for path, value in (document_hashes or {}).items()
         if str(path).strip() and str(value).strip()
     }
@@ -295,7 +297,7 @@ def _verify_studio_delivery_binding(
         )
         source_path = Path(str(record.get("source") or "")).expanduser().resolve()
         expected_project_hash = expected_document_hashes.get(
-            str(source_path),
+            artifact_path_key(source_path),
             export_document_sha256,
         )
         if (

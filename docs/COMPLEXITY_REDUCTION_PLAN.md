@@ -147,6 +147,17 @@ controls are proved. No cross-operation PASS cache or changed numerical toleranc
 Unify saved artifact/QA facts and remove the corresponding GUI copies. Migrate all
 supported scientific/creation/continuation families, not just the first XY fixture.
 
+The next combined batch removes three observed repetitions using existing owners:
+mechanical facts travel through both Workflow and Studio, governed prepared TTS
+normalizes once before compilation, and one attached SavedWork observation reads
+its canonical and archive members as a generation-bound batch. Fresh source,
+callback, native and publication observations remain independent. Component
+equality and cost records cover only those bounded operations. Genuine combined
+native and release checks still decide acceptance; they are not replaced by a
+snapshot counter or by the earlier running candidate's results. Intake session
+flat-file/envelope publication and other family projections remain explicit work
+after this batch rather than implicit claims of whole-project completion.
+
 ### 3. AI reference flow and removal of manual product paths
 
 Reuse an external PDF tool such as macOS Preview for notes/shapes on a review

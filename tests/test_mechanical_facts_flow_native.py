@@ -22,6 +22,7 @@ from sciplot_core.studio import prepare_studio_document
 from sciplot_core.studio_core.project_export import export_project_document
 from sciplot_core.veusz_runtime import veusz_worker_environment
 from sciplot_core.workflow import run_request
+from sciplot_core.workflow.project_requests import _publication_store
 
 
 def _bound_files(store, paths):
@@ -113,9 +114,8 @@ def test_generated_mechanical_workflow_and_studio_cold_native_lifecycle(tmp_path
     expected_curves = tuple(tuple((float(row[c]), float(row[c + 1])) for row in rows[3:])
                             for c in (0, 2, 4))
     expected_labels = tuple(f"Cedar__repeat {n}" for n in (1, 2, 3))
-    options = {"input": str(source), "rule_id": "compression_curve", "template": "curve",
-               "replicate_mode": "individual", "exports": ["pdf", "tiff_300"],
-               "render_options": {"size": "90x70"}, "explicit_render_option_keys": ["size"]}
+    options = {"input": str(source), "rule_id": "compression_curve", "recipe": "auto", "template": "curve",
+               "replicate_mode": "individual", "exports": ["pdf", "tiff_300"]}
     evidence = {}
     try:
         workflow_root = tmp_path / "workflow"
@@ -124,10 +124,15 @@ def test_generated_mechanical_workflow_and_studio_cold_native_lifecycle(tmp_path
         workflow_request.write_text(json.dumps({**options,
             "output": str(workflow_root / "runs/run_001"),
             "delivery_output": str(tmp_path / "workflow_delivery")}))
+        (workflow_root / "intake_manifest.json").write_text(json.dumps({
+            "kind": "sciplot_intake_project", "version": 1,
+            "project_slug": workflow_root.name}))
+        workflow_store = _publication_store(workflow_root)
+        workflow_before = workflow_store.snapshot(import_legacy=True)
         workflow = run_request(workflow_request)
-        workflow_store = project_store(workflow_root, with_snapshot=True)
         workflow_manifest = Path(workflow["output"]) / "manifest.json"
-        _, committed = _bound_files(workflow_store, [workflow_manifest])
+        workflow_after, committed = _bound_files(workflow_store, [workflow_manifest])
+        assert workflow_after["sequence"] == workflow_before["sequence"] + 1
         canonical_workflow = json.loads(committed[workflow_manifest])
         assert canonical_workflow["resolved_figure_plan"] == workflow["resolved_figure_plan"]
         workflow_plan = ResolvedFigurePlan.from_payload(canonical_workflow["resolved_figure_plan"])
@@ -161,6 +166,8 @@ def test_generated_mechanical_workflow_and_studio_cold_native_lifecycle(tmp_path
             formats=["pdf", "tiff_300"])
         summary = published.run_payload
         assert published.ready_to_use and summary["project_command"]["phase"] == "complete"
+        studio_store = project_store(studio_root, with_snapshot=True)
+        assert studio_store.locations["delivery"] == tmp_path / "studio_delivery"
         published_generation = studio_store.snapshot()
         assert summary["project_command"]["generation"] == published_generation["generation"]
         manifest_path = Path(summary["manifest"])
@@ -176,7 +183,8 @@ def test_generated_mechanical_workflow_and_studio_cold_native_lifecycle(tmp_path
         assert studio_plan.tasks[0].sample_order == expected_labels
         assert studio_plan.tasks[0].replicate_counts == tuple((label, 1) for label in expected_labels)
         assert studio_plan.tasks[1].replicate_counts == (("Cedar", 3),)
-        reopened = prepare_studio_document(studio_request)
+        reopened = prepare_studio_document(studio_root)
+        assert reopened["preserved_existing_document"] is True
         assert Path(reopened["document"]) == Path(prepared["document"])
         assert {path: path.read_bytes() for path in native_before} == native_before
         studio_science, evidence["studio"] = _cold_reopen_export(

@@ -63,6 +63,9 @@ def test_suite_boundary_preserves_unrelated_failures_without_string_matching(err
         def literal_path(self, path):
             return str(path)
 
+        def literal_artifact_path(self, actual):
+            return self.literal_path(actual)
+
         def file_paths(self, actual, *, expected_sha256=None, source_id=None):
             literal = self.literal_path(actual)
             return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)

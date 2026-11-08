@@ -119,7 +119,7 @@ def rendered_file_sets(records: object, *, directory: Path) -> dict[str, dict[st
 def additional_figure_contract_current(records: object, manifest: dict[str, Any]) -> bool:
     """Requested extra formats cannot disappear with their entire record/file."""
     from sciplot_core.delivery.plan_binding import figure_artifact_hashes_current
-    from sciplot_core.foundation.source_locations import literal_source_path
+    from sciplot_core.figure_plan.artifact_locations import artifact_path_key
     from sciplot_core.policy.export_formats import export_format_from_path
 
     def extra(path: object) -> bool:
@@ -143,6 +143,6 @@ def additional_figure_contract_current(records: object, manifest: dict[str, Any]
         if not isinstance(source, str) or not source.strip():
             return False
         actual.append(source)
-    if {literal_source_path(Path(path)) for path in expected} != {literal_source_path(Path(path)) for path in actual}:
+    if {artifact_path_key(path) for path in expected} != {artifact_path_key(path) for path in actual}:
         return False
     return not rows or figure_artifact_hashes_current(rows)

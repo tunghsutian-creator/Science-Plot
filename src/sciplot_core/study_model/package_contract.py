@@ -7,10 +7,19 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
+from sciplot_core.foundation.source_locations import resolve_source_path
 
 from sciplot_core.study_model.run_artifacts import (
     _json_contract_matches,
 )
+
+
+def _source_exists(path: Path) -> bool:
+    try:
+        resolve_source_path(path).stat()
+    except FileNotFoundError:
+        return False
+    return True
 
 
 def build_output_package_contract(
@@ -57,13 +66,13 @@ def build_output_package_contract(
         {
             "id": artifact_id,
             "path": str(path),
-            "exists": path.exists(),
+            "exists": _source_exists(path),
         }
         for artifact_id, path in required
     ]
-    has_pdf = any(path.suffix.lower() == ".pdf" and path.exists() for path in figures)
+    has_pdf = any(path.suffix.lower() == ".pdf" and _source_exists(path) for path in figures)
     has_tiff_300 = any(
-        path.name.casefold().endswith("_300dpi.tiff") and path.exists()
+        path.name.casefold().endswith("_300dpi.tiff") and _source_exists(path)
         for path in figures
     )
     qa_value = manifest.get("qa")

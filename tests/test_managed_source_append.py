@@ -124,6 +124,9 @@ def test_acknowledged_input_context_does_not_grant_refused_source_io(tmp_path):
         def literal_path(self, actual):
             pytest.fail('Declared source roles are not reverse IO requests')
 
+        def literal_artifact_path(self, actual):
+            return self.literal_path(actual)
+
         def file_paths(self, actual, *, expected_sha256=None, source_id=None):
             literal = self.literal_path(actual)
             return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)

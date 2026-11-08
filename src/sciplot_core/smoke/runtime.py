@@ -598,7 +598,7 @@ def run_runtime_smoke(
                 ),
                 _check(
                     "minimal_delivery_layout",
-                    "The user-facing delivery contains only four artifact groups and its Veusz launcher",
+                    "The user-facing delivery contains only four artifact groups and its inert identity",
                     delivery_layout.get("passed") is True,
                     detail=delivery_layout,
                 ),
@@ -711,8 +711,8 @@ def run_runtime_smoke(
         "limitations": [
             "The generated FTIR and scalar-field tables are synthetic contract fixtures, "
             "not real-data evidence.",
-            "This smoke proves one representative Studio lifecycle, project and relocated-delivery "
-            "launcher checks, a standalone exact-current export, and a delivery hash failure path; "
+            "This smoke proves one representative Studio lifecycle, headless project and "
+            "relocated-delivery cold loads, a standalone exact-current export, and a delivery hash failure path; "
             "it does not replace the complete ready-rule acceptance matrix.",
             "The OpenAI provider gates use an in-memory HTTP/SSE wire fixture and do not "
             "claim live-model quality or a successful paid API call.",

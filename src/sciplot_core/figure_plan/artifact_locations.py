@@ -4,7 +4,6 @@ from dataclasses import replace
 from pathlib import Path
 
 from sciplot_core.foundation.source_locations import (
-    literal_source_path,
     resolve_source_path,
     selected_source_resolver,
 )
@@ -14,7 +13,8 @@ from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 
 def literal_artifact_path(path: str | Path) -> str:
     """Only a selected host scope translates newly produced artifact addresses."""
-    return literal_source_path(Path(path)) if selected_source_resolver() is not None else str(path)
+    resolver = selected_source_resolver()
+    return resolver.literal_artifact_path(Path(path)) if resolver is not None else str(path)
 
 
 def artifact_is_file(path: str | Path) -> bool:
@@ -23,6 +23,11 @@ def artifact_is_file(path: str | Path) -> bool:
         return resolve_source_path(Path(path).expanduser()).is_file()
     except (OSError, ValueError):
         return False
+
+
+def artifact_path_key(path: str | Path) -> str:
+    """Compare artifact addresses, without replacing observed paths or file proof."""
+    return str(Path(literal_artifact_path(path)).expanduser().resolve())
 
 
 def literal_figure_plan_artifacts(plan: ResolvedFigurePlan) -> ResolvedFigurePlan:

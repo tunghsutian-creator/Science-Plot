@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.path_names import slug
+from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 
 
 def _manifest_veusz_documents(manifest: dict[str, Any], output_dir: Path) -> list[Path]:
@@ -85,7 +86,7 @@ def _copy_project_documents(
     used_names: set[str] = set()
     expected_hash = str(manifest.get("exported_document_hash") or "").strip()
     expected_hashes = {
-        str(Path(path).expanduser().resolve()): str(value)
+        artifact_path_key(path): str(value)
         for path, value in (
             manifest.get("veusz_document_hashes", {}).items()
             if isinstance(manifest.get("veusz_document_hashes"), dict)
@@ -107,7 +108,7 @@ def _copy_project_documents(
         source_hash = existing_file_sha256(source_document)
         delivery_hash = existing_file_sha256(destination)
         document_expected_hash = expected_hashes.get(
-            str(source_document.resolve()),
+            artifact_path_key(source_document),
             expected_hash,
         )
         hash_matches_export = bool(
@@ -124,7 +125,7 @@ def _copy_project_documents(
                 "path": str(destination),
                 "relative_path": str(destination.relative_to(project_dir.parent)),
                 "format": "vsz",
-                "figure_id": figure_ids.get(str(source_document.resolve())),
+                "figure_id": figure_ids.get(artifact_path_key(source_document)),
                 "source_sha256": source_hash,
                 "expected_sha256": document_expected_hash or source_hash,
                 "delivery_sha256": delivery_hash,
@@ -159,5 +160,5 @@ def _document_figure_ids(manifest: dict[str, Any]) -> dict[str, str]:
                 and isinstance(value, str)
                 and Path(value).suffix.casefold() == ".vsz"
             ):
-                values[str(Path(value).expanduser().resolve())] = figure_id
+                values[artifact_path_key(value)] = figure_id
     return values

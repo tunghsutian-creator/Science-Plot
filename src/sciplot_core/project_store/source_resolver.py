@@ -84,6 +84,10 @@ class ProjectSourceResolver:
             return self.store.literal_path(path, generation=self.generation)
         return str(path)
 
+    def literal_artifact_path(self, actual: Path) -> str:
+        """Current artifacts retain the selected generation's read projection."""
+        return self.literal_path(actual)
+
     def file_paths(self, actual: Path, *, expected_sha256: str | None = None,
                    source_id: str | None = None) -> tuple[str, Path]:
         # Only this measured concrete resolver's registered physical members

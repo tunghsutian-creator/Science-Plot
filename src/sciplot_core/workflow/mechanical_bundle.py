@@ -90,9 +90,6 @@ def _render_veusz_mechanical_bundle(
             "requires its raw source and typed prepare-time attestation."
         )
     facts = resolved_scientific_source.require_domain(MechanicalSourceFacts)
-    facts.require_selection(
-        source=source_input, rule_id=rule_id, series_order=request.get("series_order"),
-    )
     if resolved_scientific_source.figure_plan != plan:
         raise ValueError("mechanical_figure_plan_mismatch: scientific source plan diverged.")
     if not {"pdf", "tiff_300"}.issubset(export_formats):

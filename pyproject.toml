@@ -534,6 +534,8 @@ files = [
   "src/sciplot_core/workflow/one_step_entry.py",
   "src/sciplot_core/rheology_tts_creation_bindings.py",
   "src/sciplot_core/rheology_tts_native_invocation.py",
+  "src/sciplot_core/rheology_tts_spec.py",
+  "src/sciplot_core/workflow/rheology_tts_prepared.py",
   "src/sciplot_core/studio_core/export_replay.py",
   "src/sciplot_core/studio_core/native_export_adapter.py",
   "src/sciplot_core/studio_core/native_scientific_audit.py",

@@ -109,9 +109,16 @@ batch's actual results outside its input closure rather than rewriting them here
    resolution, physical capture and native execution stay outside new metadata
    scopes. Same-request canonical FD facts remove a second traversal without
    caching FD authority. Close their combined native/CI latency and refusal
-   controls on the final candidate. SavedWork member loops and other independent
-   calls still require their own measurements; finite counters and pure checks
-   do not establish whole-project or end-to-end performance closure.
+   controls on the final candidate. The next isolated consolidation carries one
+   mechanical source observation through both preparation routes, compiles a
+   governed TTS specification from one normalization, and batches one attached
+   SavedWork evidence read. Their component measurements remain bounded to those
+   operations; finite counters and pure checks do not establish whole-project or
+   end-to-end performance closure. Finish their combined native, compatibility
+   and release evidence before calling that batch accepted. Intake session
+   publication still has a flat-file/envelope rewrite to investigate; ordinary
+   table parsing already reuses its scoped reader and must not be described as
+   a proven second parse.
 3. **Close the remaining independent contracts.** Move lifecycle use cases off
    direct legacy-engine dependencies through concrete domain ports and adapters,
    retiring each replaced call path. State the supported numerical runtime for

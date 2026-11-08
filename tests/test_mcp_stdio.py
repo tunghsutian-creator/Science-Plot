@@ -74,9 +74,10 @@ def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 43
+            assert len(tools.tools) == 46
             discovered = {tool.name: tool for tool in tools.tools}
-            assert len(discovered) == 43
+            assert len(discovered) == 46
+            assert {"sciplot_intake_prepare", "sciplot_intake_table", "sciplot_intake_create"} <= discovered.keys()
             assert "sciplot_plot_intent" in discovered
             recovery = discovered["sciplot_plot_resume"].input_schema
             assert recovery["additionalProperties"] is False

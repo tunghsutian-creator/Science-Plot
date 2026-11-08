@@ -295,6 +295,7 @@ CHANGED_OWNERS = (
             }
         ),
         pytest_targets=(
+            "tests/test_mechanical_facts_flow.py",
             "tests/test_plan_preview.py",
             "tests/test_dma_temperature_scientific_transform.py",
             "tests/test_ftir_scientific_transform.py",

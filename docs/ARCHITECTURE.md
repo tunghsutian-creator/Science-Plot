@@ -38,6 +38,15 @@ complete visual authority. Veusz is the long-term native rendering adapter, not
 the semantic application or storage authority. Its replacement would require
 rendering, editing, scientific-QA and existing-project migration evidence.
 
+Mechanical planning resolves its request choices before reading raw data, then
+carries `MechanicalSourceFacts` in the existing `ResolvedScientificSource.domain`
+through both Workflow and Studio preparation. Plan construction and task tables
+consume that observation instead of reopening the source. Published diagnostics
+are detached read-only mappings; numerical points and scientific derivations
+retain their original representation. Independent raw preparation still reads
+afresh. Materialization, callback return and publication retain their distinct
+physical-source and attestation checks; these facts are not a cross-operation cache.
+
 Frequency response completion belongs to `semantic_sources/rheology_frequency_metrics.py`:
 instrument, confirmed-column and three-header workbook routes share the original
 modulus/positive-frequency derivation and record units/provenance. The frequency
@@ -213,6 +222,22 @@ glyphs cannot reconstruct their scientific authority. Native geometry and
 numeric audit precede publication QA; either one's success cannot stand in for
 the other's unperformed checks.
 
+Artifact addresses and scientific source reads use distinct operations on the
+selected host locator. `literal_artifact_path` preserves strict read projection
+for selected generation members, their directories and sealed views. A future
+candidate output uses the same member/role/grant admission as the existing output
+writer, without creating a file or directory. Existing CSV artifacts may also be
+protected scientific inputs: their read projection remains legal and output
+overwrite remains forbidden. The source resolver's UUID/version/hash/mode/alias
+checks are unchanged. An address alone does not prove existence or readiness;
+staged physical artifacts, native audits and transaction installation retain
+those separate responsibilities.
+Artifact metadata joins use `artifact_path_key` on both sides, so a physical
+candidate path and its admitted final address identify the same artifact without
+changing recorded source or QA observations. Package presence and JSON contract
+reads resolve the selected source view before `stat` or reading. Only absence
+counts as missing; permission, alias and version refusals retain their causes.
+
 Lifecycle success, provenance, artifact QA, human review, and journal
 compliance are separate evidence claims.
 
@@ -232,6 +257,11 @@ native settings without refitting or replacing data. Ordinary re-export records
 style deviations rather than restoring defaults. Visible suite VSZs remain
 editable authority, with hidden creation evidence. AI requests use the existing
 NativeSuite command/audit path; no manual browser editor participates.
+Prepared governed creation uses `rheology_tts_spec.prepare_and_compile_tts_spec`
+to normalize the source-bound request once and compile that same value. The
+workflow persists the returned normalized specification. Public raw compilation,
+cold reopening and later native/style observations keep their own admission;
+the older ungoverned compilation branch retains its recorded behavior.
 Prepared creation continuation is owned by its narrow workflow checkpoint and
 native per-figure creation receipt. Explicit `plot --resume` binds the original
 request, sources, prepared bytes and compiled template contract. Saving/saved/
@@ -1107,6 +1137,11 @@ candidates; final native/semantic/source/delivery checks, including a final
 search-source rehash, decide whether continuation arguments are current. Copies
 remain separate, snapshots remain non-original, and no catalog or path rebinding
 is introduced. Current editing authority does not imply ready delivery.
+For one attached document observation, its evidence helper reads the canonical
+prefix and recorded archive aliases with one existing `observe_members` call
+bound to the exact generation. Every member still passes the Store byte reader;
+missing files, corrupt history and changed members remain refusals. This finite
+read shares no result with a later query, runtime admission or commit.
 
 `task_papers` packages an ordered selection of registered project figures using
 the existing native Save/audit ports and sealed publication files. Version guards and source closure bind

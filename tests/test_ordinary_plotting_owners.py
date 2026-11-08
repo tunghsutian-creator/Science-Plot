@@ -326,6 +326,8 @@ RHEOLOGY_PROJECT_COMMAND_STRICT_ADDITIONS = frozenset(
         'src/sciplot_core/workflow/native_suite_bindings.py',
         'src/sciplot_core/rheology_tts_creation_bindings.py',
         'src/sciplot_core/rheology_tts_native_invocation.py',
+        'src/sciplot_core/rheology_tts_spec.py',
+        'src/sciplot_core/workflow/rheology_tts_prepared.py',
         'src/sciplot_core/workflow/native_suite_admission.py',
         'src/sciplot_core/workflow/native_suite_command_records.py',
         'src/sciplot_core/workflow/native_suite_creation.py',

@@ -12,7 +12,9 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
+from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.project_commands.resources import MembershipRead, PreparedFile
 from sciplot_core.project_store.adapters import publish_files, store_for_project
 from sciplot_core.project_store.io import read_file, sha
@@ -172,7 +174,7 @@ def _validate_staged_figure_set_task_evidence(
         ) from exc
 
     staged_by_target = {
-        Path(str(item["target"])).expanduser().resolve(): Path(str(item["staged"]))
+        artifact_path_key(str(item["target"])): Path(str(item["staged"]))
         for item in replacements
     }
     entries = registry.get("figures")
@@ -193,7 +195,10 @@ def _validate_staged_figure_set_task_evidence(
         ).resolve()
         expected_spec = _veusz_spec_path(expected_document).resolve()
         spec = Path(str(entry.get("spec") or "")).expanduser().resolve()
-        if document != expected_document or spec != expected_spec:
+        document_key = artifact_path_key(document)
+        spec_key = artifact_path_key(spec)
+        if (document_key != artifact_path_key(expected_document)
+                or spec_key != artifact_path_key(expected_spec)):
             raise RuntimeError(
                 "studio_figure_task_mismatch: figure registry paths do not "
                 f"match task `{task.figure_id}`."
@@ -201,17 +206,19 @@ def _validate_staged_figure_set_task_evidence(
         outcome = outcomes[task.figure_id]
         if entry.get("status") == "ready":
             outcome_artifacts = tuple(
-                str(Path(value).expanduser().resolve()) for value in outcome.artifacts
+                artifact_path_key(value) for value in outcome.artifacts
             )
             if outcome.status != "editable" or outcome_artifacts != (
-                str(document),
-                str(spec),
+                document_key,
+                spec_key,
             ):
                 raise RuntimeError(
                     "studio_figure_task_mismatch: editable outcome paths do not "
                     f"match task `{task.figure_id}`."
                 )
-            spec_source = staged_by_target.get(spec, spec)
+            spec_source = staged_by_target.get(spec_key)
+            if spec_source is None:
+                spec_source = resolve_source_path(spec)
             if not spec_source.is_file():
                 raise RuntimeError(
                     "studio_figure_task_mismatch: ready figure spec is missing "

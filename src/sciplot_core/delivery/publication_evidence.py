@@ -9,6 +9,7 @@ from sciplot_core.delivery.contracts import (
     PUBLICATION_ARTIFACT_FILENAMES,
     PUBLICATION_ARTIFACT_KINDS,
 )
+from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 
 
 def _qa_hash_evidence(
@@ -17,7 +18,7 @@ def _qa_hash_evidence(
     qa_value = manifest.get("qa")
     qa_payload = qa_value if isinstance(qa_value, dict) else {}
     qa_hashes = {
-        str(Path(str(report.get("path"))).expanduser().resolve()): str(
+        artifact_path_key(str(report.get("path"))): str(
             report.get("sha256")
         )
         for report_group in (qa_payload.get(key) for key in ("pdfs", "tiffs", "pngs", "svgs"))
@@ -29,7 +30,7 @@ def _qa_hash_evidence(
         {
             "source": record["source"],
             "qa_sha256": qa_hashes.get(
-                str(Path(record["source"]).expanduser().resolve())
+                artifact_path_key(record["source"])
             ),
             "source_sha256": record.get("source_sha256"),
             "delivery_sha256": record.get("delivery_sha256"),

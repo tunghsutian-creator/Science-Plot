@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.figure_plan import FigureOutcome, ResolvedFigurePlan
+from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 from sciplot_core.figure_plan.task import FigureTask
 from sciplot_core.studio_figure_set_contract import STUDIO_FIGURE_SET_TASK_VERSION
 
@@ -257,8 +258,8 @@ def _validate_v2_registry_state(
             document_stem=task.document_stem,
         )
         artifact_paths = {
-            (persisted_root / relative_document).resolve(): str(document),
-            (persisted_root / relative_spec).resolve(): str(spec),
+            artifact_path_key(persisted_root / relative_document): str(document),
+            artifact_path_key(persisted_root / relative_spec): str(spec),
         }
         normalized_artifacts: list[str] = []
         for value in outcome.artifacts:
@@ -266,7 +267,7 @@ def _validate_v2_registry_state(
                 value,
                 label=f"figure `{task.figure_id}` outcome artifact",
             )
-            normalized = artifact_paths.get(artifact)
+            normalized = artifact_paths.get(artifact_path_key(artifact))
             if normalized is None:
                 raise ValueError(
                     "The v2 figure-set outcome binds a noncanonical artifact."

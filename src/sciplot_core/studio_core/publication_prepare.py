@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 
 from sciplot_core.source_coverage.managed_documents import (
     verify_managed_document_sources,
@@ -112,7 +113,7 @@ def prepare_studio_export_run(
         inventory,
         snapshot_documents=snapshot_documents,
     )
-    snapshot_primary_document = snapshot_map[str(inventory.document_path.resolve())]
+    snapshot_primary_document = snapshot_map[artifact_path_key(inventory.document_path)]
     result = build_studio_export_result(
         inventory=inventory,
         sources=sources,

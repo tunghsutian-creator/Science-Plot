@@ -63,6 +63,7 @@ PROJECT_CORE_OWNERS = (
                               "src/sciplot_core/publication/transform_ledger.py"}),
         owned_test_paths=frozenset(STUDIO_PREPARATION_TESTS),
         pytest_targets=(*STUDIO_PREPARATION_TESTS, *NATIVE_PROJECT_COMMAND_TESTS,
+                        "tests/test_mechanical_facts_flow.py",
                         "tests/test_studio_figure_task_chain.py", "tests/test_studio_presentation_identity.py",
                         "tests/test_studio_publish_inventory.py", "tests/test_figure_plan_entrypoint_state.py",
                         "tests/test_registered_mapping_task_sources.py", "tests/test_managed_document_science.py",

@@ -83,18 +83,26 @@ PROJECT_INTEGRITY_OWNERS = (
                 "src/sciplot_core/materials_rules/mechanical_metrics.py",
                 "src/sciplot_core/materials_rules/mechanical_rules.py",
                 "src/sciplot_core/semantic_sources/mechanical_fact_derivation.py",
+                "src/sciplot_core/semantic_sources/mechanical_fact_models.py",
                 "src/sciplot_core/semantic_sources/mechanical_materialization.py",
+                "src/sciplot_core/mechanical_task_sources.py",
             }
         ),
         owned_test_paths=frozenset(
             {
                 "tests/test_mechanical_source_facts.py",
                 "tests/test_mechanical_figure_plan_activation.py",
+                "tests/test_mechanical_facts_flow.py",
+                "tests/test_mechanical_facts_flow_native.py",
+                "tests/test_mechanical_task_options.py",
             }
         ),
         pytest_targets=(
             "tests/test_mechanical_source_facts.py",
             "tests/test_mechanical_figure_plan_activation.py",
+            "tests/test_mechanical_facts_flow.py",
+            "tests/test_mechanical_facts_flow_native.py",
+            "tests/test_mechanical_task_options.py",
             "tests/test_tensile_workbook_directory.py",
             "tests/test_tga_scientific_transform.py",
             "tests/test_resolved_mechanical_figure_plan.py",

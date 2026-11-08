@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 9989,
-    "nodeids_sha256": "4c0f3d7b488c78b89b65a0cc6601150cf5484f4de50894cf4b0664cd316e6a27",
-    "test_sources_sha256": "7e3284739a1aa8b8909cc60b1ae42d7b4663d814b2b737c95fbb745c0f871477",
-    "test_source_count": 654,
+    "nodeid_count": 10052,
+    "nodeids_sha256": "2b0c5bc757c6e1728aa9d97449c5686d131f9a5e6a14d9e766b0a24bac089f10",
+    "test_sources_sha256": "83fb8e5f676b1a51d5dd238aa24dbb19db40a9a14858da62bc79649b864e2233",
+    "test_source_count": 657,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
@@ -5416,7 +5416,70 @@
       "tests/test_zero_sd_bar_outline.py::test_public_zero_sd_grouped_bar_preserves_replicates_and_passes_create_and_cold_export[mean_sample_sd]",
       "tests/test_zero_sd_bar_outline.py::test_public_zero_sd_grouped_bar_preserves_replicates_and_passes_create_and_cold_export[mean_sample_sd_n]",
       "tests/test_private_audit_runtime.py::test_capture_bootstrap_does_not_preload_historical_business_owners",
-      "tests/test_private_audit_runtime.py::test_first_actual_socket_connect_keeps_peer_facts_and_business_result"
+      "tests/test_private_audit_runtime.py::test_first_actual_socket_connect_keeps_peer_facts_and_business_result",
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/rheology_tts_spec.py]",
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/workflow/rheology_tts_prepared.py]",
+      "tests/test_mechanical_facts_flow.py::test_curated_representative_facts_do_not_invent_individual_curves[compression_curve]",
+      "tests/test_mechanical_facts_flow.py::test_curated_representative_facts_do_not_invent_individual_curves[flexural_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_callback_source_drift_rejects_before_renderer_and_rolls_back",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_diagnostics_detach_inputs_and_refuse_mutation",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-individual-compression_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-individual-flexural_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-individual-tensile_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-representative-compression_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-representative-flexural_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-representative-tensile_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-individual-compression_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-individual-flexural_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-individual-tensile_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-representative-compression_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-representative-flexural_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-representative-tensile_curve]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_snapshot_requires_current_physical_source_before_writes[alias]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_snapshot_requires_current_physical_source_before_writes[missing]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_snapshot_requires_current_physical_source_before_writes[same_metadata]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[attestation]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[foreign_rule]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[foreign_source]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[order]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[prepared]",
+      "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[raw]",
+      "tests/test_mechanical_facts_flow.py::test_public_studio_generation_carries_facts_to_the_native_audit_boundary",
+      "tests/test_mechanical_facts_flow.py::test_studio_missing_mechanical_envelope_is_not_a_reparse_fallback",
+      "tests/test_mechanical_facts_flow_native.py::test_generated_mechanical_workflow_and_studio_cold_native_lifecycle",
+      "tests/test_rheology_tts_single_preparation.py::test_prepared_workflow_binds_plan_then_prepares_once_before_creation",
+      "tests/test_rheology_tts_single_preparation.py::test_public_non_governed_compile_keeps_legacy_explicit_styles",
+      "tests/test_rheology_tts_single_preparation.py::test_serialized_governed_plan_is_readmitted_after_mutation",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[bool_error]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[error_length]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[log_zero]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[negative_error]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[nonfinite]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[policy]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[ragged]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[rectangle]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[role]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[style]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[version]",
+      "tests/test_rheology_tts_single_preparation.py::test_single_admission_preserves_complete_normalized_and_compiled_values",
+      "tests/test_task_saved_work.py::test_saved_fact_archive_cannot_expand_a_source_role[../raw.csv-archive/empty.bin]",
+      "tests/test_task_saved_work.py::test_saved_fact_archive_cannot_expand_a_source_role[renders/claimed.bin-../A.csv]",
+      "tests/test_task_saved_work.py::test_saved_fact_archive_cannot_expand_a_source_role[sources/claimed.csv-archive/empty.bin]",
+      "tests/test_task_saved_work.py::test_saved_fact_archive_nonfile_keeps_the_store_error[directory]",
+      "tests/test_task_saved_work.py::test_saved_fact_archive_nonfile_keeps_the_store_error[missing]",
+      "tests/test_task_saved_work.py::test_saved_fact_batch_does_not_hide_a_generation_published_after_capture",
+      "tests/test_task_saved_work.py::test_saved_fact_batch_rejects_changed_head_or_member[head]",
+      "tests/test_task_saved_work.py::test_saved_fact_batch_rejects_changed_head_or_member[member]",
+      "tests/test_task_saved_work.py::test_saved_fact_capture_consumes_only_the_admitted_archive_pairs",
+      "tests/test_task_saved_work.py::test_saved_fact_namespace_has_one_admission_and_consumes_each_member",
+      "tests/test_output_package_contract.py::test_json_contract_reads_selected_members_and_propagates_each_permission_boundary",
+      "tests/test_output_package_contract.py::test_package_presence_distinguishes_missing_from_source_alias_and_version_refusals",
+      "tests/test_output_package_contract.py::test_package_presence_uses_candidate_view_for_literal_members_and_preserves_directories",
+      "tests/test_project_candidate_resources.py::test_future_artifact_projection_preserves_exact_finite_grants_without_creating_members",
+      "tests/test_study_artifact_locations.py::test_artifact_namespace_join_cannot_bind_foreign_unselected_or_wrong_hash_evidence",
+      "tests/test_study_artifact_locations.py::test_literal_outcomes_bind_physical_delivery_copies_and_mixed_qa_observations",
+      "tests/test_study_artifact_locations.py::test_selected_csv_and_project_root_keep_read_projection_without_output_write_grants",
+      "tests/test_study_artifact_locations.py::test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files"
     ],
     "synthetic_candidates": [
       {
@@ -26378,9 +26441,261 @@
       {
         "nodeid": "tests/test_private_audit_runtime.py::test_first_actual_socket_connect_keeps_peer_facts_and_business_result",
         "reason": "actual fresh source-owned bootstrap and two owned local AF_UNIX exchanges in generated /tmp directory; first real kernel peer, then injected EACCES; no native plot/server or raw data"
+      },
+      {
+        "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/rheology_tts_spec.py]",
+        "reason": "Pure current source/configuration and changed-owner planner inspection for the two explicitly added TTS strict source files; it checks exactly one configured mypy command without executing that command or any native, private-source or model operation. The original strict residual baseline and unrelated-owner refusals remain."
+      },
+      {
+        "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/workflow/rheology_tts_prepared.py]",
+        "reason": "Pure current source/configuration and changed-owner planner inspection for the two explicitly added TTS strict source files; it checks exactly one configured mypy command without executing that command or any native, private-source or model operation. The original strict residual baseline and unrelated-owner refusals remain."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_curated_representative_facts_do_not_invent_individual_curves[compression_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_curated_representative_facts_do_not_invent_individual_curves[flexural_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_callback_source_drift_rejects_before_renderer_and_rolls_back",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_diagnostics_detach_inputs_and_refuse_mutation",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-individual-compression_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-individual-flexural_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-individual-tensile_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-representative-compression_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-representative-flexural_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[studio-representative-tensile_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-individual-compression_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-individual-flexural_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-individual-tensile_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-representative-compression_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-representative-flexural_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_operation_carries_one_observation_to_every_task[workflow-representative-tensile_curve]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_snapshot_requires_current_physical_source_before_writes[alias]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_snapshot_requires_current_physical_source_before_writes[missing]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_snapshot_requires_current_physical_source_before_writes[same_metadata]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[attestation]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[foreign_rule]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[foreign_source]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[order]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[prepared]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_mechanical_task_materialization_rejects_divergent_boundary[raw]",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_public_studio_generation_carries_facts_to_the_native_audit_boundary",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow.py::test_studio_missing_mechanical_envelope_is_not_a_reparse_fallback",
+        "reason": "Generated temporary tensile/compression/flexural CSV or Excel specimen tables from public_multitask_inputs exercise real source resolution, immutable facts, all task materializers, source/order drift and rollback. Native render/audit is replaced only at explicit unit seams; the Studio sentinel proves no publication, not a native PASS. No private corpus or golden."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow_native.py::test_generated_mechanical_workflow_and_studio_cold_native_lifecycle",
+        "reason": "Generated compression individual-replicate CSV from public_multitask_inputs drives real Workflow and Studio creation, scientific audit, Store publication and cold Veusz PDF/TIFF export. All input and output paths are temporary generated data; no private experimental fixture, frozen native golden, AI request or paid service. This node is not evidence for private scientific acceptance."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_prepared_workflow_binds_plan_then_prepares_once_before_creation",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_public_non_governed_compile_keeps_legacy_explicit_styles",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_serialized_governed_plan_is_readmitted_after_mutation",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[bool_error]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[error_length]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[log_zero]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[negative_error]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[nonfinite]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[policy]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[ragged]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[rectangle]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[role]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[style]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_keeps_governed_and_numeric_refusals[version]",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts_single_preparation.py::test_single_admission_preserves_complete_normalized_and_compiled_values",
+        "reason": "Inline generated prepared TTS arrays and temporary plan bytes exercise the real normalization/compiler and a stubbed native creation boundary, full normalized/compiled equality, legacy styles and numeric/governance refusals. No real experimental source, native golden, network or model execution."
+      },
+      {
+        "nodeid": "tests/test_task_saved_work.py::test_saved_fact_archive_cannot_expand_a_source_role[../raw.csv-archive/empty.bin]",
+        "reason": "Generated temporary project, CAS members, archive aliases and source files exercise one generation-bound member observation, head/member mutation, role escape and missing/directory refusal. No private source, baseline, native process or external model is read."
+      },
+      {
+        "nodeid": "tests/test_task_saved_work.py::test_saved_fact_archive_cannot_expand_a_source_role[renders/claimed.bin-../A.csv]",
+        "reason": "Generated temporary project, CAS members, archive aliases and source files exercise one generation-bound member observation, head/member mutation, role escape and missing/directory refusal. No private source, baseline, native process or external model is read."
+      },
+      {
+        "nodeid": "tests/test_task_saved_work.py::test_saved_fact_archive_cannot_expand_a_source_role[sources/claimed.csv-archive/empty.bin]",
+        "reason": "Generated temporary project, CAS members, archive aliases and source files exercise one generation-bound member observation, head/member mutation, role escape and missing/directory refusal. No private source, baseline, native process or external model is read."
+      },
+      {
+        "nodeid": "tests/test_task_saved_work.py::test_saved_fact_archive_nonfile_keeps_the_store_error[directory]",
+        "reason": "Generated temporary project, CAS members, archive aliases and source files exercise one generation-bound member observation, head/member mutation, role escape and missing/directory refusal. No private source, baseline, native process or external model is read."
+      },
+      {
+        "nodeid": "tests/test_task_saved_work.py::test_saved_fact_archive_nonfile_keeps_the_store_error[missing]",
+        "reason": "Generated temporary project, CAS members, archive aliases and source files exercise one generation-bound member observation, head/member mutation, role escape and missing/directory refusal. No private source, baseline, native process or external model is read."
+      },
+      {
+        "nodeid": "tests/test_task_saved_work.py::test_saved_fact_batch_does_not_hide_a_generation_published_after_capture",
+        "reason": "Generated temporary project, CAS members, archive aliases and source files exercise one generation-bound member observation, head/member mutation, role escape and missing/directory refusal. No private source, baseline, native process or external model is read."
+      },
+      {
+        "nodeid": "tests/test_task_saved_work.py::test_saved_fact_batch_rejects_changed_head_or_member[head]",
+        "reason": "Generated temporary project, CAS members, archive aliases and source files exercise one generation-bound member observation, head/member mutation, role escape and missing/directory refusal. No private source, baseline, native process or external model is read."
+      },
+      {
+        "nodeid": "tests/test_task_saved_work.py::test_saved_fact_batch_rejects_changed_head_or_member[member]",
+        "reason": "Generated temporary project, CAS members, archive aliases and source files exercise one generation-bound member observation, head/member mutation, role escape and missing/directory refusal. No private source, baseline, native process or external model is read."
+      },
+      {
+        "nodeid": "tests/test_task_saved_work.py::test_saved_fact_capture_consumes_only_the_admitted_archive_pairs",
+        "reason": "Generated temporary project, CAS members, archive aliases and source files exercise one generation-bound member observation, head/member mutation, role escape and missing/directory refusal. No private source, baseline, native process or external model is read."
+      },
+      {
+        "nodeid": "tests/test_task_saved_work.py::test_saved_fact_namespace_has_one_admission_and_consumes_each_member",
+        "reason": "Generated temporary project, CAS members, archive aliases and source files exercise one generation-bound member observation, head/member mutation, role escape and missing/directory refusal. No private source, baseline, native process or external model is read."
+      },
+      {
+        "nodeid": "tests/test_output_package_contract.py::test_json_contract_reads_selected_members_and_propagates_each_permission_boundary",
+        "reason": "Generated temporary JSON members exercise actual selected-view reads, missing/directory/invalid-UTF8/JSON/kind negatives, then inject the identical PermissionError at the existing resolver/stat/read seams to verify propagation. Scoped monkeypatch contexts do not survive teardown; original source and Store generation are retained. No private source, native golden, renderer, network or model is used."
+      },
+      {
+        "nodeid": "tests/test_output_package_contract.py::test_package_presence_distinguishes_missing_from_source_alias_and_version_refusals",
+        "reason": "Generated temporary Store/candidate source files distinguish an absent archive from a deliberately created alias and changed protected source. The real selected resolver must preserve alias/version refusal rather than report a plausible missing/default result; original source bytes and Store generation remain unchanged. No private data, native golden, renderer, network or model is used."
+      },
+      {
+        "nodeid": "tests/test_output_package_contract.py::test_package_presence_uses_candidate_view_for_literal_members_and_preserves_directories",
+        "reason": "Generated temporary project/candidate files and raw archive from the existing generated seed exercise actual package-contract selection of physical and literal addresses, live verification and retained directory-presence semantics. Source bytes, manifest and Store generation remain unchanged. No real private source, frozen native golden, renderer, network or model is used."
+      },
+      {
+        "nodeid": "tests/test_project_candidate_resources.py::test_future_artifact_projection_preserves_exact_finite_grants_without_creating_members",
+        "reason": "Generated temporary ResourceRoot with one exact output member exercises actual future artifact projection and key equality, missing-source reads, finite-member refusal and output-root write refusal. It verifies no new member/directory and no generation change. No private source, frozen native golden, rendering, network or model execution is used."
+      },
+      {
+        "nodeid": "tests/test_study_artifact_locations.py::test_artifact_namespace_join_cannot_bind_foreign_unselected_or_wrong_hash_evidence",
+        "reason": "Generated temporary same-name/same-byte foreign and unselected artifacts, inline wrong figure IDs and wrong hash/QA records exercise actual delivery and export-verification refusal boundaries. Matching names or bytes cannot invent selected identity or rewrite QA; source bytes and generation remain unchanged. No private experimental data, frozen native golden, rendering, network or model is used."
+      },
+      {
+        "nodeid": "tests/test_study_artifact_locations.py::test_literal_outcomes_bind_physical_delivery_copies_and_mixed_qa_observations",
+        "reason": "Generated temporary candidate artifacts and inline QA records drive real delivery-copy, figure-ID, source/document hash and study metadata joins across literal and selected physical namespaces. Copied bytes and hashes are checked without changing original QA observations, scientific source or Store generation. This is a software metadata/copy control; no private data, frozen native golden, rendering, network or model execution is used."
+      },
+      {
+        "nodeid": "tests/test_study_artifact_locations.py::test_selected_csv_and_project_root_keep_read_projection_without_output_write_grants",
+        "reason": "Generated temporary Store/project CSV and candidate root exercise the actual selected read projection, protected-science write refusal and changed-source-byte refusal. Reads remain distinct from output grants; original source bytes and generation are preserved. No private experimental data, native golden, renderer, network or model is used."
+      },
+      {
+        "nodeid": "tests/test_study_artifact_locations.py::test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files",
+        "reason": "Generated temporary Store/project/source and staged PDF/TIFF/VSZ bytes distinguish declarative future artifact addresses from actual source reads. Real candidate projection and plan/study gates retain no-mkdir, no-member-creation, source-missing and incomplete-artifact refusals while preserving source bytes, plan and generation. No private source, native golden, renderer, network or model is used."
       }
     ],
-    "review_method": "2026-11-07 AI-only integrated static qualification: actual unfiltered INTEGRATION_COLLECTION_09 (SHAa66daa8e5561b6cd832d1fa60e0a505e15dc35e5313574ea8c2db95c90c7fb5b),9989 nodes/9494focused/495comprehensive,0bodies,exit0,2026 source before=after. Exact node order/tiers match08 and07; only private_audit_runtime test bytes changed from08, with production/config/helpers unchanged. Retain prior353 added-public/246 retired-UI qualifications and collection06 bounded55 qualifications/34 one-to-one lineage records (INTEGRATION_NODE_QUALIFICATION_DELTA_04 and independent review), plus collection07 two generated public-focused fresh-bootstrap/owned-kernel-peer/EACCES controls (DELTA05 independent review). The peer control now uses the existing audited_socket_directory/reserve_socket_fixture exact item endpoint and transports it through SCIPLOT_ENGINE_SOCKET; original cold import, kernel PID, EACCES unknown, both exchanges and30s remain. See CAPTURE_ITEM_ENDPOINT_IMPLEMENTATION_01 and independent source review; the existing helper is included in the same654 source membership. OriginalD3 remains132P1F/exit1; bounded three-control capture3P1.28s/COMPLETE/truewait0 proves that fixture integration without changing any production guard, not final acceptance. The prior corrected curation native control preserves full manifest/Store-generation/science/native/copy assertions. All165private case objects/210dependencies/23directory roles/111failure responsibilities and baseline digest are unchanged. Original597 code closure/current guards,24 layout pins and22 retained scientific transform files remain exact. Ignored baseline support remains in the helper fingerprint; current hashes do not authenticate historical production. Static qualification only; inventory_complete=false. Current frozen capture, strict full access, unfiltered suite and CI remain separate gates.",
+    "review_method": "2026-11-08 final same-operation consolidation: original unfiltered zero-body collection INTEGRATION_COLLECTION_11.txt (SHA58222ceb7a6f820a997c1237e0fdecab813a6119a4373e802cf8d0760d0e812c),10052 nodes. Preserved every09904 private case/dependency,111 historical responsibilities, and all existing reviewed qualifications including the55 REBIND02 additions. Appended only8 independently reviewed generated artifact/presence controls in the three exact existing test leaves; retained original audit arrays as ordered prefixes. Current source hashes bind this static proposal only. No full execution, native lifecycle, capture/access completeness or scientific acceptance is asserted; inventory_complete remains false.",
     "scope": [
       "real_world",
       "polymer_corpus",

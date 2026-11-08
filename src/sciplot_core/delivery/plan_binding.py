@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
+from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.policy import canonical_figure_stem
@@ -153,7 +154,7 @@ def delivery_records_match_plan(
 def _outcome_role_paths(artifacts: tuple[str, ...]) -> dict[str, set[str]]:
     roles: dict[str, set[str]] = {role: set() for role in ("pdf", "tiff_300", "vsz")}
     for path in artifacts:
-        resolved = str(Path(path).expanduser().resolve())
+        resolved = artifact_path_key(path)
         role = "vsz" if Path(path).suffix.casefold() == ".vsz" else export_format_from_path(path)
         if role is not None:
             roles.setdefault(role, set()).add(resolved)
@@ -168,14 +169,14 @@ def _vsz_path_matches_task(
     single: bool,
     run_root: Path,
 ) -> bool:
-    resolved = path.expanduser().resolve()
+    """Match a canonical role-path key against the selected native layout."""
     try:
-        relative = resolved.relative_to(run_root)
+        relative = path.relative_to(run_root)
     except ValueError:
         return False
-    if resolved.stem.casefold() in allowed_stems:
+    if path.stem.casefold() in allowed_stems:
         return True
-    if resolved.stem.casefold() != "document":
+    if path.stem.casefold() != "document":
         return False
     parts = tuple(part.casefold() for part in relative.parts)
     if (primary or single) and parts == ("studio", "document.vsz"):
@@ -200,8 +201,8 @@ def _vsz_path_matches_task(
 
 
 def _outcome_run_root(pdf_path: Path, tiff_path: Path) -> Path | None:
-    pdf_parent = pdf_path.expanduser().resolve().parent
-    tiff_parent = tiff_path.expanduser().resolve().parent
+    pdf_parent = pdf_path.parent
+    tiff_parent = tiff_path.parent
     if pdf_parent != tiff_parent:
         return None
     return pdf_parent.parent if pdf_parent.name.casefold() == "figures" else pdf_parent
@@ -222,8 +223,8 @@ def _record_sources_match(
         if not isinstance(item, dict):
             mismatches.append({"reason": "record_not_object"})
             continue
-        source = str(Path(str(item.get("source") or "")).expanduser().resolve())
-        destination = str(Path(str(item.get("path") or "")).expanduser().resolve())
+        source = artifact_path_key(str(item.get("source") or ""))
+        destination = artifact_path_key(str(item.get("path") or ""))
         expected_id = bindings.get(source)
         actual_id = str(item.get("figure_id") or "").strip()
         recorded_sources.append(source)

@@ -45,6 +45,9 @@ class SelectedSource:
         assert actual == self.actual
         return self.source["path"]
 
+    def literal_artifact_path(self, actual):
+        return self.literal_path(actual)
+
     def file_paths(self, actual, *, expected_sha256=None, source_id=None):
         literal = self.literal_path(actual)
         return literal, self.resolve_path(actual, expected_sha256=expected_sha256, source_id=source_id)
@@ -87,6 +90,9 @@ def test_source_group_checks_each_identity_then_compares_physical_io_without_rew
         def literal_path(self, path):
             assert path in views  # This port recognizes its approved spelling, not its symlink target.
             return sources[views.index(path)]["path"]
+
+        def literal_artifact_path(self, actual):
+            return self.literal_path(actual)
 
         def file_paths(self, actual, *, expected_sha256=None, source_id=None):
             literal = self.literal_path(actual)
@@ -142,6 +148,9 @@ def test_source_group_propagates_each_member_admission_refusal_before_equal_phys
 
         def literal_path(self, _actual):
             pytest.fail("A refused source cannot authorize reverse lookup or fallback.")
+
+        def literal_artifact_path(self, actual):
+            return self.literal_path(actual)
 
         def file_paths(self, actual, *, expected_sha256=None, source_id=None):
             literal = self.literal_path(actual)
