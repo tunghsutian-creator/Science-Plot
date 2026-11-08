@@ -15,7 +15,8 @@ admission and patch caller migration, explicit XY execution, shared observations
 and saved-evidence facts. The first combined batch and product UI retirement are
 delivered as main `4b6bd72d`; its exact Mac, access and platform evidence remains
 local rather than becoming proof for later changes. The active isolated batch
-removes exact shared verification repeats and two overbroad test-only mappings,
+removes exact shared verification repeats while retaining the original conservative
+test-owner mappings,
 shares one temperature-analysis table observation, and binds current registered
 PDF review copies to the existing typed edit workflow. Final combined acceptance
 for these new changes remains separate. The product target is AI conversation
@@ -57,7 +58,8 @@ continue the already authorized work without waiting for remote CI to begin
 development. Remote policy measurements and release gates remain their own
 explicit claims until actually observed. Historical native digest measurements
 remain in `docs/TASK_CAPABILITY_MEASUREMENTS.md`; they do not measure this batch.
-The new shared-check and test-only owner comparisons save seconds, not hours.
+The shared-check comparison saves seconds, not hours. The limited-benefit
+test-only owner split was withdrawn together with its extra role scanner.
 Native workflow bodies still dominate complete acceptance. Profile those bodies
 before claiming a full-suite speedup; do not add another cache framework to mask
 that cost. Close only the integrated batch's required gates once before delivery.

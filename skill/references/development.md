@@ -90,25 +90,15 @@ the planner does not guess how to subtract a function from a module. An empty
 remaining owner selection never becomes a bare, unfiltered pytest command.
 Record mode declares the shared command as its original pytest input scope.
 
-Two reviewed test-only leaves, `test_workflow_bundle_dispatch.py` and
-`test_plan_preview.py`, select their complete focused leaf and the shared checks.
-They currently supply no shared runtime helpers, fixtures or pytest plugins;
-the mapping controls verify that role across Git's current tracked and nonignored
-untracked Python sources, including nested helpers. Ignored historical execution
-fixtures keep their separate source/pin checks; they are not current callers.
-Their production owners retain every
-original regression target. Mixed production changes broaden normally and an
-unknown owner still stops before checks. This is a finite responsibility split,
-not permission to narrow every test file by its name.
-
 Component measurements retained 47 unique assertions while removing five exact
 repetitions: the changed API took 17.75 then 14.03 seconds, excluding the outer
-Python/tool startup. One test-only owner comparison selected 253 then 70 unique
-focused bodies, keeping the complete 62-body leaf plus eight shared checks; its
-outer pipeline took 7.70 then 6.98 seconds. That second comparison changes the
-justified impact scope, and neither single pair proves a stable percentage or
-reduces the measured multi-hour release suite. Use these daily checks during
-implementation; freeze a coherent batch before its necessary full acceptance.
+Python/tool startup. An experimental test-only owner split took 7.70 then
+6.98 seconds in one pair. Its narrow responsibility needed extra role admission
+and source scanning, so that experiment was withdrawn. The two test leaves retain
+their original broad owner regressions, including mixed/unknown change handling.
+No single pair proves a stable percentage or reduces the measured multi-hour
+release suite. Use daily checks during implementation; freeze a coherent batch
+before its necessary full acceptance.
 
 Unrecorded feedback runs changed-file Ruff, eight shared source contracts and the
 complete configured type gate before the affected behavior bodies (when each
