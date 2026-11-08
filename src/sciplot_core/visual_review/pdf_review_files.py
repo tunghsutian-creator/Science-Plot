@@ -31,9 +31,23 @@ def _parent(path: Path) -> Iterator[int]:
         os.close(root)
 
 
-def capture_pdf(path: Path, *, expected_sha256: str | None = None, review: bool = False) -> dict[str, Any]:
+def review_directory_binding(path: Path) -> dict[str, int]:
+    with _parent(canonical_path(path / "review.pdf")) as parent:
+        opened = os.fstat(parent)
+        return {"device": opened.st_dev, "inode": opened.st_ino}
+
+
+def _require_directory(parent: int, expected: dict[str, int] | None) -> None:
+    opened = os.fstat(parent)
+    if expected is not None and expected != {"device": opened.st_dev, "inode": opened.st_ino}:
+        raise ValueError("The PDF review directory changed its explicitly granted host identity; create a new review.")
+
+
+def capture_pdf(path: Path, *, expected_sha256: str | None = None, review: bool = False,
+                expected_directory: dict[str, int] | None = None) -> dict[str, Any]:
     path = canonical_path(path)
     with _parent(path) as parent:
+        _require_directory(parent, expected_directory)
         fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         try:
             before = os.fstat(fd)
@@ -57,10 +71,11 @@ def capture_pdf(path: Path, *, expected_sha256: str | None = None, review: bool 
     return {"bytes": data, "sha256": digest, "size_bytes": len(data)}
 
 
-def write_review_copy(path: Path, data: bytes) -> None:
+def write_review_copy(path: Path, data: bytes, *, expected_directory: dict[str, int] | None = None) -> None:
     """Never replace a user file; a failed subsequent registration leaves an unbound copy."""
     path = canonical_path(path)
     with _parent(path) as parent:
+        _require_directory(parent, expected_directory)
         fd = os.open(path.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
         try:
             with os.fdopen(fd, "wb", closefd=False) as handle:

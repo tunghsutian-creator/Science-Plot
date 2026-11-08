@@ -145,7 +145,7 @@ def test_committed_reply_loss_retries_same_copy_without_overwriting_marks(curren
 def test_staged_copy_failure_recovers_original_command_and_exception_identity(current, tmp_path, monkeypatch):
     project, _ = current
     denied = PermissionError("review destination write refused")
-    def refuse(*args):
+    def refuse(*args, **kwargs):
         raise denied
     with monkeypatch.context() as patcher:
         patcher.setattr(review, "write_review_copy", refuse)

@@ -18,6 +18,8 @@ from sciplot_core.project_commands import MembershipRead, PreparedMutation, Proj
 from sciplot_core.project_commands.read_projections import projection_digest
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_store.runtime import literal_runtime_path, projected_runtime_artifact
+from sciplot_core.project_store.root_bindings import identities, require as require_roots
+from sciplot_core.project_store import FileProjectStore
 from sciplot_core.studio_core.annotation_operations import require_edit_source_current
 from sciplot_core.studio_core.document_edit_state import new_preview_directory
 from sciplot_core.studio_core.project_command_scope import (
@@ -29,13 +31,29 @@ from sciplot_core.studio_core.project_query_evidence import latest_run
 from sciplot_core.studio_core.project_query_paths import resolve_project_path
 
 from .pdf_review_content import review_content
-from .pdf_review_files import capture_pdf, write_review_copy
+from .pdf_review_files import capture_pdf, review_directory_binding, write_review_copy
 
 
 def _record_path(review_id: str) -> str:
     if not isinstance(review_id, str) or re.fullmatch(r"[a-f0-9]{32}", review_id) is None:
         raise ValueError("A PDF review requires the exact returned review_id.")
     return f"reviews/pdf/{review_id}.json"
+
+
+def _project_host(store: FileProjectStore) -> dict[str, int]:
+    with store._locked() as (io, current):
+        require_roots(io, current)
+        return identities(io)[""]
+
+
+def _require_review_host(store: FileProjectStore, record: dict[str, Any]) -> dict[str, int]:
+    origin = record.get("host_origin")
+    if not isinstance(origin, dict) or origin.get("project_root") != _project_host(store):
+        raise ValueError("This PDF review has no grant on this project host; explicitly create a new review directory.")
+    directory = origin.get("review_directory")
+    if not isinstance(directory, dict) or set(directory) != {"device", "inode"}:
+        raise ValueError("This PDF review has no explicit local directory grant; create a new review.")
+    return directory
 
 
 def _current(project: Path, figure_id: str | None) -> tuple[dict[str, Any], dict[str, Any], bytes]:
@@ -90,9 +108,10 @@ def _current(project: Path, figure_id: str | None) -> tuple[dict[str, Any], dict
         raise ValueError("The selected current figure must have exactly one registered PDF export.")
     export = candidates[0]
     original = canonical_path(projected_runtime_artifact(Path(export["path"])))
+    pdf_logical = store.logical_path(original)
+    store.projection_path(pdf_logical)  # Admit the original export role before byte capture.
     capture = capture_pdf(original, expected_sha256=export["sha256"])
     manifest_sha = sha256(manifest_bytes).hexdigest()
-    pdf_logical = store.logical_path(original)
     binding["files"].update({manifest_logical: manifest_sha, pdf_logical: capture["sha256"]})
     identity = {"project_id": binding["project_id"], "figure_id": selected["figure_id"],
                 "document": {"resource": document_logical, "sha256": binding["files"][document_logical]},
@@ -123,7 +142,11 @@ def create_pdf_review(project: Path, *, review_dir: Path, figure_id: str | None 
     app = ProjectCommands(store)
     prior = app.query("pdf-review:" + review_id)
     if prior is not None:
+        saved = prior["metadata"]["request"]["binding"]
+        directory = _require_review_host(store, saved)
         if prior["phase"] == "complete":
+            if review_directory_binding(Path(saved["review_pdf"]).parent) != directory:
+                raise ValueError("The PDF review directory changed its explicitly granted host identity; create a new review.")
             return command_result(prior)
         command = ProjectCommand.from_payload(prior["metadata"])
         record = json.loads(command.request_json)["binding"]
@@ -139,6 +162,8 @@ def create_pdf_review(project: Path, *, review_dir: Path, figure_id: str | None 
     logical = _record_path(review_id)
     record = {"kind": "sciplot_pdf_review_binding", "version": 1, "review_id": review_id,
               **identity, "creation_generation": binding["generation"],
+              "host_origin": {"project_root": _project_host(store),
+                              "review_directory": review_directory_binding(output)},
               "review_pdf": str(copy), "base_page_reference": reference}
     mutation = _mutation(project, record, original)
     command = command_for_binding(store, binding, kind="semantic_record", key="pdf-review:" + review_id,
@@ -162,18 +187,19 @@ def _mutation(project: Path, record: dict[str, Any], original: bytes) -> Prepare
 
 def _publish_copy(project: Path, app: ProjectCommands, command: ProjectCommand,
                   record: dict[str, Any], original: bytes) -> dict[str, Any]:
+    directory = _require_review_host(project_store(project), record)
     mutation = _mutation(project, record, original)
     # Existing staging owns frozen bytes, interruption and reply-loss recovery.
     # No native work or PDF replacement is repeated by resuming this command.
     app.stage_prepared(command, mutation)
     copy = canonical_path(Path(record["review_pdf"]))
     if copy.exists():
-        current = capture_pdf(copy, review=True)
+        current = capture_pdf(copy, review=True, expected_directory=directory)
         reference, _facts = review_content(current["bytes"])
         if reference != record["base_page_reference"]:
             raise ValueError("An occupied review copy has different base pages; it was not overwritten.")
     else:
-        write_review_copy(copy, original)
+        write_review_copy(copy, original, expected_directory=directory)
     return command_result(app.publish_prepared(command, mutation))
 
 
@@ -186,7 +212,8 @@ def read_pdf_review(project: Path, *, review_id: str) -> dict[str, Any]:
     if (record["kind"] != "sciplot_pdf_review_binding" or record["version"] != 1
             or record["review_id"] != review_id or record["project_id"] != store.snapshot()["project_id"]):
         raise ValueError("The PDF review belongs to another project or binding version.")
-    copy = capture_pdf(Path(record["review_pdf"]), review=True)
+    directory = _require_review_host(store, record)
+    copy = capture_pdf(Path(record["review_pdf"]), review=True, expected_directory=directory)
     reference, facts = review_content(copy["bytes"])
     if reference != record["base_page_reference"]:
         raise ValueError("PDF base pages or reference renderer changed. Recreate the review from the current export; flattened marks are not supported.")
