@@ -13,6 +13,19 @@ from sciplot_core.verification import changed_evidence
 from sciplot_core.verification.evidence_identity import DOMAINS
 
 
+def test_record_admits_the_current_shared_check_without_trusting_another_command(tmp_path):
+    from sciplot_core.verification.evidence_scope import _validate_check
+
+    plan = build_changed_verification_plan(["README.md"], repo_root=tmp_path)
+    shared = next(c for c in plan["checks"] if c["check_id"] == "pytest_shared_contracts")
+    assert _validate_check(plan, shared, tmp_path) == "pytest"
+    forged = {**shared, "command": [sys.executable, "-c", "raise SystemExit(0)"]}
+    with pytest.raises(ValueError, match="not part of the current owner plan"):
+        _validate_check(plan, forged, tmp_path)
+    with pytest.raises(ValueError, match="current checked runtime"):
+        _validate_check({**plan, "checks": [forged]}, forged, tmp_path)
+
+
 @pytest.fixture
 def evidence_case(tmp_path, monkeypatch):
     inputs = {}

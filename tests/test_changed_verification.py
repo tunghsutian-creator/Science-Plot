@@ -591,7 +591,8 @@ def test_scientific_transform_path_keeps_its_configured_strict_type_gate() -> No
     ]
     commands = {check["check_id"]: check["command"] for check in payload["checks"]}
     assert commands["mypy_owned_scope"] == [sys.executable, "-m", "mypy"]
-    assert TYPE_SCOPE_PARTITION_TARGET in commands["pytest_changed_owners"]
+    assert TYPE_SCOPE_PARTITION_TARGET in commands["pytest_shared_contracts"]
+    assert TYPE_SCOPE_PARTITION_TARGET not in commands["pytest_changed_owners"]
 
 
 def test_studio_registry_state_selects_snapshot_binding_evidence() -> None:
@@ -1565,8 +1566,10 @@ def test_typed_intent_leaf_selects_its_contract_and_preserves_later_gates(path):
     assert {"tests/test_plot_typed_intent.py", "tests/test_plot_typed_intent_recovery.py",
             "tests/test_figure_document.py",
             "tests/test_plot_document.py::test_presentation_intent_cannot_change_scientific_binding",
-            "tests/test_plot_engine.py::test_safe_patch_automatically_commits_and_exports_once_with_science_preserved",
-            *ARCHITECTURE_CORE_TARGETS} <= set(command)
+            "tests/test_plot_engine.py::test_safe_patch_automatically_commits_and_exports_once_with_science_preserved"} <= set(command)
+    shared = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_shared_contracts")
+    assert set(ARCHITECTURE_CORE_TARGETS) <= set(shared)
+    assert not set(ARCHITECTURE_CORE_TARGETS) & set(command)
     assert "tests/test_plot_transforms.py" not in command
     assert plan["required_later"] == {"handoff": ["doctor"],
                                       "final_milestone": ["smoke"], "release": ["full_pytest"]}

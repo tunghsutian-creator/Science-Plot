@@ -7,6 +7,63 @@ import pytest
 
 from sciplot_core.verification import build_changed_verification_plan
 from sciplot_core.verification.changed import _deduplicated_targets, _planned_checks
+from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS
+
+
+def test_shared_exact_leaves_have_one_check_without_changing_owner_obligations():
+    domain = "tests/test_example.py::test_domain_contract"
+    checks = _planned_checks(
+        python_paths=[], pytest_targets=[*CHEAP_SOURCE_TARGETS, domain],
+        mypy_required=False, has_changes=True,
+    )
+    shared, owner = (next(c for c in checks if c["check_id"] == name)
+                     for name in ("pytest_shared_contracts", "pytest_changed_owners"))
+    assert shared["command"][4:] == list(CHEAP_SOURCE_TARGETS)
+    assert owner["command"][6:] == [domain]
+    assert set(shared["command"][4:] + owner["command"][6:]) == {*CHEAP_SOURCE_TARGETS, domain}
+    assert [c["check_id"] for c in checks] == [
+        "pytest_shared_contracts", "pytest_changed_owners", "diff_whitespace",
+    ]
+
+
+def test_all_shared_owner_selection_never_becomes_an_unbounded_pytest_command():
+    checks = _planned_checks(
+        python_paths=[], pytest_targets=list(CHEAP_SOURCE_TARGETS),
+        mypy_required=True, has_changes=True,
+    )
+    assert [c["check_id"] for c in checks] == [
+        "pytest_shared_contracts", "mypy_owned_scope", "diff_whitespace",
+    ]
+    assert checks[0]["command"][4:] == list(CHEAP_SOURCE_TARGETS)
+
+
+def test_without_preceding_shared_check_every_original_target_remains_selected():
+    checks = _planned_checks(
+        python_paths=[], pytest_targets=list(CHEAP_SOURCE_TARGETS),
+        mypy_required=False, has_changes=False,
+    )
+    assert len(checks) == 1 and checks[0]["check_id"] == "pytest_changed_owners"
+    assert checks[0]["command"][6:] == list(CHEAP_SOURCE_TARGETS)
+
+
+def test_shared_dedup_never_subtracts_module_coverage_or_similarly_named_leaves():
+    shared = CHEAP_SOURCE_TARGETS[0]
+    module = shared.split("::")[0]
+    neighbor = shared + "_neighbor"
+    parameter = CHEAP_SOURCE_TARGETS[2] + "[separate-case]"
+    checks = _planned_checks(
+        python_paths=[], pytest_targets=[module, shared, neighbor, parameter],
+        mypy_required=False, has_changes=True,
+    )
+    owner = next(c for c in checks if c["check_id"] == "pytest_changed_owners")
+    assert owner["command"][6:] == [module, parameter]
+    # The module still selects its neighbor and the shared leaf. Do not infer
+    # its collected contents or introduce a prefix deselection exemption.
+    other_checks = _planned_checks(
+        python_paths=[], pytest_targets=[shared, neighbor],
+        mypy_required=False, has_changes=True,
+    )
+    assert next(c for c in other_checks if c["check_id"] == "pytest_changed_owners")["command"][6:] == [neighbor]
 
 
 def test_whole_module_subsumes_leaf_nodes_without_absorbing_neighbor_modules():

@@ -25,7 +25,7 @@ from sciplot_core.verification.evidence_runtime import QT_MODULES, _StaticNative
 from sciplot_core.verification.input_scope import MANIFEST, PROFILES, load_manifest
 
 POLICY = "changed-owner-repository-runtime-closure-v1"
-_CHECKS = {"pytest_changed_owners": "pytest", "ruff_changed_python": "ruff",
+_CHECKS = {"pytest_changed_owners": "pytest", "pytest_shared_contracts": "pytest", "ruff_changed_python": "ruff",
            "mypy_owned_scope": "mypy", "diff_whitespace": "git",
            **{f"pytest_{tier}": "pytest" for tier in ("focused", "comprehensive", "full", *PROFILES)}}
 _PLUGIN = "sciplot_core.verification.pytest_finish"

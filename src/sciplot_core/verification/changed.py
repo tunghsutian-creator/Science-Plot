@@ -242,7 +242,12 @@ def _planned_checks(
         checks.append({
             "check_id": "mypy_owned_scope", "command": [sys.executable, "-m", "mypy"], "status": "planned",
         })
-    if pytest_targets:
+    owner_targets = _deduplicated_targets(pytest_targets)
+    if has_changes:
+        # Exact leaves already belong to the mandatory preceding shared check.
+        # Keep module/class selectors intact: their other nodes are not implied.
+        owner_targets = [target for target in owner_targets if target not in CHEAP_SOURCE_TARGETS]
+    if owner_targets:
         checks.append(
             {
                 "check_id": "pytest_changed_owners",
@@ -253,7 +258,7 @@ def _planned_checks(
                     "-q",
                     "-m",
                     "focused",
-                    *_deduplicated_targets(pytest_targets),
+                    *owner_targets,
                 ],
                 "status": "planned",
             }
