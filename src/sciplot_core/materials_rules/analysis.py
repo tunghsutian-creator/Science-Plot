@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import sciplot_core.materials_rules.metric_tables as metric_tables
 from sciplot_core.materials_rules.metric_tables import (
     _write_metrics_csv,
     _metric,
@@ -21,13 +22,16 @@ from sciplot_core.materials_rules.mechanical_metrics import (
 from sciplot_core.materials_rules.curve_extrema_metrics import (
     _tga_metrics,
     _paired_extreme_position_metrics,
+    _paired_extreme_position_metrics_from_series,
     _paired_steepest_drop_position_metrics,
+    _paired_steepest_drop_position_metrics_from_series,
 )
 from sciplot_core.materials_rules.curve_peak_metrics import (
     _ftir_peak_position_metrics,
     _interior_local_peak_position_metrics,
     _terminal_y_metrics,
     _peak_y_metrics,
+    _peak_y_metrics_from_series,
 )
 
 from sciplot_core.materials_rules.thermal_metrics import (
@@ -96,38 +100,40 @@ def compute_analysis_metrics(
             y_tokens=("storage modulus",),
         )
     elif rule_id == "rheology_temperature_sweep":
-        rows = _peak_y_metrics(
-            canonical_source,
+        raw = metric_tables.read_raw_table(canonical_source)
+        loss_factor = metric_tables._labeled_paired_curve_table(
+            raw, x_tokens=("temperature",), y_tokens=("loss factor", "tan delta")
+        )
+        rows = _peak_y_metrics_from_series(
+            loss_factor,
             metric_name="maximum_tan_delta",
             y_unit="1",
-            x_tokens=("temperature",),
-            y_tokens=("loss factor", "tan delta"),
             reason=(
                 "Maximum finite loss factor in the canonical trace; "
                 "this value is not interpreted as Tg."
             ),
         )
+        x_unit = semantic["axis_plan"]["x"]["canonical_unit"]
         rows.extend(
-            _paired_extreme_position_metrics(
-                canonical_source,
+            _paired_extreme_position_metrics_from_series(
+                loss_factor,
                 metric_name="temperature_at_maximum_tan_delta_C",
-                x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
+                x_unit=x_unit,
                 extreme="maximum",
-                x_tokens=("temperature",),
-                y_tokens=("loss factor", "tan delta"),
                 reason=(
                     "Temperature of the maximum finite loss factor; endpoint "
                     "maxima are retained and this is not interpreted as Tg."
                 ),
             )
         )
+        storage_modulus = metric_tables._labeled_paired_curve_table(
+            raw, x_tokens=("temperature",), y_tokens=("storage modulus",)
+        )
         rows.extend(
-            _paired_steepest_drop_position_metrics(
-                canonical_source,
+            _paired_steepest_drop_position_metrics_from_series(
+                storage_modulus,
                 metric_name="softening_temperature_candidate",
-                x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
-                x_tokens=("temperature",),
-                y_tokens=("storage modulus",),
+                x_unit=x_unit,
             )
         )
     elif rule_id == "compression_curve":

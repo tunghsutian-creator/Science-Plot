@@ -21,7 +21,7 @@ from sciplot_core.materials_rules.models import (
     ELONGATION_AT_BREAK_METRIC,
     LEGACY_STRAIN_AT_BREAK_METRIC,
 )
-from sciplot_core.source_tables import read_raw_table
+from sciplot_core.source_tables import read_raw_table as read_raw_table
 
 
 def _write_metrics_csv(rows: list[dict[str, Any]], output_path: Path) -> None:
@@ -56,7 +56,17 @@ def _read_labeled_paired_curve_series(
     x_tokens: tuple[str, ...] = (),
     y_tokens: tuple[str, ...] = (),
 ) -> list[tuple[str, str, pd.DataFrame]]:
-    raw = read_raw_table(path)
+    return _labeled_paired_curve_series(
+        read_raw_table(path), x_tokens=x_tokens, y_tokens=y_tokens
+    )
+
+
+def _labeled_paired_curve_series(
+    raw: pd.DataFrame,
+    *,
+    x_tokens: tuple[str, ...] = (),
+    y_tokens: tuple[str, ...] = (),
+) -> list[tuple[str, str, pd.DataFrame]]:
     if raw.shape[0] < 4:
         return []
     if x_tokens:
@@ -115,6 +125,16 @@ def _read_labeled_paired_curve_series(
                 sample = f"series_{len(series) + 1}"
             series.append((sample, y_header, data.reset_index(drop=True)))
     return series
+
+
+def _labeled_paired_curve_table(
+    raw: pd.DataFrame,
+    *,
+    x_tokens: tuple[str, ...] = (),
+    y_tokens: tuple[str, ...] = (),
+) -> list[tuple[str, pd.DataFrame]]:
+    return [(sample, frame) for sample, _header, frame in
+            _labeled_paired_curve_series(raw, x_tokens=x_tokens, y_tokens=y_tokens)]
 
 
 def _read_labeled_paired_curve_table(

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import numpy as np
+import pandas as pd
 from sciplot_core.materials_rules.tokens import (
     normalize_token,
 )
@@ -228,6 +229,19 @@ def _peak_y_metrics(
         x_tokens=x_tokens,
         y_tokens=y_tokens,
     )
+    return _peak_y_metrics_from_series(
+        series, metric_name=metric_name, y_unit=y_unit, magnitude=magnitude, reason=reason
+    )
+
+
+def _peak_y_metrics_from_series(
+    series: list[tuple[str, pd.DataFrame]],
+    *,
+    metric_name: str,
+    y_unit: str,
+    magnitude: bool = False,
+    reason: str = "",
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for sample, data in series:
         finite = data.replace([np.inf, -np.inf], np.nan).dropna()

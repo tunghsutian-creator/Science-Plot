@@ -90,6 +90,19 @@ def _paired_extreme_position_metrics(
         x_tokens=x_tokens,
         y_tokens=y_tokens,
     )
+    return _paired_extreme_position_metrics_from_series(
+        series, metric_name=metric_name, x_unit=x_unit, extreme=extreme, reason=reason
+    )
+
+
+def _paired_extreme_position_metrics_from_series(
+    series: list[tuple[str, pd.DataFrame]],
+    *,
+    metric_name: str,
+    x_unit: str,
+    extreme: str,
+    reason: str = "",
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for sample, data in series:
         finite = data.replace([np.inf, -np.inf], np.nan).dropna()
@@ -141,6 +154,17 @@ def _paired_steepest_drop_position_metrics(
         x_tokens=x_tokens,
         y_tokens=y_tokens,
     )
+    return _paired_steepest_drop_position_metrics_from_series(
+        series, metric_name=metric_name, x_unit=x_unit
+    )
+
+
+def _paired_steepest_drop_position_metrics_from_series(
+    series: list[tuple[str, pd.DataFrame]],
+    *,
+    metric_name: str,
+    x_unit: str,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for sample, data in series:
         finite = (
