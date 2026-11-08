@@ -122,7 +122,7 @@ def admit_session_payload(value: Any, *, template: str | None = None) -> dict[st
     """Admit an external envelope once; only its request selects execution."""
     request = checked_session_request(value)
     selected = None
-    for data_type in intake_catalog_payload()["data_types"]:
+    for data_type in intake_catalog_payload(include_pending=True)["data_types"]:
         if data_type["id"] == request["data_type_id"]:
             selected = next((item for item in data_type["experiments"]
                              if item["id"] == request["experiment_type_id"]), None)

@@ -141,30 +141,50 @@ def test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata(tmp_pa
 
 
 def test_envelope_review_uses_current_rule_and_explicit_template_not_context(tmp_path, monkeypatch):
+    from sciplot_core.intake.catalog import intake_catalog_payload
     from sciplot_core.intake.project import create_intake_project_from_session
+    from sciplot_core.materials_rules.catalog_data import _RULE_BY_ID
+
     source = dsc_source(tmp_path)
-    prepared = adapter.prepare_session(source, output_root=tmp_path / 'out', rule_id='dsc_curve')
-    path = Path(prepared['session'])
+    pending = replace(get_rule('dsc_curve'), fixture_status='pending')
+    monkeypatch.setitem(_RULE_BY_ID, 'dsc_curve', pending)
+    assert get_rule('dsc_curve') is pending
+    assert 'dsc_curve' not in intake_catalog_payload()['ready_rule_ids']
+    assert 'dsc_curve' in intake_catalog_payload(include_pending=True)['ready_rule_ids']
+    with pytest.raises(ValueError, match='explicit rule plus template'):
+        adapter.prepare_session(source, output_root=tmp_path / 'modern', rule_id='dsc_curve')
+    assert not list((tmp_path / 'modern').rglob('*.json'))
+    prepared = sessions.prepare_intake_session(source, output_root=tmp_path / 'out',
+        requested_rule_id='dsc_curve', allow_pending_rule_review=True)
+    assert prepared['pending_rule_review'] is True
+    path = Path(prepared['session_path'])
+    historical = tmp_path / 'historical.json'
+    historical.write_text(json.dumps(prepared))
     value = json.loads(path.read_text())
     value['context']['pending_rule_review'] = False
     value['capabilities']['ready_rule_ids'] = ['dsc_curve']
     path.write_text(json.dumps(value))
-    pending = replace(get_rule('dsc_curve'), fixture_status='pending')
-    monkeypatch.setattr(session_contract, 'get_rule', lambda _rule: pending)
     calls = []
     for template in (None, '', '  '):
-        with pytest.raises(adapter.IntakeSessionError, match='explicit rule plus template'):
+        with pytest.raises(adapter.IntakeSessionError, match='currently ready'):
             create_intake_project_from_session(path, template=template,
                 studio_preparer=lambda _project: pytest.fail('Refused review reached preparation'),
                 project_factory=lambda **kw: calls.append(kw) or {})
     with pytest.raises(adapter.IntakeSessionError, match='currently ready'):
         adapter.create_session(path)
     assert calls == []
-    create_intake_project_from_session(path, template='curve',
-        studio_preparer=lambda _project: pytest.fail('Controlled factory must own preparation'),
-        project_factory=lambda **kw: calls.append(kw) or {})
-    assert len(calls) == 1 and calls[0]['recognition']['pending_rule_review'] is True
-    assert calls[0]['template'] == 'curve'
+    admitted = session_contract.admit_session_payload(value, template='curve')
+    for form in (path, historical, admitted):
+        create_intake_project_from_session(form, template='curve',
+            studio_preparer=lambda _project: pytest.fail('Controlled factory must own preparation'),
+            project_factory=lambda **kw: calls.append(kw) or {})
+    assert len(calls) == 3
+    for call in calls:
+        assert call['recognition']['pending_rule_review'] is True
+        assert call['recognition']['rule_id'] == 'dsc_curve'
+        assert call['template'] == 'curve'
+        assert call['groups'][0].files[0].content == source.read_bytes()
+    assert json.loads(historical.read_text()) == prepared
 
 
 @pytest.mark.parametrize('entry', ['adapter', 'path'])
