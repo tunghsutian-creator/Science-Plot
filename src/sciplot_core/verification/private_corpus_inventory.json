@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10053,
-    "nodeids_sha256": "b574988b9a5472b8fc7bad13df9012c7091e7caec9c4d79274a24e0e2725c8b5",
-    "test_sources_sha256": "4bc4a09a512bc2ff1f030ed097cb8ac722f904781099ea1f5bc7e5691dfe73e0",
-    "test_source_count": 657,
+    "nodeid_count": 10091,
+    "nodeids_sha256": "b0e37c7e0382a97ad0726e6287f3e670353c766b26787f7906e2f46119f8b80f",
+    "test_sources_sha256": "ecdcd421f5303840281dc33c3a7aac268d4c9cd5f536a264bdf29ab5979b8947",
+    "test_source_count": 658,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
@@ -5480,7 +5480,45 @@
       "tests/test_study_artifact_locations.py::test_literal_outcomes_bind_physical_delivery_copies_and_mixed_qa_observations",
       "tests/test_study_artifact_locations.py::test_selected_csv_and_project_root_keep_read_projection_without_output_write_grants",
       "tests/test_study_artifact_locations.py::test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files",
-      "tests/test_changed_scope_selectors.py::test_ai_only_owner_boundaries_keep_business_absence_and_unknown_refusals"
+      "tests/test_changed_scope_selectors.py::test_ai_only_owner_boundaries_keep_business_absence_and_unknown_refusals",
+      "tests/test_intake_session_publication.py::test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[envelope-dict]",
+      "tests/test_intake_session_publication.py::test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[envelope-path]",
+      "tests/test_intake_session_publication.py::test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[historical-dict]",
+      "tests/test_intake_session_publication.py::test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[historical-path]",
+      "tests/test_intake_session_publication.py::test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[request-dict]",
+      "tests/test_intake_session_publication.py::test_envelope_admission_refuses_occupied_output_and_invalid_render_before_project[adapter]",
+      "tests/test_intake_session_publication.py::test_envelope_admission_refuses_occupied_output_and_invalid_render_before_project[path]",
+      "tests/test_intake_session_publication.py::test_envelope_review_uses_current_rule_and_explicit_template_not_context",
+      "tests/test_intake_session_publication.py::test_internal_adapter_request_is_admitted_once_and_columns_are_checked_at_the_source_owner",
+      "tests/test_intake_session_publication.py::test_legacy_column_metadata_uses_the_same_exact_source_guard_before_custom_factory",
+      "tests/test_intake_session_publication.py::test_new_envelope_path_keeps_fresh_source_refusals_before_factory[declared-sha]",
+      "tests/test_intake_session_publication.py::test_new_envelope_path_keeps_fresh_source_refusals_before_factory[missing-source]",
+      "tests/test_intake_session_publication.py::test_new_envelope_path_keeps_fresh_source_refusals_before_factory[source-bytes]",
+      "tests/test_intake_session_publication.py::test_new_envelope_path_uses_request_only_and_the_real_source_reader",
+      "tests/test_intake_session_publication.py::test_new_sessions_have_one_envelope_publication_and_keep_legacy_metadata[legacy-python]",
+      "tests/test_intake_session_publication.py::test_new_sessions_have_one_envelope_publication_and_keep_legacy_metadata[local]",
+      "tests/test_intake_session_publication.py::test_raw_entry_names_are_frozen_in_one_session_without_changing_filename_identity[curate]",
+      "tests/test_intake_session_publication.py::test_raw_entry_names_are_frozen_in_one_session_without_changing_filename_identity[studio]",
+      "tests/test_intake_session_publication.py::test_session_cleanup_refusal_cannot_replace_the_original_publication_error",
+      "tests/test_intake_session_publication.py::test_session_publication_failure_preserves_existing_sessions_and_original_permission_error",
+      "tests/test_mechanical_facts_flow_native.py::test_direct_publication_adopts_dirty_primary_and_secondary_in_one_generation",
+      "tests/test_plan_preview.py::test_mechanical_preview_observes_once_without_reparsing_or_mutation[compression_curve]",
+      "tests/test_plan_preview.py::test_mechanical_preview_observes_once_without_reparsing_or_mutation[flexural_curve]",
+      "tests/test_plan_preview.py::test_mechanical_preview_observes_once_without_reparsing_or_mutation[tensile_curve]",
+      "tests/test_plan_preview.py::test_preview_preserves_fallback_figure_plan_resolution_error",
+      "tests/test_studio_figure_task_chain.py::test_cold_registry_addresses_do_not_read_the_old_project_root",
+      "tests/test_studio_figure_task_chain.py::test_registry_addresses_do_not_admit_unregistered_native_bytes[studio/document.vsz]",
+      "tests/test_studio_figure_task_chain.py::test_registry_addresses_do_not_admit_unregistered_native_bytes[studio/figures/performance_polar.vsz]",
+      "tests/test_studio_figure_task_chain.py::test_selected_registry_still_rejects_noncanonical_outcome_addresses[document-alias]",
+      "tests/test_studio_figure_task_chain.py::test_selected_registry_still_rejects_noncanonical_outcome_addresses[foreign-root]",
+      "tests/test_studio_figure_task_chain.py::test_selected_registry_still_rejects_noncanonical_outcome_addresses[relative]",
+      "tests/test_studio_figure_task_chain.py::test_selected_registry_still_rejects_noncanonical_outcome_addresses[wrong-member]",
+      "tests/test_studio_figure_task_chain.py::test_unavailable_registry_addresses_need_no_physical_artifact",
+      "tests/test_studio_snapshot_binding.py::test_publication_inventory_rejects_mixed_old_literal_hash_keys",
+      "tests/test_studio_snapshot_binding.py::test_publication_snapshot_addresses_do_not_adopt_dirty_native_bytes[primary]",
+      "tests/test_studio_snapshot_binding.py::test_publication_snapshot_addresses_do_not_adopt_dirty_native_bytes[secondary]",
+      "tests/test_workflow_bundle_dispatch.py::test_mechanical_dispatch_requires_its_resolved_source_before_any_adapter",
+      "tests/test_workflow_bundle_dispatch.py::test_mechanical_selected_plan_cannot_fall_back_to_generic_renderer"
     ],
     "synthetic_candidates": [
       {
@@ -26698,9 +26736,161 @@
       {
         "nodeid": "tests/test_changed_scope_selectors.py::test_ai_only_owner_boundaries_keep_business_absence_and_unknown_refusals",
         "reason": "Source-only calls to the existing changed-owner planner with declared QA/CLI, retired namespace, exact historical rename and unknown ordinary source path names inspect actual current owner targets and required full gates. The planner returns command descriptions without running them; no tests, mypy, native process, private scientific source, golden, network or model operation is executed by this generated control. Existing unknown-path failure and history ownership remain explicit."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[envelope-dict]",
+        "reason": "Generated DSC sessions exercise the named historical Path/dict, envelope Path/dict or internal request dict through the actual reader and a controlled factory. Original bytes/source location and format-specific pending metadata remain correct, and the historical JSON is not rewritten. Exact reviewed case: test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[envelope-dict]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[envelope-path]",
+        "reason": "Generated DSC sessions exercise the named historical Path/dict, envelope Path/dict or internal request dict through the actual reader and a controlled factory. Original bytes/source location and format-specific pending metadata remain correct, and the historical JSON is not rewritten. Exact reviewed case: test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[envelope-path]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[historical-dict]",
+        "reason": "Generated DSC sessions exercise the named historical Path/dict, envelope Path/dict or internal request dict through the actual reader and a controlled factory. Original bytes/source location and format-specific pending metadata remain correct, and the historical JSON is not rewritten. Exact reviewed case: test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[historical-dict]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[historical-path]",
+        "reason": "Generated DSC sessions exercise the named historical Path/dict, envelope Path/dict or internal request dict through the actual reader and a controlled factory. Original bytes/source location and format-specific pending metadata remain correct, and the historical JSON is not rewritten. Exact reviewed case: test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[historical-path]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[request-dict]",
+        "reason": "Generated DSC sessions exercise the named historical Path/dict, envelope Path/dict or internal request dict through the actual reader and a controlled factory. Original bytes/source location and format-specific pending metadata remain correct, and the historical JSON is not rewritten. Exact reviewed case: test_all_supported_read_forms_keep_original_bytes_and_legacy_metadata[request-dict]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_envelope_admission_refuses_occupied_output_and_invalid_render_before_project[adapter]",
+        "reason": "Generated DSC envelope alters an occupied output or invalid render option and calls the named adapter/path entry. Admission must fail before a project factory and leave the occupied directory empty; a real output/refusal boundary, not a private corpus input. Exact reviewed case: test_envelope_admission_refuses_occupied_output_and_invalid_render_before_project[adapter]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_envelope_admission_refuses_occupied_output_and_invalid_render_before_project[path]",
+        "reason": "Generated DSC envelope alters an occupied output or invalid render option and calls the named adapter/path entry. Admission must fail before a project factory and leave the occupied directory empty; a real output/refusal boundary, not a private corpus input. Exact reviewed case: test_envelope_admission_refuses_occupied_output_and_invalid_render_before_project[path]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_envelope_review_uses_current_rule_and_explicit_template_not_context",
+        "reason": "Generated DSC source plus a scoped monkeypatch of the central materials-rule registry models a genuinely pending rule. Public catalog exclusion, explicit-template review, refusal of empty/no-template production paths, ignored context/capabilities and exact original bytes are checked before controlled factory calls; no real AI or native work. Exact reviewed case: test_envelope_review_uses_current_rule_and_explicit_template_not_context."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_internal_adapter_request_is_admitted_once_and_columns_are_checked_at_the_source_owner",
+        "reason": "Generated DSC table preview produces exact source/column confirmation. Counters at the real shared request admission and source-owner column guard require one admission and one validation; factory/publication are controlled, original source remains the actual evidence. Exact reviewed case: test_internal_adapter_request_is_admitted_once_and_columns_are_checked_at_the_source_owner."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_legacy_column_metadata_uses_the_same_exact_source_guard_before_custom_factory",
+        "reason": "Generated DSC legacy Path and returned dict carry a forged original column name. File-identity binding alone is shown insufficient; the source-owner exact header guard must reject both before a custom factory. This closes the known old validation gap without rewriting a historical file. Exact reviewed case: test_legacy_column_metadata_uses_the_same_exact_source_guard_before_custom_factory."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_new_envelope_path_keeps_fresh_source_refusals_before_factory[declared-sha]",
+        "reason": "The named generated DSC mutation removes/replaces source bytes or forges the declared SHA after preparation. Actual fresh source reading must refuse before any controlled project factory; no hash/scientific tolerance is weakened and no private input is needed. Exact reviewed case: test_new_envelope_path_keeps_fresh_source_refusals_before_factory[declared-sha]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_new_envelope_path_keeps_fresh_source_refusals_before_factory[missing-source]",
+        "reason": "The named generated DSC mutation removes/replaces source bytes or forges the declared SHA after preparation. Actual fresh source reading must refuse before any controlled project factory; no hash/scientific tolerance is weakened and no private input is needed. Exact reviewed case: test_new_envelope_path_keeps_fresh_source_refusals_before_factory[missing-source]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_new_envelope_path_keeps_fresh_source_refusals_before_factory[source-bytes]",
+        "reason": "The named generated DSC mutation removes/replaces source bytes or forges the declared SHA after preparation. Actual fresh source reading must refuse before any controlled project factory; no hash/scientific tolerance is weakened and no private input is needed. Exact reviewed case: test_new_envelope_path_keeps_fresh_source_refusals_before_factory[source-bytes]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_new_envelope_path_uses_request_only_and_the_real_source_reader",
+        "reason": "Generated DSC envelope has forged semantic/pending context and capability content. The actual project session reader admits only current request/rule and verified original source bytes before one controlled factory; no rendering or private source. Exact reviewed case: test_new_envelope_path_uses_request_only_and_the_real_source_reader."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_new_sessions_have_one_envelope_publication_and_keep_legacy_metadata[legacy-python]",
+        "reason": "Generated DSC CSV calls the selected local adapter or public Python compatibility entry. Observed content publications must contain one final envelope, original metadata/filename/source bytes/order remain exact; Path/os.replace spies observe actual publisher boundaries without a native/model/private-data call. Exact reviewed case: test_new_sessions_have_one_envelope_publication_and_keep_legacy_metadata[legacy-python]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_new_sessions_have_one_envelope_publication_and_keep_legacy_metadata[local]",
+        "reason": "Generated DSC CSV calls the selected local adapter or public Python compatibility entry. Observed content publications must contain one final envelope, original metadata/filename/source bytes/order remain exact; Path/os.replace spies observe actual publisher boundaries without a native/model/private-data call. Exact reviewed case: test_new_sessions_have_one_envelope_publication_and_keep_legacy_metadata[local]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_raw_entry_names_are_frozen_in_one_session_without_changing_filename_identity[curate]",
+        "reason": "Selected Studio or curation raw-source entry uses generated DSC or generated torque inputs. A controlled project boundary stops before native creation; one saved envelope contains the explicit name while detected-name filename/session identity and returned projection remain exact. Exact reviewed case: test_raw_entry_names_are_frozen_in_one_session_without_changing_filename_identity[curate]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_raw_entry_names_are_frozen_in_one_session_without_changing_filename_identity[studio]",
+        "reason": "Selected Studio or curation raw-source entry uses generated DSC or generated torque inputs. A controlled project boundary stops before native creation; one saved envelope contains the explicit name while detected-name filename/session identity and returned projection remain exact. Exact reviewed case: test_raw_entry_names_are_frozen_in_one_session_without_changing_filename_identity[studio]."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_session_cleanup_refusal_cannot_replace_the_original_publication_error",
+        "reason": "Generated DSC drives a controlled publisher PermissionError plus a cleanup unlink refusal on the new reserved session. The original publication error must remain primary with cleanup detail attached; all operations target temporary generated session paths. Exact reviewed case: test_session_cleanup_refusal_cannot_replace_the_original_publication_error."
+      },
+      {
+        "nodeid": "tests/test_intake_session_publication.py::test_session_publication_failure_preserves_existing_sessions_and_original_permission_error",
+        "reason": "Generated DSC prepares an existing session, then the shared publisher raises a controlled PermissionError. Only this call's new reservation is cleaned; original error identity, prior session bytes and raw source survive. No host permission change or private file access. Exact reviewed case: test_session_publication_failure_preserves_existing_sessions_and_original_permission_error."
+      },
+      {
+        "nodeid": "tests/test_mechanical_facts_flow_native.py::test_direct_publication_adopts_dirty_primary_and_secondary_in_one_generation",
+        "reason": "Generated public compression instrument data from public_multitask_inputs.mechanical_source drives the real prepare/direct-publish native chain. It dirties primary and secondary VSZ, requires one final adoption/publication generation and exact source/scientific/spec preservation. It uses local generated native artifacts, not private corpus or a golden; native behavior is not described as a pure stub. Exact reviewed case: test_direct_publication_adopts_dirty_primary_and_secondary_in_one_generation."
+      },
+      {
+        "nodeid": "tests/test_plan_preview.py::test_mechanical_preview_observes_once_without_reparsing_or_mutation[compression_curve]",
+        "reason": "The named tensile/compression/flexural input is generated by public_multitask_inputs.mechanical_source. Real build_plan_preview calls the scientific-source owner once per operation, consumes its plan without generic reparsing, binds source hash/sample order, and keeps request/raw bytes unchanged. A second independent preview must freshly read again (count1 to2), not reuse a cache; no native/private/golden data. Exact reviewed case: test_mechanical_preview_observes_once_without_reparsing_or_mutation[compression_curve]."
+      },
+      {
+        "nodeid": "tests/test_plan_preview.py::test_mechanical_preview_observes_once_without_reparsing_or_mutation[flexural_curve]",
+        "reason": "The named tensile/compression/flexural input is generated by public_multitask_inputs.mechanical_source. Real build_plan_preview calls the scientific-source owner once per operation, consumes its plan without generic reparsing, binds source hash/sample order, and keeps request/raw bytes unchanged. A second independent preview must freshly read again (count1 to2), not reuse a cache; no native/private/golden data. Exact reviewed case: test_mechanical_preview_observes_once_without_reparsing_or_mutation[flexural_curve]."
+      },
+      {
+        "nodeid": "tests/test_plan_preview.py::test_mechanical_preview_observes_once_without_reparsing_or_mutation[tensile_curve]",
+        "reason": "The named tensile/compression/flexural input is generated by public_multitask_inputs.mechanical_source. Real build_plan_preview calls the scientific-source owner once per operation, consumes its plan without generic reparsing, binds source hash/sample order, and keeps request/raw bytes unchanged. A second independent preview must freshly read again (count1 to2), not reuse a cache; no native/private/golden data. Exact reviewed case: test_mechanical_preview_observes_once_without_reparsing_or_mutation[tensile_curve]."
+      },
+      {
+        "nodeid": "tests/test_plan_preview.py::test_preview_preserves_fallback_figure_plan_resolution_error",
+        "reason": "A generated two-column generic CSV and controlled classifiers select the true generic fallback. The real preview projects a FigurePlanResolutionError reason/message into blocked state, with no plan, instead of swallowing it or entering a native renderer. Exact reviewed case: test_preview_preserves_fallback_figure_plan_resolution_error."
+      },
+      {
+        "nodeid": "tests/test_studio_figure_task_chain.py::test_cold_registry_addresses_do_not_read_the_old_project_root",
+        "reason": "A temporary generated mixed project is registered, bundled/imported to a cold location, and the original directory is made absent. The actual registry reader must resolve current relocated addresses without reading the old project root or mutating the selected generation; no private or golden input. Exact reviewed case: test_cold_registry_addresses_do_not_read_the_old_project_root."
+      },
+      {
+        "nodeid": "tests/test_studio_figure_task_chain.py::test_registry_addresses_do_not_admit_unregistered_native_bytes[studio/document.vsz]",
+        "reason": "Temporary generated registry/spec/native files are registered, then the named primary/secondary native bytes are changed outside the selected generation. Registry metadata comparison remains descriptive while the strict source resolver still rejects unregistered bytes and selected head stays unchanged; no real scientific fixture. Exact reviewed case: test_registry_addresses_do_not_admit_unregistered_native_bytes[studio/document.vsz]."
+      },
+      {
+        "nodeid": "tests/test_studio_figure_task_chain.py::test_registry_addresses_do_not_admit_unregistered_native_bytes[studio/figures/performance_polar.vsz]",
+        "reason": "Temporary generated registry/spec/native files are registered, then the named primary/secondary native bytes are changed outside the selected generation. Registry metadata comparison remains descriptive while the strict source resolver still rejects unregistered bytes and selected head stays unchanged; no real scientific fixture. Exact reviewed case: test_registry_addresses_do_not_admit_unregistered_native_bytes[studio/figures/performance_polar.vsz]."
+      },
+      {
+        "nodeid": "tests/test_studio_figure_task_chain.py::test_selected_registry_still_rejects_noncanonical_outcome_addresses[document-alias]",
+        "reason": "A temporary generated registry is edited into the named address fault: native symlink alias, foreign root, wrong member or relative outcome. The actual reader must refuse the inconsistent selected registry without publishing a new head; only generated local artifacts. Exact reviewed case: test_selected_registry_still_rejects_noncanonical_outcome_addresses[document-alias]."
+      },
+      {
+        "nodeid": "tests/test_studio_figure_task_chain.py::test_selected_registry_still_rejects_noncanonical_outcome_addresses[foreign-root]",
+        "reason": "A temporary generated registry is edited into the named address fault: native symlink alias, foreign root, wrong member or relative outcome. The actual reader must refuse the inconsistent selected registry without publishing a new head; only generated local artifacts. Exact reviewed case: test_selected_registry_still_rejects_noncanonical_outcome_addresses[foreign-root]."
+      },
+      {
+        "nodeid": "tests/test_studio_figure_task_chain.py::test_selected_registry_still_rejects_noncanonical_outcome_addresses[relative]",
+        "reason": "A temporary generated registry is edited into the named address fault: native symlink alias, foreign root, wrong member or relative outcome. The actual reader must refuse the inconsistent selected registry without publishing a new head; only generated local artifacts. Exact reviewed case: test_selected_registry_still_rejects_noncanonical_outcome_addresses[relative]."
+      },
+      {
+        "nodeid": "tests/test_studio_figure_task_chain.py::test_selected_registry_still_rejects_noncanonical_outcome_addresses[wrong-member]",
+        "reason": "A temporary generated registry is edited into the named address fault: native symlink alias, foreign root, wrong member or relative outcome. The actual reader must refuse the inconsistent selected registry without publishing a new head; only generated local artifacts. Exact reviewed case: test_selected_registry_still_rejects_noncanonical_outcome_addresses[wrong-member]."
+      },
+      {
+        "nodeid": "tests/test_studio_figure_task_chain.py::test_unavailable_registry_addresses_need_no_physical_artifact",
+        "reason": "Generated unavailable figure entries intentionally have no VSZ/spec files and no outcome artifacts. Registry reading must preserve unavailability instead of demanding physical artifacts or creating a generation; this is metadata/state behavior, not skipped scientific validation. Exact reviewed case: test_unavailable_registry_addresses_need_no_physical_artifact."
+      },
+      {
+        "nodeid": "tests/test_studio_snapshot_binding.py::test_publication_inventory_rejects_mixed_old_literal_hash_keys",
+        "reason": "Generated local publication inventory deliberately mixes a relocated current document with stale literal-root hash-map keys. The actual snapshot helper must reject the mismatch rather than substitute a live file/hash; no private fixture or golden. Exact reviewed case: test_publication_inventory_rejects_mixed_old_literal_hash_keys."
+      },
+      {
+        "nodeid": "tests/test_studio_snapshot_binding.py::test_publication_snapshot_addresses_do_not_adopt_dirty_native_bytes[primary]",
+        "reason": "Generated primary/secondary native and exported-snapshot files run under an existing project generation. The named dirty native may be mapped to its actual exported snapshot, but strict source admission still refuses unadopted current bytes; corrupting the exported snapshot must still fail and no head adoption is allowed. Exact reviewed case: test_publication_snapshot_addresses_do_not_adopt_dirty_native_bytes[primary]."
+      },
+      {
+        "nodeid": "tests/test_studio_snapshot_binding.py::test_publication_snapshot_addresses_do_not_adopt_dirty_native_bytes[secondary]",
+        "reason": "Generated primary/secondary native and exported-snapshot files run under an existing project generation. The named dirty native may be mapped to its actual exported snapshot, but strict source admission still refuses unadopted current bytes; corrupting the exported snapshot must still fail and no head adoption is allowed. Exact reviewed case: test_publication_snapshot_addresses_do_not_adopt_dirty_native_bytes[secondary]."
+      },
+      {
+        "nodeid": "tests/test_workflow_bundle_dispatch.py::test_mechanical_dispatch_requires_its_resolved_source_before_any_adapter",
+        "reason": "A temporary prepared path intentionally lacks the resolved mechanical source envelope. The actual auto-split dispatcher must fail before any installed renderer spy or output-directory creation; this preserves the typed-source guard and performs no native work. Exact reviewed case: test_mechanical_dispatch_requires_its_resolved_source_before_any_adapter."
+      },
+      {
+        "nodeid": "tests/test_workflow_bundle_dispatch.py::test_mechanical_selected_plan_cannot_fall_back_to_generic_renderer",
+        "reason": "A real generated tensile source resolves an immutable scientific envelope/selected plan, then a mechanical adapter spy deliberately declines. The actual dispatcher must reject workflow_planned_bundle_unavailable after only that mechanical call, with no generic downgrade or output creation; no private source/native renderer. Exact reviewed case: test_mechanical_selected_plan_cannot_fall_back_to_generic_renderer."
       }
     ],
-    "review_method": "2026-11-08 final same-operation consolidation: original unfiltered zero-body collection INTEGRATION_COLLECTION_13.txt (SHA16ce7e0bc4f48dcf71816347f59e3ac2d3e68bb9e17aed9a0519ae434c9229e4),10053 nodes. Preserved every09904 private case/dependency,111 historical responsibilities, and all existing reviewed qualifications including all63 retained REBIND03 additions. Appended only1 independently reviewed source-only owner-selection control in the exact existing changed-scope selector leaf; retained original audit arrays as ordered prefixes. Current source hashes bind this static proposal only. No full execution, native lifecycle, capture/access completeness or scientific acceptance is asserted; inventory_complete remains false.",
+    "review_method": "2026-11-08 bounded closure metadata05: actual unfiltered zero-body structured collection CLOSE_COLLECTION_01.json (SHAe2d4d1b33e58e4a3d8657861fbd241e08cbe25218bfec45dc2c12f41ef242bb4),10091 nodes. Preserved every43aa metadata04 node/scope/tier, all original165 private cases,210 dependencies, 23 directory metadata records and111 historical responsibilities, including every prior reviewed qualification as ordered prefixes. Appended only38 exact actual public-focused nodes with independently reviewed generated-source/current-authority/exception/permission controls. Unknown additional nodes are refused until explicitly reviewed; current source hashes bind this static proposal only. No full/native/capture/access/scientific acceptance is asserted; inventory_complete remains false.",
     "scope": [
       "real_world",
       "polymer_corpus",
