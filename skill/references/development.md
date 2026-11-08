@@ -100,14 +100,22 @@ No single pair proves a stable percentage or reduces the measured multi-hour
 release suite. Use daily checks during implementation; freeze a coherent batch
 before its necessary full acceptance.
 
-Unrecorded feedback runs changed-file Ruff, eight shared source contracts and the
+Unrecorded feedback runs changed-file Ruff, nine shared source contracts and the
 complete configured type gate before the affected behavior bodies (when each
 gate applies), then whitespace. A failure stops that editing loop; later checks
 are reported as `not_run`, never passed. The shared contracts check source
 size, dependency cycles, timestamp ownership, process-wide no-IO mock lifetime,
 duplicate implementations, the strict type owner and the preserved type-scope
-partition, and the retained rendering algorithm's exact source closure. The latter
-also runs in CI before helper builds and long profiles: export filename metadata
+partition, the changed-plan distribution-policy contract, and the retained
+rendering algorithm's exact source closure. The distribution-policy check keeps
+shared-versus-owner coverage and gate order in the cheap loop, before helper
+builds and native or long profiles. Three alternating local pairs measured shared
+gates at median 4.67 seconds for the prior eight and 4.71 for the nine; these
+samples measure early-gate cost, not whole-suite speed. A real private-absent
+stage reproduced the historical policy mismatch in 10.70 seconds, while its
+original complete CI focused stage took 2405 seconds before reporting failure.
+The scopes differ: this is earlier failure detection, not equal-coverage acceleration.
+The rendering check also runs there: export filename metadata
 must not change a sealed layout dependency. This catches shared
 migration failures before a broad behavior selection. Evidence-record mode keeps
 its existing diagnostic collection and completion contract.

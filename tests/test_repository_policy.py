@@ -147,7 +147,24 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     ci_plan = build_changed_verification_plan(["src/sciplot_core/verification/ci_feedback.py"], repo_root=ROOT)
     ci_targets = next(check["command"] for check in ci_plan["checks"] if check["check_id"] == "pytest_changed_owners")
     assert "tests/test_repository_policy.py" in ci_targets
-    assert "tests/test_iso_timestamps.py::test_first_party_contract_timestamp_implementation_has_one_owner" in ci_targets
+    from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS
+    check_ids = [check["check_id"] for check in ci_plan["checks"]]
+    assert check_ids == ["ruff_changed_python", "pytest_shared_contracts", "mypy_owned_scope",
+                         "pytest_changed_owners", "diff_whitespace"]
+    shared = next(check for check in ci_plan["checks"] if check["check_id"] == "pytest_shared_contracts")
+    assert shared["status"] == "planned"
+    assert shared["command"] == [sys.executable, "-m", "pytest", "-q", *CHEAP_SOURCE_TARGETS]
+    timestamp_node = "tests/test_iso_timestamps.py::test_first_party_contract_timestamp_implementation_has_one_owner"
+    assert shared["command"].count(timestamp_node) == 1
+    policy_node = "tests/test_repository_policy.py::test_distribution_policy_changes_select_policy_regressions"
+    assert shared["command"].count(policy_node) == 1
+    assert timestamp_node not in ci_targets
+    assert not set(CHEAP_SOURCE_TARGETS) & set(ci_targets[6:])
+    declared = {target for owner in ci_plan["owners"] for target in owner["pytest_targets"]}
+    covered = {*shared["command"][4:], *ci_targets[6:]}
+    assert set(ci_targets[6:]) <= declared
+    assert all(any(target == selector or target.startswith(selector + "::") for selector in covered)
+               for target in declared)
     timestamp_plan = build_changed_verification_plan(["tests/test_iso_timestamps.py"], repo_root=ROOT)
     assert timestamp_plan["unowned_paths"] == []
     timestamp_targets = next(check["command"] for check in timestamp_plan["checks"] if check["check_id"] == "pytest_changed_owners")
