@@ -534,10 +534,21 @@ def test_unrelated_metadata_can_merge_after_current_observation(current, tmp_pat
     assert review.read_pdf_review(project, review_id=created["review_id"])["status"] == "ok"
 
 
-def test_compact_reference_preserves_standard_note_line_ink_and_highlight_geometry(current, tmp_path):
+def test_compact_reference_preserves_standard_note_line_ink_and_highlight_geometry(current, tmp_path, monkeypatch):
     from sciplot_core.visual_review.pdf_annotations import inspect_pdf_annotations
 
-    project, _ = current
+    project, exported = current
+    with pymupdf.open(exported) as document:
+        document[0].set_cropbox(pymupdf.Rect(10, 15, 230, 165))
+        document[0].set_rotation(90)
+        cropped = document.tobytes()
+    exported.write_bytes(cropped)
+    manifest_path = project / "runs/studio_001/manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    digest = sha256(cropped).hexdigest()
+    manifest["qa"]["pdfs"][0]["sha256"] = digest
+    manifest["result"]["exports"][0]["sha256"] = digest
+    write_json(manifest_path, manifest)
     created = review.create_pdf_review(project, review_dir=tmp_path / "review")
     copy = Path(created["review_pdf"])
     with pymupdf.open(copy) as document:
@@ -549,7 +560,14 @@ def test_compact_reference_preserves_standard_note_line_ink_and_highlight_geomet
         page.add_highlight_annot((25, 110, 80, 130))
         marked = document.tobytes()
     copy.write_bytes(marked)
-    result = review.read_pdf_review(project, review_id=created["review_id"])
+    render = pymupdf.Page.get_pixmap
+    render_calls = []
+    def observe_render(page, *args, **kwargs):
+        render_calls.append(page.number)
+        return render(page, *args, **kwargs)
+    with monkeypatch.context() as patcher:
+        patcher.setattr(pymupdf.Page, "get_pixmap", observe_render)
+        result = review.read_pdf_review(project, review_id=created["review_id"])
     original = inspect_pdf_annotations(marked)
     expected = {item["type_name"]: item for item in original["pages"][0]["annotations"]}
     actual = {item["type"]: item for item in result["annotations"]}
@@ -560,6 +578,13 @@ def test_compact_reference_preserves_standard_note_line_ink_and_highlight_geomet
     assert actual["Text"]["text"] == "Move this region"
     assert result["coordinate_space"] == original["annotation_coordinate_space"]
     assert result["geometry_point_count"] == 11 and result["command_authority"] is False
+    assert result["page_count"] == original["page_count"] == 1 and render_calls == [0]
+    assert result["page_rect_coordinate_space"] == original["page_rect_coordinate_space"] == "pymupdf_rotated_visible_page_points"
+    assert result["pages"] == [{key: page[key] for key in (
+        "page_index", "rect_pt", "media_box_pt", "crop_box_pt", "rotation")} for page in original["pages"]]
+    assert result["pages"][0] == {"page_index": 0, "rect_pt": [0.0, 0.0, 150.0, 220.0],
+        "media_box_pt": [0.0, 0.0, 240.0, 180.0], "crop_box_pt": [10.0, 15.0, 230.0, 165.0], "rotation": 90}
+    assert not {"pixels", "sha256", "annotations"} & result["pages"][0].keys()
 
 
 def test_geometry_budget_refuses_full_reference_instead_of_truncating_hand_drawn_intent():

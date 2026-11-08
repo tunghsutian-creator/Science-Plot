@@ -70,6 +70,10 @@ def review_content(data: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
                 facts[-1]["line_ends"] = item["line_ends"]
             remaining -= 1
     return reference, {"annotation_count": annotations["annotation_count"], "annotations": facts,
+        "page_count": annotations["page_count"], "pages": [
+            {key: page[key] for key in ("page_index", "rect_pt", "media_box_pt", "crop_box_pt", "rotation")}
+            for page in annotations["pages"]],
+        "page_rect_coordinate_space": annotations["page_rect_coordinate_space"],
         "omitted_annotation_count": omitted, "coordinate_space": annotations["annotation_coordinate_space"],
         "geometry_point_count": geometry_points, "geometry_point_limit": MAX_GEOMETRY_POINTS,
         "all_pdf_annotation_types_enumerated": False, "flattened_marks_supported": False,
