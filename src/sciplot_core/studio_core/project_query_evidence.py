@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
@@ -24,11 +25,8 @@ from sciplot_core.studio_core.project_query_paths import (
 
 
 def _indicator(current: bool | None, **fields: Any) -> dict[str, Any]:
-    return {
-        "status": "unknown" if current is None else "current" if current else "stale",
-        "current": current,
-        **fields,
-    }
+    return {"status": "unknown" if current is None else "current" if current else "stale",
+            "current": current, **fields}
 
 
 def _tree_hash(path: Path) -> str | None:
@@ -282,6 +280,21 @@ def _exports_match(
     return True
 
 
+def _optional_manifest_content_sha256(manifest: dict[str, Any]) -> str | None:
+    try:
+        return canonical_json_sha256(manifest, allow_nan=False)
+    except ValueError:
+        # Only historical non-finite JSON makes this additive digest unavailable.
+        pending: list[Any] = [manifest]
+        while pending:
+            value = pending.pop()
+            if isinstance(value, float) and not math.isfinite(value):
+                return None
+            if isinstance(value, dict | list):
+                pending.extend(value.values() if isinstance(value, dict) else value)
+        raise
+
+
 def publication_indicators(
     project: Path,
     request: dict[str, Any],
@@ -295,7 +308,7 @@ def publication_indicators(
         else {
             "manifest": str(manifest_path),
             # Digest of this already-read JSON value, not a file-byte SHA.
-            "manifest_content_sha256": canonical_json_sha256(manifest, allow_nan=False) if manifest else None,
+            "manifest_content_sha256": _optional_manifest_content_sha256(manifest) if manifest else None,
             "recorded_ready_to_use": manifest.get("ready_to_use"),
             "recorded_qa_status": (manifest.get("qa") or {}).get("status"),
             "error": error,

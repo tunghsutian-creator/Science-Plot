@@ -10,7 +10,7 @@ import shutil
 import pymupdf
 import pytest
 
-from sciplot_core.project_commands import ProjectCommand, ProjectCommands, PreparedMutation
+from sciplot_core.project_commands import ProjectCommand, ProjectCommands, PreparedFile, PreparedMutation
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.visual_review import pdf_review_binding as review
 from sciplot_core.visual_review import pdf_review_files as files
@@ -74,7 +74,8 @@ def inventory(root):
 
 def publish_record(store, logical, data):
     snapshot = store.snapshot()
-    mutation = PreparedMutation.from_values({logical: data}, {})
+    mode = snapshot["files"].get(logical, {}).get("mode", 0o600)
+    mutation = PreparedMutation.from_values({logical: PreparedFile(data, mode)}, {})
     command = ProjectCommand.create("semantic_record", "test:" + sha256(data).hexdigest()[:32],
         project_id=snapshot["project_id"], expected_generation=snapshot["generation"],
         read_set={logical: snapshot["files"].get(logical, {}).get("sha256")}, write_set=[logical],
@@ -242,8 +243,7 @@ def test_wrong_project_and_traversal_do_not_discover_binding(current, tmp_path):
             review.read_pdf_review(project, review_id=invalid)
 
 
-def test_registered_secondary_vsz_target_preserves_selected_figure(current, tmp_path):
-    project, _ = current
+def add_secondary_figure(project):
     second = project / "studio/figures/second.vsz"
     second.parent.mkdir()
     second.write_bytes(b"synthetic secondary native")
@@ -264,6 +264,13 @@ def test_registered_secondary_vsz_target_preserves_selected_figure(current, tmp_
         manifest["result"]["exports"].append(record)
         manifest["qa"][qa].append(record)
     write_json(run / "manifest.json", manifest)
+    return second
+
+
+def test_registered_secondary_vsz_target_preserves_selected_figure(current, tmp_path):
+    project, _ = current
+    second = add_secondary_figure(project)
+    run = project / "runs/studio_001"
     created = review.create_pdf_review(second, review_dir=tmp_path / "review")
     assert created["figure_id"] == "second"
     assert Path(created["review_pdf"]).read_bytes() == (run / "second.pdf").read_bytes()
@@ -427,3 +434,218 @@ def test_query_content_receipt_hashes_its_held_manifest_not_a_second_file_read(c
     assert receipt == canonical_json_sha256(observed["manifest"], allow_nan=False)
     assert receipt != canonical_json_sha256(json.loads((project / "runs/studio_001/manifest.json").read_bytes()), allow_nan=False)
     assert result["last_run"]["recorded_qa_status"] == "passed"
+
+
+@pytest.mark.parametrize("nonfinite", [float("nan"), float("inf"), float("-inf")], ids=["nan", "infinity", "negative-infinity"])
+@pytest.mark.parametrize("complete_qa", [False, True], ids=["historical-incomplete", "qa-current"])
+def test_historical_nonfinite_metadata_preserves_queries_but_cannot_bind_pdf(current, tmp_path, nonfinite, complete_qa):
+    from sciplot_core.task_contract import TaskControlError
+    from sciplot_core.task_paper_publication import capture_publication
+
+    project, original = current
+    path = project / "runs/studio_001/manifest.json"
+    manifest = json.loads(path.read_bytes()) if complete_qa else {}
+    manifest["historical_metadata"] = {"unrelated_value": [nonfinite]}
+    path.write_text(json.dumps(manifest, allow_nan=True))
+    # This is an admitted historical JSON file, not a wire-format rewrite.
+    store = FileProjectStore(project)
+    snapshot = store.snapshot(import_legacy=True)
+    before = inventory(project)
+    result = review.inspect_project(project, native=False)
+    assert result["qa"]["current"] is complete_qa
+    assert result["last_run"]["manifest_content_sha256"] is None
+    assert result["last_run"]["recorded_qa_status"] == ("passed" if complete_qa else None)
+    selected = review.resolve_project_figure(project)
+    with pytest.raises(TaskControlError) as paper:
+        capture_publication({"project": str(project), "document": selected["document"],
+            "version": {"document_sha256": selected["document_sha256"]}})
+    assert paper.value.reason_code == "paper_publication_unsealed"
+    with pytest.raises(ValueError, match="canonical manifest"):
+        review.create_pdf_review(project, review_dir=tmp_path / "review")
+    assert not (tmp_path / "review").exists()
+    assert inventory(project) == before and store.snapshot()["generation"] == snapshot["generation"]
+    assert store.commands() == () and not any(name.startswith("reviews/") for name in snapshot["files"])
+    assert original.read_bytes() == before["runs/studio_001/figure.pdf"]
+
+
+@pytest.mark.parametrize("error", [PermissionError("manifest digest permission boundary"),
+                                  ValueError("unrelated canonical owner failure")], ids=["permission", "business-error"])
+def test_optional_manifest_digest_does_not_swallow_other_failures(current, monkeypatch, error):
+    from sciplot_core.studio_core import project_query_evidence as evidence
+
+    project, _ = current
+    before = inventory(project)
+    def fail(*args, **kwargs):
+        raise error
+    with monkeypatch.context() as patcher:
+        patcher.setattr(evidence, "canonical_json_sha256", fail)
+        with pytest.raises(type(error)) as caught:
+            review.inspect_project(project, native=False)
+    assert caught.value is error and inventory(project) == before
+
+
+@pytest.mark.parametrize("boundary", ["stage", "publish"], ids=["before-reserve", "after-annotated-copy"])
+def test_run_selection_membership_is_enforced_by_existing_publisher(current, tmp_path, monkeypatch, boundary):
+    project, original = current
+    original_bytes = original.read_bytes()
+    method = "stage_prepared" if boundary == "stage" else "publish_prepared"
+    actual = getattr(ProjectCommands, method)
+    observed = {}
+    def append_failed_run(app, command, candidate):
+        if not command.key.startswith("pdf-review:"):
+            return actual(app, command, candidate)
+        assert [item.prefix for item in command.read_memberships] == ["runs"]
+        if boundary == "publish":
+            copy = Path(candidate.result["review_pdf"])
+            annotate(copy)
+            observed["marked"] = copy.read_bytes()
+        publish_record(app.store, "runs/studio_002/manifest.json", b'{"qa":{"status":"failed"}}')
+        observed["files"] = inventory(project)
+        observed["generation"] = app.store.snapshot()["generation"]
+        return actual(app, command, candidate)
+    with monkeypatch.context() as patcher:
+        patcher.setattr(ProjectCommands, method, append_failed_run)
+        with pytest.raises(ValueError, match="membership"):
+            review.create_pdf_review(project, review_dir=tmp_path / "review")
+    assert {name: data for name, data in inventory(project).items() if not name.startswith(".sciplot_store/")} == {
+        name: data for name, data in observed["files"].items() if not name.startswith(".sciplot_store/")}
+    assert original.read_bytes() == original_bytes
+    store = FileProjectStore(project)
+    assert store.snapshot()["generation"] == observed["generation"]
+    assert not any(name.startswith("reviews/pdf/") for name in store.snapshot()["files"])
+    if boundary == "stage":
+        assert not (tmp_path / "review/review.pdf").exists()
+        assert len(store.commands()) == 1  # Only the concurrent failed run.
+    else:
+        assert (tmp_path / "review/review.pdf").read_bytes() == observed["marked"]
+        assert [item["phase"] for item in store.commands() if item["command_id"].startswith("pdf-review:")] == ["accepted"]
+
+
+@pytest.mark.parametrize("logical", ["reviews/pdf/unrelated.json", "studio/figures/other.notes.json"])
+def test_unrelated_metadata_can_merge_after_current_observation(current, tmp_path, monkeypatch, logical):
+    project, _ = current
+    actual = ProjectCommands.stage_prepared
+    def commit_unrelated(app, command, candidate):
+        publish_record(app.store, logical, b'{"note":"unrelated metadata"}')
+        return actual(app, command, candidate)
+    with monkeypatch.context() as patcher:
+        patcher.setattr(ProjectCommands, "stage_prepared", commit_unrelated)
+        created = review.create_pdf_review(project, review_dir=tmp_path / "review")
+    assert review.read_pdf_review(project, review_id=created["review_id"])["status"] == "ok"
+
+
+def test_compact_reference_preserves_standard_note_line_ink_and_highlight_geometry(current, tmp_path):
+    from sciplot_core.visual_review.pdf_annotations import inspect_pdf_annotations
+
+    project, _ = current
+    created = review.create_pdf_review(project, review_dir=tmp_path / "review")
+    copy = Path(created["review_pdf"])
+    with pymupdf.open(copy) as document:
+        page = document[0]
+        page.add_text_annot((20, 30), "Move this region")
+        line = page.add_line_annot((25.25, 55.5), (80.75, 75.25))
+        line.set_line_ends(pymupdf.PDF_ANNOT_LE_NONE, pymupdf.PDF_ANNOT_LE_CLOSED_ARROW)
+        page.add_ink_annot([[(20.25, 90.5), (45.75, 95.25), (70.5, 90.5)], [(100.5, 90), (110, 95.5)]])
+        page.add_highlight_annot((25, 110, 80, 130))
+        marked = document.tobytes()
+    copy.write_bytes(marked)
+    result = review.read_pdf_review(project, review_id=created["review_id"])
+    original = inspect_pdf_annotations(marked)
+    expected = {item["type_name"]: item for item in original["pages"][0]["annotations"]}
+    actual = {item["type"]: item for item in result["annotations"]}
+    assert set(actual) == {"Text", "Line", "Ink", "Highlight"}
+    for kind in ("Line", "Ink", "Highlight"):
+        assert actual[kind]["vertices_pt"] == expected[kind]["vertices_pt"]
+    assert actual["Line"]["line_ends"] == expected["Line"]["line_ends"] == [0, 5]
+    assert actual["Text"]["text"] == "Move this region"
+    assert result["coordinate_space"] == original["annotation_coordinate_space"]
+    assert result["geometry_point_count"] == 11 and result["command_authority"] is False
+
+
+def test_geometry_budget_refuses_full_reference_instead_of_truncating_hand_drawn_intent():
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.add_ink_annot([[(20 + index % 100, 20 + index // 100) for index in range(4097)]])
+        data = document.tobytes()
+    with pytest.raises(ValueError, match="geometry budget; no partial reference"):
+        review_content(data)
+
+
+@pytest.mark.parametrize("boundary", ["query", "stage"])
+def test_selected_registry_projection_cannot_change_during_review_creation(current, tmp_path, monkeypatch, boundary):
+    project, original = current
+    add_secondary_figure(project)
+    observed = {}
+    def change_selected(store):
+        registry = json.loads((project / "studio/figure_set.json").read_bytes())
+        registry["figures"][0]["title"] = "Changed selected identity"
+        publish_record(store, "studio/figure_set.json", json.dumps(registry).encode())
+        observed["files"] = inventory(project)
+        observed["generation"] = store.snapshot()["generation"]
+    if boundary == "query":
+        actual = review.figure_binding
+        def before_binding(root, selected, *, store):
+            change_selected(store)
+            return actual(root, selected, store=store)
+        owner, method, replacement = review, "figure_binding", before_binding
+    else:
+        actual = ProjectCommands.stage_prepared
+        def before_stage(app, command, candidate):
+            change_selected(app.store)
+            return actual(app, command, candidate)
+        owner, method, replacement = ProjectCommands, "stage_prepared", before_stage
+    with monkeypatch.context() as patcher:
+        patcher.setattr(owner, method, replacement)
+        with pytest.raises(ValueError, match="registry|projected|projection"):
+            review.create_pdf_review(project, review_dir=tmp_path / "review")
+    assert inventory(project) == observed["files"]
+    assert FileProjectStore(project).snapshot()["generation"] == observed["generation"]
+    assert not (tmp_path / "review/review.pdf").exists()
+    if boundary == "query":
+        assert not (tmp_path / "review").exists()
+    assert original.read_bytes() == observed["files"]["runs/studio_001/figure.pdf"]
+
+
+def test_legacy_primary_registry_absence_is_a_publication_precondition(current, tmp_path, monkeypatch):
+    project, _ = current
+    actual = ProjectCommands.stage_prepared
+    observed = {}
+    def introduce_registry(app, command, candidate):
+        assert dict(command.read_set)["studio/figure_set.json"] is None
+        value = {"kind": "sciplot_studio_figure_set", "version": 1, "primary_figure_id": "primary",
+                 "figures": [{"figure_id": "primary", "status": "ready"}]}
+        publish_record(app.store, "studio/figure_set.json", json.dumps(value).encode())
+        observed["files"] = inventory(project)
+        return actual(app, command, candidate)
+    with monkeypatch.context() as patcher:
+        patcher.setattr(ProjectCommands, "stage_prepared", introduce_registry)
+        with pytest.raises(ValueError, match="read changed"):
+            review.create_pdf_review(project, review_dir=tmp_path / "review")
+    assert inventory(project) == observed["files"] and not (tmp_path / "review/review.pdf").exists()
+    assert not any(name.startswith("reviews/pdf/") for name in FileProjectStore(project).snapshot()["files"])
+
+
+@pytest.mark.parametrize("boundary", ["query", "stage"])
+def test_unrelated_registered_figure_metadata_keeps_selected_projection_mergeable(current, tmp_path, monkeypatch, boundary):
+    project, _ = current
+    add_secondary_figure(project)
+    def change_unrelated(store):
+        value = json.loads((project / "studio/figure_set.json").read_bytes())
+        value["figures"][1]["title"] = "Unrelated second figure metadata"
+        publish_record(store, "studio/figure_set.json", json.dumps(value).encode())
+    if boundary == "query":
+        actual = review.figure_binding
+        def before_binding(root, selected, *, store):
+            change_unrelated(store)
+            return actual(root, selected, store=store)
+        owner, method, replacement = review, "figure_binding", before_binding
+    else:
+        actual = ProjectCommands.stage_prepared
+        def before_stage(app, command, candidate):
+            change_unrelated(app.store)
+            return actual(app, command, candidate)
+        owner, method, replacement = ProjectCommands, "stage_prepared", before_stage
+    with monkeypatch.context() as patcher:
+        patcher.setattr(owner, method, replacement)
+        created = review.create_pdf_review(project, review_dir=tmp_path / "review")
+    assert review.read_pdf_review(project, review_id=created["review_id"])["status"] == "ok"

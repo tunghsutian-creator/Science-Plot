@@ -14,7 +14,8 @@ import re
 from typing import Any
 
 from sciplot_core.foundation.canonical_paths import canonical_path
-from sciplot_core.project_commands import PreparedMutation, ProjectCommand, ProjectCommands
+from sciplot_core.project_commands import MembershipRead, PreparedMutation, ProjectCommand, ProjectCommands, ProjectionRead
+from sciplot_core.project_commands.read_projections import projection_digest
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_store.runtime import literal_runtime_path, projected_runtime_artifact
 from sciplot_core.studio_core.annotation_operations import require_edit_source_current
@@ -39,13 +40,32 @@ def _record_path(review_id: str) -> str:
 
 def _current(project: Path, figure_id: str | None) -> tuple[dict[str, Any], dict[str, Any], bytes]:
     """Observe one current publication with the existing non-native query."""
+    store = project_store(project)
+    selection_snapshot = store.snapshot()
+    run_membership = MembershipRead.capture(selection_snapshot["files"], "runs")
     query = inspect_project(project, figure_id=figure_id, native=False)
     require_edit_source_current(query)
+    if query["last_run"] is not None and query["last_run"]["manifest_content_sha256"] is None:
+        raise ValueError("PDF review cannot bind an unavailable finite canonical manifest content observation.")
     if query["qa"]["current"] is not True:
         raise ValueError("PDF review requires a current, QA-bound export. Export the current figure first.")
     selected = query["selected_figure"]
-    store = project_store(project)
     binding = figure_binding(project, selected, store=store)
+    if MembershipRead.capture(store.snapshot()["files"], "runs") != run_membership:
+        raise ValueError("The current run selection membership changed after the query observation.")
+    binding["read_memberships"] = [run_membership.to_payload()]
+    registry = "studio/figure_set.json"
+    actual_registry = [item for item in binding["projected_reads"] if item["resource"] == registry]
+    if registry in selection_snapshot["files"]:
+        data = store.read_bytes(registry, generation=selection_snapshot["generation"])
+        expected_registry = ProjectionRead(registry, "studio_figure_v1", selected["figure_id"],
+            projection_digest(data, kind="studio_figure_v1", key=selected["figure_id"]))
+        if actual_registry != [expected_registry.to_payload()]:
+            raise ValueError("The selected figure registry changed after the query observation.")
+    else:
+        if actual_registry:
+            raise ValueError("The selected figure registry appeared after the query observation.")
+        binding["files"][registry] = None
     document_logical = store.logical_path(Path(selected["document"]))
     spec_logical = store.logical_path(Path(selected["spec"]))
     observed = {document_logical: selected["document_sha256"], spec_logical: selected["spec_sha256"],
