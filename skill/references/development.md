@@ -93,7 +93,10 @@ Record mode declares the shared command as its original pytest input scope.
 Two reviewed test-only leaves, `test_workflow_bundle_dispatch.py` and
 `test_plan_preview.py`, select their complete focused leaf and the shared checks.
 They currently supply no shared runtime helpers, fixtures or pytest plugins;
-the mapping controls verify that role. Their production owners retain every
+the mapping controls verify that role across Git's current tracked and nonignored
+untracked Python sources, including nested helpers. Ignored historical execution
+fixtures keep their separate source/pin checks; they are not current callers.
+Their production owners retain every
 original regression target. Mixed production changes broaden normally and an
 unknown owner still stops before checks. This is a finite responsibility split,
 not permission to narrow every test file by its name.
