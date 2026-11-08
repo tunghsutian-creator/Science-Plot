@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
-from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.path_names import reserve_unique_file, slug
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.semantic import (
@@ -20,6 +19,7 @@ from sciplot_core.request_contract import normalize_exports, normalize_render_op
 
 from .catalog import _catalog_item, _catalog_item_for_rule
 from .config import _DEFAULT_OUTPUT_ROOT, _REPLICATE_MODES
+from .session_contract import local_session_envelope
 from sciplot_core.semantic_sources.confirmation_contract import normalize_column_confirmations
 
 from .table_preview import (
@@ -47,7 +47,7 @@ def _session_project_name(source: Path, experiment_label: str) -> str:
     return slug(f"{source.name}_{experiment_label}")
 
 
-def prepare_intake_session(
+def _observe_intake_session(
     input_path: str | Path,
     *,
     output_root: Path = _DEFAULT_OUTPUT_ROOT,
@@ -184,13 +184,10 @@ def prepare_intake_session(
     warnings = _duplicate_source_warnings(groups)
     data_type, experiment = _catalog_item(data_type_id, experiment_type_id)
     project_name = _session_project_name(source, str(experiment["label"]))
-    path = _session_path(output_root, project_name)
     payload = {
         "kind": "sciplot_intake_session",
         "version": 1,
         "created_at": utc_now_iso(),
-        "session_id": path.stem,
-        "session_path": str(path),
         "input_path": str(source),
         "output_root": str(output_root),
         "project_name": project_name,
@@ -212,15 +209,44 @@ def prepare_intake_session(
             selected_rule_id and get_rule(selected_rule_id).fixture_status != "ready"
         ),
     }
-    try:
-        path.write_text(
-            json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-    except BaseException:
-        path.unlink(missing_ok=True)
-        raise
     return payload
+
+
+def prepare_local_session(
+    input_path: str | Path, *, output_root: Path = _DEFAULT_OUTPUT_ROOT,
+    requested_rule_id: str | None = None, allow_pending_rule_review: bool = False,
+    project_name: str | None = None,
+) -> dict[str, Any]:
+    """Observe once and publish the sole current on-disk session format."""
+    observed = _observe_intake_session(input_path, output_root=output_root,
+        requested_rule_id=requested_rule_id, allow_pending_rule_review=allow_pending_rule_review)
+    reservation_name = observed["project_name"]
+    if project_name:
+        observed["project_name"] = project_name
+    envelope = local_session_envelope(observed)
+    path = _session_path(Path(observed["output_root"]), reservation_name)
+    envelope["context"].update(session_id=path.stem, session_path=str(path))
+    try:
+        atomic_write_json(path, envelope)
+    except BaseException as error:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as cleanup_error:
+            error.add_note(f"Could not remove the reserved intake session {path}: {cleanup_error}")
+        raise
+    return {"session": str(path), **envelope}
+
+
+def prepare_intake_session(
+    input_path: str | Path, *, output_root: Path = _DEFAULT_OUTPUT_ROOT,
+    requested_rule_id: str | None = None, allow_pending_rule_review: bool = False,
+    project_name: str | None = None,
+) -> dict[str, Any]:
+    """Keep the legacy Python metadata projection; new files are envelopes."""
+    envelope = prepare_local_session(input_path, output_root=output_root,
+        requested_rule_id=requested_rule_id, allow_pending_rule_review=allow_pending_rule_review,
+        project_name=project_name)
+    return {**envelope["context"], **envelope["request"]}
 
 
 def _resolve_plot_output(

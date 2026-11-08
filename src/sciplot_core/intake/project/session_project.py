@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any
 from ..config import _DEFAULT_OUTPUT_ROOT
 from ..models import IncomingFile, IntakeGroupInput
+from ..catalog import _catalog_item
+from ..session_contract import IntakeSessionError, admit_session_payload
+from ..table_preview import preview_table_payload
+from sciplot_core.semantic_sources.confirmation_contract import has_column_intent
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
 
 from sciplot_core.intake.project.project_builder import (
@@ -54,6 +58,41 @@ def read_confirmed_source_file(item: dict[str, Any], *, label: str = "selected")
                         source_path=str(captured["path"])), captured
 
 
+def _validate_columns(request: dict[str, Any], groups: list[IntakeGroupInput], *, rule_id: str) -> None:
+    files = [(group.sample.strip(), item.name, reference, item.content)
+             for group, declared in zip(groups, request["groups"], strict=True)
+             for item, reference in zip(group.files, declared["files"], strict=True)]
+    seen = set()
+    for confirmation in request.get("column_confirmations", []):
+        matches = [(reference, content) for sample, name, reference, content in files
+                   if sample == confirmation["sample"].strip() and name == confirmation["file_name"]
+                   and (not confirmation.get("source_path")
+                        or Path(reference["source_path"]).expanduser().resolve() == Path(confirmation["source_path"]).expanduser().resolve())]
+        if len(matches) != 1:
+            raise IntakeSessionError("Every column confirmation must identify exactly one selected sample/file.")
+        reference, content = matches[0]
+        if confirmation["source_sha256"] != reference["sha256"]:
+            raise IntakeSessionError("A column/worksheet confirmation belongs to changed source bytes.")
+        key = (confirmation["sample"].strip(), confirmation["file_name"], reference["source_path"])
+        if key in seen:
+            raise IntakeSessionError("A file must have one complete column/worksheet confirmation.")
+        seen.add(key)
+        preview = preview_table_payload(name=confirmation["file_name"], content=content,
+                                        selected_sheet=confirmation.get("sheet"))
+        columns = {column["index"]: column for column in preview["columns"]}
+        indices = set()
+        for column in confirmation["columns"]:
+            actual = columns.get(column["index"])
+            if (actual is None or column["index"] in indices or column["name"] != actual["name"]
+                    or ("inferred_type" in column and column["inferred_type"] != actual["inferred_type"])):
+                raise IntakeSessionError("Column identities must match the original preview; indices must be unique.")
+            indices.add(column["index"])
+        if has_column_intent(confirmation):
+            from sciplot_core.semantic_sources.rheology_confirmation import check_confirmed_rheology_bytes
+
+            check_confirmed_rheology_bytes(confirmation["file_name"], content, confirmation, rule_id=rule_id)
+
+
 def create_intake_project_from_session(
     session: str | Path | dict[str, Any],
     *,
@@ -66,6 +105,8 @@ def create_intake_project_from_session(
         payload = json.loads(Path(session).expanduser().read_text(encoding="utf-8"))
     else:
         payload = dict(session)
+    if payload.get("kind") == "sciplot_local_intake_session":
+        payload = admit_session_payload(payload, template=template)
     groups: list[IntakeGroupInput] = []
     for group_index, group in enumerate(payload.get("groups", [])):
         if not isinstance(group, dict):
@@ -84,6 +125,9 @@ def create_intake_project_from_session(
         groups.append(
             IntakeGroupInput(sample=str(group.get("sample") or ""), files=tuple(files))
         )
+    if payload.get("column_confirmations"):
+        _, experiment = _catalog_item(payload["data_type_id"], payload["experiment_type_id"])
+        _validate_columns(payload, groups, rule_id=str(experiment.get("rule_id") or ""))
     factory = project_factory or create_intake_project
     semantic = (
         dict(payload["semantic"])

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from pathlib import Path
 from types import TracebackType
 from typing import Any
 
-from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.terminal_source_binding import (
     SealedTerminalSourceBinding,
     TerminalSourceBindingError,
@@ -144,6 +142,7 @@ def _qt_first_project_from_source(
     from sciplot_core.intake.session import prepare_intake_session
 
     project_root = output_root or Path("outputs") / "intake_projects"
+    normalized_name = _normalize_optional_string(project_name)
     session = prepare_intake_session(
         path,
         output_root=project_root,
@@ -151,16 +150,8 @@ def _qt_first_project_from_source(
         allow_pending_rule_review=bool(
             _normalize_optional_string(rule_id) and _normalize_optional_string(template)
         ),
+        project_name=normalized_name,
     )
-    normalized_name = _normalize_optional_string(project_name)
-    if normalized_name:
-        session["project_name"] = normalized_name
-        session_path = session.get("session_path")
-        if isinstance(session_path, str) and session_path.strip():
-            Path(session_path).write_text(
-                json.dumps(json_safe(session), indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
     prepared: dict[str, Any] | None = None
     preparation_error: Exception | None = None
     preparation_traceback: TracebackType | None = None

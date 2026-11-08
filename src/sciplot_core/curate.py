@@ -144,13 +144,12 @@ def curate_torque_project(
 ) -> dict[str, Any]:
     input_path = Path(input_path).expanduser().resolve()
     output_root = output_root.expanduser().resolve()
-    session = prepare_intake_session(input_path, output_root=output_root)
+    session = prepare_intake_session(input_path, output_root=output_root,
+        project_name=project_name)
     if session.get("rule_id") != "torque_curve":
         raise ValueError(
             f"Expected torque data, but detected `{session.get('rule_id')}`."
         )
-    if project_name:
-        session["project_name"] = project_name
     selection_payload: dict[str, Any] | None = None
     preparation_error: Exception | None = None
 
