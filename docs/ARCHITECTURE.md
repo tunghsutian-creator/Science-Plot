@@ -58,6 +58,16 @@ retain their original refusal. Standard geometry is preserved within explicit
 resource limits; flattened marks, OCR and arbitrary standalone PDFs are outside
 this registered-project route.
 
+The mutable reference location also retains the creating Store's actual local
+root identity and its explicitly selected review-directory identity. These
+restrictions are checked before record-derived external access, including command
+replay. A portable import's new project/root registration cannot inherit that
+old path authorization. The actual directory FD is checked before file open;
+the PDF inode may change during a normal external editor's atomic save. Original
+publication PDFs enter through registered Store resources before byte capture.
+This uses the existing host/root binding and publisher, not another permission
+database or an interpretation of scientific hashes as grants.
+
 Mechanical planning resolves its request choices before reading raw data, then
 carries `MechanicalSourceFacts` in the existing `ResolvedScientificSource.domain`
 through both Workflow and Studio preparation. Plan construction and task tables
