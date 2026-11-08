@@ -38,6 +38,26 @@ complete visual authority. Veusz is the long-term native rendering adapter, not
 the semantic application or storage authority. Its replacement would require
 rendering, editing, scientific-QA and existing-project migration evidence.
 
+`visual_review/pdf_review_binding.py` owns the local reference-copy use case.
+The existing Project Store owns its immutable project/figure/current-export
+binding; the separate mutable PDF owns only untrusted reference annotations.
+The query observation and fresh file witness must agree on request, document,
+specification and publication. Selected-registry projections (or legacy absence),
+run-selection membership, manifest and PDF reads enter the existing command's
+preconditions, so a later publication cannot silently change that selection.
+Global generation equality is not a substitute for those dependencies: unrelated
+review metadata may merge. Base-page pixels and PDF coordinates confer no
+scientific, target-selection or command authority. CLI/MCP read the same local
+facts and continue through existing typed edit admission; no model is invoked.
+
+The shared query's optional canonical manifest-content digest is distinct from
+the Store's file-byte SHA. Historical nonfinite metadata can leave that optional
+digest unavailable while retaining the prior query behavior; a new PDF binding
+then refuses explicitly. Native, source, permission and physical-read failures
+retain their original refusal. Standard geometry is preserved within explicit
+resource limits; flattened marks, OCR and arbitrary standalone PDFs are outside
+this registered-project route.
+
 Mechanical planning resolves its request choices before reading raw data, then
 carries `MechanicalSourceFacts` in the existing `ResolvedScientificSource.domain`
 through both Workflow and Studio preparation. Plan construction and task tables

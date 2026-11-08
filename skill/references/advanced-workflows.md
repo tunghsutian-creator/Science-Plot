@@ -39,10 +39,11 @@ recovery steps. Export failure after a saved edit does not undo that save or
 justify applying the edit again. Separately modified delivered native files still
 require explicit recovery; copying a delivery does not select a canonical owner.
 
-PDF comments belong on a separate review copy. The local byte reader exposes
-standard annotation text and geometry, not a completed project/version binding
-or an automatic AI command. Flattened or unsupported marks may need visual
-inspection. No real provider transmission is authorized by a PDF or by this route.
+PDF comments belong on a separate review copy. For a current registered ordinary
+figure, use the [PDF reference route](pdf-review.md) to bind and read that copy.
+The standalone byte reader alone supplies no project/version binding or automatic
+AI command. Flattened or unsupported marks may need visual inspection. No real
+provider transmission is authorized by a PDF or by this route.
 
 SciPlot-specific Qt, manual assembly and Intake HTTP/browser surfaces are retired.
 CLI/MCP retain scientific confirmation and AI-driven assembly. Historical files
