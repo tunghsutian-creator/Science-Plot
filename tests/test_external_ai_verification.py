@@ -66,6 +66,28 @@ RETAINED_ASSISTANT_CONSUMERS = (
 )
 
 
+def _assert_retired_assistant_responsibility(path: str) -> None:
+    renamed_history = {
+        f"src/sciplot_gui/studio_assistant_history/{name}.py"
+        for name in ("builder", "contracts", "operations", "storage", "validation", "values")
+    }
+    history = path in renamed_history
+    plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+    assert plan["status"] == "planned" and plan["unowned_paths"] == []
+    assert {owner["owner_id"] for owner in plan["owners"]} == {
+        "assistant_history" if history else "automation_baseline_evidence"
+    }
+    command = next(check["command"] for check in plan["checks"]
+                   if check["check_id"] == "pytest_changed_owners")
+    expected = ASSISTANT_HISTORY_TARGETS if history else {
+        "tests/test_frontend_topology.py", "tests/test_headless_native_probe.py",
+    }
+    assert expected <= set(command)
+    assert "tests/test_studio_assistant_disclosure.py" not in command
+    assert "full_pytest" in plan["required_later"]["release"]
+    assert "smoke" in plan["required_later"]["final_milestone"]
+
+
 @pytest.mark.parametrize("path", [
     *ASSISTANT_DISCLOSURE_TYPED_PATHS,
     "src/sciplot_core/assistant_provider/__init__.py",
@@ -97,9 +119,7 @@ def test_assistant_provider_changes_select_core_disclosure_consumers(path):
     ids=[retired for retired, _path in RETAINED_ASSISTANT_CONSUMERS])
 def test_retired_assistant_consumers_keep_their_core_fact_and_history_evidence(retired, path):
     assert not (REPO_ROOT / retired).exists()
-    retired_plan = build_changed_verification_plan([retired], repo_root=REPO_ROOT)
-    assert retired_plan["unowned_paths"] == [retired]
-    assert retired_plan["owners"] == []
+    _assert_retired_assistant_responsibility(retired)
     assert (REPO_ROOT / path).is_file()
     plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
     assert plan["unowned_paths"] == []
@@ -125,10 +145,14 @@ def test_assistant_disclosure_adds_only_its_three_reviewed_strict_files():
         assert config["files"].count(path) == 1
         plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
         assert [check["command"] for check in plan["checks"]].count([sys.executable, "-m", "mypy"]) == 1
-    plan = build_changed_verification_plan(
-        ["src/sciplot_gui/studio_assistant/unreviewed_provider_flow.py"], repo_root=REPO_ROOT,
+    _assert_retired_assistant_responsibility(
+        "src/sciplot_gui/studio_assistant/unreviewed_provider_flow.py",
     )
-    assert plan["unowned_paths"] == ["src/sciplot_gui/studio_assistant/unreviewed_provider_flow.py"]
+    unknown = "src/sciplot_core/unreviewed_provider_flow.py"
+    plan = build_changed_verification_plan([unknown], repo_root=REPO_ROOT)
+    assert plan["status"] == "failed"
+    assert plan["unowned_paths"] == [unknown]
+    assert plan["owners"] == [] and plan["checks"] == []
 
 
 @pytest.mark.parametrize("source,target", TYPED_BEHAVIOR_PATHS.items())
@@ -207,7 +231,7 @@ def test_shared_native_edit_boundaries_select_native_and_core_contract_regressio
     }.get(path)
     if retired is not None:
         assert not (REPO_ROOT / retired).exists()
-        assert build_changed_verification_plan([retired], repo_root=REPO_ROOT)["unowned_paths"] == [retired]
+        _assert_retired_assistant_responsibility(retired)
 
 
 def test_external_control_batch_keeps_one_focused_pass_and_defers_full_gate() -> None:
