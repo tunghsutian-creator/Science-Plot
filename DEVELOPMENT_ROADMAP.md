@@ -116,9 +116,11 @@ batch's actual results outside its input closure rather than rewriting them here
    operations; finite counters and pure checks do not establish whole-project or
    end-to-end performance closure. Finish their combined native, compatibility
    and release evidence before calling that batch accepted. Intake session
-   publication still has a flat-file/envelope rewrite to investigate; ordinary
-   table parsing already reuses its scoped reader and must not be described as
-   a proven second parse.
+   publication now uses one existing envelope writer across Python, CLI/MCP,
+   Studio and Curate. Historical flat files remain read-only inputs; the legacy
+   Python return value remains a metadata projection. Combined current-candidate
+   acceptance is still pending. Ordinary table parsing already reuses its scoped
+   reader and must not be described as a proven second parse.
 3. **Close the remaining independent contracts.** Move lifecycle use cases off
    direct legacy-engine dependencies through concrete domain ports and adapters,
    retiring each replaced call path. State the supported numerical runtime for

@@ -154,9 +154,14 @@ its canonical and archive members as a generation-bound batch. Fresh source,
 callback, native and publication observations remain independent. Component
 equality and cost records cover only those bounded operations. Genuine combined
 native and release checks still decide acceptance; they are not replaced by a
-snapshot counter or by the earlier running candidate's results. Intake session
-flat-file/envelope publication and other family projections remain explicit work
-after this batch rather than implicit claims of whole-project completion.
+snapshot counter or by the earlier running candidate's results. Intake now uses
+one envelope publication across the Python, CLI/MCP, Studio and Curate routes,
+with a legacy metadata return projection and read-only historical flat reader.
+Current rule readiness, explicit pending-review templates, source versions and
+confirmed columns keep their admission boundaries. The former second write is
+removed; the larger legacy envelope is a format migration, not a speed claim.
+Other family projections and project-bound PDF review remain explicit work,
+rather than implicit claims of whole-project completion.
 
 ### 3. AI reference flow and removal of manual product paths
 

@@ -232,9 +232,14 @@ overwrite remains forbidden. The source resolver's UUID/version/hash/mode/alias
 checks are unchanged. An address alone does not prove existence or readiness;
 staged physical artifacts, native audits and transaction installation retain
 those separate responsibilities.
-Artifact metadata joins use `artifact_path_key` on both sides, so a physical
-candidate path and its admitted final address identify the same artifact without
-changing recorded source or QA observations. Package presence and JSON contract
+Cross-namespace evidence joins use `artifact_path_key` on both sides, so a
+physical candidate and its admitted final address identify the same artifact.
+Persisted registry addresses and one live physical inventory already share
+their respective namespace: compare their canonical addresses without resolving
+old generation bytes. Native adoption and atomic publication validate the
+observed VSZ, scientific audit, source versions and final CAS at their own
+boundaries. An address join cannot perform that later admission early or hide
+its failure. Package presence and JSON contract
 reads resolve the selected source view before `stat` or reading. Only absence
 counts as missing; permission, alias and version refusals retain their causes.
 
@@ -809,6 +814,17 @@ request. The browser selection editor is retired; old selection JSON and its HTM
 references remain read-only inputs. A preparation failure retains the existing
 blocked-project receipt and propagates the same exception. This does not promise
 rollback of every initial creation effect.
+
+Intake preparation has one session writer in `intake.session.prepare_local_session`.
+The Python, CLI/MCP adapter, Studio and Curate routes observe original sources
+and publish the existing request envelope once. Studio's explicit project name
+is selected before publication; no caller rewrites an already published file.
+The legacy Python API still returns its flat metadata projection. Historical
+flat files remain readable without writeback; newly created files use the
+envelope format and private file mode. The request alone selects execution:
+context and advertised capabilities cannot authorize a pending rule. Current
+registered readiness, an explicit compatible review template, original source
+binding and confirmed columns are checked at their actual admission boundaries.
 
 `task_repair` normalizes only the unambiguous misplaced `task_dir` transport alias,
 rejects conflicting locations, and projects bounded field/constraint errors from

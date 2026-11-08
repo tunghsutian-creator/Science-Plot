@@ -26,7 +26,11 @@ def artifact_is_file(path: str | Path) -> bool:
 
 
 def artifact_path_key(path: str | Path) -> str:
-    """Compare artifact addresses, without replacing observed paths or file proof."""
+    """Join selected physical and literal evidence paths after source admission.
+
+    Persisted addresses or one live inventory already share a namespace; those
+    comparisons must not resolve source bytes before native adoption or commit.
+    """
     return str(Path(literal_artifact_path(path)).expanduser().resolve())
 
 
