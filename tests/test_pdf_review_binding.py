@@ -336,3 +336,94 @@ def test_reference_limits_and_compact_untrusted_text_are_explicit():
         document.new_page(width=100_000, height=100_000)
         with pytest.raises(ValueError, match="pixel"):
             review_content(document.tobytes())
+
+
+@pytest.mark.parametrize("change", ["document", "spec", "request", "qa", "manifest", "export", "new_run"])
+def test_query_and_command_witness_cannot_mix_concurrent_versions(current, tmp_path, monkeypatch, change):
+    project, original = current
+    original_pdf = original.read_bytes()
+    actual_binding = review.figure_binding
+    observed = {}
+    def commit_between_query_and_binding(root, selected, *, store):
+        assert selected["document_sha256"] == sha256((project / "studio/document.vsz").read_bytes()).hexdigest()
+        logical = {"document": "studio/document.vsz", "spec": "studio/spec.json",
+                   "request": "plot_request.json"}.get(change, "runs/studio_001/manifest.json")
+        data = (project / logical).read_bytes()
+        writes = {}
+        if change == "document":
+            data += b"\npresentation B"
+        else:
+            value = json.loads(data)
+            if change == "qa":
+                value["qa"]["status"] = "failed"
+            elif change == "export":
+                exported = pdf("Freshly exported B")
+                writes["runs/studio_001/figure.pdf"] = exported
+                version = sha256(exported).hexdigest()
+                value["qa"]["pdfs"][0]["sha256"] = version
+                value["result"]["exports"][0]["sha256"] = version
+            elif change != "new_run":
+                value["concurrent_metadata"] = "B"
+            data = json.dumps(value).encode()
+        if change == "new_run":
+            logical = "runs/studio_002/manifest.json"
+        writes[logical] = data
+        snapshot = store.snapshot()
+        candidate = PreparedMutation.from_values(writes, {})
+        command = ProjectCommand.create("semantic_record", "concurrent:" + change,
+            project_id=snapshot["project_id"], expected_generation=snapshot["generation"],
+            read_set={name: snapshot["files"].get(name, {}).get("sha256") for name in writes}, write_set=sorted(writes),
+            request={"prepared_digest": candidate.prepared_digest})
+        ProjectCommands(store).publish_prepared(command, candidate)
+        observed["files"] = inventory(project)
+        observed["generation"] = store.snapshot()["generation"]
+        return actual_binding(root, selected, store=store)
+    with monkeypatch.context() as patcher:
+        patcher.setattr(review, "figure_binding", commit_between_query_and_binding)
+        with pytest.raises(ValueError, match="changed|current|observation"):
+            review.create_pdf_review(project, review_dir=tmp_path / "review")
+    assert not (tmp_path / "review").exists()
+    assert inventory(project) == observed["files"]
+    store = FileProjectStore(project)
+    assert store.snapshot()["generation"] == observed["generation"]
+    assert [item["command_id"] for item in store.commands()] == ["concurrent:" + change]
+    assert not any(name.startswith("reviews/") for name in store.snapshot()["files"])
+    if change != "export":
+        assert original.read_bytes() == original_pdf
+
+
+def test_concurrent_unrelated_review_does_not_invalidate_actual_selected_witness(current, tmp_path, monkeypatch):
+    project, _ = current
+    actual_binding = review.figure_binding
+    def record_between_query_and_binding(root, selected, *, store):
+        publish_record(store, "reviews/pdf/unrelated.json", b'{"reference":"unrelated review metadata"}')
+        return actual_binding(root, selected, store=store)
+    with monkeypatch.context() as patcher:
+        patcher.setattr(review, "figure_binding", record_between_query_and_binding)
+        created = review.create_pdf_review(project, review_dir=tmp_path / "review")
+    assert review.read_pdf_review(project, review_id=created["review_id"])["status"] == "ok"
+
+
+def test_query_content_receipt_hashes_its_held_manifest_not_a_second_file_read(current, monkeypatch):
+    from sciplot_core.foundation.json_hashing import canonical_json_sha256
+    from sciplot_core.studio_core import project_query_evidence as evidence
+
+    project, _ = current
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    actual_latest = evidence.latest_run
+    observed = {}
+    def change_after_read(root):
+        path, manifest, error = actual_latest(root)
+        observed["manifest"] = manifest
+        updated = {**manifest, "changed_after_observation": True}
+        publish_record(store, "runs/studio_001/manifest.json", json.dumps(updated).encode())
+        return path, manifest, error
+    with monkeypatch.context() as patcher:
+        patcher.setattr(evidence, "latest_run", change_after_read)
+        result = review.inspect_project(project, native=False)
+    assert result["qa"]["current"] is True
+    receipt = result["last_run"]["manifest_content_sha256"]
+    assert receipt == canonical_json_sha256(observed["manifest"], allow_nan=False)
+    assert receipt != canonical_json_sha256(json.loads((project / "runs/studio_001/manifest.json").read_bytes()), allow_nan=False)
+    assert result["last_run"]["recorded_qa_status"] == "passed"

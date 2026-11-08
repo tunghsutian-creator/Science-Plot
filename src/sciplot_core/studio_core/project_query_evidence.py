@@ -10,6 +10,7 @@ from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_re
 from sciplot_core.data_mapping.execution_inputs import mapping_execution_is_sealed, mapping_input_reads
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_store.runtime import (
     inspect_runtime_source_file, inspect_runtime_source_tree, literal_runtime_path,
     projected_runtime_directory, projected_runtime_artifact, projected_runtime_project_root,
@@ -293,6 +294,8 @@ def publication_indicators(
         if manifest_path is None
         else {
             "manifest": str(manifest_path),
+            # Digest of this already-read JSON value, not a file-byte SHA.
+            "manifest_content_sha256": canonical_json_sha256(manifest, allow_nan=False) if manifest else None,
             "recorded_ready_to_use": manifest.get("ready_to_use"),
             "recorded_qa_status": (manifest.get("qa") or {}).get("status"),
             "error": error,

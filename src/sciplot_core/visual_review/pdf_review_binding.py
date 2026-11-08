@@ -24,6 +24,7 @@ from sciplot_core.studio_core.project_command_scope import (
     project_read_runtime, project_store,
 )
 from sciplot_core.studio_core.project_query import inspect_project, resolve_project_figure
+from sciplot_core.studio_core.project_query_evidence import latest_run
 from sciplot_core.studio_core.project_query_paths import resolve_project_path
 
 from .pdf_review_content import review_content
@@ -45,11 +46,23 @@ def _current(project: Path, figure_id: str | None) -> tuple[dict[str, Any], dict
     selected = query["selected_figure"]
     store = project_store(project)
     binding = figure_binding(project, selected, store=store)
+    document_logical = store.logical_path(Path(selected["document"]))
+    spec_logical = store.logical_path(Path(selected["spec"]))
+    observed = {document_logical: selected["document_sha256"], spec_logical: selected["spec_sha256"],
+                "plot_request.json": query["request_sha256"]}
+    if any(binding["files"].get(name) != digest for name, digest in observed.items()):
+        raise ValueError("The selected figure changed between query and command observation.")
     manifest_path = canonical_path(Path(query["last_run"]["manifest"]))
+    latest_path, latest_manifest, error = latest_run(project)
+    if (latest_path != manifest_path or error is not None
+            or canonical_json_sha256(latest_manifest, allow_nan=False) != query["last_run"]["manifest_content_sha256"]):
+        raise ValueError("The current QA/export manifest changed after the query observation.")
     manifest_logical = store.logical_path(manifest_path)
     store.projection_path(manifest_logical)  # Exact physical bytes, not just JSON equivalence.
     manifest_bytes = store.read_bytes(manifest_logical)
     manifest = json.loads(manifest_bytes)
+    if canonical_json_sha256(manifest, allow_nan=False) != query["last_run"]["manifest_content_sha256"]:
+        raise ValueError("The admitted QA/export manifest changed after the query observation.")
     run_document = literal_runtime_path(manifest_path.parent / Path(selected["document"]).relative_to(project))
     candidates = [item for item in manifest["result"]["exports"]
                   if item["format"] == "pdf" and item["document"] == run_document]
@@ -62,11 +75,9 @@ def _current(project: Path, figure_id: str | None) -> tuple[dict[str, Any], dict
     pdf_logical = store.logical_path(original)
     binding["files"].update({manifest_logical: manifest_sha, pdf_logical: capture["sha256"]})
     identity = {"project_id": binding["project_id"], "figure_id": selected["figure_id"],
-                "document": {"resource": store.logical_path(Path(selected["document"])),
-                             "sha256": selected["document_sha256"]},
-                "spec": {"resource": store.logical_path(Path(selected["spec"])),
-                         "sha256": selected["spec_sha256"]},
-                "request_sha256": query["request_sha256"],
+                "document": {"resource": document_logical, "sha256": binding["files"][document_logical]},
+                "spec": {"resource": spec_logical, "sha256": binding["files"][spec_logical]},
+                "request_sha256": binding["files"]["plot_request.json"],
                 "manifest": {"resource": manifest_logical, "sha256": manifest_sha},
                 "original_pdf": {"resource": pdf_logical, "sha256": capture["sha256"]}}
     return identity, binding, capture["bytes"]
