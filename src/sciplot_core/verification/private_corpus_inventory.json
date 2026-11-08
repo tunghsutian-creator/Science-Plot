@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10181,
-    "nodeids_sha256": "d81bdca46b858ff2efc43d6276bb526990dc1a9f95e84c1858a2e3acd524b991",
-    "test_sources_sha256": "1e2fd586eb439c648632ae7ab6b734a2db4c90f4ce05e43d0ed429737dd4c3d1",
+    "nodeid_count": 10178,
+    "nodeids_sha256": "0a1edef3058b4c3e1c53c9fcb5157adf1a365f9d23129f8b5d749c3ee914302f",
+    "test_sources_sha256": "e342bcf9e67cd07506400e9fc2536d75a841f740e46dcb4733b51f1a00b91057",
     "test_source_count": 663,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
@@ -5530,9 +5530,6 @@
       "tests/test_changed_scope_selectors.py::test_shared_dedup_never_subtracts_module_coverage_or_similarly_named_leaves",
       "tests/test_changed_scope_selectors.py::test_shared_exact_leaves_have_one_check_without_changing_owner_obligations",
       "tests/test_changed_scope_selectors.py::test_without_preceding_shared_check_every_original_target_remains_selected",
-      "tests/test_changed_verification.py::test_reviewed_test_only_leaves_do_not_supply_shared_runtime_helpers",
-      "tests/test_changed_verification.py::test_reviewed_test_only_leaves_keep_local_assertions_and_broaden_with_production[tests/test_plan_preview.py-plan_preview_test_contract-src/sciplot_core/semantic_sources/tga_transform.py-tests/test_task_semantic_resolution_native.py]",
-      "tests/test_changed_verification.py::test_reviewed_test_only_leaves_keep_local_assertions_and_broaden_with_production[tests/test_workflow_bundle_dispatch.py-workflow_dispatch_test_contract-src/sciplot_core/materials_rules/catalog.py-tests/test_autoplot_run.py]",
       "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/cli/dispatch/pdf_review.py]",
       "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/visual_review/pdf_review_binding.py]",
       "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/visual_review/pdf_review_content.py]",
@@ -27024,32 +27021,20 @@
         "reason": "Pure explicit selector/command construction checks retain exact shared leaves, full-module coverage and no-unfiltered-pytest refusal; no test commands are run by the body."
       },
       {
-        "nodeid": "tests/test_changed_verification.py::test_reviewed_test_only_leaves_do_not_supply_shared_runtime_helpers",
-        "reason": "Existing changed-plan/type-owner config and repository Python source are read to test exact leaf responsibility, unknown/scientific broadening or configured source ownership; no private measurements or native execution."
-      },
-      {
-        "nodeid": "tests/test_changed_verification.py::test_reviewed_test_only_leaves_keep_local_assertions_and_broaden_with_production[tests/test_plan_preview.py-plan_preview_test_contract-src/sciplot_core/semantic_sources/tga_transform.py-tests/test_task_semantic_resolution_native.py]",
-        "reason": "Existing changed-plan/type-owner config and repository Python source are read to test exact leaf responsibility, unknown/scientific broadening or configured source ownership; no private measurements or native execution."
-      },
-      {
-        "nodeid": "tests/test_changed_verification.py::test_reviewed_test_only_leaves_keep_local_assertions_and_broaden_with_production[tests/test_workflow_bundle_dispatch.py-workflow_dispatch_test_contract-src/sciplot_core/materials_rules/catalog.py-tests/test_autoplot_run.py]",
-        "reason": "Existing changed-plan/type-owner config and repository Python source are read to test exact leaf responsibility, unknown/scientific broadening or configured source ownership; no private measurements or native execution."
-      },
-      {
         "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/cli/dispatch/pdf_review.py]",
-        "reason": "Existing changed-plan/type-owner config and repository Python source are read to test exact leaf responsibility, unknown/scientific broadening or configured source ownership; no private measurements or native execution."
+        "reason": "Pure existing configured scientific strict-source owner mapping proves one complete mypy gate for the actual source path; no test command, native process or private measurement is executed by this body. Original broad production/test ownership is restored."
       },
       {
         "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/visual_review/pdf_review_binding.py]",
-        "reason": "Existing changed-plan/type-owner config and repository Python source are read to test exact leaf responsibility, unknown/scientific broadening or configured source ownership; no private measurements or native execution."
+        "reason": "Pure existing configured scientific strict-source owner mapping proves one complete mypy gate for the actual source path; no test command, native process or private measurement is executed by this body. Original broad production/test ownership is restored."
       },
       {
         "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/visual_review/pdf_review_content.py]",
-        "reason": "Existing changed-plan/type-owner config and repository Python source are read to test exact leaf responsibility, unknown/scientific broadening or configured source ownership; no private measurements or native execution."
+        "reason": "Pure existing configured scientific strict-source owner mapping proves one complete mypy gate for the actual source path; no test command, native process or private measurement is executed by this body. Original broad production/test ownership is restored."
       },
       {
         "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/visual_review/pdf_review_files.py]",
-        "reason": "Existing changed-plan/type-owner config and repository Python source are read to test exact leaf responsibility, unknown/scientific broadening or configured source ownership; no private measurements or native execution."
+        "reason": "Pure existing configured scientific strict-source owner mapping proves one complete mypy gate for the actual source path; no test command, native process or private measurement is executed by this body. Original broad production/test ownership is restored."
       },
       {
         "nodeid": "tests/test_changed_verification_evidence.py::test_record_admits_the_current_shared_check_without_trusting_another_command",
@@ -27340,7 +27325,7 @@
         "reason": "Explicit generated argv and a monkeypatched local PDF dispatch owner test parser/forwarding and refusal of an unbound PDF option; no native or private input."
       }
     ],
-    "review_method": "2026-11-08 next-batch static append proposal02: preserved complete accepted main4b6 metadata05 and every prior ordered prefix; added exactly90 actual executed node IDs:81 from FINAL_TARGETED_01.xml SHA61ecda93aabfbad0a0d63643ee0980a0f5ed73b82530dc967e8fcf10618385cc (977 passed at source8426f8e), plus9 new generated host-boundary IDs from HOST_BINDING_INTEGRATION_01.xml SHA90d38d11189f5444bb399d0a8c0a17081055577599c79bc9c0cd8405330666f4 (11 passed, including2 already-covered interface IDs). Current final source53e61ff qualification keeps89 public-focused and1 generated public-comprehensive PDF native chain. Every new test definition/literal parameter matrix and four configured strict-source parameter additions is covered by the actual XMLs. Current source hashes bind this static proposal; older XML source identities are not relabelled, and later same-ID body strengthening retains its separate execution evidence. Expected full union10181 is a proposal, not a completed full collection; one fresh final-commit unfiltered collection must confirm complete IDs/tiers/source bytes. All165 private cases,210 dependencies,23 directory roles,111 historical responsibilities and inventory_complete=false are unchanged. No full, capture, private access, final-SHA native or scientific acceptance is claimed by this proposal.",
+    "review_method": "2026-11-08 next-batch metadata proposal04 rebased on accepted main4b6 metadata05, preserving all10091 accepted nodes and every original ordered prefix. Appended exactly87 current retained public IDs from existing actual977/11 XMLs and746 retained-verification XML; source/complete parameter qualification at8517ec0 keeps86focused and1generated PDF-native comprehensive. The never-main two test-only leaf-owner shortcuts were cancelled after measured cost review: their3 experimental cases and10 source-inventory fix controls retire with that unique mechanism; all original main definitions/targets remain, and the broader original owners are restored. No failed708/D8 candidate prefix is promoted to accepted history; all old drafts, XMLs and original363/CAP/strict82 facts remain unchanged. Expected10178 full union and current test/implementation hashes are static proposed bindings, pending one real final-metadata-commit unfiltered collection. All165 private cases,210 dependencies,23 directory roles,111 historical responsibilities and inventory_complete=false are identical to accepted main. No scientific/capture/permission assertion, private path boundary or required full/native/access acceptance is weakened or claimed by this proposal.",
     "scope": [
       "real_world",
       "polymer_corpus",
