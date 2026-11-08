@@ -8,6 +8,7 @@ import sys
 
 import pytest
 
+from sciplot_core.figure_plan.artifact_locations import artifact_is_file, literal_artifact_path
 from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path, selected_source_resolver
 from sciplot_core.project_store import FileProjectStore, ProjectConflict, ProjectStoreError, ResourceRoot
 from sciplot_core.project_store.io import sha
@@ -58,6 +59,10 @@ def test_external_output_maps_to_private_view_and_preserves_exact_source_generat
         output = store.locations["run_exact"]
         assert resolve_source_path(output / "baseline.pdf") == resources / "run_exact/baseline.pdf"
         assert (resources / "run_exact/baseline.pdf").stat().st_mode & 0o777 == 0o640
+        assert literal_artifact_path(output / "nested/result.pdf") == str(output / "nested/result.pdf")
+        assert not (resources / "run_exact/nested").exists()
+        assert literal_artifact_path(resources / "run_exact") == str(output)
+        assert literal_artifact_path(resources / "snapshot") == str(store.locations["snapshot"])
         document = resolve_runtime_output_path(output / "nested/result.pdf")
         assert document == resources / "run_exact/nested/result.pdf"
         document.write_bytes(b"private new output")
@@ -88,6 +93,14 @@ def test_outputs_cannot_expand_finite_grants_or_overwrite_scientific_inputs(tmp_
             "whole-resource-root": resources / "run_exact"}
         with pytest.raises((ProjectConflict, ProjectStoreError)):
             resolve_runtime_output_path(targets[failure])
+        if failure in {"finite-new", "foreign-key", "resources-parent", "new-project-raw", "new-external-source"}:
+            with pytest.raises((ProjectConflict, ProjectStoreError)):
+                literal_artifact_path(targets[failure])
+        elif failure in {"project-raw", "external-input", "whole-resource-root"}:
+            assert literal_artifact_path(targets[failure]) == literal_source_path(targets[failure])
+        elif failure == "finite-sibling":
+            with pytest.raises(ProjectConflict):
+                literal_artifact_path(resources / "snapshot/private-sibling.vsz")
 
 
 @pytest.mark.parametrize("failure", ["source-bytes", "source-mode", "source-uuid", "source-version", "symlink", "hardlink",
@@ -116,6 +129,9 @@ def test_resource_read_guards_preserve_input_identity_and_closed_finite_views(tm
                 resolve_source_path(path.parent if failure == "directory-mode" else path,
                     source_id="b" * 32 if failure == "source-uuid" else None,
                     expected_sha256="0" * 64 if failure == "source-version" else entry["sha256"] if failure == "source-uuid" else None)
+        if failure not in {"source-uuid", "source-version"}:
+            with pytest.raises((ProjectConflict, ProjectStoreError, OSError)):
+                literal_artifact_path(path.parent if failure == "directory-mode" else path)
 
 
 @pytest.mark.parametrize("failure", ["root-symlink", "root-mode", "overlap", "ungranted-key", "foreign-copy"])
@@ -213,11 +229,40 @@ def test_new_explicit_host_output_grant_needs_no_unregistered_old_active_copy(tm
     locations["run_new"] = ResourceRoot(new_output)
     admitted = FileProjectStore(store.root, locations=locations)
     with project_candidate_runtime(admitted, primary, resources_root=resources):
+        assert literal_artifact_path(resources / "run_new") == str(new_output)
+        assert literal_artifact_path(new_output) == str(new_output)
+        assert not list((resources / "run_new").iterdir())
         target = resolve_runtime_output_path(new_output / "nested/result.pdf")
         target.write_bytes(b"new candidate only")
         assert literal_source_path(target) == str(new_output / "nested/result.pdf")
         assert logical_runtime_resource(target, private_only=True) == "@run_new/nested/result.pdf"
     assert store.snapshot() == before and not list(new_output.iterdir())
+
+
+def test_future_artifact_projection_preserves_exact_finite_grants_without_creating_members(tmp_path):
+    store, before, primary, resources = resource_fixture(tmp_path)
+    output = tmp_path / "finite-output"
+    output.mkdir()
+    locations = {key: ResourceRoot(path, store.location_members[key]) for key, path in store.locations.items()}
+    locations["future"] = ResourceRoot(output, ("nested/result.pdf",))
+    admitted = FileProjectStore(store.root, locations=locations)
+    with project_candidate_runtime(admitted, primary, resources_root=resources):
+        target = resources / "future/nested/result.pdf"
+        assert literal_artifact_path(target) == str(output / "nested/result.pdf")
+        assert literal_artifact_path(output / "nested/result.pdf") == str(output / "nested/result.pdf")
+        assert literal_artifact_path(resources / "future") == str(output)
+        assert not list((resources / "future").iterdir()) and not artifact_is_file(target)
+        for reader in (resolve_source_path, literal_source_path):
+            with pytest.raises(FileNotFoundError):
+                reader(target)
+        for refused in (resources / "future/nested/other.pdf", resources / "future/other.pdf"):
+            with pytest.raises(ProjectConflict, match="finite host capability"):
+                literal_artifact_path(refused)
+        for refused in (resources / "future", resources / "future/nested"):
+            with pytest.raises(ProjectConflict):
+                resolve_runtime_output_path(refused)
+        assert not list((resources / "future").iterdir())
+        assert store.snapshot() == before and not list(output.iterdir())
 
 
 def test_narrow_selected_capability_clones_only_its_exact_members(tmp_path):

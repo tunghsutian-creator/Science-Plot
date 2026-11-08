@@ -1,20 +1,22 @@
 """Host delivery addresses survive private cleanup; audit observations stay true."""
 
 from copy import deepcopy
+import os
 from pathlib import Path
 import shutil
 
 import pytest
 
 from sciplot_core.figure_plan import FigureOutcome, FigureTask, ResolvedFigurePlan
-from sciplot_core.figure_plan.artifact_locations import artifact_is_file
+from sciplot_core.figure_plan.artifact_locations import artifact_is_file, literal_artifact_path
 from sciplot_core.figure_plan.execution import (
     finalize_figure_plan_result, merge_figure_outcomes, outcomes_for_artifact_map,
 )
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 from sciplot_core.project_store import FileProjectStore, ProjectConflict
-from sciplot_core.project_store.runtime import project_candidate_runtime
+from sciplot_core.project_store.runtime import project_candidate_runtime, resolve_runtime_output_path
 from sciplot_core.study_model.run_artifacts import attach_run_artifacts_to_study_model
 from sciplot_core.terminal_request import project_terminal_render_request
 from sciplot_core.workflow.request_rendering import RequestRenderResult
@@ -143,7 +145,75 @@ def test_artifact_scope_refuses_alias_and_missing_output_without_rewriting_scien
                 attach_run_artifacts_to_study_model(model, output_dir=output, figures=[str(alias)])
         finally:
             alias.unlink()  # Remove only this test's rejected alias before scope revalidation.
+        alias.hardlink_to(artifacts[1])
+        assert not artifact_is_file(alias)
+        try:
+            with pytest.raises(ProjectConflict, match="cannot traverse aliases"):
+                literal_artifact_path(alias)
+        finally:
+            alias.unlink()
         missing = finalize_figure_plan_result(plan, {'outputs': [str(output / 'missing.pdf')]})
         assert missing is not None and not missing.complete
         assert missing.outcomes[0].artifacts == ()
     assert (model, _source.read_bytes(), store.snapshot()) == before
+
+
+def test_staged_evidence_can_publish_future_addresses_without_creating_or_certifying_files(tmp_path, monkeypatch):
+    project, source, store, snapshot, private, output, artifacts, plan, model = seed(tmp_path)
+    staged = output / '.stage/figures'
+    staged.parent.mkdir()
+    artifacts[0].parent.rename(staged)
+    staged_artifacts = [staged / path.name for path in artifacts]
+    original = deepcopy(model), plan.to_payload(), source.read_bytes()
+    with project_candidate_runtime(store, private):
+        observed = outcomes_for_artifact_map(plan, {'signal': list(map(str, staged_artifacts))})
+        assert observed[0].delivery_artifacts_complete
+        before = {str(path.relative_to(private)): (path.stat().st_mode, path.stat().st_mtime_ns,
+                  path.stat().st_ctime_ns, path.read_bytes() if path.is_file() else None)
+                  for path in private.rglob('*')}
+        with monkeypatch.context() as guard:
+            guard.setattr(os, 'mkdir', lambda *_args, **_kwargs: pytest.fail('Artifact projection created a directory'))
+            result = {'figure_outcomes': [{**observed[0].to_payload(), 'artifacts': list(map(str, artifacts))}]}
+            completed = finalize_figure_plan_result(plan, result)
+            assert completed is not None and completed.complete
+            expected = tuple(str(project / path.relative_to(private)) for path in artifacts)
+            assert completed.outcomes[0].artifacts == expected
+            assert tuple(literal_artifact_path(path) for path in expected) == expected
+            assert completed.plan_sha256 == plan.plan_sha256 and completed.tasks == plan.tasks
+            study = attach_run_artifacts_to_study_model(model, output_dir=output,
+                figures=list(map(str, artifacts[1:])), resolved_figure_plan=completed.to_payload())
+            gate = figure_plan_manifest_gate({'resolved_figure_plan': completed.to_payload(),
+                'result': result, 'study_model': study})
+            assert gate is not None and not gate['complete']
+            assert gate['projection_consistency'] == {'manifest_rule_matches': True, 'result_plan_matches': True,
+                'study_plan_matches': True, 'outcome_artifacts_exist': False}
+            assert not artifacts[0].parent.exists() and not any(artifact_is_file(path) for path in expected)
+            for reader in (resolve_source_path, literal_source_path):
+                with pytest.raises(FileNotFoundError):
+                    reader(artifacts[0])
+        after = {str(path.relative_to(private)): (path.stat().st_mode, path.stat().st_mtime_ns,
+                 path.stat().st_ctime_ns, path.read_bytes() if path.is_file() else None)
+                 for path in private.rglob('*')}
+        assert after == before
+    assert (model, plan.to_payload(), source.read_bytes()) == original and store.snapshot() == snapshot
+
+
+def test_selected_csv_and_project_root_keep_read_projection_without_output_write_grants(tmp_path):
+    project, source, store, snapshot, private, _output, _artifacts, _plan, _model = seed(tmp_path)
+    selected = private / source.name
+    original = selected.read_bytes()
+    assert any(entry['logical'] == source.name for versions in snapshot['sources'].values() for entry in versions.values())
+    with project_candidate_runtime(store, private):
+        assert literal_artifact_path(selected) == str(source)
+        assert literal_artifact_path(private) == str(project)
+        assert literal_artifact_path(project) == str(project)
+        for target in (selected, private):
+            with pytest.raises(ProjectConflict, match='cannot overwrite science'):
+                resolve_runtime_output_path(target)
+        selected.write_bytes(b'changed selected science')
+        try:
+            with pytest.raises(ProjectConflict, match='exact requested bytes'):
+                literal_artifact_path(selected)
+        finally:
+            selected.write_bytes(original)
+    assert source.read_bytes() == original and store.snapshot() == snapshot
