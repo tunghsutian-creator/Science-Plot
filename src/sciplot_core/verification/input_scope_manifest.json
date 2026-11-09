@@ -10028,7 +10028,18 @@
       "tests/test_pdf_review_binding.py::test_page_frame_budget_refuses_before_any_annotation_enumeration[page-count]",
       "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[added_page]",
       "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[crop]",
-      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[rotation]"
+      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[rotation]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_sealed_mapping_input_admits_history_once_without_retaining_a_proof[concrete]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_sealed_mapping_input_admits_history_once_without_retaining_a_proof[extension]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_source_read_still_expires_an_active_history_proof",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_keeps_exact_identity_and_fresh_bytes[identity]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_keeps_exact_identity_and_fresh_bytes[version]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_keeps_exact_identity_and_fresh_bytes[name]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_keeps_exact_identity_and_fresh_bytes[bytes]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[current]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[committed-old]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[orphan]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[current-source-removed]"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -19892,7 +19903,18 @@
       "tests/test_pdf_review_binding.py::test_page_frame_budget_refuses_before_any_annotation_enumeration[page-count]",
       "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[added_page]",
       "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[crop]",
-      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[rotation]"
+      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[rotation]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_sealed_mapping_input_admits_history_once_without_retaining_a_proof[concrete]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_sealed_mapping_input_admits_history_once_without_retaining_a_proof[extension]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_source_read_still_expires_an_active_history_proof",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_keeps_exact_identity_and_fresh_bytes[identity]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_keeps_exact_identity_and_fresh_bytes[version]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_keeps_exact_identity_and_fresh_bytes[name]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_keeps_exact_identity_and_fresh_bytes[bytes]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[current]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[committed-old]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[orphan]",
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[current-source-removed]"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",

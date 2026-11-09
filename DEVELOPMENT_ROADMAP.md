@@ -16,14 +16,25 @@ command admission, canonical project writers, retired manual product UI, shared
 observations and basic PDF notes with the checked original figure/project are
 already delivered within their documented scopes.
 
-The next bounded batch measures the 800.82-second strict access export's repeated
-review/hash path and the 610.07-second mapping lifecycle's internal costs. Remove
-only proven duplicate responsibilities, retaining fresh IO/permission/commit
-boundaries and all scientific and native assertions. Report same-condition
+The isolated follow-up has replaced the mapping input's repeated source-view
+admission, preserving its distinct historical-generation requirement in the
+first Store lock. One complete ordinary node measured 197.19 then 158.01 seconds.
+Its reader correction binds hashing and parsing to one held byte observation;
+the small-pair median did not improve, so it is no strict-export speed claim.
+New combined release gates remain pending for this isolated candidate. Retain
+fresh IO/permission/commit boundaries and all scientific and native assertions. Report same-condition
 component costs separately from whole acceptance time; do not add a general
 cache, scheduling framework or new frontend. Full details and stop conditions
 belong to the plan. The independent cancelled SavedWork release stays retained,
 not promoted as an accepted baseline.
+
+The following investigation is the local acceptance recipe itself: the current
+2.05-GB raw capture also produces a 4.97-GB derived review, and an external export
+operator repeats review three times. Census its real producers/consumers, then
+assess one source-owned finalization/export path and compact diagnostic reports.
+Retain raw evidence and all fresh checks; do not declare a compact report to be
+an approval or silently change before-write refusal. This follows the current
+bounded reader/resolver work rather than expanding it mid-implementation.
 
 ## Retained AI disclosure boundary
 

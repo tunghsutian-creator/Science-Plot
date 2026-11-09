@@ -47,6 +47,50 @@ Basic PDF feedback remains positions/text plus the original figure/project.
 No Foxit testing, new editor, vector-to-scientific-object recognition, real model
 call or user-data transmission is part of the work.
 
+The isolated implementation now moves selected-generation reachability into
+the first source admission, in the same Store lock, while retaining current
+source membership and the selected snapshot's UUID/version/name. It removes the
+adjacent repeated full admission only for the concrete resolver without active
+owned IO. Extensions and active history windows retain their original fence.
+The complete ordinary generated mapping node measured 197.19 then 158.01 seconds
+in one before/after pair with all original assertions; this is not a stable
+whole-suite or cross-platform percentage.
+
+The reader now hashes and parses the same held bytes. Three small alternating
+pairs measured medians 0.876958 then 0.880154 seconds: no speed benefit, despite
+raw reads falling from twelve to six. Keep it as a byte-consistency correction,
+not evidence that the 800.82-second strict export is faster. These changes have
+local development evidence; new combined release/capture/platform gates remain
+separate from the already accepted baseline.
+
+## Following bounded decision: retire repeated local acceptance recipes
+
+The current accepted capture contains 258 raw streams totaling 2,047,284,070
+bytes, while its derived `capture-review.json` is 4,970,691,114 bytes. These are
+file-size observations, not internal timing attribution. The raw proof and review
+still belong to the original accepted execution and must not be rewritten.
+The actual three-review export sequence is assembled in an external local
+operator; production `private_corpus_preflight` itself reviews once.
+
+After the current reader/resolver changes close, census the actual local
+producer and consumers before replacing that recipe through the existing
+verification entry point. The candidate boundary is one finalization/export
+operation with one owner of receipt/raw consistency, plus a compact diagnostic
+projection rather than another persisted copy of every raw frame. Preserve
+original raw streams, full failure evidence, input identities, actual exits and
+all fresh source/permission/artifact checks. A compact report is a report, not a
+portable certificate or a cached PASS. Old reports/operators remain readable
+historical evidence, not silently migrated execution.
+
+Removing an explicit validation changes failure timing if a receipt is written
+before the final preflight. That effect must be tested and remain fail closed;
+it is not automatically equivalent. No wall-time saving is claimed until an
+actual same-input operation comparison exists. If implementing this requires a
+second scheduler/certificate/cache framework, stop and narrow the proposal.
+The same entry should expose check start/finish and elapsed cost while preserving
+structured stdout; current quick output is buffered until the selection ends.
+This improves observability, and must not be counted as execution speedup.
+
 ## Product boundary and target
 
 Users request creation and changes through an AI conversation. Existing CLI/MCP
