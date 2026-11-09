@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import ctypes
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 import hashlib
 import os
 from pathlib import Path
 import sys
 import sysconfig
-from types import SimpleNamespace
+from types import FunctionType, SimpleNamespace
 
 import pytest
 
@@ -159,6 +161,99 @@ def test_metadata_owner_requires_the_actual_compiled_source(tmp_path: Path, monk
     exec(compile(f"def {producer}():\n return probe()\n", module.__file__, "exec"),
          {"probe": boundary.diagnostic_owner}, foreign)
     assert foreign[producer]() is None
+    _owner_derivation_controls(tmp_path, monkeypatch, Path(module.__file__).name, producer)
+
+
+def _owner_derivation_controls(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, filename: str, function: str) -> None:
+    """The same compiled-owner controls also exercise hits and expiry, not just misses."""
+    directory = tmp_path / "generated-owner"
+    directory.mkdir()
+    source = directory / filename
+    original = f"def {function}():\n return probe()\n"
+    changed = original.replace("probe()", "other()")
+    assert len(original) == len(changed)
+    source.write_text(original)
+    timestamp = source.stat().st_mtime_ns
+    compiled = compile(original, str(source), "exec", dont_inherit=True, optimize=sys.flags.optimize)
+    namespace = {"probe": lambda: boundary.owned_caller(filename, function)}
+    exec(compiled, namespace)
+    actual = namespace[function]
+    forged = FunctionType(actual.__code__.replace(co_consts=(*actual.__code__.co_consts, "foreign")), namespace)
+    calls = []
+    def counted(*args, **kwargs):
+        calls.append(None)
+        return compile(*args, **kwargs)
+    with monkeypatch.context() as control:
+        control.setattr(boundary, "__file__", str(directory / "private_process_boundaries.py"))
+        control.setattr(boundary, "compile", counted, raising=False)
+        with boundary.owner_derivation_scope():
+            expected = boundary.owner_identity(filename, function)
+            assert actual() == expected
+            assert forged() is None  # A hit still hashes the actual live frame.
+            assert boundary.owned_caller(filename, function) is None
+            assert boundary.owner_identity(filename, "unknown") == {}
+            assert len(calls) == 1
+            returned = boundary.owner_identity(filename, function)
+            returned["bytecode_sha256"] = "caller mutation"
+            assert boundary.owner_identity(filename, function) == expected
+            inherited = copy_context()
+            with boundary.owner_derivation_scope():
+                assert boundary.owner_identity(filename, function) == expected
+                assert boundary.owner_identity(filename, function) == expected
+            assert len(calls) == 2
+            assert boundary.owner_identity(filename, function) == expected
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                assert executor.submit(copy_context().run, boundary.owner_identity, filename, function).result() == expected
+            assert len(calls) == 3  # A foreign thread cannot borrow this scope.
+            with monkeypatch.context() as options:
+                options.setattr(sys, "flags", SimpleNamespace(optimize=1))
+                boundary.owner_identity(filename, function)
+            assert len(calls) == 4
+            assert boundary.owner_identity(filename, function) == expected
+            opened = Path.open
+            def denied(path, *args, **kwargs):
+                if path == source:
+                    raise PermissionError("generated source denial on a hit")
+                return opened(path, *args, **kwargs)
+            with monkeypatch.context() as refusal:
+                refusal.setattr(Path, "open", denied)
+                with pytest.raises(PermissionError, match="source denial"):
+                    boundary.owner_identity(filename, function)
+            source.write_text(changed)
+            os.utime(source, ns=(timestamp, timestamp))
+            assert source.stat().st_mtime_ns == timestamp
+            different = boundary.owner_identity(filename, function)
+            assert different != expected and actual() is None
+            source.write_text(original)
+            os.utime(source, ns=(timestamp, timestamp))
+            assert boundary.owner_identity(filename, function) == expected
+        count = len(calls)
+        assert inherited.run(boundary.owner_identity, filename, function) == expected
+        assert len(calls) == count + 1  # A copied context expires with the operation.
+        with pytest.raises(RuntimeError, match="original failure"):
+            with boundary.owner_derivation_scope():
+                boundary.owner_identity(filename, function)
+                raise RuntimeError("original failure")
+        count = len(calls)
+        assert boundary.owner_identity(filename, function) == expected
+        assert len(calls) == count + 1
+        with pytest.raises(ValueError, match="Source owner changed"):
+            with boundary.owner_derivation_scope():
+                boundary.owner_identity(filename, function)
+                source.write_text(changed)  # No subsequent lookup may conceal exit drift.
+                os.utime(source, ns=(timestamp, timestamp))
+        assert boundary.owner_identity(filename, function) == different
+        source.write_text(original)
+        def wrong_qualname(*args, **kwargs):
+            module = compile(*args, **kwargs)
+            return module.replace(co_consts=tuple(value.replace(co_qualname="foreign")
+                if isinstance(value, type(module)) and value.co_name == function else value for value in module.co_consts))
+        with pytest.raises(ValueError, match="qualified name"):
+            with boundary.owner_derivation_scope():
+                boundary.owner_identity(filename, function)
+                with monkeypatch.context() as invalid:
+                    invalid.setattr(boundary, "compile", wrong_qualname)
+                    boundary.owner_identity(filename, function)
 
 
 def test_native_dependency_discovery_does_not_inherit_metadata_read_permission(monkeypatch: pytest.MonkeyPatch) -> None:

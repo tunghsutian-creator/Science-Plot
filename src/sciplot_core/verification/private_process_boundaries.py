@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import hashlib
 import ctypes
+from contextlib import contextmanager
+from contextvars import ContextVar
 import inspect
 import json
 import os
@@ -11,11 +13,13 @@ import shutil
 import stat
 import sys
 import sysconfig
+from threading import get_ident
 from types import CodeType
-from typing import Any, Mapping
+from typing import Any, Iterator, Mapping
 
 _PLATFORM_SOURCE = Path(sysconfig.get_path("stdlib")) / "platform.py"
 ZERO = "0" * 64
+_DERIVATIONS: ContextVar[dict[str, Any] | None] = ContextVar("source_owner_derivations", default=None)
 
 
 def frame_digest(value: dict[str, Any]) -> str:
@@ -172,7 +176,6 @@ def _code_hash(code: CodeType) -> str:
         if isinstance(value, frozenset):
             return "frozenset:" + repr(sorted(constant(item) for item in value))
         return type(value).__name__ + ":" + repr(value)
-
     fields = (code.co_code.hex(), tuple(constant(value) for value in code.co_consts), code.co_names, code.co_varnames,
               code.co_freevars, code.co_cellvars, code.co_argcount, code.co_posonlyargcount,
               code.co_kwonlyargcount, code.co_flags, code.co_stacksize, code.co_nlocals,
@@ -306,20 +309,44 @@ _OWNERS = {"evidence_runtime.py": {"native_dependencies", "qt_import_bindings"},
            "private_corpus_audit.py": {"test_sources_sha256"}}
 
 
+@contextmanager
+def owner_derivation_scope() -> Iterator[None]:
+    """Only one synchronous exclusion preparation; no IO or frame proof is reused."""
+    scope: dict[str, Any] = {"owner": (os.getpid(), get_ident()), "values": {}}
+    token = _DERIVATIONS.set(scope)
+    try:
+        yield
+        for (path, *_), (source, _) in scope["values"].items():
+            if path.read_bytes() != source:
+                raise ValueError("Source owner changed during exclusion preparation.")
+    finally:
+        scope.clear()  # Inherited contexts also see an expired scope.
+        _DERIVATIONS.reset(token)
+
+
 def owner_identity(filename: str, function: str) -> dict[str, str]:
     if function not in _OWNERS.get(filename, set()):
         return {}
     path = (Path(__file__).parents[1] / "plot_protocol" / filename
             if filename in {"socket_client.py", "server.py"} else Path(__file__).with_name(filename))
     source = path.read_bytes()
-    module = compile(source, str(path), "exec", dont_inherit=True, optimize=sys.flags.optimize)
-    code = module
+    scope = _DERIVATIONS.get()
+    values = scope["values"] if scope and scope["owner"] == (os.getpid(), get_ident()) else None
+    key = (path, function, sys.implementation.cache_tag, sys.flags.optimize, compile)
+    previous = values.get(key) if values is not None else None
+    if previous is not None and previous[0] == source:
+        return {"owner": filename, "function": function, "source_sha256": hashlib.sha256(source).hexdigest(),
+                "bytecode_sha256": previous[1]}
+    code = compile(source, str(path), "exec", dont_inherit=True, optimize=sys.flags.optimize)
     for part in function.split("."):
         code = next(c for c in code.co_consts if isinstance(c, CodeType) and c.co_name == part)
     if code.co_qualname != function:
         raise ValueError("Source owner qualified name differs.")
+    bytecode = _code_hash(code)
+    if values is not None and len(values) < 16:
+        values[key] = (source, bytecode)
     return {"owner": filename, "function": function, "source_sha256": hashlib.sha256(source).hexdigest(),
-            "bytecode_sha256": _code_hash(code)}
+            "bytecode_sha256": bytecode}
 
 
 def owned_caller(filename: str, function: str) -> dict[str, str] | None:
@@ -363,7 +390,6 @@ def live_native_request(observer: Any, request: dict[str, Any], recorded: dict[s
     if not valid:
         raise ValueError('Native live request has no actual current source record.')
     return True
-
 
 
 def diagnostic_owner() -> dict[str, str] | None:

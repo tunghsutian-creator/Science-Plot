@@ -17,7 +17,7 @@ from typing import Any, Mapping, Sequence
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.verification.native_exit_boundary import read_identity
-from sciplot_core.verification.private_process_boundaries import runtime_loader_environment
+from sciplot_core.verification.private_process_boundaries import owner_derivation_scope, runtime_loader_environment
 from sciplot_core.verification.private_process_boundaries import forbidden_roots
 from sciplot_core.verification.process_private_launch import bound_source_invocation, hold_stdio, launch_facts, launch_prefix, socket_scope_facts, validate_stdio
 from sciplot_core.verification.process_private_launch import ExcludedInvocation as ExcludedInvocation
@@ -129,6 +129,7 @@ def _profile(names: Sequence[str], writes: Sequence[str], ancestors: Mapping[str
     return profile + "(deny file-write* file-link (vnode-type SOCKET))\n"
 
 
+@owner_derivation_scope()
 def prepare_private_exclusion(repo_root: Path, environment: Mapping[str, str], *, stage_root: Path | None = None,
                               audit_directory: Path | None = None, evidence_paths: Sequence[Path] = (),
                               socket_scope: Mapping[str, Any] | None = None) -> ExclusionSnapshot:
