@@ -353,7 +353,14 @@ interpreter's own Python framework. Keep restoration provenance local.
 
 At handoff, run Doctor for command/runtime changes. Run smoke once at the final
 milestone for changes crossing Studio, worker, export, QA, delivery or runtime.
-Full pytest and ready-rule acceptance are release/merge gates, not every edit.
+For a merge candidate, combine actual impact regressions, applicable OS-specific
+boundaries, required CI and relevant native/capture evidence. Resolve unknown
+impact before selecting coverage and conservatively expand mixed or shared
+changes. Record the selected scope and unexecuted obligations. Frozen full
+pytest, real-input scientific validation and strict access reconciliation remain
+required for complete releases and integrated or critical milestones that need
+them. Keep applicable ready-rule checks and the existing full-release predicates
+unchanged; limited feedback and scoped evidence retain their original claims.
 
 Use the canonical wrapper or its absolute current-source binding for native
 verification, including child processes that change cwd. A relative PYTHONPATH
