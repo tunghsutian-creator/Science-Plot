@@ -1,102 +1,51 @@
 # AI-only scientific application: complexity reduction
 
-Status: active target and implementation sequence, updated 2026-11-08.
-Original baseline: main `07505f5c`. The cancelled SavedWork release is retained separately.
-This plan replaces the earlier single-desktop/single-browser frontend proposals.
+Status: active target and implementation sequence, updated 2026-11-09.
+Current verified baseline: main `54b166365990a572239e56901e5f7e325bed79c9`.
+The cancelled SavedWork release and older worktrees remain separate.
 
-The first combined batch is delivered as main `4b6bd72d`: the Mac suite completed
-10091 bodies successfully, capture and the declared execution's access closure
-completed, and the exact candidate's Linux CI succeeded. Main referenced that
-completed source approval rather than repeating its tests. Those results do not
-certify an exhaustive historical corpus, printed journal quality or completion
-of the whole simplification plan. The component descriptions below record what
-that batch changed; remaining work stays explicit.
+The application uses external AI conversation and deterministic local commands.
+The delivered baseline retires the manual product editors, consolidates command
+and project writers, and reads basic notes on a separate PDF with the checked
+original figure/project. These are bounded completed responsibilities, not proof
+that the whole project has no duplication. Historical implementation and acceptance
+records belong to Git and the retained local receipts, rather than an expanding
+sequence of competing status paragraphs in this plan.
 
-### Current bounded batch
+## Current bounded batch: measure and remove repeated verification work
 
-Three isolated worktrees continue from that verified commit. The integration
-owner alone changes shared owner/type registration and this plan.
+The current successful Mac execution had 10,189 passed bodies. Its original
+pytest elapsed time was 14,938.07 seconds; subsequent capture finalization took
+221.70 seconds and strict access export took 800.82 seconds. The long mapping
+CALL took 610.07 seconds. These are costs from one accepted execution, not a
+baseline/candidate acceleration comparison. The interrupted prior execution and
+its missing exit evidence remain recorded separately.
 
-- Daily verification: use existing quick/changed selection and actual node overlap
-  to remove proven repeated work. Preserve fail-fast shared contracts, unknown
-  owner refusal, scientific/native coverage and the record mode's evidence
-  contract. Measure the same selected assertions and input before and after;
-  selected feedback is never release or reusable capture evidence.
-- Scientific preparation: consolidate the temperature-sweep analysis's repeated
-  paired-table observations inside its one synchronous operation. Preserve the
-  original calculators, ordering, missing values, units, tie choices and error
-  behavior. Independent callers and later IO/commit boundaries observe afresh;
-  different rheology algorithms are not interchangeable duplicates.
-- PDF references: bind a separately marked review copy to an existing registered
-  project/figure and exact current document/export. Read standard annotations as
-  untrusted reference material for the existing typed AI command path. A PDF's
-  own labels grant no project, scientific or command authority. No new frontend,
-  automatic interpretation of marks, model call or outbound disclosure is added.
+Two isolated branches start from that exact verified source. One integration
+owner controls shared registration, the plan and final combined review.
 
-The previous Mac full took 17302.15 seconds; the exact candidate CI runtime job
-took 18950 seconds, of which comprehensive consumed 15486 step seconds. A retained
-generated A-G fixture's read-only fingerprint profile took 3.236 seconds,
-including 2.672 seconds in checked-head reads and 1856 JSON decodes. This profile
-uses a deliberately drifted test fixture and does not establish successful
-continuation or explain capture/load overhead. Fresh credential checks before
-and after an actual read are distinct boundaries and must remain.
+| Line | Complete deliverable | Boundary and stop condition |
+| --- | --- | --- |
+| Strict access operation | Attribute repeated review, parsing and hashing in the real call chain; remove a proven same-operation duplicate with all callers migrated | Preserve fresh source/stream/permission observations, original actor/phase/wait validation and final drift refusal. No PASS cache across operations or retained multi-GB object. Stop if improvement requires a new certificate/scheduler framework or weaker evidence. |
+| Mapping lifecycle | Profile the complete existing create, source-update, cold import and offline publication node; simplify only a measured repeated responsibility | Keep all original raw arrays, units, source versions, explicit native styles, preview/accept/retry, cold conditions, scientific audits and worker-exit assertions. Necessary cold/native work is not a duplicate merely because it takes time. |
 
-Each line first proves its finite equality/refusal and cost controls. Integrate
-the completed changes before selecting necessary native/platform and final
-acceptance gates; do not repeat the delivered commit's full suite or launch a
-full suite for each intermediate edit. Raw timings from different evidence modes
-or node sets are not algorithmic speedup evidence.
+Use existing pytest durations and stdlib cProfile/pstats or a finite forwarding
+measurement around real owners. Compare identical node sets, source inputs,
+runtime and evidence mode, reporting profiler overhead and distinct operations.
+Standalone ordinary execution cannot be compared with an old full capture as
+causal speedup. Do not sum overlapping inclusive timers. If a hotspot has no
+safe useful replacement, record that result instead of adding a cache.
 
-First implementation checkpoint: immutable command/patch ownership now reaches
-all existing semantic and NativeSuite patch consumers; replaced in-memory schema
-and hash checks have been removed. Current IO, science, permissions, commit and
-recovery boundaries remain. Managed bindings reuse captured content in the real
-pure compiler; public-stage admission shares one observation of independently
-checked environments and observes again on exit. A local byte-only PDF annotation
-reader exists, without a project binding or outbound AI route. These are completed
-components of the sequence below, not completion of all-family migration or release acceptance.
+During development, run the exact relevant counterexamples and existing quick
+shared/static gates. A coherent integrated verifier change needs its own final
+capture/access proof; the delivered baseline's proof remains attached to its
+original source. Do not repeat completed full/CI merely for a new plan, or run a
+full suite independently in each worker. Direct xdist and a new multi-worker
+acceptance protocol are outside this batch.
 
-The integrated XY slice removes a real preview duplicate: the admitted
-preparation supplies the same IR after fresh post-persistence canonical/CAS/source
-checks; cold apply/export still reconstruct independently. One matched generated
-native lifecycle keeps science, IR and rendered TIFF bytes equal and reduces
-compilation calls from nine to eight. Its single wall-time pair is not a stable
-performance claim. React/browser sessions and assets are removed; CLI retirement,
-fresh/legacy delivery records and all production callers close that component.
-Assembly desktop, Qt product UI, Intake HTTP/static application and their product
-status/draft/history writers are also retired in the isolated batch. Actual
-scientific confirmation moves through CLI/MCP into the existing preparation owner;
-no GUI status layer is copied into Core. Registered legacy artifacts remain
-read-only compatibility inputs. Torque curation now constructs its complete
-scientific selection and CSV before initial project admission, using the existing
-Intake preparation port once. Its manual HTML editor and late rewrites of bound
-inputs are removed; legacy selection files remain readable. Read-only galleries
-can present saved facts and copy an AI instruction, without applying a command.
-Complete supported export formats, source-bound
-column semantics and output-vs-source locator roles now have discriminating
-consumer checks and real five-format publication evidence. Combined frozen
-acceptance, supported-platform CI and strict access closure are still separate
-pending gates. The standard PDF parser
-still does not implement project-bound annotation-to-AI editing.
-
-Export filename/DPI metadata has a separate owner from the byte-pinned historical
-layout implementation. The original layout bytes and pins remain unchanged.
-Their existing pure binding control now runs in the shared quick/CI source gate,
-before native builds and long profiles. Historical writer tests also retain the
-original client's finite helper and import-ABI closure; current permission and
-input guards remain live. Neither arrangement is a second production executor.
-
-The generated Torque lifecycle has now executed with one actual native
-preparation: full selected arrays, scientific QA, same-generation Store facts and
-exact PDF/TIFF delivery copies passed. Its bounded run summary is deliberately
-not the full manifest; consumers use the returned manifest path for full facts.
-The private capture bootstrap also defers protocol imports until an actual
-connection, avoiding premature loading of a historical business owner. A fresh
-bootstrap and real owned-socket peer/EACCES counterexample cover that boundary;
-the original pending-writer four states passed in the matching capture mode.
-These are component proofs. The failed integrated 131-item run is retained, and
-the new frozen batch still requires its own combined capture, strict access,
-unfiltered suite and CI evidence.
+Basic PDF feedback remains positions/text plus the original figure/project.
+No Foxit testing, new editor, vector-to-scientific-object recognition, real model
+call or user-data transmission is part of the work.
 
 ## Product boundary and target
 
@@ -190,21 +139,14 @@ controls are proved. No cross-operation PASS cache or changed numerical toleranc
 Unify saved artifact/QA facts and remove the corresponding GUI copies. Migrate all
 supported scientific/creation/continuation families, not just the first XY fixture.
 
-The next combined batch removes three observed repetitions using existing owners:
-mechanical facts travel through both Workflow and Studio, governed prepared TTS
-normalizes once before compilation, and one attached SavedWork observation reads
-its canonical and archive members as a generation-bound batch. Fresh source,
-callback, native and publication observations remain independent. Component
-equality and cost records cover only those bounded operations. Genuine combined
-native and release checks still decide acceptance; they are not replaced by a
-snapshot counter or by the earlier running candidate's results. Intake now uses
-one envelope publication across the Python, CLI/MCP, Studio and Curate routes,
-with a legacy metadata return projection and read-only historical flat reader.
-Current rule readiness, explicit pending-review templates, source versions and
-confirmed columns keep their admission boundaries. The former second write is
-removed; the larger legacy envelope is a format migration, not a speed claim.
-Other family projections and project-bound PDF review remain explicit work,
-rather than implicit claims of whole-project completion.
+Delivered consumers share mechanical facts through Workflow/Studio, normalize
+governed prepared TTS once before compilation, and observe attached SavedWork
+canonical/archive members as a generation-bound batch. Intake uses one envelope
+publication across Python, CLI/MCP, Studio and Curate. Its legacy flat reader is
+read-only; current readiness, pending-review templates, source versions and
+confirmed columns retain admission. These migrated responsibilities are retained
+as regression boundaries. Any remaining family projection requires its actual
+producer/caller census before a new migration is selected.
 
 ### 3. AI reference flow and removal of manual product paths
 
@@ -243,15 +185,15 @@ closure is migrated. Do not keep old implementations as permanent fallback paths
 
 ## Parallel ownership and feedback
 
-Independent worktrees implement request/core admission, PDF-reference reading,
-Managed binding expansion and public-stage observation. One integration owner
-controls shared interfaces, merges those changes and reviews the complete diff.
-Each worker runs its relevant discriminating controls, not an independent full.
+The current independent worktrees own strict-operation cost and mapping-lifecycle
+cost respectively. One integration owner controls shared interfaces, registrations
+and documentation, merges those changes and reviews the complete diff. Each
+worker runs its relevant discriminating controls, not an independent full.
 
 Measure baseline/candidate under the same runtime, input/history and mode. Report
 schema/JSON/hash/read/native counts, complete result equality, removed mechanisms
-and actual elapsed time. The current value-object experiment is milliseconds per
-cycle; it is not evidence that a multi-hour native suite is solved. Existing full
+and actual elapsed time. Prior value-object measurements cover small components; they are not evidence
+that a multi-hour native suite is solved. Existing full
 runs show native workflow bodies dominate, so later optimization must measure
 those bodies rather than only moving waiting to CI.
 

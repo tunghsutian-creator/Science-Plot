@@ -9,23 +9,21 @@ snapshot's acceptance.
 
 ## Immediate priority: reduce duplicated core responsibilities
 
-The current authorized work is the ordered
-[core complexity reduction](docs/COMPLEXITY_REDUCTION_PLAN.md): immutable command
-admission and patch caller migration, explicit XY execution, shared observations
-and saved-evidence facts. The first combined batch and product UI retirement are
-delivered as main `4b6bd72d`; the subsequent shared-check, table-observation and
-PDF-reference batch is delivered as `b1b8646e`. Their exact evidence remains local
-rather than becoming proof for later changes. The active isolated batch reduces
-repeated pure code derivation within an actual synchronous verification operation
-and narrows PDF feedback to positions/text plus the checked original figure and
-project. It does not build a PDF editor or map arbitrary graphics to science.
-Final combined acceptance for these new changes remains separate. The product target is AI conversation
-through local tools, with a separate PDF reference copy; no manual graph-editing
-frontend is being built. Retired manual UI and draft/history writers do not remain
-as alternate Core authority. Preserve their real scientific and file obligations.
-Preserve scientific, file, process, permission and recovery boundaries while
-retiring replaced internal paths. The independent
-SavedWork release is cancelled and retained, not a new accepted main baseline.
+The current authorized work follows the ordered
+[core complexity reduction](docs/COMPLEXITY_REDUCTION_PLAN.md). Main
+`54b166365990a572239e56901e5f7e325bed79c9` is the verified baseline: immutable
+command admission, canonical project writers, retired manual product UI, shared
+observations and basic PDF notes with the checked original figure/project are
+already delivered within their documented scopes.
+
+The next bounded batch measures the 800.82-second strict access export's repeated
+review/hash path and the 610.07-second mapping lifecycle's internal costs. Remove
+only proven duplicate responsibilities, retaining fresh IO/permission/commit
+boundaries and all scientific and native assertions. Report same-condition
+component costs separately from whole acceptance time; do not add a general
+cache, scheduling framework or new frontend. Full details and stop conditions
+belong to the plan. The independent cancelled SavedWork release stays retained,
+not promoted as an accepted baseline.
 
 ## Retained AI disclosure boundary
 
