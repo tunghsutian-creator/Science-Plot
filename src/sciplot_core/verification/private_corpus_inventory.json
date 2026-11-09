@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10178,
-    "nodeids_sha256": "0a1edef3058b4c3e1c53c9fcb5157adf1a365f9d23129f8b5d749c3ee914302f",
-    "test_sources_sha256": "f3a4f6bb480b4cf170510c61c119ff5da46e320de857922c377e93cbf9c885ac",
+    "nodeid_count": 10189,
+    "nodeids_sha256": "a24b30b3cbbc6b216f8209f97faf7385256311b3a0c94a6dfebb13a59881050a",
+    "test_sources_sha256": "2aab707f8165acd9e18eb75bec1349f8eaf452d1455f6e4a41b0cb5420057375",
     "test_source_count": 663,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
@@ -5563,10 +5563,6 @@
       "tests/test_pdf_review_binding.py::test_no_fallback_to_same_bytes_other_path_or_alias",
       "tests/test_pdf_review_binding.py::test_optional_manifest_digest_does_not_swallow_other_failures[business-error]",
       "tests/test_pdf_review_binding.py::test_optional_manifest_digest_does_not_swallow_other_failures[permission]",
-      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_bind_replaced_pages_or_flattened_changes[added_page]",
-      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_bind_replaced_pages_or_flattened_changes[flattened_mark]",
-      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_bind_replaced_pages_or_flattened_changes[other_page]",
-      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_bind_replaced_pages_or_flattened_changes[rotation]",
       "tests/test_pdf_review_binding.py::test_permission_from_selected_copy_is_propagated_without_store_writes",
       "tests/test_pdf_review_binding.py::test_query_and_command_witness_cannot_mix_concurrent_versions[document]",
       "tests/test_pdf_review_binding.py::test_query_and_command_witness_cannot_mix_concurrent_versions[export]",
@@ -5605,7 +5601,22 @@
       "tests/test_pdf_review_interfaces.py::test_pdf_review_public_transports_preserve_reference_facts_and_originals[mcp]",
       "tests/test_project_control_cli.py::test_pdf_review_cli_routes_only_explicit_reference_arguments[create]",
       "tests/test_project_control_cli.py::test_pdf_review_cli_routes_only_explicit_reference_arguments[read]",
-      "tests/test_project_control_cli.py::test_pdf_review_read_does_not_accept_an_unbound_pdf_path_option"
+      "tests/test_project_control_cli.py::test_pdf_review_read_does_not_accept_an_unbound_pdf_path_option",
+      "tests/test_pdf_review_binding.py::test_creation_and_read_use_only_annotations_and_original_identity_not_mutable_base",
+      "tests/test_pdf_review_binding.py::test_flattened_comments_are_not_read_or_claimed_as_complete_feedback[flattened-only]",
+      "tests/test_pdf_review_binding.py::test_flattened_comments_are_not_read_or_claimed_as_complete_feedback[mixed-with-standard-note]",
+      "tests/test_pdf_review_binding.py::test_historical_v1_pending_review_keeps_exact_prepared_result_guard",
+      "tests/test_pdf_review_binding.py::test_historical_v1_sealed_review_resumes_without_resealing_or_overwriting[accepted]",
+      "tests/test_pdf_review_binding.py::test_historical_v1_sealed_review_resumes_without_resealing_or_overwriting[committed-reply-lost]",
+      "tests/test_pdf_review_binding.py::test_historical_v1_sealed_review_resumes_without_resealing_or_overwriting[staged]",
+      "tests/test_pdf_review_binding.py::test_incremental_region_and_text_comments_keep_base_and_cold_read_unicode",
+      "tests/test_pdf_review_binding.py::test_other_same_frame_pdf_and_forged_tags_are_unverified_feedback_not_original",
+      "tests/test_pdf_review_binding.py::test_page_frame_budget_refuses_before_any_annotation_enumeration[cumulative-page-area]",
+      "tests/test_pdf_review_binding.py::test_page_frame_budget_refuses_before_any_annotation_enumeration[first-page-area]",
+      "tests/test_pdf_review_binding.py::test_page_frame_budget_refuses_before_any_annotation_enumeration[page-count]",
+      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[added_page]",
+      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[crop]",
+      "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[rotation]"
     ],
     "synthetic_candidates": [
       {
@@ -27153,22 +27164,6 @@
         "reason": "Locally generated CSV, PyMuPDF PDFs and explicit synthetic saved-native/query-hash fixtures exercise real Store/reply-loss/currentness/output/alias/permission/annotation reference boundaries; these bodies make no scientific renderer or private-input claim."
       },
       {
-        "nodeid": "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_bind_replaced_pages_or_flattened_changes[added_page]",
-        "reason": "Locally generated CSV, PyMuPDF PDFs and explicit synthetic saved-native/query-hash fixtures exercise real Store/reply-loss/currentness/output/alias/permission/annotation reference boundaries; these bodies make no scientific renderer or private-input claim."
-      },
-      {
-        "nodeid": "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_bind_replaced_pages_or_flattened_changes[flattened_mark]",
-        "reason": "Locally generated CSV, PyMuPDF PDFs and explicit synthetic saved-native/query-hash fixtures exercise real Store/reply-loss/currentness/output/alias/permission/annotation reference boundaries; these bodies make no scientific renderer or private-input claim."
-      },
-      {
-        "nodeid": "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_bind_replaced_pages_or_flattened_changes[other_page]",
-        "reason": "Locally generated CSV, PyMuPDF PDFs and explicit synthetic saved-native/query-hash fixtures exercise real Store/reply-loss/currentness/output/alias/permission/annotation reference boundaries; these bodies make no scientific renderer or private-input claim."
-      },
-      {
-        "nodeid": "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_bind_replaced_pages_or_flattened_changes[rotation]",
-        "reason": "Locally generated CSV, PyMuPDF PDFs and explicit synthetic saved-native/query-hash fixtures exercise real Store/reply-loss/currentness/output/alias/permission/annotation reference boundaries; these bodies make no scientific renderer or private-input claim."
-      },
-      {
         "nodeid": "tests/test_pdf_review_binding.py::test_permission_from_selected_copy_is_propagated_without_store_writes",
         "reason": "Locally generated CSV, PyMuPDF PDFs and explicit synthetic saved-native/query-hash fixtures exercise real Store/reply-loss/currentness/output/alias/permission/annotation reference boundaries; these bodies make no scientific renderer or private-input claim."
       },
@@ -27323,9 +27318,69 @@
       {
         "nodeid": "tests/test_project_control_cli.py::test_pdf_review_read_does_not_accept_an_unbound_pdf_path_option",
         "reason": "Explicit generated argv and a monkeypatched local PDF dispatch owner test parser/forwarding and refusal of an unbound PDF option; no native or private input."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_creation_and_read_use_only_annotations_and_original_identity_not_mutable_base",
+        "reason": "Generated local Store/PDF fixture; monkeypatched renderer/text extraction must not execute while current original source/export identity and unverified-feedback authority are retained. No private measurements or model calls."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_flattened_comments_are_not_read_or_claimed_as_complete_feedback[flattened-only]",
+        "reason": "Generated PDF content-only and mixed-content/standard-note cases explicitly disclose unsupported flattened marks, retain original project bytes and grant no command/scientific authority; all input files are synthetic tmp_path artifacts."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_flattened_comments_are_not_read_or_claimed_as_complete_feedback[mixed-with-standard-note]",
+        "reason": "Generated PDF content-only and mixed-content/standard-note cases explicitly disclose unsupported flattened marks, retain original project bytes and grant no command/scientific authority; all input files are synthetic tmp_path artifacts."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_historical_v1_pending_review_keeps_exact_prepared_result_guard",
+        "reason": "Generated historical v1 prepared Store command rejects changed result bytes under the exact storage binding and retains pending state; temporary local artifacts only, no private input."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_historical_v1_sealed_review_resumes_without_resealing_or_overwriting[accepted]",
+        "reason": "Independently constructed historical v1 record/result is sealed with the real Store using generated CSV/PDF/synthetic-native bytes. Generated staged, accepted and committed-reply-lost states check unchanged prepared digest, record, marked copy and one canonical publication; no real experiment or renderer certificate."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_historical_v1_sealed_review_resumes_without_resealing_or_overwriting[committed-reply-lost]",
+        "reason": "Independently constructed historical v1 record/result is sealed with the real Store using generated CSV/PDF/synthetic-native bytes. Generated staged, accepted and committed-reply-lost states check unchanged prepared digest, record, marked copy and one canonical publication; no real experiment or renderer certificate."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_historical_v1_sealed_review_resumes_without_resealing_or_overwriting[staged]",
+        "reason": "Independently constructed historical v1 record/result is sealed with the real Store using generated CSV/PDF/synthetic-native bytes. Generated staged, accepted and committed-reply-lost states check unchanged prepared digest, record, marked copy and one canonical publication; no real experiment or renderer certificate."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_incremental_region_and_text_comments_keep_base_and_cold_read_unicode",
+        "reason": "Generated tmp_path CSV, synthetic saved-native/query artifacts and PyMuPDF incrementally saved rectangle/highlight with Unicode comments; exact source bytes and project readonly preservation are checked, without a private corpus, scientific renderer or third-party editor claim."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_other_same_frame_pdf_and_forged_tags_are_unverified_feedback_not_original",
+        "reason": "Generated same-frame replacement PDF and malicious annotation text are returned only as unverified feedback; exact original project/document/source/publication identity and no command authority are asserted. This intentionally replaces the retired external-base pixel-authentication contract, not a scientific-input check."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_page_frame_budget_refuses_before_any_annotation_enumeration[cumulative-page-area]",
+        "reason": "In-memory generated PDFs exercise page-count, first-page area and cumulative-area limits with annotation enumeration monkeypatched to fail if reached; no filesystem corpus, native renderer, network or AI call."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_page_frame_budget_refuses_before_any_annotation_enumeration[first-page-area]",
+        "reason": "In-memory generated PDFs exercise page-count, first-page area and cumulative-area limits with annotation enumeration monkeypatched to fail if reached; no filesystem corpus, native renderer, network or AI call."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_page_frame_budget_refuses_before_any_annotation_enumeration[page-count]",
+        "reason": "In-memory generated PDFs exercise page-count, first-page area and cumulative-area limits with annotation enumeration monkeypatched to fail if reached; no filesystem corpus, native renderer, network or AI call."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[added_page]",
+        "reason": "Generated current Store/PDF fixture with forged nonauthoritative tags and explicit added-page, rotation or crop mutations; strict registered ordered-page coordinate-frame refusal remains, without private data access."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[crop]",
+        "reason": "Generated current Store/PDF fixture with forged nonauthoritative tags and explicit added-page, rotation or crop mutations; strict registered ordered-page coordinate-frame refusal remains, without private data access."
+      },
+      {
+        "nodeid": "tests/test_pdf_review_binding.py::test_pdf_tags_cannot_replace_the_registered_page_coordinate_frame[rotation]",
+        "reason": "Generated current Store/PDF fixture with forged nonauthoritative tags and explicit added-page, rotation or crop mutations; strict registered ordered-page coordinate-frame refusal remains, without private data access."
       }
     ],
-    "review_method": "2026-11-08 next-batch metadata proposal04 rebased on accepted main4b6 metadata05, preserving all10091 accepted nodes and every original ordered prefix. Appended exactly87 current retained public IDs from existing actual977/11 XMLs and746 retained-verification XML; source/complete parameter qualification at8517ec0 keeps86focused and1generated PDF-native comprehensive. The never-main two test-only leaf-owner shortcuts were cancelled after measured cost review: their3 experimental cases and10 source-inventory fix controls retire with that unique mechanism; all original main definitions/targets remain, and the broader original owners are restored. No failed708/D8 candidate prefix is promoted to accepted history; all old drafts, XMLs and original363/CAP/strict82 facts remain unchanged. Expected10178 full union and current test/implementation hashes are static proposed bindings, pending one real final-metadata-commit unfiltered collection. All165 private cases,210 dependencies,23 directory roles,111 historical responsibilities and inventory_complete=false are identical to accepted main. No scientific/capture/permission assertion, private path boundary or required full/native/access acceptance is weakened or claimed by this proposal. 2026-11-08 same-node assertion/cheap-gate repair proposal: the existing focused distribution-policy node retains all original IDs/tiers and now checks actual shared versus owner coverage; it is appended as the ninth exact cheap source target. Only current test-source digest and this explanatory source requalification change in the existing inventory schema. Current implementation fingerprint is kept in the external source/operator binding, not a newly invented inventory field. The original cdb collection/full/CI states remain unchanged; fresh final-head collection and required completed acceptance are pending.",
+    "review_method": "2026-11-08 next-batch metadata proposal04 rebased on accepted main4b6 metadata05, preserving all10091 accepted nodes and every original ordered prefix. Appended exactly87 current retained public IDs from existing actual977/11 XMLs and746 retained-verification XML; source/complete parameter qualification at8517ec0 keeps86focused and1generated PDF-native comprehensive. The never-main two test-only leaf-owner shortcuts were cancelled after measured cost review: their3 experimental cases and10 source-inventory fix controls retire with that unique mechanism; all original main definitions/targets remain, and the broader original owners are restored. No failed708/D8 candidate prefix is promoted to accepted history; all old drafts, XMLs and original363/CAP/strict82 facts remain unchanged. Expected10178 full union and current test/implementation hashes are static proposed bindings, pending one real final-metadata-commit unfiltered collection. All165 private cases,210 dependencies,23 directory roles,111 historical responsibilities and inventory_complete=false are identical to accepted main. No scientific/capture/permission assertion, private path boundary or required full/native/access acceptance is weakened or claimed by this proposal. 2026-11-08 same-node assertion/cheap-gate repair proposal: the existing focused distribution-policy node retains all original IDs/tiers and now checks actual shared versus owner coverage; it is appended as the ninth exact cheap source target. Only current test-source digest and this explanatory source requalification change in the existing inventory schema. Current implementation fingerprint is kept in the external source/operator binding, not a newly invented inventory field. The original cdb collection/full/CI states remain unchanged; fresh final-head collection and required completed acceptance are pending. 2026-11-09 basic-notes batch: one actual unfiltered collect-only at HEAD1c6faac plus current PDF WIP collected10189 exact IDs with zero test bodies and identical before/after2021 Python files (645 tracked tests/helpers and1376 implementation sources). The documented unverified-external-feedback contract migrates exactly4 old PDF parameter IDs to5 explicit successor IDs, retaining ordered-page-frame, original project/source/export currentness, host/permission and no-command guards;10 other generated public-focused cases are new (15 added minus4 migrated-away, net11). All remaining accepted node IDs and tiers are unchanged; the existing2 metadata-owner parameter cases strengthen same-source derivation/fresh permission/frame/expiry controls without new IDs. New PDF cases are explicitly generated-only: CSV, PyMuPDF bytes, synthetic saved-native/query records and real temporary Store transactions, not actual scientific renderer or real editor evidence. All165 private cases,210 dependencies,23 directory-metadata roles,111 historical responsibilities, scope and remaining-proof requirements remain byte-equivalent; inventory_complete stays false. The18 untracked historical private rendering-profile Python helpers present in the old Mac full snapshot are not in this new source-only checkout; no tracked accepted source file was removed and no private-input availability or full-native equivalence is asserted. Restore/admit any required legitimate fixture layout before final full access binding and refresh this source fingerprint if it changes. This static qualification/collection is not full, capture, access-completeness, CI or scientific acceptance; final source or metadata edits require current identity reconciliation. 2026-11-09 later support-only adoption is separately recorded in CURRENT_BASELINE_HELPER_ADOPTION.json (SHA256 0fb9baa64079540777e6f42d2b732b951cea83a46929fa7b66c14106d790b243): exactly18 ignored historical capture support Python files were restored with the accepted b1b hashes/modes, no golden or experiment data copied. The original unfiltered collect-only record still binds2021 source files (645 tests plus1376 implementation); its bytes and10189 node IDs/tiers remain untouched. A separate current source reconciliation binds2039 files (663 tests/helpers plus1376 implementation), verifies every prior2021 source hash unchanged, and refreshes only this existing test-source count/digest plus review method. No repeat collection, helper execution, test body, native run, capture/access completeness or scientific acceptance is claimed by this adoption; final required runs retain their own strict collection/input binding.",
     "scope": [
       "real_world",
       "polymer_corpus",

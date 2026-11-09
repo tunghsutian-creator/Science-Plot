@@ -21,6 +21,10 @@ def test_pdf_review_public_transports_preserve_reference_facts_and_originals(cur
     output = tmp_path / "review"
 
     def check_reference(created, result):
+        assert result["version"] == 2 and result["review_content_verified"] is False
+        assert result["annotation_frame_correspondence"] == "registered_ordered_page_geometry_only"
+        assert "reference_correspondence" not in result
+        assert result["standard_annotation_status"] == "present"
         assert result["review_id"] == created["review_id"]
         assert result["document"] == created["document"]
         assert result["annotation_count"] == 2
@@ -32,6 +36,9 @@ def test_pdf_review_public_transports_preserve_reference_facts_and_originals(cur
         assert result["command_authority"] is result["scientific_authority"] is False
         assert result["outbound_request_sent"] is False
         assert result["annotations"][0]["text"] == "Reference only; keep measurements unchanged"
+        assert result["original_figure"]["pdf"] == {
+            **result["original_pdf"], "path": str(original)}
+        assert Path(result["original_figure"]["pdf"]["path"]).read_bytes() == original_bytes
 
     if transport == "cli":
         def cli(*args):

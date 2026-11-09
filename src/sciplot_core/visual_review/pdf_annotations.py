@@ -36,7 +36,8 @@ def _annotation_facts(annotation: pymupdf.Annot) -> dict[str, Any]:
     return result
 
 
-def inspect_pdf_annotations(pdf_bytes: bytes) -> dict[str, Any]:
+def inspect_pdf_annotations(pdf_bytes: bytes, *, max_pages: int | None = None,
+                            max_page_area: int | None = None) -> dict[str, Any]:
     """Return local reference facts, never a figure command or completeness claim.
 
     Page indices are zero-based. Annotation rectangles and vertices use PyMuPDF's
@@ -61,6 +62,15 @@ def inspect_pdf_annotations(pdf_bytes: bytes) -> dict[str, Any]:
                 raise ValueError("Encrypted PDF references are not supported.")
             if document.page_count < 1:
                 raise ValueError("PDF references require at least one page.")
+            if max_pages is not None and document.page_count > max_pages:
+                raise ValueError(f"PDF review is limited to {max_pages} pages.")
+            if max_page_area is not None:
+                total_area = 0
+                for page in document:
+                    width, height = page.rect.width, page.rect.height
+                    total_area += (int(width) + 1) * (int(height) + 1)
+                    if width <= 0 or height <= 0 or total_area > max_page_area:
+                        raise ValueError("PDF review exceeds the 16-million-pixel page-reference budget.")
             pages = []
             for page in document:
                 pages.append({

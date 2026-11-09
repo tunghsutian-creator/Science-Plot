@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-11-08. External AI is the task interface. Current behavior belongs
+Status: 2026-11-09. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -13,13 +13,13 @@ The current authorized work is the ordered
 [core complexity reduction](docs/COMPLEXITY_REDUCTION_PLAN.md): immutable command
 admission and patch caller migration, explicit XY execution, shared observations
 and saved-evidence facts. The first combined batch and product UI retirement are
-delivered as main `4b6bd72d`; its exact Mac, access and platform evidence remains
-local rather than becoming proof for later changes. The active isolated batch
-removes exact shared verification repeats while retaining the original conservative
-test-owner mappings,
-shares one temperature-analysis table observation, and binds current registered
-PDF review copies to the existing typed edit workflow. Final combined acceptance
-for these new changes remains separate. The product target is AI conversation
+delivered as main `4b6bd72d`; the subsequent shared-check, table-observation and
+PDF-reference batch is delivered as `b1b8646e`. Their exact evidence remains local
+rather than becoming proof for later changes. The active isolated batch reduces
+repeated pure code derivation within an actual synchronous verification operation
+and narrows PDF feedback to positions/text plus the checked original figure and
+project. It does not build a PDF editor or map arbitrary graphics to science.
+Final combined acceptance for these new changes remains separate. The product target is AI conversation
 through local tools, with a separate PDF reference copy; no manual graph-editing
 frontend is being built. Retired manual UI and draft/history writers do not remain
 as alternate Core authority. Preserve their real scientific and file obligations.

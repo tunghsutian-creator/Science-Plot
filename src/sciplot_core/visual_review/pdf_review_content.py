@@ -1,19 +1,23 @@
-"""Bounded page-reference evidence; pixels confer no scientific or edit authority."""
+"""Bounded annotation facts and their page frame; no mutable base-page authority."""
 
 from __future__ import annotations
 
-from hashlib import sha256
-from typing import Any, cast
+from typing import Any
 
-import pymupdf
-
-from .pdf_annotations import _OpenPDF, inspect_pdf_annotations
+from .pdf_annotations import inspect_pdf_annotations
 from .pdf_review_files import MAX_PDF_BYTES
 
 MAX_PAGES = 16
 MAX_PIXELS = 16_000_000
 MAX_ANNOTATIONS = 100
 MAX_GEOMETRY_POINTS = 4096
+PAGE_GEOMETRY_KEYS = ("rect_pt", "media_box_pt", "crop_box_pt", "rotation")
+
+
+def annotation_frame(pages: list[dict[str, Any]]) -> dict[str, Any]:
+    """The original ordered page geometry, never a claim about page content."""
+    return {"kind": "pdf_annotation_frame", "version": 1, "pages": [
+        {key: page[key] for key in PAGE_GEOMETRY_KEYS} for page in pages]}
 
 
 def _geometry_points(value: Any) -> int:
@@ -29,25 +33,7 @@ def review_content(data: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
         raise ValueError("PDF review exceeds 32 MiB.")
     # The existing reader owns standard-annotation/encryption semantics. No
     # embedded metadata, attachment, link or JavaScript is treated as authority.
-    pages, total_pixels = [], 0
-    with cast(_OpenPDF, pymupdf.open)(stream=data, filetype="pdf") as document:
-        if document.page_count > MAX_PAGES:
-            raise ValueError("PDF review is limited to 16 pages.")
-        # Reject encrypted PDFs before rendering, including empty passwords.
-        if document.needs_pass or document.is_encrypted or document.metadata.get("encryption"):
-            raise ValueError("Encrypted PDF references are not supported.")
-        for page in document:
-            width, height = page.rect.width, page.rect.height
-            total_pixels += (int(width) + 1) * (int(height) + 1)
-            if width <= 0 or height <= 0 or total_pixels > MAX_PIXELS:
-                raise ValueError("PDF review exceeds the 16-million-pixel page-reference budget.")
-            pixmap = page.get_pixmap(dpi=72, colorspace=pymupdf.csRGB, alpha=True, annots=False)
-            pages.append({"rect_pt": list(page.rect), "media_box_pt": list(page.mediabox),
-                          "crop_box_pt": list(page.cropbox), "rotation": page.rotation,
-                          "pixels": [pixmap.width, pixmap.height], "sha256": sha256(pixmap.samples).hexdigest()})
-    reference = {"kind": "pdf_base_page_reference", "version": 2, "dpi": 72, "pixels": "premultiplied_rgba",
-                 "mupdf_version": pymupdf.VersionBind, "pages": pages}
-    annotations = inspect_pdf_annotations(data)
+    annotations = inspect_pdf_annotations(data, max_pages=MAX_PAGES, max_page_area=MAX_PIXELS)
     facts, remaining, omitted, geometry_points = [], MAX_ANNOTATIONS, 0, 0
     for page in annotations["pages"]:
         for item in page["annotations"]:
@@ -69,7 +55,7 @@ def review_content(data: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
             if "line_ends" in item:
                 facts[-1]["line_ends"] = item["line_ends"]
             remaining -= 1
-    return reference, {"annotation_count": annotations["annotation_count"], "annotations": facts,
+    return annotation_frame(annotations["pages"]), {"annotation_count": annotations["annotation_count"], "annotations": facts,
         "page_count": annotations["page_count"], "pages": [
             {key: page[key] for key in ("page_index", "rect_pt", "media_box_pt", "crop_box_pt", "rotation")}
             for page in annotations["pages"]],

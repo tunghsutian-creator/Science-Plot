@@ -46,9 +46,22 @@ specification and publication. Selected-registry projections (or legacy absence)
 run-selection membership, manifest and PDF reads enter the existing command's
 preconditions, so a later publication cannot silently change that selection.
 Global generation equality is not a substitute for those dependencies: unrelated
-review metadata may merge. Base-page pixels and PDF coordinates confer no
-scientific, target-selection or command authority. CLI/MCP read the same local
+review metadata may merge. The original publication remains the only image
+authority; read responses expose its admitted path/hash and the saved document.
+The mutable copy supplies standard comments and their ordered page geometry,
+not an authenticated duplicate of the original page content. Same-frame changed
+content is deliberately unverified, including same-size page reorder; positions
+cannot select scientific objects automatically. CLI/MCP read the same untrusted
 facts and continue through existing typed edit admission; no model is invoked.
+
+New review bindings store one annotation frame (version 2). The prior version 1
+binding is projected read-only from its recorded page geometry, without rewriting
+host grants, prepared mutations or historical command results. Creation recovery
+and reading use the same frame check. The retired mutable-base raster comparison
+provided an extra visual-correspondence guarantee; this basic-comment contract
+does not retain that guarantee or disguise its removal as zero-risk deduplication.
+It never renders the marked PDF as the AI's original image. Empty standard-note
+enumeration reports that limit and does not direct automatic editing.
 
 The shared query's optional canonical manifest-content digest is distinct from
 the Store's file-byte SHA. Historical nonfinite metadata can leave that optional

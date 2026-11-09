@@ -462,6 +462,10 @@ bounded standard annotations for the AI to interpret through the existing typed
 edit and preview flow. Reads recheck currentness; marks never execute commands,
 change science or send data to a model. Unknown standalone PDFs, flattened marks
 and OCR are outside this route. See the [PDF reference guide](skill/references/pdf-review.md).
+For small changes, mark a region and comment on it, or highlight existing PDF
+text and add a comment. The AI uses the checked original figure and project
+together with those positions and words. The marked copy is reference only;
+PDF paths are not scientific object IDs.
 
 ## Get started
 
