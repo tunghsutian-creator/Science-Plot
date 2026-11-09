@@ -68,22 +68,31 @@ def checked_member(io: StoreIO, value: dict[str, Any], logical: str, expected: s
         raise
 
 
-def owned_source_view(io: StoreIO, value: dict[str, Any], actual: Path, *,
-                      expected_sha256: str | None = None, source_id: str | None = None) -> tuple[Path, str] | None:
-    import os
-
-    base = io.root / ".sciplot_store/sources"
+def source_view_entry(root: Path, value: dict[str, Any], actual: Path, *,
+                      expected_sha256: str | None = None, source_id: str | None = None) -> dict[str, Any] | None:
+    """Project one exact view's registered identity; this makes no IO claim."""
+    base = root / ".sciplot_store/sources"
     if not actual.is_relative_to(base):
         return None
     components = actual.relative_to(base).parts
     if len(components) != 3:
         raise ProjectConflict("An immutable source view must identify one exact source version.")
     identity, version, name = components
-    entry = value["sources"].get(identity, {}).get(version)
+    entry: dict[str, Any] | None = value["sources"].get(identity, {}).get(version)
     if (entry is None or source_id is not None and source_id != identity and source_id not in entry.get("aliases", [])
             or expected_sha256 is not None and expected_sha256 != version
             or name != Path(entry.get("locator") or entry.get("logical") or "source.bin").name):
         raise ProjectConflict("The immutable source view does not match the selected source identity/version.")
+    return entry
+
+
+def owned_source_view(io: StoreIO, value: dict[str, Any], actual: Path, *,
+                      expected_sha256: str | None = None, source_id: str | None = None) -> tuple[Path, str] | None:
+    import os
+
+    entry = source_view_entry(io.root, value, actual, expected_sha256=expected_sha256, source_id=source_id)
+    if entry is None:
+        return None
     with io.validation_fence():
         parent = os.open(actual.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:

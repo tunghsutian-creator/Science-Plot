@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,6 @@ class FileProjectStore:
             # Cold bundles may register only confined, host-created local views.
             with StoreIO(self.root, {}).locked() as io:
                 local = io.read("local_locations.json")
-            import re
             ids = local.get("ids", []) if local else []
             if any(not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", key) for key in ids):
                 raise ProjectStoreError("Invalid confined cold-project resource-root IDs.")
@@ -331,12 +331,12 @@ class FileProjectStore:
                 return self.locations[components[0][1:]] / Path(*components[1:])
             return self.root / Path(*components)
 
-    def resolve_source(self, source_id: str, version: str) -> Path:
-        import re
-
+    def resolve_source(self, source_id: str, version: str, *, generation: str | None = None) -> Path:
         if not re.fullmatch(r"[0-9a-f]{32}", source_id) or not re.fullmatch(r"[0-9a-f]{64}", version):
             raise ProjectStoreError("Source and version identifiers must match their frozen project identity.")
         with self._locked() as (io, current):
+            if generation is not None:
+                state.reachable(io, current, generation)
             entry = current["sources"].get(source_id, {}).get(version)
             if entry is None:
                 raise ProjectStoreError("The explicit source identity/version is not in this project.")

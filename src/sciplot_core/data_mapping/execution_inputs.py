@@ -211,7 +211,7 @@ def _read(path: Path, expected: str | None = None, *, metadata: bool = False) ->
     actual = canonical_path(resolve_source_path(literal, expected_sha256=expected, source_id=identity))
     selected = selected_source_resolver()
     if isinstance(selected, ProjectSourceResolver) and actual.is_relative_to(selected.store.root / ".sciplot_store/sources"):
-        selected.store.resolve_path(actual, expected_sha256=expected, source_id=identity, generation=selected.generation)
+        selected.require_resolved_source_view(actual, expected_sha256=expected, source_id=identity)
     parent = os.open(actual.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         data, mode = read_file(parent, actual.name)

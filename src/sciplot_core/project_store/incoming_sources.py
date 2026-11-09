@@ -179,7 +179,8 @@ def resolve_expected_source(store: FileProjectStore, snapshot: dict[str, Any], o
     if (expected_sha256 is not None and expected_sha256 != matched.sha256
             or source_id is not None and source_id != matched.source_id):
         raise ProjectConflict("The requested source identity/version differs from the explicit invocation expectation.")
-    actual = Path(literal) if mode == "incoming" else store.resolve_source(matched.source_id, matched.sha256)
+    actual = (Path(literal) if mode == "incoming" else
+              store.resolve_source(matched.source_id, matched.sha256, generation=snapshot["generation"]))
     _verify_file(actual, matched.sha256)
     return actual
 

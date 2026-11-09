@@ -11,7 +11,7 @@ from typing import Any
 
 from . import state
 from .errors import ProjectConflict, ProjectStoreError
-from .io import digest
+from .io import digest, owned_io
 from .incoming_sources import literal_sealed_tree, resolve_expected_source, selected_expectations
 from .repository import FileProjectStore
 
@@ -72,6 +72,26 @@ class ProjectSourceResolver:
             return self.store.resolve_path(original, expected_sha256=expected_sha256,
                                            source_id=source_id, generation=self.generation)
         return path
+
+    def require_resolved_source_view(self, actual: Path, *, expected_sha256: str | None,
+                                     source_id: str | None) -> None:
+        """Bind a resolved view before the consumer's fresh byte observation.
+
+        The concrete resolver already admitted this exact source and checked its
+        view bytes. Repeating the whole Store admission proves no new fact when
+        no owned IO proof can cross that read. Extensions and active IO retain
+        the original admission, including its source-observation fence.
+        """
+        if (type(self) is ProjectSourceResolver and source_id is not None and expected_sha256 is not None
+                and owned_io(self.store.root) is None):
+            from .locators import source_view_entry
+
+            if source_view_entry(self.store.root, self.snapshot, actual,
+                                 expected_sha256=expected_sha256, source_id=source_id) is None:
+                raise ProjectConflict("A resolved source view must retain its exact registered identity.")
+        else:
+            self.store.resolve_path(actual, expected_sha256=expected_sha256,
+                                    source_id=source_id, generation=self.generation)
 
     def literal_path(self, actual: Path) -> str:
         sealed = literal_sealed_tree(self.store, self.snapshot, actual)
