@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from sciplot_core.verification.durable_runner import run_status
 from sciplot_core.verification.evidence_identity import digest, identity_valid
@@ -28,15 +28,18 @@ def observer_source_hashes() -> dict[str, str]:
     return source_hashes()
 
 
-def _streams(directory: Path) -> dict[str, str]:
-    result = {}
-    for path in sorted(directory.glob("*.jsonl")):
+def _stream_data(directory: Path) -> Iterator[tuple[Path, bytes]]:
+    paths = sorted(directory.glob("*.jsonl"))
+    if not paths:
+        raise ValueError("observer streams are absent")
+    for path in paths:
         if path.is_symlink() or not path.is_file() or not _HEX.fullmatch(path.stem):
             raise ValueError("unsupported or aliased observer stream")
-        result[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
-    if not result:
-        raise ValueError("observer streams are absent")
-    return result
+        yield path, path.read_bytes()
+
+
+def _streams(directory: Path) -> dict[str, str]:
+    return {path.name: hashlib.sha256(data).hexdigest() for path, data in _stream_data(directory)}
 
 
 def capture_proof(directory: Path, *, primary_pid: int, root_pid: int | None = None,
@@ -55,10 +58,11 @@ def capture_proof(directory: Path, *, primary_pid: int, root_pid: int | None = N
             "stream_sha256": _streams(directory), "observer_sources_sha256": observer_source_hashes()}
 
 
-def _read_epochs(directory: Path) -> dict[str, list[dict[str, Any]]]:
+def _read_epochs(directory: Path, expected_streams: Any) -> dict[str, list[dict[str, Any]]]:
     epochs = {}
-    for path in sorted(directory.glob("*.jsonl")):
-        data = path.read_bytes()
+    for path, data in _stream_data(directory):
+        if not isinstance(expected_streams, dict) or hashlib.sha256(data).hexdigest() != expected_streams.get(path.name):
+            raise ValueError("observer stream bytes or membership changed")
         if not data.endswith(b"\n"):
             raise ValueError("observer stream is truncated")
         records = []
@@ -88,6 +92,8 @@ def _read_epochs(directory: Path) -> dict[str, list[dict[str, Any]]]:
                 or any(a["monotonic_ns"] > b["monotonic_ns"] for a, b in zip(records, records[1:], strict=False))):
             raise ValueError("observer epoch identity changes")
         epochs[path.stem] = records
+    if set(expected_streams) != {name + ".jsonl" for name in epochs}:
+        raise ValueError("observer stream bytes or membership changed")
     return epochs
 
 
@@ -166,9 +172,7 @@ def review_capture(proof: dict[str, Any], *, expected_nodeids: set[str] | None =
         directory = Path(proof["directory"])
         if not directory.is_absolute() or not directory.is_dir() or directory.is_symlink():
             raise ValueError("observer output directory is absent or aliased")
-        if proof.get("stream_sha256") != _streams(directory):
-            raise ValueError("observer stream bytes or membership changed")
-        epochs = _read_epochs(directory)
+        epochs = _read_epochs(directory, proof.get("stream_sha256"))
         indexes = {epoch: _review_index(records) for epoch, records in epochs.items()}
         node_scope = _scope(sorted(expected_nodeids)) if expected_nodeids is not None else None
         frames = [frame for records in epochs.values() for frame in records]

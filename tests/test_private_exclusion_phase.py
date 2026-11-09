@@ -396,8 +396,7 @@ def _generated_capture_review(tmp_path, monkeypatch, *, children=2, noise=8, fau
         return dict(sources, **({"suite_evidence.py": "changed"} if fault == "source_drift" and len(source_calls) > 1 else {}))
 
     monkeypatch.setattr(capture, "observer_source_hashes", current_sources)
-    monkeypatch.setattr(capture, "_streams", lambda _: {})
-    monkeypatch.setattr(capture, "_read_epochs", lambda _: epochs)
+    monkeypatch.setattr(capture, "_read_epochs", lambda _, expected: epochs)
     monkeypatch.setattr(capture, "_durable_context", lambda _, root=False: caller if root else durable)
     monkeypatch.setattr(capture, "validated_exits", lambda *_, **__: {})
     monkeypatch.setattr(capture, "runtime_identity", dict)
@@ -439,6 +438,74 @@ def test_capture_review_rechecks_source_snapshot_and_never_reuses_prior_call_ide
         assert ("process_private_exclusion.py", "_members") in calls
         if fault == "source_drift":
             assert any("source" in issue for issue in result["issues"])
+    _held_stream_controls(tmp_path, monkeypatch)
+
+
+def _held_stream_controls(tmp_path, monkeypatch):
+    """A parser fixture has no actor/wait authority; it only distinguishes A from B."""
+    import json
+    import os
+    from sciplot_core.verification import private_capture as capture
+
+    directory = tmp_path / "held-stream"
+    directory.mkdir()
+    epoch = "a" * 32
+    path = directory / (epoch + ".jsonl")
+    def stream(marker):
+        rows, previous = [], capture.ZERO
+        for sequence, event in enumerate(("process_start", "process_finish")):
+            row = {"event": event, "version": capture.VERSION, "epoch": epoch,
+                "run_id": "b" * 32, "pid": os.getpid(), "parent_pid": os.getppid(),
+                "sequence": sequence, "previous_sha256": previous, "monotonic_ns": sequence + 1,
+                "lost_events_before": 0, "marker": marker}
+            row["sha256"] = capture.frame_digest(row)
+            previous = row["sha256"]
+            rows.append(json.dumps(row, sort_keys=True).encode() + b"\n")
+        return b"".join(rows)
+    first, second = stream("A"), stream("B")
+    assert len(first) == len(second)
+    path.write_bytes(first)
+    timestamp = path.stat().st_mtime_ns
+    proof = capture.capture_proof(directory, primary_pid=os.getpid(), expected_roots=[str(directory)])
+    original_read, reads = Path.read_bytes, []
+    def replace_after_read(current, *args, **kwargs):
+        data = original_read(current, *args, **kwargs)
+        if current == path:
+            reads.append(None)
+            if len(reads) == 1:
+                path.write_bytes(second)
+                os.utime(path, ns=(timestamp, timestamp))
+        return data
+    with monkeypatch.context() as control:
+        control.setattr(Path, "read_bytes", replace_after_read)
+        observed = capture.review_capture(proof)
+    assert observed["status"] == "BLOCKED"  # No genuine durable actor/wait proof.
+    assert [row["marker"] for row in observed["frames"]] == ["A", "A"]
+    assert len(reads) == 1 and path.stat().st_mtime_ns == timestamp
+    later = capture.review_capture(proof)
+    assert later["status"] == "BLOCKED" and later["frames"] == []
+    assert any("stream bytes or membership" in issue for issue in later["issues"])
+    path.write_bytes(first)
+    expected = capture._streams(directory)
+    for malformed in (None, {}, {**expected, "c" * 32 + ".jsonl": "0" * 64}):
+        with pytest.raises(ValueError, match="stream bytes or membership"):
+            capture._read_epochs(directory, malformed)
+    def denied(current, *args, **kwargs):
+        if current == path:
+            raise PermissionError("generated original stream denied")
+        return original_read(current, *args, **kwargs)
+    with monkeypatch.context() as control:
+        control.setattr(Path, "read_bytes", denied)
+        refused = capture.review_capture(proof)
+    assert refused["status"] == "BLOCKED" and any("stream denied" in issue for issue in refused["issues"])
+    path.unlink()
+    with pytest.raises(ValueError, match="streams are absent"):
+        capture._read_epochs(directory, expected)
+    outside = tmp_path / "original-stream"
+    outside.write_bytes(first)
+    path.symlink_to(outside)
+    with pytest.raises(ValueError, match="unsupported or aliased"):
+        capture._read_epochs(directory, expected)
 
 
 def test_phase_and_metadata_indexes_preserve_missing_duplicate_owner_and_reserve_order(tmp_path, monkeypatch):
