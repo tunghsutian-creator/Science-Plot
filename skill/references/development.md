@@ -728,3 +728,7 @@ and monkeypatch/patch.object substitutes before freezing. Migrate explicit fake
 parameters without swallowing unknown keywords or removing behavior assertions;
 run their consumer modules. Filename families alone do not prove that a shared
 interface's consumers were covered. A passing subset remains a subset.
+
+A prepared check's specification and returned effective process environment
+travel together. Pass that environment to the actual child; reconstructing
+`os.environ` loses bound inputs. Keep explicit carrier-loss refusal controls.

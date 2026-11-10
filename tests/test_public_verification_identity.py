@@ -224,7 +224,7 @@ def test_actual_guard_capture_keeps_public_config_and_removes_only_covered_impor
     request.parent.mkdir(parents=True)
     request.write_text(json.dumps({key: value for key, value in spec.items() if key != "environment"}))
     source = Path(__file__).resolve().parents[1]
-    environment = configure_environment(root, dict(os.environ), bootstrap=source / "src/sciplot_core/verification/public_guard_bootstrap")
+    environment = configure_environment(root, spec["environment"], bootstrap=source / "src/sciplot_core/verification/public_guard_bootstrap")
     code = """
 import json,os,sys
 from pathlib import Path
@@ -243,6 +243,14 @@ else:
                             cwd=source, env=environment, capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "CAPTURED WITH GUARD ACTIVE"
+    from sciplot_core.verification.recorded_workspace import BINDING_ENV
+
+    missing_workspace = {key: value for key, value in environment.items() if key != BINDING_ENV}
+    refused = subprocess.run([sys.executable, "-c", code, str(request), str(private)],
+                             cwd=source, env=missing_workspace, capture_output=True, text=True, check=False)
+    assert refused.returncode != 0
+    assert "Recorded pytest workspace scope and environment differ" in refused.stderr
+    assert refused.stdout.strip() == ""
 
 
 @pytest.mark.parametrize("drift", ("implementation", "external", "alias"))
