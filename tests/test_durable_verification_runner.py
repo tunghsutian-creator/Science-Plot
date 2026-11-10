@@ -78,6 +78,20 @@ def test_command_failure_is_not_pass(run_spec):
     assert await_completion(directory)["status"] == "FAIL"
 
 
+def test_low_space_warning_preserves_original_recorded_execution(run_spec, monkeypatch, capsys):
+    from sciplot_core.verification import development_storage
+
+    monkeypatch.setattr(development_storage, "space_observation", lambda root:
+                        {"free_bytes": 1024, "warning": "generated low-space warning"})
+    original_command = list(run_spec["command"])
+    directory = Path(run_spec["repo_root"]) / ".tmp_verify" / "low-space"
+    start_run(directory=directory, spec=run_spec)
+    result = await_completion(directory)
+    assert result["status"] == "PASS"
+    assert json.loads((directory / "request.json").read_text())["command"] == original_command
+    assert "generated low-space warning" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("body,selected,status", [
     ("def test_ok(): assert True", ["test_synthetic.py::test_ok"], "PASS"),
     ("import pytest\ndef test_ok(): pytest.skip('test negative control')", ["test_synthetic.py::test_ok"], "BLOCKED"),

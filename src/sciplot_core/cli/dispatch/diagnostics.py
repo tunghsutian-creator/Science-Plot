@@ -171,6 +171,10 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
                 print("No checks selected; this is not new verification evidence.")
             if payload.get("error"):
                 print(payload["error"]["message"])
+            if type(payload.get("storage_before", {}).get("free_bytes")) is int:
+                print(f"Development volume free before checks: {payload['storage_before']['free_bytes'] / 1024**3:.2f} GiB")
+            if type(payload.get("storage_after", {}).get("free_bytes")) is int:
+                print(f"Development volume free after checks: {payload['storage_after']['free_bytes'] / 1024**3:.2f} GiB")
             for check in payload["checks"]:
                 print(f"{check['check_id']}: {check['status']}")
                 elapsed = check.get("wall_seconds")
@@ -180,6 +184,11 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
                     print("  Pytest final output: " + check["stdout"].strip().splitlines()[-1])
                 if check.get("reason"):
                     print(f"  {check['reason']}")
+                if check.get("development_storage_warning"):
+                    print(f"  Scratch warning: {check['development_storage_warning']}")
+                cleanup = check.get("development_storage", {}).get("cleanup", {})
+                if cleanup.get("warning"):
+                    print(f"  Scratch cleanup warning: {cleanup['warning']}")
                 if check["status"] == "failed":
                     detail = str(check.get("stderr") or check.get("stdout") or "").strip()
                     if detail:

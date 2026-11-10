@@ -8,6 +8,7 @@ from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.source_contracts import ARCHITECTURE_CORE_TARGETS, TYPE_SCOPE_PARTITION_TARGET
 
 CHANGED_VERIFICATION_TEST_TARGETS = (
+    'tests/test_development_storage.py', 'tests/test_changed_development_storage.py',
     'tests/test_changed_verification.py', 'tests/test_repository_policy.py', 'tests/test_main_commit_admission.py',
     'tests/test_ordinary_plotting_owners.py',
     'tests/test_external_ai_verification.py',

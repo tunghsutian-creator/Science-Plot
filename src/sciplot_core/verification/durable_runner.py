@@ -45,6 +45,10 @@ complete effective child environment; this function adds its bound finish path.
     preparation_started = time.monotonic()
     directory = directory.expanduser().resolve()
     root = Path(spec["repo_root"]).expanduser().resolve()
+    from sciplot_core.verification.development_storage import space_observation
+    capacity = space_observation(root)
+    if capacity.get("warning"):
+        print(capacity["warning"], file=sys.stderr)
     if not directory.is_relative_to(root / ".tmp_verify"):
         raise ValueError("durable evidence must remain under repository .tmp_verify")
     if directory.exists():
@@ -60,7 +64,8 @@ complete effective child environment; this function adds its bound finish path.
     spec["repo_root"] = str(root)
     from sciplot_core.verification.private_observer import reserve_child_environment
 
-    environment = spec.pop("environment")
+    from sciplot_core.verification.development_storage import without_development_storage
+    environment = without_development_storage(spec.pop("environment"))
     environment["SCIPLOT_VERIFY_FINISH"] = str(directory / "finish.json")
     environment = reserve_child_environment(environment)
     spec["environment_sha256"] = digest(environment)

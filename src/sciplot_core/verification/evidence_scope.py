@@ -213,7 +213,9 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
     """Build the sole trusted CLI default, with fresh discovery on every call."""
     root = repo_root.expanduser().resolve()
     module = _validate_check(plan, check, root)
-    environment = dict(environment, SCIPLOT_VERIFY_FINISH=str(finish_path.resolve()),
+    from sciplot_core.verification.development_storage import without_development_storage
+
+    environment = dict(without_development_storage(environment), SCIPLOT_VERIFY_FINISH=str(finish_path.resolve()),
                        SCIPLOT_VERIFY_QT_MODULES=json.dumps(sorted(QT_MODULES)))
     if not finish_path.resolve().is_relative_to(root / ".tmp_verify"):
         raise ValueError("completion evidence must stay in ignored local storage")

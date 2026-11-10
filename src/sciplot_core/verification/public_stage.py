@@ -198,6 +198,8 @@ def validate_stage(root: Path, environment: dict[str, str], *additional_environm
 
 def create_stage(root: Path, output: Path, environment: dict[str, str]) -> tuple[Path, dict[str, str], dict[str, Any]]:
     """Copy public tracked source and exact native helpers, preserving origin."""
+    from sciplot_core.verification.development_storage import without_development_storage
+    environment = without_development_storage(environment)
     root = root.expanduser().resolve()
     output = Path(os.path.abspath(output.expanduser()))
     if "SCIPLOT_REFERENCE_DATA" in environment:

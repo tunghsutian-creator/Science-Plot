@@ -187,12 +187,40 @@ def run_changed_verification(
                                    reuse=reuse is not None)
 
     results: list[dict[str, Any]] = []
+    from sciplot_core.verification.development_storage import development_pytest_run, space_observation
+
+    if command_runner is None:
+        payload["storage_before"] = space_observation(root)
+        if payload["storage_before"].get("warning"):
+            print(payload["storage_before"]["warning"], file=sys.stderr)
     for check in payload["checks"]:
         started = time.monotonic()
-        completed = runner(check["command"], root)
+        actual = dict(check)
+        completed = None
+        try:
+            if command_runner is None:
+                with development_pytest_run(check["command"], root) as workspace:
+                    actual["command"] = workspace.command
+                    completed = _run_command(workspace.command, root, environment=workspace.environment)
+                    workspace.finish(completed.returncode)
+                if workspace.managed:
+                    actual["development_storage"] = {"directory": str(workspace.directory),
+                                                     "cleanup": workspace.cleanup}
+            else:
+                completed = runner(check["command"], root)
+        except (OSError, ValueError) as exc:
+            if completed is None:
+                payload.update(status="BLOCKED", checks_executed=len(results),
+                               error={"reason_code": "development_check_unavailable", "message": str(exc)})
+                payload["checks"] = results + [{**row, "status": "not_run", "reason": "check_setup_or_wait_unavailable"}
+                                               for row in payload["checks"][len(results):]]
+                return payload
+            actual["development_storage_warning"] = str(exc)
+            print(f"Development scratch could not be finalized; original child exited {completed.returncode}: {exc}",
+                  file=sys.stderr)
         results.append(
             {
-                **check,
+                **actual,
                 "status": "passed" if completed.returncode == 0 else "failed",
                 "exit_code": completed.returncode,
                 "stdout": completed.stdout,
@@ -212,6 +240,10 @@ def run_changed_verification(
         if all(result["status"] == "passed" for result in results)
         else "failed"
     )
+    if command_runner is None:
+        payload["storage_after"] = space_observation(root)
+        if payload["storage_after"].get("warning"):
+            print(payload["storage_after"]["warning"], file=sys.stderr)
     return payload
 
 
@@ -304,6 +336,7 @@ def _default_repo_root() -> Path:
 def _run_command(
     command: Sequence[str],
     cwd: Path,
+    *, environment: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         list(command),
@@ -311,6 +344,7 @@ def _run_command(
         text=True,
         capture_output=True,
         check=False,
+        env=environment,
     )
 
 

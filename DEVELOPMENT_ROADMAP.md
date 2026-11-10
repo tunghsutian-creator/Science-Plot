@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-11-09. External AI is the task interface. Current behavior belongs
+Status: 2026-11-10. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -47,6 +47,14 @@ Do not send user data to a real provider, make paid calls or add fee estimates.
 Historical component evidence does not certify this new integrated snapshot.
 
 ## Retained feedback and performance boundaries
+
+The current storage candidate gives ordinary quick/changed pytest invocations
+separate leased scratch containers, successful cleanup and two completed failed
+containers retained. Recorded, active, interrupted and caller-owned outputs stay
+protected; capacity warnings do not establish a global byte quota. Close its
+targeted integration/platform checks, then continue measured completion-query
+and cold-publication costs. Historical full/audit archival and compact derived
+diagnostics remain distinct unfinished work; do not delete evidence by age.
 
 Keep routine feedback and final acceptance separate. The bounded CI policy selects
 a private-absent affected stage only for reviewed

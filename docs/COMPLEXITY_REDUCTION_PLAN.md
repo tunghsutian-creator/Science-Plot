@@ -63,6 +63,22 @@ not evidence that the 800.82-second strict export is faster. These changes have
 local development evidence; new combined release/capture/platform gates remain
 separate from the already accepted baseline.
 
+## Development artifact lifetime
+
+Routine quick/changed execution now has a separate disposable pytest lifetime:
+one container per real invocation, original child completion plus a kernel lease,
+successful scratch removal and two completed failed containers retained. Active,
+unknown, caller-owned and recorded/captured outputs are preserved. Capacity is
+observed before/after checks, with a 5 GiB warning rather than a predicted quota.
+This bounds ordinary completed scratch accumulation; it does not pretend that
+all historical full/audit outputs are disposable or globally byte-bounded.
+
+The actual workspace has hundreds of historical worktrees and thousands of
+ignored output entries. Their names/ages do not establish safe deletion. Future
+workers should reuse their own suitable isolated trees and retire them only after
+checking merged history, uncommitted work and necessary evidence. A whole worktree
+is never the disposable pytest container. Existing user and frozen trees remain.
+
 ## Following bounded decision: retire repeated local acceptance recipes
 
 The current accepted capture contains 258 raw streams totaling 2,047,284,070

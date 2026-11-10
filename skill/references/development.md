@@ -125,6 +125,35 @@ owner-selected assertions and also collects exact input/runtime identities and
 original completion evidence. Request that extra work when a reusable record or
 capture is needed; do not add it to every edit. A fast-check pass is selected
 software behavior, with no reusable receipt or full scientific/access claim.
+
+Ordinary quick/changed pytest checks use disposable per-invocation containers
+under this worktree's `.tmp_verify/pytest-development`. Passing test temporary
+directories are removed using pytest's `failed` retention policy. After the
+original pytest child returns, completed successful containers are removed and
+only the newest two completed failed containers are retained. A separate kernel
+lease protects active containers; an interrupted run without an original child
+completion remains protected, even if pytest's own three-day lock has expired.
+This is scratch ownership, not a verification receipt or proof of scientific
+acceptance. Cleanup warnings never turn a failed test into a pass.
+
+Recorded/reused checks, active access observers, durable suites and public stages
+retain their original evidence lifecycle. They cannot inherit the developer
+temporary-root override. Explicit `--basetemp`, `PYTEST_ADDOPTS` or caller-owned
+temporary roots are not silently taken over. Plan-only and injected command
+runners do not allocate managed scratch. Per-invocation roots also separate
+concurrent pytest processes; pytest-xdist keeps its worker directories inside
+that invocation. Do not share one explicit basetemp across parallel runs.
+
+Quick feedback reports actual free space before and after checks and warns below
+5 GiB. Durable preparation also warns before starting the original run, without
+changing its command, inputs or completion predicate. This is a warning, not a
+reservation or a bound on a test's peak output.
+Raw audit streams, captures, receipts, unknown runs and whole worktrees are never
+automatic cleanup targets. Retaining two failed scratch runs is not a global
+byte quota: necessary release evidence and unresolved interrupted runs still
+require deliberate archival/reconciliation. Never recursively delete the whole
+`.tmp_verify` or use directory age to infer that a task has finished.
+
 Release verification stays in the same `verify` entry point: freeze the intended
 candidate, use `--start full --out FRESH_DIRECTORY`, then inspect that original
 run with `--status`. Keep the required Doctor/smoke/rules gates. A frozen full

@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10200,
-    "nodeids_sha256": "270f647a007aa982c1ae13ef1a1f7cf55573d1febb06a9066d7fc6f9adc4c20f",
-    "test_sources_sha256": "afb308b5106f5ffa1a17ce78e36f17585895f5f0112d6afabdc2b163e4f288ba",
-    "test_source_count": 663,
+    "nodeid_count": 10236,
+    "nodeids_sha256": "bfb56bac0f354597f0c416e0b88a747b08667ea1d8e2ed110779fc46df18bac7",
+    "test_sources_sha256": "802b567d6dbd908f9289ecaa8ea9d01d75cbc2a706b2128a7c82b2c4a33a09f5",
+    "test_source_count": 665,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
@@ -5627,7 +5627,43 @@
       "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[current]",
       "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[committed-old]",
       "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[orphan]",
-      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[current-source-removed]"
+      "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[current-source-removed]",
+      "tests/test_changed_development_storage.py::test_original_exit_is_kept_when_scratch_finalization_fails[0]",
+      "tests/test_changed_development_storage.py::test_original_exit_is_kept_when_scratch_finalization_fails[1]",
+      "tests/test_changed_development_storage.py::test_real_changed_child_reports_actual_command_exit_and_scratch[False-False]",
+      "tests/test_changed_development_storage.py::test_real_changed_child_reports_actual_command_exit_and_scratch[False-True]",
+      "tests/test_changed_development_storage.py::test_real_changed_child_reports_actual_command_exit_and_scratch[True-False]",
+      "tests/test_changed_development_storage.py::test_real_changed_child_reports_actual_command_exit_and_scratch[True-True]",
+      "tests/test_changed_development_storage.py::test_recorded_modes_never_enter_disposable_lifecycle[record]",
+      "tests/test_changed_development_storage.py::test_recorded_modes_never_enter_disposable_lifecycle[reuse]",
+      "tests/test_changed_development_storage.py::test_unsafe_scratch_setup_does_not_start_or_claim_a_child",
+      "tests/test_development_storage.py::test_active_observer_is_respected_without_importing_one_for_ordinary_runs",
+      "tests/test_development_storage.py::test_completed_failures_are_bounded_and_unknown_or_replaced_records_survive",
+      "tests/test_development_storage.py::test_failed_completion_write_leaves_unknown_container_protected",
+      "tests/test_development_storage.py::test_kernel_lease_protects_completed_run_even_when_older_than_pytest_lock_timeout",
+      "tests/test_development_storage.py::test_low_space_is_an_observation_and_does_not_reserve_or_delete_bytes",
+      "tests/test_development_storage.py::test_malformed_nested_metadata_is_unknown_instead_of_hiding_a_test_result",
+      "tests/test_development_storage.py::test_name_replacement_after_admission_cannot_redirect_recursive_deletion",
+      "tests/test_development_storage.py::test_nonpytest_and_explicit_user_choices_do_not_allocate_or_change_environment",
+      "tests/test_development_storage.py::test_nonregular_cleanup_control_never_blocks_or_deletes_unknown_data[lease]",
+      "tests/test_development_storage.py::test_nonregular_cleanup_control_never_blocks_or_deletes_unknown_data[run.json]",
+      "tests/test_development_storage.py::test_real_pytest_respects_ordinary_or_observed_storage_contract[False]",
+      "tests/test_development_storage.py::test_real_pytest_respects_ordinary_or_observed_storage_contract[True]",
+      "tests/test_development_storage.py::test_record_boundary_strips_only_our_temp_override",
+      "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[PYTEST_PLUGINS]",
+      "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_AUDIT_ACTOR_SOCKET]",
+      "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_CHILD]",
+      "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_CONTINUATION]",
+      "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_DIR]",
+      "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_PARENT]",
+      "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_ROOTS]",
+      "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_RUN]",
+      "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_VERIFY_FINISH]",
+      "tests/test_development_storage.py::test_success_cleanup_unlinks_internal_alias_without_following_it",
+      "tests/test_development_storage.py::test_two_actual_children_get_distinct_storage_and_keep_active_containers",
+      "tests/test_development_storage.py::test_unknown_symlink_members_cannot_select_external_data[lease]",
+      "tests/test_development_storage.py::test_unknown_symlink_members_cannot_select_external_data[run.json]",
+      "tests/test_durable_verification_runner.py::test_low_space_warning_preserves_original_recorded_execution"
     ],
     "synthetic_candidates": [
       {
@@ -24712,7 +24748,7 @@
       },
       {
         "nodeid": "tests/test_project_store_read_windows.py::test_digest_memo_is_bounded_and_isolated_between_threads",
-        "reason": "Only in-memory JSON and two Python Threads; each new thread observes independent empty→256 hash-pair table, main thread mapping unchanged. No fixture/path/file read, native/Qt/process or scientific IO."
+        "reason": "Only in-memory JSON and two Python Threads; each new thread observes independent empty\u2192256 hash-pair table, main thread mapping unchanged. No fixture/path/file read, native/Qt/process or scientific IO."
       },
       {
         "nodeid": "tests/test_project_store_read_windows.py::test_digest_memo_keeps_every_history_and_blob_read_and_detaches_new_metadata",
@@ -25628,7 +25664,7 @@
       },
       {
         "nodeid": "tests/test_intake_confirmation_semantics.py::test_confirmed_modulus_symbols_keep_prime_identity",
-        "reason": "Inline G′/G″ columns have distinct generated 100/20 and 80/16 values; actual consumer must preserve storage/loss identity rather than token-collapse both to g."
+        "reason": "Inline G\u2032/G\u2033 columns have distinct generated 100/20 and 80/16 values; actual consumer must preserve storage/loss identity rather than token-collapse both to g."
       },
       {
         "nodeid": "tests/test_intake_confirmation_semantics.py::test_disconnected_explicit_scope_rejects_before_project_factory",
@@ -27433,9 +27469,153 @@
       {
         "nodeid": "tests/test_mapping_replicate_source_versions.py::test_resolved_mapping_view_requires_a_committed_selected_generation[current-source-removed]",
         "reason": "Generated Store/source and later local generations exercise current, committed-old, never-committed orphan and source-removed-current states. Reads accept only the committed selected source allowed by current history and never mutate generation. No private/native/scientific acceptance claim."
+      },
+      {
+        "nodeid": "tests/test_changed_development_storage.py::test_original_exit_is_kept_when_scratch_finalization_fails[0]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_changed_development_storage.py::test_original_exit_is_kept_when_scratch_finalization_fails[1]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_changed_development_storage.py::test_real_changed_child_reports_actual_command_exit_and_scratch[False-False]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_changed_development_storage.py::test_real_changed_child_reports_actual_command_exit_and_scratch[False-True]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_changed_development_storage.py::test_real_changed_child_reports_actual_command_exit_and_scratch[True-False]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_changed_development_storage.py::test_real_changed_child_reports_actual_command_exit_and_scratch[True-True]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_changed_development_storage.py::test_recorded_modes_never_enter_disposable_lifecycle[record]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_changed_development_storage.py::test_recorded_modes_never_enter_disposable_lifecycle[reuse]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_changed_development_storage.py::test_unsafe_scratch_setup_does_not_start_or_claim_a_child",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_active_observer_is_respected_without_importing_one_for_ordinary_runs",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_completed_failures_are_bounded_and_unknown_or_replaced_records_survive",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_failed_completion_write_leaves_unknown_container_protected",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_kernel_lease_protects_completed_run_even_when_older_than_pytest_lock_timeout",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_low_space_is_an_observation_and_does_not_reserve_or_delete_bytes",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_malformed_nested_metadata_is_unknown_instead_of_hiding_a_test_result",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_name_replacement_after_admission_cannot_redirect_recursive_deletion",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_nonpytest_and_explicit_user_choices_do_not_allocate_or_change_environment",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_nonregular_cleanup_control_never_blocks_or_deletes_unknown_data[lease]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_nonregular_cleanup_control_never_blocks_or_deletes_unknown_data[run.json]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_real_pytest_respects_ordinary_or_observed_storage_contract[False]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_real_pytest_respects_ordinary_or_observed_storage_contract[True]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_record_boundary_strips_only_our_temp_override",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[PYTEST_PLUGINS]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_AUDIT_ACTOR_SOCKET]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_CHILD]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_CONTINUATION]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_DIR]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_PARENT]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_ROOTS]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_PRIVATE_AUDIT_RUN]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_recorded_and_observed_environment_is_not_disposable[SCIPLOT_VERIFY_FINISH]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_success_cleanup_unlinks_internal_alias_without_following_it",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_two_actual_children_get_distinct_storage_and_keep_active_containers",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unknown_symlink_members_cannot_select_external_data[lease]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unknown_symlink_members_cannot_select_external_data[run.json]",
+        "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
+      },
+      {
+        "nodeid": "tests/test_durable_verification_runner.py::test_low_space_warning_preserves_original_recorded_execution",
+        "reason": "Generated synthetic durable run spec with tiny subprocess, simulated capacity warning and real original completion; original command and PASS condition remain unchanged, with no private input or model call."
       }
     ],
-    "review_method": "2026-11-09: actual unfiltered collect-only confirmed 10200 unique nodes and zero test reports with 2039 Python source files unchanged before/after. Existing get_closest_marker tier ownership gives 9704 focused and 496 comprehensive. Eleven added mapping source-view admission controls use only generated A.bin/B.bin/external.csv Store fixtures and are explicitly public-focused; no private dependency was added. Strict reader controls extend existing test bodies without changing node IDs. Existing 165 private cases, 210 dependencies, 23 directory roles, 111 historical responsibilities and remaining full/native access proof are retained. This static disposition and collection do not certify full execution or scientific acceptance.",
+    "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance.",
     "scope": [
       "real_world",
       "polymer_corpus",
