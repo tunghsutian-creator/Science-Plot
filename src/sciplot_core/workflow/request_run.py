@@ -84,6 +84,10 @@ def run_request(
         base_dir=base_dir,
         field="output",
     )
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(output_dir)
+    from sciplot_core.output_contract import requested_delivery_root
+    require_data_destination(requested_delivery_root({"request": source_request}, run_output=output_dir))
     with _managed_output_transaction(output_dir):
         return _run_request_in_managed_output(
             request_path=request_path,
@@ -346,6 +350,7 @@ def _enforce_intervention_gate(
     )
     write_cleanup_request(
         output_dir,
+        _output_namespace=output_dir,
         input_path=input_path,
         reason=str(intervention.get("category") or "semantic_intervention"),
         semantic=semantic,

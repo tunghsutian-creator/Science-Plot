@@ -333,4 +333,4 @@ jobs:
         run: skill/scripts/sciplot doctor --json
       - name: Run fixture-free lifecycle smoke
         if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') }}
-        run: skill/scripts/sciplot smoke --out .tmp_verify/ci_runtime_smoke --json
+        run: skill/scripts/sciplot smoke --out "$RUNNER_TEMP/sciplot-runtime-smoke" --json

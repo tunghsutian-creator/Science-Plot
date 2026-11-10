@@ -133,6 +133,8 @@ def execute_data_mapping_proposal(
         return _validate_existing_execution(
             final_execution, proposal=resolved, confirmation=receipt, request_path=request_file,
         )
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(mapping_root)
     base_request = _read_json(request_file)
     preview = preview_data_mapping_proposal(
         resolved,

@@ -254,6 +254,11 @@ can survive a documentation-only commit. Scope/selection are never widened.
         raise ValueError("selected tests must be unique exact identifiers")
     if not isinstance(environment, dict) or not environment or not all(isinstance(k, str) and isinstance(v, str) for k, v in environment.items()):
         raise ValueError("effective execution environment must be bound")
+    from sciplot_core.verification.recorded_workspace import validate_recorded_workspace
+
+    workspace = validate_recorded_workspace(environment)
+    if "recorded_workspace" in scope and workspace != scope["recorded_workspace"]:
+        raise ValueError("Recorded pytest workspace scope and environment differ.")
     if not isinstance(corpus, dict) or corpus.get("complete") is not True or corpus.get("mode") not in {"synthetic", "declared", "audited"} or not corpus.get("policy"):
         raise ValueError("unknown or preliminary corpus closure")
     if corpus["mode"] == "declared" and (

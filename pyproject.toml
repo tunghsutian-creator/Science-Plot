@@ -624,6 +624,7 @@ files = [
   "src/sciplot_core/assistant_provider/facts.py",
   "src/sciplot_core/assistant_provider/disclosure.py",
   "src/sciplot_core/openai_provider/observations.py",
+  "src/sciplot_core/verification/recorded_workspace.py",
 ]
 mypy_path = "src"
 explicit_package_bases = true

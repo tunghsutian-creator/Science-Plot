@@ -12,6 +12,9 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
             "src/sciplot_core/data_mapping/request_rebinding.py",
             "src/sciplot_core/render/panel_render.py",
             "src/sciplot_core/render/public_api.py",
+            "src/sciplot_core/batch/run.py",
+            "src/sciplot_recipes/__init__.py",
+            "src/sciplot_core/studio_core/standalone_receipt.py",
             "src/sciplot_core/render/target_paths.py",
             "src/sciplot_core/veusz_worker/__main__.py",
             "src/sciplot_core/studio_core/prepare_generated.py",
@@ -66,6 +69,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
         }
     ),
     pytest_targets=(
+        "tests/test_research_destination.py",
         'tests/test_native_setting_admission.py',
         "tests/test_render_worker_rejection.py",
         "tests/test_generic_prepared_terminal_source.py",

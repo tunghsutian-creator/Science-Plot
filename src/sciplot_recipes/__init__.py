@@ -18,7 +18,10 @@ def run_recipe(
     *,
     output_dir: Path,
     options: dict[str, Any] | None = None,
+    _output_namespace: Path | None = None,
 ) -> dict[str, Any]:
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(output_dir, existing_namespace=_output_namespace)
     module = get_recipe_module(name)
     return module.run(
         input_path,

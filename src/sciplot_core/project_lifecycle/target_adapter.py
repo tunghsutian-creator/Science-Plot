@@ -61,7 +61,10 @@ class FilesystemProjectTargets:
         if isinstance(self.repository, ComposedProjectRepository) and self.repository.selected_store() is not None:
             raise EngineError("semantic_project_creation_unsupported", "An attached existing project accepts Managed Template/Binding creation; source tasks create their own separate native project.")
         source = canonical_path(source)
-        return transaction_path(source.parent / ".sciplot_documents" / "creations", key).parent
+        legacy = transaction_path(source.parent / ".sciplot_documents" / "creations", key).parent
+        if self.repository.exists(legacy / "creation.json"):
+            return legacy
+        return transaction_path(_source_control_parent(source) / ".sciplot_documents" / "creations", key).parent
 
     def managed_creation(self, request: dict[str, Any]) -> ManagedCreationLocation:
         from .repository_router import ComposedProjectRepository
@@ -76,8 +79,20 @@ class FilesystemProjectTargets:
             raise EngineError("managed_source_required", "Managed creation requires explicit original data sources.")
         source = canonical_path(Path(sources[0]["path"]))
         identifier = "plot:" + digest([str(source.parent), request["idempotency_key"]])[:24]
-        root = source.parent / ".sciplot_documents" / "managed" / digest(request["idempotency_key"])
+        legacy = source.parent / ".sciplot_documents" / "managed" / digest(request["idempotency_key"])
+        root = legacy if self.repository.exists(legacy / "managed-creation.json") else _source_control_parent(source) / ".sciplot_documents" / "managed" / digest(request["idempotency_key"])
         output = canonical_path(Path(request["out"])) if "out" in request else source.parent / (source.stem + "_SciPlot") / identifier.replace(":", "_")
         if output == source or output == source.parent or output in source.parents or output == root:
             raise EngineError("managed_output_conflict", "Select a distinct managed output directory beside the source.")
+        if not self.repository.exists(root / "managed-creation.json"):
+            from sciplot_core.foundation.research_destination import require_data_destination
+            require_data_destination(root)
+            require_data_destination(output)
         return ManagedCreationLocation(root, output, identifier)
+
+
+def _source_control_parent(source: Path) -> Path:
+    from platformdirs import user_state_path
+    from sciplot_core.foundation.research_destination import software_root
+    return (user_state_path("SciPlot") / "source-projects" / digest(str(source.parent))
+            if software_root(source.parent) is not None else source.parent)

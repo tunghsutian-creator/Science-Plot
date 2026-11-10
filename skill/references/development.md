@@ -5,6 +5,15 @@ discriminating coverage. After two unsuccessful attempts at one symptom, stop
 guessing: record cause, replacement contract, verification and limitations.
 Use `.venv/bin/python` and `skill/scripts/sciplot`. Development evidence belongs
 under ignored `.tmp_verify/`; preserve user data and exact-current VSZ authority.
+That directory name is not cleanup authority: historical private inputs and
+paper deliveries there remain user data. Ordinary generated check caches use the
+managed SciPlot cache; formal recorded pytest data is allocated persistently
+outside source/cache before collection, independently of its retained receipt
+location. New research output must be outside SciPlot source/package directories;
+old projects and source bytes are never relocated automatically. The same
+new-output boundary rejects the managed evictable development cache; generated
+unit controls inject synthetic host providers, while real product checks use an
+external research destination. No test environment grants product placement.
 
 Validate at the owner of a real boundary. External requests, persisted values,
 scientific data, host permissions and recovery facts retain their necessary

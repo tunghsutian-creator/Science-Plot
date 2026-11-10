@@ -156,6 +156,10 @@ def run_studio_command(
                     export_payload = export_saved_native(document_path, formats=requested_formats,
                         audit_spec_path=_veusz_spec_path(document_path), standalone_receipt=True)
             else:
+                from sciplot_core.studio_core.standalone_receipt import has_standalone_binding
+                if not has_standalone_binding(standalone_root, document_path):
+                    from sciplot_core.foundation.research_destination import require_data_destination
+                    require_data_destination(standalone_root)
                 export_payload = export_studio_document(
                     document_path, formats=requested_formats, output_dir=export_dir)
             payload["exports"] = export_payload["exports"]

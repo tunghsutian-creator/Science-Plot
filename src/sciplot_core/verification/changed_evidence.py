@@ -6,6 +6,7 @@ changed verification does not import this optional fingerprinting path.
 from __future__ import annotations
 
 from contextvars import ContextVar
+import json
 import os
 from pathlib import Path
 import re
@@ -51,8 +52,19 @@ def _prepare_specs(plan: dict[str, Any], repo_root: Path, directory: Path) -> li
         seen.add(check_id)
         check_dir = _closed_directory(repo_root, directory / check_id)
         environment = dict(os.environ, SCIPLOT_VERIFY_FINISH=str(check_dir / "finish.json"))
+        if not _RECORD_PREPARATION.get():
+            request = load_receipt(check_dir / "request.json")
+            if not isinstance(request, dict) or not isinstance(request.get("scope"), dict):
+                raise ValueError("The original verification request is unavailable.")
+            workspace = request["scope"].get("recorded_workspace")
+            if workspace is not None:
+                from sciplot_core.verification.recorded_workspace import BINDING_ENV
+
+                environment.update({BINDING_ENV: json.dumps(workspace, sort_keys=True, separators=(",", ":")),
+                                    "PYTEST_DEBUG_TEMPROOT": workspace["path"]})
         specs.append(build_check_spec(plan, check, repo_root, environment=environment,
-                                      finish_path=check_dir / "finish.json", _inspections=inspections))
+                                      finish_path=check_dir / "finish.json", _inspections=inspections,
+                                      _legacy_workspace=not _RECORD_PREPARATION.get()))
     return specs
 
 
@@ -78,7 +90,10 @@ def _reuse_check(repo_root: Path, directory: Path, spec: dict[str, Any]) -> dict
 
     # Paths and argv come from the current trusted plan/builder, never a receipt.
     environment = reserve_child_environment(without_development_storage(spec["environment"]), reserve=False)
-    current = capture_identity(**{**spec, "repo_root": repo_root, "environment": environment})
+    try:
+        current = capture_identity(**{**spec, "repo_root": repo_root, "environment": environment})
+    except (OSError, ValueError) as exc:
+        return {"status": "BLOCKED", "reused": False, "reason": "identity_unavailable", "error": str(exc)}
     receipt = load_receipt(directory / "receipt.json")
     return check_reuse(receipt, current, artifacts=artifact_hashes(directory))
 
@@ -183,6 +198,7 @@ def changed_record_status(directory: Path, *, repo_root: Path) -> dict[str, Any]
                 raise ValueError("The recorded check identity or command is malformed.")
             seen.add(check["check_id"])
             check_dir = _closed_directory(repo_root, output / check["check_id"])
+            current: dict[str, Any]
             if not check_dir.exists():
                 current = {"status": "NOT_STARTED", "reason": "check_not_started"}
             else:

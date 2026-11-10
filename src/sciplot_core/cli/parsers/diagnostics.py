@@ -164,7 +164,8 @@ def register_diagnostics_commands(subparsers: Any) -> None:
     )
 
     smoke_parser.add_argument(
-        "--out", type=Path, default=Path(".tmp_verify") / "runtime_smoke"
+        "--out", type=Path, default=None,
+        help="External generated-workspace parent; defaults to the SciPlot user state directory."
     )
 
     smoke_parser.add_argument(

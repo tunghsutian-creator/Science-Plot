@@ -26,8 +26,9 @@ def render_to_dir(
     request_context: dict[str, Any] | None = None,
     _terminal_source_binding: MaterializedTerminalSourceBinding | None = None,
     _terminal_source_prepared: bool = False,
+    _output_namespace: Path | None = None,
 ) -> dict[str, Any]:
-    reserved = {"_terminal_source_binding", "_terminal_source_prepared"}
+    reserved = {"_terminal_source_binding", "_terminal_source_prepared", "_output_namespace"}
     if isinstance(request_context, dict) and reserved.intersection(request_context):
         raise ValueError(
             "Internal terminal-source authority cannot appear in request context."
@@ -39,6 +40,8 @@ def render_to_dir(
     if _terminal_source_binding is not None and split_policy is not None:
         raise ValueError("A materialized terminal source cannot be auto-split.")
     template = validate_veusz_template_id(template)
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(output_dir, existing_namespace=_output_namespace)
     binding_option = (
         {"_terminal_source_binding": _terminal_source_binding}
         if _terminal_source_binding is not None

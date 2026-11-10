@@ -1,6 +1,49 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+import hashlib
+from pathlib import Path
+import tempfile
+
 import pytest
+
+
+@pytest.fixture(scope="session")
+def _recorded_test_host() -> Iterator[Path]:
+    from platformdirs import user_cache_path
+    from sciplot_core.foundation.research_destination import require_data_destination
+
+    # Ordinary pytest tmp_path may itself be in the disposable SciPlot cache.
+    # A child process uses real host providers, so this simulated recorded host
+    # must be physically external too. Only this fixture's synthetic data is
+    # removed at session end; real recorded evidence has no automatic cleanup.
+    with tempfile.TemporaryDirectory(prefix="sciplot-recorded-unit-host-") as directory:
+        host = Path(directory).resolve()
+        cache = user_cache_path("SciPlot").resolve()
+        assert host != cache and not host.is_relative_to(cache)
+        assert require_data_destination(host) == host
+        yield host
+
+
+@pytest.fixture(autouse=True)
+def _isolated_recorded_host(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, _recorded_test_host: Path,
+) -> None:
+    """Keep simulated recorded hosts out of the real persistent user state.
+
+    Only the host path providers are replaced. The production allocator,
+    source boundary and fresh directory identity checks run unchanged.
+    """
+    from sciplot_core.verification import recorded_workspace
+    from sciplot_core.foundation import research_destination
+
+    node = hashlib.sha256(request.node.nodeid.encode("utf-8")).hexdigest()
+    host = _recorded_test_host / node
+    def cache_path(_app: str) -> Path:
+        return host / "cache"
+    monkeypatch.setattr(recorded_workspace, "user_state_path", lambda _app: host / "state")
+    monkeypatch.setattr(recorded_workspace, "user_cache_path", cache_path)
+    monkeypatch.setattr(research_destination, "user_cache_path", cache_path)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

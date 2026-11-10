@@ -74,7 +74,7 @@ def _saved_preview(root: Path, project: str, figure: dict[str, Any]) -> dict[str
             return dict(cached["preview"])
     # Preserve incomplete or altered evidence and use a new native preview directory.
     output = folder if not folder.exists() else folder.with_name(folder.name + "-" + uuid4().hex)
-    fresh = preview_project_document(Path(project), figure_id=figure["figure_id"], output_dir=output)
+    fresh = preview_project_document(Path(project), figure_id=figure["figure_id"], output_dir=output, _output_namespace=root)
     if fresh["document"]["sha256"] != figure["document_sha256"]:
         raise ValueError("图在生成预览期间发生变化，请重新查询。")
     atomic_write_json(metadata, fresh)

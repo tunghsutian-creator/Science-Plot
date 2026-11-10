@@ -30,6 +30,7 @@ def _render_legacy_recipe_request(
         final_recipe,
         input_path,
         output_dir=output_dir,
+        _output_namespace=output_dir if output_dir.is_dir() else None,
         options=_request_options(request),
     )
     transform_steps.extend(

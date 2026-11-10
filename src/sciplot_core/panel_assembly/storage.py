@@ -182,6 +182,9 @@ def _ensure_fence(lease: DirectoryWriterLease, target: Path, name: str) -> _Snap
 
 
 def save(document: dict[str, Any], path: Path, *, expected_revision: int | None) -> Path:
+    if expected_revision is None or not path.exists():
+        from sciplot_core.foundation.research_destination import require_data_destination
+        require_data_destination(path)
     if expected_revision is not None and (type(expected_revision) is not int or expected_revision < 0):
         raise AssemblyError("assembly_invalid", "An expected revision must be a nonnegative integer.")
     target = _target(path)

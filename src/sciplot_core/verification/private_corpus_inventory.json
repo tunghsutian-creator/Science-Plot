@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10261,
-    "nodeids_sha256": "bed520863000de06f728180a16f023dfc4a6f26c7e7cab6c993f2d6287993173",
-    "test_sources_sha256": "83cefdcd1baface95c7f8cf1d05923d0b1246c67783f4d03fcb3ac2ad3ac13e1",
-    "test_source_count": 647,
+    "nodeid_count": 10342,
+    "nodeids_sha256": "c699aa69405bf95a31441dfde893a5a63c06afe8d87a2fd76beb356495fa9a77",
+    "test_sources_sha256": "51b7809e134a4eb1bef26497607305768a07a1703985aa47ae043cac5e704693",
+    "test_source_count": 649,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
@@ -5688,7 +5688,88 @@
       "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[alias]",
       "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[ancestor]",
       "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[inside]",
-      "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[other_checkout]"
+      "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[other_checkout]",
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/verification/recorded_workspace.py]",
+      "tests/test_project_host_factory.py::test_changed_legacy_native_baseline_cannot_admit_a_checkout_namespace",
+      "tests/test_project_host_factory.py::test_copied_legacy_delivery_binding_cannot_admit_a_new_checkout_namespace",
+      "tests/test_project_host_factory.py::test_existing_legacy_delivery_in_checkout_is_admitted_without_changing_its_originals",
+      "tests/test_recorded_workspace.py::test_capture_requires_matching_new_scope_and_rechecks_directory_identity",
+      "tests/test_recorded_workspace.py::test_changed_reuse_rebuilds_only_the_known_request_workspace[False]",
+      "tests/test_recorded_workspace.py::test_changed_reuse_rebuilds_only_the_known_request_workspace[True]",
+      "tests/test_recorded_workspace.py::test_code_and_cache_overrides_fail_before_creating_generated_data[cache]",
+      "tests/test_recorded_workspace.py::test_code_and_cache_overrides_fail_before_creating_generated_data[source-alias]",
+      "tests/test_recorded_workspace.py::test_code_and_cache_overrides_fail_before_creating_generated_data[source]",
+      "tests/test_recorded_workspace.py::test_explicit_external_root_is_an_untouched_parent",
+      "tests/test_recorded_workspace.py::test_fresh_binding_observes_directory_identity_not_mutable_contents[alias]",
+      "tests/test_recorded_workspace.py::test_fresh_binding_observes_directory_identity_not_mutable_contents[environment]",
+      "tests/test_recorded_workspace.py::test_fresh_binding_observes_directory_identity_not_mutable_contents[malformed]",
+      "tests/test_recorded_workspace.py::test_fresh_binding_observes_directory_identity_not_mutable_contents[mode]",
+      "tests/test_recorded_workspace.py::test_fresh_binding_observes_directory_identity_not_mutable_contents[replace]",
+      "tests/test_recorded_workspace.py::test_legacy_environment_does_not_allocate_or_infer_a_workspace",
+      "tests/test_recorded_workspace.py::test_new_record_refuses_conflicting_pytest_temp_owners[--basetemp /outside]",
+      "tests/test_recorded_workspace.py::test_new_record_refuses_conflicting_pytest_temp_owners[--basetemp=/outside]",
+      "tests/test_recorded_workspace.py::test_new_record_refuses_conflicting_pytest_temp_owners[-o tmp_path_retention_policy=failed]",
+      "tests/test_recorded_workspace.py::test_new_runs_use_exclusive_state_directories_and_preserve_prior_contents",
+      "tests/test_recorded_workspace.py::test_owned_development_override_is_removed_before_record_allocation",
+      "tests/test_recorded_workspace.py::test_session_host_injection_is_per_node_lazy_and_uses_the_production_allocator",
+      "tests/test_recorded_workspace.py::test_session_host_injection_preserves_the_real_source_and_fake_cache_refusals",
+      "tests/test_research_destination.py::test_alias_into_checkout_is_rejected_but_external_sibling_is_allowed",
+      "tests/test_research_destination.py::test_automatic_render_refuses_output_before_persisting_its_generated_request",
+      "tests/test_research_destination.py::test_batch_rejects_checkout_before_removing_any_preexisting_results",
+      "tests/test_research_destination.py::test_cleanup_artifacts_refuse_checkout_before_mkdir[request]",
+      "tests/test_research_destination.py::test_cleanup_artifacts_refuse_checkout_before_mkdir[result]",
+      "tests/test_research_destination.py::test_default_intake_has_source_adjacent_evidence_and_visible_delivery_without_changing_input",
+      "tests/test_research_destination.py::test_empty_managed_namespace_does_not_admit_a_new_checkout_output",
+      "tests/test_research_destination.py::test_empty_store_is_not_a_standalone_output_binding",
+      "tests/test_research_destination.py::test_existing_development_namespace_continuation_does_not_admit_an_independent_destination",
+      "tests/test_research_destination.py::test_existing_namespace_allows_derived_children_without_reauthorizing_an_independent_root",
+      "tests/test_research_destination.py::test_existing_namespace_cannot_follow_a_child_alias_outside_its_owner",
+      "tests/test_research_destination.py::test_fresh_mapping_refuses_checkout_before_numeric_preparation_or_copy",
+      "tests/test_research_destination.py::test_fresh_workflow_checks_both_independent_roots_before_transaction[delivery_output]",
+      "tests/test_research_destination.py::test_fresh_workflow_checks_both_independent_roots_before_transaction[output]",
+      "tests/test_research_destination.py::test_in_memory_intake_requires_explicit_destination_instead_of_a_cwd_fallback",
+      "tests/test_research_destination.py::test_intake_project_checks_every_independent_destination_before_copy[delivery_root]",
+      "tests/test_research_destination.py::test_intake_project_checks_every_independent_destination_before_copy[output_root]",
+      "tests/test_research_destination.py::test_intake_project_checks_every_independent_destination_before_copy[plot_output]",
+      "tests/test_research_destination.py::test_intake_session_rejects_output_before_classification_or_state_write",
+      "tests/test_research_destination.py::test_loaded_package_itself_is_never_a_new_output_destination",
+      "tests/test_research_destination.py::test_managed_checkout_input_requires_external_output_and_stable_external_control_root",
+      "tests/test_research_destination.py::test_mapping_confirmation_refuses_new_checkout_file_and_directory[confirmation.json]",
+      "tests/test_research_destination.py::test_mapping_confirmation_refuses_new_checkout_file_and_directory[new-confirmation-directory]",
+      "tests/test_research_destination.py::test_missing_registered_delivery_is_not_silently_recreated",
+      "tests/test_research_destination.py::test_new_output_rejects_actual_checkout_without_touching_existing_data[.tmp_verify/private-input/new]",
+      "tests/test_research_destination.py::test_new_output_rejects_actual_checkout_without_touching_existing_data[nested/delivery.pdf]",
+      "tests/test_research_destination.py::test_new_output_rejects_actual_checkout_without_touching_existing_data[result]",
+      "tests/test_research_destination.py::test_new_output_rejects_actual_checkout_without_touching_existing_data[src/sciplot_core/new]",
+      "tests/test_research_destination.py::test_new_panel_layout_refuses_checkout_before_any_layout_write",
+      "tests/test_research_destination.py::test_new_research_destination_refuses_managed_development_cache_without_creating_it[.]",
+      "tests/test_research_destination.py::test_new_research_destination_refuses_managed_development_cache_without_creating_it[new-results]",
+      "tests/test_research_destination.py::test_non_sciplot_python_project_keeps_its_research_outputs",
+      "tests/test_research_destination.py::test_old_held_project_may_still_allocate_its_internal_delivery",
+      "tests/test_research_destination.py::test_old_saved_layout_can_be_reopened_and_saved_at_its_existing_checkout_location",
+      "tests/test_research_destination.py::test_ordinary_creation_keeps_in_checkout_input_but_requires_external_outputs",
+      "tests/test_research_destination.py::test_panel_export_checks_destination_before_rendering_or_copying_sources",
+      "tests/test_research_destination.py::test_portable_destination_is_checked_before_store_or_bundle_io[export]",
+      "tests/test_research_destination.py::test_portable_destination_is_checked_before_store_or_bundle_io[import]",
+      "tests/test_research_destination.py::test_preview_new_destination_and_existing_bound_derived_destination_are_distinct",
+      "tests/test_research_destination.py::test_receipt_for_the_same_document_does_not_grant_a_different_output_root[copied]",
+      "tests/test_research_destination.py::test_receipt_for_the_same_document_does_not_grant_a_different_output_root[symlink]",
+      "tests/test_research_destination.py::test_recipe_refuses_new_checkout_output_before_recipe_dispatch",
+      "tests/test_research_destination.py::test_render_rejects_checkout_before_backend_and_keeps_raw_data",
+      "tests/test_research_destination.py::test_research_git_and_tmp_named_directories_are_not_deletion_or_software_authority",
+      "tests/test_research_destination.py::test_saved_creation_receipt_retains_its_old_checkout_namespace",
+      "tests/test_research_destination.py::test_source_creation_from_checkout_keeps_raw_input_and_moves_only_new_control_allocation",
+      "tests/test_research_destination.py::test_task_rejects_new_root_or_delivery_before_checkpoint_or_scientific_execution[delivery]",
+      "tests/test_research_destination.py::test_task_rejects_new_root_or_delivery_before_checkpoint_or_scientific_execution[task]",
+      "tests/test_research_destination.py::test_unregistered_project_cannot_choose_new_external_checkout_resource[delivery_output-create_delivery]",
+      "tests/test_research_destination.py::test_unregistered_project_cannot_choose_new_external_checkout_resource[output-create_output]",
+      "tests/test_research_destination.py::test_unrelated_receipt_cannot_admit_standalone_export[receipt0]",
+      "tests/test_research_destination.py::test_unrelated_receipt_cannot_admit_standalone_export[receipt1]",
+      "tests/test_research_destination.py::test_wire_context_cannot_supply_the_internal_output_namespace",
+      "tests/test_suite_verification_cli.py::test_private_collection_uses_prepared_workspace_without_false_input_pass[False]",
+      "tests/test_suite_verification_cli.py::test_private_collection_uses_prepared_workspace_without_false_input_pass[True]",
+      "tests/test_suite_verification_cli.py::test_suite_rejects_explicit_software_temp_root_before_any_collection",
+      "tests/test_verification_evidence_scope.py::test_nested_formal_spec_never_shares_an_outer_operation_workspace"
     ],
     "synthetic_candidates": [
       {
@@ -27738,9 +27819,333 @@
       {
         "nodeid": "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[other_checkout]",
         "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/verification/recorded_workspace.py]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_project_host_factory.py::test_changed_legacy_native_baseline_cannot_admit_a_checkout_namespace",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_project_host_factory.py::test_copied_legacy_delivery_binding_cannot_admit_a_new_checkout_namespace",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_project_host_factory.py::test_existing_legacy_delivery_in_checkout_is_admitted_without_changing_its_originals",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_capture_requires_matching_new_scope_and_rechecks_directory_identity",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_changed_reuse_rebuilds_only_the_known_request_workspace[False]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_changed_reuse_rebuilds_only_the_known_request_workspace[True]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_code_and_cache_overrides_fail_before_creating_generated_data[cache]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_code_and_cache_overrides_fail_before_creating_generated_data[source-alias]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_code_and_cache_overrides_fail_before_creating_generated_data[source]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_explicit_external_root_is_an_untouched_parent",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_fresh_binding_observes_directory_identity_not_mutable_contents[alias]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_fresh_binding_observes_directory_identity_not_mutable_contents[environment]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_fresh_binding_observes_directory_identity_not_mutable_contents[malformed]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_fresh_binding_observes_directory_identity_not_mutable_contents[mode]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_fresh_binding_observes_directory_identity_not_mutable_contents[replace]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_legacy_environment_does_not_allocate_or_infer_a_workspace",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_new_record_refuses_conflicting_pytest_temp_owners[--basetemp /outside]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_new_record_refuses_conflicting_pytest_temp_owners[--basetemp=/outside]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_new_record_refuses_conflicting_pytest_temp_owners[-o tmp_path_retention_policy=failed]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_new_runs_use_exclusive_state_directories_and_preserve_prior_contents",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_owned_development_override_is_removed_before_record_allocation",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_session_host_injection_is_per_node_lazy_and_uses_the_production_allocator",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_recorded_workspace.py::test_session_host_injection_preserves_the_real_source_and_fake_cache_refusals",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_alias_into_checkout_is_rejected_but_external_sibling_is_allowed",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_automatic_render_refuses_output_before_persisting_its_generated_request",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_batch_rejects_checkout_before_removing_any_preexisting_results",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_cleanup_artifacts_refuse_checkout_before_mkdir[request]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_cleanup_artifacts_refuse_checkout_before_mkdir[result]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_default_intake_has_source_adjacent_evidence_and_visible_delivery_without_changing_input",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_empty_managed_namespace_does_not_admit_a_new_checkout_output",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_empty_store_is_not_a_standalone_output_binding",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_existing_development_namespace_continuation_does_not_admit_an_independent_destination",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_existing_namespace_allows_derived_children_without_reauthorizing_an_independent_root",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_existing_namespace_cannot_follow_a_child_alias_outside_its_owner",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_fresh_mapping_refuses_checkout_before_numeric_preparation_or_copy",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_fresh_workflow_checks_both_independent_roots_before_transaction[delivery_output]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_fresh_workflow_checks_both_independent_roots_before_transaction[output]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_in_memory_intake_requires_explicit_destination_instead_of_a_cwd_fallback",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_intake_project_checks_every_independent_destination_before_copy[delivery_root]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_intake_project_checks_every_independent_destination_before_copy[output_root]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_intake_project_checks_every_independent_destination_before_copy[plot_output]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_intake_session_rejects_output_before_classification_or_state_write",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_loaded_package_itself_is_never_a_new_output_destination",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_managed_checkout_input_requires_external_output_and_stable_external_control_root",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_mapping_confirmation_refuses_new_checkout_file_and_directory[confirmation.json]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_mapping_confirmation_refuses_new_checkout_file_and_directory[new-confirmation-directory]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_missing_registered_delivery_is_not_silently_recreated",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_new_output_rejects_actual_checkout_without_touching_existing_data[.tmp_verify/private-input/new]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_new_output_rejects_actual_checkout_without_touching_existing_data[nested/delivery.pdf]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_new_output_rejects_actual_checkout_without_touching_existing_data[result]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_new_output_rejects_actual_checkout_without_touching_existing_data[src/sciplot_core/new]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_new_panel_layout_refuses_checkout_before_any_layout_write",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_new_research_destination_refuses_managed_development_cache_without_creating_it[.]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_new_research_destination_refuses_managed_development_cache_without_creating_it[new-results]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_non_sciplot_python_project_keeps_its_research_outputs",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_old_held_project_may_still_allocate_its_internal_delivery",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_old_saved_layout_can_be_reopened_and_saved_at_its_existing_checkout_location",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_ordinary_creation_keeps_in_checkout_input_but_requires_external_outputs",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_panel_export_checks_destination_before_rendering_or_copying_sources",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_portable_destination_is_checked_before_store_or_bundle_io[export]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_portable_destination_is_checked_before_store_or_bundle_io[import]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_preview_new_destination_and_existing_bound_derived_destination_are_distinct",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_receipt_for_the_same_document_does_not_grant_a_different_output_root[copied]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_receipt_for_the_same_document_does_not_grant_a_different_output_root[symlink]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_recipe_refuses_new_checkout_output_before_recipe_dispatch",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_render_rejects_checkout_before_backend_and_keeps_raw_data",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_research_git_and_tmp_named_directories_are_not_deletion_or_software_authority",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_saved_creation_receipt_retains_its_old_checkout_namespace",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_source_creation_from_checkout_keeps_raw_input_and_moves_only_new_control_allocation",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_task_rejects_new_root_or_delivery_before_checkpoint_or_scientific_execution[delivery]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_task_rejects_new_root_or_delivery_before_checkpoint_or_scientific_execution[task]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_unregistered_project_cannot_choose_new_external_checkout_resource[delivery_output-create_delivery]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_unregistered_project_cannot_choose_new_external_checkout_resource[output-create_output]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_unrelated_receipt_cannot_admit_standalone_export[receipt0]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_unrelated_receipt_cannot_admit_standalone_export[receipt1]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_research_destination.py::test_wire_context_cannot_supply_the_internal_output_namespace",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_private_collection_uses_prepared_workspace_without_false_input_pass[False]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_private_collection_uses_prepared_workspace_without_false_input_pass[True]",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_suite_verification_cli.py::test_suite_rejects_explicit_software_temp_root_before_any_collection",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_verification_evidence_scope.py::test_nested_formal_spec_never_shares_an_outer_operation_workspace",
+        "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
       }
     ],
-    "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance.",
+    "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance. 2026-11-10 storage closure: actual zero-body unfiltered10342-node collection,81 additive generated public-focused cases, original tiers/private dependencies/duties retained. Synthetic host providers isolate unit paths; production has no test-environment placement exemption. Static review is not full/private scientific acceptance.",
     "scope": [
       "real_world",
       "polymer_corpus",

@@ -92,6 +92,7 @@ def _write_render_failure_cleanup_request(
         input_path = request_path.parent / input_path
     write_cleanup_request(
         run_output,
+        _output_namespace=run_output,
         input_path=input_path,
         reason="render_failure",
         request=request,

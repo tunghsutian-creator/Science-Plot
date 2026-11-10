@@ -72,7 +72,7 @@ def edit_state(project: Path, selected: dict[str, Any] | None = None) -> dict[st
     }
 
 
-def new_preview_directory(project: Path, target: Path) -> Path:
+def new_preview_directory(project: Path, target: Path, *, _output_namespace: Path | None = None) -> Path:
     project = canonical_path(project)
     output = canonical_path(target)
     request = json.loads(canonical_path(project / "plot_request.json").read_text())
@@ -90,6 +90,8 @@ def new_preview_directory(project: Path, target: Path) -> Path:
         raise ValueError(
             "Choose a new preview directory outside the project, source and delivery."
         )
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(output, existing_namespace=_output_namespace)
     output.mkdir(parents=True, mode=0o700)
     return output
 

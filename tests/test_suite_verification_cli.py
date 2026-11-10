@@ -17,6 +17,10 @@ from sciplot_core.verification.evidence_identity import DOMAINS
 @pytest.fixture
 def suite_case(tmp_path, monkeypatch):
     from sciplot_core.verification.private_observer import reserve_child_environment
+    from sciplot_core.verification import recorded_workspace
+
+    monkeypatch.delenv(recorded_workspace.BINDING_ENV, raising=False)
+    monkeypatch.delenv("PYTEST_DEBUG_TEMPROOT", raising=False)
 
     inputs = {}
     for domain in DOMAINS:
@@ -40,7 +44,8 @@ def suite_case(tmp_path, monkeypatch):
         )]
         return {"repo_root": str(root), "command": command,
                 "scope": {"kind": "process", "closure_policy": "explicit isolated CLI test fixture",
-                          "check_id": check["check_id"]},
+                          "check_id": check["check_id"],
+                          "recorded_workspace": json.loads(environment[recorded_workspace.BINDING_ENV])},
                 "selected_tests": ["isolated_tiny_process"], "inputs": inputs,
                 "environment": environment,
                 "corpus": {"mode": "synthetic", "complete": True, "policy": "test-only fixture"}}
@@ -172,6 +177,57 @@ def test_fixed_suite_rejects_inherited_filter_without_clearing_it(suite_case, mo
     assert result["status"] == "BLOCKED" and "PYTEST_ADDOPTS" in result["error"]["message"]
     assert os.environ["PYTEST_ADDOPTS"] == addopts
     assert not commands and not counter.exists()
+
+
+@pytest.mark.parametrize("available", [False, True])
+def test_private_collection_uses_prepared_workspace_without_false_input_pass(suite_case, monkeypatch, available):
+    from sciplot_core.verification import input_scope, recorded_workspace
+
+    root, counter, commands = suite_case
+    module = sys.modules["sciplot_core.verification.evidence_scope"]
+    selected = "tests/test_private.py::test_raw"
+    observations = []
+    def collect(command, *, repo_root, environment):
+        assert repo_root == root and "--input-scope" not in command
+        assert command[-2:] == ["-p", "sciplot_core.verification.pytest_finish"]
+        observations.append(recorded_workspace.validate_recorded_workspace(environment))
+        assert "SCIPLOT_PRIVATE_AUDIT_DIR" not in environment
+        return [selected]
+    monkeypatch.setattr(module, "collect_check_tests", collect, raising=False)
+    monkeypatch.setattr(input_scope, "load_manifest", lambda _path: {"scopes": {"private": [selected]}})
+    def availability(**kwargs):
+        assert kwargs["collected_nodeids"] == {selected}
+        return {"status": "PASS" if available else "BLOCKED", "selected_count": 1,
+                "issues": [] if available else [{"code": "fixture_missing"}]}
+    corpus = types.ModuleType("sciplot_core.verification.private_corpus")
+    corpus.declared_input_availability = availability
+    monkeypatch.setitem(sys.modules, corpus.__name__, corpus)
+    captured = []
+    monkeypatch.setattr(suite_evidence, "start_run", lambda **kwargs: captured.append(kwargs["spec"]) or {"status": "RUNNING"})
+    if not available:
+        monkeypatch.setattr(suite_evidence, "_audit_environment", lambda *_a, **_k: pytest.fail("Unavailable raw started audit"))
+    result = suite_evidence.start_suite_verification("private-science", directory=Path(".tmp_verify/private"), repo_root=root)
+    assert len(observations) == 1 and observations[0] is not None
+    assert not counter.exists()
+    if available:
+        assert result["status"] == "RUNNING"
+        assert captured[0]["scope"]["recorded_workspace"] == observations[0]
+        assert commands == [[sys.executable, "-m", "pytest", "-q", "--input-scope", "private-science"]]
+    else:
+        assert result["status"] == "BLOCKED" and result["error"]["reason_code"] == "private_inputs_unavailable"
+        assert result["executed_test_count"] == 0 and not captured and not commands
+    assert Path(observations[0]["path"]).is_dir()
+
+
+def test_suite_rejects_explicit_software_temp_root_before_any_collection(suite_case, monkeypatch):
+    root, counter, commands = suite_case
+    (root / "pyproject.toml").write_text('[project]\nname="sciplot-core"\n')
+    (root / "src/sciplot_core").mkdir(parents=True)
+    refused = root / "would-be-generated"
+    monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(refused))
+    result = suite_evidence.start_suite_verification("full", directory=Path(".tmp_verify/refused"), repo_root=root)
+    assert result["status"] == "BLOCKED" and "SciPlot software" in result["error"]["message"]
+    assert not refused.exists() and not counter.exists() and not commands
 
 
 @pytest.mark.parametrize("arguments", [

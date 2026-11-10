@@ -21,6 +21,10 @@ def git(root, *args):
 
 @pytest.fixture
 def checkout(tmp_path, monkeypatch):
+    from sciplot_core.verification import recorded_workspace
+
+    monkeypatch.delenv(recorded_workspace.BINDING_ENV, raising=False)
+    monkeypatch.delenv("PYTEST_DEBUG_TEMPROOT", raising=False)
     monkeypatch.delenv("SCIPLOT_REFERENCE_DATA", raising=False)
     contents = {
         "pyproject.toml": "[tool.pytest.ini_options]\n",
@@ -54,7 +58,7 @@ def checkout(tmp_path, monkeypatch):
     return tmp_path
 
 
-def spec_for(root, *, module="pytest", nodes=None):
+def spec_for(root, *, module="pytest", nodes=None, environment=None, finish_path=None):
     checks = {"pytest": ("pytest_changed_owners", [sys.executable, "-m", "pytest", "-q", *(nodes or ["tests/test_unit.py"])]),
               "ruff": ("ruff_changed_python", [sys.executable, "-m", "ruff", "check", "src/sciplot_core/implementation.py"]),
               "git": ("diff_whitespace", ["git", "diff", "--check", "HEAD", "--"])}
@@ -62,9 +66,10 @@ def spec_for(root, *, module="pytest", nodes=None):
     check = {"check_id": check_id, "command": command}
     plan = {"status": "planned", "unowned_paths": [], "checks": [check], "changed_paths": ["src/sciplot_core/implementation.py"]}
     source = str(Path(__file__).resolve().parents[1] / "src")
-    environment = {**os.environ, "PYTHONPATH": os.pathsep.join((source, os.environ.get("PYTHONPATH", "")))}
+    environment = environment if environment is not None else {
+        **os.environ, "PYTHONPATH": os.pathsep.join((source, os.environ.get("PYTHONPATH", "")))}
     return scope.build_check_spec(plan, check, root, environment=environment,
-                                  finish_path=root / ".tmp_verify/run/finish.json")
+                                  finish_path=finish_path or root / ".tmp_verify/run/finish.json")
 
 
 def identity(spec):
@@ -87,18 +92,38 @@ def test_default_collects_exact_nodes_and_disallows_domain_omissions(checkout):
     assert spec["corpus"]["mode"] == "declared"
     assert spec["corpus"]["scientific_acceptance"] is False
     assert spec["corpus"]["fresh_access_audit"] is False
+    binding = spec["scope"]["recorded_workspace"]
+    assert json.loads(spec["environment"]["SCIPLOT_RECORDED_WORKSPACE"]) == binding
+    assert spec["environment"]["PYTEST_DEBUG_TEMPROOT"] == binding["path"]
+    collections = list(Path(binding["path"]).glob("collection-*/finish.json"))
+    assert len(collections) == 1 and json.loads(collections[0].read_text())["complete"] is True
+    assert not (checkout / ".tmp_verify").exists()
     assert passed(identity(spec))["status"] == "PASS"
 
 
 def test_unrelated_documentation_commit_reuses_executable_evidence(checkout):
-    before = identity(spec_for(checkout))
+    original = spec_for(checkout)
+    before = identity(original)
     receipt = passed(before)
     (checkout / "README.md").write_text("revised prose\n")
     git(checkout, "add", "README.md")
     git(checkout, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "documentation only")
-    after = identity(spec_for(checkout))
+    after = identity(spec_for(checkout, environment=original["environment"]))
     result = check_reuse(receipt, after, artifacts=receipt["artifacts"])
     assert result["status"] == "PASS" and result["reused"] is True
+
+
+def test_nested_formal_spec_never_shares_an_outer_operation_workspace(checkout):
+    outer = spec_for(checkout)
+    nested_finish = checkout / ".tmp_verify/nested/finish.json"
+    nested = spec_for(checkout, environment=outer["environment"], finish_path=nested_finish)
+    first = outer["scope"]["recorded_workspace"]
+    second = nested["scope"]["recorded_workspace"]
+    assert first["path"] != second["path"]
+    assert first["operation"] != second["operation"] == str(nested_finish.parent)
+    resumed = spec_for(checkout, environment=nested["environment"], finish_path=nested_finish)
+    assert resumed["scope"]["recorded_workspace"] == second
+    assert outer["environment"]["PYTEST_DEBUG_TEMPROOT"] == first["path"]
 
 
 @pytest.mark.parametrize("name", [
@@ -349,6 +374,7 @@ def test_synthetic_collection_preserves_inherited_plugin_path(checkout, monkeypa
     plugin_dir = checkout.parent / (checkout.name + "-plugins")
     plugin_dir.mkdir()
     marker = checkout / ".tmp_verify/inherited-plugin-observed"
+    marker.parent.mkdir()
     (plugin_dir / "sciplot_inherited_probe.py").write_text(
         "from pathlib import Path\n"
         f"def pytest_configure(config):\n    Path({str(marker)!r}).write_text('observed')\n"

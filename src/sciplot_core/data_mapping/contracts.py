@@ -235,6 +235,8 @@ def write_data_mapping_confirmation(
     confirmation: DataMappingConfirmation,
 ) -> Path:
     destination = Path(path).expanduser().resolve()
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(destination)
     if destination.exists() and destination.is_dir():
         destination = destination / DATA_MAPPING_CONFIRMATION_FILENAME
     elif destination.suffix.casefold() != ".json":

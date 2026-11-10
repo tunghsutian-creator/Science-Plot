@@ -9,7 +9,7 @@ from sciplot_core.semantic_sources.confirmation_contract import COLUMN_ROLES, CO
 _COLUMN_ROLES = COLUMN_ROLES
 _COLUMN_TYPES = COLUMN_TYPES
 
-_DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
+_LEGACY_OUTPUT_ROOT = Path("outputs") / "intake_projects"
 
 APPROVED_INTAKE_SIZE_PRESETS = FIGURE_SIZE_PRESETS
 

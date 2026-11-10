@@ -97,6 +97,7 @@ def start_task(
     request: dict[str, Any], *, task_dir: Path | None = None,
     entry_intent: dict[str, Any] | None = None,
     defer_creation_export: bool = False,
+    _owned_namespace: Path | None = None,
 ) -> dict[str, Any]:
     original_request = request
     try:
@@ -129,6 +130,17 @@ def start_task(
         if key in request:
             request[key] = str(canonical_path(Path(request[key])))
     root = task_location(request, task_dir)
+    if not root.exists():
+        from sciplot_core.foundation.research_destination import require_data_destination
+        require_data_destination(root, existing_namespace=_owned_namespace)
+        if request["action"] == "create":
+            from sciplot_core.output_contract import resolve_user_output_layout
+            layout = resolve_user_output_layout(request.get("source", request.get("sources", [None])[0]),
+                                                requested_delivery_root=request.get("out"))
+            for destination in (layout.delivery_root, layout.workspace_root):
+                inherited = (_owned_namespace if _owned_namespace is not None
+                             and destination.is_relative_to(_owned_namespace.resolve()) else None)
+                require_data_destination(destination, existing_namespace=inherited)
     root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with external_project_session(root):
         if root.exists():

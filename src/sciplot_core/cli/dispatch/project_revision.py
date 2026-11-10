@@ -113,6 +113,8 @@ def dispatch_project_revision(args: Any) -> int | None:
                 raise ValueError(
                     "Choose a new preview JSON path outside the project and selected source."
                 )
+            from sciplot_core.foundation.research_destination import require_data_destination
+            require_data_destination(output)
             atomic_write_json(output, payload)
     _print_json(payload)
     return 1 if payload.get("status") == "blocked" else 0

@@ -8,7 +8,7 @@ from typing import Any
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.output_contract import requested_delivery_root
-from sciplot_core.project_store import FileProjectStore
+from sciplot_core.project_store import FileProjectStore, ProjectRecoveryRequired
 from sciplot_core.project_manifest_locations import admitted_intake_manifest, admitted_project_generation, intake_snapshot_location
 from sciplot_core.project_store.io import StoreIO, owned_io
 from sciplot_core.project_store.adapters import store_for_project
@@ -91,6 +91,9 @@ def _run_output_capability(project: Path, request: dict[str, Any], locations: di
             relative = output.relative_to(root).as_posix()
             if cap.members is None or relative in cap.members or any(name.startswith(relative + "/") for name in cap.members):
                 return
+    if create and key not in claims:
+        from sciplot_core.foundation.research_destination import require_data_destination
+        require_data_destination(output)
     if not output.exists():
         if key in claims:
             raise ProjectRecoveryRequired("The registered external run root is missing; explicit recovery is required")
@@ -119,6 +122,36 @@ def _snapshot_members(project: Path, *, blocking: bool = False) -> set[str]:
     return members
 
 
+def _legacy_delivery_namespace(project: Path, request: dict[str, Any], delivery: Path) -> Path | None:
+    """Recognize an existing visible namespace, never grant Store authority."""
+    from sciplot_core.delivery_identity import read_delivery_binding
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.foundation.source_locations import literal_source_path
+    from sciplot_core.policy import DELIVERY_PROJECT_DIR
+
+    if not delivery.is_dir():
+        return None
+    binding = read_delivery_binding(delivery)
+    source_value = request.get("input")
+    if binding is None or not isinstance(source_value, str) or not source_value.strip():
+        return None
+    source = Path(source_value).expanduser()
+    if not source.is_absolute():
+        source = project / source
+    if (binding.root != str(delivery)
+            or binding.request != literal_source_path(project / "plot_request.json")
+            or binding.source != literal_source_path(source)):
+        return None
+    documents = canonical_path(delivery / DELIVERY_PROJECT_DIR)
+    if {path.name for path in documents.glob("*") if path.suffix.casefold() == ".vsz"} != {name for name, _digest in binding.documents}:
+        return None
+    for name, expected in binding.documents:
+        document = canonical_path(documents / name)
+        if not document.is_file() or file_sha256(document) != expected:
+            return None
+    return delivery
+
+
 def project_store(project: Path, *, create_delivery: bool = False, with_snapshot: bool = False,
                   create_output: bool = False, intake_compat: bool = False,
                   snapshot_payload: dict[str, Any] | None = None) -> FileProjectStore:
@@ -145,6 +178,12 @@ def project_store(project: Path, *, create_delivery: bool = False, with_snapshot
         canonical_path(Path(raw_delivery))  # Validate before the legacy resolver normalizes it.
     delivery = canonical_path(requested_delivery_root({"request": request}, run_output=project))
     if create_delivery:
+        if not delivery.exists() and "delivery" in claims:
+            raise ProjectRecoveryRequired("The registered delivery root is missing; explicit recovery is required")
+        if "delivery" not in claims:
+            from sciplot_core.foundation.research_destination import require_data_destination
+            existing = project if delivery.is_relative_to(project) else _legacy_delivery_namespace(project, request, delivery)
+            require_data_destination(delivery, existing_namespace=existing)
         delivery.mkdir(parents=True, exist_ok=True)
     selected_locations: dict[str, Any] = {"delivery": delivery} if delivery.is_dir() and not delivery.is_relative_to(project) else {}
     if with_snapshot or "snapshot" in claims:

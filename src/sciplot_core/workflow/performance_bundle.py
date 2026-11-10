@@ -64,6 +64,7 @@ def _render_veusz_performance_bundle(
                 source_input,
                 template=task.template,
                 output_dir=transaction_dir / task.artifact_stem,
+                _output_namespace=output_dir if output_dir.is_dir() else None,
                 options=options,
                 export_formats=export_formats,
                 request_context={

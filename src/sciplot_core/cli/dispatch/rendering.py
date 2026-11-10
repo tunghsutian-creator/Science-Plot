@@ -41,6 +41,8 @@ def _render_auto(source: Path, args: Any, options: dict[str, Any]) -> dict[str, 
     template = resolve_rule_template(rule_id, args.template)
     explicit = normalize_render_options(options, template=template)
     source, output = source.resolve(), args.out.expanduser().resolve()
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(output)
     if source.is_relative_to(output) or (source.is_dir() and output.is_relative_to(source)):
         raise ValueError("Automatic output and original source must be separate; choose --out outside the source tree.")
     request: dict[str, Any] = {

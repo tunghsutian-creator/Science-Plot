@@ -190,7 +190,9 @@ def case(tmp_path, monkeypatch):
         return {'project': project, 'primary_figure_id': 'f0', 'figures': figures,
                 'ready_to_use': True, 'source': {}, 'qa': {}, 'delivery': {}}
 
-    def start(task, *, task_dir, defer_creation_export=False):
+    def start(task, *, task_dir, defer_creation_export=False, _owned_namespace=None):
+        assert _owned_namespace is not None and _owned_namespace.is_dir()
+        assert task_dir.resolve().is_relative_to(_owned_namespace.resolve())
         calls.append(copy.deepcopy(task))
         task_dir.mkdir(parents=True)
         state = {'kind': 'sciplot_task', 'version': 1, 'task_dir': str(task_dir), 'request': task,
@@ -242,7 +244,9 @@ def case(tmp_path, monkeypatch):
         save_task(path, state)
         return state
 
-    def preview(project, *, figure_id, output_dir):
+    def preview(project, *, figure_id, output_dir, _output_namespace=None):
+        assert _output_namespace is not None and _output_namespace.is_dir()
+        assert output_dir.resolve().is_relative_to(_output_namespace.resolve())
         renders.append((str(project), figure_id))
         output_dir.mkdir(parents=True)
         image = output_dir / 'current.png'
@@ -293,8 +297,8 @@ def test_lost_child_reply_recovers_receipt_without_creating_twice(case, monkeypa
     request, root, calls, _, _ = case
     original = groups.start_task
 
-    def lost(task, *, task_dir):
-        original(task, task_dir=task_dir)
+    def lost(task, *, task_dir, _owned_namespace=None):
+        original(task, task_dir=task_dir, _owned_namespace=_owned_namespace)
         if task['source'].endswith('a.csv'):
             raise RuntimeError('reply lost after child saved')
 
@@ -504,8 +508,9 @@ def test_changed_preparation_blocks_presentation_without_recreating_or_hiding_ot
     with_presentations(request)
     original = groups.start_task
 
-    def changed_after_checkpoint(task, **kwargs):
-        result = original(task, **kwargs)
+    def changed_after_checkpoint(task, *, task_dir, defer_creation_export=False, _owned_namespace=None):
+        result = original(task, task_dir=task_dir, defer_creation_export=defer_creation_export,
+                          _owned_namespace=_owned_namespace)
         if task['action'] == 'create' and Path(task['source']).stem == 'a':
             path = Path(task['source']) if changed == 'source' else Path(result['project']) / 'f0.vsz'
             path.write_text('external change after native checkpoint')

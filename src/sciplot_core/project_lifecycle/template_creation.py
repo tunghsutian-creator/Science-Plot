@@ -91,6 +91,12 @@ def _continue(service: PlotCreator, root: Path, state: dict[str, Any], task: dic
 def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTargets) -> dict[str, Any]:
     source, task_request, desired = prepare(request)
     root = targets.creation_root(source, request["idempotency_key"])
+    if not exists(root / "creation.json"):
+        from sciplot_core.foundation.research_destination import require_data_destination
+        from sciplot_core.output_contract import resolve_user_output_layout
+        layout = resolve_user_output_layout(source, requested_delivery_root=task_request.get("out"))
+        for destination in (root, layout.delivery_root, layout.workspace_root):
+            require_data_destination(destination)
     prepare_namespace(root)
     with external_project_session(root):
         path = root / "creation.json"
@@ -109,7 +115,7 @@ def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTar
             return _export(service, root, state)
         task_root = root / "task"
         task = (inspect_task(task_root) if (task_root / "task.json").exists()
-                else start_task(task_request, task_dir=task_root, defer_creation_export=True))
+                else start_task(task_request, task_dir=task_root, defer_creation_export=True, _owned_namespace=root))
         if task["status"] == "blocked" and task.get("phase") == "prepared":
             task = resume_task(task_root, {"retry": True})
         return _continue(service, root, state, task)

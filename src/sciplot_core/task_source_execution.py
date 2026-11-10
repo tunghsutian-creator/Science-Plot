@@ -48,6 +48,7 @@ def run_source_preview(root: Path, state: dict[str, Any]) -> None:
     review = prepare_source_update_review(
         Path(request["project"]), source, worksheet=request.get("worksheet"),
         review_path=root / f"source_review_{index:03}.json",
+        _output_namespace=root,
         **review_options,
     )
     state.update(project=review["project"], revision_id=review["revision_id"])

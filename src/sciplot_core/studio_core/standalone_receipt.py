@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import json
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -10,7 +11,7 @@ from sciplot_core.foundation.file_hashing import (
     existing_file_sha256,
 )
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.qa import run_qa
+from sciplot_core.qa.run import run_qa
 
 from sciplot_core.studio_core.runtime import (
     _normalize_export_format,
@@ -28,6 +29,21 @@ from sciplot_core.studio_core.export_verification import (
 from sciplot_core.studio_core.registry_state import (
     _veusz_spec_reference,
 )
+
+
+def has_standalone_binding(root: Path, document: Path) -> bool:
+    """A saved receipt identifies its namespace; an empty directory does not."""
+    path = root / "standalone_export_receipt.json"
+    if path.is_symlink():
+        raise ValueError("A standalone output binding cannot follow a receipt symlink")
+    if not path.exists():
+        return False
+    value = json.loads(path.read_bytes())
+    if not isinstance(value, dict) or value.get("kind") != "sciplot_standalone_vsz_export" or value.get("document") != str(document):
+        raise ValueError("This output aggregate belongs to another native document")
+    if value.get("receipt_path") != str(path):
+        raise ValueError("This standalone receipt belongs to another output root")
+    return True
 
 
 def publish_standalone_export_receipt(

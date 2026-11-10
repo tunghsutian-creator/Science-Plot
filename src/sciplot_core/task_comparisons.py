@@ -47,7 +47,7 @@ def _generate(root: Path, state: dict[str, Any]) -> None:
     save_comparison(root, state)
     if "baseline_preview" not in state:
         rendered = preview_project_document(project, figure_id=request["figure_id"],
-                                            output_dir=root / ("baseline-" + uuid4().hex))
+                                            output_dir=root / ("baseline-" + uuid4().hex), _output_namespace=root)
         _require_baseline(state)
         if rendered["document"]["sha256"] != request["expected_document_sha256"]:
             raise TaskControlError("comparison_baseline_stale", "原图预览版本已变化。")
@@ -61,7 +61,7 @@ def _generate(root: Path, state: dict[str, Any]) -> None:
             child = candidate_task(root, state, item)
             directory = root / "candidates" / item["id"]
             if child is None:
-                start_task(candidate_request(request, item), task_dir=directory)
+                start_task(candidate_request(request, item), task_dir=directory, _owned_namespace=root)
             elif child["status"] in {"running", "blocked"}:
                 if child.get("preview_accepted") or child["phase"] not in {"starting", "previewing"}:
                     raise TaskControlError("comparison_candidate_changed", "候选已在比较之外继续执行，请新建比较。")
@@ -127,7 +127,8 @@ def _finish_selection(root: Path, state: dict[str, Any]) -> None:
             if exported["status"] != "complete":
                 resume_task(directory, {"retry": True})
         else:
-            start_task({"version": 1, "action": "export", "project": request["project"]}, task_dir=directory)
+            start_task({"version": 1, "action": "export", "project": request["project"]}, task_dir=directory,
+                       _owned_namespace=root)
         exported = load_task(directory)
         if exported["status"] != "complete":
             raise TaskControlError("comparison_export_incomplete", exported.get("blocker", {}).get("message", "所选图已保存，导出尚未完成。"))
@@ -147,6 +148,9 @@ def _require_selected_figure(state: dict[str, Any]) -> None:
 def start_comparison(request: dict[str, Any], *, comparison_dir: Path, base_dir: Path | None = None) -> dict[str, Any]:
     request = normalize_comparison_request(request, base_dir=base_dir)
     root = task_location(candidate_request(request, request["candidates"][0]), comparison_path(comparison_dir))
+    if not root.exists():
+        from sciplot_core.foundation.research_destination import require_data_destination
+        require_data_destination(root)
     root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with external_project_session(root):
         if root.exists():

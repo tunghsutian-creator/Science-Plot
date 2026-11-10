@@ -14,7 +14,6 @@ from sciplot_core.operation_modes import (
 )
 from sciplot_core.studio import export_project_document
 
-from .config import _DEFAULT_OUTPUT_ROOT
 from .models import IntakeGroupInput
 from .packaging import _write_render_failure_cleanup_request, refresh_intake_project_zip
 from .application import create_intake_project
@@ -30,7 +29,7 @@ def create_and_run_intake_project(
     data_type_id: str,
     experiment_type_id: str,
     groups: list[IntakeGroupInput],
-    output_root: Path = _DEFAULT_OUTPUT_ROOT,
+    output_root: Path | None = None,
     plot_output: str | Path | None = None,
     exports: list[str] | tuple[str, ...] | None = None,
     render_options: dict[str, Any] | None = None,

@@ -20,8 +20,10 @@ SUITES = ("focused", "comprehensive", "full", *PROFILES)
 
 def _audit_environment(
     root: Path, output: Path, plugin: Path | None, audit: Path | None,
+    *, environment: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], Path | None]:
-    environment = dict(os.environ, SCIPLOT_VERIFY_FINISH=str(output / "finish.json"))
+    environment = dict(os.environ if environment is None else environment,
+                       SCIPLOT_VERIFY_FINISH=str(output / "finish.json"))
     if (plugin is None) != (audit is None):
         raise ValueError("A frozen audit plugin and a separate audit output must be supplied together.")
     if plugin is None or audit is None:
@@ -76,12 +78,23 @@ def start_suite_verification(
         output = _closed_directory(root, directory)
         if output.exists():
             raise ValueError("The run directory already exists; use verify --status to inspect it.")
+        from sciplot_core.verification.recorded_workspace import prepare_recorded_environment
+
+        environment, _workspace = prepare_recorded_environment(
+            root, dict(os.environ, SCIPLOT_VERIFY_FINISH=str(output / "finish.json")))
         if suite == "private-science":
             from sciplot_core.verification.input_scope import load_manifest
-            from sciplot_core.verification.private_corpus import _collect_nodeids, declared_input_availability
+            from sciplot_core.verification.private_corpus import declared_input_availability
+            from sciplot_core.verification.evidence_scope import collect_check_tests
+
             inventory_path = root / "src/sciplot_core/verification/private_corpus_inventory.json"
             manifest = load_manifest(root / "src/sciplot_core/verification/input_scope_manifest.json")
-            collected = _collect_nodeids(root, inventory_path)
+            preflight_environment = {**environment, "PYTHONPATH": os.pathsep.join(filter(None, [
+                str(root / "src"), str(root / "tests"), environment.get("PYTHONPATH", ""),
+            ]))}
+            collected = set(collect_check_tests(
+                [sys.executable, "-m", "pytest", "-q", "-p", "sciplot_core.verification.pytest_finish"],
+                repo_root=root, environment=preflight_environment))
             availability = declared_input_availability(repo_root=root, inventory_path=inventory_path,
                                                       selected_nodeids=manifest["scopes"]["private"], collected_nodeids=collected)
             if availability["status"] == "BLOCKED":
@@ -90,7 +103,8 @@ def start_suite_verification(
                         "selected_test_count": availability["selected_count"], "executed_test_count": 0,
                         "error": {"reason_code": "private_inputs_unavailable", "message": "Declared private inputs are missing, unsafe or unmapped; no test bodies ran."},
                         "issues": availability["issues"]}
-        environment, audit = _audit_environment(root, output, audit_plugin_dir, audit_out)
+        environment, audit = _audit_environment(root, output, audit_plugin_dir, audit_out,
+                                               environment=environment)
         if suite.startswith("public-"):
             from sciplot_core.verification.public_input_guard import configure_environment
             if audit_plugin_dir is not None:

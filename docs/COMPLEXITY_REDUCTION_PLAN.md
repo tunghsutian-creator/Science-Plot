@@ -294,3 +294,15 @@ refusals. Test counts and deleted lines alone are not an architecture acceptance
 All original data, protected worktrees/WIP and cancelled-candidate evidence stay
 intact. No denied launchd retry, force push, deployment or paid AI call. Quota reset
 is used only if an actual supported authorized tool exists; no reset is invented.
+
+
+## Storage boundary correction (2026-11-10)
+
+Nine public writer families now share one new-destination placement owner;
+existing admitted namespaces retain derived children and old replay. Recorded
+pytest workspace allocation precedes identity capture and never participates in
+ordinary cache eviction. These changes do not classify historical mixed folders
+as disposable or move user material. Independent legacy cleanup remains manual,
+role-based review; persistent evidence still needs deliberate retention review.
+The default source-control relocation applies only to new control records for
+inputs already inside software, with bounded saved-work discovery.

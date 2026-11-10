@@ -31,6 +31,7 @@ def prepare_source_update_review(
     project: Path, source: Path, *, review_path: Path, worksheet: str | None = None,
     mapping_request: dict[str, Any] | None = None,
     annotation_decisions: list[dict[str, Any]] | None = None,
+    _output_namespace: Path | None = None,
 ) -> dict[str, Any]:
     """Keep before/candidate PNGs after the isolated candidate is discarded."""
     project, source = resolve_project_path(project), canonical_path(source)
@@ -39,7 +40,7 @@ def prepare_source_update_review(
     if path.exists() or path == source or path.is_relative_to(source) or image_dir.is_relative_to(source):
         raise TaskControlError("task_review_path_overlap", "请使用原始数据、项目及成图目录之外的新审阅路径。")
     # The shared owner checks project, original source and visible delivery paths.
-    image_dir = new_preview_directory(project, image_dir)
+    image_dir = new_preview_directory(project, image_dir, _output_namespace=_output_namespace)
     previews: list[dict[str, Any]] = []
 
     def capture(candidate: Path, review: dict[str, Any]) -> None:

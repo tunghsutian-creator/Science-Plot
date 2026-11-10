@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from ..config import _DEFAULT_OUTPUT_ROOT
+from ..config import _LEGACY_OUTPUT_ROOT
 from ..models import IncomingFile, IntakeGroupInput
 from ..catalog import _catalog_item
 from ..session_contract import IntakeSessionError, admit_session_payload
@@ -148,7 +148,7 @@ def create_intake_project_from_session(
         "groups": groups,
         "group_order_is_explicit": payload.get("group_order_is_explicit", True)
         is not False,
-        "output_root": Path(str(payload.get("output_root") or _DEFAULT_OUTPUT_ROOT)),
+        "output_root": Path(str(payload.get("output_root") or _LEGACY_OUTPUT_ROOT)),
         "plot_output": payload.get("plot_output"),
         "exports": payload.get("exports"),
         "render_options": payload.get("render_options"),

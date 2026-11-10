@@ -164,6 +164,10 @@ def deliver(service: DeliveryService, value: Any) -> dict[str, Any]:
     request = normalize_request(value)
     out = Path(request["out"])
     root = canonical_path(out.parent / ".sciplot_deliveries" / digest(str(out)))
+    if not exists(root / "delivery.json"):
+        from sciplot_core.foundation.research_destination import require_data_destination
+        require_data_destination(root)
+        require_data_destination(out)
     # All keys for one destination share the same record and exclusion lease.
     prepare_namespace(root)
     with external_project_session(root):

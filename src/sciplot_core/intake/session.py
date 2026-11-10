@@ -18,7 +18,7 @@ from sciplot_core.semantic import (
 from sciplot_core.request_contract import normalize_exports, normalize_render_options
 
 from .catalog import _catalog_item, _catalog_item_for_rule
-from .config import _DEFAULT_OUTPUT_ROOT, _REPLICATE_MODES
+from .config import _REPLICATE_MODES
 from .session_contract import local_session_envelope
 from sciplot_core.semantic_sources.confirmation_contract import normalize_column_confirmations
 
@@ -50,14 +50,18 @@ def _session_project_name(source: Path, experiment_label: str) -> str:
 def _observe_intake_session(
     input_path: str | Path,
     *,
-    output_root: Path = _DEFAULT_OUTPUT_ROOT,
+    output_root: Path | None = None,
     requested_rule_id: str | None = None,
     allow_pending_rule_review: bool = False,
 ) -> dict[str, Any]:
     source = Path(input_path).expanduser().resolve()
     if not source.exists():
         raise ValueError(f"Input path does not exist: {source}")
-    output_root = output_root.expanduser().resolve()
+    from sciplot_core.output_contract import resolve_user_output_layout
+    output_root = (output_root.expanduser().resolve() if output_root is not None else
+                   resolve_user_output_layout(source).workspace_root / "intake_sessions")
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
     selected_rule_id = str(requested_rule_id or "").strip() or None
 
@@ -213,7 +217,7 @@ def _observe_intake_session(
 
 
 def prepare_local_session(
-    input_path: str | Path, *, output_root: Path = _DEFAULT_OUTPUT_ROOT,
+    input_path: str | Path, *, output_root: Path | None = None,
     requested_rule_id: str | None = None, allow_pending_rule_review: bool = False,
     project_name: str | None = None,
 ) -> dict[str, Any]:
@@ -238,7 +242,7 @@ def prepare_local_session(
 
 
 def prepare_intake_session(
-    input_path: str | Path, *, output_root: Path = _DEFAULT_OUTPUT_ROOT,
+    input_path: str | Path, *, output_root: Path | None = None,
     requested_rule_id: str | None = None, allow_pending_rule_review: bool = False,
     project_name: str | None = None,
 ) -> dict[str, Any]:

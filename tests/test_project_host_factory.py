@@ -179,3 +179,65 @@ def test_uncommitted_host_selection_rejects_aliases_before_allocating_roots(tmp_
     with pytest.raises(ValueError, match="symlink"):
         project_store(root, create_delivery=True, create_output=True)
     assert not (root / ".sciplot_store").exists()
+
+
+def _legacy_visible_delivery(tmp_path):
+    from sciplot_core.delivery_binding import DeliveryBinding
+    from sciplot_core.delivery_identity import write_delivery_identity
+    from sciplot_core.foundation.file_hashing import file_sha256
+
+    checkout = tmp_path / "software"
+    (checkout / "src/sciplot_core").mkdir(parents=True)
+    (checkout / "pyproject.toml").write_text('[project]\nname = "sciplot-core"\n')
+    project = _project(tmp_path)
+    delivery = checkout / "historical-delivery"
+    native = delivery / "project/figure.VSZ"
+    native.parent.mkdir(parents=True)
+    native.write_bytes(b"existing historical native document")
+    request = json.loads((project / "plot_request.json").read_bytes())
+    request["delivery_output"] = str(delivery)
+    (project / "plot_request.json").write_text(json.dumps(request))
+    write_delivery_identity(delivery, binding=DeliveryBinding(
+        root=str(delivery), request=str(project / "plot_request.json"), source=str(project / "source.csv"),
+        primary=native.name, documents=((native.name, file_sha256(native)),)))
+    return project, delivery, native
+
+
+def test_existing_legacy_delivery_in_checkout_is_admitted_without_changing_its_originals(tmp_path):
+    project, delivery, native = _legacy_visible_delivery(tmp_path)
+    before = {path: path.read_bytes() for path in (project / "source.csv", project / "plot_request.json",
+                                                 delivery / "SciPlot_delivery.json", native)}
+    assert not (project / ".sciplot_store").exists()
+    selected = project_store(project, create_delivery=True)
+    assert selected.locations == {"delivery": delivery}
+    admitted = selected.snapshot(import_legacy=True)
+    assert "delivery" in admitted["resource_roots"]
+    assert project_store(project, create_delivery=True).snapshot() == admitted
+    assert all(path.read_bytes() == contents for path, contents in before.items())
+
+
+def test_copied_legacy_delivery_binding_cannot_admit_a_new_checkout_namespace(tmp_path):
+    import shutil
+
+    project, delivery, native = _legacy_visible_delivery(tmp_path)
+    copied = delivery.with_name("copied-delivery")
+    shutil.copytree(delivery, copied)
+    request = json.loads((project / "plot_request.json").read_bytes())
+    request["delivery_output"] = str(copied)
+    (project / "plot_request.json").write_text(json.dumps(request))
+    before = {path: path.read_bytes() for root in (project, delivery, copied) for path in root.rglob("*") if path.is_file()}
+    with pytest.raises(ValueError, match="New research output"):
+        project_store(project, create_delivery=True)
+    assert not (project / ".sciplot_store").exists()
+    assert native.read_bytes() == b"existing historical native document"
+    assert all(path.read_bytes() == contents for path, contents in before.items())
+
+
+def test_changed_legacy_native_baseline_cannot_admit_a_checkout_namespace(tmp_path):
+    project, delivery, native = _legacy_visible_delivery(tmp_path)
+    native.write_bytes(b"unreconciled user edit, preserve exactly")
+    before = {path: path.read_bytes() for root in (project, delivery) for path in root.rglob("*") if path.is_file()}
+    with pytest.raises(ValueError, match="New research output"):
+        project_store(project, create_delivery=True)
+    assert not (project / ".sciplot_store").exists()
+    assert all(path.read_bytes() == contents for path, contents in before.items())

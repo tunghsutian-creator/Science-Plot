@@ -78,6 +78,8 @@ def run_runtime_smoke(
     *, output_root: Path, profile: Literal["full", "quick"] = "full",
 ) -> dict[str, Any]:
     """Run full lifecycle coverage by default, or one bounded native quick check."""
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(output_root)
 
     if profile == "quick":
         return _run_quick_runtime_smoke(output_root=output_root)

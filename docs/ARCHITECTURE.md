@@ -2053,14 +2053,36 @@ idle days, two failures and one successful cache per tool within 512 MiB of
 accounted file bytes. This is not a bound on live, interrupted or recorded data.
 Historical mixed `.tmp_verify` directories are neither migrated nor adopted.
 
-This cache correction does not claim all application writers enforce an external
-research root. Ordinary, Managed, Intake/raw Studio, JSON workflow, NativeSuite,
-group/comparison/paper, final-package/panel, preview/PDF and render/recipe/mapping
-families have separate new-namespace boundaries. A future uniform destination
-admission must migrate those actual writers before their first allocation, while
-preserving existing-project queries/replays and the pure layout resolvers. Future
-recorded fixture workspace allocation also belongs before collection identity,
-not in cleanup. Do not introduce a `.tmp_verify` or test-environment exemption.
+`foundation/research_destination.py` owns new research destination placement.
+It rejects actual SciPlot source checkouts, loaded package directories and the
+evictable `SciPlot/development` cache for new independent research destinations;
+an arbitrary research Git repository or a name such as `.tmp_verify` conveys no
+role or deletion permission. The nine writer families admit independent roots
+before allocation: ordinary/task; source/Managed creation; Intake/raw Studio;
+JSON/autoplot; NativeSuite; group/comparison/paper; delivery/panel/portable export;
+preview/PDF; and render/recipe/batch/mapping/cleanup. Pure layout resolution and
+original input reading stay unchanged. Explicit verification receipts are a
+separate retained role, not research output or disposable cache.
+
+Loaded existing task/project namespaces can derive their own children, including
+historical projects inside a checkout. Internal callers pass their held root;
+wire requests cannot supply that inheritance. A separately chosen delivery/out
+still receives independent placement admission. Existing project replay remains
+with its recorded resource identities, and a missing registered delivery root
+requires recovery before any mkdir. This placement policy does not replace file
+leases, scientific validation or host permissions, and never moves old data.
+New source-based control records whose original input remains inside software
+use `user_state_path("SciPlot")/source-projects`; discovery includes that bounded
+root and the original legacy location. Their independent research output must
+still be explicitly outside software.
+
+`verification/recorded_workspace.py` allocates generated recorded pytest data
+before collection/capture, under persistent SciPlot state or an explicit external
+parent. It rejects source and the evictable SciPlot cache. Operation, path and
+directory identity bind environment and scope; separate operations get separate
+workspaces. Legacy records remain readable without new mandatory fields.
+Recorded workspaces and collection receipts are retained, never ordinary cache
+GC inputs. There is no `.tmp_verify` or test-environment placement exemption.
 
 The visible package contains plotting data, requested figures, editable VSZ and
 its verified inventory. PDF/TIFF remain the canonical publication pair; supported

@@ -37,12 +37,16 @@ def case(tmp_path, monkeypatch):
         path.write_bytes(contents)
         return {'path': str(path), 'sha256': file_sha256(path)}
 
-    def preview(_, *, figure_id, output_dir):
+    def preview(_, *, figure_id, output_dir, _output_namespace=None):
+        assert _output_namespace is not None and _output_namespace.is_dir()
+        assert output_dir.resolve().is_relative_to(_output_namespace.resolve())
         renders.append(figure_id)
         output_dir.mkdir()
         return {'document': {'sha256': file_sha256(document)}, 'preview': artifact(output_dir / 'current.png', PNG)}
 
-    def start(request, *, task_dir):
+    def start(request, *, task_dir, _owned_namespace=None):
+        assert _owned_namespace is not None and _owned_namespace.is_dir()
+        assert task_dir.resolve().is_relative_to(_owned_namespace.resolve())
         calls.append(copy.deepcopy(request))
         task_dir.mkdir(parents=True)
         state = {'kind': 'sciplot_task', 'version': 1, 'task_dir': str(task_dir), 'request': request,
@@ -179,8 +183,8 @@ def test_lost_candidate_reply_recovers_existing_preview(case, monkeypatch):
     request, root, _, _, calls, _, _ = case
     original = comparisons.start_task
 
-    def lost(request, *, task_dir):
-        original(request, task_dir=task_dir)
+    def lost(request, *, task_dir, _owned_namespace=None):
+        original(request, task_dir=task_dir, _owned_namespace=_owned_namespace)
         if task_dir.name == 'a':
             raise RuntimeError('lost reply')
 
@@ -214,8 +218,8 @@ def test_export_lost_reply_resumes_without_reapplying(case, monkeypatch, candida
     result = comparisons.start_comparison(request, comparison_dir=root)
     original = comparisons.start_task
 
-    def lost(request, *, task_dir):
-        original(request, task_dir=task_dir)
+    def lost(request, *, task_dir, _owned_namespace=None):
+        original(request, task_dir=task_dir, _owned_namespace=_owned_namespace)
         if request['action'] == 'export':
             raise RuntimeError('reply lost after export')
 

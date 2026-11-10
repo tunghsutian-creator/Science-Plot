@@ -40,14 +40,15 @@ from sciplot_core.studio_core.project_query import (
 
 @project_read_runtime
 def preview_project_document(
-    project: Path, *, output_dir: Path, figure_id: str | None = None
+    project: Path, *, output_dir: Path, figure_id: str | None = None,
+    _output_namespace: Path | None = None,
 ) -> dict[str, Any]:
     project = resolve_project_path(project)
     selected = resolve_project_figure(project, figure_id)
     document = Path(selected["document"])
     witness = figure_read_witness(project, selected)
     state = witness.to_read_state_payload()
-    output = new_preview_directory(project, output_dir)
+    output = new_preview_directory(project, output_dir, _output_namespace=_output_namespace)
     arguments = ["preview-document", str(document), "--out", str(output / "current.png")]
     resolver = selected_source_resolver()
     context: AbstractContextManager[None] = nullcontext()
@@ -143,6 +144,7 @@ def preview_document_edit(
     operations: list[dict[str, Any]] | None = None,
     expected_spec_sha256: str | None = None,
     request_id: str | None = None,
+    _output_namespace: Path | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.studio_core.document_edit_commands import preview_native_edit
 
@@ -150,7 +152,7 @@ def preview_document_edit(
         expected_document_sha256=expected_document_sha256, operations=operations,
         expected_spec_sha256=expected_spec_sha256, candidate_builder=_candidate, audit_document=audit_edited_document,
         validate_settings=_validate_settings,
-        request_id=request_id)
+        request_id=request_id, _output_namespace=_output_namespace)
 
 
 def _validate_settings(document: Path, spec: Path, changes: list[dict[str, Any]], *,

@@ -25,6 +25,7 @@ from sciplot_core.studio_core.studio_prepare import prepare_studio_document
 
 
 def require_new_layout(layout: UserOutputLayout) -> None:
+    from sciplot_core.foundation.research_destination import require_data_destination
     for path in (layout.delivery_root, layout.workspace_root):
         canonical_path(path)
         if path.exists():
@@ -32,6 +33,7 @@ def require_new_layout(layout: UserOutputLayout) -> None:
                 f"Project creation requires a new delivery and workspace: {path}. "
                 "Inspect an existing project or choose a new output directory."
             )
+        require_data_destination(path)
 
 
 def _publish(payload: dict[str, Any]) -> dict[str, Any]:

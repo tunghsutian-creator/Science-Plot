@@ -193,6 +193,10 @@ def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = Non
     normalized = normalize_paper_request(request, base_dir=base_dir)
     root = _path(paper_dir)
     _validate_locations(root, normalized)
+    if not root.exists():
+        from sciplot_core.foundation.research_destination import require_data_destination
+        require_data_destination(root)
+        require_data_destination(Path(normalized["out"]))
     root.parent.mkdir(parents=True, exist_ok=True)
     with external_project_session(root):
         if root.exists():

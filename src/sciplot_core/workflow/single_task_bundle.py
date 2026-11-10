@@ -47,6 +47,7 @@ def render_selected_single_task_bundle(
             input_path,
             template=task.template,
             output_dir=transaction_dir,
+            _output_namespace=output_dir if output_dir.is_dir() else None,
             options=options,
             export_formats=export_formats,
             request_context={

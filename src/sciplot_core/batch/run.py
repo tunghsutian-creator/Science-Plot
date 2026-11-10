@@ -58,6 +58,8 @@ def run_batch(
                 f"Tensile allow-list directory does not exist: {root}"
             )
 
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     runs_dir = output_dir / "runs"
     if runs_dir.exists():

@@ -45,12 +45,17 @@ def run_one_step(
     from sciplot_core.workflow.project_requests import next_project_run, recognized_project
 
     registered = project_dir.is_dir() and recognized_project(request_path)
+    previous = previous_workflow_request(request_path)
+    from sciplot_core.foundation.research_destination import require_data_destination
+    if not registered:
+        require_data_destination(project_dir)
+    if delivery_root is not None and (previous or {}).get("delivery_output") != str(delivery_root.expanduser().resolve()):
+        require_data_destination(delivery_root)
     if registered:
         run_dir = next_project_run(project_dir)
     else:
         project_dir.mkdir(parents=True, exist_ok=True)
         run_dir = _next_run_dir(project_dir)
-    previous = previous_workflow_request(request_path)
     request: dict[str, Any] = {
         "recipe": "auto",
         "input": str(input_path),

@@ -295,12 +295,14 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
         original_argv = list(sys.argv[1:] if argv is None else argv)
         maybe_reexec_with_qt_runtime(original_argv)
         from sciplot_core.smoke import run_runtime_smoke
+        from platformdirs import user_state_path
 
         profile = getattr(args, "profile", "full")
+        smoke_output = args.out if args.out is not None else user_state_path("SciPlot") / "runtime-smoke"
         payload = (
-            run_runtime_smoke(output_root=args.out, profile="quick")
+            run_runtime_smoke(output_root=smoke_output, profile="quick")
             if profile == "quick"
-            else run_runtime_smoke(output_root=args.out)
+            else run_runtime_smoke(output_root=smoke_output)
         )
         if args.json:
             _print_json(payload)

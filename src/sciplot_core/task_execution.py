@@ -121,6 +121,7 @@ def _run_edit_preview(root: Path, state: dict[str, Any]) -> None:
     review = preview_document_operations(
         Path(request["project"]), request["operations"],
         output_dir=root / f"preview_{index:03}",
+        _output_namespace=root,
         figure_id=request.get("figure_id"),
         expected_document_sha256=request["expected_document_sha256"],
         **({"request_id": identity} if identity is not None else {}),

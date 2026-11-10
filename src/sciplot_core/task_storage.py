@@ -50,6 +50,10 @@ def task_location(request: dict[str, Any], supplied: Path | None) -> Path:
                 if isinstance(raw, str):
                     protected.append(Path(raw).expanduser().resolve())
         parent = project.parent / ".sciplot_tasks"
+        from sciplot_core.foundation.research_destination import software_root
+        if supplied is None and software_root(parent) is not None:
+            from platformdirs import user_state_path
+            parent = user_state_path("SciPlot") / "tasks" / canonical_json_sha256(str(project))
     root = canonical_path(supplied or parent / uuid.uuid4().hex)
     for path in protected:
         if root == path or root.is_relative_to(path) or path.is_relative_to(root):

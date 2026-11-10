@@ -32,7 +32,8 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
                         candidate_builder: Callable[..., dict[str, Any]],
                         audit_document: Callable[..., dict[str, Any]],
                         validate_settings: Callable[..., None],
-                        request_id: str | None = None) -> dict[str, Any]:
+                        request_id: str | None = None,
+                        _output_namespace: Path | None = None) -> dict[str, Any]:
 
     project = resolve_project_path(project)
     selected = resolve_project_figure(project, figure_id)
@@ -89,7 +90,7 @@ def preview_native_edit(project: Path, changes: list[dict[str, Any]], *, output_
     binding = adopt_saved_native(project, selected, expected_binding=binding)
     command = command_for_binding(repository, binding, kind="document_edit", key=key,
                                    writes=writes, request=intent)
-    output = new_preview_directory(project, output_dir)
+    output = new_preview_directory(project, output_dir, _output_namespace=_output_namespace)
 
     def prepare() -> ProjectMutation:
         audit_document(document, spec)

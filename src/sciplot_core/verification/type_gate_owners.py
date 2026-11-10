@@ -8,6 +8,7 @@ from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.source_contracts import ARCHITECTURE_CORE_TARGETS, TYPE_SCOPE_PARTITION_TARGET
 
 CHANGED_VERIFICATION_TEST_TARGETS = (
+    'tests/test_recorded_workspace.py',
     'tests/test_development_storage.py', 'tests/test_changed_development_storage.py',
     'tests/test_changed_verification.py', 'tests/test_repository_policy.py', 'tests/test_main_commit_admission.py',
     'tests/test_ordinary_plotting_owners.py',
@@ -119,6 +120,7 @@ TYPED_CORE_CONTRACT_OWNER = ChangedOwner(
     owned_test_paths=frozenset(
         {
             "tests/test_autoplot_evidence.py",
+            "tests/test_research_destination.py",
             "tests/test_foundation_text_values.py", "tests/test_source_version_error_contracts.py",
             "tests/test_foundation_json_io.py", "tests/test_writer_lease.py", "tests/test_iso_timestamps.py",
             "tests/test_output_package_contract.py",
@@ -133,6 +135,7 @@ TYPED_CORE_CONTRACT_OWNER = ChangedOwner(
     ),
     pytest_targets=(
         "tests/test_mechanical_facts_flow.py",
+        "tests/test_research_destination.py",
         "tests/test_autoplot_evidence.py",
         "tests/test_foundation_text_values.py", "tests/test_source_version_error_contracts.py",
         "tests/test_foundation_json_io.py", "tests/test_writer_lease.py", "tests/test_iso_timestamps.py",
@@ -381,19 +384,16 @@ MYPY_SCOPE_CONFIGURATION_OWNER = ChangedOwner(
 
 __all__ = [
     "ARCHITECTURE_CORE_TARGETS",
-    "CHANGED_VERIFICATION_OWNER",
-    "MYPY_SCOPE_CONFIGURATION_OWNER",
+    "CHANGED_VERIFICATION_OWNER", "MYPY_SCOPE_CONFIGURATION_OWNER",
     "SCIENTIFIC_TRANSACTION_TYPE_OWNER",
-    "SCIENTIFIC_TRANSACTION_TYPE_PATHS",
-    "SCIENTIFIC_TRANSACTION_TYPE_PREFIXES",
+    "SCIENTIFIC_TRANSACTION_TYPE_PATHS", "SCIENTIFIC_TRANSACTION_TYPE_PREFIXES",
     "STUDIO_FIGURE_SET_EXECUTION_TYPE_OWNER",
     "STUDIO_FIGURE_SET_EXECUTION_TYPE_PATHS",
     "STUDIO_FIGURE_SET_LIFECYCLE_TYPE_OWNER",
     "STUDIO_FIGURE_SET_LIFECYCLE_TYPE_PATHS",
     "STUDIO_FIGURE_SET_PUBLICATION_TYPE_OWNER",
     "STUDIO_FIGURE_SET_PUBLICATION_TYPE_PATHS",
-    "STUDIO_PROJECT_REGISTRY_TYPE_OWNER",
-    "STUDIO_PROJECT_REGISTRY_TYPE_PATHS",
+    "STUDIO_PROJECT_REGISTRY_TYPE_OWNER", "STUDIO_PROJECT_REGISTRY_TYPE_PATHS",
     "TYPED_CORE_CONTRACT_OWNER",
     "VERIFICATION_POLICY_OWNER",
     "WORKFLOW_EXPORT_FORMAT_TYPE_OWNER", "WORKFLOW_EXPORT_FORMAT_TYPE_PATHS",

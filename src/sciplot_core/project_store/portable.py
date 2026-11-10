@@ -44,6 +44,8 @@ def _members(fd: int, prefix: tuple[str, ...] = ()) -> dict[str, tuple[bytes, in
 
 def export_bundle(store: BundleStore, destination: Path) -> Path:
     target = Path(destination).expanduser().absolute()
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(target)
     if target.exists() or target.is_symlink():
         raise FileExistsError("A portable bundle destination must be new.")
     with store._locked() as (io, current):
@@ -79,6 +81,8 @@ def import_bundle(bundle: Path, destination: Path, *,
 
     source = Path(bundle).expanduser().resolve(strict=True)
     target = Path(destination).expanduser().absolute()
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(target)
     if target.exists() or target.is_symlink():
         raise FileExistsError("Cold import requires a new destination; never replace existing work.")
     source_fd = os.open(source, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)

@@ -28,7 +28,6 @@ from sciplot_core.project_manifest import commit_intake_project_manifest
 from sciplot_core.study_model import build_study_model
 
 from ..catalog import _catalog_item, converge_material_review_notes
-from ..config import _DEFAULT_OUTPUT_ROOT
 from ..models import IntakeGroupInput
 from ..packaging import (
     _apply_export_command_to_manifest,
@@ -54,7 +53,7 @@ def create_intake_project(
     data_type_id: str,
     experiment_type_id: str,
     groups: list[IntakeGroupInput],
-    output_root: Path = _DEFAULT_OUTPUT_ROOT,
+    output_root: Path | None = None,
     plot_output: str | Path | None = None,
     exports: list[str] | tuple[str, ...] | None = None,
     render_options: dict[str, Any] | None = None,
@@ -76,7 +75,12 @@ def create_intake_project(
         project_name
         or f"{experiment['label']}_{'_'.join(group.sample for group in cleaned_groups)}"
     )
-    resolved_output_root = output_root.expanduser().resolve()
+    from sciplot_core.intake.path_security import resolve_intake_destinations
+    resolved_output_root, delivery_root = resolve_intake_destinations(
+        source=cleaned_groups[0].files[0].source_path, project_name=project_name,
+        project_slug=project_slug, output_root=output_root, delivery_root=delivery_root,
+        plot_output=plot_output,
+    )
     project_dir = reserve_unique_directory(resolved_output_root, project_slug)
     try:
         return _create_intake_project_in_reserved_directory(

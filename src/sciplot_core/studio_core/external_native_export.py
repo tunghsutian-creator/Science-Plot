@@ -28,16 +28,10 @@ def _dedicated_output(root: Path, document: Path) -> None:
     for path in root.rglob("*"):
         if path.is_symlink():
             raise ValueError("Standalone export cannot follow an output symlink")
-    receipt = root / "standalone_export_receipt.json"
-    if not receipt.exists() and any(path.is_file() for path in root.rglob("*")
+    from sciplot_core.studio_core.standalone_receipt import has_standalone_binding
+    if not has_standalone_binding(root, document) and any(path.is_file() for path in root.rglob("*")
                                     if ".sciplot_store" not in path.relative_to(root).parts):
         raise ValueError("Existing standalone files have no owning receipt; all files were preserved")
-    if receipt.exists():
-        import json
-
-        value = json.loads(receipt.read_text())
-        if value.get("kind") != "sciplot_standalone_vsz_export" or value.get("document") != str(document):
-            raise ValueError("This output aggregate belongs to another native document")
 
 
 def _current_output(root: Path, record: dict[str, Any]) -> None:
@@ -62,6 +56,10 @@ def export_external_native(document: Path, *, formats: list[str], output_root: P
     if root.is_relative_to(project):
         raise ValueError("Choose a standalone output outside the read-only source project")
     _dedicated_output(root, document)
+    from sciplot_core.studio_core.standalone_receipt import has_standalone_binding
+    if not has_standalone_binding(root, document):
+        from sciplot_core.foundation.research_destination import require_data_destination
+        require_data_destination(root)
     root.mkdir(parents=True, exist_ok=True)
     output_store = FileProjectStore(root)
     before = output_store.snapshot(import_legacy=True)

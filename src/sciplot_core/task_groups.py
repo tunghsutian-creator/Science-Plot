@@ -76,9 +76,10 @@ def _advance(root: Path, state: dict[str, Any], item: dict[str, Any]) -> None:
             child = step_state(step)
             if child is None:
                 if step.get("defer_creation_export") is True:
-                    start_task(step["request"], task_dir=Path(step["task_dir"]), defer_creation_export=True)
+                    start_task(step["request"], task_dir=Path(step["task_dir"]), defer_creation_export=True,
+                               _owned_namespace=root)
                 else:
-                    start_task(step["request"], task_dir=Path(step["task_dir"]))
+                    start_task(step["request"], task_dir=Path(step["task_dir"]), _owned_namespace=root)
                 child = step_state(step)
             elif child["status"] == "running":
                 # The existing owner retains bounded uncertain-outcome recovery.
@@ -128,6 +129,9 @@ def start_group(request: dict[str, Any], *, group_dir: Path, base_dir: Path | No
     request = normalize_group_request(request, base_dir=base_dir)
     root = group_path(group_dir)
     validate_group_location(root, request)
+    if not root.exists():
+        from sciplot_core.foundation.research_destination import require_data_destination
+        require_data_destination(root)
     root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with external_project_session(root):
         if root.exists():

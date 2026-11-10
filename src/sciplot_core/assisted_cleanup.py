@@ -118,8 +118,11 @@ def write_cleanup_request(
     request: dict[str, Any] | None = None,
     intervention_request: str | Path | dict[str, Any] | None = None,
     provider: str = "codex",
+    _output_namespace: Path | None = None,
 ) -> dict[str, Any]:
     output_path = Path(output_dir).expanduser().resolve()
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(output_path, existing_namespace=_output_namespace)
     output_path.mkdir(parents=True, exist_ok=True)
     payload = build_cleanup_request(
         input_path=input_path,
@@ -199,6 +202,8 @@ def write_cleanup_result(
     provider: str = "manual",
 ) -> dict[str, Any]:
     output_path = Path(output_dir).expanduser().resolve()
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
     result_path = output_path / CLEANUP_RESULT_FILENAME
     payload = build_cleanup_result(

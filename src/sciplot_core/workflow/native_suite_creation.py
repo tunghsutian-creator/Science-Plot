@@ -37,6 +37,10 @@ def create_project(workspace: Path, delivery: Path, request: dict[str, Any], sou
         raise FileExistsError("A recorded native creation already exists; explicitly resume its exact request or export the saved suite.")
     if not store_exists and (workspace.exists() or delivery.exists()):
         raise FileExistsError("Existing native creation evidence requires explicit inspection/import; it cannot be recreated.")
+    if not store_exists:
+        from sciplot_core.foundation.research_destination import require_data_destination
+        require_data_destination(workspace)
+        require_data_destination(delivery)
     workspace.mkdir(parents=True, exist_ok=True)
     delivery.mkdir(parents=True, exist_ok=True)
     key = command_key("native_create", request)

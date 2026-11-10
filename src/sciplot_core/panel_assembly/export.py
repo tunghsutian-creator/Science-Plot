@@ -221,6 +221,8 @@ def export_document(document: dict[str, Any], out: str | Path, *, dpi: int = 300
     if not solved["panels"]:
         raise AssemblyError("assembly_empty", "Add at least one panel before exporting.")
     destination = Path(out).expanduser().absolute()
+    from sciplot_core.foundation.research_destination import require_data_destination
+    require_data_destination(destination)
     if destination.exists() or destination.is_symlink():
         raise AssemblyError("assembly_output_exists", "The output destination already exists; choose a new directory.")
     for panel in validated["panels"]:

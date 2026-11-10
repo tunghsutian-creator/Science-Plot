@@ -28,6 +28,12 @@ def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTar
     # Key validation also prevents unbounded or unhashable identifiers before allocation.
     key = request["idempotency_key"]
     root = targets.creation_root(source, key)
+    if not exists(root / "creation.json"):
+        from sciplot_core.foundation.research_destination import require_data_destination
+        from sciplot_core.output_contract import resolve_user_output_layout
+        layout = resolve_user_output_layout(source, requested_delivery_root=request.get("out"))
+        for destination in (root, layout.delivery_root, layout.workspace_root):
+            require_data_destination(destination)
     prepare_namespace(root)
     task_request = {"version": 1, "action": "create", **{k: v for k, v in request.items() if k != "idempotency_key"}}
     task_request["source"] = str(source)
@@ -44,7 +50,7 @@ def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTar
         task_root = root / "task"
         # start_task already has crash-safe task allocation; its owner handles pending stages.
         task = (inspect_task(task_root) if (task_root / "task.json").exists()
-                else start_task(task_request, task_dir=task_root))
+                else start_task(task_request, task_dir=task_root, _owned_namespace=root))
         return _result(service, root, state, task)
 
 

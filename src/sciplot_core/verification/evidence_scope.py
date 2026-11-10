@@ -63,13 +63,17 @@ def _validate_check(plan: dict[str, Any], check: dict[str, Any], root: Path) -> 
 def collect_check_tests(command: list[str], *, repo_root: Path,
                         environment: dict[str, str]) -> list[str]:
     """Collect exact selected pytest nodes without running test bodies."""
-    (repo_root / ".tmp_verify").mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="collection-", dir=repo_root / ".tmp_verify") as directory:
-        finish = Path(directory) / "finish.json"
-        result = subprocess.run([*command, "--collect-only"], cwd=repo_root,
-                                env={**environment, "SCIPLOT_VERIFY_FINISH": str(finish)},
-                                capture_output=True, text=True, timeout=90, check=False)
-        marker = load_receipt(finish)
+    from sciplot_core.verification.recorded_workspace import validate_recorded_workspace
+
+    workspace = validate_recorded_workspace(environment)
+    # Old sealed specs do not acquire a new execution environment on reuse.
+    # Preserve their collection marker externally too, without deleting it.
+    directory = Path(tempfile.mkdtemp(prefix="collection-", dir=workspace["path"] if workspace else None))
+    finish = directory / "finish.json"
+    result = subprocess.run([*command, "--collect-only"], cwd=repo_root,
+                            env={**environment, "SCIPLOT_VERIFY_FINISH": str(finish)},
+                            capture_output=True, text=True, timeout=90, check=False)
+    marker = load_receipt(finish)
     if result.returncode not in {0, 5} or not isinstance(marker, dict) or marker.get("complete") is not True:
         raise ValueError("exact selected test collection did not complete")
     nodes = marker.get("selected_tests")
@@ -209,7 +213,8 @@ def _git_inputs(root: Path) -> list[Path]:
 
 def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Path, *,
                      environment: dict[str, str], finish_path: Path,
-                     _inspections: _StaticNativeInspections | None = None) -> dict[str, Any]:
+                     _inspections: _StaticNativeInspections | None = None,
+                     _legacy_workspace: bool = False) -> dict[str, Any]:
     """Build the sole trusted CLI default, with fresh discovery on every call."""
     root = repo_root.expanduser().resolve()
     module = _validate_check(plan, check, root)
@@ -222,10 +227,14 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
     if environment.get("SCIPLOT_PYTHON") and Path(environment["SCIPLOT_PYTHON"]).resolve() != Path(sys.executable).resolve():
         raise ValueError("secondary Python runtime closure is unknown")
     command = list(check["command"])
+    from sciplot_core.verification.recorded_workspace import prepare_recorded_environment, validate_recorded_workspace
+
     if module == "pytest":
+        environment, workspace = prepare_recorded_environment(root, environment, legacy=_legacy_workspace)
         command[3:3] = ["-p", _PLUGIN]
         nodes = collect_check_tests(command, repo_root=root, environment=environment)
     else:
+        workspace = validate_recorded_workspace(environment)
         nodes = []
     discovery_bindings = {digest(str(path.resolve())): file_sha256(path)
                           for path in {root / node.split("::", 1)[0] for node in nodes} | {Path(__file__).resolve()}}
@@ -313,6 +322,8 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
              "closure_policy": PUBLIC_INPUT_POLICY if public_profile else POLICY,
              "check_id": check["check_id"], "host": host, "discovery_bindings": discovery_bindings,
              "discovery_layouts": layouts, "discovery_aliases": aliases, **reviewed_sources}
+    if workspace is not None:
+        scope["recorded_workspace"] = workspace
     if exclusions:
         scope["excluded_domains"] = exclusions
     if module == "git":

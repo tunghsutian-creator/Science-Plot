@@ -147,7 +147,10 @@ def test_committed_template_retry_reuses_frozen_patch_without_restarting_source_
             return {"status": "blocked" if len(patches) == 1 else "complete", "revision": 1,
                     "plot": str(plot), "commit_status": "committed", "ready_to_use": len(patches) > 1}
 
-    def start(task: dict[str, Any], *, task_dir: Path, defer_creation_export: bool = False) -> dict[str, Any]:
+    def start(task: dict[str, Any], *, task_dir: Path, defer_creation_export: bool = False,
+              _owned_namespace: Path | None = None) -> dict[str, Any]:
+        assert _owned_namespace is not None and _owned_namespace.is_dir()
+        assert task_dir.resolve().is_relative_to(_owned_namespace.resolve())
         assert defer_creation_export is True
         starts.append(task)
         return {"status": "complete", "project": str(source.parent / "project"),
