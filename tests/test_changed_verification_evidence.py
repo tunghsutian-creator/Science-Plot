@@ -93,9 +93,8 @@ def test_mismatched_reuse_is_blocked_without_automatic_retry(evidence_case, drif
 
 
 @pytest.mark.parametrize("outside", [True, False])
-def test_evidence_path_alias_or_escape_is_rejected_before_discovery(tmp_path, monkeypatch, outside):
-    external = tmp_path.parent / (tmp_path.name + "-external")
-    external.mkdir()
+def test_evidence_path_alias_or_escape_is_rejected_before_discovery(tmp_path, tmp_path_factory, monkeypatch, outside):
+    external = tmp_path_factory.mktemp("external-evidence-control")
     if outside:
         directory = external / "recorded"
     else:

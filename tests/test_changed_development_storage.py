@@ -10,6 +10,12 @@ import pytest
 from sciplot_core.verification import changed, changed_evidence, development_storage
 
 
+@pytest.fixture(autouse=True)
+def isolated_cache(tmp_path_factory, monkeypatch):
+    cache = tmp_path_factory.mktemp("sciplot-cache")
+    monkeypatch.setattr(development_storage, "user_cache_path", lambda _app: cache)
+
+
 def _plan(command):
     return {"status": "planned", "unowned_paths": [], "checks": [
         {"check_id": "pytest_changed_owners", "command": command, "status": "planned"},
@@ -65,7 +71,7 @@ def test_original_exit_is_kept_when_scratch_finalization_fails(tmp_path, monkeyp
         yield SimpleNamespace(command=command, environment={}, managed=True,
                               directory=tmp_path, cleanup={}, finish=finish)
 
-    monkeypatch.setattr(development_storage, "development_pytest_run", failing_storage)
+    monkeypatch.setattr(development_storage, "development_check_run", failing_storage)
     monkeypatch.setattr(changed, "_run_command", lambda *a, **k:
                         subprocess.CompletedProcess(command, exit_code, "actual child output", ""))
     result = changed.run_changed_verification(repo_root=tmp_path, changed_paths=["generated"])
@@ -86,7 +92,7 @@ def test_unsafe_scratch_setup_does_not_start_or_claim_a_child(tmp_path, monkeypa
         raise ValueError("generated scratch alias")
         yield
 
-    monkeypatch.setattr(development_storage, "development_pytest_run", unsafe)
+    monkeypatch.setattr(development_storage, "development_check_run", unsafe)
     monkeypatch.setattr(changed, "_run_command", lambda *a, **k: pytest.fail("Started unsafe child"))
     result = changed.run_changed_verification(repo_root=tmp_path, changed_paths=["generated"])
     assert result["status"] == "BLOCKED" and result["checks_executed"] == 0
@@ -97,7 +103,7 @@ def test_unsafe_scratch_setup_does_not_start_or_claim_a_child(tmp_path, monkeypa
 @pytest.mark.parametrize("mode", ("record", "reuse"))
 def test_recorded_modes_never_enter_disposable_lifecycle(tmp_path, monkeypatch, mode):
     monkeypatch.setattr(changed, "build_changed_verification_plan", lambda *a, **k: _plan(["generated"]))
-    monkeypatch.setattr(development_storage, "development_pytest_run",
+    monkeypatch.setattr(development_storage, "development_check_run",
                         lambda *a, **k: pytest.fail("Recorded evidence entered disposable lifecycle"))
     calls = []
     monkeypatch.setattr(changed_evidence, "run_evidence_checks", lambda plan, **kwargs:

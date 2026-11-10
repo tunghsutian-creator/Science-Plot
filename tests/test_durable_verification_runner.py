@@ -242,6 +242,14 @@ def test_public_prepare_and_reuse_bind_the_same_actual_environment(run_spec, mon
                            wall_seconds=0, artifacts=artifact_hashes(directory))
     atomic_json(directory / "receipt.json", receipt)
     assert changed_evidence._reuse_check(root, directory, run_spec)["status"] == "PASS"
+    original_temp = environment.get("PYTEST_DEBUG_TEMPROOT")
+    environment["PYTEST_DEBUG_TEMPROOT"] = str(root / "changed-caller-temp")
+    assert changed_evidence._reuse_check(root, directory, run_spec)["status"] == "BLOCKED"
+    if original_temp is None:
+        environment.pop("PYTEST_DEBUG_TEMPROOT")
+    else:
+        environment["PYTEST_DEBUG_TEMPROOT"] = original_temp
+    assert changed_evidence._reuse_check(root, directory, run_spec)["status"] == "PASS"
     assert observer.reserved == {}
     environment["SCIPLOT_TEST_SECRET"] += "-drift"
     assert changed_evidence._reuse_check(root, directory, run_spec)["status"] == "BLOCKED"

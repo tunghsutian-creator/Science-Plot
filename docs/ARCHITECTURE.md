@@ -2035,6 +2035,33 @@ choose a dedicated directory beside the original data. Repository `outputs/`
 must not be used for normal user deliveries. Internal evidence belongs to the
 sibling hidden `.sciplot/`; development gates use ignored `.tmp_verify/`.
 
+Storage role and deletion authority are separate from directory spelling:
+
+| Role | Location / authority | Lifetime |
+| --- | --- | --- |
+| Original inputs and user results | Dedicated research root, source hashes and registered project resources | User-owned; never cache cleanup |
+| Scientific fixtures / golden / historical helper source | Explicit reviewed dependency inventory | Immutable inputs; never infer disposal from an extension or ignored status |
+| Recorded evidence | Explicit verification output with bound code, input, runtime, selection and real exit | Retain until deliberate evidence review; not disposable scratch |
+| Generated ordinary test/compiler cache | `platformdirs.user_cache_path("SciPlot")/development`, owned kind + inode + completion + lease | Bounded completed retention; active/unknown protected |
+| Source and shared runtime | Git worktrees and existing `.local` dependencies | Independent worktree/dependency lifecycle, never recursive cache deletion |
+
+The existing `verification/development_storage.py` owns ordinary pytest, mypy, Ruff and
+finite local Swift diagnostic caches. `changed` uses it at actual process launch;
+the developer-only module entry uses the same owner. Compiler cache reuse reruns
+the compiler; it cannot mint verification evidence. Completed retention is seven
+idle days, two failures and one successful cache per tool within 512 MiB of
+accounted file bytes. This is not a bound on live, interrupted or recorded data.
+Historical mixed `.tmp_verify` directories are neither migrated nor adopted.
+
+This cache correction does not claim all application writers enforce an external
+research root. Ordinary, Managed, Intake/raw Studio, JSON workflow, NativeSuite,
+group/comparison/paper, final-package/panel, preview/PDF and render/recipe/mapping
+families have separate new-namespace boundaries. A future uniform destination
+admission must migrate those actual writers before their first allocation, while
+preserving existing-project queries/replays and the pure layout resolvers. Future
+recorded fixture workspace allocation also belongs before collection identity,
+not in cleanup. Do not introduce a `.tmp_verify` or test-environment exemption.
+
 The visible package contains plotting data, requested figures, editable VSZ and
 its verified inventory. PDF/TIFF remain the canonical publication pair; supported
 explicit PNG/SVG exports retain their own QA byte binding. Fresh ordinary v7

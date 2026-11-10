@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10236,
-    "nodeids_sha256": "bfb56bac0f354597f0c416e0b88a747b08667ea1d8e2ed110779fc46df18bac7",
-    "test_sources_sha256": "802b567d6dbd908f9289ecaa8ea9d01d75cbc2a706b2128a7c82b2c4a33a09f5",
-    "test_source_count": 665,
+    "nodeid_count": 10261,
+    "nodeids_sha256": "bed520863000de06f728180a16f023dfc4a6f26c7e7cab6c993f2d6287993173",
+    "test_sources_sha256": "83cefdcd1baface95c7f8cf1d05923d0b1246c67783f4d03fcb3ac2ad3ac13e1",
+    "test_source_count": 647,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
@@ -5644,7 +5644,7 @@
       "tests/test_development_storage.py::test_low_space_is_an_observation_and_does_not_reserve_or_delete_bytes",
       "tests/test_development_storage.py::test_malformed_nested_metadata_is_unknown_instead_of_hiding_a_test_result",
       "tests/test_development_storage.py::test_name_replacement_after_admission_cannot_redirect_recursive_deletion",
-      "tests/test_development_storage.py::test_nonpytest_and_explicit_user_choices_do_not_allocate_or_change_environment",
+      "tests/test_development_storage.py::test_unsupported_commands_and_explicit_user_choices_do_not_allocate_or_change_environment",
       "tests/test_development_storage.py::test_nonregular_cleanup_control_never_blocks_or_deletes_unknown_data[lease]",
       "tests/test_development_storage.py::test_nonregular_cleanup_control_never_blocks_or_deletes_unknown_data[run.json]",
       "tests/test_development_storage.py::test_real_pytest_respects_ordinary_or_observed_storage_contract[False]",
@@ -5663,7 +5663,32 @@
       "tests/test_development_storage.py::test_two_actual_children_get_distinct_storage_and_keep_active_containers",
       "tests/test_development_storage.py::test_unknown_symlink_members_cannot_select_external_data[lease]",
       "tests/test_development_storage.py::test_unknown_symlink_members_cannot_select_external_data[run.json]",
-      "tests/test_durable_verification_runner.py::test_low_space_warning_preserves_original_recorded_execution"
+      "tests/test_durable_verification_runner.py::test_low_space_warning_preserves_original_recorded_execution",
+      "tests/test_development_storage.py::test_completed_cache_budget_and_expiry_do_not_apply_to_active_or_unknown",
+      "tests/test_development_storage.py::test_completed_tool_cache_reuses_bytes_but_busy_or_unknown_cache_is_not_admitted[mypy]",
+      "tests/test_development_storage.py::test_completed_tool_cache_reuses_bytes_but_busy_or_unknown_cache_is_not_admitted[ruff]",
+      "tests/test_development_storage.py::test_completed_tool_cache_reuses_bytes_but_busy_or_unknown_cache_is_not_admitted[swift]",
+      "tests/test_development_storage.py::test_explicit_tool_caches_keep_caller_ownership[mypy-MYPY_CACHE_DIR]",
+      "tests/test_development_storage.py::test_explicit_tool_caches_keep_caller_ownership[ruff-RUFF_CACHE_DIR]",
+      "tests/test_development_storage.py::test_explicit_tool_caches_keep_caller_ownership[swift-CLANG_MODULE_CACHE_PATH]",
+      "tests/test_development_storage.py::test_legacy_mixed_worktree_and_old_owned_scratch_are_not_cleanup_inputs",
+      "tests/test_development_storage.py::test_real_mypy_rechecks_changed_source_in_reused_cache",
+      "tests/test_development_storage.py::test_tool_cache_child_alias_is_not_passed_to_the_tool[mypy]",
+      "tests/test_development_storage.py::test_tool_cache_child_alias_is_not_passed_to_the_tool[ruff]",
+      "tests/test_development_storage.py::test_tool_cache_child_alias_is_not_passed_to_the_tool[swift]",
+      "tests/test_development_storage.py::test_tool_entry_keeps_actual_exit_when_cache_finalization_fails[cleanup-0]",
+      "tests/test_development_storage.py::test_tool_entry_keeps_actual_exit_when_cache_finalization_fails[cleanup-3]",
+      "tests/test_development_storage.py::test_tool_entry_keeps_actual_exit_when_cache_finalization_fails[finish-0]",
+      "tests/test_development_storage.py::test_tool_entry_keeps_actual_exit_when_cache_finalization_fails[finish-3]",
+      "tests/test_development_storage.py::test_unknown_cache_role_is_protected_before_accounting[42]",
+      "tests/test_development_storage.py::test_unknown_cache_role_is_protected_before_accounting[None]",
+      "tests/test_development_storage.py::test_unknown_cache_role_is_protected_before_accounting[private_input]",
+      "tests/test_development_storage.py::test_unknown_cache_role_is_protected_before_accounting[purpose1]",
+      "tests/test_development_storage.py::test_unknown_cache_role_is_protected_before_accounting[purpose2]",
+      "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[alias]",
+      "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[ancestor]",
+      "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[inside]",
+      "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[other_checkout]"
     ],
     "synthetic_candidates": [
       {
@@ -24748,7 +24773,7 @@
       },
       {
         "nodeid": "tests/test_project_store_read_windows.py::test_digest_memo_is_bounded_and_isolated_between_threads",
-        "reason": "Only in-memory JSON and two Python Threads; each new thread observes independent empty\u2192256 hash-pair table, main thread mapping unchanged. No fixture/path/file read, native/Qt/process or scientific IO."
+        "reason": "Only in-memory JSON and two Python Threads; each new thread observes independent empty→256 hash-pair table, main thread mapping unchanged. No fixture/path/file read, native/Qt/process or scientific IO."
       },
       {
         "nodeid": "tests/test_project_store_read_windows.py::test_digest_memo_keeps_every_history_and_blob_read_and_detaches_new_metadata",
@@ -25664,7 +25689,7 @@
       },
       {
         "nodeid": "tests/test_intake_confirmation_semantics.py::test_confirmed_modulus_symbols_keep_prime_identity",
-        "reason": "Inline G\u2032/G\u2033 columns have distinct generated 100/20 and 80/16 values; actual consumer must preserve storage/loss identity rather than token-collapse both to g."
+        "reason": "Inline G′/G″ columns have distinct generated 100/20 and 80/16 values; actual consumer must preserve storage/loss identity rather than token-collapse both to g."
       },
       {
         "nodeid": "tests/test_intake_confirmation_semantics.py::test_disconnected_explicit_scope_rejects_before_project_factory",
@@ -27535,7 +27560,7 @@
         "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
       },
       {
-        "nodeid": "tests/test_development_storage.py::test_nonpytest_and_explicit_user_choices_do_not_allocate_or_change_environment",
+        "nodeid": "tests/test_development_storage.py::test_unsupported_commands_and_explicit_user_choices_do_not_allocate_or_change_environment",
         "reason": "Generated disposable pytest workspaces, child test files, leases and synthetic filesystem/error controls under tmp_path; no original experiment, native golden, paid model or external user project is read. Recorded/observed execution retains its actual admission and is not forced into disposable mode."
       },
       {
@@ -27613,6 +27638,106 @@
       {
         "nodeid": "tests/test_durable_verification_runner.py::test_low_space_warning_preserves_original_recorded_execution",
         "reason": "Generated synthetic durable run spec with tiny subprocess, simulated capacity warning and real original completion; original command and PASS condition remain unchanged, with no private input or model call."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_completed_cache_budget_and_expiry_do_not_apply_to_active_or_unknown",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_completed_tool_cache_reuses_bytes_but_busy_or_unknown_cache_is_not_admitted[mypy]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_completed_tool_cache_reuses_bytes_but_busy_or_unknown_cache_is_not_admitted[ruff]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_completed_tool_cache_reuses_bytes_but_busy_or_unknown_cache_is_not_admitted[swift]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_explicit_tool_caches_keep_caller_ownership[mypy-MYPY_CACHE_DIR]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_explicit_tool_caches_keep_caller_ownership[ruff-RUFF_CACHE_DIR]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_explicit_tool_caches_keep_caller_ownership[swift-CLANG_MODULE_CACHE_PATH]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_legacy_mixed_worktree_and_old_owned_scratch_are_not_cleanup_inputs",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_real_mypy_rechecks_changed_source_in_reused_cache",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_tool_cache_child_alias_is_not_passed_to_the_tool[mypy]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_tool_cache_child_alias_is_not_passed_to_the_tool[ruff]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_tool_cache_child_alias_is_not_passed_to_the_tool[swift]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_tool_entry_keeps_actual_exit_when_cache_finalization_fails[cleanup-0]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_tool_entry_keeps_actual_exit_when_cache_finalization_fails[cleanup-3]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_tool_entry_keeps_actual_exit_when_cache_finalization_fails[finish-0]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_tool_entry_keeps_actual_exit_when_cache_finalization_fails[finish-3]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unknown_cache_role_is_protected_before_accounting[42]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unknown_cache_role_is_protected_before_accounting[None]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unknown_cache_role_is_protected_before_accounting[private_input]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unknown_cache_role_is_protected_before_accounting[purpose1]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unknown_cache_role_is_protected_before_accounting[purpose2]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[alias]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[ancestor]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[inside]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
+      },
+      {
+        "nodeid": "tests/test_development_storage.py::test_unsafe_cache_location_is_rejected_before_allocation[other_checkout]",
+        "reason": "Generated cache controls only: actual child exit, local compiler/source freshness, leases, quotas, unknown roles and aliases. No private corpus or scientific input; original assertions remain."
       }
     ],
     "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance.",

@@ -73,10 +73,11 @@ def _await_original(repo_root: Path, directory: Path) -> dict[str, Any]:
 
 def _reuse_check(repo_root: Path, directory: Path, spec: dict[str, Any]) -> dict[str, Any]:
     _closed_directory(repo_root, directory)
+    from sciplot_core.verification.development_storage import without_development_storage
     from sciplot_core.verification.private_observer import reserve_child_environment
 
     # Paths and argv come from the current trusted plan/builder, never a receipt.
-    environment = reserve_child_environment(spec["environment"], reserve=False)
+    environment = reserve_child_environment(without_development_storage(spec["environment"]), reserve=False)
     current = capture_identity(**{**spec, "repo_root": repo_root, "environment": environment})
     receipt = load_receipt(directory / "receipt.json")
     return check_reuse(receipt, current, artifacts=artifact_hashes(directory))

@@ -65,13 +65,29 @@ separate from the already accepted baseline.
 
 ## Development artifact lifetime
 
-Routine quick/changed execution now has a separate disposable pytest lifetime:
-one container per real invocation, original child completion plus a kernel lease,
-successful scratch removal and two completed failed containers retained. Active,
+Routine quick/changed execution now has a shared external tool-cache root through
+the existing platformdirs dependency, not one retention domain per worktree.
+Pytest uses one container per real invocation; mypy/Ruff/Swift retain reusable tool
+bytes while always rerunning their own input checks. Original child completion
+plus a kernel lease admits completed-cache retention: success pytest removal,
+at most two failures and one successful cache per tool, seven idle days and
+512 MiB accounted file bytes. Active,
 unknown, caller-owned and recorded/captured outputs are preserved. Capacity is
 observed before/after checks, with a 5 GiB warning rather than a predicted quota.
 This bounds ordinary completed scratch accumulation; it does not pretend that
 all historical full/audit outputs are disposable or globally byte-bounded.
+
+Actual historical counterexamples are `.tmp_verify/workflow-reliability` with
+private inputs, mechanical data, final deliveries and staged originals; 175
+custom mypy cache roots and 11 Swift module-cache roots escaped conventional
+cache-name cleanup. Existing data is not adopted or deleted by the new owner.
+Retire the ad hoc cache recipes through the real changed runner and shared
+compiler entry, without a new scheduler, cache database or PASS reuse system.
+
+Still open: unified admission at every new application destination and recorded
+fixture-workspace allocation before collection. The nine writer families and
+read/query compatibility boundary are documented in Architecture. This is an
+explicit remaining migration, not a claim that a single layout guard closed it.
 
 The actual workspace has hundreds of historical worktrees and thousands of
 ignored output entries. Their names/ages do not establish safe deletion. Future

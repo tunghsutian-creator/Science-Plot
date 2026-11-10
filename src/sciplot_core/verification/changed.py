@@ -187,7 +187,7 @@ def run_changed_verification(
                                    reuse=reuse is not None)
 
     results: list[dict[str, Any]] = []
-    from sciplot_core.verification.development_storage import development_pytest_run, space_observation
+    from sciplot_core.verification.development_storage import development_check_run, space_observation
 
     if command_runner is None:
         payload["storage_before"] = space_observation(root)
@@ -199,7 +199,7 @@ def run_changed_verification(
         completed = None
         try:
             if command_runner is None:
-                with development_pytest_run(check["command"], root) as workspace:
+                with development_check_run(check["command"], root) as workspace:
                     actual["command"] = workspace.command
                     completed = _run_command(workspace.command, root, environment=workspace.environment)
                     workspace.finish(completed.returncode)

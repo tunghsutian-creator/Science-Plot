@@ -126,20 +126,27 @@ original completion evidence. Request that extra work when a reusable record or
 capture is needed; do not add it to every edit. A fast-check pass is selected
 software behavior, with no reusable receipt or full scientific/access claim.
 
-Ordinary quick/changed pytest checks use disposable per-invocation containers
-under this worktree's `.tmp_verify/pytest-development`. Passing test temporary
-directories are removed using pytest's `failed` retention policy. After the
-original pytest child returns, completed successful containers are removed and
-only the newest two completed failed containers are retained. A separate kernel
+Ordinary quick/changed checks use `platformdirs.user_cache_path("SciPlot") /
+"development"`, outside source checkouts, rather than per-worktree temporary roots.
+Pytest has a fresh container per invocation; completed successful containers are
+removed. Completed mypy/Ruff/Swift tool caches may be reused, with the tool still
+executing and validating its own inputs/options/version. This never reuses PASS.
+At most two failed runs and one successful cache per tool are retained across
+worktrees, for up to seven idle days and 512 MiB of accounted file bytes in total.
+Cleanup is opportunistic after actual child completion, not a filesystem quota.
+Active/unknown storage is protected and can exceed that bound. A separate kernel
 lease protects active containers; an interrupted run without an original child
 completion remains protected, even if pytest's own three-day lock has expired.
-This is scratch ownership, not a verification receipt or proof of scientific
+Only the owned cache kind, completed state, bound inode and available lease admit
+cleanup. Names, age, extensions and an ignored Git status do not. This is scratch
+ownership, not a verification receipt or proof of scientific
 acceptance. Cleanup warnings never turn a failed test into a pass.
 
 Recorded/reused checks, active access observers, durable suites and public stages
 retain their original evidence lifecycle. They cannot inherit the developer
 temporary-root override. Explicit `--basetemp`, `PYTEST_ADDOPTS` or caller-owned
-temporary roots are not silently taken over. Plan-only and injected command
+temporary roots are not silently taken over. Named `--input-scope` checks also
+keep their original caller-owned temporary/evidence lifecycle. Plan-only and injected command
 runners do not allocate managed scratch. Per-invocation roots also separate
 concurrent pytest processes; pytest-xdist keeps its worker directories inside
 that invocation. Do not share one explicit basetemp across parallel runs.
@@ -153,6 +160,38 @@ automatic cleanup targets. Retaining two failed scratch runs is not a global
 byte quota: necessary release evidence and unresolved interrupted runs still
 require deliberate archival/reconciliation. Never recursively delete the whole
 `.tmp_verify` or use directory age to infer that a task has finished.
+
+Use the existing quick/changed runner for everyday feedback. For standalone type
+or native-compiler diagnostics, use the same finite cache lifecycle:
+
+```sh
+python -m sciplot_core.verification.development_storage -- python -m mypy --platform darwin
+python -m sciplot_core.verification.development_storage -- python -m ruff check src tests
+python -m sciplot_core.verification.development_storage -- xcrun swiftc -typecheck generated.swift
+```
+
+Use the canonical runtime wrapper where required; the nested Python must be its
+selected interpreter. Do not create per-SHA `types-*` or module-cache directories
+under evidence. Explicit tool cache flags/environment retain caller ownership;
+they are not silently relocated or automatically pruned. The tracked application
+has no Swift compilation path; the Swift command is for actual local compiler
+diagnostics, not a new product dependency. Existing 175 custom mypy caches and 11
+Swift cache locations remain an independently reviewed cleanup task.
+
+Keep original inputs, canonical projects, task receipts, PDF references and final
+deliveries in a dedicated research directory outside development checkouts and
+tool caches. Existing internal locations remain protected compatibility inputs;
+do not move them or change historical requests during a code/cache correction.
+`.tmp_verify/workflow-reliability` was found to contain private-input,
+mechanical-data, paper-delivery, deliveries and staged originals. It is therefore
+an example of mixed protected storage, never a disposable-directory declaration.
+New recorded evidence must name its output explicitly and retain input/code/
+runtime/selection/completion identities. Generated fixture workspace allocation
+must precede collection and those bindings; do not move it at execution/cleanup.
+Old recorded operators retain their original paths. No broad cache cleanup may
+cross into scientific fixture inventories, raw/golden or shared `.local` runtime.
+For environment diagnostics, report differing key names and hashes, never dump
+environment values or use unrestricted local-variable dumps on credential-bearing inputs.
 
 Release verification stays in the same `verify` entry point: freeze the intended
 candidate, use `--start full --out FRESH_DIRECTORY`, then inspect that original
