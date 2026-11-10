@@ -2083,6 +2083,11 @@ directory identity bind environment and scope; separate operations get separate
 workspaces. Legacy records remain readable without new mandatory fields.
 Recorded workspaces and collection receipts are retained, never ordinary cache
 GC inputs. There is no `.tmp_verify` or test-environment placement exemption.
+The bounded CI native diagnostic keeps its source stage/receipts separate from
+pytest-generated product data. Its admitted `RUNNER_TEMP` gets a unique workspace
+before staging; the actual basetemp and failure diagnostics use that same root.
+A source/cache runner root fails before allocation. The twelve original nodes,
+order, phase review and timeouts remain unchanged; this is not full acceptance.
 
 The visible package contains plotting data, requested figures, editable VSZ and
 its verified inventory. PDF/TIFF remain the canonical publication pair; supported

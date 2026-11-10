@@ -204,3 +204,42 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     exercise_profile_stage_route(tmp_path / "profile-routes", monkeypatch)
     from ci_public_profiles_support import exercise_ci_feedback_layers
     exercise_ci_feedback_layers(ROOT, tmp_path, monkeypatch)
+
+
+@pytest.mark.parametrize("runner_location", ["external", "source", "development"])
+def test_native_preflight_places_generated_data_outside_source_before_staging(tmp_path, monkeypatch, runner_location):
+    import textwrap
+    from sciplot_core.foundation import research_destination
+
+    workflow = (ROOT / ".github/workflows/minimal-repository.yml").read_text()
+    step = next(part for part in workflow.split("      - name: ")
+                if part.startswith("Check known native CI regressions"))
+    script = textwrap.dedent(step.split("python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0])
+    prefix = script.split("from sciplot_core.verification.ci_feedback import", 1)[0]
+    checkout = tmp_path / "checkout"
+    (checkout / "src/sciplot_core").mkdir(parents=True)
+    (checkout / "pyproject.toml").write_text('[project]\nname = "sciplot-core"\n')
+    external = tmp_path / "runner"
+    external.mkdir()
+    marker = external / "unrelated.txt"
+    marker.write_bytes(b"never remove unrelated runner files")
+    runner = {"external": external, "source": checkout / ".tmp_verify/runner",
+              "development": research_destination.user_cache_path("SciPlot") / "development/runner"}[runner_location]
+    monkeypatch.chdir(checkout)
+    monkeypatch.setenv("RUNNER_TEMP", str(runner))
+    monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+    namespace = {}
+    if runner_location == "external":
+        exec(compile(prefix, "<ci-native-preflight-allocation>", "exec"), namespace)
+        workspace = namespace["pytest_workspace"]
+        assert workspace.parent == external and workspace.is_dir()
+        assert namespace["pytest_tmp"] == workspace / "pytest-tmp"
+        assert '"--basetemp", str(pytest_tmp)' in script
+        assert '(pytest_tmp, {"native-worker.log"})' in script
+        assert 'str(output / "pytest-tmp")' not in script
+    else:
+        with pytest.raises(ValueError, match="New research output cannot"):
+            exec(compile(prefix, "<ci-native-preflight-allocation>", "exec"), namespace)
+        assert not runner.exists()
+    assert marker.read_bytes() == b"never remove unrelated runner files"
+    assert not (checkout / ".tmp_verify/ci_known_native_regressions").exists()

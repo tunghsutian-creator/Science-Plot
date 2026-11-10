@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10342,
-    "nodeids_sha256": "c699aa69405bf95a31441dfde893a5a63c06afe8d87a2fd76beb356495fa9a77",
-    "test_sources_sha256": "51b7809e134a4eb1bef26497607305768a07a1703985aa47ae043cac5e704693",
+    "nodeid_count": 10345,
+    "nodeids_sha256": "0b86d073b211b4239e274efe2d61c79f4025d5e1a7d7149f54b68a63f9263f6e",
+    "test_sources_sha256": "4a8d3d69bd955b2680e4a511dddb6f8e547eef5f3b13427b1dafa6a8cd20a178",
     "test_source_count": 649,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
@@ -5769,7 +5769,10 @@
       "tests/test_suite_verification_cli.py::test_private_collection_uses_prepared_workspace_without_false_input_pass[False]",
       "tests/test_suite_verification_cli.py::test_private_collection_uses_prepared_workspace_without_false_input_pass[True]",
       "tests/test_suite_verification_cli.py::test_suite_rejects_explicit_software_temp_root_before_any_collection",
-      "tests/test_verification_evidence_scope.py::test_nested_formal_spec_never_shares_an_outer_operation_workspace"
+      "tests/test_verification_evidence_scope.py::test_nested_formal_spec_never_shares_an_outer_operation_workspace",
+      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[development]",
+      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[external]",
+      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[source]"
     ],
     "synthetic_candidates": [
       {
@@ -28143,9 +28146,21 @@
       {
         "nodeid": "tests/test_verification_evidence_scope.py::test_nested_formal_spec_never_shares_an_outer_operation_workspace",
         "reason": "Generated destination/recorded-workspace contracts: source/cache refusal, real legacy identity and containment, actual directory/source identity and collection/reuse lifecycle. No private input or native golden; original scientific assertions retained."
+      },
+      {
+        "nodeid": "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[development]",
+        "reason": "Generated CI preflight allocation prefix only: real external RUNNER_TEMP succeeds, source/development-cache roots refuse before allocation; no native test or scientific input."
+      },
+      {
+        "nodeid": "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[external]",
+        "reason": "Generated CI preflight allocation prefix only: real external RUNNER_TEMP succeeds, source/development-cache roots refuse before allocation; no native test or scientific input."
+      },
+      {
+        "nodeid": "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[source]",
+        "reason": "Generated CI preflight allocation prefix only: real external RUNNER_TEMP succeeds, source/development-cache roots refuse before allocation; no native test or scientific input."
       }
     ],
-    "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance. 2026-11-10 storage closure: actual zero-body unfiltered10342-node collection,81 additive generated public-focused cases, original tiers/private dependencies/duties retained. Synthetic host providers isolate unit paths; production has no test-environment placement exemption. Static review is not full/private scientific acceptance.",
+    "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance. 2026-11-10 storage closure: actual zero-body unfiltered10342-node collection,81 additive generated public-focused cases, original tiers/private dependencies/duties retained. Synthetic host providers isolate unit paths; production has no test-environment placement exemption. Static review is not full/private scientific acceptance. 2026-11-10 CI workspace correction: original10342 full collection plus complete11-node policy-module collection gives10345, three additive generated focused allocator controls. The actual unchanged12-node staged native preflight must freshly confirm full scope before any body; no historical node, tier or scientific duty removed.",
     "scope": [
       "real_world",
       "polymer_corpus",

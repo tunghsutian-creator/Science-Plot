@@ -245,12 +245,17 @@ jobs:
           from pathlib import Path
           import subprocess
           import sys
+          import tempfile
           from sciplot_core.verification.public_stage import RECEIPT, create_stage, review_stage_reports, runtime_binding
 
           root = Path.cwd().resolve()
           output = root / ".tmp_verify/ci_known_native_regressions"
           environment = dict(os.environ)
           assert not environment.get("PYTEST_ADDOPTS", "").strip()
+          from sciplot_core.foundation.research_destination import require_data_destination
+          workspace_parent = require_data_destination(Path(os.environ["RUNNER_TEMP"]))
+          pytest_workspace = Path(tempfile.mkdtemp(prefix="sciplot-native-preflight-", dir=workspace_parent))
+          pytest_tmp = pytest_workspace / "pytest-tmp"
           from sciplot_core.verification.ci_feedback import NATIVE_PREFIX, NATIVE_EXPECTED
           required_prefix = list(NATIVE_PREFIX)
           expected = set(NATIVE_EXPECTED)
@@ -267,7 +272,7 @@ jobs:
           child_environment.update(SCIPLOT_VERIFY_FINISH=str(finish), SCIPLOT_PUBLIC_STAGE_REPORT=str(reports_path))
           command = [sys.executable, "-m", "pytest", "-vv", "--tb=short", "-p", "sciplot_core.verification.pytest_finish",
                      "-p", "sciplot_core.verification.public_stage", "--input-scope", "public-all", "-k", expression,
-                     "--basetemp", str(output / "pytest-tmp")]
+                     "--basetemp", str(pytest_tmp)]
           result = subprocess.run(command, cwd=stage, env=child_environment, stdin=subprocess.DEVNULL, check=False)
           post = subprocess.run(validate, cwd=stage, env=child_environment, check=False)
           marker = json.loads(finish.read_bytes()) if finish.is_file() else {}
@@ -286,6 +291,7 @@ jobs:
               issues.append("Original or staged source/runtime binding changed.")
           summary = {"kind": "sciplot_bounded_ci_regression_preflight", "claim": "DIAGNOSTIC_ONLY", "origin_head": before["origin_head"],
                      "actual_exit_code": result.returncode, "finish_complete": marker.get("complete"),
+                     "pytest_workspace": str(pytest_workspace),
                      "selected_nodes": marker.get("selected_tests", []), "phase_count": len(phases), "issues": issues,
                      "full_public_acceptance": False, "scientific_acceptance": False, "access_capture_complete": False}
           (output / "scoped-result.json").write_text(json.dumps(summary, indent=2) + "\n")
@@ -294,7 +300,7 @@ jobs:
               # Only this fresh twelve-node run owns these generated outputs.
               # Never enumerate source fixtures, environment files or other runs.
               diagnostic_roots = (
-                  (output / "pytest-tmp", {"native-worker.log"}),
+                  (pytest_tmp, {"native-worker.log"}),
                   (stage / ".tmp_verify/entry-checkpoints/native-cases",
                    {"child.stdout.log", "child.stderr.log", "result.json", "owned-native.json", "owned-native-progress.json"}),
                   (stage / ".tmp_verify/attached-semantic/native-cases",

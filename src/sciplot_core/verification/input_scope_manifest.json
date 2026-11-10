@@ -10181,7 +10181,10 @@
       "tests/test_suite_verification_cli.py::test_private_collection_uses_prepared_workspace_without_false_input_pass[False]",
       "tests/test_suite_verification_cli.py::test_private_collection_uses_prepared_workspace_without_false_input_pass[True]",
       "tests/test_suite_verification_cli.py::test_suite_rejects_explicit_software_temp_root_before_any_collection",
-      "tests/test_verification_evidence_scope.py::test_nested_formal_spec_never_shares_an_outer_operation_workspace"
+      "tests/test_verification_evidence_scope.py::test_nested_formal_spec_never_shares_an_outer_operation_workspace",
+      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[development]",
+      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[external]",
+      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[source]"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20198,7 +20201,10 @@
       "tests/test_suite_verification_cli.py::test_private_collection_uses_prepared_workspace_without_false_input_pass[False]",
       "tests/test_suite_verification_cli.py::test_private_collection_uses_prepared_workspace_without_false_input_pass[True]",
       "tests/test_suite_verification_cli.py::test_suite_rejects_explicit_software_temp_root_before_any_collection",
-      "tests/test_verification_evidence_scope.py::test_nested_formal_spec_never_shares_an_outer_operation_workspace"
+      "tests/test_verification_evidence_scope.py::test_nested_formal_spec_never_shares_an_outer_operation_workspace",
+      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[development]",
+      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[external]",
+      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[source]"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
