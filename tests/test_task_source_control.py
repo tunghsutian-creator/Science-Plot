@@ -18,7 +18,10 @@ def pending(tmp_path, monkeypatch):
     source.write_text("x,y\n1,2\n")
     calls = []
 
-    def preview(_project, selected, *, review_path, worksheet):
+    def preview(_project, selected, *, review_path, worksheet, _output_namespace=None):
+        if _output_namespace is not None:
+            assert _output_namespace.is_dir()
+            assert review_path.resolve().is_relative_to(_output_namespace.resolve())
         assert _project == project and selected == source and worksheet == "Data"
         calls.append("preview")
         return {"status": "ready", "project": str(project), "revision_id": "a" * 64,

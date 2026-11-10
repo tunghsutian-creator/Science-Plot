@@ -47,12 +47,18 @@ def stored_comparison(project, tmp_path, monkeypatch):
                 'scientific_audit': {'status': 'passed', 'document_sha256': saved['sha256'],
                                      'spec_sha256': companion['sha256']}}
 
-    def preview(_project, *, figure_id, output_dir):
+    def preview(_project, *, figure_id, output_dir, _output_namespace=None):
+        if _output_namespace is not None:
+            assert _output_namespace.is_dir()
+            assert output_dir.resolve().is_relative_to(_output_namespace.resolve())
         output_dir.mkdir()
         return {'document': {'sha256': file_sha256(document)},
                 'preview': artifact(output_dir / 'current.png', PNG)}
 
-    def start(request, *, task_dir):
+    def start(request, *, task_dir, _owned_namespace=None):
+        if _owned_namespace is not None:
+            assert _owned_namespace.is_dir()
+            assert task_dir.resolve().is_relative_to(_owned_namespace.resolve())
         task_dir.mkdir(parents=True)
         review = preview_native_edit(project, [], output_dir=task_dir / 'native', figure_id='first',
             expected_document_sha256=request['expected_document_sha256'], operations=request['operations'],

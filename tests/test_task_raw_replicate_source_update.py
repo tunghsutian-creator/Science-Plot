@@ -121,7 +121,10 @@ def test_same_task_corrects_choice_reviews_same_figure_and_installs_once_with_ar
     monkeypatch.setattr(review, "project_figures", lambda root: {"impact_strength_by_sample":
         (root / "studio/document.vsz", root / "studio/spec.json")})
 
-    def preview(selected_project, selected_source, *, review_path, worksheet, mapping_request):
+    def preview(selected_project, selected_source, *, review_path, worksheet, mapping_request, _output_namespace=None):
+        if _output_namespace is not None:
+            assert _output_namespace.is_dir()
+            assert review_path.resolve().is_relative_to(_output_namespace.resolve())
         assert selected_project == project and selected_source == source and worksheet is None
         plan = dict(build_plan_preview(source, request=mapping_request))
         try:

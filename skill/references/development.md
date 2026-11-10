@@ -721,3 +721,10 @@ Old project, native-file and registered-artifact compatibility does not require
 retaining retired GUI/browser writers. Migrate real scientific and recovery
 responsibilities to their Core owners, preserve historical bytes and refusal
 boundaries, then remove the replaced paths. The product remains external-AI driven.
+
+
+When an internal call signature changes, enumerate its real production callers
+and monkeypatch/patch.object substitutes before freezing. Migrate explicit fake
+parameters without swallowing unknown keywords or removing behavior assertions;
+run their consumer modules. Filename families alone do not prove that a shared
+interface's consumers were covered. A passing subset remains a subset.

@@ -327,7 +327,11 @@ def _install_task_recording_renderer(
         options: dict[str, Any],
         export_formats: object,
         request_context: dict[str, Any],
+        _output_namespace: Path | None = None,
     ) -> dict[str, Any]:
+        if _output_namespace is not None:
+            assert _output_namespace.is_dir()
+            assert output_dir.resolve().is_relative_to(_output_namespace.resolve())
         output_dir.mkdir(parents=True, exist_ok=True)
         document = output_dir / f"{template}.vsz"
         pdf = output_dir / f"{template}.pdf"
