@@ -7,7 +7,7 @@ def linear_ticks(domain: list[float]) -> list[float]:
     magnitude = 10 ** math.floor(math.log10((high - low) / 5))
     step = next(item * magnitude for item in (1, 2, 2.5, 5, 10) if item * magnitude >= (high - low) / 5)
     first = math.ceil(low / step) * step
-    return [round(first + index * step, 12) for index in range(12) if first + index * step <= high + step * 1e-9]
+    return [first + index * step for index in range(12) if first + index * step <= high]
 
 
 def numeric_axis(values: list[float], *, quantity: str, transform: str, dimension: str,

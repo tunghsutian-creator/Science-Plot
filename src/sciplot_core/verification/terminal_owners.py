@@ -48,6 +48,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
     ),
     owned_test_paths=frozenset(
         {
+            "tests/test_render_worksheet_selection.py",
             "tests/test_render_worker_rejection.py",
             "tests/test_generic_prepared_terminal_source.py",
             "tests/test_generic_single_task_plan.py",
@@ -69,6 +70,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
         }
     ),
     pytest_targets=(
+        "tests/test_render_worksheet_selection.py",
         "tests/test_research_destination.py",
         'tests/test_native_setting_admission.py',
         "tests/test_render_worker_rejection.py",

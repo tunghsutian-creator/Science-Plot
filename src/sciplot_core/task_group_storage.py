@@ -29,8 +29,9 @@ def validate_group_location(root: Path, request: dict[str, Any]) -> None:
         task = item["request"]
         task_location(task, root)  # Includes original source/project/delivery boundaries.
         if task["action"] == "create":
-            source = Path(task["source"])
-            sources.append(source)
+            inputs = [Path(value) for value in task["sources"]] if "sources" in task else [Path(task["source"])]
+            sources.extend(inputs)
+            source = inputs[0]  # Matches the single task's default output naming only.
             layout = resolve_user_output_layout(source, requested_delivery_root=task.get("out"))
             destinations.extend((item["id"], path) for path in (layout.workspace_root, layout.delivery_root))
         else:
@@ -78,3 +79,23 @@ def active_step(item: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | 
             return step, state
     step = item["steps"][-1]
     return step, step_state(step)
+
+
+def original_source_current(state: dict[str, Any] | None) -> bool | None:
+    """Use the child task's complete frozen source evidence for group guards and views."""
+    if not state or state["request"]["action"] != "create":
+        return None
+    if "intent" in state["request"]:
+        from sciplot_core.task_semantic_creation import assert_sources_current
+
+        try:
+            assert_sources_current(state)
+        except TaskControlError as exc:
+            if exc.reason_code != "source_changed":
+                raise
+            return False
+        return True
+    from sciplot_core.foundation.source_tree import source_tree_sha256
+
+    expected = state.get("source_sha256")
+    return source_tree_sha256(Path(state["request"]["source"])) == expected if expected else None

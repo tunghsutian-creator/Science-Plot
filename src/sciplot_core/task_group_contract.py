@@ -19,12 +19,13 @@ def group_request_schema() -> dict[str, Any]:
         "preset": {"type": "string", "minLength": 1},
         "expected_preset_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     }, ["preset", "expected_preset_sha256"])
+    preset["description"] = "Shared native sample style preset; applies only to source-based native create items."
     presentation = object_schema({
         "figure_id": text,
         "operations": annotation_operation_capabilities()["operations_schema"],
     }, ["operations"])
     presentation["description"] = (
-        "Explicit existing edit operations after native preparation and before first export. "
+        "Native create requests only (source, not sources+intent). Explicit existing edit operations after native preparation and before first export. "
         "A multi-figure project requires figure_id. Every changed candidate still requires review."
     )
     return object_schema({
@@ -73,6 +74,13 @@ def normalize_group_request(value: dict[str, Any], *, base_dir: Path | None = No
         for key in ("source", "project", "out", "profile"):
             if key in task:
                 task[key] = absolute(task[key])
+        if "sources" in task:
+            from sciplot_core.task_semantic_creation import normalize_sources
+
+            task["sources"] = [absolute(source) for source in task["sources"]]
+            normalize_sources(task)
+        if "intent" in task and (item.get("presentation") or request.get("sample_style_preset")):
+            raise TaskControlError("group_presentation_scope", "Native presentation operations require a native create request; express semantic presentation in intent.")
         if task["action"] == "edit":
             validate_operation_batch(task["operations"])
             for operation in task["operations"]:

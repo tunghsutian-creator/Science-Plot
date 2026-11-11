@@ -66,7 +66,7 @@ def _card(root: Path, item: dict[str, Any], figure: dict[str, Any], index: int) 
     problem = item.get("blocker") or task.get("blocker") or task.get("question") or {}
     title = figure.get("title", "等待生成图形")
     samples = [str(sample["sample"]) for sample in figure.get("samples", []) if sample.get("sample")]
-    search = ' '.join([item["label"], title, *samples, str(item.get("source", ""))])
+    search = ' '.join([item["label"], title, *samples, str(item.get("sources", item.get("source", "")))])
     candidate = figure.get("scope") == "candidate"
     kind = figure.get("scope") if figure.get("scope") in {"saved", "candidate"} else "unavailable"
     state_label = _TASK_LABELS.get(item["status"], "状态待核查")
@@ -85,6 +85,7 @@ def _card(root: Path, item: dict[str, Any], figure: dict[str, Any], index: int) 
     source_label = "原始数据路径" if item.get("source") else "项目数据路径"
     paths = [("source", source_label, source), ("document", "保存图路径", figure.get("document")),
              ("delivery", "交付目录", (evidence.get("delivery") or {}).get("path"))]
+    paths.extend((f"source-{index}", "原始数据路径", path) for index, path in enumerate(item.get("sources", [])))
     body.extend(copy_field(f'{identifier}-{key}', label, value) for key, label, value in paths)
     if figure.get("document_sha256"):
         body.append(f'<p class="revision">保存版本 <code title="{text(figure["document_sha256"])}">{text(figure["document_sha256"][:12])}</code></p>')

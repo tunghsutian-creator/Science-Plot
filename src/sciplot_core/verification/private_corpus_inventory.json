@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10345,
-    "nodeids_sha256": "0b86d073b211b4239e274efe2d61c79f4025d5e1a7d7149f54b68a63f9263f6e",
-    "test_sources_sha256": "d395c2de83b9dd179ebce6384561e47c35ed8a95ef1f63c5807bf6942c9f92ef",
-    "test_source_count": 649,
+    "nodeid_count": 10370,
+    "nodeids_sha256": "2991ee0d2228eae40e21b3f76a1f05961fdbba7bcf85862b18ba842f19f0f6bc",
+    "test_sources_sha256": "36a8b5f094c707b54f40ff4d00e1ac30ced63490e66d3932ddc8de42796b99e4",
+    "test_source_count": 653,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
@@ -5772,7 +5772,32 @@
       "tests/test_verification_evidence_scope.py::test_nested_formal_spec_never_shares_an_outer_operation_workspace",
       "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[development]",
       "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[external]",
-      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[source]"
+      "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[source]",
+      "tests/test_current_view.py::test_automatic_linear_ticks_preserve_small_and_ordinary_scales[values0]",
+      "tests/test_current_view.py::test_automatic_linear_ticks_preserve_small_and_ordinary_scales[values1]",
+      "tests/test_data_mapping_transformations.py::test_aggregate_count_names_cannot_overwrite_group_or_value_columns",
+      "tests/test_data_mapping_transformations.py::test_aggregate_counts_match_each_statistic_without_missing_observations",
+      "tests/test_data_mapping_transformations.py::test_unit_conversion_requires_current_unit_and_rejects_repeated_conversion",
+      "tests/test_plot_data_exports.py::test_missing_measurements_do_not_become_metadata_and_ambiguous_rows_are_rejected",
+      "tests/test_plot_data_exports.py::test_numeric_first_measurements_are_not_unit_and_sample_metadata",
+      "tests/test_plot_data_exports.py::test_single_header_delivery_roundtrip_preserves_first_measurements",
+      "tests/test_plot_data_exports.py::test_three_metadata_rows_are_preserved_including_dimensionless_units",
+      "tests/test_render_worksheet_selection.py::test_direct_render_worksheet_survives_worker_and_exact_source_audit",
+      "tests/test_render_worksheet_selection.py::test_source_reader_uses_requested_worksheet_for_current_and_legacy[1]",
+      "tests/test_render_worksheet_selection.py::test_source_reader_uses_requested_worksheet_for_current_and_legacy[wanted]",
+      "tests/test_task_group_semantic_sources.py::test_alias_sources_reuse_single_task_validation",
+      "tests/test_task_group_semantic_sources.py::test_group_checks_every_attachment_before_resume_and_in_overview[False-original.csv]",
+      "tests/test_task_group_semantic_sources.py::test_group_checks_every_attachment_before_resume_and_in_overview[False-second.csv]",
+      "tests/test_task_group_semantic_sources.py::test_group_checks_every_attachment_before_resume_and_in_overview[True-original.csv]",
+      "tests/test_task_group_semantic_sources.py::test_group_checks_every_attachment_before_resume_and_in_overview[True-second.csv]",
+      "tests/test_task_group_semantic_sources.py::test_multisource_group_create_and_resume_keep_manifest_paths_and_all_hashes[False]",
+      "tests/test_task_group_semantic_sources.py::test_multisource_group_create_and_resume_keep_manifest_paths_and_all_hashes[True]",
+      "tests/test_task_group_semantic_sources.py::test_native_only_group_styles_fail_before_semantic_creation[presentation]",
+      "tests/test_task_group_semantic_sources.py::test_native_only_group_styles_fail_before_semantic_creation[sample_style_preset]",
+      "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[checkpoint]",
+      "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[other_output]",
+      "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[own_output]",
+      "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[workspace]"
     ],
     "synthetic_candidates": [
       {
@@ -28158,9 +28183,109 @@
       {
         "nodeid": "tests/test_repository_policy.py::test_native_preflight_places_generated_data_outside_source_before_staging[source]",
         "reason": "Generated CI preflight allocation prefix only: real external RUNNER_TEMP succeeds, source/development-cache roots refuse before allocation; no native test or scientific input."
+      },
+      {
+        "nodeid": "tests/test_current_view.py::test_automatic_linear_ticks_preserve_small_and_ordinary_scales[values0]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_current_view.py::test_automatic_linear_ticks_preserve_small_and_ordinary_scales[values1]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_data_mapping_transformations.py::test_aggregate_count_names_cannot_overwrite_group_or_value_columns",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_data_mapping_transformations.py::test_aggregate_counts_match_each_statistic_without_missing_observations",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_data_mapping_transformations.py::test_unit_conversion_requires_current_unit_and_rejects_repeated_conversion",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_plot_data_exports.py::test_missing_measurements_do_not_become_metadata_and_ambiguous_rows_are_rejected",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_plot_data_exports.py::test_numeric_first_measurements_are_not_unit_and_sample_metadata",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_plot_data_exports.py::test_single_header_delivery_roundtrip_preserves_first_measurements",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_plot_data_exports.py::test_three_metadata_rows_are_preserved_including_dimensionless_units",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_render_worksheet_selection.py::test_direct_render_worksheet_survives_worker_and_exact_source_audit",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_render_worksheet_selection.py::test_source_reader_uses_requested_worksheet_for_current_and_legacy[1]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_render_worksheet_selection.py::test_source_reader_uses_requested_worksheet_for_current_and_legacy[wanted]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_alias_sources_reuse_single_task_validation",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_group_checks_every_attachment_before_resume_and_in_overview[False-original.csv]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_group_checks_every_attachment_before_resume_and_in_overview[False-second.csv]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_group_checks_every_attachment_before_resume_and_in_overview[True-original.csv]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_group_checks_every_attachment_before_resume_and_in_overview[True-second.csv]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_multisource_group_create_and_resume_keep_manifest_paths_and_all_hashes[False]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_multisource_group_create_and_resume_keep_manifest_paths_and_all_hashes[True]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_native_only_group_styles_fail_before_semantic_creation[presentation]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_native_only_group_styles_fail_before_semantic_creation[sample_style_preset]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[checkpoint]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[other_output]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[own_output]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
+      },
+      {
+        "nodeid": "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[workspace]",
+        "reason": "Generated local remediation control: synthetic unit/replicate tables, CSV round-trip, two-sheet workbook, small numeric axes, or multi-source task state; no private research fixtures. The worksheet native check audits only its generated workbook."
       }
     ],
-    "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance. 2026-11-10 storage closure: actual zero-body unfiltered10342-node collection,81 additive generated public-focused cases, original tiers/private dependencies/duties retained. Synthetic host providers isolate unit paths; production has no test-environment placement exemption. Static review is not full/private scientific acceptance. 2026-11-10 CI workspace correction: original10342 full collection plus complete11-node policy-module collection gives10345, three additive generated focused allocator controls. The actual unchanged12-node staged native preflight must freshly confirm full scope before any body; no historical node, tier or scientific duty removed. 2026-11-10 callback migration closure: complete50-node collection for four consumer modules remains exact (49 original focused bodies PASS,one original comprehensive deselected). Five test doubles explicitly accept their real namespace parameter and check containment; no production code,scientific assertion,node,tier,dependency or duty change. Only current test-byte binding changes; earlier c29112-node receipt remains historical under its own SHA. 2026-11-10 public capture carrier consumer: the actual guarded child now receives build_check_spec prepared environment; dropping only the workspace carrier is explicitly refused in the same original node. Thirty unchanged module node IDs, no production guard,scientific assertion,scope classification or dependency change. Previous5299705 successful bodies and one failure remain historical,not a new-SHA pass.",
+    "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance. 2026-11-10 storage closure: actual zero-body unfiltered10342-node collection,81 additive generated public-focused cases, original tiers/private dependencies/duties retained. Synthetic host providers isolate unit paths; production has no test-environment placement exemption. Static review is not full/private scientific acceptance. 2026-11-10 CI workspace correction: original10342 full collection plus complete11-node policy-module collection gives10345, three additive generated focused allocator controls. The actual unchanged12-node staged native preflight must freshly confirm full scope before any body; no historical node, tier or scientific duty removed. 2026-11-10 callback migration closure: complete50-node collection for four consumer modules remains exact (49 original focused bodies PASS,one original comprehensive deselected). Five test doubles explicitly accept their real namespace parameter and check containment; no production code,scientific assertion,node,tier,dependency or duty change. Only current test-byte binding changes; earlier c29112-node receipt remains historical under its own SHA. 2026-11-10 public capture carrier consumer: the actual guarded child now receives build_check_spec prepared environment; dropping only the workspace carrier is explicitly refused in the same original node. Thirty unchanged module node IDs, no production guard,scientific assertion,scope classification or dependency change. Previous5299705 successful bodies and one failure remain historical,not a new-SHA pass. 2026-11-11 targeted correctness remediation: actual unfiltered 10370-node collection, zero executed bodies, 25 additive generated public-focused controls. Original private cases, dependencies, tiers, and responsibilities remain unchanged. Static test-byte binding only; no new full-suite or scientific acceptance claim.",
     "scope": [
       "real_world",
       "polymer_corpus",

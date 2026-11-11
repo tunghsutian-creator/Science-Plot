@@ -454,3 +454,21 @@ def test_single_observation_is_drawable_as_point_but_cannot_invent_a_line_segmen
     assert error.value.reason_code == "figure_empty_auto_extent"
     layer["marks"][0]["type"] = "point"
     resolve(resolve_current_view(spec, data), data)
+
+
+@pytest.mark.parametrize("values", [[1e-14, 1.5e-14, 2e-14], [1., 5., 15.]])
+def test_automatic_linear_ticks_preserve_small_and_ordinary_scales(values):
+    spec, data = current()
+    data["raw:A"]["columns"]["column:1"]["values"] = values
+    for fixed_window in (False, True):
+        if fixed_window:
+            fixed(spec, [0., 10.], [min(values), max(values)])
+        resolved = resolve_current_view(spec, data)
+        validate_figure_spec(resolved)
+        axis = resolved["views"][0]["axes"][1]
+        ticks = axis["ticks"]
+        low, high = resolved["scales"][1]["domain"]
+        assert len(ticks) >= 2 and len(ticks) == len(set(ticks))
+        assert ticks == sorted(ticks)
+        assert all(low <= tick <= high for tick in ticks)
+        assert any(tick != 0 for tick in ticks)

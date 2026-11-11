@@ -15,6 +15,7 @@ TERMINAL_RENDER_REQUEST_VERSION = 2
 LEGACY_TERMINAL_RENDER_REQUEST_FIELDS = frozenset(
     {
         "template",
+        "sheet",
         "render_options",
         "explicit_render_option_keys",
         "rule_id",
@@ -139,6 +140,12 @@ def project_terminal_render_request(
         raise ValueError("A terminal render request needs a template.")
     if not isinstance(request_context, dict):
         return request
+    if "sheet" in request_context:
+        sheet = request_context["sheet"]
+        if isinstance(sheet, bool) or not isinstance(sheet, str | int):
+            raise ValueError("A worksheet selector must be a name or integer index.")
+        if sheet != 0:
+            request["sheet"] = sheet
     from sciplot_core.studio_render.direct_label_layout import DIRECT_LABEL_LAYOUT_KEY, active_direct_label_layout
 
     if DIRECT_LABEL_LAYOUT_KEY in request_context:

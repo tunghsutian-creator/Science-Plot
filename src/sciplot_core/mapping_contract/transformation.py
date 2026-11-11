@@ -29,6 +29,14 @@ from sciplot_core.mapping_contract.transform_validation import (
 
 @dataclass(frozen=True)
 class DeclarativeTransformation:
+    """A validated mapping operation.
+
+    For aggregate_replicates, count_column (default replicate_count) is the
+    non-missing count of a single value column. With multiple value_columns it
+    is a prefix: <count_column>_<value_column> counts each value independently,
+    matching the observations used by that column's mean or median.
+    """
+
     transformation_type: str
     parameters: dict[str, Any]
     source_ids: tuple[str, ...] = ()

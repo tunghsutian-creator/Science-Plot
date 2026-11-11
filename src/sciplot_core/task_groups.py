@@ -6,13 +6,12 @@ from pathlib import Path
 from subprocess import TimeoutExpired
 from typing import Any
 
-from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_control import resume_task, start_task
 from sciplot_core.task_group_contract import group_responses_schema, normalize_group_request, validate_shape
-from sciplot_core.task_group_storage import active_step, group_path, load_group, save_group, step_state, validate_group_location
+from sciplot_core.task_group_storage import active_step, original_source_current, group_path, load_group, save_group, step_state, validate_group_location
 from sciplot_core.task_group_review import group_overview
 
 
@@ -22,11 +21,9 @@ def _step(root: Path, identifier: str, name: str, request: dict[str, Any]) -> di
 
 def _require_original_source_current(item: dict[str, Any]) -> None:
     first = step_state(item["steps"][0])
-    if first and first["request"]["action"] == "create":
-        expected = first.get("source_sha256")
-        if expected is not None and source_tree_sha256(Path(first["request"]["source"])) != expected:
-            raise TaskControlError(
-                "source_changed", "The original group source changed. Preserve the saved native project and preview; resolve the scientific source revision before continuing this same group.")
+    if original_source_current(first) is False:
+        raise TaskControlError(
+            "source_changed", "The original group source changed. Preserve the saved project and preview; resolve the scientific source revision before continuing this same group.")
 
 
 def _presentation_steps(root: Path, state: dict[str, Any], item: dict[str, Any]) -> list[dict[str, Any]]:

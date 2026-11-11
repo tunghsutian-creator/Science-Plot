@@ -11,6 +11,7 @@ import pandas as pd
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256, file_sha256
 from sciplot_core.foundation.path_names import slug
+from sciplot_core.materials_rules.unit_formatting import looks_like_unit_expression
 from sciplot_core.plot_data.source_tables import (
     data_source as _data_source,
     load_source_table as _load_source_table,
@@ -69,7 +70,6 @@ def build_plot_data_exports(
         table = _spec_to_table(spec, manifest=manifest, spec_path=spec_path)
         if table is None or table.empty:
             continue
-        stem = project_name if index == 1 else f"{project_name}_{index:02d}"
         output = destination / f"{stem}_plot_data.csv"
         _write_table_csv(table, output)
         records.append(_data_record(output, source=spec_path, source_kind="veusz_spec"))
@@ -102,14 +102,27 @@ def _write_four_row_csv(table: pd.DataFrame, output: Path, *, sample_hint: str) 
 def _looks_like_four_row_table(table: pd.DataFrame) -> bool:
     if table.shape[0] < 4 or table.shape[1] < 1:
         return False
-    data = table.iloc[3:].apply(pd.to_numeric, errors="coerce")
-    numeric_count = int(data.notna().sum().sum())
-    if numeric_count < 2:
+    metadata = table.iloc[:3].fillna("").astype(str).apply(lambda column: column.str.strip())
+    if not metadata.iloc[0].any() or not metadata.iloc[2].any():
         return False
-    first_rows = table.iloc[:3].fillna("").astype(str)
-    return bool(first_rows.iloc[0].str.strip().any()) and bool(
-        first_rows.iloc[2].str.strip().any()
-    )
+    units = metadata.iloc[1]
+    numeric_units = pd.to_numeric(units, errors="coerce")
+    # A unit row cannot contain measurements. "1" is the dimensionless unit;
+    # when every unit is numeric, require textual sample metadata as evidence.
+    if (numeric_units.notna() & numeric_units.ne(1)).any():
+        return False
+    if not (units.eq("") | numeric_units.eq(1) | units.map(looks_like_unit_expression)).all():
+        return False
+    if not (units.ne("") & numeric_units.isna()).any():
+        samples = metadata.iloc[2]
+        if not (samples.ne("") & pd.to_numeric(samples, errors="coerce").isna()).any():
+            if any(_unit_from_label(label) not in {"", "1"} for label in metadata.iloc[0]):
+                return False
+            raise ValueError(
+                "Ambiguous CSV header: numeric dimensionless units and numeric sample "
+                "identifiers cannot be distinguished from measurements. Use textual sample labels."
+            )
+    return bool(table.iloc[3:].apply(pd.to_numeric, errors="coerce").notna().any().any())
 
 
 def _write_table_csv(table: pd.DataFrame, output: Path) -> None:

@@ -55,6 +55,7 @@ def _render_veusz_panel(
     output_base: str,
     options: dict[str, Any],
     export_formats: tuple[str, ...],
+    sheet: str | int = 0,
     split_panel: dict[str, Any] | None = None,
     request_context: dict[str, Any] | None = None,
     _terminal_source_binding: MaterializedTerminalSourceBinding | None = None,
@@ -72,7 +73,7 @@ def _render_veusz_panel(
     terminal_request = project_terminal_render_request(
         template=template,
         render_options=options,
-        request_context=request_context,
+        request_context={**(request_context or {}), "sheet": sheet},
     )
     if _terminal_source_binding is not None and "series_order" not in terminal_request:
         terminal_request["series_order"] = list(_terminal_source_binding.sample_order)
@@ -179,11 +180,6 @@ def _render_to_dir_veusz(
                     "policy": dict(normalized_split_policy or {}),
                 }
             output_base = _veusz_target_base(source, template, panel_index=panel_index)
-            panel_binding = (
-                {"_terminal_source_binding": _terminal_source_binding}
-                if _terminal_source_binding is not None
-                else {}
-            )
             (
                 outputs,
                 export_records,
@@ -201,10 +197,11 @@ def _render_to_dir_veusz(
                 output_base=output_base,
                 options=panel_options,
                 export_formats=normalized_exports,
+                sheet=sheet,
                 split_panel=split_panel,
                 request_context=request_context,
                 _terminal_source_prepared=_terminal_source_prepared,
-                **panel_binding,
+                _terminal_source_binding=_terminal_source_binding,
             )
             all_outputs.extend(outputs)
             all_exports.extend(export_records)

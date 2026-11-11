@@ -1,6 +1,9 @@
 """Recipe identities observe implementation/runtime inputs independently of outputs."""
 
+from collections import Counter
 from copy import deepcopy
+import os
+from pathlib import Path
 
 from sciplot_core.plot_engine import cache_identity
 
@@ -29,18 +32,42 @@ def test_cache_recipe_changes_for_backend_runtime_font_export_and_input_changes(
     assert description["fonts"]["coverage"] == "requested_configuration_only_resolved_font_files_unobserved"
 
 
-def test_source_recipe_observes_actual_bytes_without_mtime_guessing(tmp_path):
-    source = tmp_path / "renderer.py"
-    source.write_text("value = 1")
-    original = cache_identity._source_digest(tmp_path)
-    source.write_text("value = 2")
-    assert cache_identity._source_digest(tmp_path) != original
-    source.write_text("value = 1")
-    assert cache_identity._source_digest(tmp_path) == original
+def test_source_recipe_observes_actual_bytes_without_mtime_guessing(tmp_path, monkeypatch):
+    from sciplot_core.native_process import identity
+
+    core, veusz = tmp_path / "core", tmp_path / "third_party"
+    sources = [core / folder / "renderer.py" for folder in ("plot_backends", "veusz_worker", "studio_render")]
+    sources.append(veusz / "veusz" / "plot.py")
+    for source in sources:
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text("value = 1")
+    monkeypatch.setattr(identity, "PACKAGE_ROOT", core)
+    monkeypatch.setattr(identity, "VEUSZ_ROOT", veusz)
+    monkeypatch.setattr(cache_identity, "VEUSZ_ROOT", veusz)
+    reads = Counter()
+    original_open = Path.open
+
+    def counted_open(path, *args, **kwargs):
+        if path in sources:
+            reads[path] += 1
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", counted_open)
+    original = cache_identity.runtime_identity()
+    assert reads == Counter({source: 1 for source in sources})
+    for source in sources:
+        stamp = source.stat()
+        source.write_text("value = 2")
+        os.utime(source, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+        assert source.stat().st_size == stamp.st_size
+        reads.clear()
+        assert cache_identity.runtime_identity() != original
+        assert reads == Counter({item: 1 for item in sources})
+        source.write_text("value = 1")
+    assert cache_identity.runtime_identity() == original
 
 
 def test_runtime_identity_observes_font_environment_without_qt_import(monkeypatch):
-    monkeypatch.setattr(cache_identity, "_source_digest", lambda _: "source-hash")
     monkeypatch.setattr(cache_identity, "_version", lambda _: "package-version")
     first = cache_identity.runtime_identity()
     monkeypatch.setenv("QT_QPA_FONTDIR", "/another/font/configuration")

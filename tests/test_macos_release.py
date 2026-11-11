@@ -89,7 +89,7 @@ def test_verification_keeps_failed_check_and_durable_report(tmp_path, monkeypatc
 
     def fail(command, **kwargs):
         if failure == "timeout":
-            raise subprocess.TimeoutExpired(command, 900)
+            raise subprocess.TimeoutExpired(command, 900, output=b"last successful phase", stderr=b"actual error")
         return subprocess.CompletedProcess(command, 1 if failure == "exit" else 0,
             "not JSON" if failure == "json" else '{"status":"needs_fix"}', "actual error")
 
@@ -101,8 +101,9 @@ def test_verification_keeps_failed_check_and_durable_report(tmp_path, monkeypatc
     assert report["status"] == "failed"
     assert report["checks"] == [dict(report["checks"][0], name="doctor", status="failed")]
     assert report["clean_machine_test"] == "not_performed"
-    if failure != "timeout":
-        assert (evidence / "doctor.stderr.log").read_text() == "actual error"
+    assert (evidence / "doctor.stderr.log").read_text() == "actual error"
+    if failure == "timeout":
+        assert (evidence / "doctor.stdout.json").read_bytes() == b"last successful phase"
 
 
 def test_manifest_mismatch_stops_before_executing_bundle(tmp_path, monkeypatch):

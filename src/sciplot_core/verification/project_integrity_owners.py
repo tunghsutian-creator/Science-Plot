@@ -160,6 +160,7 @@ PROJECT_INTEGRITY_OWNERS = (
             'src/sciplot_core/studio_core/publish_exports.py',
         }),
         owned_test_paths=frozenset({
+            "tests/test_plot_data_exports.py",
             "tests/test_delivery_identity.py",
             "tests/test_delivery_extra_formats.py",
             "tests/test_svg_canvas_units.py",
@@ -177,6 +178,7 @@ PROJECT_INTEGRITY_OWNERS = (
             'tests/test_export_format_contract.py',
         }),
         pytest_targets=(
+            "tests/test_plot_data_exports.py",
             "tests/test_delivery_identity.py",
             "tests/test_delivery_extra_formats.py",
             "tests/test_svg_canvas_units.py",

@@ -10,6 +10,7 @@ from sciplot_core.mapping_contract import (
     DeclarativeTransformation,
 )
 from sciplot_core.materials_rules import convert_value
+from sciplot_core.plot_transforms.unit_relations import resolve_unit_relation
 
 from sciplot_core.data_mapping.raw_tables import (
     MAPPING_NUMERIC_V3, MappingNumericContract, MappingNumericRejected,
@@ -104,13 +105,23 @@ def _apply_transformation(
         column = str(parameters["column"])
         output = str(parameters.get("output_column") or column)
         numeric = _numeric_series(result, column, operation=operation, numeric_contract=numeric_contract)
+        from_unit = str(parameters["from_unit"])
+        current_unit = updated_units.get(column)
+        if current_unit:
+            relation = resolve_unit_relation(current_unit, from_unit)
+            if relation["kind"] != "identity":
+                raise ValueError(
+                    f"unit_convert from_unit {from_unit!r} does not match "
+                    f"current unit {current_unit!r} for {column!r}."
+                )
+            from_unit = relation["canonical_from_unit"]
         converted = numeric.map(
             lambda value: (
                 pd.NA
                 if pd.isna(value)
                 else convert_value(
                     float(value),
-                    str(parameters["from_unit"]),
+                    from_unit,
                     str(parameters["to_unit"]),
                 )
             )
@@ -169,23 +180,22 @@ def _apply_transformation(
             result[column] = _numeric_series(result, column, operation=operation, numeric_contract=numeric_contract)
         grouped = result.groupby(group_by, dropna=False, sort=False)
         method = str(parameters.get("method") or "mean")
-        if method == "mean":
-            result = grouped[value_columns].mean().reset_index()
-        else:
-            result = grouped[value_columns].median().reset_index()
+        # Both statistics and counts use each value column's non-missing rows.
+        # A multi-value aggregate has one count per value, never an ambiguous n.
+        result = grouped[value_columns].agg(method)
         if parameters.get("include_count", True):
             count_column = str(parameters.get("count_column") or "replicate_count")
-            if count_column in result.columns:
+            count_names = {
+                column: count_column if len(value_columns) == 1 else f"{count_column}_{column}"
+                for column in value_columns
+            }
+            collisions = set(count_names.values()) & set([*group_by, *value_columns])
+            if collisions:
                 raise ValueError(
-                    f"aggregate count column already exists: {count_column!r}"
+                    f"aggregate count column already exists: {sorted(collisions)!r}"
                 )
-            counts = grouped.size().reset_index(name=count_column)
-            result = result.merge(
-                counts,
-                on=group_by,
-                how="left",
-                validate="one_to_one",
-            )
+            result = result.join(grouped[value_columns].count().rename(columns=count_names))
+        result = result.reset_index()
         updated_units = {
             column: unit
             for column, unit in updated_units.items()

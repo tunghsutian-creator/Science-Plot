@@ -15,11 +15,10 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.writer_lease import exclusive_directory_lease
-from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.studio_core.document_edit import preview_project_document
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_query_paths import canonical_path
-from sciplot_core.task_group_storage import active_step, step_state
+from sciplot_core.task_group_storage import original_source_current, active_step, step_state
 from sciplot_core.task_group_gallery import write_group_gallery as _write_gallery
 from sciplot_core.task_next_step import task_next_step
 
@@ -110,10 +109,25 @@ def _item_overview(root: Path, item: dict[str, Any]) -> dict[str, Any]:
     first = step_state(item["steps"][0])
     original = item["steps"][0]["request"]
     if original["action"] == "create":
-        result["source"] = original["source"]
-        expected_source = (first or {}).get("source_sha256")
-        result["source_current"] = (source_tree_sha256(Path(original["source"])) == expected_source
-                                    if expected_source else None)
+        result.update({"sources": original["sources"]} if "sources" in original else {"source": original["source"]})
+        result["source_current"] = original_source_current(first)
+    if "intent" in original:
+        if child:
+            from sciplot_core.task_semantic_creation import current_result
+
+            summary = current_result(child)
+            result.update(task=summary, ready_to_use=summary.get("ready_to_use"),
+                          readiness_evaluated=summary.get("readiness_evaluated", False),
+                          current_evidence=summary.get("current_project", {}),
+                          export_images=summary["next_step"].get("images", []))
+            if not item.get("blocker"):
+                result["status"] = summary["status"]
+        if result["source_current"] is False:
+            result.update(status="blocked", ready_to_use=False,
+                          blocker={"reason_code": "source_changed", "message": "An original group attachment changed; preserve the saved task and resolve its source revision."})
+            if child:
+                result["task"]["next_step"] = {"action": "resolve_source_change", "message": result["blocker"]["message"]}
+        return result
     project = (child or {}).get("project") or (first or {}).get("project")
     if not project:
         return result

@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from sciplot_core._paths import PACKAGE_ROOT, VEUSZ_ROOT, VEUSZ_UPSTREAM_COMMIT
+from sciplot_core._paths import VEUSZ_ROOT, VEUSZ_UPSTREAM_COMMIT
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.plot_document.dependency import artifact_build_key
@@ -24,11 +24,6 @@ def _version(package: str) -> str:
         return "not-installed"
 
 
-def _source_digest(directory: Path) -> str:
-    return _digest({str(path.relative_to(directory)): existing_file_sha256(path)
-                    for path in sorted(directory.rglob("*.py"))})
-
-
 def runtime_identity() -> dict[str, str]:
     """Read versions/recipe bytes without importing Qt or starting a native worker."""
     environment = {key: os.environ.get(key, "") for key in (
@@ -36,15 +31,13 @@ def runtime_identity() -> dict[str, str]:
         "SCIPLOT_BUNDLED_QT_LIB", "DYLD_FRAMEWORK_PATH", "DYLD_LIBRARY_PATH",
     )}
     return {
-        "recipe_version": "sciplot-render-recipe-1", "python_runtime": sys.version,
+        "recipe_version": "sciplot-render-recipe-2", "python_runtime": sys.version,
+        # The fresh native identity already covers all core and Veusz Python bytes
+        # and refuses stale loaded workers; component rehashes add no coverage.
         "native_process_runtime_sha256": verified_runtime_identity(),
         "python_executable_sha256": existing_file_sha256(Path(sys.executable)) or "unavailable",
         "platform": sys.platform,
-        "adapter_source_sha256": _source_digest(PACKAGE_ROOT / "plot_backends"),
-        "worker_source_sha256": _source_digest(PACKAGE_ROOT / "veusz_worker"),
-        "renderer_source_sha256": _source_digest(PACKAGE_ROOT / "studio_render"),
         "veusz_upstream_commit": VEUSZ_UPSTREAM_COMMIT,
-        "veusz_python_source_sha256": _source_digest(VEUSZ_ROOT / "veusz"),
         "veusz_version_file_sha256": existing_file_sha256(VEUSZ_ROOT / "VERSION") or "unavailable",
         "veusz_installation": str(VEUSZ_ROOT),
         "PyQt6": _version("PyQt6"), "PyQt6-Qt6": _version("PyQt6-Qt6"),

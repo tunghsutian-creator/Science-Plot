@@ -97,6 +97,13 @@ def verify_app(app: Path, evidence: Path, *, smoke: bool = False) -> dict:
                 validate_command_result(name, result)
                 record["status"] = "passed"
             except Exception as error:
+                if isinstance(error, subprocess.TimeoutExpired):
+                    for suffix, value in (("stdout.json", error.stdout), ("stderr.log", error.stderr)):
+                        path = evidence / f"{name}.{suffix}"
+                        if isinstance(value, bytes):
+                            path.write_bytes(value)
+                        else:
+                            path.write_text(value or "")
                 record.update(status="failed", error=str(error))
                 raise
             finally:

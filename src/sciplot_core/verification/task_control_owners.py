@@ -22,6 +22,7 @@ GROUP_LEAF_PATHS = frozenset({
     "src/sciplot_core/task_group_storage.py", "src/sciplot_core/task_group_review.py",
     "src/sciplot_core/task_group_gallery.py",
     "tests/test_task_groups.py", "tests/test_task_groups_native.py",
+    "tests/test_task_group_semantic_sources.py",
 })
 PAPER_LEAF_PATHS = frozenset({
     "src/sciplot_core/task_papers.py", "src/sciplot_core/task_paper_contract.py",
@@ -175,7 +176,7 @@ TASK_CONTROL_OWNERS = (
                               "src/sciplot_core/studio_core/source_update_review.py",
                               "tests/mapping_numeric_history.py",
                               "tests/fixtures/generated_mapping_numeric_v2.json"}),
-        owned_test_paths=frozenset({*RAW_REPLICATE_TESTS, "tests/test_column_choice.py", "tests/test_task_column_mapping.py",
+        owned_test_paths=frozenset({"tests/test_data_mapping_transformations.py", *RAW_REPLICATE_TESTS, "tests/test_column_choice.py", "tests/test_task_column_mapping.py",
             "tests/test_task_column_mapping_native.py", "tests/test_task_mapping_plan.py", "tests/test_task_mapping_review.py", "tests/test_table_choice.py", "tests/test_table_metadata.py", "tests/test_table_ranges.py",
             "tests/test_source_observation_scope.py", "tests/test_scoped_source_consumers.py",
             "tests/test_mapping_numeric_replay.py",
@@ -193,7 +194,7 @@ TASK_CONTROL_OWNERS = (
             "tests/test_mapping_candidate_roles.py",
             "tests/test_mapping_candidate_roles_native.py",
         }),
-        pytest_targets=(*RAW_REPLICATE_TESTS, "tests/test_column_choice.py", "tests/test_table_choice.py", "tests/test_table_metadata.py", "tests/test_table_ranges.py", "tests/test_task_column_mapping.py",
+        pytest_targets=("tests/test_data_mapping_transformations.py", *RAW_REPLICATE_TESTS, "tests/test_column_choice.py", "tests/test_table_choice.py", "tests/test_table_metadata.py", "tests/test_table_ranges.py", "tests/test_task_column_mapping.py",
             "tests/test_task_column_mapping_native.py", "tests/test_task_mapping_plan.py", "tests/test_task_mapping_review.py",
             "tests/test_source_observation_scope.py", "tests/test_scoped_source_consumers.py",
             "tests/test_mapping_numeric_replay.py",
@@ -224,7 +225,7 @@ TASK_CONTROL_OWNERS = (
     ChangedOwner(
         owner_id="task_group_orchestration",
         exact_paths=GROUP_LEAF_PATHS,
-        pytest_targets=("tests/test_task_groups.py", "tests/test_task_groups_native.py",
+        pytest_targets=("tests/test_task_group_semantic_sources.py", "tests/test_task_groups.py", "tests/test_task_groups_native.py",
                         "tests/test_task_prepared_creation.py", "tests/test_task_control.py",
                         "tests/test_task_recovery.py", "tests/test_task_revision_guards.py",
                         "tests/test_task_preview_revision.py", "tests/test_task_papers.py",

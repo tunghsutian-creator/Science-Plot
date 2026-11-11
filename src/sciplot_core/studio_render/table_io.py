@@ -95,7 +95,8 @@ def _read_source_frame_records(
         try:
             resolved = path.expanduser().resolve()
             before_sha256 = file_sha256(resolved)
-            frame = _read_table(resolved, legacy_numeric_parser=legacy_numeric_parser,
+            frame = _read_table(resolved, sheet=(request or {}).get("sheet", 0),
+                                legacy_numeric_parser=legacy_numeric_parser,
                                 source_numeric_encoding=source_numeric_encoding,
                                 legacy_fused_digits=legacy_fused_digits)
             after_sha256 = file_sha256(resolved)
@@ -139,7 +140,7 @@ def _source_label_from_path(path: Path) -> str:
     return stem
 
 
-def _read_table(path: Path, *, legacy_numeric_parser: bool = False,
+def _read_table(path: Path, *, sheet: str | int = 0, legacy_numeric_parser: bool = False,
                 source_numeric_encoding: str = DECIMAL_ROUND_TRIP_ENCODING,
                 legacy_fused_digits: bool | None = True) -> pd.DataFrame:
     """Read current cells, or exactly replay an unversioned historical parser.
@@ -148,13 +149,13 @@ def _read_table(path: Path, *, legacy_numeric_parser: bool = False,
     source audit of an existing unversioned specification. It never changes a
     source, saved document or current creation's parsing policy.
     """
-    frame = _read_table_cells(path, dtype=None if legacy_numeric_parser else object)
+    frame = _read_table_cells(path, sheet=sheet, dtype=None if legacy_numeric_parser else object)
     if legacy_numeric_parser:
         if legacy_fused_digits is None:
             raise ValueError("Unversioned legacy parsing requires an explicit arithmetic order.")
         # Preserve old inference for labels/bools/integers, but reconstruct float
         # columns from their original cells before current pandas rounds them.
-        cells = _read_table_cells(path, dtype=object)
+        cells = _read_table_cells(path, sheet=sheet, dtype=object)
         for column in frame.columns:
             numeric = coerce_legacy_numeric_series(cells[column], fused_digits=legacy_fused_digits)
             if numeric[cells[column].notna()].notna().all():
@@ -165,10 +166,10 @@ def _read_table(path: Path, *, legacy_numeric_parser: bool = False,
     return frame
 
 
-def _read_table_cells(path: Path, *, dtype: Any) -> pd.DataFrame:
+def _read_table_cells(path: Path, *, sheet: str | int = 0, dtype: Any) -> pd.DataFrame:
     suffix = path.suffix.lower()
     if suffix in {".xlsx", ".xls"}:
-        return pd.read_excel(path, dtype=dtype)
+        return pd.read_excel(path, sheet_name=sheet, dtype=dtype)
     text = decode_text(path)
     lines = text.splitlines()
     for index, line in enumerate(lines):
