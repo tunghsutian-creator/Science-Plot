@@ -6,18 +6,23 @@ from pathlib import Path
 from typing import Any
 
 
-_ORDINARY_KEYS = frozenset({"xscale", "summary_statistic", "replicate_summary_disclosure", "performance_selection"})
+_ORDINARY_KEYS = frozenset({"sheet", "xscale", "summary_statistic", "replicate_summary_disclosure", "performance_selection"})
 _CATEGORICAL_KEYS = frozenset({"categorical_binding", "missing_values", "render_options", "summary_statistic", "replicate_summary_disclosure"})
 SOURCE_OPTION_KEYS = _ORDINARY_KEYS | _CATEGORICAL_KEYS
 
 
 def source_options(request: dict[str, Any]) -> dict[str, Any]:
     keys = _CATEGORICAL_KEYS if "categorical_binding" in request else _ORDINARY_KEYS
-    return {key: request[key] for key in sorted(keys) if key in request}
+    return {key: request[key] for key in sorted(keys) if key in request
+            and (key != "sheet" or request.get("rule_id") == "tensile_curve")}
 
 
 def validate_source_options(source: Path, request: dict[str, Any], *, rule_id: str | None, template: str) -> dict[str, Any]:
-    options = source_options(request)
+    options = source_options({**request, "rule_id": rule_id})
+    if "sheet" in options:
+        sheet = options["sheet"]
+        if rule_id != "tensile_curve" or not source.is_file() or source.suffix.lower() not in {".xlsx", ".xls"} or not isinstance(sheet, str) or not sheet.strip():
+            raise ValueError("Explicit sheet requires a named worksheet in one tensile workbook.")
     if "performance_selection" in options:
         from sciplot_core.performance_comparison.selection import parse_performance_selection
         if rule_id != "performance_comparison" or template != "scatter":

@@ -107,6 +107,7 @@ def _resolve_mechanical_scientific_source(
     try:
         facts = load_mechanical_source_facts(
             source, rule_id=rule_id, series_order=request.get("series_order"),
+            selected_sheet=request.get("sheet"),
         )
     except MechanicalSourceFactsError as exc:
         raise ScientificSourceResolutionError(exc.reason_code, str(exc)) from exc

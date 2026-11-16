@@ -167,6 +167,18 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
                 message="尚不能确定实验类型。请选择与原始数据实际含义一致的实验。",
                 evidence=str(root / "inspection.json"), source=source)
             return None
+    if request.get("worksheet") and selected.get("rule_id") != "tensile_curve":
+        raise TaskControlError("invalid_source_option", "Creation worksheet selection is supported by the tensile workbook owner; use the existing table mapping for ordinary XY data.")
+    if selected.get("rule_id") == "tensile_curve" and source.is_file() and source.suffix.lower() in {".xlsx", ".xls"} and not request.get("worksheet"):
+        import pandas as pd
+        with pd.ExcelFile(source) as workbook:
+            sheets = list(workbook.sheet_names)
+        if len(sheets) > 1 or request.get("choose_columns"):
+            worksheet_question = {"field": "worksheet", "source_sha256": state["source_sha256"],
+                        "worksheets": sheets, "message": "Choose the original tensile stress worksheet explicitly; specific stress is not tensile stress."}
+            worksheet_question["question_id"] = canonical_json_sha256(worksheet_question, allow_nan=False)
+            state.update(status="needs_input", phase="scientific_choice", question=worksheet_question, selection=selected)
+            return None
     if request.get("mapping") and not state.get("mapping_choice") and not state.get("initial_mapping_attempted"):
         from sciplot_core.task_initial_mapping import apply_initial_mapping
 
@@ -191,6 +203,8 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
             return None
     mapping_choice = state.get("mapping_choice")
     plan_request = mapped_plan_request(state) if mapping_choice else dict(selected)
+    if "worksheet" in request:
+        plan_request["sheet"] = request["worksheet"]
     if "xscale" in request:
         plan_request["xscale"] = request["xscale"]
     if request.get("summary_statistic") == "raw_only" and selected["rule_id"] == "impact_metric":
@@ -214,7 +228,7 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
     blocker_snapshot = plan.get("blocker")
     reason = str(blocker_snapshot.get("reason_code", "")) if isinstance(blocker_snapshot, dict) else ""
     invalid_rule = reason in {"plan_rule_invalid", "plan_rule_unknown", "plan_template_unsupported"}
-    if not mapping_choice and not invalid_rule and reason != "plan_source_option_invalid":
+    if not mapping_choice and not invalid_rule and reason != "plan_source_option_invalid" and not request.get("worksheet"):
         from sciplot_core.task_column_mapping import replicate_mapping_mode
 
         shape = "replicates" if replicate_mapping_mode(state, selected) else "xy"
@@ -241,6 +255,12 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
                     return None
             pause_for_columns(state, question)
             return None
+    if (plan["status"] == "blocked" and reason in {"mechanical_source_contract_invalid", "plan_source_option_invalid"}
+            and state.get("question", {}).get("field") == "worksheet"):
+        state.update(status="needs_input", phase="scientific_choice", mapping_error=plan["blocker"])
+        return None
+    if state.get("question", {}).get("field") == "worksheet":
+        state.pop("question", None)
     if plan["status"] == "blocked":
         blocker_value = plan["blocker"]
         blocker = blocker_value if isinstance(blocker_value, dict) else {}

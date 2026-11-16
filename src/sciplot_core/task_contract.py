@@ -9,7 +9,7 @@ from sciplot_core.task_choice_schema import annotation_response_schema, column_m
 from sciplot_core.task_errors import TaskControlError as TaskControlError
 
 _FIELDS = {
-    "create": {"source", "rule_id", "template", "out", "profile", "choose_columns", "mapping", "xscale", "curve_display", "summary_statistic", "missing_values"},
+    "create": {"source", "worksheet", "rule_id", "template", "out", "profile", "choose_columns", "mapping", "xscale", "curve_display", "summary_statistic", "missing_values"},
     "edit": {"project", "figure_id", "expected_document_sha256", "operations", "export"},
     "export": {"project"},
     "update_source": {"project", "source", "worksheet", "choose_columns"},
@@ -90,6 +90,10 @@ def task_response_schema() -> dict[str, Any]:
              "properties": {"expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
                             "out": {"type": "string", "minLength": 1}},
              "required": ["expected_question_id", "out"]},
+            {"type": "object", "additionalProperties": False,
+             "properties": {"expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                            "worksheet": {"type": "string", "minLength": 1}},
+             "required": ["expected_question_id", "worksheet"]},
             table_response_schema(),
             mapping_response_schema(),
             mapping_candidate_response_schema(),

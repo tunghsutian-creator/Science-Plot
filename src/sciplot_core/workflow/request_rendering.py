@@ -315,6 +315,7 @@ def _render_semantic_plan_request(
         column_confirmations=request.get("column_confirmations"),
         replicate_mode=effective_replicate_mode,
         resolved_scientific_source=resolved_scientific_source,
+        selected_sheet=request.get("sheet"),
     )
     transform_steps.extend(
         step for step in prepared.get("transform_steps", []) if isinstance(step, dict)

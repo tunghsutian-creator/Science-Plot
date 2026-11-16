@@ -101,6 +101,7 @@ def prepare_semantic_source(
     column_confirmations: object = None,
     replicate_mode: object = None,
     resolved_scientific_source: ResolvedScientificSource | None = None,
+    selected_sheet: str | None = None,
 ) -> dict[str, Any]:
     """Prepare one source through the handler for its semantic family."""
 
@@ -144,6 +145,7 @@ def prepare_semantic_source(
         replicate_mode=replicate_mode,
         source_tree_sha256_before=source_hash_before,
         resolved_scientific_source=resolved_scientific_source,
+        selected_sheet=selected_sheet,
     )
     adapter = _semantic_preparation_adapter(family=family, rule_id=rule_id)
     result = _run_semantic_preparation_adapter(adapter, context)

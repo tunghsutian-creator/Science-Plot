@@ -60,6 +60,7 @@ def _studio_source_for_request(
         column_confirmations=request.get("column_confirmations"),
         replicate_mode=request.get("replicate_mode"),
         resolved_scientific_source=resolved_scientific_source,
+        selected_sheet=request.get("sheet"),
     )
     prepared_source = prepared.get("source")
     source_attestation_value = prepared.get("source_attestation")

@@ -10209,7 +10209,9 @@
       "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[checkpoint]",
       "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[other_output]",
       "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[own_output]",
-      "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[workspace]"
+      "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[workspace]",
+      "tests/test_task_control.py::test_tensile_worksheet_choice_recovers_same_task_without_inventing_metrics",
+      "tests/test_tensile_workbook_directory.py::test_explicit_tensile_worksheet_binds_facts_and_rejects_specific_stress"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20254,7 +20256,9 @@
       "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[checkpoint]",
       "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[other_output]",
       "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[own_output]",
-      "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[workspace]"
+      "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[workspace]",
+      "tests/test_task_control.py::test_tensile_worksheet_choice_recovers_same_task_without_inventing_metrics",
+      "tests/test_tensile_workbook_directory.py::test_explicit_tensile_worksheet_binds_facts_and_rejects_specific_stress"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",

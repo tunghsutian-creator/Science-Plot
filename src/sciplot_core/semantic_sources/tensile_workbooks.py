@@ -30,7 +30,7 @@ from sciplot_core.semantic_sources.table_scanning import (
 )
 
 
-def _read_tensile_workbook_series(source: Path) -> list[CurveSeriesPayload]:
+def _read_tensile_workbook_series(source: Path, *, selected_sheet: str | None = None) -> list[CurveSeriesPayload]:
     series_list = _scan_curve_series_source(
         source,
         x_aliases=("strain", "拉伸应变"),
@@ -40,9 +40,14 @@ def _read_tensile_workbook_series(source: Path) -> list[CurveSeriesPayload]:
         default_x_unit="%",
         default_y_unit="MPa",
         sample_prefix=source.stem,
+        selected_sheet=selected_sheet,
     )
     if not series_list:
         raise ValueError("No tensile curves found by structure scan.")
+    for series in series_list:
+        header = str((series.diagnostics or {}).get("source_y_header", "")).casefold()
+        if "specific stress" in header or "比应力" in header:
+            raise ValueError("Specific stress is a different quantity and cannot be relabelled as stress.")
     return series_list
 
 

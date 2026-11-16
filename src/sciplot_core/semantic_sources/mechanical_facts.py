@@ -43,6 +43,7 @@ def load_mechanical_source_facts(
     *,
     rule_id: str,
     series_order: object = None,
+    selected_sheet: str | None = None,
 ) -> MechanicalSourceFacts:
     """Parse once between source-tree hashes and return closed source facts."""
 
@@ -54,7 +55,7 @@ def load_mechanical_source_facts(
         _fail("mechanical_source_unavailable", f"Mechanical source is absent: {source}")
     try:
         raw_series, supplied_rows, selected, source_kind = _read_source(
-            source, rule_id=rule_id
+            source, rule_id=rule_id, selected_sheet=selected_sheet
         )
         curated = source_kind == "curated_representative_workbooks"
         series = list(raw_series)
@@ -91,6 +92,7 @@ def load_mechanical_source_facts(
     first = series[0]
     return MechanicalSourceFacts(
         rule_id=rule_id,
+        selected_sheet=selected_sheet,
         source_root=source,
         source_sha256=before,
         selected_sources=selected_sources,
@@ -111,10 +113,12 @@ def load_mechanical_source_facts(
 
 
 def _read_source(
-    source: Path, *, rule_id: str
+    source: Path, *, rule_id: str, selected_sheet: str | None = None
 ) -> tuple[
     list[CurveSeriesPayload], list[dict[str, Any]] | None, tuple[Path, ...], str
 ]:
+    if selected_sheet is not None and (rule_id != "tensile_curve" or not source.is_file() or source.suffix.lower() not in {".xlsx", ".xls"}):
+        raise ValueError("Explicit mechanical worksheet selection requires one tensile workbook.")
     if rule_id != "tensile_curve":
         curated = (
             _read_non_tensile_mechanical_workbook_directory(source, family=rule_id)
@@ -140,7 +144,7 @@ def _read_source(
         curves, rows = _read_tensile_workbook_directory(source)
         return curves, rows, workbooks, "curated_representative_workbooks"
     if source.is_file() and source.suffix.lower() in {".xlsx", ".xls"}:
-        curves = _read_tensile_workbook_series(source)
+        curves = _read_tensile_workbook_series(source, selected_sheet=selected_sheet)
         curves = [_with_source_file(item, source) for item in curves]
         return curves, None, (source,), "raw_specimen_curves"
     curves = _read_tensile_export_series_list(source)

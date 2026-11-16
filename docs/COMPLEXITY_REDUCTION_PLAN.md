@@ -1,7 +1,8 @@
 # AI-only scientific application: complexity reduction
 
-Status: active target and implementation sequence, updated 2026-11-09.
-Current verified baseline: main `54b166365990a572239e56901e5f7e325bed79c9`.
+Status: bounded remaining work, reconciled 2026-11-16.
+Current main: `30de8f1c06b656e1a36032bece7478040969231f`.
+The measurements below describe their original executions, not current timings.
 The cancelled SavedWork release and older worktrees remain separate.
 
 The application uses external AI conversation and deterministic local commands.
@@ -12,7 +13,7 @@ that the whole project has no duplication. Historical implementation and accepta
 records belong to Git and the retained local receipts, rather than an expanding
 sequence of competing status paragraphs in this plan.
 
-## Current bounded batch: measure and remove repeated verification work
+## Delivered reader/resolver batch and its measured limits
 
 The current successful Mac execution had 10,189 passed bodies. Its original
 pytest elapsed time was 14,938.07 seconds; subsequent capture finalization took
@@ -21,8 +22,8 @@ CALL took 610.07 seconds. These are costs from one accepted execution, not a
 baseline/candidate acceleration comparison. The interrupted prior execution and
 its missing exit evidence remain recorded separately.
 
-Two isolated branches start from that exact verified source. One integration
-owner controls shared registration, the plan and final combined review.
+The two original branches are integrated in main (`90be13d2`, `782a98cf`).
+The table records their scope and stop conditions, not outstanding implementation.
 
 | Line | Complete deliverable | Boundary and stop condition |
 | --- | --- | --- |
@@ -59,9 +60,8 @@ whole-suite or cross-platform percentage.
 The reader now hashes and parses the same held bytes. Three small alternating
 pairs measured medians 0.876958 then 0.880154 seconds: no speed benefit, despite
 raw reads falling from twelve to six. Keep it as a byte-consistency correction,
-not evidence that the 800.82-second strict export is faster. These changes have
-local development evidence; new combined release/capture/platform gates remain
-separate from the already accepted baseline.
+not evidence that the 800.82-second strict export is faster. These changes are integrated; their original local measurements remain
+separate from later main acceptance and do not establish whole-suite speedup.
 
 ## Development artifact lifetime
 
@@ -84,10 +84,11 @@ cache-name cleanup. Existing data is not adopted or deleted by the new owner.
 Retire the ad hoc cache recipes through the real changed runner and shared
 compiler entry, without a new scheduler, cache database or PASS reuse system.
 
-Still open: unified admission at every new application destination and recorded
-fixture-workspace allocation before collection. The nine writer families and
-read/query compatibility boundary are documented in Architecture. This is an
-explicit remaining migration, not a claim that a single layout guard closed it.
+Delivered through `dd050af7` and its consumer corrections ending at `7f3cb7a1`:
+new research-destination admission across the nine writer families and retained
+recorded fixture-workspace allocation before collection. Architecture documents
+the read/query compatibility boundary. Do not reopen this completed migration;
+historical evidence retention and a global capacity policy remain separate.
 
 The actual workspace has hundreds of historical worktrees and thousands of
 ignored output entries. Their names/ages do not establish safe deletion. Future
@@ -104,7 +105,7 @@ still belong to the original accepted execution and must not be rewritten.
 The actual three-review export sequence is assembled in an external local
 operator; production `private_corpus_preflight` itself reviews once.
 
-After the current reader/resolver changes close, census the actual local
+With the reader/resolver changes delivered, census the actual local
 producer and consumers before replacing that recipe through the existing
 verification entry point. The candidate boundary is one finalization/export
 operation with one owner of receipt/raw consistency, plus a compact diagnostic

@@ -72,6 +72,7 @@ class MechanicalSourceFacts:
     metric_units: tuple[tuple[str, str], ...]
     curve_source_kind: str
     individual_curves_complete: bool
+    selected_sheet: str | None = None
 
     def __post_init__(self) -> None:
         # Only mechanical diagnostics cross this operation-owned immutable seam.
@@ -108,7 +109,7 @@ class MechanicalSourceFacts:
             object.__setattr__(self, field, tuple(closed))
 
     def require_selection(
-        self, *, source: Path, rule_id: str, series_order: object
+        self, *, source: Path, rule_id: str, series_order: object, selected_sheet: str | None = None
     ) -> None:
         """Check the operation's effective selection without reading raw data."""
         from sciplot_core.semantic_sources.series_ordering import _order_curve_series
@@ -116,6 +117,7 @@ class MechanicalSourceFacts:
         if (
             self.source_root != source.expanduser().resolve()
             or self.rule_id != rule_id
+            or self.selected_sheet != selected_sheet
         ):
             fail_mechanical_source_facts(
                 "mechanical_source_identity_mismatch",

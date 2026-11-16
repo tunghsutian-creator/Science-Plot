@@ -114,6 +114,8 @@ def _worksheet_confirmation(
 
     if not worksheet:
         return []
+    if rule_id == "tensile_curve" and source.is_file() and source.suffix.casefold() in {".xlsx", ".xls"}:
+        return []
     if get_rule(rule_id).scientific_source_adapter != "registered_paired_curve":
         raise ValueError(
             f"{rule_id} owns its worksheet/condition interpretation; no worksheet can be silently omitted."
@@ -237,6 +239,8 @@ def _prepare_candidate(
                    "rule_id": rule_id, "template": previous["template"],
                    "explicit_template_selection": True, "exports": previous.get("exports", ["pdf", "tiff_300"]),
                    "replicate_mode": previous.get("replicate_mode", "raw"), "delivery_output": str(delivery)}
+        if worksheet is not None and rule_id == "tensile_curve":
+            request["sheet"] = worksheet
         options = {key: value for key, value in previous.get("render_options", {}).items()
                    if key in {"size", "style_preset", "visual_theme_id", "palette_preset"}}
         if options:

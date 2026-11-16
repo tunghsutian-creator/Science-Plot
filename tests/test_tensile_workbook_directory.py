@@ -232,3 +232,29 @@ def test_nonfinite_instrument_reports_do_not_claim_instrument_provenance() -> No
     assert metrics["strength_source"] == "curve_maximum"
     assert metrics["modulus_source"] == "unavailable"
     assert metrics["elongation_at_break_source"] == "unavailable"
+
+
+def test_explicit_tensile_worksheet_binds_facts_and_rejects_specific_stress(tmp_path):
+    from sciplot_core.semantic_sources.mechanical_facts import load_mechanical_source_facts
+    from sciplot_core.plan_preview import build_plan_preview
+    source = tmp_path / "original.xlsx"
+    with pd.ExcelWriter(source) as writer:
+        for sheet, unit, scale in (("stress", "MPa", 1), ("specific", "MPa·cm³/g", 10)):
+            pd.DataFrame([["Strain", "Specific stress" if sheet == "specific" else "Stress"],
+                          ["%", unit], ["A", "A"], [0, 0], [.1, scale], [.2, 2*scale], [1, 3*scale]]).to_excel(writer, sheet_name=sheet, header=False, index=False)
+    original = source.read_bytes()
+    facts = load_mechanical_source_facts(source, rule_id="tensile_curve", selected_sheet="stress")
+    assert facts.raw_series[0].points == ((0., 0.), (.1, 1.), (.2, 2.), (1., 3.))
+    facts.require_selection(source=source, rule_id="tensile_curve", series_order=None, selected_sheet="stress")
+    with pytest.raises(ValueError, match="another source or rule"):
+        facts.require_selection(source=source, rule_id="tensile_curve", series_order=None, selected_sheet="specific")
+    with pytest.raises(ValueError, match="Specific stress"):
+        load_mechanical_source_facts(source, rule_id="tensile_curve", selected_sheet="specific")
+    with pytest.raises(ValueError, match="missing"):
+        load_mechanical_source_facts(source, rule_id="tensile_curve", selected_sheet="absent")
+    plan = dict(build_plan_preview(source, request={"rule_id":"tensile_curve", "template":"curve", "sheet":"stress"}))
+    assert plan["blocker"]["reason_code"] == "mechanical_summary_metric_missing"
+    from sciplot_core.plan_source_options import validate_source_options, expected_source_options
+    options = validate_source_options(source, {"sheet":"stress"}, rule_id="tensile_curve", template="curve")
+    assert expected_source_options(options) == {"sheet":"stress"}
+    assert source.read_bytes() == original

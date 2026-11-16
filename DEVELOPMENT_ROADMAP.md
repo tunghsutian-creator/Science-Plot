@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-11-10. External AI is the task interface. Current behavior belongs
+Status: 2026-11-16. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 Completed implementation narratives, superseded cloud blockers and historical
 run counts have been removed from this operational roadmap. Git and the
@@ -9,32 +9,26 @@ snapshot's acceptance.
 
 ## Immediate priority: reduce duplicated core responsibilities
 
-The current authorized work follows the ordered
-[core complexity reduction](docs/COMPLEXITY_REDUCTION_PLAN.md). Main
-`54b166365990a572239e56901e5f7e325bed79c9` is the verified baseline: immutable
-command admission, canonical project writers, retired manual product UI, shared
-observations and basic PDF notes with the checked original figure/project are
-already delivered within their documented scopes.
+Current main is `30de8f1c06b656e1a36032bece7478040969231f`. The mapping
+source-admission and held-byte reader changes are integrated, as are the bounded
+development-storage and research-destination corrections. Do not reopen their
+completed integration gates from the older candidate descriptions. The November
+11 scientific-source, units, aggregation, CSV, tick and group-interface fixes are
+also delivered; generated/public checks are not acceptance of arbitrary real
+research data.
 
-The isolated follow-up has replaced the mapping input's repeated source-view
-admission, preserving its distinct historical-generation requirement in the
-first Store lock. One complete ordinary node measured 197.19 then 158.01 seconds.
-Its reader correction binds hashing and parsing to one held byte observation;
-the small-pair median did not improve, so it is no strict-export speed claim.
-New combined release gates remain pending for this isolated candidate. Retain
-fresh IO/permission/commit boundaries and all scientific and native assertions. Report same-condition
-component costs separately from whole acceptance time; do not add a general
-cache, scheduling framework or new frontend. Full details and stop conditions
-belong to the plan. The independent cancelled SavedWork release stays retained,
-not promoted as an accepted baseline.
+The [core complexity plan](docs/COMPLEXITY_REDUCTION_PLAN.md) retains measured
+costs and bounded remaining work. Keep fresh IO/permission/commit boundaries and
+scientific/native assertions; do not add a general cache, scheduler or frontend.
+The cancelled SavedWork release stays retained, not promoted as a baseline.
 
 The following investigation is the local acceptance recipe itself: the current
 2.05-GB raw capture also produces a 4.97-GB derived review, and an external export
 operator repeats review three times. Census its real producers/consumers, then
 assess one source-owned finalization/export path and compact diagnostic reports.
 Retain raw evidence and all fresh checks; do not declare a compact report to be
-an approval or silently change before-write refusal. This follows the current
-bounded reader/resolver work rather than expanding it mid-implementation.
+an approval or silently change before-write refusal. This is a remaining investigation, not a reason to repeat the completed
+reader/resolver implementation.
 
 ## Retained AI disclosure boundary
 
@@ -48,12 +42,12 @@ Historical component evidence does not certify this new integrated snapshot.
 
 ## Retained feedback and performance boundaries
 
-The current storage candidate gives ordinary quick/changed pytest invocations
+The delivered storage implementation gives ordinary quick/changed pytest invocations
 separate leased scratch containers, successful cleanup and two completed failed
 containers retained. Recorded, active, interrupted and caller-owned outputs stay
-protected; capacity warnings do not establish a global byte quota. Close its
-targeted integration/platform checks, then continue measured completion-query
-and cold-publication costs. Historical full/audit archival and compact derived
+protected; capacity warnings do not establish a global byte quota. Storage
+integration through `7f3cb7a1` is complete. Further work should target measured
+completion-query and cold-publication costs, not rerun that delivery. Historical full/audit archival and compact derived
 diagnostics remain distinct unfinished work; do not delete evidence by age.
 
 Keep routine feedback and final acceptance separate. The bounded CI policy selects

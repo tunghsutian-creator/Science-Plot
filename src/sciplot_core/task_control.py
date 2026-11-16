@@ -225,6 +225,19 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
         save_task(root, state)
         run_creation(root, state)
         return
+    if "worksheet" in response:
+        question = state.get("question", {})
+        if (state["status"] != "needs_input" or question.get("field") != "worksheet"
+                or set(response) != {"expected_question_id", "worksheet"}
+                or response["expected_question_id"] != question.get("question_id")
+                or response["worksheet"] not in question.get("worksheets", [])):
+            raise TaskControlError("invalid_task_response", "Answer the current worksheet question with one advertised name.")
+        assert_source_current(state)
+        state["request"]["worksheet"] = response["worksheet"]
+        state.pop("mapping_error", None)
+        save_task(root, state)
+        run_creation(root, state)
+        return
     if "out" in response:
         assert_source_current(state)
         accept_output_response(state, response)

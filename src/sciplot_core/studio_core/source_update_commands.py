@@ -21,6 +21,8 @@ from sciplot_core.studio_core.source_update_files import project_inventory, relo
 def selected_worksheet(request: dict[str, Any], worksheet: str | None) -> str | None:
     if worksheet is not None:
         return worksheet.strip() or None
+    if request.get("sheet") is not None:
+        return str(request["sheet"])
     old = {str(c["sheet"]) for c in request.get("column_confirmations", [])
            if c.get("sheet_selected") is True and c.get("sheet")}
     if len(old) > 1:

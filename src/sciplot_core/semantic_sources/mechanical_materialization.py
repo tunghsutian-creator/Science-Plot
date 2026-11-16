@@ -71,11 +71,13 @@ def prepare_exact_mechanical_source(
         # for an orchestration path that already resolved its source.
         facts = load_mechanical_source_facts(
             context.source, rule_id=rule_id, series_order=context.series_order,
+            selected_sheet=context.selected_sheet,
         )
     else:
         facts = context.resolved_scientific_source.require_domain(MechanicalSourceFacts)
         facts.require_selection(
             source=context.source, rule_id=rule_id, series_order=context.series_order,
+            selected_sheet=context.selected_sheet,
         )
         if source_tree_sha256(context.source) != facts.source_sha256:
             raise ValueError(

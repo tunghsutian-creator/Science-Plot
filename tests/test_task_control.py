@@ -567,3 +567,27 @@ def test_deferred_edit_returns_saved_revision_and_never_exports_on_retry(tmp_pat
     count = len(calls)
     assert control.resume_task(task, {"retry": True}) == result
     assert len(calls) == count
+
+
+def test_tensile_worksheet_choice_recovers_same_task_without_inventing_metrics(tmp_path, monkeypatch):
+    import pandas as pd
+    from sciplot_core import task_execution
+    source = tmp_path / "curves.xlsx"
+    with pd.ExcelWriter(source) as writer:
+        for name, label, unit in (("stress", "Stress", "MPa"), ("specific", "Specific stress", "MPa·cm³/g")):
+            pd.DataFrame([["Strain", label], ["%", unit], ["A", "A"], [0, 0], [.1, 1], [.2, 2], [1, 3]]).to_excel(writer, sheet_name=name, header=False, index=False)
+    raw = source.read_bytes()
+    monkeypatch.setattr(task_execution, "create_project", lambda *a, **k: pytest.fail("Missing fracture facts cannot create a complete mechanical figure set"))
+    task = tmp_path / "task"
+    result = control.start_task({"version":1, "action":"create", "source":str(source), "rule_id":"tensile_curve", "choose_columns":True}, task_dir=task)
+    assert result["status"] == "needs_input" and result["question"]["field"] == "worksheet"
+    question = result["question"]["question_id"]
+    result = control.resume_task(task, {"expected_question_id":question, "worksheet":"specific"})
+    assert result["status"] == "needs_input" and result["question"]["question_id"] == question
+    assert "Specific stress" in result["mapping_error"]["message"]
+    result = control.resume_task(task, {"expected_question_id":question, "worksheet":"stress"})
+    assert result["status"] == "blocked"
+    assert result["blocker"]["reason_code"] == "mechanical_summary_metric_missing"
+    assert "question" not in result and "mapping_error" not in result
+    assert json.loads((task / "task.json").read_text())["request"]["worksheet"] == "stress"
+    assert source.read_bytes() == raw
