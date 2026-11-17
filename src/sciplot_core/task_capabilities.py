@@ -120,7 +120,7 @@ def task_capabilities(*, section: str | None = None, name: str | None = None,
                         "full_cli": "task capabilities --full --json"},
         "saved_edit_context": {
             "cli": "task edit-context TASK_OR_PROJECT --operation NAME [--operation NAME ...] [--figure FIGURE_ID] --json",
-            "scope": "Read current targets and selected edit schemas together."},
+            "scope": "Current targets and requested edit schemas."},
         "typed_entries": {
             "edit": "task edit TARGET --intent EXACT --task-dir STABLE_PATH --json",
             "continue": "task continue SOURCE [--search-root ROOT --target EXACT] --json",
