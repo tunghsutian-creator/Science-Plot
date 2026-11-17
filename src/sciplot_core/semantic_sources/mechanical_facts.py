@@ -61,7 +61,7 @@ def load_mechanical_source_facts(
         series = list(raw_series)
         if not curated:
             series = normalize_explicit_mechanical_replicates(series)
-        series = _order_mechanical_series(series, series_order=series_order)
+        series = _order_curve_series(series, series_order)
         observations, sample_order, replicate_counts, representatives = (
             derive_mechanical_source_projection(
                 series,
@@ -149,12 +149,6 @@ def _read_source(
         return curves, None, (source,), "raw_specimen_curves"
     curves = _read_tensile_export_series_list(source)
     return curves, None, _selected_paths(curves, source), "raw_specimen_curves"
-
-
-def _order_mechanical_series(
-    series: list[CurveSeriesPayload], *, series_order: object
-) -> list[CurveSeriesPayload]:
-    return _order_curve_series(series, series_order)
 
 
 def _selected_paths(series: list[CurveSeriesPayload], source: Path) -> tuple[Path, ...]:

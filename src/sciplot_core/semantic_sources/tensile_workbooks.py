@@ -195,8 +195,6 @@ def _read_tensile_workbook_directory(
                 f"Could not read tensile workbook {workbook_path.name}: {exc}"
             ) from exc
 
-    if not representatives:
-        raise ValueError(f"No representative tensile curves found under {source}.")
     if not summary_rows:
         raise ValueError(f"No tensile specimen metrics found under {source}.")
     return representatives, summary_rows

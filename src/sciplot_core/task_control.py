@@ -134,7 +134,6 @@ def start_task(
         from sciplot_core.foundation.research_destination import require_data_destination
         require_data_destination(root, existing_namespace=_owned_namespace)
         if request["action"] == "create":
-            from sciplot_core.output_contract import resolve_user_output_layout
             layout = resolve_user_output_layout(request.get("source", request.get("sources", [None])[0]),
                                                 requested_delivery_root=request.get("out"))
             for destination in (layout.delivery_root, layout.workspace_root):
@@ -327,20 +326,18 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
         if response != {"retry": True} or type(response.get("retry")) is not bool:
             raise TaskControlError("invalid_task_response", "修复具体问题后使用 retry=true。")
         phase = state["phase"]
-        if state["request"]["action"] == "update_source":
-            if phase == "exporting":
-                run_export(root, state)
-            elif phase == "applying" and state.get("preview_accepted") is True:
-                run_source_apply_export(root, state)
-            elif phase in {"starting", "previewing", "scientific_choice"}:
-                run_source_preview(root, state)
-            else:
-                raise TaskControlError("task_recovery_required", "请查询源更新任务的具体状态。")
-            return
         if phase == "exporting":
             run_export(root, state)
         elif phase == "applying" and state.get("preview_accepted") is True:
-            run_apply_export(root, state)
+            if state["request"]["action"] == "update_source":
+                run_source_apply_export(root, state)
+            else:
+                run_apply_export(root, state)
+        elif state["request"]["action"] == "update_source":
+            if phase in {"starting", "previewing", "scientific_choice"}:
+                run_source_preview(root, state)
+            else:
+                raise TaskControlError("task_recovery_required", "请查询源更新任务的具体状态。")
         elif phase == "previewing":
             run_edit_preview(root, state)
         elif phase == "starting" and state["request"]["action"] == "edit":

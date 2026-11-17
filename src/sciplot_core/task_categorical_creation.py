@@ -22,16 +22,14 @@ from sciplot_core.task_missing_values import require_missing_policy
 
 
 def _question(state: dict[str, Any], *, binding: dict[str, Any], evidence: dict[str, Any],
-              code: str, message: str, missing: bool = False) -> None:
-    question: dict[str, Any] = {"field": "missing_values" if missing else "categorical",
+              code: str, message: str) -> None:
+    question: dict[str, Any] = {"field": "categorical",
         "reason_code": code, "message": message, "source_sha256": state["source_sha256"],
         "evidence": evidence, "categorical": binding,
         "selection": {"rule_id": None, "template": "point_line" if binding.get("mode") == "given_values" else "bar"}}
     question["question_id"] = canonical_json_sha256(question, allow_nan=False)
-    question["response_template"] = {"expected_question_id": question["question_id"],
-        **({"missing_values": "exclude"} if missing else {"categorical": binding})}
-    if not missing:
-        question["response_schema"] = categorical_response_schema()
+    question["response_template"] = {"expected_question_id": question["question_id"], "categorical": binding}
+    question["response_schema"] = categorical_response_schema()
     state.update(status="needs_input", phase="scientific_choice", question=question)
     state.pop("blocker", None)
 
@@ -74,8 +72,7 @@ def plan_categorical_task(state: dict[str, Any]) -> dict[str, Any] | None:
         plan = build_categorical_preview(source, request={"categorical_binding": binding,
             **({"missing_values": missing} if missing is not None else {})})
     except (StudioPreparationBlocked, ValueError) as exc:
-        _question(state, binding=binding, evidence=facts, code=getattr(exc, "reason_code", "categorical_binding_invalid"), message=str(exc),
-                  missing=False)
+        _question(state, binding=binding, evidence=facts, code=getattr(exc, "reason_code", "categorical_binding_invalid"), message=str(exc))
         return None
     state.pop("question", None)
     state["categorical_plan"] = plan
