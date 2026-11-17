@@ -32,6 +32,19 @@ def assert_source_current(state: dict[str, Any]) -> Path:
     return source
 
 
+def accept_worksheet_response(state: dict[str, Any], response: dict[str, Any]) -> None:
+    """Accept this planner's source-bound worksheet question without creating output."""
+    question = state.get("question", {})
+    if (state["status"] != "needs_input" or question.get("field") != "worksheet"
+            or set(response) != {"expected_question_id", "worksheet"}
+            or response["expected_question_id"] != question.get("question_id")
+            or response["worksheet"] not in question.get("worksheets", [])):
+        raise TaskControlError("invalid_task_response", "Answer the current worksheet question with one advertised name.")
+    assert_source_current(state)
+    state["request"]["worksheet"] = response["worksheet"]
+    state.pop("mapping_error", None)
+
+
 def _profile_signature(source: Path, rule: str) -> dict[str, Any]:
     # An explicitly requested rule returns rule defaults without reading the
     # source. It therefore cannot establish whether a saved profile applies.

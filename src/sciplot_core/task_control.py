@@ -23,7 +23,7 @@ from sciplot_core.task_execution import (
     record_failure, run_apply_export, run_creation, run_edit_preview, run_export,
 )
 from sciplot_core.task_column_mapping import accept_column_response, accept_table_response
-from sciplot_core.task_planning import assert_source_current
+from sciplot_core.task_planning import accept_worksheet_response, assert_source_current
 from sciplot_core.task_source_execution import accept_annotation_response, run_source_apply_export, run_source_preview, validate_source_response
 from sciplot_core.task_editing import begin_preview_revision, validate_preview_response
 from sciplot_core.task_repair import normalize_task_location, request_repair, response_repair
@@ -225,22 +225,12 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
         save_task(root, state)
         run_creation(root, state)
         return
-    if "worksheet" in response:
-        question = state.get("question", {})
-        if (state["status"] != "needs_input" or question.get("field") != "worksheet"
-                or set(response) != {"expected_question_id", "worksheet"}
-                or response["expected_question_id"] != question.get("question_id")
-                or response["worksheet"] not in question.get("worksheets", [])):
-            raise TaskControlError("invalid_task_response", "Answer the current worksheet question with one advertised name.")
-        assert_source_current(state)
-        state["request"]["worksheet"] = response["worksheet"]
-        state.pop("mapping_error", None)
-        save_task(root, state)
-        run_creation(root, state)
-        return
-    if "out" in response:
-        assert_source_current(state)
-        accept_output_response(state, response)
+    if "worksheet" in response or "out" in response:
+        if "worksheet" in response:
+            accept_worksheet_response(state, response)
+        else:
+            assert_source_current(state)
+            accept_output_response(state, response)
         save_task(root, state)
         run_creation(root, state)
         return
