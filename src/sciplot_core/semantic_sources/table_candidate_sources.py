@@ -52,11 +52,12 @@ def read_candidate_tables(
                     read_raw_table_normalized(path).dropna(axis=1, how="all"),
                 )
             )
-    return [
-        (name, _without_outer_empty_rows(table))
-        for name, table in tables
-        if not _without_outer_empty_rows(table).empty
-    ]
+    candidates: list[tuple[str, pd.DataFrame]] = []
+    for name, table in tables:
+        trimmed = _without_outer_empty_rows(table)
+        if not trimmed.empty:
+            candidates.append((name, trimmed))
+    return candidates
 
 
 def _structural_empty_cells_as_missing(table: pd.DataFrame) -> pd.DataFrame:
