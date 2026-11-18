@@ -77,6 +77,12 @@ def create_project(
                                            owner=_creation_owner)
         if managed is not None:
             return managed
+    if publish and on_prepared is None and _creation_owner == "project":
+        from .managed_curve_creation import create_curve_project
+
+        managed = create_curve_project(source, verified, layout, require_new=require_new_layout)
+        if managed is not None:
+            return managed
     require_new_layout(layout)
     canonical_path(layout.workspace_root.parent)
     layout.workspace_root.parent.mkdir(parents=True, exist_ok=True)

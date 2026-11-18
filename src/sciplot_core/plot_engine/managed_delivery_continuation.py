@@ -9,7 +9,7 @@ from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.storage import digest, load_head
 from sciplot_core.studio_core.project_query_paths import canonical_path
-from sciplot_core.studio_core.source_update_commit import file_inventory
+from sciplot_core.studio_core.source_update_files import file_inventory
 
 
 def delivery_inventory(root: Path) -> dict[str, str]:

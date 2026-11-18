@@ -106,8 +106,7 @@ def _execute_creation(root: Path, state: dict[str, Any], plan: dict[str, Any]) -
                                "on_prepared": checkpoint}
     if state.get("defer_creation_export") is True:
         options["publish"] = False
-    if "frequency_creation_plan" in state:
-        options["_creation_owner"] = state["task_dir"]
+    options["_creation_owner"] = state["task_dir"]
     result = create_project(Path(state["request"]["source"]), **options)
     if state.get("defer_creation_export") is True:
         if result.get("kind") != "sciplot_project_prepared_result" or not is_prepared(state):
