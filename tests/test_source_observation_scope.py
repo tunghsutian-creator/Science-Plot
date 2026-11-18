@@ -157,14 +157,15 @@ def test_test_and_block_intersection_stays_empty_in_selected_instrument_table(tm
 
 
 def test_snapshot_catalog_does_not_observe_cells_and_refresh_keeps_declared_scope(tmp_path, monkeypatch):
-    source = workbook(tmp_path / "original.xlsx", [("Summary", DISCONNECTED), ("Measured", BODY)])
-    calls = only_cells(monkeypatch, {(source, "Measured")})
+    source = workbook(tmp_path / "original.xlsx", [("Summary", DISCONNECTED), ("Measured", BODY), ("Blank", [])])
+    calls = only_cells(monkeypatch, {(source, "Measured"), (source, "Blank")})
     assert source_table_catalog(source)["tables"] == [
-        {"table_id": "table:0", "sheet": "Summary"}, {"table_id": "table:1", "sheet": "Measured"}]
+        {"table_id": "table:0", "sheet": "Summary"}, {"table_id": "table:1", "sheet": "Measured"},
+        {"table_id": "table:2", "sheet": "Blank"}]
     assert calls == []
     snapshot = source_table_snapshot(source, sheets=["Measured"])
     assert snapshot["observed_sheets"] == ["Measured"] and snapshot["tables"][0]["table_id"] == "table:1"
-    assert len(snapshot["catalog"]) == 2
+    assert len(snapshot["catalog"]) == 3
     selection = {"sheet": "Measured", "header_rows": [0], "unit_row": 1, "sample_row": 2,
                  "data_start_row": 3, "data_end_row": len(BODY)}
     assert select_table(snapshot, selection)["table_selection"] == selection
@@ -174,6 +175,17 @@ def test_snapshot_catalog_does_not_observe_cells_and_refresh_keeps_declared_scop
     for invalid in ([], ["Missing"]):
         with pytest.raises(ValueError):
             source_table_snapshot(source, sheets=invalid)
+
+
+    assert source_table_snapshot(source, sheets=["Blank"])["tables"] == [
+        {"sheet": "Blank", "row_count": 0, "column_count": 0, "rows": [], "table_id": "table:2"}]
+
+    def unreadable(*_args, **_kwargs):
+        raise ValueError("Unexpected empty workbook relationship while reading")
+
+    monkeypatch.setattr(raw_tables, "_read_original_cells", unreadable)
+    with pytest.raises(ValueError, match="empty workbook relationship"):
+        source_table_snapshot(source, sheets=["Measured"])
 
 
 def test_unselected_sheet_byte_change_still_invalidates_scoped_snapshot_and_cache(tmp_path, monkeypatch):

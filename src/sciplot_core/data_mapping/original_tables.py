@@ -33,14 +33,18 @@ def original_rows(frame: pd.DataFrame, indices: list[int]) -> list[dict[str, Any
 def source_table_catalog(source: Path, *, expected_sha256: str | None = None) -> dict[str, Any] | None:
     """List every physical table without reading its measurement cells."""
     source = source.expanduser().resolve()
-    if not resolve_source_path(source, expected_sha256=expected_sha256).is_file() or source.suffix.casefold() not in {".csv", ".tsv", ".xlsx", ".xls", ".xlsm"}:
+    suffix = source.suffix.casefold()
+    if suffix not in {".csv", ".tsv", ".xlsx", ".xls", ".xlsm"}:
         return None
-    before = file_sha256(resolve_source_path(source, expected_sha256=expected_sha256))
+    actual = resolve_source_path(source, expected_sha256=expected_sha256)
+    if not actual.is_file():
+        return None
+    before = file_sha256(actual)
     if expected_sha256 is not None and before != expected_sha256:
         raise SourceVersionMismatch(str(source), expected_sha256, before,
                                     "The original table changed from its exact declared byte version.")
     sheets: list[str | None] = [None]
-    if source.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}:
+    if suffix in {".xlsx", ".xls", ".xlsm"}:
         sheets = list(read_sheet_names(source, expected_sha256=before))
     if file_sha256(resolve_source_path(source, expected_sha256=before)) != before:
         raise ValueError("Table-choice source changed while reading.")
@@ -67,9 +71,7 @@ def source_table_snapshot(source: Path, *, rule_id: str | None = None,
             continue
         try:
             frame = read_original_table(source, sheet, before)
-        except ValueError as exc:
-            if "empty" not in str(exc):
-                raise
+        except pd.errors.EmptyDataError:
             table = {"sheet": sheet, "row_count": 0, "column_count": 0, "rows": []}
         else:
             table = {"sheet": sheet, "row_count": len(frame), "column_count": frame.shape[1],

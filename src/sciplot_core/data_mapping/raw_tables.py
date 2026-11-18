@@ -156,7 +156,7 @@ def _read_raw_table(
         lambda: _read_original_cells(reference, read_path, preserve_cells=preserve_cells),
         expected_sha256=digest, content_only=True)
     if raw.empty:
-        raise ValueError(f"Data mapping source is empty: {reference.relative_path}")
+        raise pd.errors.EmptyDataError(f"Data mapping source is empty: {reference.relative_path}")
     # Never collapse empty interior columns: selections use original cell indices.
     for coordinate, expected in reference.cell_evidence.items():
         row, column = (int(part) for part in coordinate.split(","))
