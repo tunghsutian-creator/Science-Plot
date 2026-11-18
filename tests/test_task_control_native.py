@@ -240,12 +240,15 @@ def test_three_sample_style_rounds_save_without_export_then_publish_current_data
 
 @pytest.mark.comprehensive
 def test_failed_native_preview_is_corrected_in_place_and_then_saved(tmp_path):
+    from sciplot_core.task_control import start_task
+
     source = tmp_path / "UVvis.csv"
     source.write_text("Wavelength,Absorbance\nnm,a.u.\nA,A\n400,1\n450,3\n500,2\n")
     raw = source.read_bytes()
     request, response = tmp_path / "request.json", tmp_path / "response.json"
-    request.write_text(json.dumps({"version": 1, "action": "create", "source": str(source)}))
-    created = _cli("task", "start", "--request", request)
+    # Seed the historical native task workflow; public source-only creation is ManagedPlot.
+    created = start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=tmp_path / "creation")
+    assert created["status"] == "complete", created
     project = Path(created["project"])
     current = _cli("task", "inspect", created["task_dir"])["current_project"]
     figure = current["figures"][0]

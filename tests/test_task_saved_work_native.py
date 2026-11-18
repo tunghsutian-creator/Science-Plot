@@ -18,7 +18,7 @@ from sciplot_core import task_saved_work as work
 
 
 @pytest.mark.comprehensive
-def test_cold_mapped_continuation_retains_two_applied_edits_without_adopting_shadow(tmp_path):
+def test_cold_mapped_continuation_retains_two_applied_edits_without_adopting_shadow(tmp_path, monkeypatch):
     from sciplot_core.plot_engine.service import PlotService
     from sciplot_core.plot_engine.storage import document_root
     from test_task_initial_mapping import request_for
@@ -59,15 +59,30 @@ def test_cold_mapped_continuation_retains_two_applied_edits_without_adopting_sha
     assert namespace + "head.json" in head
     old_namespace = {str(path): path.read_bytes() for path in root.rglob("*") if path.is_file()}
 
-    def cli(*arguments):
+    def cli(*arguments, expected=0):
         result = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), *map(str, arguments), "--json"],
             cwd=REPO_ROOT, check=False, capture_output=True, text=True, timeout=180)
-        assert result.returncode == 0, result.stdout + result.stderr
+        assert result.returncode == expected, result.stdout + result.stderr
         return result.stdout, json.loads(result.stdout)
 
     copied = tmp_path / "renamed.csv"
     copied.write_bytes(raw)
-    _, before = cli("task", "continue", copied, "--search-root", project, "--target", project)
+    _, refused = cli("task", "continue", copied, "--search-root", project, "--target", project, expected=1)
+    assert refused["reason_code"] == "legacy_conversion_required"
+    assert refused["next_step"] == {"action": "plot.open", "arguments": {"target": str(project), "figure_id": figure_id}}
+    assert semantic_state() == head
+    # Exercise the historical evidence path below public write admission; the
+    # separate CLI invocation above still uses the real read-only policy.
+    from sciplot_core.project_lifecycle import legacy_public_policy
+
+    def historical_continuation(path):
+        def admit_historical_target(target, *, figure_id):
+            assert target == project and figure_id == initial["primary_figure_id"]
+        with monkeypatch.context() as historical:
+            historical.setattr(legacy_public_policy, "require_public_editable", admit_historical_target)
+            return continue_saved_work(path, search_roots=[project], target=project)
+
+    before = historical_continuation(copied)
     assert before["status"] == "current", before
     assert before["selected"]["recorded_source_sha256"] == mapping["original_input_sha256"]
     assert before["selected"]["selected_source_current"] is True
@@ -80,7 +95,7 @@ def test_cold_mapped_continuation_retains_two_applied_edits_without_adopting_sha
         assert review["status"] == "needs_review", review
         saved = resume_task(Path(review["task_dir"]), {"accept_preview": True, "expected_operation_id": review["operation_id"]})
         assert saved["status"] == "complete", saved
-    _, continued = cli("task", "continue", source, "--search-root", project, "--target", project)
+    continued = historical_continuation(source)
     assert continued["status"] == "current", continued
     assert continued["current"]["scientific_audit"]["status"] == "passed"
     shadow = continued["selected"]["documents"][0]
@@ -99,31 +114,34 @@ def test_cold_mapped_continuation_retains_two_applied_edits_without_adopting_sha
     export_request = tmp_path / "export.json"
     export_request.write_text(json.dumps({"version": 1, "action": "export", "project": str(project)}))
     arguments = ("task", "start", "--request", export_request, "--task-dir", tmp_path / "export")
-    reply, exported = cli(*arguments)
+    _, denied = cli(*arguments, expected=1)
+    assert denied["reason_code"] == "legacy_conversion_required" and not (tmp_path / "export").exists()
+    export_payload = json.loads(export_request.read_text())
+    exported = start_task(export_payload, task_dir=tmp_path / "export")
     assert exported["status"] == "complete", exported
     delivery = Path(inspect_project(project)["delivery"]["path"])
     def inventory():
         return {str(path): (path.read_bytes(), path.stat().st_mtime_ns)
             for base in (project, delivery, root) for path in base.rglob("*") if path.is_file()}
     authority = inventory()
-    replay, replayed = cli(*arguments)
-    assert replay == reply and replayed["status"] == "complete"
+    replayed = start_task(export_payload, task_dir=tmp_path / "export")
+    assert replayed == exported and replayed["status"] == "complete"
     assert inventory() == authority and semantic_state() == head
     # The saved chain cannot justify an unrelated native save or changed raw/effective inputs.
     document = Path(current["selected_figure"]["document"])
     saved_native = document.read_bytes()
     document.write_bytes(saved_native + b"\n# unknown external save\n")
-    external = continue_saved_work(source, search_roots=[project], target=project)
+    external = historical_continuation(source)
     assert external["status"] == "blocked" and external["reason_code"] == "document_conflict", external
     document.write_bytes(saved_native)
     source.write_bytes(raw.replace(b"450,4", b"450,8"))
-    stale = continue_saved_work(source, search_roots=[project], target=project)
+    stale = historical_continuation(source)
     assert stale["status"] == "blocked" and stale["reason_code"] == "source_revision_required", stale
     source.write_bytes(raw)
     effective = Path(mapping["effective_input"])
     original_effective = effective.read_bytes()
     effective.write_bytes(original_effective + b"\n")
-    stale = continue_saved_work(source, search_roots=[project], target=project)
+    stale = historical_continuation(source)
     assert stale["status"] == "blocked" and stale["reason_code"] == "source_revision_required", stale
     effective.write_bytes(original_effective)
     assert source.read_bytes() == raw

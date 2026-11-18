@@ -116,10 +116,11 @@ def test_template_materialization_does_not_change_auto_render_route(
     calls: list[WorkflowRouteIntent] = []
 
     def fake_auto_request(**kwargs: Any) -> RequestRenderResult:
+        assert kwargs["named_recipe_binding"] is None
         calls.append(kwargs["route_intent"])
         return sentinel
 
-    monkeypatch.setattr(request_rendering, "_render_auto_request", fake_auto_request)
+    monkeypatch.setattr(request_rendering, "_render_semantic_plan_request", fake_auto_request)
     monkeypatch.setattr(
         request_rendering,
         "run_recipe",

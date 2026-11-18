@@ -57,10 +57,18 @@ def test_decoded_result_size_is_compact_utf8_not_an_envelope():
 
 @pytest.mark.comprehensive
 def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
-    source = tmp_path / "UVvis.csv"
-    source.write_text("Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\n"
-                      "E2,E2,E4,E4\n400,1,400,2\n450,2,450,3\n500,3,500,4\n")
-    source_hash = file_sha256(source)
+    from test_plot_ir import managed_example
+
+    template, binding, _ = managed_example()
+    source_hashes = {}
+    for index, item in enumerate(binding["data_sources"]):
+        source = tmp_path / f"source-{index}.csv"
+        source.write_text(f"Time,Signal\ns,V\n0,{2 + index}\n1,{4 + index}\n2,{8 + index}\n")
+        source_hashes[source] = file_sha256(source)
+        item.update(path=str(source), sha256=source_hashes[source])
+    series_ids = ["series:E2", "series:E4"]
+    for identity, slot in zip(series_ids, binding["slots"].values(), strict=True):
+        slot.update(series_id=identity, sample=identity.removeprefix("series:"))
     measurements = []
     with socket_directory(prefix="spnative-", dir="/tmp") as temporary:
         socket = Path(temporary) / "engine.sock"
@@ -80,10 +88,11 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
 
         try:
             request_file = tmp_path / "create.json"
-            request_file.write_text(json.dumps({"source": str(source), "rule_id": "uvvis_spectrum",
-                                                "idempotency_key": "native-create"}))
+            request_file.write_text(json.dumps({"template_definition": template, "data_binding": binding,
+                                                "rule_id": "uvvis_spectrum", "idempotency_key": "native-create"}))
             created = cli("cli_create_cold_engine", ["create", "--request", str(request_file)])
             assert created["status"] == "complete" and created["ready_to_use"] is True, created
+            assert created["plot_type"] == "ManagedPlot"
             engine_pid = read_owner(socket)["pid"]
             plot = Path(created["plot"])
             opened = cli("cli_open_warm_engine", ["open", str(plot)])
@@ -91,11 +100,11 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
             assert opened["plot_id"] == described["plot_id"] == created["plot_id"]
             assert described["status"] == "current" and described["revision"] == 0
             scientific_hash = described["scientific_hash"]
-            for identifier in ("series:E2", "series:E4"):
+            for identifier in series_ids:
                 assert identifier in described["objects"]
             request = {"plot_id": created["plot_id"], "base_revision": 0,
                        "idempotency_key": "native-width", "intent_class": "presentation", "changes": [
-                           {"op": "set", "target": ["series:E2", "series:E4"], "property": "style.line.width", "value": "0.7pt"}]}
+                           {"op": "set", "target": series_ids, "property": "style.line.width", "value": "1.2pt"}]}
             patch_file = tmp_path / "patch.json"
             patch_file.write_text(json.dumps(request))
             patched = cli("cli_patch_warm_engine", ["patch", str(plot), "--request", str(patch_file)])
@@ -143,7 +152,7 @@ def test_native_cli_create_socket_patch_and_official_mcp_replay(tmp_path):
             response.write_text(json.dumps({"response": {"rule_id": "uvvis_spectrum"}}))
             rejected = cli("cli_changed_source_answer", ["decide", question["plot"], "--request", str(response)], success=False)
             assert (rejected.get("reason_code") or (rejected.get("blocker") or {}).get("reason_code")) == "source_changed", rejected
-            assert file_sha256(source) == source_hash
+            assert {source: file_sha256(source) for source in source_hashes} == source_hashes
             assert _ping(socket, 3)["pid"] == engine_pid
             report = {"status": "passed", "transport": "CLI + official MCP stdio -> same persistent UNIX engine",
                       "server_pid": engine_pid, "server_pid_stable": True, "plot": str(plot),
