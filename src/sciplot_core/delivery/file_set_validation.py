@@ -16,11 +16,12 @@ def _recorded_file_set(
     hash_field: str,
     required: bool = True,
 ) -> dict[str, Any]:
+    directory = directory.resolve()
     live_files = (
         {
             path.resolve()
             for path in directory.iterdir()
-            if path.is_file() and path.suffix.casefold() in suffixes
+            if path.suffix.casefold() in suffixes and path.is_file()
         }
         if directory.is_dir()
         else set()
@@ -49,15 +50,9 @@ def _recorded_file_set(
             invalid.append({"reason": "file_or_hash_invalid", "path": str(declared)})
             continue
         path = projected_runtime_artifact(declared).resolve()
-        actual_hash = existing_file_sha256(path)
-        valid = bool(
-            path.parent == directory.resolve()
-            and path.suffix.casefold() in suffixes
-            and path.is_file()
-            and path.stat().st_size > 0
-            and expected_hash
-            and actual_hash == expected_hash
-        )
+        in_scope = path.parent == directory and path.suffix.casefold() in suffixes
+        actual_hash = existing_file_sha256(path) if in_scope else None
+        valid = actual_hash == expected_hash and path.stat().st_size > 0
         if not valid:
             invalid.append(
                 {

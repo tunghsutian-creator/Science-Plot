@@ -139,6 +139,20 @@ def test_malformed_delivery_file_record_rejects_directory_before_resolving(tmp_p
         assert verify_delivery_package(record, expected_root=delivery, expected_manifest=manifest)["passed"] is False
     assert inventory(tmp_path) == before
 
+    from sciplot_core.delivery import file_set_validation
+
+    foreign = tmp_path / "outside.csv"
+    foreign.write_text("X,Y\n1,2\n")
+    with monkeypatch.context() as patch:
+        patch.setattr(file_set_validation, "existing_file_sha256",
+                      lambda _path: pytest.fail("Read bytes outside the delivery directory"))
+        checked = file_set_validation._recorded_file_set(
+            [{"path": str(foreign), "sha256": "a" * 64}],
+            directory=delivery / "data", suffixes={".csv"}, hash_field="sha256",
+        )
+    assert checked["passed"] is False
+    assert checked["invalid"][0]["actual_sha256"] is None
+
 
 def test_malformed_qa_export_rejects_directory_before_resolving(tmp_path, monkeypatch):
     project, _delivery_root, store = _project_and_delivery(tmp_path)
