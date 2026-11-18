@@ -15,10 +15,11 @@ from .schema import binding_schema, rendering_contract_schema
 
 CURRENT_HOUSE_CONTRACT_ID = "sciplot-house-style-v2"
 LOG_MINOR_ALGORITHM_ID = "sciplot-current-log-minor-ticks-v1"
+INSIDE_BEST_ALGORITHM_ID = "sciplot-current-inside-best-v1"
 
 
 _PINNED_CONTENT_HASHES = {
-    CURRENT_HOUSE_CONTRACT_ID: "6a3b0b20217fce6aba71323a64307e4353dae45d116cff2a581cabe4e090dc14",
+    CURRENT_HOUSE_CONTRACT_ID: "36d58b2240edc6b40007542651ef0d5d9ba484355be1f341643d1399f50bf030",
     HOUSE_CONTRACT_ID: "cb9d4af22f1905ede7acc956ccbc9d664f4d9171a4dad9afb2ca878cf96cd821",
     COMPOSITION_CONTRACT_ID: "345c47f305fc9e2b57defd08662abad0e6232a1ac00d649725ea20e8829bf283",
 }
@@ -36,6 +37,11 @@ def _snapshot(contract_id: str) -> dict[str, Any]:
             "status": "specified", "value": LOG_MINOR_ALGORITHM_ID,
             "source_file": "src/sciplot_core/rendering_contract/current_ticks.py", "source_symbol": "log_minor_ticks",
             "notes": "Open-decade minor ticks consume the pinned axis.log_minor_multipliers, not the legacy runtime policy.",
+        }
+        payload["properties"]["legend.inside_best_algorithm"] = {
+            "status": "specified", "value": INSIDE_BEST_ALGORITHM_ID,
+            "source_file": "src/sciplot_core/rendering_contract/current_inside_best.py", "source_symbol": "inside_best_geometry",
+            "notes": "Explicit well-separated axes use the equivalent physical footprint, corner scoring and anchor.",
         }
         payload["content_hash"] = content_hash(payload)
     else:
@@ -57,10 +63,9 @@ def contract_binding(contract_id: str = HOUSE_CONTRACT_ID) -> dict[str, str]:
     return {"contract_id": contract_id, "content_hash": str(contract["content_hash"])}
 
 
-def writer_binding(spec: dict[str, Any]) -> dict[str, str]:
-    """Avoid silently upgrading a new request that still needs legacy scoring."""
-    inside_best = any(guide["location"] == "inside-best" for guide in spec.get("guides", ()))
-    return contract_binding(HOUSE_CONTRACT_ID if inside_best else CURRENT_HOUSE_CONTRACT_ID)
+def writer_binding() -> dict[str, str]:
+    """Bind fresh semantic requests; unmarked imported templates retain v1."""
+    return contract_binding(CURRENT_HOUSE_CONTRACT_ID)
 
 
 def require_binding(binding: dict[str, Any]) -> dict[str, Any]:

@@ -364,7 +364,7 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
     from sciplot_core.rendering_contract import contract_value
     from sciplot_core.rendering_contract.registry import writer_binding
 
-    figure["rendering_contract"] = writer_binding(figure)
+    figure["rendering_contract"] = writer_binding()
     figure = resolve_current_view(figure, datasets)
     if "size_mm" in raw_plan:
         width, figure["layout"]["height_mm"] = raw_plan["size_mm"]

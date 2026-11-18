@@ -160,7 +160,7 @@ def test_raw_source_option_does_not_change_fixed_statistics_or_accept_unknown_va
     assert result["blocker"]["reason_code"] == "plan_source_option_invalid"
 
 
-def test_no_experiment_numeric_xy_preserves_signed_ordered_missing_measurements_and_context(tmp_path):
+def test_no_experiment_numeric_xy_preserves_signed_ordered_missing_measurements_and_context(tmp_path, monkeypatch):
     from sciplot_core.task_semantic_creation import build_managed_request
     from sciplot_core.task_semantic_contract import validate_intent
     from sciplot_core.task_semantic_plan import prepare_plan
@@ -175,8 +175,16 @@ def test_no_experiment_numeric_xy_preserves_signed_ordered_missing_measurements_
                               "source_context": "Original cooling acquisition; no baseline correction, normalization or integration."})
     plan = prepare_plan([source], intent)
     assert plan["decisions"] == []
+    from sciplot_core.rendering_contract import legacy_algorithms
+    from sciplot_core.rendering_contract.registry import CURRENT_HOUSE_CONTRACT_ID
+
+    monkeypatch.setattr(legacy_algorithms, "require_legacy_algorithms",
+                        lambda *_: pytest.fail("Fresh ordinary inside-best tasks must not depend on the legacy pin."))
     wire = build_managed_request({"request": {"intent": intent}, "semantic_plan": plan,
         "semantic_choices": {}, "task_dir": str(tmp_path / "task"), "intent_revision": 1})
+    figure = wire["template_definition"]["figure_spec"]
+    assert figure["guides"][0]["location"] == "inside-best"
+    assert figure["rendering_contract"]["contract_id"] == CURRENT_HOUSE_CONTRACT_ID
     assert wire["rule_id"] == "ordinary_xy"
     assert wire["data_binding"]["provenance"]["semantic_task"]["intent"] == intent
     assert {node["kind"] for node in wire["data_binding"]["transforms"]} <= {"select", "row_slice", "rename"}

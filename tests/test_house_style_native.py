@@ -192,15 +192,31 @@ def test_current_log_minor_ticks_keep_native_pdf_pixels_and_physical_canvas(tmp_
                 assert [page.rect.width * 25.4 / 72, page.rect.height * 25.4 / 72] == pytest.approx([60., 55.], abs=.4)
                 assert page.get_drawings()
                 pdfs.append(page.get_pixmap(matrix=pymupdf.Matrix(2, 2)).samples)
-        # A later explicit inside-best edit retains v2 tick semantics and
-        # correctly reattaches only the legacy scorer after a serialized reopen.
+        # A later edit to inside-best preserves the physical footprint without
+        # depending on the v1 implementation. Compare after serialized reopen.
         spec["guides"][0]["location"] = "inside-best"
-        reopened = json.loads(json.dumps(store_spec(document, spec)))
-        edited = compile_document(reopened)
-        assert edited["rendering_contract"] == contract_binding(CURRENT_HOUSE_CONTRACT_ID)
-        assert edited["style_provenance"]["rendering:legacy_legend_binding"]["rendering_contract"] == contract_binding()
-        built = compiler.compile_ir(edited, tmp_path / "edited-current")
-        assert compiler.export_ir(edited, Path(built["document"]), tmp_path / "edited-exports")["ready_to_use"]
+        auto_pdfs, auto_guides = [], []
+        for label, binding in (("v1", contract_binding()), ("current", contract_binding(CURRENT_HOUSE_CONTRACT_ID))):
+            spec["rendering_contract"] = binding
+            reopened = json.loads(json.dumps(store_spec(document, spec)))
+            edited = compile_document(reopened)
+            auto_guides.append(edited["guides"])
+            if label == "current":
+                assert edited["rendering_contract"] == binding
+                assert edited["style_provenance"]["rendering:inside_best_binding"]["rendering_contract"] == binding
+                assert "rendering:legacy_legend_binding" not in edited["style_provenance"]
+            output = tmp_path / (label + "-auto")
+            built = compiler.compile_ir(edited, output)
+            exports = compiler.export_ir(edited, Path(built["document"]), output / "exports")
+            assert exports["ready_to_use"]
+            pdf = next(item["path"] for item in exports["exports"] if item["format"] == "pdf")
+            with pymupdf.open(pdf) as native:
+                page = native[0]
+                assert [page.rect.width * 25.4 / 72, page.rect.height * 25.4 / 72] == pytest.approx([60., 55.], abs=.4)
+                assert page.get_drawings()
+                auto_pdfs.append(page.get_pixmap(matrix=pymupdf.Matrix(2, 2)).samples)
+        assert auto_guides[0] == auto_guides[1]
+        assert auto_pdfs[0] == auto_pdfs[1]
     finally:
         compiler.close()
     assert irs[0]["datasets"] == irs[1]["datasets"]
