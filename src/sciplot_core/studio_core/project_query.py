@@ -169,8 +169,14 @@ def _inspect_legacy_project(
 
 
 def inspect_project(project: Path, **options: Any) -> dict[str, Any]:
+    from sciplot_core.studio_core.managed_curve_query import inspect_curve_project
     from sciplot_core.studio_core.managed_frequency_query import inspect_frequency_creation
 
+    curve = inspect_curve_project(project, figure_id=options.get("figure_id"))
+    if curve is not None:
+        if any(options.get(key) for key in ("object_path", "native", "include_annotations", "include_axes")):
+            raise ValueError("Managed figures expose their current objects through plot open; use the reported canonical plot path.")
+        return curve
     managed = inspect_frequency_creation(project)
     if managed is None:
         return _inspect_legacy_project(project, **options)

@@ -26,6 +26,7 @@ def create_curve_project(source: Path, plan: dict[str, Any], layout: UserOutputL
     if not (journal / "task.json").is_file():
         if workspace.exists() or not admit_raw_curve(draft, plan):
             return None
+        draft["project_creation_figure"] = plan["resolved_figure_plan"]["tasks"][0]
         require_new(layout)
         workspace.parent.mkdir(parents=True, exist_ok=True)
     with external_project_session(workspace):

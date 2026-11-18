@@ -11,8 +11,7 @@ from typing import Any
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.output_contract import resolve_user_output_layout, requested_delivery_root
-from sciplot_core.studio_core.project_query import resolve_project_path
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.studio_core.project_query_paths import canonical_path, resolve_project_path
 from sciplot_core.task_contract import TaskControlError, validate_task_request
 from sciplot_core.task_next_step import task_next_step
 from sciplot_core.task_timing import observe_phase

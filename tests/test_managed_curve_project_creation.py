@@ -65,6 +65,14 @@ def test_verified_curve_project_creates_managed_and_recovers_existing_delivery(t
                 assert "Wavelength (nm)" in b[0].get_text() and "Absorbance (a.u.)" in b[0].get_text()
             assert main(cmd) == 0
             assert json.loads(capsys.readouterr().out) == result
+            for target in (str(plot), str(out), result["document"], result["request"]):
+                assert main(["project", "inspect", target, "--full", "--json", "--figure", result["primary_figure_id"]]) == 0
+                inspected = json.loads(capsys.readouterr().out)
+                assert inspected["project"] == str(plot) and inspected["ready_to_use"] is True
+                assert inspected["selected_figure"]["figure_id"] == result["primary_figure_id"]
+            missing = Path(result["document"]).with_name("missing.vsz")
+            assert main(["project", "inspect", str(missing), "--full", "--json"]) != 0
+            assert "does not exist" in capsys.readouterr().out
             document = Path(result["document"])
             edited = document.read_bytes() + b"\n# local edits\n"
             document.write_bytes(edited)

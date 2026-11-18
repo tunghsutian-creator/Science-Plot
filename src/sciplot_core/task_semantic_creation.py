@@ -270,7 +270,7 @@ def current_result(state: dict[str, Any]) -> dict[str, Any]:
                         and identities_match and bool(exports) and export_current.get("current") is True
                         and export_current.get("byte_inventory_verified") is True)
         ready = native_delivery_current and plot_current
-        summary.update(ready_to_use=ready, readiness_evaluated=True)
+        summary.update(ready_to_use=ready, readiness_evaluated=True, native_delivery_current=native_delivery_current)
         if ready:
             from sciplot_core.task_semantic_delivery import handoff_paths
 
