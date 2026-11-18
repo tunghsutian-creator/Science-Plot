@@ -21,6 +21,7 @@ from sciplot_core.project_store import FileProjectStore, state
 from sciplot_core.task_semantic_creation import build_managed_request
 from sciplot_core.task_semantic_plan import prepare_plan
 from sciplot_core.workflow.frequency_managed_grouping import group_frequency_request, resolve_mean_group_blocks
+from sciplot_core.workflow.frequency_managed_requests import prepare_frequency_requests
 from test_frequency_interval_binding import instrument_source, intent
 
 
@@ -124,11 +125,11 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
         return real_compile(ir, output)
 
     monkeypatch.setattr(compiler, "compile_ir", compile_once)
+    requests = prepare_frequency_requests(resolved.domain, plan, task_root=tmp_path / "candidate-tasks")
     try:
-        for task in tasks:
+        for task, request in zip(tasks, requests, strict=True):
             expected = (("Anonymous material · 210 °C", 2), ("Anonymous material · 150 °C", 1), ("Anonymous material · 170 °C", 1))
             assert task.replicate_counts == expected
-            request = _grouped_request(originals, resolved.domain, plan, task, units, tmp_path / ("task-" + task.figure_id))
             if task is tasks[-1]:
                 def missing_final_figure(*_args):
                     raise Interrupted()

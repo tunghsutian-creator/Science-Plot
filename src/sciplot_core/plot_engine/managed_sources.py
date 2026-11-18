@@ -160,16 +160,17 @@ def _require_sample_lineage(document: dict[str, Any], raw: dict[str, dict[str, s
         source, output = node["inputs"][0], node["output"]
         columns = dict(known.get(source, {}))
         unresolved = unknown.get(source)
-        if node["kind"] == "concat_time":
+        if node["kind"] in {"concat_time", "rheology_mean_exact_x"}:
             inputs = node["inputs"]
             if any(name in unknown for name in inputs):
                 unknown[output] = set().union(*(unknown[name] if name in unknown else
                                                set().union(*known[name].values()) for name in inputs))
                 known[output] = {}
                 continue
-            if any(set(known[name]) != set(columns) for name in inputs):
+            if node["kind"] == "concat_time" and any(set(known[name]) != set(columns) for name in inputs):
                 raise EngineError("managed_column_lineage_missing", "Every concatenated stage must preserve the same original column identities.")
-            known[output] = {column: set().union(*(known[name][column] for name in inputs)) for column in columns}
+            members = set().union(*(known[name].keys() for name in inputs))
+            known[output] = {column: set().union(*(known[name].get(column, set()) for name in inputs)) for column in members}
             continue
         if node["kind"] == "external":
             # An arbitrary fixed executor has no declared column lineage. A
@@ -193,6 +194,14 @@ def _require_sample_lineage(document: dict[str, Any], raw: dict[str, dict[str, s
             if any(name not in columns for name in inputs):
                 raise EngineError("managed_column_lineage_missing", "Viscosity derivation requires each original input column.")
             columns[parameters["output_column"]] = set().union(*(columns[name] for name in inputs))
+        elif node["kind"] == "rheology_frequency_complete":
+            for metric, inputs in (("complex_modulus", ("storage_modulus", "loss_modulus")),
+                                   ("complex_viscosity", ("x", "complex_modulus"))):
+                if metric not in node["parameters"]["derivations"]:
+                    continue
+                if metric in columns or any(name not in columns for name in inputs):
+                    raise EngineError("managed_column_lineage_missing", "The frequency derivation requires its exact measured inputs and a new response column.")
+                columns[metric] = set().union(*(columns[name] for name in inputs))
         elif node["kind"] == "rename":
             renames = node["parameters"]["columns"]
             if any(name not in columns for name in renames):
