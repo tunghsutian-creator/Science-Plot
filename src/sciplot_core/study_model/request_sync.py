@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +14,6 @@ from sciplot_core.study_model.experiment_plans import (
 from sciplot_core.study_model.recommendations import (
     normalize_replicate_mode,
     _unique_id,
-    _experiment_plan,
     experiment_recommendation_payload,
     _metric_payloads,
 )
@@ -40,9 +38,8 @@ def study_model_from_request(
     recommendation = experiment_recommendation_payload(
         rule_id=rule_id, semantic_family=semantic_family
     )
-    plan = _experiment_plan(rule_id=rule_id, semantic_family=semantic_family)
     replicate_mode = normalize_replicate_mode(
-        request.get("replicate_mode"), default=plan["default_replicate_mode"]
+        request.get("replicate_mode"), default=recommendation["default_replicate_mode"]
     )
     series_order = request.get("series_order")
     if isinstance(series_order, list | tuple):
@@ -66,7 +63,7 @@ def study_model_from_request(
     figure_queue = [
         {**figure, "order": index, "status": "planned"}
         for index, figure in enumerate(
-            copy.deepcopy(recommendation["figure_queue"]), start=1
+            recommendation["figure_queue"], start=1
         )
     ]
     return normalize_study_model(
@@ -85,7 +82,7 @@ def study_model_from_request(
             },
             "replicate_policy": {
                 "mode": replicate_mode,
-                "default_mode": plan["default_replicate_mode"],
+                "default_mode": recommendation["default_replicate_mode"],
                 "available_modes": [
                     {"id": key, **value} for key, value in REPLICATE_MODES.items()
                 ],
@@ -107,14 +104,13 @@ def sync_study_model_samples(
 ) -> dict[str, Any] | None:
     if not isinstance(study_model, dict) or study_model.get("kind") != STUDY_MODEL_KIND:
         return study_model
-    study_model = normalize_study_model(study_model)
+    synced = normalize_study_model(study_model)
     if not sample_order:
-        return copy.deepcopy(study_model)
+        return synced
     selected = [str(item).strip() for item in sample_order if str(item).strip()]
     if not selected:
-        return copy.deepcopy(study_model)
+        return synced
     selected_set = set(selected)
-    synced = copy.deepcopy(study_model)
     samples = [
         sample
         for sample in synced.get("samples", [])

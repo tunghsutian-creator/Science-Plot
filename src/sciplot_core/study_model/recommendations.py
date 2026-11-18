@@ -72,7 +72,7 @@ def experiment_recommendation_payload(
         "semantic_family": semantic_family,
         "default_replicate_mode": plan["default_replicate_mode"],
         "figure_count": len(plan["figure_queue"]),
-        "figure_queue": copy.deepcopy(list(plan["figure_queue"])),
+        "figure_queue": list(plan["figure_queue"]),
     }
 
 

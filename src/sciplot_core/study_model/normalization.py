@@ -124,7 +124,7 @@ def build_study_model(
             "status": "planned",
         }
         for index, figure in enumerate(
-            copy.deepcopy(list(plan["figure_queue"])), start=1
+            plan["figure_queue"], start=1
         )
     ]
     sample_ids: set[str] = set()
