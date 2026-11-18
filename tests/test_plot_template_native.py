@@ -251,28 +251,17 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
 def test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles(tmp_path):
     """Reauthor the paired recipe without using the old renderer or changing original cells."""
     from sciplot_core.plot_protocol.server import make_service
-    from test_plot_ir import managed_example
 
     source = tmp_path / "UVvis.csv"
     source.write_text("Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\nE2,E2,E4,E4\n"
                       "400,1,400,2\n450,2,450,3\n500,3,500,4\n")
     original = source.read_bytes()
-    request = template_request(source)
-    request["mode"] = "managed"
-    cartesian, *_ = managed_example()
-    old = request["template_definition"]["presentation"]
-    explicit = cartesian["presentation"]
-    layout = deepcopy(explicit["layout"])
-    layout["axes"]["x"].update(label="Wavelength (nm)", unit="nm", limits=[390, 510], ticks=[400, 450, 500])
-    layout["axes"]["y"].update(label="Absorbance (a.u.)", unit="a.u.", limits=[0, 5], ticks=[0, 1, 2, 3, 4, 5])
-    layout["series_styles"] = {slot: deepcopy(explicit["layout"]["series_styles"]["slot:A"])
-                               for slot in request["template_definition"]["series_slots"]}
-    for key in ("axis:x", "axis:y", "legend:main"):
-        old["objects"][key] = deepcopy(explicit["objects"][key])
-    for axis in layout["axes"].values():
-        old["objects"][axis["id"]]["label"] = axis["label"]
-        old["objects"][axis["id"]]["properties"]["axis.limits"] = axis["limits"]
-    old.update(layout=layout, export_configuration={"formats": ["pdf", "tiff_300"]})
+    example = REPO_ROOT / "skill/references/managed-paired-template.example.json"
+    request = json.loads(example.read_text())
+    request["data_binding"]["data_sources"][0].update(path=str(source), sha256=file_sha256(source))
+    legacy = template_request(source)
+    assert request["data_binding"] == legacy["data_binding"]
+    assert request["theme"] == legacy["theme"]
 
     service = make_service()
     try:
