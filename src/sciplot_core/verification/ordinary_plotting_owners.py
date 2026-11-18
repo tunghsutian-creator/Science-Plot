@@ -340,22 +340,29 @@ DIRECT_LABEL_LAYOUT_OWNER = ChangedOwner(
     release_gates=("full_pytest",),
 )
 
+_MANAGED_CURVE_PROJECT_TEST = "tests/test_managed_curve_project_creation.py"
 MANAGED_CURVE_PROJECT_PATHS = frozenset({
     "src/sciplot_core/studio_core/managed_curve_creation.py",
     "src/sciplot_core/studio_core/managed_curve_query.py",
-    "tests/test_managed_curve_project_creation.py",
+    _MANAGED_CURVE_PROJECT_TEST,
 })
 MANAGED_CURVE_PROJECT_FOCUSED = ("tests/test_project_create_cli.py", "tests/test_task_shortcuts.py")
 MANAGED_CURVE_PROJECT_NATIVE = (
-    "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery",
+    f"{_MANAGED_CURVE_PROJECT_TEST}::test_verified_curve_project_creates_managed_and_recovers_existing_delivery",
     "tests/test_project_create_cli.py::test_real_public_create_returns_a_resumable_native_project",
 )
 MANAGED_CURVE_PROJECT_OWNER = ChangedOwner(
     owner_id="managed_curve_project",
     exact_paths=MANAGED_CURVE_PROJECT_PATHS,
-    pytest_targets=(*MANAGED_CURVE_PROJECT_FOCUSED, *MANAGED_CURVE_PROJECT_NATIVE, *ARCHITECTURE_CORE_TARGETS),
+    owned_test_paths=frozenset({_MANAGED_CURVE_PROJECT_TEST}),
+    pytest_targets=(
+        _MANAGED_CURVE_PROJECT_TEST, *MANAGED_CURVE_PROJECT_FOCUSED,
+        *MANAGED_CURVE_PROJECT_NATIVE, *ARCHITECTURE_CORE_TARGETS,
+    ),
+    mypy_required=True,
+    final_milestone_gates=("smoke",),
+    release_gates=("full_pytest",),
 )
-
 
 
 ORDINARY_PLOTTING_OWNERS = (
