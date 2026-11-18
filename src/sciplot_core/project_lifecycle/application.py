@@ -394,6 +394,6 @@ class ProjectApplication(CommandDispatch):
             return create(self, request, targets=self.targets)
 
     def _managed_task_scope(self) -> AbstractContextManager[None]:
-        from sciplot_core.task_semantic_creation import local_managed_actions
+        from sciplot_core.task_semantic_owner import local_managed_actions
 
         return local_managed_actions(self.create, lambda plot: self.describe(plot, description={"scope": "summary"}), self.deliver)

@@ -30,7 +30,7 @@ def delivery_request(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def execute_delivery(request: dict[str, Any]) -> dict[str, Any]:
-    from sciplot_core.task_semantic_creation import deliver_managed
+    from sciplot_core.task_semantic_owner import deliver_managed
 
     return deliver_managed(request)
 
