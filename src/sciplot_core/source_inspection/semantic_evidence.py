@@ -73,12 +73,18 @@ def _sample_row(frame: pd.DataFrame, row: int, headers: list[str]) -> bool:
     return bool(values) and all(value and _finite(value) is None for value in values) and len(set(values)) < len(values)
 
 
-def _header_candidate(frame: pd.DataFrame) -> tuple[int, int | None, int | None] | None:
+def _header_candidate(frame: pd.DataFrame, *, gpc: bool = False) -> tuple[int, int | None, int | None] | None:
     for row in range(min(32, len(frame))):
         headers = [cell_text(value) for value in frame.iloc[row]]
         if sum(bool(header) and _finite(header) is None for header in headers) < 2:
             continue
         inline = sum(bool(explicit_header_unit(header)) for header in headers)
+        # The registered GPC distribution is dimensionless. Identify the
+        # original partial unit row without filling its blank response cell.
+        if (gpc and [header.casefold() for header in headers] == ['molar mass', 'dw/dlogm']
+                and row + 1 < len(frame)
+                and [cell_text(value) for value in frame.iloc[row + 1]] == ['g/mol', '']):
+            return row, row + 1, None
         for offset in (1, 2):
             if row + offset >= len(frame):
                 break
@@ -185,8 +191,8 @@ def _blocks(frame: pd.DataFrame, columns: list[dict[str, Any]], start: int, end:
     return blocks
 
 
-def _candidate(frame: pd.DataFrame, sheet: str | None, position: int, *, source: Path) -> dict[str, Any] | None:
-    header = _header_candidate(frame)
+def _candidate(frame: pd.DataFrame, sheet: str | None, position: int, *, source: Path, rule_id: str | None = None) -> dict[str, Any] | None:
+    header = _header_candidate(frame, gpc=rule_id == "gpc_sec_chromatogram")
     if header is None:
         return None
     header_row, unit_row, sample_row = header
@@ -267,7 +273,7 @@ def inspect_semantic_tables(path: str | Path, *, rule_id: str | None = None,
         candidate = instrument_candidate(frame, sheet=table['sheet'], position=position, source=source,
             column_reader=_column)
         if candidate is None:
-            candidate = _candidate(frame, table['sheet'], position, source=source)
+            candidate = _candidate(frame, table['sheet'], position, source=source, rule_id=rule_id)
         if candidate is not None:
             candidates.append(candidate)
     if file_sha256(source) != digest:

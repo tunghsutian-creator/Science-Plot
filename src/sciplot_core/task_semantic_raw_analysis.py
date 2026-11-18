@@ -87,10 +87,11 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
                     and conversion.get("source_unit_declared") and conversion.get("source_unit") == conversion.get("output_unit") == unit
                     if ftir else all(conversion.get(step) == {"factor": 1.0, "offset": 0.0}
                                      for step in ("source_to_canonical", "canonical_to_display")))
-        method = ("detected_dimensionless_distribution_header" if role == "y"
-                  else "detected_from_header") if gpc else "detected_from_adjacent_unit_row"
+        methods = ({"detected_dimensionless_distribution_header"} if gpc and role == "y"
+                   else {"detected_from_header", "detected_from_adjacent_unit_row"} if gpc
+                   else {"detected_from_adjacent_unit_row"})
         if (original["unit"] != unit or output.get(role + "_unit") != unit or not identity
-                or original["unit_detection"]["method"] != method):
+                or original["unit_detection"]["method"] not in methods):
             return False
         intent[role] = {"quantity": ftir_mode if ftir and role == "y" else output[role + "_metric"], "column_id": f"column:{original['column_index_zero_based']}",
                         "scale": axis.scale, "direction": "descending" if axis.reverse else "ascending"}
@@ -120,8 +121,15 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
             or block["point_count"] != series[0]["point_count"]
             or (gpc and block["table_selection"]["header_rows"] != [columns[0]["header_row_index"]])):
         return False
-    if gpc and block["table_selection"]["data_start_row"] != columns[0]["header_row_index"] + 1:
-        return False
+    if gpc:
+        region = block["table_selection"]
+        header = columns[0]["header_row_index"]
+        original_x_unit = columns[0]["x"]["unit_detection"]
+        expected_unit_row = header + 1 if original_x_unit["method"] == "detected_from_adjacent_unit_row" else None
+        if (region.get("unit_row") != expected_unit_row
+                or expected_unit_row is not None and original_x_unit["row_index_zero_based"] != expected_unit_row
+                or region["data_start_row"] != header + 1 + int(expected_unit_row is not None) + int("sample_row" in region)):
+            return False
     for role, original_role, _ in coordinates:
         actual, original = bindings[0]["coordinates"][role], columns[0][original_role]
         # Scattering quantities may be known to the registered plan without

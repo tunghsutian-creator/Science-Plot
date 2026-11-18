@@ -205,9 +205,19 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     assert gpc.read_bytes() == chromatogram
     alternate = tmp_path / "gpc-adjacent.csv"
     alternate.write_bytes(chromatogram.replace(b"Molar mass (g/mol),dW/dLogM", b"Molar mass,dW/dLogM\ng/mol,\nA,A"))
-    unverified = build_plan_preview(alternate, request={"rule_id": "gpc_sec_chromatogram"})
-    assert unverified["status"] == "planned"
-    assert not admit_raw_curve({"request": {**request, "source": str(alternate)}}, unverified)
+    adjacent = build_plan_preview(alternate, request={"rule_id": "gpc_sec_chromatogram"})
+    alternate_state = {"request": {**request, "source": str(alternate)}, "task_dir": str(tmp_path / "gpc-adjacent-task"),
+                       "source_sha256": adjacent["preview_identity"]["source_tree_sha256"]}
+    assert adjacent["status"] == "planned"
+    assert admit_raw_curve(alternate_state, adjacent)
+    adjacent_wire = build_managed_request(alternate_state)
+    adjacent_binding = adjacent_wire["data_binding"]
+    adjacent_source, = adjacent_binding["data_sources"]
+    assert adjacent_source["table_selection"] == {"sheet": None, "header_rows": [0], "unit_row": 1,
+                                                  "sample_row": 2, "data_start_row": 3, "data_end_row": 6}
+    adjacent_slot, = adjacent_binding["slots"].values()
+    assert adjacent_slot["sample"] == "A"
+    assert alternate_state["analysis_metrics"] == state["analysis_metrics"]
 
     path = tmp_path / "signed-xrd.csv"
     path.write_text("2theta,Intensity\ndegree,a.u.\nB,B\n1,-3\n2,6\n3,4\n")
