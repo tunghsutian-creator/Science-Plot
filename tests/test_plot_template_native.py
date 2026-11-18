@@ -77,6 +77,8 @@ def test_template_create_two_sources_through_one_public_command_each(tmp_path):
             saved = Path(results[0]["plot"])
             before = load_head(saved)
             native = Path(before["binding"]["document"])
+            assert results[0]["read_only"] and results[0]["new_features_require_conversion"]
+            assert results[0]["conversion"]["cli_argv"] == ["sciplot", "project", "legacy-convert", str(native), "--out"]
             original_native = native.read_bytes()
             stale_edit = tmp_path / "saved-legacy-edit.json"
             stale_edit.write_text(json.dumps({"plot_id": results[0]["plot_id"], "base_revision": results[0]["revision"],
@@ -187,6 +189,34 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
     assert prepared["phase"] == "prepared" and prepared["result"]["ready_to_use"] is False
     assert prepared["result"]["export_performed"] is False
     assert bool(state.get("template_export_only")) is not style_change
+    if not style_change:
+        from sciplot_core.plot_engine.errors import EngineError
+
+        original_plot = Path(first["plot"])
+        replacement_source = source.with_name("Replacement.csv")
+        replacement_source.write_bytes(source_bytes)
+        replacement_request = deepcopy(request)
+        replacement_request["idempotency_key"] = "replacement-template"
+        replacement_request["data_binding"]["data_sources"][0]["path"] = str(replacement_source)
+        replacement = service.create(replacement_request)
+        assert replacement["ready_to_use"] and replacement["plot_id"] != first["plot_id"]
+        real_load = service.repository.load_head
+        replacement_head = real_load(Path(replacement["plot"]))
+        replacement_native = Path(replacement_head["binding"]["document"])
+        replacement_bytes = replacement_native.read_bytes()
+        saved_workers = workers.copy()
+
+        # Model a replaced repository attachment at the original pathname,
+        # returning the actual other complete project's head, not a forged head.
+        with monkeypatch.context() as substitution:
+            substitution.setattr(service.repository, "load_head",
+                                 lambda plot: real_load(Path(replacement["plot"]) if plot == original_plot else plot))
+            with pytest.raises(EngineError) as error:
+                service.create(request)
+        assert error.value.reason_code == "document_template_adoption_conflict"
+        assert workers == saved_workers
+        assert replacement_native.read_bytes() == replacement_bytes and real_load(Path(replacement["plot"])) == replacement_head
+        workers = original_workers
     report = {"status": "passed", "style_change": style_change, "native_workers": dict(workers),
               "baseline_export_performed": False, "replay_native_calls": 0,
               "source_sha256": file_sha256(source), "plot": first["plot"]}

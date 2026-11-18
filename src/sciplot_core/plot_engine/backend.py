@@ -17,7 +17,8 @@ class PlotCreator(PlotOpener, Protocol):
 
     def describe(self, plot: Path) -> dict[str, Any]: ...
 
-    def export(self, plot: Path) -> dict[str, Any]: ...
+    def export_created(self, plot: Path, *, plot_id: str, revision: int, series_ids: dict[str, str],
+                       recipe: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class PlotBackend(Protocol):

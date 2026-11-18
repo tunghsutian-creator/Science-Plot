@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 from pathlib import Path
-from .context import exists, prepare_namespace
+from .context import exists, load_head, prepare_namespace, project_query
 from .ports import ProjectTargets
 
 from .contracts import NormalizedCommand
@@ -24,14 +24,26 @@ class _TemplateOpener:
         self.service, self.state = service, state
 
     def open(self, target: Path, figure_id: str | None = None) -> dict[str, Any]:
-        request = self.state["request"]
-        recipe = {key: deepcopy(request[key]) for key in ("template_definition", "data_binding", "theme", "rule_id") if key in request}
-        identities = {slot["sample"]: slot["series_id"] for slot in request["data_binding"]["slots"].values()}
+        identities, recipe = _adoption(self.state["request"])
         return self.service.open_created(target, series_ids=identities, recipe=recipe, figure_id=figure_id)
+
+
+def _adoption(request: dict[str, Any]) -> tuple[dict[str, str], dict[str, Any]]:
+    recipe = {key: deepcopy(request[key]) for key in ("template_definition", "data_binding", "theme", "rule_id") if key in request}
+    identities = {slot["sample"]: slot["series_id"] for slot in request["data_binding"]["slots"].values()}
+    return identities, recipe
 
 
 def _annotate(root: Path, state: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
     request = state["request"]
+    if result.get("plot_type") == "LegacyPlot" and result.get("ready_to_use") is True:
+        from sciplot_core.studio_core.legacy_saved_plot import conversion_guidance
+
+        plot = Path(result["plot"])
+        with project_query(plot):
+            document = Path(load_head(plot)["binding"]["document"])
+        result = {**result, "read_only": True, "new_features_require_conversion": True,
+                  "conversion": conversion_guidance(document)}
     return {**result, "creation_evidence": str(root / "creation.json"),
             "template_id": request["template_definition"]["template_id"],
             "binding_sha256": digest(request["data_binding"]),
@@ -48,7 +60,15 @@ def _apply(service: PlotCreator, root: Path, state: dict[str, Any]) -> dict[str,
 
 
 def _export(service: PlotCreator, root: Path, state: dict[str, Any]) -> dict[str, Any]:
-    result = service.export(Path(state["plot"]))
+    expected = state.get("template_export_revision") or state.get("template_result") or {}
+    plot_id, revision = expected.get("plot_id"), expected.get("revision")
+    if not isinstance(plot_id, str) or type(revision) is not int:
+        raise EngineError("document_template_adoption_conflict",
+                          "This older incomplete creation lacks its original export revision.",
+                          action="use_original_creation_request")
+    identities, recipe = _adoption(state["request"])
+    result = service.export_created(Path(state["plot"]), plot_id=plot_id, revision=revision,
+                                    series_ids=identities, recipe=recipe)
     state["template_result"] = result
     write(root / "creation.json", state)
     return _annotate(root, state, result)
@@ -79,6 +99,7 @@ def _continue(service: PlotCreator, root: Path, state: dict[str, Any], task: dic
     changes = presentation_changes(state["desired"], result)
     if not changes:
         state["template_export_only"] = True
+        state["template_export_revision"] = {"plot_id": result["plot_id"], "revision": result["revision"]}
         write(root / "creation.json", state)
         return _export(service, root, state)
     state["template_patch"] = {"plot_id": result["plot_id"], "base_revision": result["revision"],

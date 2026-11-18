@@ -355,19 +355,39 @@ class ProjectApplication(CommandDispatch):
     def export(self, plot: Path) -> dict[str, Any]:
         root = canonical_path(plot)
         with external_project_session(root):
-            tx = active(root)
-            if tx and tx["phase"] not in {"complete", "rejected"}:
-                if tx["phase"] in {"committed", "exporting", "export_pending"}:
-                    return replay(root, tx, self.backend)
-                raise EngineError("document_transaction_pending", "The current change must finish before export.",
-                                  action="retry_same_request")
-            head = load_head(root)
-            require_current(self.backend, head["binding"])
-            if tx and tx["phase"] == "complete" and tx["document"]["revision"] == head["document"]["revision"]:
-                return replay(root, tx, self.backend)
-            from sciplot_core.project_lifecycle.exports import export_head
+            return self._export(root)
 
-            return export_head(root, head, self.backend)
+    @usecase
+    def export_created(self, plot: Path, *, plot_id: str, revision: int, series_ids: dict[str, str],
+                       recipe: dict[str, Any]) -> dict[str, Any]:
+        from sciplot_core.plot_engine.adoption import require_adoption
+
+        root = canonical_path(plot)
+        with external_project_session(root):
+            head = load_head(root)
+            document = head["document"]
+            if (document["plot_id"], document["revision"]) != (plot_id, revision):
+                raise EngineError("document_template_adoption_conflict",
+                                  "The saved template creation no longer owns this plot revision.",
+                                  action="use_original_creation_request")
+            require_adoption(head["binding"], series_ids, recipe)
+            return self._export(root, head=head)
+
+    def _export(self, root: Path, *, head: dict[str, Any] | None = None) -> dict[str, Any]:
+        tx = active(root)
+        if tx and tx["phase"] not in {"complete", "rejected"}:
+            if tx["phase"] in {"committed", "exporting", "export_pending"}:
+                return replay(root, tx, self.backend)
+            raise EngineError("document_transaction_pending", "The current change must finish before export.",
+                              action="retry_same_request")
+        if head is None:
+            head = load_head(root)
+        require_current(self.backend, head["binding"])
+        if tx and tx["phase"] == "complete" and tx["document"]["revision"] == head["document"]["revision"]:
+            return replay(root, tx, self.backend)
+        from sciplot_core.project_lifecycle.exports import export_head
+
+        return export_head(root, head, self.backend)
 
     @usecase
     def render(self, plot: Path) -> dict[str, Any]:

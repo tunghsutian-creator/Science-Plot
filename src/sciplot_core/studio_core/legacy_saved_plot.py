@@ -47,10 +47,14 @@ def open_legacy_document(root: Path, document: Path) -> dict[str, Any]:
             "next_step": {"action": "redraw_legacy", "target": str(document),
                           "cli_argv": ["sciplot", "project", "legacy-redraw", str(document), "--out"],
                           "requires": ["new_output_directory"]},
-            "conversion": {"action": "legacy_convert", "target": str(document),
-                           "cli_argv": ["sciplot", "project", "legacy-convert", str(document), "--out"],
-                           "requires": ["new_output_directory"],
-                           "message": "To edit a supported saved XY plot, convert a separate copy."}}
+            "conversion": conversion_guidance(document)}
+
+
+def conversion_guidance(document: Path) -> dict[str, Any]:
+    return {"action": "legacy_convert", "target": str(document),
+            "cli_argv": ["sciplot", "project", "legacy-convert", str(document), "--out"],
+            "requires": ["new_output_directory"],
+            "message": "To edit a supported saved XY plot, convert a separate copy."}
 
 
 def redraw_legacy_plot(target: Path, *, output: Path, formats: list[str],
@@ -78,7 +82,7 @@ def redraw_legacy_plot(target: Path, *, output: Path, formats: list[str],
 def conversion_required(document: Path) -> Exception:
     from sciplot_core.project_lifecycle.errors import EngineError
 
+    guidance = conversion_guidance(document)
+    guidance.pop("message")
     return EngineError("legacy_conversion_required", "This saved legacy figure is read-only. Convert a separate copy to edit it.",
-                       action="legacy_convert", target=str(document),
-                       cli_argv=["sciplot", "project", "legacy-convert", str(document), "--out"],
-                       requires=["new_output_directory"])
+                       **guidance)
