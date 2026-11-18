@@ -10235,7 +10235,9 @@
       "tests/test_rheology_exact_x_mean.py::test_managed_exact_x_mean_rebuilds_from_its_originals_and_cache",
       "tests/test_rheology_mean_suite_publication.py::test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_generation",
       "tests/test_rheology_mean_suite_publication.py::test_automatic_frequency_groups_bind_original_regions_not_condition_display_labels",
-      "tests/test_rheology_mean_suite_publication.py::test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reordered"
+      "tests/test_rheology_mean_suite_publication.py::test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reordered",
+      "tests/test_rheology_managed_sparse_metric.py::test_sparse_measured_replicate_keeps_union_x_without_fabricating_loss_column",
+      "tests/test_rheology_managed_sparse_metric.py::test_frequency_graph_preserves_reported_magnitude_and_derives_before_averaging"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20297,7 +20299,9 @@
       "tests/test_rheology_exact_x_mean.py::test_exact_x_mean_matches_original_grouping_metric_tables_and_analysis",
       "tests/test_rheology_exact_x_mean.py::test_managed_exact_x_mean_rebuilds_from_its_originals_and_cache",
       "tests/test_rheology_mean_suite_publication.py::test_automatic_frequency_groups_bind_original_regions_not_condition_display_labels",
-      "tests/test_rheology_mean_suite_publication.py::test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reordered"
+      "tests/test_rheology_mean_suite_publication.py::test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reordered",
+      "tests/test_rheology_managed_sparse_metric.py::test_sparse_measured_replicate_keeps_union_x_without_fabricating_loss_column",
+      "tests/test_rheology_managed_sparse_metric.py::test_frequency_graph_preserves_reported_magnitude_and_derives_before_averaging"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
