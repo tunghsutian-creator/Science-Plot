@@ -286,3 +286,64 @@ def test_frequency_managed_native_delivery_replays_registered_storage_modulus(tm
     finally:
         service.close()
     assert source.read_bytes() == before
+
+
+def test_all_automatic_frequency_metrics_can_replay_individual_condition_data(tmp_path):
+    from sciplot_core.materials_rules.analysis import compute_analysis_metrics
+    from sciplot_core.plot_engine.managed_sources import load_sources
+    from sciplot_core.plot_ir import create_managed_document
+    from sciplot_core.plot_transforms import resolve_transforms
+    from sciplot_core.semantic import prepare_semantic_source
+    from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
+    from sciplot_core.task_semantic_creation import build_managed_request
+    from sciplot_core.task_semantic_plan import prepare_plan
+    from sciplot_core.workflow.rheology_bundle import _sweep_metric_sources
+
+    root = tmp_path / "raw"
+    root.mkdir()
+    source = instrument_source(root / "sample.csv", temperatures=(210, 150))
+    before = source.read_bytes()
+    rule = "rheology_frequency_sweep"
+    resolved = resolve_scientific_source(root, rule_id=rule, template="point_line", request={})
+    assert resolved is not None and resolved.figure_plan is not None
+    plan = resolved.figure_plan
+    samples = resolved.domain.prepared_samples
+    semantic = {"rule_id": rule, "semantic_family": "rheology_frequency", "axis_plan": {"y": {"canonical_unit": "Pa"}}}
+    prepared = prepare_semantic_source(root, output_dir=tmp_path / "prepared", semantic=semantic,
+                                       resolved_scientific_source=resolved)
+    processed = tmp_path / prepared["processed_source"]
+    task_sources = _sweep_metric_sources(processed, output_dir=tmp_path / "bundle",
+        request={"rule_id": rule, "template": "point_line", "resolved_figure_plan": plan.to_payload()})
+    assert [task.y_metric for task in plan.tasks] == ["storage_modulus", "loss_modulus", "loss_factor", "complex_viscosity"]
+    assert [stem for stem, _, _ in task_sources] == [task.artifact_stem for task in plan.tasks]
+
+    terminal_modulus = []
+    for task in plan.tasks:
+        metric = task.y_metric
+        unit = samples[0].metric_units[metric]
+        value = {**intent(), "y": {"quantity": metric, "unit": unit}}
+        scientific_plan = prepare_plan([source], value)
+        managed = build_managed_request({"request": {"intent": value}, "semantic_plan": scientific_plan,
+            "semantic_choices": {}, "intent_revision": 1, "task_dir": str(tmp_path / task.figure_id)})
+        doc = create_managed_document(managed["template_definition"], managed["data_binding"], plot_id=task.figure_id)
+        datasets = resolve_transforms(doc, load_sources(doc, rule))["datasets"]
+        layers = managed["template_definition"]["figure_spec"]["views"][0]["layers"]
+        assert [layer["label"] for layer in layers] == list(task.sample_order)
+        assert task.replicate_counts == tuple((sample.sample, 1) for sample in samples)
+        for layer, sample in zip(layers, samples, strict=True):
+            data = datasets[layer["dataset_id"]]["columns"]
+            assert (data["x"]["unit"], data["y"]["unit"]) == ("rad/s", unit)
+            assert data["x"]["values"] == [row["x"] for row in sample.rows]
+            assert data["y"]["values"] == pytest.approx([row[metric] for row in sample.rows], rel=2e-15, abs=0.)
+            if metric == "storage_modulus":
+                terminal_modulus.append(min(zip(data["x"]["values"], data["y"]["values"], strict=True))[1])
+
+    rows = compute_analysis_metrics(source_path=root, processed_source=processed, semantic=semantic, output_dir=tmp_path / "analysis")
+    assert [row["value"] for row in rows] == terminal_modulus == [515., 415.]
+    assert all(row["unit"] == "Pa" and row["status"] == "ok" for row in rows)
+    from sciplot_core.task_errors import TaskControlError
+
+    with pytest.raises(TaskControlError) as rejected:
+        prepare_plan([source], {**intent(), "y": {"quantity": "loss_factor", "unit": "%"}})
+    assert rejected.value.reason_code == "transform_unit_incompatible"
+    assert source.read_bytes() == before

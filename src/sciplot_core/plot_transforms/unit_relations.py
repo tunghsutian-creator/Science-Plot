@@ -34,7 +34,9 @@ def _registered_endpoint(unit: str, *, temperature: bool) -> str | None:
     token = aliases.get(token, token)
     if token in {"C", "°C"}:
         return "C" if temperature else None
-    return token if token in endpoints else None
+    # A literal dimensionless unity is a spelling identity ([1] -> 1), not
+    # a registered conversion to percent or another ratio notation.
+    return token if token == "1" or token in endpoints else None
 
 
 def requires_unit_context(from_unit: str, to_unit: str) -> bool:
