@@ -35,7 +35,7 @@ def validate_categorical_request(value: dict[str, Any]) -> dict[str, Any]:
         validate_categorical_binding(value.get("categorical"))
     except ValueError as exc:
         raise TaskControlError("invalid_categorical_request", str(exc)) from exc
-    errors = list(Draft202012Validator(categorical_request_schema()).iter_errors(value))
-    if errors:
-        raise TaskControlError("invalid_categorical_request", errors[0].message)
+    error = next(Draft202012Validator(categorical_request_schema()).iter_errors(value), None)
+    if error is not None:
+        raise TaskControlError("invalid_categorical_request", error.message)
     return dict(json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False)))

@@ -25,12 +25,12 @@ def task_path(path: Path) -> Path:
 
 def task_location(request: dict[str, Any], supplied: Path | None) -> Path:
     if request["action"] == "create":
-        source = canonical_path(Path(request["sources"][0] if "sources" in request else request["source"]))
+        raw_sources = request["sources"] if "sources" in request else [request["source"]]
+        sources = [canonical_path(Path(value)) for value in raw_sources]
         layout = resolve_user_output_layout(
-            source, requested_delivery_root=request.get("out"),
+            sources[0], requested_delivery_root=request.get("out"),
         )
-        protected = [source, layout.delivery_root, layout.workspace_root,
-                     *(canonical_path(Path(value)) for value in request.get("sources", []))]
+        protected = [*sources, layout.delivery_root, layout.workspace_root]
         parent = layout.workspace_root.parent / "tasks"
     else:
         project = resolve_project_path(Path(request["project"]))
@@ -86,7 +86,7 @@ def load_task(root: Path) -> dict[str, Any]:
     if digest != payload.get("state_sha256"):
         raise TaskControlError("task_record_changed", "任务记录发生变化，请保留原记录。")
     validate_task_request(payload["request"])
-    return dict(payload)
+    return payload
 
 
 def task_summary(state: dict[str, Any]) -> dict[str, Any]:
