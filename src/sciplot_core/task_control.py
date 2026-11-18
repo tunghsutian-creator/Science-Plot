@@ -344,9 +344,7 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any], *, _pub
                 run_source_preview(root, state)
             else:
                 raise TaskControlError("task_recovery_required", "请查询源更新任务的具体状态。")
-        elif phase == "previewing":
-            run_edit_preview(root, state)
-        elif phase == "starting" and state["request"]["action"] == "edit":
+        elif phase == "previewing" or (phase == "starting" and state["request"]["action"] == "edit"):
             run_edit_preview(root, state)
         elif phase == "starting" and state["request"]["action"] == "export":
             run_export(root, state)
