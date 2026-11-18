@@ -166,7 +166,7 @@ def test_preview_uses_one_compilation_but_later_ensure_reconstructs(scientific_b
     backend = object.__new__(ManagedBackend)
     backend.compiler = SimpleNamespace(render_ir=lambda *_: {
         "scientific_audit": {"status": "passed"}, "preview": {"path": "synthetic preview"}})
-    monkeypatch.setattr(backend, "_materialize_native", lambda binding, _canonical, ir: (ir, Path(binding["document"])))
+    monkeypatch.setattr(backend, "_materialize_native", lambda binding, *_args, **_kwargs: (Path(binding["document"]), None))
     before = deepcopy(document)
     review = backend.preview(document, {"root": str(root), "output": str(root / "generated")},
                              document, [], root / "preview")
@@ -212,7 +212,7 @@ def test_preview_reobserves_persistence_before_any_native_effect(scientific_bind
 
     monkeypatch.setattr(managed_backend, "prepare_binding", corrupt_after_persist)
     backend = object.__new__(managed_backend.ManagedBackend)
-    monkeypatch.setattr(backend, "_materialize_native", lambda *_: pytest.fail("changed persistence reached native compilation"))
+    monkeypatch.setattr(backend, "_materialize_native", lambda *_args, **_kwargs: pytest.fail("changed persistence reached native compilation"))
     with pytest.raises(ValueError) as failure:
         backend.preview(document, {"root": str(root), "output": str(root / "generated")}, document, [], root / "review")
     assert failure.value.reason_code == expected

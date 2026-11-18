@@ -1,6 +1,7 @@
 """Adapt full managed compilation to the existing durable transaction interface."""
 
 from copy import deepcopy
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -136,7 +137,7 @@ class ManagedBackend:
         original = sources[0]['path'] if sources else name
         return existing_file_sha256(source_input_path(canonical, original, sha) if canonical is not None else Path(name))
 
-    def _ensure(self, binding: dict[str, Any]) -> tuple[dict[str, Any], Path]:
+    def _ensure(self, binding: dict[str, Any], *, verify_existing: bool = True) -> tuple[dict[str, Any], Path]:
         canonical = read_canonical(binding)
         require_inputs(canonical)
         root = Path(binding["root"])
@@ -147,15 +148,17 @@ class ManagedBackend:
         ir_path = Path(binding["ir_path"])
         if not exists(ir_path):
             write(ir_path, ir)
-        return self._materialize_native(binding, canonical, ir)
+        native, _ = self._materialize_native(binding, canonical, ir, verify_existing=verify_existing)
+        return ir, native
 
     def _materialize_native(self, binding: dict[str, Any], canonical: dict[str, Any],
-                            ir: dict[str, Any]) -> tuple[dict[str, Any], Path]:
-        """Render one locally compiled plan after its caller's fresh input check."""
+                            ir: dict[str, Any], *, verify_existing: bool) -> tuple[Path, dict[str, Any] | None]:
+        """Materialize or recover; render/export already inspect the existing artifact."""
         native = Path(binding["document"])
         marker = native.parent / "build.json"
         intent = self._owned_intent(binding)
         rebuild = not native.exists()
+        built = None
         if native.exists():
             if self.fingerprint(binding) != fingerprint_for_read(binding):
                 raise EngineError("managed_external_mutation", "An existing managed artifact changed outside its document.",
@@ -165,7 +168,7 @@ class ManagedBackend:
             # version change, after its own byte seal excludes manual edits.
             rebuild = bool(record and record.get("compiler_identity") != compiler_identity()
                            and record.get("document_sha256") == existing_file_sha256(native))
-            if intent or not rebuild:
+            if intent or (verify_existing and not rebuild):
                 inspected = self.compiler.inspect_ir(ir, native)
                 exact = inspected["status"] == "unchanged" and inspected["scientific_audit"]["status"] == "passed"
                 if not exact and not rebuild:
@@ -192,7 +195,7 @@ class ManagedBackend:
                   "native_state_hash": built["native_state_hash"], "compiler_identity": built["compiler_identity"],
                   "compile_id": intent["compile_id"]})
         require_inputs(canonical)
-        return ir, native
+        return native, built
 
     def preview(self, document: dict[str, Any], binding: dict[str, Any], new_document: dict[str, Any],
                 diff: list[dict[str, Any]], output: Path) -> dict[str, Any]:
@@ -208,15 +211,27 @@ class ManagedBackend:
         # This replaces _ensure's fresh input admission after model/IR writes;
         # the same invocation's pure compilation need not be performed again.
         require_inputs(canonical)
-        ir, native = self._materialize_native(candidate, canonical, prepared.ir)
+        ir = prepared.ir
+        native, built = self._materialize_native(candidate, canonical, ir, verify_existing=False)
         output.mkdir(parents=True, exist_ok=True)
-        preview = self.compiler.render_ir(ir, native, output / "preview.png")
+        if built is None:
+            preview = self.compiler.render_ir(ir, native, output / "preview.png")
+        else:
+            # The compiler rendered these exact audited bytes in this invocation.
+            # Keep the review image in its transaction directory as before.
+            image = built["preview"]
+            pixels = Path(image["path"]).read_bytes()
+            if sha256(pixels).hexdigest() != image["sha256"] or file_sha256(native) != built["document_sha256"]:
+                raise EngineError("managed_external_mutation", "The audited managed native document or preview changed before review.")
+            preview_path = output / "preview.png"
+            preview_path.write_bytes(pixels)
+            preview = {**built, "preview": {**image, "path": str(preview_path)}}
         review = {"scientific_audit": preview["scientific_audit"], "preview": preview.get("preview", preview),
                   "_managed_binding": candidate}
         if any(item["property"] == "source.append" for item in diff):
             # The before-image belongs to the original canonical artifact,
             # whereas the transaction guard also observes the admitted append.
-            before_ir, before_native = self._ensure(scientific_binding(binding, document))
+            before_ir, before_native = self._ensure(scientific_binding(binding, document), verify_existing=False)
             before = self.compiler.render_ir(before_ir, before_native, output / "before.png")
             review["before_preview"] = before.get("preview", before)
             review["source_append"] = {"before_layer_ids": [layer["id"] for view in before_ir["views"] for layer in view["layers"]],
@@ -233,12 +248,12 @@ class ManagedBackend:
         return dict(result["_managed_binding"])
 
     def export(self, binding: dict[str, Any]) -> dict[str, Any]:
-        ir, native = self._ensure(binding)
+        ir, native = self._ensure(binding, verify_existing=False)
         result = self.compiler.export_ir(ir, native, native.parent / "exports")
         result["exports"].append({"path": str(native), "format": "vsz", "sha256": file_sha256(native)})
         return result
 
     def render(self, binding: dict[str, Any], output: Path) -> dict[str, Any]:
-        ir, native = self._ensure(binding)
+        ir, native = self._ensure(binding, verify_existing=False)
         output.mkdir(parents=True, exist_ok=True)
         return self.compiler.render_ir(ir, native, output / "preview.png")

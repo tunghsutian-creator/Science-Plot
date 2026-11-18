@@ -55,13 +55,40 @@ def test_backend_preview_consumes_render_audit_without_reinspection(tmp_path, mo
     monkeypatch.setattr(managed_backend, "read_canonical", lambda _: {})
     monkeypatch.setattr(managed_backend, "verify_document_content", lambda *_: None)
     monkeypatch.setattr(managed_backend, "require_inputs", lambda _: None)
-    monkeypatch.setattr(backend, "_materialize_native", lambda *_: (managed_ir(), tmp_path / "document.vsz"))
+    monkeypatch.setattr(backend, "_materialize_native", lambda *_args, **_kwargs: (tmp_path / "document.vsz", None))
 
     result = backend.preview({}, candidate, {}, [], tmp_path / "review")
 
     assert result["scientific_audit"] == audit
     assert result["_managed_binding"] == candidate
     assert result["preview"] == {"path": "preview.png"}
+
+
+def test_fresh_compile_preview_reuses_audited_bytes_only(tmp_path, monkeypatch):
+    backend = object.__new__(managed_backend.ManagedBackend)
+    native, image = tmp_path / "document.vsz", tmp_path / "compile.png"
+    native.write_bytes(b"exact audited candidate")
+    image.write_bytes(b"exact audited preview")
+    ir = managed_ir()
+    candidate = {"root": str(tmp_path), "output": str(tmp_path / "output"), "ir_hash": ir["ir_hash"]}
+    built = {**_inspection(native), "preview": {"path": str(image), "sha256": file_sha256(image)}}
+    backend.compiler = SimpleNamespace(render_ir=lambda *_: pytest.fail("A fresh compile already rendered the PNG"))
+    monkeypatch.setattr(managed_backend, "prepare_binding", lambda *_args, **_kwargs: ManagedPreparation(candidate, ir))
+    monkeypatch.setattr(managed_backend, "read_canonical", lambda _: {})
+    monkeypatch.setattr(managed_backend, "verify_document_content", lambda *_: None)
+    monkeypatch.setattr(managed_backend, "require_inputs", lambda _: None)
+    monkeypatch.setattr(backend, "_materialize_native", lambda *_args, **_kwargs: (native, built))
+
+    result = backend.preview({}, candidate, {}, [], tmp_path / "review")
+    assert result["scientific_audit"] == built["scientific_audit"]
+    assert result["preview"] == {**built["preview"], "path": str(tmp_path / "review" / "preview.png")}
+    assert file_sha256(Path(result["preview"]["path"])) == built["preview"]["sha256"]
+
+    image.write_bytes(b"changed preview")
+    with pytest.raises(ValueError) as error:
+        backend.preview({}, candidate, {}, [], tmp_path / "review2")
+    assert error.value.reason_code == "managed_external_mutation"
+    assert not (tmp_path / "review2" / "preview.png").exists()
 
 
 @pytest.mark.parametrize("failure,code", [
@@ -104,7 +131,7 @@ def test_reused_audit_cannot_bless_native_or_preview_identity_drift(tmp_path, mo
 
 
 @pytest.mark.comprehensive
-def test_real_width_patch_keeps_four_independent_inspections(tmp_path, monkeypatch):
+def test_real_width_patch_reuses_compile_preview_and_keeps_apply_export_inspections(tmp_path, monkeypatch):
     request = request_for_source(tmp_path)
     source = Path(request["data_binding"]["data_sources"][0]["path"])
     source_before = file_sha256(source)
@@ -142,8 +169,7 @@ def test_real_width_patch_keeps_four_independent_inspections(tmp_path, monkeypat
         assert changed["scientific_hash"] == created["scientific_hash"]
         assert file_sha256(source) == source_before
         assert [item["operation"] for item in commands] == [
-            "compile-plot-ir", "inspect-plot-ir", "preview-document",
-            "inspect-plot-ir", "inspect-plot-ir", "inspect-plot-ir"], evidence
-        assert counts == {"compile-plot-ir": 1, "inspect-plot-ir": 4, "preview-document": 1}
+            "compile-plot-ir", "inspect-plot-ir", "inspect-plot-ir"], evidence
+        assert counts == {"compile-plot-ir": 1, "inspect-plot-ir": 2}
     finally:
         service.close()
