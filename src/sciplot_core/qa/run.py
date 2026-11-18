@@ -38,6 +38,7 @@ def run_qa(
     publication_profile: str | Path | dict[str, Any] | None = None,
     strict_publication: bool = False,
     veusz_documents: list[Path] | None = None,
+    _managed_native: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if publication_profile is None:
         discovered_profile = output_dir / "journal_profile.json"
@@ -82,9 +83,13 @@ def run_qa(
     profile = resolve_publication_profile(publication_profile)
     required_formats = _required_export_formats(output_dir, profile or {})
     additional = additional_export_reports(output_dir, pdf_reports, required=set(required_formats["formats"]))
+    if _managed_native is not None and (not _managed_native or any(
+            item["scientific_audit"]["status"] != "passed" or item["publication_qa"]["status"] != "passed"
+            for item in _managed_native)):
+        raise ValueError("Managed publication requires sealed scientific and native QA for each figure.")
     discovered_veusz_documents = _discover_veusz_documents(output_dir, veusz_documents)
     veusz_audit, veusz_audit_error = (
-        _run_veusz_audit(discovered_veusz_documents) if profile else (None, None)
+        _run_veusz_audit(discovered_veusz_documents) if profile and _managed_native is None else (None, None)
     )
     intent = _publication_intent(output_dir)
     publication = (
@@ -122,6 +127,8 @@ def run_qa(
         if reports:
             payload[key] = reports
             payload[key[:-1] + "_count"] = len(reports)
+    if _managed_native is not None:
+        payload["managed_native"] = _managed_native
     if publication is not None:
         if veusz_audit_error:
             publication["veusz_document_audit_error"] = veusz_audit_error

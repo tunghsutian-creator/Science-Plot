@@ -64,6 +64,7 @@ class RequestRenderResult:
     result: dict[str, Any]
     plotted_data_source: Path
     selected_figure_plan: ResolvedFigurePlan | None = None
+    managed_frequency: bool = False
     completed_figure_plan: ResolvedFigurePlan | None = field(
         init=False,
         default=None,
@@ -75,6 +76,15 @@ class RequestRenderResult:
 
     def __post_init__(self) -> None:
         result = deepcopy(self.result)
+        if self.managed_frequency:
+            completed = resolved_figure_plan_from_payload(result.get("resolved_figure_plan"))
+            selected = self.selected_figure_plan
+            if (completed is None or selected is None or not completed.complete
+                    or completed.plan_sha256 != selected.plan_sha256):
+                raise ValueError("The Managed frequency receipt must cover the exact selected FigurePlan.")
+            object.__setattr__(self, "result", result)
+            object.__setattr__(self, "completed_figure_plan", completed)
+            return
         terminal_evidence = bind_terminal_figure_evidence(
             selected_plan=self.selected_figure_plan,
             result=result,
@@ -118,6 +128,7 @@ def execute_request_render(
     transform_steps: list[dict[str, Any]],
     resolved_scientific_source: ResolvedScientificSource | None = None,
     _resolved_figure_plan: ResolvedFigurePlan | None = None,
+    _managed_result: dict[str, Any] | None = None,
 ) -> RequestRenderResult:
     """Render a request through exactly one normalized route."""
 
@@ -140,7 +151,7 @@ def execute_request_render(
                 "does not match the render request."
             )
     if route_intent.route == "auto":
-        return _render_auto_request(
+        return _render_semantic_plan_request(
             request=request,
             route_intent=route_intent,
             semantic=semantic,
@@ -151,6 +162,9 @@ def execute_request_render(
             transform_steps=transform_steps,
             selected_figure_plan=selected_figure_plan,
             resolved_scientific_source=resolved_scientific_source,
+            final_recipe=str(recipe) if (recipe := semantic.get("recommended_recipe")) is not None else None,
+            named_recipe_binding=None,
+            managed_result=_managed_result,
         )
     if route_intent.route == "recipe":
         final_recipe = route_intent.requested_recipe
@@ -247,41 +261,6 @@ def execute_request_render(
     )
 
 
-def _render_auto_request(
-    *,
-    request: dict[str, Any],
-    route_intent: WorkflowRouteIntent,
-    semantic: dict[str, Any],
-    study_model: dict[str, Any],
-    input_path: Path,
-    output_dir: Path,
-    base_dir: Path,
-    transform_steps: list[dict[str, Any]],
-    selected_figure_plan: ResolvedFigurePlan | None,
-    resolved_scientific_source: ResolvedScientificSource | None,
-) -> RequestRenderResult:
-    """Execute the automatic route through shared semantic-plan preparation."""
-
-    return _render_semantic_plan_request(
-        request=request,
-        route_intent=route_intent,
-        semantic=semantic,
-        study_model=study_model,
-        input_path=input_path,
-        output_dir=output_dir,
-        base_dir=base_dir,
-        transform_steps=transform_steps,
-        selected_figure_plan=selected_figure_plan,
-        final_recipe=(
-            str(semantic["recommended_recipe"])
-            if semantic.get("recommended_recipe") is not None
-            else None
-        ),
-        named_recipe_binding=None,
-        resolved_scientific_source=resolved_scientific_source,
-    )
-
-
 def _render_semantic_plan_request(
     *,
     request: dict[str, Any],
@@ -296,6 +275,7 @@ def _render_semantic_plan_request(
     final_recipe: str | None,
     named_recipe_binding: DmaNamedRecipePlanBinding | None,
     resolved_scientific_source: ResolvedScientificSource | None,
+    managed_result: dict[str, Any] | None = None,
 ) -> RequestRenderResult:
     """Prepare semantic data once and execute the already-selected plan."""
 
@@ -337,7 +317,7 @@ def _render_semantic_plan_request(
         "study_model": study_model,
         "template": template,
     }
-    result = _render_with_auto_split(
+    result = managed_result if managed_result is not None else _render_with_auto_split(
         Path(str(prepared["source"])),
         source_input=input_path,
         source_attestation=(
@@ -364,12 +344,13 @@ def _render_semantic_plan_request(
     )
     result = {
         **result,
+        **({"input": str(plotted_data_source)} if managed_result is not None else {}),
         "semantic_family": semantic["semantic_family"],
         "rule_id": semantic.get("rule_id"),
         "final_recipe": final_recipe,
         "processed": prepared["processed"],
         "processed_source": prepared["processed_source"],
-        "analysis_metrics": compute_analysis_metrics(
+        "analysis_metrics": result["analysis_metrics"] if managed_result is not None else compute_analysis_metrics(
             source_path=input_path,
             processed_source=processed_source,
             semantic=semantic,
@@ -384,6 +365,7 @@ def _render_semantic_plan_request(
         result=result,
         plotted_data_source=plotted_data_source,
         selected_figure_plan=selected_figure_plan,
+        managed_frequency=managed_result is not None,
     )
     _write_auto_report(
         output_dir,

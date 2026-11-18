@@ -428,6 +428,7 @@ def _assert_legacy_auto_delivery_parity(root, workspace):
     request = root / "legacy-request.json"
     request.write_text(json.dumps({"input": str(root / "raw"), "output": str(root / "legacy-output"),
                                   "rule_id": "rheology_frequency_sweep"}), encoding="utf-8")
+    (root / "legacy-output").mkdir()
     old = run_request(request)
     assert old["route"] == "auto" and old["ready_to_use"] is True
     current_plan = json.loads((workspace / "figure-plan.json").read_bytes())
@@ -459,3 +460,63 @@ def test_frequency_readable_narrow_log_keeps_fixed_endpoints_and_unmarked_specs(
     assert numeric_axis(source, **args, minimum=20., maximum=50., extend_empty_log_ticks=True) == ([20., 50.], [])
     assert numeric_axis(source, **args, minimum=20., extend_empty_log_ticks=True) == ([20., 100.], [100.])
     assert source == [29., 34., 41.]
+
+
+@pytest.mark.comprehensive
+def test_default_frequency_cli_publishes_and_retries_same_managed_editable_group(tmp_path, monkeypatch, capsys):
+    import json
+
+    from sciplot_core.cli import main
+    from sciplot_core.plot_engine.service import PlotService
+
+    raw, originals = _mean_input(tmp_path)
+    request, output = tmp_path / "request.json", tmp_path / "run"
+    payload = {"input": str(raw), "output": str(output), "rule_id": "rheology_frequency_sweep"}
+    request.write_text(json.dumps(payload), encoding="utf-8")
+    before = {path: path.read_bytes() for path in originals}
+    assert main(["run", str(request)]) == 0
+    first = json.loads(capsys.readouterr().out)
+    managed = first["result"]["managed_frequency"]
+    assert first["ready_to_use"] is True and first["delivery_package"]["complete"] is True
+    assert managed["primary_figure_id"] == "storage_modulus_vs_frequency"
+    assert [item["figure_id"] for item in managed["figures"]] == first["resolved_figure_plan"]["selected_figure_ids"]
+    assert [item["format"] for item in first["result"]["exports"]] == ["pdf", "tiff_300"] * 4
+    assert [item["value"] for item in first["result"]["analysis_metrics"]] == [565., 171., 515.]
+    assert all(item["scientific_audit"]["status"] == item["publication_qa"]["status"] == "passed"
+               for item in first["qa"]["managed_native"])
+    assert len(first["delivery_package"]["figures"]) == 8
+    assert all(Path(item["path"]).is_file() for item in first["delivery_package"]["figures"])
+    store = FileProjectStore(Path(managed["project"]))
+    snapshot = store.snapshot()
+
+    def no_native(*args, **kwargs):
+        pytest.fail("the exact retry must reuse all sealed native figures")
+
+    monkeypatch.setattr(ManagedVeuszCompiler, "compile_ir", no_native)
+    monkeypatch.setattr(ManagedVeuszCompiler, "export_ir", no_native)
+    assert main(["run", str(request)]) == 0
+    second = json.loads(capsys.readouterr().out)
+    assert second["result"]["managed_frequency"] == managed
+    assert store.snapshot() == snapshot
+    assert before == {path: path.read_bytes() for path in originals}
+    service = PlotService()
+    try:
+        for item in managed["figures"]:
+            reopened = service.open(Path(item["plot"]))
+            assert reopened["plot_type"] == "ManagedPlot" and reopened["revision"] == 0
+            assert reopened["export_current"]["byte_inventory_verified"] is True
+    finally:
+        service.close()
+
+    request.write_text(json.dumps({**payload, "replicate_mode": "overlay"}), encoding="utf-8")
+    assert main(["run", str(request)]) != 0
+    capsys.readouterr()
+    assert store.snapshot() == snapshot
+    assert json.loads((output / "manifest.json").read_bytes())["ready_to_use"] is True
+
+    request.write_text(json.dumps(payload), encoding="utf-8")
+    native = next(Path(managed["project"]).glob("figures/*/**/*.vsz"))
+    native.write_bytes(native.read_bytes() + b"\n# external edit\n")
+    assert main(["run", str(request)]) != 0
+    assert "saved Managed frequency project has changed" in capsys.readouterr().err
+    assert native.read_bytes().endswith(b"# external edit\n")

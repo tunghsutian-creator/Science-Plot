@@ -108,6 +108,7 @@ def publish_request_result(
         output_dir,
         publication_profile=publication_profile,
         strict_publication=bool(request.get("publication_strict")),
+        **({"_managed_native": result["managed_frequency"]["figures"]} if rendered.managed_frequency else {}),
         veusz_documents=[
             Path(value)
             for value in result.get("veusz_documents", [])

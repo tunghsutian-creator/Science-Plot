@@ -23,7 +23,7 @@ from sciplot_core.semantic_sources.scientific_source import ResolvedScientificSo
 from sciplot_core.semantic_sources.rheology_sweep_domain import ResolvedRheologySweepDomain
 from sciplot_core.task_errors import TaskControlError
 
-from .frequency_managed_requests import prepare_frequency_requests
+from .frequency_managed_requests import PreparedFrequencyRequests, prepare_frequency_requests
 
 
 def _figure(
@@ -56,7 +56,7 @@ def _figure(
 
 def publish_frequency_managed_suite(
     store: FileProjectStore, *, key: str, resolved: ResolvedScientificSource, compiler: ManagedVeuszCompiler,
-    task_root: Path,
+    task_root: Path, prepared: PreparedFrequencyRequests | None = None,
 ) -> dict[str, Any]:
     """Prepare or resume all figures of an exact source-bound FigurePlan."""
     plan = resolved.figure_plan
@@ -73,7 +73,8 @@ def publish_frequency_managed_suite(
         if recorded.get("plan") != plan_data or recorded.get("original") != source_tree.to_payload():
             raise TaskControlError("frequency_managed_request_changed", "Use the exact saved frequency group plan and original input identity.")
         return resume_attachment_group(store, key)
-    prepared = prepare_frequency_requests(domain, plan, task_root=task_root)
+    if prepared is None:
+        prepared = prepare_frequency_requests(domain, plan, task_root=task_root)
     by_figure = dict(zip(plan.selected_figure_ids, prepared.requests, strict=True))
     identity = {figure_id: digest(request) for figure_id, request in by_figure.items()}
     snapshot = store.snapshot()
@@ -83,7 +84,7 @@ def publish_frequency_managed_suite(
             store, snapshot, key, figure_id, by_figure[figure_id], compiler, private))
             for figure_id in plan.selected_figure_ids)
         analysis = pending.workspace / "analysis_metrics.csv"
-        frequency_terminal_analysis(prepared.terminal_pairs,
+        metrics = frequency_terminal_analysis(prepared.terminal_pairs,
             semantic={"axis_plan": {"y": {"canonical_unit": "Pa"}}}, output=analysis)
         completed = merge_figure_outcomes(plan, [
             FigureOutcome(figure.attachment.entry["figure_id"], "ready",
@@ -91,6 +92,7 @@ def publish_frequency_managed_suite(
                                           if Path(name).suffix in {".vsz", ".pdf", ".tiff"}))
             for figure in figures
         ])
-        outputs = {"analysis/analysis_metrics.csv": analysis.read_bytes(), "figure-plan.json": encode(completed.to_payload())}
+        outputs = {"analysis/analysis_metrics.csv": analysis.read_bytes(), "analysis/analysis_metrics.json": encode(metrics),
+                   "figure-plan.json": encode(completed.to_payload())}
         return publish_attachment_group(store, snapshot, key=key, selected_figures=plan.selected_figure_ids,
             figures=figures, required_outputs=tuple(outputs), outputs=outputs, source_tree=source_tree)

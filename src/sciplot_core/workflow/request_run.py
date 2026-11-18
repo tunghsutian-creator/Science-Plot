@@ -88,7 +88,10 @@ def run_request(
     require_data_destination(output_dir)
     from sciplot_core.output_contract import requested_delivery_root
     require_data_destination(requested_delivery_root({"request": source_request}, run_output=output_dir))
-    with _managed_output_transaction(output_dir):
+    from .frequency_managed_workflow import managed_frequency_session
+
+    session, authority = managed_frequency_session(output_dir, source_request, new_creation=_new_creation)
+    with session, _managed_output_transaction(output_dir):
         return _run_request_in_managed_output(
             request_path=request_path,
             source_request=source_request,
@@ -97,6 +100,7 @@ def run_request(
             classifier=_classifier,
             new_creation=_new_creation,
             previous_request=_previous_request,
+            frequency_authority=authority,
         )
 
 
@@ -112,6 +116,7 @@ def _run_request_in_managed_output(
     staged_delivery: tuple[Path, Path] | None = None,
     update_project: bool = True,
     previous_delivery: dict[str, Any] | None = None,
+    frequency_authority: Path | None = None,
 ) -> dict[str, Any]:
     """Resolve inputs, enforce semantic gates, then render and publish."""
 
@@ -245,6 +250,14 @@ def _run_request_in_managed_output(
         layout_policy=layout_policy,
         figure_plan=figure_plan,
     )
+    managed_result = None
+    if frequency_authority is not None and resolved_scientific_source is not None:
+        from .frequency_managed_workflow import render_managed_frequency
+
+        managed_result = render_managed_frequency(resolved_scientific_source, authority=frequency_authority,
+                                                  output=output_dir, source_request=source_request)
+    if frequency_authority is not None and frequency_authority.exists() and managed_result is None:
+        raise ValueError("The Managed frequency output belongs to its exact original request.")
     rendered = execute_request_render(
         request=request,
         route_intent=route_intent,
@@ -256,6 +269,7 @@ def _run_request_in_managed_output(
         transform_steps=transform_steps,
         resolved_scientific_source=resolved_scientific_source,
         _resolved_figure_plan=figure_plan,
+        _managed_result=managed_result,
     )
     return publish_request_result(
         request_path=request_path,
