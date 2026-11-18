@@ -2989,7 +2989,8 @@
       "tests/test_managed_preview_audit_reuse.py::test_backend_preview_consumes_render_audit_without_reinspection",
       "tests/test_managed_preview_audit_reuse.py::test_failed_exact_science_or_publication_audit_never_renders[publication-publication_qa_failed]",
       "tests/test_managed_preview_audit_reuse.py::test_failed_exact_science_or_publication_audit_never_renders[science-external_mutation]",
-      "tests/test_managed_preview_audit_reuse.py::test_real_width_patch_keeps_four_independent_inspections",
+      "tests/test_managed_preview_audit_reuse.py::test_fresh_compile_preview_reuses_audited_bytes_only",
+      "tests/test_managed_preview_audit_reuse.py::test_real_width_patch_reuses_compile_preview_and_keeps_apply_export_inspections",
       "tests/test_managed_preview_audit_reuse.py::test_render_returns_the_actual_passed_scientific_audit",
       "tests/test_managed_preview_audit_reuse.py::test_reused_audit_cannot_bless_native_or_preview_identity_drift[native_bytes]",
       "tests/test_managed_preview_audit_reuse.py::test_reused_audit_cannot_bless_native_or_preview_identity_drift[preview_receipt]",
@@ -10211,7 +10212,18 @@
       "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[own_output]",
       "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[workspace]",
       "tests/test_task_control.py::test_tensile_worksheet_choice_recovers_same_task_without_inventing_metrics",
-      "tests/test_tensile_workbook_directory.py::test_explicit_tensile_worksheet_binds_facts_and_rejects_specific_stress"
+      "tests/test_tensile_workbook_directory.py::test_explicit_tensile_worksheet_binds_facts_and_rejects_specific_stress",
+      "tests/test_legacy_conversion.py::test_legacy_conversion_creates_editable_copy_with_exact_arrays_units_and_marks",
+      "tests/test_legacy_conversion.py::test_legacy_conversion_layout_rejection_leaves_no_partial_destination",
+      "tests/test_legacy_conversion.py::test_legacy_conversion_refuses_unmapped_widget_before_allocating_copy",
+      "tests/test_legacy_conversion.py::test_legacy_unit_does_not_treat_sample_labels_as_scientific_units",
+      "tests/test_legacy_conversion.py::test_pending_conversion_retries_exact_request_without_touching_unowned_files",
+      "tests/test_legacy_saved_plot.py::test_committed_legacy_head_is_read_only_even_with_a_real_revision_pointer",
+      "tests/test_legacy_saved_plot.py::test_exact_legacy_vsz_rejects_output_inside_original_project",
+      "tests/test_legacy_saved_plot.py::test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project",
+      "tests/test_legacy_saved_plot.py::test_public_legacy_resume_requires_and_only_finishes_a_saved_transaction",
+      "tests/test_legacy_saved_plot.py::test_public_task_and_native_edit_entrypoints_cannot_allocate_old_project_writes",
+      "tests/test_legacy_saved_plot.py::test_registered_project_selects_legacy_or_managed_by_exact_figure_identity"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -13306,6 +13318,7 @@
       "tests/test_managed_preview_audit_reuse.py::test_backend_preview_consumes_render_audit_without_reinspection",
       "tests/test_managed_preview_audit_reuse.py::test_failed_exact_science_or_publication_audit_never_renders[publication-publication_qa_failed]",
       "tests/test_managed_preview_audit_reuse.py::test_failed_exact_science_or_publication_audit_never_renders[science-external_mutation]",
+      "tests/test_managed_preview_audit_reuse.py::test_fresh_compile_preview_reuses_audited_bytes_only",
       "tests/test_managed_preview_audit_reuse.py::test_render_returns_the_actual_passed_scientific_audit",
       "tests/test_managed_preview_audit_reuse.py::test_reused_audit_cannot_bless_native_or_preview_identity_drift[native_bytes]",
       "tests/test_managed_preview_audit_reuse.py::test_reused_audit_cannot_bless_native_or_preview_identity_drift[preview_receipt]",
@@ -20258,7 +20271,14 @@
       "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[own_output]",
       "tests/test_task_group_semantic_sources.py::test_nonfirst_attachment_is_protected_at_every_group_destination[workspace]",
       "tests/test_task_control.py::test_tensile_worksheet_choice_recovers_same_task_without_inventing_metrics",
-      "tests/test_tensile_workbook_directory.py::test_explicit_tensile_worksheet_binds_facts_and_rejects_specific_stress"
+      "tests/test_tensile_workbook_directory.py::test_explicit_tensile_worksheet_binds_facts_and_rejects_specific_stress",
+      "tests/test_legacy_conversion.py::test_legacy_unit_does_not_treat_sample_labels_as_scientific_units",
+      "tests/test_legacy_conversion.py::test_pending_conversion_retries_exact_request_without_touching_unowned_files",
+      "tests/test_legacy_saved_plot.py::test_committed_legacy_head_is_read_only_even_with_a_real_revision_pointer",
+      "tests/test_legacy_saved_plot.py::test_exact_legacy_vsz_rejects_output_inside_original_project",
+      "tests/test_legacy_saved_plot.py::test_public_legacy_resume_requires_and_only_finishes_a_saved_transaction",
+      "tests/test_legacy_saved_plot.py::test_public_task_and_native_edit_entrypoints_cannot_allocate_old_project_writes",
+      "tests/test_legacy_saved_plot.py::test_registered_project_selects_legacy_or_managed_by_exact_figure_identity"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
@@ -20356,7 +20376,7 @@
       "tests/test_managed_lifecycle_guards.py::test_managed_noop_pending_creation_replay_and_simultaneous_input_drift",
       "tests/test_managed_line_patterns_native.py::test_saved_dash_dot_export_rebuild_and_exact_native_mutation_detection[v1]",
       "tests/test_managed_line_patterns_native.py::test_saved_dash_dot_export_rebuild_and_exact_native_mutation_detection[v2-house]",
-      "tests/test_managed_preview_audit_reuse.py::test_real_width_patch_keeps_four_independent_inspections",
+      "tests/test_managed_preview_audit_reuse.py::test_real_width_patch_reuses_compile_preview_and_keeps_apply_export_inspections",
       "tests/test_managed_protocol_native.py::test_public_cli_create_and_mcp_rebuild_from_canonical_document[cartesian-v1]",
       "tests/test_managed_protocol_native.py::test_public_cli_create_and_mcp_rebuild_from_canonical_document[figure-v2]",
       "tests/test_managed_recovery_native.py::test_compiler_upgrade_rebuilds_known_unchanged_native_product[False-False]",
@@ -20756,7 +20776,11 @@
       "tests/test_xy_ai_lifecycle_native.py::test_real_xy_typed_review_save_cold_export_and_reply_loss",
       "tests/test_zero_sd_bar_outline.py::test_public_zero_sd_grouped_bar_preserves_replicates_and_passes_create_and_cold_export[mean_sample_sd]",
       "tests/test_zero_sd_bar_outline.py::test_public_zero_sd_grouped_bar_preserves_replicates_and_passes_create_and_cold_export[mean_sample_sd_n]",
-      "tests/test_pdf_review_binding_native.py::test_actual_export_copy_cold_read_and_existing_typed_edit_preserve_raw_values"
+      "tests/test_pdf_review_binding_native.py::test_actual_export_copy_cold_read_and_existing_typed_edit_preserve_raw_values",
+      "tests/test_legacy_conversion.py::test_legacy_conversion_creates_editable_copy_with_exact_arrays_units_and_marks",
+      "tests/test_legacy_conversion.py::test_legacy_conversion_layout_rejection_leaves_no_partial_destination",
+      "tests/test_legacy_conversion.py::test_legacy_conversion_refuses_unmapped_widget_before_allocating_copy",
+      "tests/test_legacy_saved_plot.py::test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project"
     ]
   },
   "private_failure_responsibilities": [
