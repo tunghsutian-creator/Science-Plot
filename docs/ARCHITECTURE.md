@@ -433,8 +433,9 @@ heuristics remain warnings. This is bounded layout QA, not journal certification
 Creation from an unmarked FigureTemplate still pins `sciplot-house-style-v1`.
 Fresh semantic tasks explicitly bind `sciplot-house-style-v2`: independent
 logarithmic minor ticks and inside-best placement over the same pinned style
-values. The current placement preserves retained sampling, footprint, corner
-score and anchor for explicit non-degenerate ranges. The byte lock remains on
+values. For explicit non-degenerate ranges, the current placement retains the
+sampling, footprint, corner scoring and anchor formulas, and corrects the
+projection of descending Y (V1 replay is unchanged). The byte lock remains on
 v1 and the narrowly retained inside-best fallback for relatively degenerate
 ranges. IR reports which placement binding was used.
 `rendering_contract/` owns extracted immutable resources, their source evidence and

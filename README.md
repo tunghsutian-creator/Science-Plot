@@ -319,8 +319,8 @@ scientific mapping checks gate export; soft layout warnings remain explicit.
 Arbitrary native features and non-deterministic execution remain unsupported.
 Unmarked FigureTemplates retain the extracted `sciplot-house-style-v1` visual
 contract. New semantic figures bind `sciplot-house-style-v2`, using the same
-style values with dedicated logarithmic minor ticks and an equivalent
-inside-best legend placement for ordinary explicit ranges. Extremely narrow
+style values with dedicated logarithmic minor ticks and inside-best legend
+placement that respects both displayed axis directions. Extremely narrow
 ranges keep the retained legend fallback.
 Omitted layout uses the original 60 × 55 mm panel and fixed physical
 margins. New semantic tasks select a versioned presentation policy that reserves

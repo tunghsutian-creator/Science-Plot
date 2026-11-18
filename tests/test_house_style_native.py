@@ -224,3 +224,63 @@ def test_current_log_minor_ticks_keep_native_pdf_pixels_and_physical_canvas(tmp_
     assert all(axis["minor_ticks"] for axis in irs[1]["views"][0]["axes"])
     assert pdfs[0] == pdfs[1]
     assert file_sha256(source) == original
+
+
+@pytest.mark.comprehensive
+def test_current_inside_best_avoids_the_curve_on_reversed_y_pdf(tmp_path):
+    import pymupdf
+
+    from sciplot_core.plot_ir.figure_document import figure_spec, store_spec
+    from sciplot_core.rendering_contract import contract_binding
+    from sciplot_core.rendering_contract.registry import CURRENT_HOUSE_CONTRACT_ID
+
+    source = tmp_path / "reversed.csv"
+    with source.open("w", newline="", encoding="utf-8") as stream:
+        csv.writer(stream).writerows([
+            ["Wavelength", "Absorbance", "Wavelength", "Absorbance"],
+            ["nm", "a.u.", "nm", "a.u."], ["A", "A", "B", "B"],
+            *((x, .5, x, .5) for x in (0, 2.5, 5, 7.5, 10)),
+        ])
+    science = {"x": [0., 10.], "y": [0., 10.], "x_ticks": [0., 5., 10.], "y_ticks": [0., 5., 10.]}
+    document = _managed_document(source, "linear", "curve", science)
+    spec = figure_spec(document)
+    for scale in spec["scales"]:
+        scale["direction"] = "descending"
+    figures, curve_heights = [], []
+    compiler = ManagedVeuszCompiler(warm=False)
+    try:
+        for contract_id in ("sciplot-house-style-v1", CURRENT_HOUSE_CONTRACT_ID):
+            spec["rendering_contract"] = contract_binding(contract_id)
+            ir = compile_document(store_spec(document, spec))
+            output = tmp_path / contract_id
+            built = compiler.compile_ir(ir, output)
+            assert built["scientific_audit"]["status"] == "passed"
+            exports = compiler.export_ir(ir, Path(built["document"]), output / "exports")
+            assert exports["ready_to_use"]
+            pdf = next(item["path"] for item in exports["exports"] if item["format"] == "pdf")
+            with pymupdf.open(pdf) as native:
+                page = native[0]
+                assert [page.rect.width * 25.4 / 72, page.rect.height * 25.4 / 72] == pytest.approx([60., 55.], abs=.4)
+                legend = pymupdf.Rect(next(word[:4] for word in page.get_text("words") if word[4] == "A"))
+                # The filled horizontal path spanning the plot is the actual
+                # curve, not a legend key (short) or an axis (stroked).
+                curve = next(item["rect"] for item in page.get_drawings()
+                             if item["fill"] is not None
+                             and 0 < item["rect"].height < 2
+                             and item["rect"].width > page.rect.width / 2)
+                curve_heights.append((curve.y0, curve.y1))
+                guide = ir["guides"][0]
+                if contract_id == CURRENT_HOUSE_CONTRACT_ID:
+                    assert guide["location"] == "bottom-right"
+                    assert guide["position_fraction"] == pytest.approx([.789751, .025974], abs=1e-6)
+                    assert legend.y0 - curve.y1 > 72 / 25.4 * 20
+                else:
+                    assert guide["location"] == "top-right"
+                    assert guide["position_fraction"] == pytest.approx([.789751, .842078], abs=1e-6)
+                    assert legend.y0 < curve.y0 < curve.y1 < legend.y1
+                figures.append(ir)
+    finally:
+        compiler.close()
+    assert figures[0]["datasets"] == figures[1]["datasets"]
+    assert figures[0]["views"] == figures[1]["views"]
+    assert curve_heights[0] == curve_heights[1]

@@ -249,7 +249,7 @@ def test_current_inside_best_keeps_each_legacy_corner_metric_and_anchor(monkeypa
         (many, base, 1),
         (many, {**base, "size": "90x55"}, 2),
         ([log], {**base, "x_min": .1, "x_max": 100., "y_min": .1, "y_max": 100.,
-                 "xscale": "log", "yscale": "log", "reverse_x": True, "reverse_y": True}, 1),
+                 "xscale": "log", "yscale": "log", "reverse_x": True}, 1),
     ]
     for series, options, columns in cases:
         retained = legacy_algorithms.auto_inside_legend_placement(series, options, template_id="curve")

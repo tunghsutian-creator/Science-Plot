@@ -16,15 +16,16 @@ def inside_best_geometry(
 
     A relatively degenerate axis still needs the retained range fallback (which
     can extend a log domain to anchored decades). Ordinary explicit axes do not
-    use that branch. The legacy curve path reverses X, not Y.
+    use that branch. Project each axis in its actual displayed direction.
     """
     bounds = [(float(options[f"{axis}_min"]), float(options[f"{axis}_max"]))
               for axis in ("x", "y")]
     if any(math.isclose(lo, hi) for lo, hi in bounds):
         return None
     transforms = [options[f"{axis}scale"] for axis in ("x", "y")]
-    if options.get("reverse_x") is True:
-        bounds[0] = bounds[0][::-1]
+    for index, axis in enumerate(("x", "y")):
+        if options.get(f"reverse_{axis}") is True:
+            bounds[index] = bounds[index][::-1]
     axis_ranges = [(math.log10(lo), math.log10(hi)) if transform == "log" else (lo, hi)
                    for (lo, hi), transform in zip(bounds, transforms, strict=True)]
     samples: list[tuple[float, float]] = []

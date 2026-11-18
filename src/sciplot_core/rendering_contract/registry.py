@@ -19,7 +19,7 @@ INSIDE_BEST_ALGORITHM_ID = "sciplot-current-inside-best-v1"
 
 
 _PINNED_CONTENT_HASHES = {
-    CURRENT_HOUSE_CONTRACT_ID: "36d58b2240edc6b40007542651ef0d5d9ba484355be1f341643d1399f50bf030",
+    CURRENT_HOUSE_CONTRACT_ID: "3e8dc83b46fa84f6f836f18d6b6976770cb99592a2669f0b6fda37007686dfe9",
     HOUSE_CONTRACT_ID: "cb9d4af22f1905ede7acc956ccbc9d664f4d9171a4dad9afb2ca878cf96cd821",
     COMPOSITION_CONTRACT_ID: "345c47f305fc9e2b57defd08662abad0e6232a1ac00d649725ea20e8829bf283",
 }
@@ -41,7 +41,7 @@ def _snapshot(contract_id: str) -> dict[str, Any]:
         payload["properties"]["legend.inside_best_algorithm"] = {
             "status": "specified", "value": INSIDE_BEST_ALGORITHM_ID,
             "source_file": "src/sciplot_core/rendering_contract/current_inside_best.py", "source_symbol": "inside_best_geometry",
-            "notes": "Explicit well-separated axes use the equivalent physical footprint, corner scoring and anchor.",
+            "notes": "Explicit well-separated axes retain the physical footprint and scoring; both displayed axis directions are respected.",
         }
         payload["content_hash"] = content_hash(payload)
     else:
