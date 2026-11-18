@@ -9,7 +9,7 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_document.errors import DocumentError
 
-from .versions.catalog import LEGACY_DESCRIPTOR, LEGACY_RETAINED_FILES, V1_OPERATORS
+from .versions.catalog import EXACT_X_MEAN_V1, LEGACY_DESCRIPTOR, LEGACY_RETAINED_FILES, V1_OPERATORS
 from .versions.v1.hashing import canonical_json_sha256
 
 
@@ -54,8 +54,12 @@ def _function(entry: str) -> Callable[..., Any]:
 _VERSIONS = {(kind, "1"): BuiltinVersion(kind, "1", value["content_hash"], value["entry"], value["runtime"],
                                           value["multiple_inputs"], tuple(value["files"].items()))
              for kind, value in V1_OPERATORS.items()}
-_CURRENT = {kind: "1" for kind in V1_OPERATORS}
 _LEGACY_VERSIONS = MappingProxyType(dict(_VERSIONS))
+_mean = EXACT_X_MEAN_V1
+_VERSIONS[(_mean["operator"], _mean["version"])] = BuiltinVersion(
+    _mean["operator"], _mean["version"], _mean["content_hash"], _mean["entry"],
+    _mean["runtime"], _mean["multiple_inputs"], tuple(_mean["files"].items()))
+_CURRENT = {kind: version for kind, version in _VERSIONS}
 _LEGACY_FILES = tuple(LEGACY_RETAINED_FILES.items())
 _LEGACY_DESCRIPTOR = MappingProxyType(dict(LEGACY_DESCRIPTOR))
 

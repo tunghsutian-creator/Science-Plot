@@ -237,3 +237,23 @@ LEGACY_ORIGINAL_PATHS: dict[str, Any] = {'foundation/text_values.py': '896b25c5b
  'semantic_sources/paired_curve_table_metadata.py': '02b342112c6948e476a1628f67e9c3ef2c904c8113a264f3b63023309dc95229',
  'semantic_sources/rheology_frequency_metrics.py': '29801251e8af1b06378f4ace06a6ea71b5c728faaf44d02da78410f1fc1ba376',
  'semantic_sources/rheology_units.py': '1362844171acf2a989cc8926a4e8c9bbdab1f6a79aee859c7f055ab7c44ba4e3'}
+
+
+EXACT_X_MEAN_V1: dict[str, Any] = {'content_hash': '91afcb4655bdddfc8bc37c74c4b1f8921daed8900d75c407ea40fffc84e3c934',
+ 'entry': 'v1.rheology_mean:mean_at_exact_x',
+ 'files': {'__init__.py': 'b2daada6018f878a102dd328dc2e96008061dc7325c03bfdf129942a350e925f',
+           'v1/__init__.py': '665b4aff06139a06c7c2fd06b1e823d9804708494b698f31034db579fa8add87',
+           'v1/datasets.py': '2a50e284c6d535676e965641859d4c363a44a146a6f6d8690a81f631d0086c00',
+           'v1/hashing.py': 'df8925e9dbe054e13cfe6ff95133cf57a09c6214bdefcb0139053fec7e333658',
+           'v1/json_values.py': '576a66e558d148b4b23d3bf8ba704feadb63f30816164e8aeceaa7477362483f',
+           'v1/lineage.py': '6f6b9681880306e82623a955ca3277ffea078bb8e00cf2ceb29c6203a89f3fa4',
+           'v1/node_contract.py': '036000b9c6b68658ddc1d7a581eec074a6d6bdad6d09b17eecb6418ba1854d53',
+           'v1/rheology_mean.py': '0b8863f573bc93ca4503ba9786b2ae90cc41dceb06d29cff8e3761ff89fe60d4',
+           'v1/runtime.py': '74b77455571b47b8e72f5714188c421c5f680686d351ff9904f6fd0271bcc1b8',
+           'v1/schema.py': '129fe08661f02d539193ab22217faf65d7e2b78b221ccf20827d56d8172eb0f2',
+           'v1/selection.py': '34c07aa09447eaddf9c9338c1d51c34f30c8b126e69d1a0ca406ecb366deaf31',
+           'v1/wire.py': '5e1d32287a115d1c7e1b5e0b87ed0d5d59764e8c110f81cc1f4e5a3743235d33'},
+ 'multiple_inputs': True,
+ 'operator': 'rheology_mean_exact_x',
+ 'runtime': 'v1.rheology_mean:execute',
+ 'version': '1'}
