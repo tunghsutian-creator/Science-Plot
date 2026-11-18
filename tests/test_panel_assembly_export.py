@@ -1,6 +1,7 @@
 """Frozen source authority, physical image composition and publication failure guards."""
 
 from copy import deepcopy
+import io
 import json
 from pathlib import Path
 import shutil
@@ -15,6 +16,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.panel_assembly.errors import AssemblyError
 from sciplot_core.panel_assembly.export import export_document
 from sciplot_core.panel_assembly.model import apply_operations, new_document, resolve_document
+from sciplot_core.panel_assembly.preview import render_preview
 from sciplot_core.panel_assembly.sources import assert_source_current, capture_source
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
@@ -134,6 +136,40 @@ def test_vector_pdf_diagram_is_supported_and_multipage_is_refused(tmp_path):
     with pytest.raises(AssemblyError, match="one unencrypted page"):
         capture_source({"kind": "image", "path": str(tmp_path / "multiple.pdf")})
 
+    for rotation in (90, 180, 270):
+        path = tmp_path / f"rotated-{rotation}.pdf"
+        with pymupdf.open() as pdf:
+            page = pdf.new_page(width=200, height=100)
+            for tile, color in (
+                ((0, 0, 100, 50), (1, 0, 0)),
+                ((100, 0, 200, 50), (0, 0, 1)),
+                ((0, 50, 100, 100), (0, 1, 0)),
+                ((100, 50, 200, 100), (1, 1, 0)),
+            ):
+                page.draw_rect(tile, color=None, fill=color)
+            page.set_cropbox(pymupdf.Rect(10, 8, 186, 88))
+            page.set_rotation(rotation)
+            pdf.save(path)
+        original = path.read_bytes()
+        source = capture_source({"kind": "image", "path": str(path)})
+        with Image.open(io.BytesIO(render_preview(source))) as image:
+            displayed = image.convert("RGB")
+        crop = [.2, .15, .85, .93]
+        document = add(new_document(rows=1, columns=1, width_mm=60, height_mm=45), source, crop=crop)
+        output = export_document(document, tmp_path / f"placed-{rotation}", dpi=100)
+        x, y, width, height = output["panels"][0]["evidence"]["placement_mm"]
+        with pymupdf.open(output["pdf"]) as pdf:
+            assert not pdf[0].get_images()  # Keep the diagram vector.
+        with Image.open(output["tiff"]) as tiff:
+            for fx, fy in ((.2, .2), (.8, .2), (.2, .8), (.8, .8)):
+                source_pos = (
+                    int(displayed.width * (crop[0] + fx * (crop[2] - crop[0]))),
+                    int(displayed.height * (crop[1] + fy * (crop[3] - crop[1]))),
+                )
+                output_pos = (round((x + width * fx) * 100 / 25.4), round((y + height * fy) * 100 / 25.4))
+                assert tiff.getpixel(output_pos) == displayed.getpixel(source_pos)
+        assert path.read_bytes() == original
+
 
 def test_image_crop_deterministic_pdf_tiff_physical_size_and_source_bytes(tmp_path):
     path, source = image_source(tmp_path)
@@ -155,6 +191,20 @@ def test_image_crop_deterministic_pdf_tiff_physical_size_and_source_bytes(tmp_pa
     assert first["source_currentness"] == "passed"
     assert first["panels"][0]["evidence"]["resampling_of_source"] is False
     assert (tmp_path / "first/panels/001/sources/index.json").is_file()
+
+    cmyk = tmp_path / "cmyk.jpg"
+    Image.new("CMYK", (100, 50), (0, 255, 255, 0)).save(cmyk)
+    original = cmyk.read_bytes()
+    source = capture_source({"kind": "image", "path": str(cmyk)})
+    with Image.open(io.BytesIO(render_preview(source))) as preview:
+        assert preview.mode == "RGB"
+        expected = preview.getpixel((50, 25))
+    assert expected == (255, 0, 0)
+    document = add(new_document(rows=1, columns=1, width_mm=60, height_mm=45), source, crop=[.1, .1, .9, .9])
+    output = export_document(document, tmp_path / "cmyk", dpi=100)
+    with Image.open(output["tiff"]) as tiff:
+        assert tiff.getpixel((tiff.width // 2, tiff.height // 2)) == expected
+    assert cmyk.read_bytes() == original
 
 
 def test_house_panel_label_uses_seven_point_bold_and_measured_reserved_band(tmp_path):

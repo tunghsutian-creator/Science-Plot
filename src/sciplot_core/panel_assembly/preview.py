@@ -26,6 +26,8 @@ def _png(payload: bytes) -> bytes:
     with Image.open(io.BytesIO(payload)) as image:
         oriented = ImageOps.exif_transpose(image)
         oriented.thumbnail((MAX_EDGE, MAX_EDGE), Image.Resampling.LANCZOS)
+        if oriented.mode == "CMYK":
+            oriented = oriented.convert("RGB")
         output = io.BytesIO()
         oriented.save(output, format="PNG")
         return output.getvalue()

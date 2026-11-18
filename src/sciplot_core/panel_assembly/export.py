@@ -125,12 +125,19 @@ def _place_image(page: Any, panel: dict[str, Any], source: dict[str, Any], raw: 
     crop = panel["crop"] or [0., 0., 1., 1.]
     if source["binding"]["media_type"] == "application/pdf":
         with pymupdf.open(stream=raw, filetype="pdf") as diagram:
-            bounds = diagram[0].rect
+            diagram_page = diagram[0]
+            bounds = diagram_page.rect
             left, top, right, bottom = crop
             clip = pymupdf.Rect(bounds.x0 + left * bounds.width, bounds.y0 + top * bounds.height,
                                 bounds.x0 + right * bounds.width, bounds.y0 + bottom * bounds.height)
             fitted = _fit(panel["content_mm"], clip.width, clip.height)
-            page.show_pdf_page(_rect(fitted), diagram, 0, clip=clip, keep_proportion=True)
+            # The crop is in display coordinates, but the vector placement
+            # needs an unrotated clip plus the opposite-angle PDF transform.
+            rotation = diagram_page.rotation
+            if rotation:
+                clip *= diagram_page.derotation_matrix
+                diagram_page.set_rotation(0)
+            page.show_pdf_page(_rect(fitted), diagram, 0, clip=clip, rotate=-rotation, keep_proportion=True)
     else:
         from PIL import Image, ImageOps
 
@@ -140,6 +147,8 @@ def _place_image(page: Any, panel: dict[str, Any], source: dict[str, Any], raw: 
             box = (math.floor(crop[0] * width), math.floor(crop[1] * height),
                    math.ceil(crop[2] * width), math.ceil(crop[3] * height))
             cropped = oriented.crop(box)
+            if cropped.mode == "CMYK":
+                cropped = cropped.convert("RGB")
             stream = io.BytesIO()
             cropped.save(stream, format="PNG")
             fitted = _fit(panel["content_mm"], *cropped.size)
