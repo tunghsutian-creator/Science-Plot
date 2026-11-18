@@ -322,11 +322,18 @@ def _prepare_in_process(root, *, interrupt):
     """Exercise the production coordinator in each independent process."""
     import os
 
-    from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
+    from sciplot_core.semantic import classify_source
+    from sciplot_core.study_model import study_model_from_request
     from sciplot_core.workflow import frequency_managed_suite as owner
+    from sciplot_core.workflow.scientific_source_resolution import resolve_workflow_scientific_source
 
     raw_data, workspace = root / "raw", root / "cold-workspace"
-    resolved = resolve_scientific_source(raw_data, rule_id="rheology_frequency_sweep", template="point_line", request={})
+    rule = "rheology_frequency_sweep"
+    request = {"rule_id": rule}
+    semantic = classify_source(raw_data, requested_rule_id=rule)
+    study = study_model_from_request(request=request, semantic=semantic, input_path=raw_data)
+    resolved, _ = resolve_workflow_scientific_source(
+        input_path=raw_data, rule_id=rule, template="point_line", study_model=study, request=request)
     assert resolved is not None and resolved.figure_plan is not None
     plan = resolved.figure_plan
     real = owner._figure
@@ -398,7 +405,7 @@ def test_frequency_suite_preaccept_retry_cold_resumes_only_the_unfinished_figure
     names = (tmp_path / "native-invocations").read_text().splitlines()
     assert names == ["storage_modulus_vs_frequency", "loss_modulus_vs_frequency",
                      "loss_factor_vs_frequency", "complex_viscosity_vs_frequency", "complex_viscosity_vs_frequency"]
-    assert (workspace / "analysis/analysis_metrics.csv").is_file()
+    _assert_legacy_auto_delivery_parity(tmp_path, workspace)
     import pymupdf
 
     path = workspace / "figures" / "loss_modulus_vs_frequency" / "document.pdf"
@@ -409,6 +416,37 @@ def test_frequency_suite_preaccept_retry_cold_resumes_only_the_unfinished_figure
         # Restrict to the y-side before the graph so X ticks cannot pass this.
         ticks = {word[4] for word in page.get_text("words") if word[2] < 40}
         assert {"101", "102"} <= ticks, page.get_text("words")
+
+
+def _assert_legacy_auto_delivery_parity(root, workspace):
+    import json
+
+    import pymupdf
+
+    from sciplot_core.workflow.request_run import run_request
+
+    request = root / "legacy-request.json"
+    request.write_text(json.dumps({"input": str(root / "raw"), "output": str(root / "legacy-output"),
+                                  "rule_id": "rheology_frequency_sweep"}), encoding="utf-8")
+    old = run_request(request)
+    assert old["route"] == "auto" and old["ready_to_use"] is True
+    current_plan = json.loads((workspace / "figure-plan.json").read_bytes())
+    old_plan = old["resolved_figure_plan"]
+    assert current_plan["complete"] is old_plan["complete"] is True
+    for key in ("tasks", "primary_figure_id", "selected_figure_ids", "source_sha256"):
+        assert current_plan[key] == old_plan[key], key
+    assert (workspace / "analysis/analysis_metrics.csv").read_bytes() == (
+        root / "legacy-output/tables/analysis_metrics.csv").read_bytes()
+    for figure in current_plan["selected_figure_ids"]:
+        paired = {row["format"]: Path(row["path"]) for row in old["result"]["exports"] if row["figure_id"] == figure}
+        assert set(paired) == {"pdf", "tiff_300"}
+        directory = workspace / "figures" / figure
+        tiff = next(directory.glob("*.tiff"))
+        assert tiff.stat().st_size > 0
+        with pymupdf.open(paired["pdf"]) as legacy, pymupdf.open(directory / "document.pdf") as managed:
+            assert len(managed) == len(legacy) == 1
+            assert (managed[0].rect.width, managed[0].rect.height) == pytest.approx(
+                (legacy[0].rect.width, legacy[0].rect.height), abs=1.2)
 
 
 def test_frequency_readable_narrow_log_keeps_fixed_endpoints_and_unmarked_specs():

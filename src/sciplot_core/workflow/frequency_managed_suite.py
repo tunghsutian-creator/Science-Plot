@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.figure_plan import FigureOutcome, merge_figure_outcomes
 from sciplot_core.materials_rules.analysis import frequency_terminal_analysis
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler, compiler_identity
 from sciplot_core.plot_engine.managed_backend import native_build_record
@@ -84,6 +85,12 @@ def publish_frequency_managed_suite(
         analysis = pending.workspace / "analysis_metrics.csv"
         frequency_terminal_analysis(prepared.terminal_pairs,
             semantic={"axis_plan": {"y": {"canonical_unit": "Pa"}}}, output=analysis)
-        outputs = {"analysis/analysis_metrics.csv": analysis.read_bytes(), "figure-plan.json": encode(plan_data)}
+        completed = merge_figure_outcomes(plan, [
+            FigureOutcome(figure.attachment.entry["figure_id"], "ready",
+                          artifacts=tuple(str(store.root / name) for name in figure.assets
+                                          if Path(name).suffix in {".vsz", ".pdf", ".tiff"}))
+            for figure in figures
+        ])
+        outputs = {"analysis/analysis_metrics.csv": analysis.read_bytes(), "figure-plan.json": encode(completed.to_payload())}
         return publish_attachment_group(store, snapshot, key=key, selected_figures=plan.selected_figure_ids,
             figures=figures, required_outputs=tuple(outputs), outputs=outputs, source_tree=source_tree)
