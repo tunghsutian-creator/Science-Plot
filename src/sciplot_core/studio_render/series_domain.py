@@ -30,6 +30,11 @@ from sciplot_core.studio_render.template_resolution import (
 )
 
 
+def xrd_default_minimum(values: list[float]) -> float | None:
+    """The XRD baseline is zero only for nonnegative observed coordinates."""
+    return 0.0 if values and min(values) >= 0.0 else None
+
+
 def _apply_series_domain_contract_defaults(
     render_options: dict[str, Any],
     *,
@@ -48,10 +53,10 @@ def _apply_series_domain_contract_defaults(
         value for item in series for value in item.y_values if math.isfinite(value)
     ]
     if rule_id == "xrd_pattern":
-        if x_values and min(x_values) >= 0.0 and "x_min" not in explicit:
-            updated["x_min"] = 0.0
-        if y_values and min(y_values) >= 0.0 and "y_min" not in explicit:
-            updated["y_min"] = 0.0
+        for key, values in (("x_min", x_values), ("y_min", y_values)):
+            minimum = xrd_default_minimum(values)
+            if minimum is not None and key not in explicit:
+                updated[key] = minimum
     elif rule_id == "rheology_stress_relaxation" and y_values:
         lower = float(min(y_values))
         upper = float(max(y_values))

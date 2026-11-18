@@ -79,6 +79,13 @@ def test_identity_is_not_confused_with_numeric_conversion_or_offset():
     assert viscosity['kind'] == 'conversion' and viscosity['factor'] == .001 and viscosity['offset'] == 0
     temperature = resolve_unit_relation('C', 'K', quantity='temperature', observed_quantity='temperature')
     assert temperature['kind'] == 'conversion' and temperature['factor'] == 1 and temperature['offset'] == 273.15
+    derivative = resolve_unit_relation('%/C', '%/C', quantity='derivative_mass', observed_quantity='derivative_mass')
+    assert derivative['kind'] == 'identity' and derivative['factor'] == 1 and derivative['offset'] == 0
+    for source, target, observed in [('%/C', '%/C', None), ('%/C', '%/K', 'derivative_mass'),
+                                      ('%/C', '% °C⁻¹', 'derivative_mass'), ('C/s', 'C/s', 'derivative_mass')]:
+        with pytest.raises(DocumentError):
+            resolve_unit_relation(source, target, quantity='derivative_mass', observed_quantity=observed,
+                                  explicit_quantity_binding=True)
 
 
 @pytest.mark.parametrize(('source', 'target'), [('', ''), (' ', 'C'), ('C', '')])

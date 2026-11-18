@@ -242,5 +242,8 @@ def test_attachment_task_route_is_shared_with_cli_skill_and_remains_small(tmp_pa
 
     anyio.run(scenario)
     assert len(managed) == 2 and managed[0] == managed[1]
-    assert load_task(task_dir)["plan_confirmation"]["rule_id"] == "dsc_curve"
+    recorded = load_task(task_dir)
+    assert recorded["plan_confirmation"]["rule_id"] == "dsc_curve"
+    assert {row["metric"] for row in recorded["analysis_metrics"]} == {
+        "maximum_absolute_heat_flow_slope_temperature_C", "maximum_absolute_heat_flow_temperature_C"}
     assert path.read_bytes() == original

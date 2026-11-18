@@ -305,15 +305,26 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
         if coordinate["unit"] != unit:
             _error("semantic_resolved_binding_changed", "The compiled coordinate unit differs from its resolved axis.", role=role)
         values = [value for record in selected for value in datasets[record["dataset_id"]]["columns"][role]["values"] if value is not None]
-        domain, ticks, label, scale_transform = ordinary_axis(role, coordinate, unit, values)
+
+        effective = coordinate
+        if raw_plan.get("rule_id") == "xrd_pattern":
+            from sciplot_core.studio_render.series_domain import xrd_default_minimum
+
+            minimum = xrd_default_minimum(values)
+            if minimum is not None:
+                effective = {**coordinate, "minimum": minimum}
+        domain, ticks, label, scale_transform = ordinary_axis(role, effective, unit, values)
         scales.append({"id": "scale:" + role, "dimension": "x" if role == "x" else "y", "transform": scale_transform,
                        "domain": domain, "unit": unit, "quantity": coordinate["quantity"], "direction": coordinate.get("direction", "ascending"),
-                       "domain_rule": {name: {"mode": "fixed", "value": coordinate[name]} if name in coordinate else {"mode": "auto"}
+                       "domain_rule": {name: {"mode": "fixed", "value": effective[name]} if name in effective else {"mode": "auto"}
                                        for name in ("minimum", "maximum")},
                        **({"quantity_members": deepcopy(coordinate["quantity_members"])} if "quantity_members" in coordinate else {})})
         label = raw_plan.get("axis_labels", {}).get(role, label)
+        qualitative_y = role == "y" and raw_plan.get("show_y_ticks") is False
         axes.append({"id": "axis:" + role, "scale_id": "scale:" + role, "side": side,
-                     "label": label, "visible": True, "label_visible": True, "ticks": ticks, "ticks_mode": "automatic", "style": {}})
+                     "label": label, "visible": True, "label_visible": True,
+                     "ticks": [] if qualitative_y else ticks, "ticks_mode": "fixed" if qualitative_y else "automatic",
+                     "style": {"minor_ticks_visible": False} if qualitative_y else {}})
     def layer(record: dict[str, Any], index: int, *, temperature: bool = False) -> None:
         role = "temperature" if temperature else "y"
         identifier = "layer:temperature" if temperature else f"layer:response:{index}"

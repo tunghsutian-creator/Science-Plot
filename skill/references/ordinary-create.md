@@ -7,14 +7,19 @@ project-create/Studio commands, repository reading and tests are not prerequisit
 Ordinary creation uses the existing production plan for scientific recognition,
 family templates and supported overrides. The typed `task create`, structured
 CLI `task start` and daily MCP `sciplot_task_start` routes create Managed
-documents directly for eligible single-sample UV–vis, DSC, TGA and SAXS curves
+documents directly for eligible single-sample UV–vis, DSC, TGA, DTG, XRD and SAXS curves
 in CSV or TSV. This requires agreement between the registered plan and exact
 table on original headers, observed units, sample name and all rows without
 conversion, normalization or exclusion. SAXS keeps its registered log intensity
-axis and wide page. Other source shapes, profiles, manual mappings and families
-retain their production path, including DTG's compound units and XRD's special
-presentation. An admitted Managed task never falls back after a runtime or
-transport error; resolve the issue and resume the same task.
+axis and wide page; qualifying XRD keeps the qualitative Y ticks policy and
+only anchors nonnegative coordinate domains at zero. DTG requires an observed
+derivative-mass header and retains the original literal `%/C` values; the
+registered DTG label denotes percent per degree Celsius, not a conversion.
+Current and historical task receipts expose the same registered analysis
+metrics (values, units, status and reasons) for the analyzed source.
+Other source shapes, profiles, manual mappings and families retain their
+production path. An admitted Managed task never falls back after a runtime
+or transport error; resolve the issue and resume the same task.
 Explicit semantic intents remain available for wider cases.
 Do not translate raw input into a FigureTemplate in an AI request.
 Instrument directories are validated by their scientific owner; missing metrics

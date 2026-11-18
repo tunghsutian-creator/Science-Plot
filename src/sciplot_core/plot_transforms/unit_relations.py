@@ -66,7 +66,10 @@ def resolve_unit_relation(from_unit: str, to_unit: str, *, quantity: str | None 
     if quantity == "temperature" and not temperature and requires_unit_context(from_unit, to_unit):
         fail("transform_unit_incompatible", "A temperature interpretation requires observed temperature metadata or an exact selected user quantity binding.",
              "/parameters/to_unit", "confirmed_temperature_quantity", from_unit=from_unit, to_unit=to_unit)
-    if not temperature and any("/" in unit and re.search(r"(?<![\w°])C(?!\w)", unit)
+    # The observed DTG derivative admits literal identity only. Never use a
+    # compound-unit spelling or a display label as conversion authority.
+    derivative_identity = quantity == observed_quantity == "derivative_mass" and from_unit == to_unit == "%/C"
+    if not temperature and not derivative_identity and any("/" in unit and re.search(r"(?<![\w°])C(?!\w)", unit)
                                for unit in (from_unit, to_unit)):
         fail("transform_unit_context_unsupported", "The historical compound-unit formatter cannot preserve non-temperature C. This current binding is unsupported until contextual formatting is migrated.",
              "/parameters/to_unit", "contextual_compound_unit", from_unit=from_unit, to_unit=to_unit, quantity=quantity)

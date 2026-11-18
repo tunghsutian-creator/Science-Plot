@@ -14,6 +14,30 @@ def is_semantic(state: dict[str, Any]) -> bool:
     return state["request"].get("action") == "create" and "intent" in state["request"]
 
 
+def _raw_curve_analysis(source: Path, rule_id: str, plan: dict[str, Any], source_sha256: str) -> list[dict[str, Any]]:
+    """Run the same registered scientific analysis on the verified canonical curve."""
+    from tempfile import TemporaryDirectory
+
+    from sciplot_core.materials_rules.analysis import compute_analysis_metrics
+    from sciplot_core.materials_rules.catalog import get_rule, semantic_payload_from_rule
+    from sciplot_core.semantic_sources.curve_output import _write_curve_table
+    from sciplot_core.semantic_sources.scientific_source_single_curve import resolve_single_curve_transform
+
+    rule = get_rule(rule_id)
+    resolved = resolve_single_curve_transform(source, rule=rule)
+    if file_sha256(source) != source_sha256 or resolved.contract.to_payload() != plan["scientific_transform"]:
+        raise TaskControlError("source_changed", "The original scientific curve changed before its analysis.")
+    # The old owner analyzes this normalized table. Using its exact writer
+    # preserves header aliases and per-sample parsing even for TSV originals.
+    with TemporaryDirectory(prefix="sciplot-raw-analysis-") as directory:
+        workspace = Path(directory)
+        canonical = workspace / "curve.csv"
+        _write_curve_table(list(resolved.series), canonical)
+        semantic = semantic_payload_from_rule(rule, confidence=100.0)
+        return compute_analysis_metrics(source_path=canonical, processed_source=canonical,
+                                        semantic=semantic, output_dir=workspace)
+
+
 def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
     """Freeze the same source, columns, sample and units under Managed authority."""
     request = state["request"]
@@ -21,7 +45,7 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
     rule_id = plan["rule_id"]
     if (set(request) - {"version", "action", "source", "out", "rule_id", "template"}
             or source.suffix.casefold() not in {".csv", ".tsv"} or not source.is_file()
-            or rule_id not in {"uvvis_spectrum", "dsc_curve", "tga_curve", "saxs_profile"}
+            or rule_id not in {"uvvis_spectrum", "dsc_curve", "tga_curve", "dtg_curve", "saxs_profile", "xrd_pattern"}
             or plan["template"] != "curve" or "data_mapping" in plan or "source_options" in plan):
         return False
     transform = plan.get("scientific_transform") or {}
@@ -64,6 +88,11 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
         intent[role] = {"quantity": output[role + "_metric"], "column_id": f"column:{original['column_index_zero_based']}",
                         "scale": axis.scale, "direction": "descending" if axis.reverse else "ascending"}
 
+    if rule_id == "dtg_curve":
+        from sciplot_core.source_inspection.semantic_evidence import _quantity
+
+        if _quantity(columns[0]["response"]["header"]) != "derivative_mass":
+            return False  # A generic "Derivative" header does not prove the DTG unit context.
     semantic = prepare_plan([source], intent)
     frozen = semantic["sources"][0]
     if canonical_json_sha256({"kind": "file", "content_sha256": frozen["sha256"]}) != state["source_sha256"]:
@@ -77,23 +106,32 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
         return False
     for role, original_role, axis in coordinates:
         actual, original = bindings[0]["coordinates"][role], columns[0][original_role]
-        # A generic table does not know SAXS q/Intensity aliases, but the
-        # registered plan does and has already bound these exact columns.
+        # Scattering quantities may be known to the registered plan without
+        # aliases in the generic table. DTG needs the observed derivative.
+        expected = output[role + "_metric"]
+        allowed = (expected, None) if rule_id in {"saxs_profile", "xrd_pattern"} else (expected,)
         if ((actual["column_index"], actual["header"], actual["observed_unit"], actual["unit"])
                 != (original["column_index_zero_based"], original["header"], axis.canonical_unit, axis.canonical_unit)
-                or actual["observed_quantity"] not in (None, output[role + "_metric"])
+                or actual["observed_quantity"] not in allowed
                 or actual["unit_relation"]["kind"] != "identity"):
             return False
 
     size = size_preset_contract(rule.render_options["size"])
-    state.update(initial_request=deepcopy(request),
+    presentation: dict[str, Any] = {}
+    if rule_id == "xrd_pattern":
+        from sciplot_core.studio_render.spectral_axis_display import freeze_new_spectral_axis_display
+
+        display = freeze_new_spectral_axis_display({}, rule_id=rule_id, template="curve", transform_contract=transform)
+        presentation["show_y_ticks"] = display["render_options"]["show_y_ticks"]
+    analysis = _raw_curve_analysis(source, rule_id, plan, frozen["sha256"])
+    state.update(initial_request=deepcopy(request), analysis_metrics=analysis,
                  request={"version": 1, "action": "create", "sources": [str(source)], "intent": intent,
                           **({"out": request["out"]} if "out" in request else {})},
                  source_hashes={str(source): frozen["sha256"]}, semantic_plan=semantic, semantic_choices={},
                  semantic_plan_confirmed=True, intent_revision=1,
                  plan_confirmation={"mode": "verified_raw_curve", "rule_id": rule_id,
                                     "figure_plan": plan["resolved_figure_plan"]["plan_sha256"],
-                                    "size_mm": [size.width_mm, size.height_mm],
+                                    "size_mm": [size.width_mm, size.height_mm], **presentation,
                                     "axis_labels": {role: axis.display_label.replace("$^{-1}$", "⁻¹")
                                                     for role, _, axis in coordinates}})
     return True
@@ -294,7 +332,7 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
             "blocker": deepcopy(state.get("blocker"))})
         state["request"]["intent"] = intent
         state["intent_revision"] = int(state.get("intent_revision", 1)) + 1
-        for key in ("semantic_plan", "semantic_plan_confirmed", "semantic_choices", "managed_request", "question", "blocker", "result", "plan_confirmation"):
+        for key in ("semantic_plan", "semantic_plan_confirmed", "semantic_choices", "managed_request", "question", "blocker", "result", "plan_confirmation", "analysis_metrics"):
             state.pop(key, None)
         run_creation(root, state)
         return

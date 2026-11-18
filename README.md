@@ -348,11 +348,13 @@ supported explicit overrides. `render --auto` uses that same workflow; plain
 supports both explicit low-level composition and the local task adapter for a
 semantic coordinate intent. `task create`, structured CLI `task start` and
 daily MCP `sciplot_task_start` now create Managed plots directly for eligible
-single-sample UV–vis, DSC, TGA and SAXS CSV/TSV. Both the production plan and
+single-sample UV–vis, DSC, TGA, DTG, XRD and SAXS CSV/TSV. Both the production plan and
 exact original table must agree on columns, units, sample and source rows,
 with no conversion or normalization. The registered SAXS log intensity axis
-and 120 × 55 mm size are retained. An admitted task that hits a runtime
-failure stays Managed and resumes in place. Other families and source shapes,
+and 120 × 55 mm size are retained, as are the published XRD axis policy and
+literal DTG derivative values. Registered analysis results remain in the
+task receipt and `task inspect`. An admitted task that hits a runtime failure
+stays Managed and resumes in place. Other families and source shapes,
 the expert MCP catalog, and source-only `plot.create` retain the compatibility
 path.
 

@@ -84,14 +84,19 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     assert values["x"]["values"] == [400.0, 460.0, 500.0]
     assert values["y"]["values"] == [1.5, 3.25, -1.0]
     assert raw.read_bytes() == original
+    assert [(row["metric"], row["value"], row["unit"]) for row in candidate["analysis_metrics"]] == [
+        ("strongest_absorbance_wavelength_nm", 460, "nm")]
 
     for family, header, units, expected_labels, expected_scales, width in (
         ("dsc_curve", "Temperature,Heat flow", "C,W/g", ["Temperature (°C)", "Heat flow (W g⁻¹)"], ["linear", "linear"], 60),
         ("tga_curve", "Temperature,Mass", "C,%", ["Temperature (°C)", "Mass (%)"], ["linear", "linear"], 60),
         ("saxs_profile", "q,Intensity", "nm^-1,a.u.", ["q (nm⁻¹)", "Log intensity (a.u.)"], ["linear", "log"], 120),
+        ("dtg_curve", "Temperature,Derivative mass", "C,%/C", ["Temperature (°C)", "DTG (% °C⁻¹)"], ["linear", "linear"], 60),
+        ("xrd_pattern", "2theta,Intensity", "degree,a.u.", ["Diffraction angle (°)", "Intensity (a.u.)"], ["linear", "linear"], 60),
     ):
         path = tmp_path / (family + ".csv")
-        path.write_text(f"{header}\n{units}\nA,A\n1,3\n2,6\n3,4\n")
+        points = "30,100\n100,94\n150,89\n" if family == "tga_curve" else "1,3\n2,6\n3,4\n"
+        path.write_text(f"{header}\n{units}\nA,A\n" + points)
         plan = build_plan_preview(path, request={"rule_id": family})
         candidate = {"request": {**request, "source": str(path)}, "task_dir": str(tmp_path / family),
                      "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
@@ -101,6 +106,33 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
         assert [scale["transform"] for scale in figure["scales"]] == expected_scales
         assert [scale["unit"] for scale in figure["scales"]] == units.split(",")
         assert figure["layout"] == {"width_mm": width, "height_mm": 55}
+        reported = {row["metric"]: row for row in candidate["analysis_metrics"]}
+        assert all(row["status"] == "ok" for row in reported.values())
+        if family == "tga_curve":
+            assert {key: (row["value"], row["unit"]) for key, row in reported.items()} == {
+                "residual_mass_percent": (89, "%"), "t5_temperature_C": (100, "°C"), "t10_temperature_C": (150, "°C")}
+        elif family == "dsc_curve":
+            assert {key: row["value"] for key, row in reported.items()} == {
+                "maximum_absolute_heat_flow_slope_temperature_C": 1, "maximum_absolute_heat_flow_temperature_C": 2}
+            assert all("identity is assigned" in row["reason"] for row in reported.values())
+        else:
+            expected_metric = {"saxs_profile": "main_scattering_peak_q", "dtg_curve": "dtg_peak_temperature_C",
+                               "xrd_pattern": "main_peak_2theta"}[family]
+            assert reported[expected_metric]["value"] == 2
+        if family == "xrd_pattern":
+            assert [scale["domain"][0] for scale in figure["scales"]] == [0, 0]
+            axis = figure["views"][0]["axes"][1]
+            assert axis["visible"] and axis["label_visible"] and axis["ticks_mode"] == "fixed"
+            assert not axis["ticks"] and axis["style"]["minor_ticks_visible"] is False
+
+    path = tmp_path / "signed-xrd.csv"
+    path.write_text("2theta,Intensity\ndegree,a.u.\nA,A\n1,-3\n2,6\n3,4\n")
+    plan = build_plan_preview(path, request={"rule_id": "xrd_pattern"})
+    candidate = {"request": {**request, "source": str(path)}, "task_dir": str(tmp_path / "signed"),
+                 "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
+    assert admit_raw_curve(candidate, plan)
+    y = build_managed_request(candidate)["template_definition"]["figure_spec"]["scales"][1]
+    assert y["domain"][0] < -3 and y["domain_rule"]["minimum"] == {"mode": "auto"}
 
 
 @pytest.mark.parametrize("semantic", [False, True])

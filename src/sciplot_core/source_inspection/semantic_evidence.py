@@ -24,6 +24,7 @@ _QUANTITIES = {
     'time': {'time', 't', '时间'},
     'temperature': {'temperature', 'temp', 'ts', 'tr', '温度'},
     'charge': {'charge', 'electric charge', 'electrical charge', '电荷'},
+    'derivative_mass': {'derivative mass', 'dtg'},
     'mass': {'mass', 'weight', '质量', '重量'},
     'wavelength': {'wavelength', '波长'},
     'wavenumber': {'wavenumber', 'wave number', '波数'},
