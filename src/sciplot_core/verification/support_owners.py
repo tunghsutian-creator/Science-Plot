@@ -69,6 +69,8 @@ DOCUMENTATION_OWNER = ChangedOwner(
             "skill/references/saved-figure-edit.md",
             "skill/references/pdf-review.md",
             "skill/references/ordinary-create.md",
+            "skill/references/managed-paired-template.example.json",
+            "skill/references/managed-template-migration.md",
             "skill/references/ordinary-categorical.md",
             "skill/references/categorical-presentation-edit.md",
             "skill/references/performance-selection.md",

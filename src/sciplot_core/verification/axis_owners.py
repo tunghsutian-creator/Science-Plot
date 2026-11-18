@@ -27,6 +27,8 @@ GENERIC_AXIS_OWNERS = (
                 "src/sciplot_core/studio_render/domain_defaults.py",
                 "src/sciplot_core/studio_render/template_resolution.py",
                 "src/sciplot_core/studio_render/series_option_context.py",
+                "src/sciplot_core/studio_render/series_domain.py",
+                "src/sciplot_core/studio_render/series_transforms.py",
                 "src/sciplot_core/studio_render/spectral_axis_display.py",
                 "src/sciplot_core/studio_render/metric_columns.py",
                 "src/sciplot_core/studio_render/table_io.py",

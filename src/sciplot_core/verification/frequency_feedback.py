@@ -11,6 +11,7 @@ FREQUENCY_WORKFLOW_PATHS = frozenset({
     "src/sciplot_core/workflow/frequency_managed_suite.py",
     "src/sciplot_core/workflow/frequency_managed_workflow.py",
     _FREQUENCY_GROUP_TEST,
+    "tests/test_rheology_managed_sparse_metric.py",
 })
 FREQUENCY_ENTRY_PATHS = frozenset({
     "src/sciplot_core/studio_core/managed_frequency_creation.py",
