@@ -40,8 +40,7 @@ def _finished_call(root: Path, state: dict[str, Any]) -> dict[str, Any]:
     finish_timing(state)
     save_task(root, state)
     if "intent" in state["request"] and result is not None:
-        # Current-evidence checks belong inside this call's timing. Their
-        # earlier summary must receive the metadata saved after those checks.
+        # Include evidence checks in timing, then attach the resulting metadata.
         return {**result, **{key: state[key] for key in ("updated_at", "local_timing") if key in state}}
     return {**task_summary(state), **({key: result[key] for key in (
         "status", "blocker", "current_project", "next_step",
@@ -133,7 +132,6 @@ def start_task(
     root = task_location(request, task_dir)
     if _public_mutation and request["action"] != "create" and not root.exists():
         from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
-
         require_public_editable(Path(request["project"]), figure_id=request.get("figure_id"))
     if not root.exists():
         from sciplot_core.foundation.research_destination import require_data_destination
@@ -154,9 +152,7 @@ def start_task(
             if entry_intent is not None:
                 if state.get("entry_intent") != entry_intent:
                     raise TaskControlError("task_intent_conflict", "This task directory belongs to a different or unrecorded typed intent.")
-                # Another caller may have completed this exact typed intent
-                # after the shortcut's initial read. Its original bound request
-                # remains authoritative; never replace it with today's SHA.
+                # A concurrent exact intent retains its original bound request and SHA.
                 return _current_result(state) if state["status"] == "complete" else task_summary(state)
             if state["request"] != request and state.get("initial_request") != request:
                 raise TaskControlError("task_already_exists", "此任务目录已用于其他请求。")
@@ -210,7 +206,6 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any], *, _pub
         return
     if "revise_operations" in response:
         from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
-
         if _public_mutation and state["request"].get("project"):
             require_public_editable(Path(state["request"]["project"]), figure_id=state["request"].get("figure_id"))
         if begin_preview_revision(state, response):
@@ -264,8 +259,7 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any], *, _pub
             and state["request"]["action"] == "create" and state["request"].get("mapping")
             and state.get("phase") == "scientific_choice" and not state.get("initial_mapping_attempted")
             and not state.get("project")):
-        # An interrupted batch may checkpoint one question/confirmation. Resume
-        # only the caller's original explicit choices, before any native creation.
+        # Replay only original explicit choices before creating native outputs.
         run_creation(root, state)
         return
     if (response == {"retry": True} and state.get("mapping_choice")

@@ -17,6 +17,7 @@ from typing import Any, cast, overload
 
 PRIVATE_NAMES = ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")
 RECEIPT = ".tmp_verify/public-source-stage.json"
+_TARGETED_SCOPES = {"public-affected": "public-focused", "public-affected-native": "public-comprehensive"}
 HELPERS = ("_nc_cntr", "qtmml", "qtloops", "recordpaint", "threed")
 BINDING_CHECKS = ("private_namespace_absent", "stage_source_equal", "origin_source_equal",
                   "stage_head_equal", "origin_head_equal", "runtime_equal", "stage_runtime_equal")
@@ -248,9 +249,6 @@ def create_stage(root: Path, output: Path, environment: dict[str, str]) -> tuple
     for key in ("SCIPLOT_PUBLIC_INPUT_GUARD", "SCIPLOT_PUBLIC_GUARD_BOOTSTRAP", "SCIPLOT_PUBLIC_GUARD_WRAPPER_BOOTSTRAP"):
         child_environment.pop(key, None)
     return stage, child_environment, receipt
-
-
-_TARGETED_SCOPES = {"public-affected": "public-focused", "public-affected-native": "public-comprehensive"}
 
 
 def _selected_public_nodes(manifest: dict[str, Any], source: dict[str, str], profile: str, targets: list[str] | None) -> set[str]:
