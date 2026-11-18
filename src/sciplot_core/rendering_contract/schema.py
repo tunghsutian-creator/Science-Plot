@@ -22,5 +22,5 @@ def rendering_contract_schema() -> dict[str, Any]:
             "required": ["kind", "schema_version", "contract_id", "authority", "properties", "content_hash"],
             "properties": {"kind": {"const": "sciplot_rendering_style_contract"}, "schema_version": {"const": 1},
                            **binding_schema()["properties"],
-                           "authority": {"enum": ["legacy_source_extraction", "new_composition_policy"]},
+                           "authority": {"enum": ["legacy_source_extraction", "new_composition_policy", "current_rendering_policy"]},
                            "properties": {"type": "object", "minProperties": 1, "additionalProperties": record}}}

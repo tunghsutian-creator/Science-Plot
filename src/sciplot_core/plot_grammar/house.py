@@ -4,7 +4,7 @@ from typing import Any
 
 from sciplot_core.rendering_contract import contract_value, require_binding, resolved_style_defaults, resolved_style_provenance, load_contract
 from sciplot_core.plot_document.errors import fail
-from sciplot_core.rendering_contract.legacy_algorithms import require_legacy_algorithms
+from sciplot_core.rendering_contract.registry import CURRENT_HOUSE_CONTRACT_ID
 from .styles import resolve_style
 
 
@@ -12,9 +12,14 @@ class StyleResolver:
     def __init__(self, spec: dict[str, Any]) -> None:
         self.binding = spec.get("rendering_contract")
         self.trace: dict[str, Any] = {}
+        self.current = False
         if self.binding is not None:
-            require_binding(self.binding)
-            self.trace["rendering:algorithm_binding"] = require_legacy_semantics(self.binding)
+            snapshot = require_binding(self.binding)
+            self.current = snapshot["contract_id"] == CURRENT_HOUSE_CONTRACT_ID
+            self.trace["rendering:algorithm_binding"] = (
+                {"algorithm_id": snapshot["properties"]["axis.log_minor_algorithm"]["value"],
+                 "rendering_contract": self.binding, "source": "current house minor-tick contract"}
+                if self.current else require_legacy_semantics(self.binding))
 
     def resolve(self, identity: str, kind: str, scopes: list[dict[str, Any]], override: dict[str, Any],
                 *, index: int = 0, scope_names: list[str] | None = None) -> dict[str, Any]:
@@ -69,6 +74,8 @@ def resolved_layout_input(spec: dict[str, Any]) -> tuple[dict[str, Any], dict[st
 
 
 def require_legacy_semantics(binding: dict[str, Any]) -> dict[str, Any]:
+    from sciplot_core.rendering_contract.legacy_algorithms import require_legacy_algorithms
+
     try:
         return require_legacy_algorithms(binding)
     except ValueError as exc:
@@ -77,11 +84,19 @@ def require_legacy_semantics(binding: dict[str, Any]) -> dict[str, Any]:
 
 
 def axis_flow(axis: dict[str, Any], scale: dict[str, Any], resolver: StyleResolver, *, explicit_labels: bool = False) -> None:
-    # Shared old semantic tick preparation, independent of native paths/widgets.
-    from sciplot_core.rendering_contract.legacy_algorithms import log_minor_ticks
+    assert resolver.binding is not None
+    major_ticks = tuple(axis["ticks"])
+    if resolver.current:
+        from sciplot_core.rendering_contract.current_ticks import log_minor_ticks as current_minor_ticks
+
+        minors = current_minor_ticks(*scale["domain"], scale=scale["transform"], major_ticks=major_ticks,
+                                     multipliers=tuple(contract_value("axis.log_minor_multipliers", resolver.binding)))
+    else:
+        from sciplot_core.rendering_contract.legacy_algorithms import log_minor_ticks
+
+        minors = log_minor_ticks(*scale["domain"], scale=scale["transform"], major_ticks=major_ticks)
     axis.update(text_layout="axis-metric-flow", tick_notation=axis["style"].get(
-        "tick_notation", "power10" if scale["transform"] == "log" else "general"),
-        minor_ticks=log_minor_ticks(*scale["domain"], scale=scale["transform"], major_ticks=tuple(axis["ticks"])))
+        "tick_notation", "power10" if scale["transform"] == "log" else "general"), minor_ticks=minors)
     if explicit_labels:
         axis["tick_notation"] = "labels"
         resolver.trace[axis["id"] + ":tick_labels"] = {"value": axis["tick_labels"], "source": "object override"}
@@ -90,7 +105,7 @@ def axis_flow(axis: dict[str, Any], scale: dict[str, Any], resolver: StyleResolv
     trace = resolver.trace[axis["id"]]["minor_tick_count"]
     if scale["transform"] == "log" and trace["source"] == "RenderingStyleContract":
         axis["style"]["minor_tick_count"] = int(contract_value("axis.log_minor_tick_count", resolver.binding))
-        trace.update(load_contract()["properties"]["axis.log_minor_tick_count"], contract_property="axis.log_minor_tick_count")
+        trace.update(load_contract(resolver.binding["contract_id"])["properties"]["axis.log_minor_tick_count"], contract_property="axis.log_minor_tick_count")
     resolver.trace[axis["id"] + ":tick_policy"] = {
         "tick_notation": axis["tick_notation"], "minor_ticks": axis["minor_ticks"],
         "source": resolver.trace[axis["id"]].get("tick_notation", {}).get("source", "scale notation policy"),

@@ -156,3 +156,55 @@ def test_house_default_matches_independent_legacy_and_rebuilds(tmp_path, scale, 
         assert file_sha256(source) == source_hash
     finally:
         compiler.close()
+
+
+@pytest.mark.comprehensive
+def test_current_log_minor_ticks_keep_native_pdf_pixels_and_physical_canvas(tmp_path):
+    from io import BytesIO
+    import pymupdf
+
+    from sciplot_core.plot_ir.figure_document import figure_spec, store_spec
+    from sciplot_core.rendering_contract import contract_binding
+    from sciplot_core.rendering_contract.registry import CURRENT_HOUSE_CONTRACT_ID
+
+    source = tmp_path / "synthetic.csv"
+    _synthetic_table(source, "log")
+    original = file_sha256(source)
+    document = _managed_document(source, "log", "point_line", _science("log"))
+    spec = figure_spec(document)
+    spec["guides"][0]["location"] = "top-right"
+    pdfs, irs = [], []
+    compiler = ManagedVeuszCompiler(warm=False)
+    try:
+        for label, binding in (("v1", contract_binding()), ("current", contract_binding(CURRENT_HOUSE_CONTRACT_ID))):
+            spec["rendering_contract"] = binding
+            saved = json.loads(json.dumps(store_spec(document, spec)))
+            ir = compile_document(saved)
+            irs.append(ir)
+            built = compiler.compile_ir(ir, tmp_path / label)
+            assert built["scientific_audit"]["status"] == "passed"
+            assert built["publication_qa"]["status"] == "passed"
+            exports = compiler.export_ir(ir, Path(built["document"]), tmp_path / label / "exports")
+            pdf = Path(next(item["path"] for item in exports["exports"] if item["format"] == "pdf"))
+            with pymupdf.open(stream=BytesIO(pdf.read_bytes()), filetype="pdf") as native:
+                page = native[0]
+                assert len(native) == 1
+                assert [page.rect.width * 25.4 / 72, page.rect.height * 25.4 / 72] == pytest.approx([60., 55.], abs=.4)
+                assert page.get_drawings()
+                pdfs.append(page.get_pixmap(matrix=pymupdf.Matrix(2, 2)).samples)
+        # A later explicit inside-best edit retains v2 tick semantics and
+        # correctly reattaches only the legacy scorer after a serialized reopen.
+        spec["guides"][0]["location"] = "inside-best"
+        reopened = json.loads(json.dumps(store_spec(document, spec)))
+        edited = compile_document(reopened)
+        assert edited["rendering_contract"] == contract_binding(CURRENT_HOUSE_CONTRACT_ID)
+        assert edited["style_provenance"]["rendering:legacy_legend_binding"]["rendering_contract"] == contract_binding()
+        built = compiler.compile_ir(edited, tmp_path / "edited-current")
+        assert compiler.export_ir(edited, Path(built["document"]), tmp_path / "edited-exports")["ready_to_use"]
+    finally:
+        compiler.close()
+    assert irs[0]["datasets"] == irs[1]["datasets"]
+    assert irs[0]["views"] == irs[1]["views"]
+    assert all(axis["minor_ticks"] for axis in irs[1]["views"][0]["axes"])
+    assert pdfs[0] == pdfs[1]
+    assert file_sha256(source) == original

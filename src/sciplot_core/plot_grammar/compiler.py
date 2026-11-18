@@ -154,7 +154,7 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
     layout = solve_layout({**spec["composition"], **layout_input}, spec["views"], flat_axes, guides,
                           panel_margins_mm=panel_margins, secondary_axis_policy=spec.get("axis_layout_policy"))
     if resolver.binding is not None:
-        resolve_house_legends(spec, guides, datasets, layout)
+        resolve_house_legends(spec, guides, datasets, layout, resolver)
     axes = {axis["id"]: axis for axis in resolve_axis_text(layout, flat_axes, spec["scales"])}
     for view in views:
         view["axes"] = [axes[axis["id"]] for axis in view["axes"]]

@@ -348,15 +348,16 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
     template = "semantic-task-v1"
     key = "task:" + canonical_json_sha256([state["task_dir"], state["intent_revision"]])
     from sciplot_core.plot_grammar import compile_figure
-    from sciplot_core.rendering_contract import contract_binding, contract_value
+    from sciplot_core.rendering_contract import contract_value
+    from sciplot_core.rendering_contract.registry import writer_binding
 
-    figure["rendering_contract"] = contract_binding()
+    figure["rendering_contract"] = writer_binding(figure)
     from sciplot_core.plot_grammar.current_view import resolve_current_view
 
     figure = resolve_current_view(figure, datasets)
-    presets = contract_value("canvas.size_presets")
+    presets = contract_value("canvas.size_presets", figure["rendering_contract"])
     width_candidates = sorted({float(item["width_mm"]) for item in presets.values()
-                               if float(item["height_mm"]) == float(contract_value("canvas.height_mm"))})
+                               if float(item["height_mm"]) == float(contract_value("canvas.height_mm", figure["rendering_contract"]))})
     layout_attempts = []
     for width in width_candidates:
         figure["layout"]["width_mm"] = width

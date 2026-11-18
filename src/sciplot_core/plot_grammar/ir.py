@@ -9,7 +9,8 @@ from sciplot_core.plot_document.validation import validate_wire
 from sciplot_core.plot_layout import resolved_layout_schema, structural_publication_qa
 from sciplot_core.plot_transforms.datasets import dataset_schema
 
-from sciplot_core.rendering_contract import require_binding, resolved_style_defaults
+from sciplot_core.rendering_contract import HOUSE_CONTRACT_ID, require_binding, resolved_style_defaults
+from sciplot_core.rendering_contract.registry import CURRENT_HOUSE_CONTRACT_ID
 
 from .schema import rendering_binding_schema, annotation_schema, axis_schema, guide_schema, layer_schema, scale_schema
 from .styles import COLOR, style_schema
@@ -34,7 +35,7 @@ def ir_schema_v2() -> dict[str, Any]:
         "views": {"type": "array", "minItems": 1, "items": view}, "layout": resolved_layout_schema(),
         "guides": {"type": "array", "items": guide_schema(resolved=True)},
         "annotations": {"type": "array", "items": annotation_schema(resolved=True)}, "layout_qa": qa, "ir_hash": DIGEST,
-        "rendering_contract": rendering_binding_schema("sciplot-house-style-v1"),
+        "rendering_contract": rendering_binding_schema(HOUSE_CONTRACT_ID, CURRENT_HOUSE_CONTRACT_ID),
         "composition_policy": rendering_binding_schema("sciplot-figure-composition-v1"),
         "style_provenance": {"type": "object"}}
     fields["display_curves"] = {"type": "object", "propertyNames": IDENTIFIER, "additionalProperties": {"type": "object"}}

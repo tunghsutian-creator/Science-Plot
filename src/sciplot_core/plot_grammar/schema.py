@@ -3,13 +3,14 @@ from typing import Any
 
 from sciplot_core.plot_document.schema import IDENTIFIER, closed
 
-from sciplot_core.rendering_contract import binding_schema
+from sciplot_core.rendering_contract import HOUSE_CONTRACT_ID, binding_schema
+from sciplot_core.rendering_contract.registry import CURRENT_HOUSE_CONTRACT_ID
 from sciplot_core.plot_layout.schema import grid_schema
 from .styles import COLOR, MARK_TYPES, NUMBER, POSITIVE, scope_schema, style_schema
 
-def rendering_binding_schema(contract_id: str) -> dict[str, Any]:
+def rendering_binding_schema(contract_id: str, *other_ids: str) -> dict[str, Any]:
     result = binding_schema()
-    result["properties"]["contract_id"] = {"const": contract_id}
+    result["properties"]["contract_id"] = {"enum": [contract_id, *other_ids]} if other_ids else {"const": contract_id}
     return result
 
 
@@ -160,7 +161,7 @@ def figure_spec_schema() -> dict[str, Any]:
         "views": {"type": "array", "minItems": 1, "maxItems": 64, "items": view},
         "composition": composition_schema(), "layout": figure_layout_schema(), "theme": theme,
         "guides": {"type": "array", "items": guide_schema()}, "annotations": {"type": "array", "items": annotation_schema()},
-        "rendering_contract": rendering_binding_schema("sciplot-house-style-v1"),
+        "rendering_contract": rendering_binding_schema(HOUSE_CONTRACT_ID, CURRENT_HOUSE_CONTRACT_ID),
         "composition_policy": rendering_binding_schema("sciplot-figure-composition-v1")}
     fields["axis_layout_policy"] = {"const": "decorated_secondary_sides_v1"}
     fields["domain_semantics"] = {"const": "current_view_v1"}

@@ -317,8 +317,11 @@ scoped themes, semantic legends and data/view/figure annotations. Dual Y and
 multipanel scientific figures use this common grammar. Native text bounds and
 scientific mapping checks gate export; soft layout warnings remain explicit.
 Arbitrary native features and non-deterministic execution remain unsupported.
-New FigureTemplate documents pin the extracted `sciplot-house-style-v1` visual
-contract. Omitted layout uses the original 60 × 55 mm panel and fixed physical
+Unmarked FigureTemplates retain the extracted `sciplot-house-style-v1` visual
+contract. New semantic figures without automatic inside-best legends can use
+`sciplot-house-style-v2`: the same style values with a dedicated logarithmic minor
+tick algorithm. Inside-best scoring still uses the retained legacy algorithm.
+Omitted layout uses the original 60 × 55 mm panel and fixed physical
 margins. New semantic tasks select a versioned presentation policy that reserves
 additional space for decorated right/top axes before native compilation. Older
 saved figures retain their layout interpretation. The resolved layout records

@@ -430,7 +430,12 @@ artifact/IR-cache deletion, theme identity and data-anchored annotations. Native
 text bounds are measured before clipping; hard failures block export and soft
 heuristics remain warnings. This is bounded layout QA, not journal certification.
 
-New FigureTemplate creation pins `sciplot-house-style-v1` in canonical presentation.
+Creation from an unmarked FigureTemplate still pins `sciplot-house-style-v1`.
+Fresh semantic tasks without an inside-best legend explicitly bind
+`sciplot-house-style-v2`: an independent log minor tick implementation over the
+same pinned style values. The old implementation byte lock remains for v1 and
+for inside-best scoring, including any inside-best edit to a v2 figure. The
+latter records the legacy scorer binding separately in the resolved IR.
 `rendering_contract/` owns extracted immutable resources, their source evidence and
 content bindings; grammar resolves them below explicit themes and overrides.
 Single-panel defaults use the old fixed 60 x 55 mm frame and absolute margins.

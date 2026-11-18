@@ -8,6 +8,7 @@ from sciplot_core.plot_grammar import compile_figure, seal_ir_v2, split_figure_s
 from sciplot_core.plot_ir import create_managed_document
 from sciplot_core.plot_ir.figure_document import figure_spec
 from sciplot_core.rendering_contract import contract_binding, require_binding
+from sciplot_core.rendering_contract.registry import CURRENT_HOUSE_CONTRACT_ID, writer_binding
 from test_figure_document import request_for_figure
 from test_figure_grammar import example
 
@@ -31,9 +32,18 @@ def test_creation_pins_house_but_does_not_rewrite_old_revisions(tmp_path):
     doc = create_managed_document(request['template_definition'], request['data_binding'], plot_id='plot:test')
     spec = figure_spec(doc)
     assert spec['rendering_contract'] == contract_binding()
+    request_spec = request['template_definition']['figure_spec']
+    assert writer_binding(request_spec) == contract_binding(CURRENT_HOUSE_CONTRACT_ID)
+    request_spec['guides'][0]['location'] = 'inside-best'
+    assert writer_binding(request_spec) == contract_binding()
+    request_spec['guides'][0]['location'] = 'top-right'
+    request_spec['rendering_contract'] = writer_binding(request_spec)
+    current = create_managed_document(request['template_definition'], request['data_binding'], plot_id='plot:current')
+    assert figure_spec(current)['rendering_contract'] == contract_binding(CURRENT_HOUSE_CONTRACT_ID)
     old, data = example()
     historical = compile_(old, data)
     assert 'rendering_contract' not in historical
+    assert historical['ir_hash'] == 'faebb65f064ce4bf8d8f0c027af848b99d7d82b76755a16d1088d7a7e7f2d2d1'
     assert historical['views'][0]['axes'][0]['style']['font_size_pt'] == 8
     assert 'rendering_contract' not in split_figure_spec(old)[1]
 
@@ -156,3 +166,59 @@ def test_incomplete_or_ignored_visual_ir_cannot_reach_backend(channel):
         ir['views'][0]['axes'][0]['tick_labels'] = ['unrepresented']
     with pytest.raises(DocumentError):
         seal_ir_v2(ir)
+
+def test_current_minor_ticks_match_retained_edge_cases_and_separate_the_old_pin(monkeypatch):
+    import json
+
+    from sciplot_core.rendering_contract import contract_value, legacy_algorithms
+    from sciplot_core.rendering_contract.current_ticks import log_minor_ticks
+
+    binding = contract_binding(CURRENT_HOUSE_CONTRACT_ID)
+    multipliers = tuple(contract_value("axis.log_minor_multipliers", binding))
+    cases = [
+        (1., 100., "linear", (1., 100.)),
+        (None, 100., "log", ()),
+        (0., 100., "log", ()),
+        (-1., 100., "log", ()),
+        (1., float("inf"), "log", ()),
+        (1., 100., "log", ()),
+        (100., 1., "log", (10., 1., 100.)),
+        (1., 100., "log", (10.,)),
+        (1., 100., "log", (float("nan"), 10., 10.)),
+        (1e-12, 1e-8, "log", (0., 1e-11, 1e-9, 1.)),
+    ]
+    for low, high, scale, major in cases:
+        old = legacy_algorithms.log_minor_ticks(low, high, scale=scale, major_ticks=major)
+        assert log_minor_ticks(low, high, scale=scale, major_ticks=major, multipliers=multipliers) == old
+
+    saved, data = house()
+    assert compile_(json.loads(json.dumps(saved)), data)["ir_hash"] == (
+        "4c9ddf6cc1925da14241ee064379747944273305caa77ebc3293b775ac1ee1d7")
+    inside = deepcopy(saved)
+    inside["guides"][0]["location"] = "inside-best"
+    assert compile_(json.loads(json.dumps(inside)), data)["ir_hash"] == (
+        "170fcc4241936111c94cb3576012b0710f71ac837c05642a99ed255e696fee06")
+    current = {**saved, "rendering_contract": binding}
+    old_pin = legacy_algorithms.require_legacy_algorithms
+
+    def drift(_binding):
+        raise ValueError("unavailable historical bytes")
+
+    with monkeypatch.context() as changed:
+        changed.setattr(legacy_algorithms, "require_legacy_algorithms", drift)
+        ir = compile_(current, data)
+        assert ir["style_provenance"]["rendering:algorithm_binding"]["algorithm_id"] == (
+            "sciplot-current-log-minor-ticks-v1")
+        assert "rendering:legacy_legend_binding" not in ir["style_provenance"]
+        with pytest.raises(DocumentError) as error:
+            compile_(saved, data)
+        assert error.value.reason_code == "rendering_contract_algorithm_drift"
+        current["guides"][0]["location"] = "inside-best"
+        with pytest.raises(DocumentError) as error:
+            compile_(current, data)
+        assert error.value.reason_code == "rendering_contract_algorithm_drift"
+
+    reopened = json.loads(json.dumps(current))
+    ir = compile_(reopened, data)
+    assert ir["style_provenance"]["rendering:legacy_legend_binding"] == old_pin(contract_binding())
+    assert compile_(current, data) == ir

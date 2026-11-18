@@ -2,15 +2,13 @@
 from typing import Any
 
 from sciplot_core.plot_document.errors import fail
-from .house import require_legacy_semantics
+from .house import StyleResolver, require_legacy_semantics
 
 
 def resolve_house_legends(spec: dict[str, Any], guides: list[dict[str, Any]], datasets: dict[str, Any],
-                          layout: dict[str, Any]) -> None:
-    require_legacy_semantics(spec["rendering_contract"])
-    from sciplot_core.rendering_contract.legacy_algorithms import (
-        StudioSeries, auto_inside_legend_placement, manual_anchor_fraction,
-    )
+                          layout: dict[str, Any], resolver: StyleResolver) -> None:
+    if not resolver.current:
+        require_legacy_semantics(spec["rendering_contract"])
 
     views = {view["id"]: view for view in spec["views"]}
     scales = {scale["id"]: scale for scale in spec["scales"]}
@@ -28,6 +26,14 @@ def resolve_house_legends(spec: dict[str, Any], guides: list[dict[str, Any]], da
                    for layer in selected):
                 fail("figure_legend_auto_scale_conflict", "Inside-best requires one scale pair; provide a corner for multiple scales.",
                      "/guides/location", "placement_scale_pair")
+            from sciplot_core.rendering_contract.legacy_algorithms import (
+                StudioSeries, auto_inside_legend_placement, manual_anchor_fraction,
+            )
+
+            if resolver.current and "rendering:legacy_legend_binding" not in resolver.trace:
+                from sciplot_core.rendering_contract import contract_binding
+
+                resolver.trace["rendering:legacy_legend_binding"] = require_legacy_semantics(contract_binding())
             options: dict[str, Any] = {"size": f"{layout['width_mm']:g}x{layout['height_mm']:g}"}
             for dimension in ("x", "y"):
                 scale = scales[selected[0][dimension + "_scale"]]

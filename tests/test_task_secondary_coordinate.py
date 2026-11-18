@@ -46,6 +46,9 @@ def test_exact_secondary_selector_determines_numbers_without_redundant_question(
     assert column["values"] == [80, 90]
     assert column["unit"] == "C"
     assert wire["data_binding"]["provenance"]["semantic_task"]["intent"]["secondary_y"] == intent(**selector)["secondary_y"]
+    from sciplot_core.rendering_contract.registry import CURRENT_HOUSE_CONTRACT_ID
+
+    assert wire["template_definition"]["figure_spec"]["rendering_contract"]["contract_id"] == CURRENT_HOUSE_CONTRACT_ID
     assert source.read_bytes() == raw
 
 
