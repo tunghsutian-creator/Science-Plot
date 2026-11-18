@@ -78,7 +78,7 @@ def load_heatmap_table_from_frame(
             role_index["y"],
             role_index["z"],
         ],
-    ].copy()
+    ]
     ordered.columns = ["x", "y", "z"]
     ordered["z"] = pd.to_numeric(ordered["z"], errors="coerce")
     ordered = ordered.dropna(subset=["z"])

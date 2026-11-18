@@ -27,14 +27,12 @@ def has_content(value: Any) -> bool:
 
 
 def row_has_content(row: pd.Series) -> bool:
-    return any(has_content(value) for value in row.tolist())
+    return any(has_content(value) for value in row)
 
 
 def drop_fully_empty_columns(raw: pd.DataFrame) -> pd.DataFrame:
     keep_columns = [index for index in raw.columns if row_has_content(raw[index])]
-    if not keep_columns:
-        return raw.iloc[:, 0:0].copy()
-    return raw.loc[:, keep_columns].copy()
+    return raw.loc[:, keep_columns]
 
 
 def ensure_minimum_rows(
@@ -73,19 +71,14 @@ def coerce_numeric_pair(
             "must contain matching X/Y numeric data."
         )
     if not has_x_values and not has_y_values:
-        mapped = (
-            pair.map(has_content)
-            if hasattr(pair, "map")
-            else pair.applymap(has_content)
-        )
-        if bool(mapped.to_numpy().any()):
+        if any(has_content(value) for row in pair.itertuples(index=False, name=None) for value in row):
             raise ValueError(
                 f"{table_name} columns {column_numbers[0]} and {column_numbers[1]} "
                 "contain non-numeric values in the data region."
             )
-        return numeric_pair.iloc[0:0].copy()
+        return numeric_pair.iloc[0:0]
     numeric_pair.columns = ["x", "y"]
-    numeric_pair = numeric_pair.dropna(how="all").dropna(subset=["x", "y"])
+    numeric_pair = numeric_pair.dropna(subset=["x", "y"])
     if numeric_pair.empty:
         raise ValueError(
             f"{table_name} columns {column_numbers[0]} and {column_numbers[1]} "

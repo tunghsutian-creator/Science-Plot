@@ -92,7 +92,7 @@ def load_curve_table_from_frame(
                 "axis labels in row 1."
             )
         pair = coerce_numeric_pair(
-            data_rows.iloc[:, [column, column + 1]].copy(),
+            data_rows.iloc[:, column:column + 2],
             column_numbers=(column + 1, column + 2),
             table_name="Curve table",
         )
@@ -101,11 +101,11 @@ def load_curve_table_from_frame(
         series_list.append(
             CurveSeries(
                 sample=sample_x or sample_y or f"Sample_{column // 2 + 1}",
-                x_label=x_label or "X",
-                y_label=y_label or "Y",
+                x_label=x_label,
+                y_label=y_label,
                 x_unit=x_unit,
                 y_unit=y_unit,
-                data=pair.reset_index(drop=True),
+                data=pair,
             )
         )
     if not series_list:
