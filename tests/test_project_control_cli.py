@@ -10,7 +10,6 @@ from sciplot_core.cli.dispatch import project as command
 from sciplot_core.cli.parsers import build_parser
 from sciplot_core.cli.dispatch.interfaces import dispatch_interfaces
 from sciplot_core.studio_core.project_session import (
-    ProjectSessionBusy,
     ProjectSessionLease,
 )
 from sciplot_core.studio_core.control_results import compact_result
@@ -204,7 +203,10 @@ def test_all_headless_studio_writes_exclude_native_sessions_without_loading_gui(
     args = build_parser().parse_args(["studio", str(tmp_path), *flags])
     lease = ProjectSessionLease(tmp_path, native=True)
     try:
-        with pytest.raises(ProjectSessionBusy):
+        from sciplot_core.plot_engine.errors import EngineError
+
+        with pytest.raises(EngineError) as error:
             dispatch_interfaces(args, [])
+        assert error.value.reason_code == "legacy_conversion_required"
     finally:
         lease.close()

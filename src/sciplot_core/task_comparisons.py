@@ -145,10 +145,15 @@ def _require_selected_figure(state: dict[str, Any]) -> None:
         raise TaskControlError("comparison_selected_figure_changed", "选定图已被后续修改，不能将新版本当作本次选择导出。")
 
 
-def start_comparison(request: dict[str, Any], *, comparison_dir: Path, base_dir: Path | None = None) -> dict[str, Any]:
+def start_comparison(request: dict[str, Any], *, comparison_dir: Path, base_dir: Path | None = None,
+                     _public_mutation: bool = False) -> dict[str, Any]:
     request = normalize_comparison_request(request, base_dir=base_dir)
     root = task_location(candidate_request(request, request["candidates"][0]), comparison_path(comparison_dir))
     if not root.exists():
+        if _public_mutation:
+            from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+            require_public_editable(Path(request["project"]), figure_id=request["figure_id"])
         from sciplot_core.foundation.research_destination import require_data_destination
         require_data_destination(root)
     root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)

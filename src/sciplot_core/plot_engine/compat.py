@@ -113,8 +113,9 @@ def migrated_style(target: Path, *, samples: list[str] | None, all_samples: bool
     # Literal checkpoint admission precedes constructing an execution owner.
     # The checkpoint owner stores literal intent, never semantic head/journal.
     with _saved_style(target, entry, caller) as frozen:
-        owner = PlotService()
+        owner = PlotService(read_only_legacy=True)
         with edit_service_owner(owner):
+            owner.require_editable(target, figure_id=figure_id)
             if frozen is not None:
                 return _execute_style(owner, *frozen)
             return _migrated_style(owner, target, samples=samples, all_samples=all_samples,

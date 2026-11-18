@@ -92,7 +92,7 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         )
 
         if name == "sciplot_comparison_start":
-            return start_comparison(arguments["request"], comparison_dir=Path(arguments["comparison_dir"]))
+            return start_comparison(arguments["request"], comparison_dir=Path(arguments["comparison_dir"]), _public_mutation=True)
         comparison = Path(arguments["comparison"])
         if name == "sciplot_comparison_select":
             return select_comparison(comparison, arguments["selection"])
@@ -134,9 +134,9 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         if name == "sciplot_task_start":
             task_dir = arguments.get("task_dir")
-            return start_task(arguments["request"], task_dir=Path(task_dir) if task_dir else None)
+            return start_task(arguments["request"], task_dir=Path(task_dir) if task_dir else None, _public_mutation=True)
         task = Path(arguments["task"])
-        return inspect_task(task) if name == "sciplot_task_inspect" else resume_task(task, arguments["response"])
+        return inspect_task(task) if name == "sciplot_task_inspect" else resume_task(task, arguments["response"], _public_mutation=True)
     project = Path(arguments["project"])
     figure_id = arguments.get("figure_id")
     if name in {"sciplot_pdf_review_create", "sciplot_pdf_review_read"}:
@@ -171,6 +171,9 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             preview_document_operations,
         )
 
+        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+        require_public_editable(project, figure_id=figure_id)
         return preview_document_operations(project, arguments["operations"],
             output_dir=_preview_output(arguments), figure_id=figure_id,
             expected_document_sha256=arguments["expected_document_sha256"])
@@ -184,6 +187,9 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         review = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(review, dict):
             raise AdapterError("invalid_preview", "The saved edit review must be an object.")
+        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+        require_public_editable(project, figure_id=review.get("figure_id"), prior_review=review)
         return apply_document_edit(project, review)
     if name == "sciplot_peaks":
         from sciplot_core.studio_core.peak_analysis import inspect_peak_candidates
@@ -195,6 +201,9 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     if name == "sciplot_export":
         from sciplot_core.studio_core.project_creation import export_project
 
+        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+        require_public_editable(project)
         return export_project(project)
     if name == "sciplot_operation":
         from sciplot_core.studio_core.document_edit_commit import read_edit_operation

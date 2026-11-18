@@ -46,6 +46,9 @@ def dispatch_project_control(args: Any) -> int:
 
         payload = inspect_annotation_state(args.target, figure_id=args.figure)
     elif action == "operations-preview":
+        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+        require_public_editable(args.target, figure_id=args.figure)
         from sciplot_core.studio_core.annotation_operations import preview_document_operations
 
         operations = json.loads(args.operations.read_text(encoding="utf-8"))
@@ -70,6 +73,9 @@ def dispatch_project_control(args: Any) -> int:
             args.target, output_dir=args.out, figure_id=args.figure
         )
     elif action == "edit-preview":
+        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+        require_public_editable(args.target, figure_id=args.figure)
         changes = json.loads(args.changes.read_text(encoding="utf-8"))
         if not isinstance(changes, list) or not all(
             isinstance(item, dict) for item in changes
@@ -88,6 +94,9 @@ def dispatch_project_control(args: Any) -> int:
         review = json.loads(args.preview.read_text(encoding="utf-8"))
         if not isinstance(review, dict):
             raise ValueError("An edit preview must be a JSON object.")
+        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+        require_public_editable(args.target, figure_id=review.get("figure_id"), prior_review=review)
         payload = apply_document_edit(args.target, review)
     else:
         payload = read_edit_operation(

@@ -73,6 +73,8 @@ def dispatch_project_revision(args: Any) -> int | None:
             "--preview-out is only valid when creating a revision preview."
         )
     project = revision_project(args.target)
+    from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
     if args.apply_revision:
         preview = json.loads(
             args.apply_revision.expanduser().read_text(encoding="utf-8")
@@ -81,12 +83,15 @@ def dispatch_project_revision(args: Any) -> int | None:
             raise ValueError("The reviewed preview must be a JSON object.")
         kind = preview.get("kind")
         if kind == "sciplot_delivery_recovery_preview":
+            if preview.get("version") != 2:
+                require_public_editable(project)
             payload = apply_delivery_recovery(project, preview)
         elif kind == "sciplot_project_source_update":
             payload = apply_project_source_update(project, preview)
         else:
             raise ValueError("The file is not a supported project revision preview.")
     else:
+        require_public_editable(project)
         payload = (
             preview_project_source_update(
                 project, args.update_source, worksheet=args.worksheet

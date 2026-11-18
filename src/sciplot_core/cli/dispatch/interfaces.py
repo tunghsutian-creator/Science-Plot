@@ -80,6 +80,10 @@ def dispatch_interfaces(
                     if delivery_target["mode"] == "project"
                     else delivery_target["document"]
                 )
+        if studio_target is not None and not args.qt_smoke:
+            from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+            require_public_editable(studio_target)
         studio_output_root = args.out.expanduser() if args.out else None
         studio_delivery_root = None
         if studio_target is not None:

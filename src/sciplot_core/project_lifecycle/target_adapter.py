@@ -44,6 +44,55 @@ class FilesystemProjectTargets:
         project, selected_id = Path(selection["project"]), selection["figure_id"]
         return ImportTarget(document_root(project, selected_id), project, selected_id)
 
+    def read_legacy_saved(self, target: Path, figure_id: str | None) -> tuple[Path, Path] | None:
+        """Resolve read-only authority by selection, before any attach or import."""
+        from .attachment_index import read_index
+        from .store_composition import existing_store
+        from sciplot_core.project_store.io import STORE
+        from sciplot_core.studio_core.legacy_saved_plot import _saved_plot
+
+        def stored(root: Path) -> tuple[Path, Path] | None:
+            envelope = self.repository.load_head(root)
+            document, binding = envelope["document"], envelope["binding"]
+            authority = document.get("plot_type")
+            if authority == "LegacyPlot" or (authority is None and
+                    document.get("coverage", {}).get("mode") in {"legacy_shadow", "opaque"}):
+                if binding.get("kind") != "sciplot_veusz_binding":
+                    raise EngineError("legacy_native_binding_missing", "The saved legacy figure has no exact native document.")
+                return canonical_path(Path(binding["project"])), canonical_path(Path(binding["document"]))
+            return None
+
+        explicit_vsz = target.is_file() and target.suffix.lower() == ".vsz"
+        if explicit_vsz:
+            from sciplot_core.studio_core.legacy_saved_plot import _native_file_root
+
+            root = _native_file_root(target)
+        else:
+            root = target.parent if target.name == "plot_request.json" else target
+        with self.repository.query_scope(root):
+            if not explicit_vsz and self.repository.has_head(root):
+                return stored(root)
+            store = existing_store(root) if (root / STORE / "head.json").is_file() else None
+            if store is not None and not explicit_vsz:
+                entries = list(read_index(store)["attachments"].values())
+                matches = [entry for entry in entries
+                           if figure_id in {entry["figure_id"], entry["plot_id"]}] if figure_id is not None else entries
+                if len(matches) == 1:
+                    attached = root / matches[0]["namespace"]
+                    if self.repository.has_head(attached):
+                        return stored(attached)
+                    if matches[0].get("managed_output") is not None:
+                        return None
+                if len(matches) > 1:
+                    return None
+            if not explicit_vsz and not ((root / "plot_request.json").is_file()
+                    and (root / "studio" / "document.vsz").is_file()):
+                return None
+            saved = _saved_plot(target, figure_id)
+            if store is not None and _prepared_native_figure(store, saved[1]):
+                return None
+            return saved
+
     def resolve_decision(self, target: Path) -> DecisionTarget:
         from .store_composition import namespace_root
 
@@ -89,6 +138,21 @@ class FilesystemProjectTargets:
             require_data_destination(root)
             require_data_destination(output)
         return ManagedCreationLocation(root, output, identifier)
+
+
+def _prepared_native_figure(store: Any, document: Path) -> bool:
+    """A real generation-owned native figure is not an imported legacy shadow."""
+    from sciplot_core.project_commands import ProjectCommands
+
+    relative = document.relative_to(store.root).as_posix()
+    for record in ProjectCommands(store).commands():
+        metadata = record.get("metadata", {})
+        request = metadata.get("request", {})
+        if (record["phase"] == "complete" and metadata.get("kind") == "figure_set"
+                and request.get("family") == "studio_preparation"
+                and request.get("prepared_files", {}).get(relative)):
+            return True
+    return False
 
 
 def _source_control_parent(source: Path) -> Path:

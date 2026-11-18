@@ -55,7 +55,7 @@ def test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project(tmp
     assert opened["read_only"] and opened["new_features_require_conversion"]
     assert opened["document"] == {"path": str(native), "sha256": file_sha256(native)}
     assert opened["pages"] == ["page1"]
-    assert opened["next_step"]["action"] == "convert_to_new_format"
+    assert opened["next_step"]["action"] == "redraw_legacy"
     assert _tree(project) == old_tree
 
     output = tmp_path / "redrawn"
@@ -80,3 +80,87 @@ def test_exact_legacy_vsz_rejects_output_inside_original_project(tmp_path, capsy
     assert main(["project", "legacy-redraw", str(native), "--out", str(project / "export"), "--json"]) == 1
     assert "outside the original project" in capsys.readouterr().out
     assert _tree(project) == old_tree
+
+
+def test_committed_legacy_head_is_read_only_even_with_a_real_revision_pointer(tmp_path, monkeypatch):
+    from test_plot_engine import FakeBackend, commit, request
+    from sciplot_core.plot_engine.errors import EngineError
+    from sciplot_core.plot_engine.service import PlotService
+    from sciplot_core.studio_core import project_query
+
+    backend = FakeBackend(tmp_path / "backend")
+    doc, binding = backend.initial()
+    binding.update(kind="sciplot_veusz_binding", project=str(backend.directory), document=str(backend.native))
+    root = tmp_path / "old-shadow"
+    commit(root, doc, binding, "import")
+    previous = _tree(tmp_path)
+    monkeypatch.setattr(project_query, "_inspect_document", lambda source: {
+        "document": {"path": str(source), "sha256": file_sha256(source)}, "pages": ["page1"], "linked_files": []})
+    service = PlotService(backend, read_only_legacy=True)
+    try:
+        assert service.open(root)["read_only"]
+        assert service.describe(root)["read_only"]
+        with pytest.raises(EngineError) as caught:
+            service.patch(root, request())
+        assert caught.value.reason_code == "legacy_conversion_required"
+        assert backend.calls["apply"] == 0
+        with pytest.raises(EngineError, match="read-only"):
+            service.export(root)
+    finally:
+        service.close()
+    assert _tree(tmp_path) == previous
+
+
+def test_registered_project_selects_legacy_or_managed_by_exact_figure_identity(tmp_path, monkeypatch):
+    from managed_plot_helpers import request_for_source
+    from test_project_lifecycle import ManagedBackend
+    from sciplot_core.plot_engine.service import PlotService
+    from sciplot_core.project_store.repository import FileProjectStore
+    from sciplot_core.studio_core import project_query
+
+    project, native = _old_project(tmp_path)
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    source_parent = project / "source"
+    source_parent.mkdir()
+    request = request_for_source(source_parent)
+    # The read test uses a real store and attached Managed head, but a fake
+    # renderer so authority routing is independent of GUI/runtime availability.
+    service = PlotService(ManagedBackend(), read_only_legacy=True)
+    try:
+        created = service.create(request, project=project)
+        assert created["ready_to_use"], created
+        before = _tree(project)
+        monkeypatch.setattr(project_query, "_inspect_document", lambda source: {
+            "document": {"path": str(source), "sha256": file_sha256(source)},
+            "pages": ["page1"], "linked_files": []})
+        assert service.open(project, figure_id=created["plot_id"])["plot_type"] == "ManagedPlot"
+        legacy = service.open(project, figure_id="primary")
+        assert legacy["read_only"] and legacy["document"]["path"] == str(native)
+        assert _tree(project) == before
+    finally:
+        service.close()
+
+
+def test_public_task_and_native_edit_entrypoints_cannot_allocate_old_project_writes(tmp_path, capsys):
+    from sciplot_core.mcp_server.services import invoke_owner
+    from sciplot_core.plot_engine.errors import EngineError
+
+    project, native = _old_project(tmp_path)
+    before = _tree(project)
+    changes = tmp_path / "changes.json"
+    changes.write_text("[]")
+    arguments = ["project", "edit-preview", str(project), "--out", str(tmp_path / "candidate"),
+                 "--expected-document", file_sha256(native), "--changes", str(changes), "--json"]
+    assert main(arguments) == 1
+    assert json.loads(capsys.readouterr().out)["reason_code"] == "legacy_conversion_required"
+    assert not (tmp_path / "candidate").exists()
+    request = tmp_path / "task-request.json"
+    request.write_text(json.dumps({"version": 1, "action": "export", "project": str(project)}))
+    assert main(["task", "start", "--request", str(request), "--task-dir", str(tmp_path / "new-task"), "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)["reason_code"] == "legacy_conversion_required"
+    assert not (tmp_path / "new-task").exists()
+    with pytest.raises(EngineError) as error:
+        invoke_owner("sciplot_export", {"project": str(project)})
+    assert error.value.reason_code == "legacy_conversion_required"
+    assert _tree(project) == before

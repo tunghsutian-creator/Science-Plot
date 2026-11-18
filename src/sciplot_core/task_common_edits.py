@@ -308,7 +308,7 @@ def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None 
     normalized = {"kind": "sciplot_common_edit_intent", "version": 1,
                   "target": str(target), "figure_id": figure_id, "edits": selected}
     entry = canonical_path(task_dir) if task_dir is not None else None
-    owner = service or PlotService()
+    owner = service or PlotService(read_only_legacy=True)
     with edit_service_owner(owner, owned=service is None):
         # Replay reads the original bound request before today's revision/currentness
         # discovery, preserving uncertain-apply and export-pending continuation.
@@ -347,7 +347,8 @@ def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None 
         description = owner.open(resolved_target, figure_id=figure_id, description=scope)
         if description["status"] != "current":
             return {**description, "current_status": description["status"], "status": "blocked",
-                    "reason_code": "common_edit_currentness_required", "doctor": doctor,
+                    "reason_code": ("legacy_conversion_required" if description.get("read_only")
+                                    else "common_edit_currentness_required"), "doctor": doctor,
                     "next_step": description.get("next_step", {"action": "plot.describe", "plot": description.get("plot")})}
         if description.get("pending"):
             from sciplot_core.project_lifecycle.receipts import receipt

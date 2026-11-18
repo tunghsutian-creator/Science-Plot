@@ -287,6 +287,9 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             from sciplot_core.studio_core.project_query import inspect_project
 
             identity = figure_id or match["primary_figure_id"]
+            from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+            require_public_editable(selected, figure_id=identity)
             current = inspect_project(selected, figure_id=identity, native=True)
             if current["source"]["current"] is not True:
                 raise ValueError("Current complete recorded scientific-source evidence is required.")
@@ -321,6 +324,9 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
         return {**base, "status": "current", "selected": match, "current": current, "next_step": next_step}
     except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
         code = getattr(exc, "reason_code", "saved_authority_changed")
+        if code == "legacy_conversion_required":
+            return {**base, "status": "blocked", "reason_code": code, "message": str(exc), "selected": match,
+                    "next_step": {"action": "plot.open", "arguments": {"target": str(selected), "figure_id": identity}}}
         return {**base, "status": "blocked", "reason_code": code,
                 "message": str(exc), "selected": match,
                 "next_step": ({"action": "find_saved_work_again", "arguments": {

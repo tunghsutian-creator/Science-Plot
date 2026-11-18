@@ -98,6 +98,7 @@ def start_task(
     entry_intent: dict[str, Any] | None = None,
     defer_creation_export: bool = False,
     _owned_namespace: Path | None = None,
+    _public_mutation: bool = False,
 ) -> dict[str, Any]:
     original_request = request
     try:
@@ -130,6 +131,10 @@ def start_task(
         if key in request:
             request[key] = str(canonical_path(Path(request[key])))
     root = task_location(request, task_dir)
+    if _public_mutation and request["action"] != "create" and not root.exists():
+        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+        require_public_editable(Path(request["project"]), figure_id=request.get("figure_id"))
     if not root.exists():
         from sciplot_core.foundation.research_destination import require_data_destination
         require_data_destination(root, existing_namespace=_owned_namespace)
@@ -192,7 +197,7 @@ def inspect_task(task: Path) -> dict[str, Any]:
     return _current_result(state)
 
 
-def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
+def _resume(root: Path, state: dict[str, Any], response: dict[str, Any], *, _public_mutation: bool = False) -> None:
     if "intent" in state["request"]:
         from sciplot_core.task_semantic_creation import resume
 
@@ -204,6 +209,10 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
         complete_prepared(root, state)
         return
     if "revise_operations" in response:
+        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+
+        if _public_mutation and state["request"].get("project"):
+            require_public_editable(Path(state["request"]["project"]), figure_id=state["request"].get("figure_id"))
         if begin_preview_revision(state, response):
             run_edit_preview(root, state, new_revision=True)
         return
@@ -364,7 +373,7 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
 
 @with_table_reads
 @timed_task_call
-def resume_task(task: Path, response: dict[str, Any]) -> dict[str, Any]:
+def resume_task(task: Path, response: dict[str, Any], *, _public_mutation: bool = False) -> dict[str, Any]:
     if not isinstance(response, dict):
         raise TaskControlError("invalid_task_response", "任务答复必须是 JSON 对象。")
     root = task_path(task)
@@ -379,7 +388,7 @@ def resume_task(task: Path, response: dict[str, Any]) -> dict[str, Any]:
             return _current_result(state) if state["status"] == "complete" else task_summary(state)
         original_revision = state["state_sha256"]
         try:
-            _resume(root, state, response)
+            _resume(root, state, response, _public_mutation=_public_mutation)
         except TaskControlError as exc:
             if exc.reason_code in {"invalid_task_response", "stale_task_preview", "task_not_revisable",
                                     "stale_task_question", "invalid_mapping_selection", "invalid_mapping_candidate", "stale_source_review"}:

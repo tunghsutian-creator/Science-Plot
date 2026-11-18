@@ -11,11 +11,34 @@ from test_figure_document import request_for_figure
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_engine.storage import load_head, read
 from sciplot_core.plot_ir.figure_document import figure_spec
 
 
 def _cli(*args, success=True):
+    # Keep exercising the retired history engine through its internal owner.
+    # The public path is now covered by test_legacy_saved_plot.
+    if len(args) >= 3 and isinstance(args[2], Path) and (args[2] / "head.json").is_file() and (
+            load_head(args[2])["document"].get("plot_type", "LegacyPlot") == "LegacyPlot"):
+        from contextlib import redirect_stdout
+        from functools import partial
+        from io import StringIO
+        from unittest.mock import patch
+        from sciplot_core.cli import main
+        from sciplot_core.cli.dispatch import common_edits
+        from sciplot_core.plot_protocol import server
+
+        service = PlotService()
+        captured = StringIO()
+        try:
+            with patch.object(common_edits, "edit_task", partial(common_edits.edit_task, service=service)), (
+                    patch.object(server, "make_service", lambda: service)), redirect_stdout(captured):
+                code = main([*map(str, args), "--json"])
+        finally:
+            service.close()
+        assert (code == 0) == success, captured.getvalue()
+        return json.loads(captured.getvalue())
     result = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), *map(str, args), "--json"],
                             cwd=REPO_ROOT, text=True, capture_output=True, timeout=180)
     if success:
@@ -65,7 +88,11 @@ def _create(tmp_path, authority, *, collision=False):
                           f"500,3,410,{values[0]}\n450,2,470,{values[1]}\n450,2.5,490,{values[2]}\n400,1,,\n")
         made = _cli("studio", source, "--rule", "uvvis_spectrum", "--export", "pdf,tiff_300")
         _native_save(Path(made["project_dir"]) / "studio" / "document.vsz", opaque=True)
-        opened = _cli("plot", "open", made["project_dir"], "--direct")
+        service = PlotService()
+        try:
+            opened = service.open(Path(made["project_dir"]))
+        finally:
+            service.close()
         return Path(opened["plot"]), [source], "series:A", "series:B"
     request = request_for_figure(tmp_path)
     source = tmp_path / "figure.csv"
@@ -200,7 +227,14 @@ def test_public_cli_series_display_cold_reopen_replay_and_rollback(tmp_path, aut
     assert result["revision"] == 1
     replay = _cli(*arguments)
     assert replay["replayed"] and replay["revision"] == 1 and load_head(root) == after
-    opened = _cli("plot", "open", root, "--direct")
+    if authority == "legacy":
+        service = PlotService()
+        try:
+            opened = service.open(root)
+        finally:
+            service.close()
+    else:
+        opened = _cli("plot", "open", root, "--direct")
     assert opened["status"] == "current" and opened["revision"] == 1
     if authority == "managed":
         summary = _cli("plot", "describe", root, "--scope", "summary", "--direct")
