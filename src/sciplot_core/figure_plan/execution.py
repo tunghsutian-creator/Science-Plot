@@ -57,7 +57,7 @@ def request_for_figure_task(
         )
     study_model_value = projected.get("study_model")
     if isinstance(study_model_value, dict):
-        study_model = deepcopy(study_model_value)
+        study_model = dict(study_model_value)
     else:
         study_model = {}
     _remove_metric_projection(study_model)
@@ -68,7 +68,7 @@ def request_for_figure_task(
         raw_queue = []
     existing = next(
         (
-            deepcopy(value)
+            dict(value)
             for value in raw_queue
             if isinstance(value, dict) and str(value.get("id") or "") == task.figure_id
         ),
