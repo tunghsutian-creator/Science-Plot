@@ -1,5 +1,6 @@
 """Creation delegates scientific decisions and execution to the existing task owner."""
 
+from collections.abc import Callable
 from pathlib import Path
 from .context import exists, prepare_namespace
 from .ports import ProjectTargets
@@ -56,7 +57,8 @@ def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTar
         return _result(service, root, state, task)
 
 
-def decide_creation(service: PlotCreator, root: Path, request: dict[str, Any]) -> dict[str, Any]:
+def decide_creation(service: PlotCreator, root: Path, request: dict[str, Any], *,
+                    template_owner: Callable[[], PlotCreator] | None = None) -> dict[str, Any]:
     from sciplot_core.plot_engine.contracts import validate_decide
 
     request = validate_decide(request)
@@ -67,6 +69,6 @@ def decide_creation(service: PlotCreator, root: Path, request: dict[str, Any]) -
         if state.get("template_runtime_version") == 1:
             from sciplot_core.project_lifecycle.template_creation import decide
 
-            return decide(service, root, state, request)
+            return decide(template_owner() if template_owner is not None else service, root, state, request)
         result = resume_task(root / "task", request["response"])
         return _result(service, root, state, result)

@@ -74,6 +74,20 @@ def test_template_create_two_sources_through_one_public_command_each(tmp_path):
                     assert fields[target["properties"]["style.line.width"]["setting_path"]] == "0.7pt"
                     assert fields[target["properties"]["style.line.color"]["setting_path"]] == color
                 results.append(result)
+            saved = Path(results[0]["plot"])
+            before = load_head(saved)
+            native = Path(before["binding"]["document"])
+            original_native = native.read_bytes()
+            stale_edit = tmp_path / "saved-legacy-edit.json"
+            stale_edit.write_text(json.dumps({"plot_id": results[0]["plot_id"], "base_revision": results[0]["revision"],
+                "idempotency_key": "post-creation-edit", "intent_class": "presentation", "changes": [
+                    {"op": "set", "target": ["bound:E2"], "property": "style.line.width", "value": "2pt"}]}))
+            forbidden = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "plot", "patch", str(saved),
+                "--request", str(stale_edit), "--json"], capture_output=True, text=True, env=environment,
+                cwd=REPO_ROOT, timeout=180)
+            assert forbidden.returncode == 1, forbidden.stdout + forbidden.stderr
+            assert json.loads(forbidden.stdout)["reason_code"] == "legacy_conversion_required"
+            assert load_head(saved) == before and native.read_bytes() == original_native
             assert results[0]["plot_id"] != results[1]["plot_id"]
             assert results[0]["scientific_hash"] != results[1]["scientific_hash"]
             baseline = deepcopy(load_head(Path(results[0]["plot"])))
@@ -132,7 +146,7 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
         return actual_run(args, *a, **kw)
 
     monkeypatch.setattr(subprocess, "run", measured_run)
-    service = PlotService(VeuszBackend(warm=False))
+    service = PlotService(VeuszBackend(warm=False), read_only_legacy=True)
     first = service.create(request)
     assert first["status"] == "complete" and first["ready_to_use"] is True, first
     assert workers["export-document"] == 1, workers

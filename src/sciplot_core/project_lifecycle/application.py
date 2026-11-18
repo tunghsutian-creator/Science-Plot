@@ -278,7 +278,7 @@ class ProjectApplication(CommandDispatch):
             from sciplot_core.project_lifecycle.creation import decide_creation
 
             with self._managed_task_scope():
-                return decide_creation(self, root, request)
+                return decide_creation(self, root, request, template_owner=self._template_creation_owner)
         if set(request) != {"decision_id", "base_revision", "accept"} or type(request.get("accept")) is not bool:
             raise EngineError("document_invalid_decision", "Use decision_id, base_revision and boolean accept.")
         with external_project_session(root):
@@ -391,7 +391,11 @@ class ProjectApplication(CommandDispatch):
             return create_managed(request, self.backend, location=self.targets.managed_creation(request))
 
         with self._managed_task_scope():
-            return create(self, request, targets=self.targets)
+            owner = self._template_creation_owner() if "template_definition" in request else self
+            return create(owner, request, targets=self.targets)
+
+    def _template_creation_owner(self) -> "ProjectApplication":
+        return self
 
     def _managed_task_scope(self) -> AbstractContextManager[None]:
         from sciplot_core.task_semantic_owner import local_managed_actions
