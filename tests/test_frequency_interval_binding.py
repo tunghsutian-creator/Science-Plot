@@ -224,3 +224,65 @@ def test_frequency_log_padding_preserves_each_explicit_scientific_bound(bounds):
     domain, *_ = frequency_axis("y", {"quantity": "complex_viscosity", **bounds}, "Pa s", values)
     assert domain == [bounds.get("minimum", automatic[0]), bounds.get("maximum", automatic[1])]
     assert values == [1.0, 10.0, 100.0]
+
+
+@pytest.mark.comprehensive
+def test_frequency_managed_native_delivery_replays_registered_storage_modulus(tmp_path):
+    from pathlib import Path
+
+    import pymupdf
+
+    from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
+    from sciplot_core.plot_engine.service import PlotService
+    from sciplot_core.plot_engine.storage import load_head, read
+    from sciplot_core.semantic_sources.rheology_sweep_sources import _read_rheology_frequency_comparison_samples
+    from sciplot_core.task_semantic_creation import build_managed_request
+    from sciplot_core.task_semantic_plan import prepare_plan
+
+    source = instrument_source(tmp_path / "instrument.csv", temperatures=(210, 150))
+    before = source.read_bytes()
+    old = _read_rheology_frequency_comparison_samples(source)
+    value = {**intent(), "y": {"quantity": "storage_modulus", "unit": "Pa"}}
+    plan = prepare_plan([source], value)
+    assert not plan["decisions"]
+    request = build_managed_request({"request": {"intent": value}, "semantic_plan": plan,
+                                     "semantic_choices": {}, "intent_revision": 1, "task_dir": str(tmp_path / "task")})
+    service = PlotService()
+    try:
+        creation = service.create(request)
+        assert creation["ready_to_use"], creation
+        target = Path(creation["plot"])
+        head = load_head(target)
+        ir = read(Path(head["binding"]["ir_path"]))
+        assert service.describe(target)["scientific_hash"] == creation["scientific_hash"]
+        assert [entry["label"] for entry in ir["guides"][0]["entries"]] == [item.sample for item in old]
+        for layer, sample in zip(ir["views"][0]["layers"], old, strict=True):
+            columns = ir["datasets"][layer["dataset_id"]]["columns"]
+            for dimension, field, unit in (("x", "x", "rad/s"), ("y", "storage_modulus", "Pa")):
+                assert columns[dimension]["values"] == [row[field] for row in sample.rows]
+                assert columns[dimension]["unit"] == unit
+        styled = service.patch(target, {
+            "plot_id": creation["plot_id"], "base_revision": 0, "idempotency_key": "format-frequency-label",
+            "intent_class": "presentation",
+            "changes": [{"op": "set", "target": ["axis:x"], "property": "axis.label", "value": "Angular frequency (rad/s)"}],
+        })
+        assert styled["ready_to_use"] and styled["revision"] == 1, styled
+        assert styled["scientific_hash"] == creation["scientific_hash"]
+        edited = load_head(target)
+        edited_ir = read(Path(edited["binding"]["ir_path"]))
+        assert edited_ir["datasets"] == ir["datasets"]
+        # Inspect the real saved native artifact, which checks hashes of its
+        # actual values against each mapped IR dataset.
+        compiler = ManagedVeuszCompiler(warm=False)
+        try:
+            assert compiler.audit_ir(edited_ir, Path(edited["binding"]["document"]))["status"] == "passed"
+        finally:
+            compiler.close()
+        pdf = next(item["path"] for item in styled["exports"] if item["format"] == "pdf")
+        with pymupdf.open(pdf) as native_pdf:
+            page = native_pdf[0]
+            assert [page.rect.width * 25.4 / 72, page.rect.height * 25.4 / 72] == pytest.approx([120., 55.], abs=.4)
+            assert page.get_drawings()
+    finally:
+        service.close()
+    assert source.read_bytes() == before
