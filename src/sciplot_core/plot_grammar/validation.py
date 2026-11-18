@@ -144,6 +144,9 @@ def _domain_rules(spec: dict[str, Any], *, pending_domains: bool) -> None:
                    "Current-view domains support only the declared linear and log transforms.", "/scales/transform")
             for index, endpoint in enumerate(("minimum", "maximum")):
                 rule = scale["domain_rule"][endpoint]
+                if rule["mode"] == "auto_zero_if_nonnegative":
+                    _check(scale["transform"] == "linear", "figure_scale_domain",
+                           "Automatic zero baselines require a linear scale.", "/scales/domain_rule")
                 if rule["mode"] == "fixed":
                     _check(scale["transform"] != "log" or rule["value"] > 0, "figure_scale_domain",
                            "Fixed log endpoints must be positive.", "/scales/domain_rule")

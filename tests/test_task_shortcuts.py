@@ -101,7 +101,8 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
         candidate = {"request": {**request, "source": str(path)}, "task_dir": str(tmp_path / family),
                      "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
         assert admit_raw_curve(candidate, plan)
-        figure = build_managed_request(candidate)["template_definition"]["figure_spec"]
+        built = build_managed_request(candidate)
+        figure = built["template_definition"]["figure_spec"]
         assert [axis["label"] for axis in figure["views"][0]["axes"]] == expected_labels
         assert [scale["transform"] for scale in figure["scales"]] == expected_scales
         assert [scale["unit"] for scale in figure["scales"]] == units.split(",")
@@ -120,19 +121,56 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
                                "xrd_pattern": "main_peak_2theta"}[family]
             assert reported[expected_metric]["value"] == 2
         if family == "xrd_pattern":
+            unsigned = built
             assert [scale["domain"][0] for scale in figure["scales"]] == [0, 0]
             axis = figure["views"][0]["axes"][1]
             assert axis["visible"] and axis["label_visible"] and axis["ticks_mode"] == "fixed"
             assert not axis["ticks"] and axis["style"]["minor_ticks_visible"] is False
 
     path = tmp_path / "signed-xrd.csv"
-    path.write_text("2theta,Intensity\ndegree,a.u.\nA,A\n1,-3\n2,6\n3,4\n")
+    path.write_text("2theta,Intensity\ndegree,a.u.\nB,B\n1,-3\n2,6\n3,4\n")
     plan = build_plan_preview(path, request={"rule_id": "xrd_pattern"})
     candidate = {"request": {**request, "source": str(path)}, "task_dir": str(tmp_path / "signed"),
                  "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
     assert admit_raw_curve(candidate, plan)
-    y = build_managed_request(candidate)["template_definition"]["figure_spec"]["scales"][1]
-    assert y["domain"][0] < -3 and y["domain_rule"]["minimum"] == {"mode": "auto"}
+    signed = build_managed_request(candidate)
+    y = signed["template_definition"]["figure_spec"]["scales"][1]
+    assert y["domain"][0] < -3 and y["domain_rule"]["minimum"] == {"mode": "auto_zero_if_nonnegative"}
+
+    from test_current_view_lifecycle import _append, _domains, _patch
+    from sciplot_core.plot_engine.current_unit_admission import prepare_current_update
+    from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
+
+    def saved(built, name):
+        doc = create_managed_document(built["template_definition"], built["data_binding"], plot_id=name)
+        return resolved_metadata(doc, rule_id="xrd_pattern", executors={})
+
+    store = tmp_path / "update"
+    initial = resolve_science(store, saved(unsigned, "xrd-original"))[0]
+    added = saved(signed, "xrd-added")
+    candidate, diff, _, execute = prepare_current_update(store, initial, _append(initial, added))
+    assert execute and diff[0]["after"]["preserved_domain_rules"]["y"]["minimum"] == {"mode": "auto_zero_if_nonnegative"}
+    assert _domains(resolve_science(store, candidate)[0])["scale:y"] == y["domain"]
+    explicit = _patch(initial, [("scale:y", "scale.domain", {"minimum": {"mode": "fixed", "value": 0},
+                                                          "maximum": {"mode": "auto"}})], scientific=True)
+    fixed = prepare_current_update(store, initial, explicit)[0]
+    candidate = prepare_current_update(store, fixed, _append(fixed, added))[0]
+    assert _domains(resolve_science(store, candidate)[0])["scale:y"][0] == 0
+
+    from hashlib import sha256
+    from sciplot_core.plot_engine.managed_source_revision import source_value
+
+    source = initial["scientific"]["data_sources"][0]
+    target = "source:" + source["source_id"]
+    revision = source_value(initial, target, root=store)
+    updated = path.read_bytes().replace(b"B,B", b"A,A")
+    Path(source["path"]).write_bytes(updated)
+    revision["sha256"] = sha256(updated).hexdigest()
+    for unit_context in revision["unit_context_bindings"]:
+        unit_context["source_sha256"] = revision["sha256"]
+    for before, expected in ((initial, y["domain"][0]), (fixed, 0)):
+        candidate = prepare_current_update(store, before, _patch(before, [(target, "source.sha256", revision)], scientific=True))[0]
+        assert _domains(resolve_science(store, candidate)[0])["scale:y"][0] == expected
 
 
 @pytest.mark.parametrize("semantic", [False, True])

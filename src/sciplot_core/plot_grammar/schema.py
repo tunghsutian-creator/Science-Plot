@@ -28,7 +28,9 @@ def quantity_members_schema() -> dict[str, Any]:
 def domain_rule_schema() -> dict[str, Any]:
     endpoint = {"oneOf": [closed({"mode": {"const": "auto"}}),
                            closed({"mode": {"const": "fixed"}, "value": NUMBER})]}
-    return closed({"minimum": endpoint, "maximum": endpoint})
+    minimum = {"oneOf": [*endpoint["oneOf"], closed({"mode": {"const": "auto_zero_if_nonnegative",
+        "description": "Linear minimum: zero when all visible drawable values are nonnegative; otherwise automatic."}})]}
+    return closed({"minimum": minimum, "maximum": endpoint})
 
 
 def scale_schema(*, resolved: bool = False) -> dict[str, Any]:

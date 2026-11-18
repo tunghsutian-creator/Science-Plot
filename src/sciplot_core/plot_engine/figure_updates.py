@@ -66,7 +66,7 @@ def _figure_edit_descriptor(spec: dict[str, Any], target: str, kind: str,
         schema = scale_schema()["properties"]["domain"]
         if is_current_view(spec):
             schema = {"oneOf": [schema, domain_rule_schema()],
-                      "description": "A numeric pair fixes both endpoints. A closed minimum/maximum rule explicitly selects auto or a fixed value per endpoint."}
+                      "description": "A numeric pair fixes both endpoints. Choose an automatic or fixed endpoint; linear minima also support zero only for nonnegative data."}
     elif property_name in {"axis.label", "axis.ticks"}:
         schema = axis_schema()["properties"][property_name.removeprefix("axis.")]
         if property_name == "axis.ticks" and is_current_view(spec):

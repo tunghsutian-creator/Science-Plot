@@ -100,7 +100,8 @@ def _quantity_matches(header: str, quantity: str) -> bool:
     from sciplot_core.source_inspection.semantic_evidence import _quantity
 
     literal = header_quantity_text(header).replace("_", " ").strip().casefold()
-    return literal == quantity.replace("_", " ").strip().casefold() or _quantity(header) == quantity
+    return (literal == quantity.replace("_", " ").strip().casefold() or _quantity(header) == quantity
+            or quantity == "diffraction_angle" and literal == "2theta")
 
 
 def _source_facts(snapshot: dict[str, Any], source: dict[str, Any], request: dict[str, Any]) -> NoReturn:

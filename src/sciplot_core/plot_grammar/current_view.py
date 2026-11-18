@@ -8,7 +8,7 @@ from typing import Any
 from sciplot_core.plot_document.errors import fail
 
 from .mark_geometry import extent_values, layer_geometry, window_intersects
-from .domain_values import numeric_axis
+from .domain_values import nonnegative_minimum, numeric_axis
 from .validation import validate_bound_data, validate_figure_spec
 
 DOMAIN_SEMANTICS = "current_view_v1"
@@ -51,11 +51,13 @@ def resolve_current_view(value: Any, datasets: dict[str, dict[str, Any]]) -> dic
                   if layer.get("visible", True) and layer[dimension + "_scale"] == scale["id"]
                   for value in extent_values(geometries[layer["id"]], dimension)]
         rule = scale["domain_rule"]
-        automatic = any(rule[endpoint]["mode"] == "auto" for endpoint in ("minimum", "maximum"))
+        automatic = any(rule[endpoint]["mode"] != "fixed" for endpoint in ("minimum", "maximum"))
         if automatic and not values:
             fail("figure_empty_auto_extent", "An automatic endpoint requires visible drawable extent independent of domain-spanning rules.",
                  "/scales/domain_rule", "visible_extent", scale_id=scale["id"])
         endpoints = {name: rule[name].get("value") for name in ("minimum", "maximum")}
+        if rule["minimum"]["mode"] == "auto_zero_if_nonnegative":
+            endpoints["minimum"] = nonnegative_minimum(values)
         try:
             domain, ticks = numeric_axis(values or [endpoints["minimum"], endpoints["maximum"]],
                 quantity=scale["quantity"], transform=scale["transform"], dimension=dimension, **endpoints)

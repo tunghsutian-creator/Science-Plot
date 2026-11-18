@@ -180,7 +180,10 @@ refusals.
 New semantic creation records `domain_semantics: current_view_v1`. Each endpoint
 has a current auto/fixed rule; numeric domains and ticks are their presentation
 projection. Auto uses visible drawable members, while fixed endpoints preserve
-comparison windows. Hidden members retain complete scientific validation.
+comparison windows. New raw XRD plots use `auto_zero_if_nonnegative` for the
+linear minimum: zero for all-nonnegative visible data, automatic for signed data.
+An explicit fixed minimum of zero still locks the comparison window. Hidden
+members retain complete scientific validation.
 `plot_grammar/current_view.py` is the numeric writer after resolved datasets are
 available and before final storage/sealing. Creation, append and saved edits use
 it; compilation only validates the projection. Manual tick conflicts refuse the

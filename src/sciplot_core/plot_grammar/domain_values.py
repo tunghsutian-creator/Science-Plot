@@ -2,6 +2,11 @@
 import math
 
 
+def nonnegative_minimum(values: list[float]) -> float | None:
+    """An automatic zero baseline is applicable only to observed nonnegative coordinates."""
+    return 0.0 if values and min(values) >= 0.0 else None
+
+
 def linear_ticks(domain: list[float]) -> list[float]:
     low, high = domain
     magnitude = 10 ** math.floor(math.log10((high - low) / 5))

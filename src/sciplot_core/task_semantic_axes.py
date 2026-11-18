@@ -3,7 +3,7 @@ import math
 from copy import deepcopy
 from typing import Any, NoReturn
 
-from sciplot_core.plot_grammar.domain_values import numeric_axis
+from sciplot_core.plot_grammar.domain_values import nonnegative_minimum, numeric_axis
 from sciplot_core.task_errors import TaskControlError
 
 
@@ -34,16 +34,16 @@ def ordinary_axis(role: str, coordinate: dict[str, Any], unit: str, values: list
 def axis_spec(role: str, coordinate: dict[str, Any], side: str, unit: str, values: list[float],
               raw_plan: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     effective = coordinate
-    if raw_plan.get("rule_id") == "xrd_pattern":
-        from sciplot_core.studio_render.series_domain import xrd_default_minimum
-
-        minimum = xrd_default_minimum(values)
+    automatic_zero = raw_plan.get("rule_id") == "xrd_pattern" and "minimum" not in coordinate
+    if automatic_zero:
+        minimum = nonnegative_minimum(values)
         if minimum is not None:
             effective = {**coordinate, "minimum": minimum}
     domain, ticks, label, scale_transform = ordinary_axis(role, effective, unit, values)
     scale = {"id": "scale:" + role, "dimension": "x" if role == "x" else "y", "transform": scale_transform,
                    "domain": domain, "unit": unit, "quantity": coordinate["quantity"], "direction": coordinate.get("direction", "ascending"),
-                   "domain_rule": {name: {"mode": "fixed", "value": effective[name]} if name in effective else {"mode": "auto"}
+                   "domain_rule": {name: ({"mode": "fixed", "value": coordinate[name]} if name in coordinate
+                                         else {"mode": "auto_zero_if_nonnegative" if name == "minimum" and automatic_zero else "auto"})
                                    for name in ("minimum", "maximum")},
                    **({"quantity_members": deepcopy(coordinate["quantity_members"])} if "quantity_members" in coordinate else {})}
     label = raw_plan.get("axis_labels", {}).get(role, label)
