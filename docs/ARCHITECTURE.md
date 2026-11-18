@@ -665,10 +665,17 @@ preparation resumes its sealed checkpoint; changed inputs/output conflicts block
 Unsupported template transforms, layout or custom guards are rejected explicitly.
 `mapping_contract/table_selection.py` owns the shared pure selection schema;
 `task_prepared_creation.py` owns the prepared checkpoint and never claims delivery.
-That prepared-native creation path is retained only as explicit `mode: legacy`
-compatibility. Template-based `plot.create` now defaults to ManagedPlot, requiring
-a fully represented Cartesian v1 or FigureTemplate v2; source-only task/CLI creation remains
-the existing compatibility workflow. No automatic conversion of legacy VSZ occurs.
+The public API does not start new `mode: legacy` template creations. The explicit
+mode is retained only to finish an existing, exact frozen creation; it does not
+enable editing an existing legacy project. New template-based `plot.create` uses
+ManagedPlot, requiring a fully represented Cartesian v1 or FigureTemplate v2.
+Legacy recipes with implicit layout and export defaults must specify their
+Managed Cartesian layout and export formats explicitly, or be rebuilt as
+FigureTemplate v2. Existing bindings can keep their verified original rows,
+columns, units and sample identities. Unsupported recipes are not silently
+translated. Open or redraw
+an existing saved VSZ without rewriting it, or use `project legacy-convert` to
+create a separate Managed copy of a supported saved XY figure.
 Managed creation commits document/revision before compiling disposable artifacts.
 `managed_backend.py` reuses the same transaction state machine: a durable compile
 intent plus exact full-state inspection recovers a VSZ saved before its build

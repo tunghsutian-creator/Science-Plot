@@ -160,7 +160,8 @@ def test_committed_template_retry_reuses_frozen_patch_without_restarting_source_
     monkeypatch.setattr(template_creation, "start_task", start)
     monkeypatch.setattr(template_creation, "inspect_task", lambda *_: pytest.fail("Source task restarted"))
     first = creation.create(Service(), request, targets=FilesystemProjectTargets(repository()))
-    second = creation.create(Service(), request, targets=FilesystemProjectTargets(repository()))
+    second = creation.create(Service(), request, targets=FilesystemProjectTargets(repository()),
+                             allow_new_legacy_template=False)
     assert first["status"] == "blocked" and second["status"] == "complete"
     assert len(starts) == 1 and len(patches) == 2 and patches[0] == patches[1]
     assert patches[0]["base_revision"] == 0 and second["template_id"] == "paired-spectra"
@@ -197,3 +198,20 @@ def test_existing_output_requires_bound_choice_without_overwriting_or_guessing(s
         assert second["status"] == "blocked" and len(calls) == 1
         assert calls[0]["output_dir"] == source.parent / "New" and calls[0]["publish"] is False
     assert sentinel.read_text() == "existing user output"
+
+
+def test_public_explicit_legacy_creation_is_recovery_only(source: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sciplot_core.plot_engine.errors import EngineError
+    from sciplot_core.plot_protocol.server import make_service
+
+    request = template_request(source)
+    monkeypatch.setattr(template_creation, "start_task", lambda *_a, **_k: pytest.fail("Fresh legacy native work started"))
+    service = make_service()
+    try:
+        before = {path: path.read_bytes() for path in source.parent.iterdir()}
+        with pytest.raises(EngineError) as denied:
+            service.create(request)
+        assert denied.value.reason_code == "legacy_template_creation_disabled"
+        assert {path: path.read_bytes() for path in source.parent.iterdir()} == before
+    finally:
+        service.close()

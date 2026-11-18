@@ -23,6 +23,20 @@ from sciplot_core.studio_core.project_query import inspect_project
 from test_plot_template_creation import template_request
 
 
+def _seed_legacy_creation(service, request):
+    """Model a frozen creation accepted before new public legacy creation retired."""
+    from sciplot_core.foundation.json_io import atomic_write_json
+    from sciplot_core.plot_engine.template_creation_binding import prepare
+    from sciplot_core.project_lifecycle.context import digest
+    from sciplot_core.project_lifecycle.contracts import NormalizedCommand
+
+    source, task, desired = prepare(request)
+    root = service.targets.creation_root(source, request["idempotency_key"])
+    atomic_write_json(root / "creation.json", {"request": request, "request_hash": digest(request),
+        "task_request": task, "desired": desired, "template_runtime_version": 1,
+        "normalized_command": NormalizedCommand.create("create", request).to_payload()})
+
+
 @pytest.mark.comprehensive
 def test_template_create_two_sources_through_one_public_command_each(tmp_path):
     sources = [tmp_path / name for name in ("First.csv", "Second.csv")]
@@ -34,6 +48,12 @@ def test_template_create_two_sources_through_one_public_command_each(tmp_path):
     assert requests[0]["template_definition"] == requests[1]["template_definition"]
     assert requests[0]["theme"] == requests[1]["theme"]
     results, measurements = [], []
+    service = PlotService()
+    try:
+        for request in requests:
+            _seed_legacy_creation(service, request)
+    finally:
+        service.close()
     with socket_directory(prefix="sptmpl-", dir="/tmp") as temporary:
         socket = Path(temporary) / "engine.sock"
         environment = {**os.environ, "SCIPLOT_ENGINE_SOCKET": str(socket)}
@@ -149,6 +169,7 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
 
     monkeypatch.setattr(subprocess, "run", measured_run)
     service = PlotService(VeuszBackend(warm=False), read_only_legacy=True)
+    _seed_legacy_creation(service, request)
     first = service.create(request)
     assert first["status"] == "complete" and first["ready_to_use"] is True, first
     assert workers["export-document"] == 1, workers
@@ -198,6 +219,7 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
         replacement_request = deepcopy(request)
         replacement_request["idempotency_key"] = "replacement-template"
         replacement_request["data_binding"]["data_sources"][0]["path"] = str(replacement_source)
+        _seed_legacy_creation(service, replacement_request)
         replacement = service.create(replacement_request)
         assert replacement["ready_to_use"] and replacement["plot_id"] != first["plot_id"]
         real_load = service.repository.load_head

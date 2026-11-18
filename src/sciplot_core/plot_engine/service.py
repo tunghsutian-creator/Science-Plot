@@ -36,6 +36,9 @@ class PlotService(ProjectApplication):
         with selected_project_creation(project, request):
             return super().create(request)
 
+    def _allow_new_legacy_template(self) -> bool:
+        return not self.read_only_legacy
+
     def _template_creation_owner(self) -> ProjectApplication:
         # Apply a frozen template only inside its existing creation lifecycle.
         # Share the real backend and repository, without public saved-plot dispatch.

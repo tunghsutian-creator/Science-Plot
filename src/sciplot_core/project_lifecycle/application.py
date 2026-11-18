@@ -412,7 +412,11 @@ class ProjectApplication(CommandDispatch):
 
         with self._managed_task_scope():
             owner = self._template_creation_owner() if "template_definition" in request else self
-            return create(owner, request, targets=self.targets)
+            return create(owner, request, targets=self.targets,
+                          allow_new_legacy_template=self._allow_new_legacy_template())
+
+    def _allow_new_legacy_template(self) -> bool:
+        return True
 
     def _template_creation_owner(self) -> "ProjectApplication":
         return self

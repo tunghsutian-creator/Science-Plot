@@ -109,10 +109,19 @@ def _continue(service: PlotCreator, root: Path, state: dict[str, Any], task: dic
     return _apply(service, root, state)
 
 
-def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTargets) -> dict[str, Any]:
+def _legacy_template_creation_disabled() -> EngineError:
+    return EngineError("legacy_template_creation_disabled",
+                      "New plots cannot use explicit legacy mode. Submit a supported Managed template; existing saved legacy XY plots can be converted separately.",
+                      action="use_managed_template", mode="managed")
+
+
+def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTargets,
+           allow_new: bool = True) -> dict[str, Any]:
     source, task_request, desired = prepare(request)
     root = targets.creation_root(source, request["idempotency_key"])
     if not exists(root / "creation.json"):
+        if not allow_new:
+            raise _legacy_template_creation_disabled()
         from sciplot_core.foundation.research_destination import require_data_destination
         from sciplot_core.output_contract import resolve_user_output_layout
         layout = resolve_user_output_layout(source, requested_delivery_root=task_request.get("out"))
@@ -126,6 +135,8 @@ def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTar
             if state["request_hash"] != digest(request):
                 raise EngineError("document_idempotency_conflict", "This creation key belongs to another frozen template or data binding.")
         else:
+            if not allow_new:
+                raise _legacy_template_creation_disabled()
             state = {"request": request, "request_hash": digest(request), "task_request": task_request,
                      "desired": desired, "template_runtime_version": 1,
                      "normalized_command": NormalizedCommand.create("create", request).to_payload()}

@@ -17,14 +17,15 @@ from sciplot_core.plot_engine.backend import PlotCreator
 from sciplot_core.project_lifecycle.creation_results import _result
 from sciplot_core.project_lifecycle.context import digest, read, write
 
-def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTargets) -> dict[str, Any]:
+def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTargets,
+           allow_new_legacy_template: bool = True) -> dict[str, Any]:
     from sciplot_core.plot_engine.contracts import validate_create
 
     request = validate_create(request)
     if "template_definition" in request:
         from sciplot_core.project_lifecycle.template_creation import create as create_from_template
 
-        return create_from_template(service, request, targets=targets)
+        return create_from_template(service, request, targets=targets, allow_new=allow_new_legacy_template)
     source = canonical_path(Path(request["source"]))
     # Key validation also prevents unbounded or unhashable identifiers before allocation.
     key = request["idempotency_key"]
