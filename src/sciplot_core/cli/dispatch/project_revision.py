@@ -73,7 +73,7 @@ def dispatch_project_revision(args: Any) -> int | None:
             "--preview-out is only valid when creating a revision preview."
         )
     project = revision_project(args.target)
-    from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+    from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 
     if args.apply_revision:
         preview = json.loads(

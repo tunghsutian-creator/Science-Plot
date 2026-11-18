@@ -287,7 +287,7 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             from sciplot_core.studio_core.project_query import inspect_project
 
             identity = figure_id or match["primary_figure_id"]
-            from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+            from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 
             require_public_editable(selected, figure_id=identity)
             current = inspect_project(selected, figure_id=identity, native=True)

@@ -131,7 +131,7 @@ def start_task(
             request[key] = str(canonical_path(Path(request[key])))
     root = task_location(request, task_dir)
     if _public_mutation and request["action"] != "create" and not root.exists():
-        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+        from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
         require_public_editable(Path(request["project"]), figure_id=request.get("figure_id"))
     if not root.exists():
         from sciplot_core.foundation.research_destination import require_data_destination
@@ -205,7 +205,7 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any], *, _pub
         complete_prepared(root, state)
         return
     if "revise_operations" in response:
-        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+        from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
         if _public_mutation and state["request"].get("project"):
             require_public_editable(Path(state["request"]["project"]), figure_id=state["request"].get("figure_id"))
         if begin_preview_revision(state, response):

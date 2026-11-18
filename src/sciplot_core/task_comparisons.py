@@ -151,7 +151,7 @@ def start_comparison(request: dict[str, Any], *, comparison_dir: Path, base_dir:
     root = task_location(candidate_request(request, request["candidates"][0]), comparison_path(comparison_dir))
     if not root.exists():
         if _public_mutation:
-            from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+            from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 
             require_public_editable(Path(request["project"]), figure_id=request["figure_id"])
         from sciplot_core.foundation.research_destination import require_data_destination

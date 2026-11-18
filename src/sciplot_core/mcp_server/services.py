@@ -171,7 +171,7 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             preview_document_operations,
         )
 
-        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+        from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 
         require_public_editable(project, figure_id=figure_id)
         return preview_document_operations(project, arguments["operations"],
@@ -187,7 +187,7 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         review = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(review, dict):
             raise AdapterError("invalid_preview", "The saved edit review must be an object.")
-        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+        from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 
         require_public_editable(project, figure_id=review.get("figure_id"), prior_review=review)
         return apply_document_edit(project, review)
@@ -201,7 +201,7 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     if name == "sciplot_export":
         from sciplot_core.studio_core.project_creation import export_project
 
-        from sciplot_core.studio_core.legacy_saved_plot import require_public_editable
+        from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 
         require_public_editable(project)
         return export_project(project)

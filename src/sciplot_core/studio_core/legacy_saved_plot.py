@@ -75,41 +75,10 @@ def redraw_legacy_plot(target: Path, *, output: Path, formats: list[str],
     return {**result, "kind": "sciplot_legacy_plot_redraw", "version": 1, "status": "redrawn",
             "project": str(root), "read_only": True}
 
-def require_public_editable(target: Path, *, figure_id: str | None = None,
-                            prior_review: dict[str, Any] | None = None) -> None:
-    """Gate public mutation; a genuine persisted historical review may finish."""
-    from sciplot_core.plot_engine.errors import EngineError
-    from sciplot_core.plot_engine.service import PlotService
-    from sciplot_core.workflow.native_suite_objects import resolve_native_object
+def conversion_required(document: Path) -> Exception:
+    from sciplot_core.project_lifecycle.errors import EngineError
 
-    target = canonical_path(target)
-    if resolve_native_object(target, figure_id, repair=False) is not None:
-        return
-    service = PlotService(read_only_legacy=True)
-    try:
-        service.require_editable(target, figure_id=figure_id)
-    except EngineError as exc:
-        if exc.reason_code != "legacy_conversion_required" or prior_review is None:
-            raise
-        from sciplot_core.project_commands import ProjectCommands
-        from sciplot_core.studio_core.project_command_scope import project_store
-        from sciplot_core.studio_core.project_query import resolve_project_path
-
-        project = resolve_project_path(target)
-        operation_id = prior_review.get("operation_id")
-        if not isinstance(operation_id, str) or not operation_id:
-            raise
-        if (project / ".sciplot_store" / "head.json").is_file():
-            record = ProjectCommands(project_store(project)).query(operation_id)
-            if record is not None and record.get("metadata", {}).get("kind") == "document_edit" and (
-                    record.get("phase") in {"needs_review", "accepted", "complete"}):
-                return  # The actual apply owner still verifies the unchanged signed review.
-        from sciplot_core.studio_core.document_edit_state import history_directory
-        from sciplot_core.studio_core.document_edit_legacy import read_edit_operation
-
-        if (history_directory(project, operation_id) / "outcome.json").is_file() and (
-                read_edit_operation(project, operation_id).get("result_is_current") is True):
-            return  # Replay only: the authorized historical mutation is already current.
-        raise
-    finally:
-        service.close()
+    return EngineError("legacy_conversion_required", "This saved legacy figure is read-only. Convert a separate copy to edit it.",
+                       action="legacy_convert", target=str(document),
+                       cli_argv=["sciplot", "project", "legacy-convert", str(document), "--out"],
+                       requires=["new_output_directory"])
