@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import io
 import re
@@ -21,7 +22,8 @@ from .config import (
 
 
 def _decode_text_preview(path: Path, *, max_bytes: int = 8192) -> str:
-    return smart_decode(path.read_bytes()[:max_bytes])[0]
+    with path.open("rb") as stream:
+        return smart_decode(stream.read(max_bytes))[0]
 
 
 def _tensile_export_dirs(source: Path) -> list[Path]:
@@ -176,7 +178,7 @@ def _preview_read_frame(
             frame = pd.read_csv(
                 buffer, sep=None, engine="python", header=None, nrows=_PREVIEW_SCAN_ROWS
             )
-        except Exception:
+        except (csv.Error, pd.errors.ParserError, pd.errors.EmptyDataError):
             buffer = io.StringIO(text)
             delimiter = (
                 "\t" if suffix in {".tsv", ".txt"} or "\t" in text[:4096] else ","

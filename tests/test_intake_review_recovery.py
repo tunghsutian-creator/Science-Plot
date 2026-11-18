@@ -78,7 +78,39 @@ def test_stale_or_missing_worksheet_confirmation_fails_closed(tmp_path: Path) ->
         )
 
 
-def test_preview_keeps_original_column_indices_and_literal_na_labels() -> None:
+def test_preview_keeps_original_column_indices_and_literal_na_labels(monkeypatch) -> None:
+    from sciplot_core.intake import table_preview
+
+    class BoundedPreview(BytesIO):
+        def read(self, size=-1):
+            assert size == 11
+            return super().read(size)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", lambda *_args: BoundedPreview(b"screw torque" * 8192))
+        assert table_preview._decode_text_preview(Path("instrument.csv"), max_bytes=11) == "screw torqu"
+
+    original_read_csv = pd.read_csv
+
+    def failed_parser(*_args, **options):
+        assert options["sep"] is None, "Unexpected retry after internal error"
+        raise RuntimeError("internal parser failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(pd, "read_csv", failed_parser)
+        with pytest.raises(RuntimeError, match="internal parser failure"):
+            table_preview._preview_read_frame("source.csv", b"time,value\n1,2\n")
+
+    def unreadable_delimiter(*args, **options):
+        if options["sep"] is None:
+            raise pd.errors.ParserError("separator could not be detected")
+        return original_read_csv(*args, **options)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(pd, "read_csv", unreadable_delimiter)
+        frame, *_ = table_preview._preview_read_frame("source.csv", b"time,value\n1,2\n")
+        assert frame.to_numpy().tolist() == [["time", "value"], ["1", "2"]]
+
     stream = BytesIO()
     with pd.ExcelWriter(stream, engine="openpyxl") as writer:
         pd.DataFrame(
