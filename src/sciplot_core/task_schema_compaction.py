@@ -1,6 +1,7 @@
 """Factor repeated JSON Schema nodes into local definitions without loosening them."""
 
 from collections import Counter
+from collections.abc import Callable
 from copy import deepcopy
 import json
 from typing import Any
@@ -13,25 +14,29 @@ def compact_schema(schema: dict[str, Any]) -> dict[str, Any]:
     counts: Counter[str] = Counter()
     nodes: dict[str, dict[str, Any]] = {}
 
-    def children(node: dict[str, Any], visit: Any) -> dict[str, Any]:
-        result = deepcopy(node)
+    def children(node: dict[str, Any], visit: Callable[[dict[str, Any]], dict[str, Any]],
+                 *, copy_leaves: bool = True) -> dict[str, Any]:
+        def leaf(value: Any) -> Any:
+            return deepcopy(value) if copy_leaves else value
+
+        rewritten: dict[str, Any] = {}
         for key in ("properties", "patternProperties", "dependentSchemas", "$defs"):
             if isinstance(node.get(key), dict):
-                result[key] = {name: visit(value) if isinstance(value, dict) else value
-                               for name, value in node[key].items()}
+                rewritten[key] = {name: visit(value) if isinstance(value, dict) else leaf(value)
+                                  for name, value in node[key].items()}
         for key in ("oneOf", "anyOf", "allOf", "prefixItems"):
             if isinstance(node.get(key), list):
-                result[key] = [visit(value) if isinstance(value, dict) else value for value in node[key]]
+                rewritten[key] = [visit(value) if isinstance(value, dict) else leaf(value) for value in node[key]]
         for key in ("items", "additionalProperties", "contains", "not", "if", "then", "else", "propertyNames"):
             if isinstance(node.get(key), dict):
-                result[key] = visit(node[key])
-        return result
+                rewritten[key] = visit(node[key])
+        return {key: rewritten[key] if key in rewritten else leaf(value) for key, value in node.items()}
 
     def count(node: dict[str, Any]) -> dict[str, Any]:
         digest = canonical_json_sha256(node)
         counts[digest] += 1
         nodes[digest] = node
-        children(node, count)
+        children(node, count, copy_leaves=False)
         return node
 
     count(schema)
