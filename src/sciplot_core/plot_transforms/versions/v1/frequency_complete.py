@@ -1,7 +1,7 @@
 """Exact supported rheology acquisition row selection and metric completion."""
 from copy import deepcopy
 from math import hypot, isfinite
-from typing import Any
+from typing import Any, cast
 
 from sciplot_core.plot_document.errors import fail
 
@@ -32,7 +32,7 @@ def complete(node: dict[str, Any], source: dict[str, Any]) -> tuple[dict[str, An
         column = columns.get(name)
         if column is None or column["unit"] != "Pa":
             fail("transform_frequency_metric_invalid", "The selected modulus input requires Pa.", "/inputs", "modulus_units", column=name)
-        return column["values"]
+        return cast(list[float | None], column["values"])
 
     def derive(name: str, unit: str, values: list[float | None]) -> None:
         if name in columns or any(value is not None and not isfinite(value) for value in values):
@@ -49,7 +49,7 @@ def complete(node: dict[str, Any], source: dict[str, Any]) -> tuple[dict[str, An
         try:
             if any(value is None for value in modulus):
                 raise ValueError("Complex viscosity needs measured or derived modulus at every retained row.")
-            eta = [_viscosity_from_modulus(w, m, output_unit="mPa·s")
+            eta: list[float | None] = [_viscosity_from_modulus(w, m, output_unit="mPa·s")
                    for w, m in zip(x["values"], modulus, strict=True) if m is not None]
         except ValueError as exc:
             fail("transform_frequency_metric_invalid", str(exc), "/inputs", "viscosity_domain")

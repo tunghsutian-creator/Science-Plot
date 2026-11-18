@@ -134,8 +134,8 @@ def invoke_owner(name: str, arguments: dict[str, Any], *, prefer_managed: bool =
 
         if name == "sciplot_task_start":
             task_dir = arguments.get("task_dir")
-            return start_task(arguments["request"], task_dir=Path(task_dir) if task_dir else None, _public_mutation=True,
-                              **({"_prefer_managed": True} if prefer_managed else {}))
+            options: dict[str, Any] = {"_prefer_managed": True} if prefer_managed else {}
+            return start_task(arguments["request"], task_dir=Path(task_dir) if task_dir else None, _public_mutation=True, **options)
         task = Path(arguments["task"])
         return inspect_task(task) if name == "sciplot_task_inspect" else resume_task(task, arguments["response"], _public_mutation=True)
     project = Path(arguments["project"])

@@ -1,5 +1,5 @@
 """Recover complete pre-publication figures in their Store-owned workspace."""
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 import hashlib
 import json
@@ -67,7 +67,7 @@ class GroupPreparation:
         return figure
 
     @staticmethod
-    def _write(root: Path, values: dict[str, bytes | None]) -> dict[str, str | None]:
+    def _write(root: Path, values: Mapping[str, bytes | None]) -> dict[str, str | None]:
         folder = root / "content"
         folder.mkdir(exist_ok=True)
         fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -89,7 +89,7 @@ class GroupPreparation:
 
     @staticmethod
     def _read(root: Path, inventory: dict[str, str | None]) -> dict[str, Any]:
-        values = {}
+        values: dict[str, Any] = {}
         for name, version in inventory.items():
             if version is None:
                 values[name] = None

@@ -11,7 +11,7 @@ import signal
 import socket
 import threading
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sciplot_core.plot_protocol.paths import (
@@ -23,7 +23,11 @@ from sciplot_core.plot_protocol.rpc import (
 )
 
 
-def make_service() -> Service:
+if TYPE_CHECKING:
+    from sciplot_core.plot_engine.service import PlotService
+
+
+def make_service() -> PlotService:
     from sciplot_core.plot_engine.service import PlotService
 
     # Public open observes old saved figures; internal adoption/recovery keeps

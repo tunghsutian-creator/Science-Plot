@@ -297,7 +297,8 @@ class AttachedProjectRepository(FileProjectRepository):
     def _archived_initial_export(self, path: Path) -> str | None:
         relative = self.attachment.relative(path)
         if relative == Path("export-cache.json"):
-            return self.attachment.entry.get("archived_derivatives", {}).get("export-cache.json")
+            archived: str | None = self.attachment.entry.get("archived_derivatives", {}).get("export-cache.json")
+            return archived
         return None
 
     def exists(self, path: Path) -> bool:

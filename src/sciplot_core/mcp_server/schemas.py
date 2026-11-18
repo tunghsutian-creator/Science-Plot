@@ -25,7 +25,7 @@ _DAILY_TOOLS = frozenset({
 
 # Exact nested variants are available on demand or in owner-returned templates.
 # These are discovery schemas only; the server always validates the full input.
-_DAILY_CONTRACTS = {
+_DAILY_CONTRACTS: dict[str, tuple[str, dict[str, Any], str]] = {
     "sciplot_task_start": (
         "request",
         {"type": "object", "required": ["version", "action"]},

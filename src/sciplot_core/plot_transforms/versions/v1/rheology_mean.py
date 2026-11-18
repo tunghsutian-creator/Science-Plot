@@ -30,11 +30,11 @@ def mean_at_exact_x(node: dict[str, Any], sources: list[dict[str, Any]]) -> tupl
         for index, (x_value, origin) in enumerate(zip(observed[x_name]["values"], row_origins(source), strict=True)):
             if x_value is None:
                 continue
-            values = {name: observed[name]["values"][index] for name in metrics}
-            if not any(value is not None for value in values.values()):
+            observations = {name: observed[name]["values"][index] for name in metrics}
+            if not any(value is not None for value in observations.values()):
                 continue
             bucket = rows.setdefault(x_value, {})
-            for name, value in values.items():
+            for name, value in observations.items():
                 if value is not None:
                     bucket.setdefault(name, []).append(value)
             origins.setdefault(x_value, []).extend(origin)

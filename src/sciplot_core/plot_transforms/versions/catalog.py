@@ -239,7 +239,7 @@ LEGACY_ORIGINAL_PATHS: dict[str, Any] = {'foundation/text_values.py': '896b25c5b
  'semantic_sources/rheology_units.py': '1362844171acf2a989cc8926a4e8c9bbdab1f6a79aee859c7f055ab7c44ba4e3'}
 
 
-EXACT_X_MEAN_V1: dict[str, Any] = {'content_hash': '2f0ede9f46a9af650d96b7a18dc3e421b743c06a6572c8f912e50178814d65ef',
+EXACT_X_MEAN_V1: dict[str, Any] = {'content_hash': 'd633e00691faefc21022bfb3a5170136c9eb2e7cb374ede4432d57355a5224fd',
  'entry': 'v1.rheology_mean:mean_at_exact_x',
  'files': {'__init__.py': 'b2daada6018f878a102dd328dc2e96008061dc7325c03bfdf129942a350e925f',
            'v1/__init__.py': '665b4aff06139a06c7c2fd06b1e823d9804708494b698f31034db579fa8add87',
@@ -248,7 +248,7 @@ EXACT_X_MEAN_V1: dict[str, Any] = {'content_hash': '2f0ede9f46a9af650d96b7a18dc3
            'v1/json_values.py': '576a66e558d148b4b23d3bf8ba704feadb63f30816164e8aeceaa7477362483f',
            'v1/lineage.py': '6f6b9681880306e82623a955ca3277ffea078bb8e00cf2ceb29c6203a89f3fa4',
            'v1/node_contract.py': '036000b9c6b68658ddc1d7a581eec074a6d6bdad6d09b17eecb6418ba1854d53',
-           'v1/rheology_mean.py': '6018132466e35abfd7b6b9848836e3e1ee6435e9f0b1b21f41d2f05a83027b99',
+           'v1/rheology_mean.py': '749a0b6cb5fb1c2b247cffc4419fd1eb1a1fe1bfe3c7737d0c7dc18357f0ae6e',
            'v1/runtime.py': '74b77455571b47b8e72f5714188c421c5f680686d351ff9904f6fd0271bcc1b8',
            'v1/schema.py': '129fe08661f02d539193ab22217faf65d7e2b78b221ccf20827d56d8172eb0f2',
            'v1/selection.py': '34c07aa09447eaddf9c9338c1d51c34f30c8b126e69d1a0ca406ecb366deaf31',
@@ -259,12 +259,12 @@ EXACT_X_MEAN_V1: dict[str, Any] = {'content_hash': '2f0ede9f46a9af650d96b7a18dc3
  'version': '1'}
 
 
-FREQUENCY_COMPLETE_V1: dict[str, Any] = {'content_hash': 'f033f455c0cb4498785e00520e9d946302b3cdfbe8cb82a36a505c1e9ec108ff',
+FREQUENCY_COMPLETE_V1: dict[str, Any] = {'content_hash': '33db91becd1aeba87c04359084d80af0a5c8ed96f3f300f560d2b8b458c1d7b6',
  'entry': 'v1.frequency_complete:complete',
  'files': {'__init__.py': 'b2daada6018f878a102dd328dc2e96008061dc7325c03bfdf129942a350e925f',
            'v1/__init__.py': '665b4aff06139a06c7c2fd06b1e823d9804708494b698f31034db579fa8add87',
            'v1/datasets.py': '2a50e284c6d535676e965641859d4c363a44a146a6f6d8690a81f631d0086c00',
-           'v1/frequency_complete.py': '9f35b3b5f9c8c8dcf8aa8e25b67e9d4d5d69a520f5487bd36de6f4b024d4c981',
+           'v1/frequency_complete.py': '901d853db4f01dc6499333bc309bdade7d408b9193f008b19165450e7913add4',
            'v1/hashing.py': 'df8925e9dbe054e13cfe6ff95133cf57a09c6214bdefcb0139053fec7e333658',
            'v1/json_values.py': '576a66e558d148b4b23d3bf8ba704feadb63f30816164e8aeceaa7477362483f',
            'v1/lineage.py': '6f6b9681880306e82623a955ca3277ffea078bb8e00cf2ceb29c6203a89f3fa4',

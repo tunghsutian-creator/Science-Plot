@@ -43,7 +43,7 @@ def _coordinate_binding(column: dict[str, Any], coordinate: dict[str, Any], role
             # operations distinct, including their binary64 rounding.
             path = [resolve_unit_relation(observed, "Pa", **context),
                     resolve_unit_relation("Pa", target, **context)]
-            relation = {"unit_path": path}
+            relation: dict[str, Any] = {"unit_path": path}
         else:
             relation = {"unit_relation": resolve_unit_relation(observed, target, **context)}
     except DocumentError as exc:
