@@ -15,6 +15,7 @@ closed operation contract with the returned revision:
 skill/scripts/sciplot compose new /absolute/layout.json --rows 2 --columns 2 --width-mm 180 --height-mm 140 --json
 skill/scripts/sciplot compose apply /absolute/layout.json --expected-revision 0 --operations @/absolute/operations.json --json
 skill/scripts/sciplot compose inspect /absolute/layout.json --json
+skill/scripts/sciplot compose export-pdf /absolute/layout.json --out /absolute/assembled.pdf --json
 skill/scripts/sciplot compose export /absolute/layout.json --out /absolute/new-package --dpi 300 --json
 ```
 
@@ -29,7 +30,13 @@ references identify the canonical document root and exact plot ID. The local sou
 to a canonical ManagedPlot returns its managed reference without converting it.
 Source versions are captured locally on add/replace. Ordinary layout operations
 read no scientific source and call no model. MCP exposes the same owner through
-`sciplot_compose_capabilities` and `sciplot_compose` (new/inspect/apply/export).
+`sciplot_compose_capabilities` and `sciplot_compose` (new/inspect/apply/export/export-pdf).
+
+Choose `export-pdf` for a diagram/image-only layout and a single new PDF file.
+PDF diagrams stay vector and use the same physical cells, labels, rotation and
+crops as the full package. Existing TIFF/PNG/JPEG panels remain raster. This route
+checks frozen sources but writes no TIFF, manifest, layout copy or source copies.
+Choose `export` for saved scientific plots or a complete delivery package.
 
 Legacy VSZ remains the visual authority. Managed semantic documents, sources and
 transforms remain authoritative; absent native caches are rebuilt in temporary

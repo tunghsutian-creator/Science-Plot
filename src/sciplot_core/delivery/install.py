@@ -1,4 +1,4 @@
-"""Atomically install a new validated directory, excluding existing outputs."""
+"""Atomically install a new validated delivery, excluding existing outputs."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from sciplot_core.studio_core.source_update_commit import reject_symlink_path
 
 
 def install_new_delivery(candidate: Path, delivery: Path) -> None:
-    """Atomically rename a new directory without replacing even an empty target."""
+    """Atomically rename a new file or directory without replacing an existing target."""
     reject_symlink_path(candidate)
     reject_symlink_path(delivery)
     library = ctypes.CDLL(None, use_errno=True)
@@ -26,7 +26,7 @@ def install_new_delivery(candidate: Path, delivery: Path) -> None:
         rename.restype = ctypes.c_int
         result = rename(-100, os.fsencode(candidate), -100, os.fsencode(delivery), 1)  # RENAME_NOREPLACE
     else:
-        raise RuntimeError("Atomic non-replacing directory installation is unavailable on this platform.")
+        raise RuntimeError("Atomic non-replacing delivery installation is unavailable on this platform.")
     if result:
         code = ctypes.get_errno()
         raise OSError(code, os.strerror(code), str(delivery))

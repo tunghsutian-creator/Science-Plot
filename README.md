@@ -232,16 +232,18 @@ independent VSZ remains editable after relocation. The package does not contain
 a portable Managed document registry or a standalone human Managed editor.
 
 AI-driven panel assembly brings saved figures and microscopy images or diagrams
-onto one physical page. `compose capabilities/new/inspect/apply/export` and the
-matching MCP tools use one saved layout, revision and history. A bounded batch
+onto one physical page. The `compose` commands and matching MCP tools use one
+saved layout, revision and history. A bounded batch
 sets panels, grid spans, millimetre gaps, panel letters and image crops. There is
 no manual workbench: historical `compose open` reports `manual_composer_retired`
 without reading or changing the layout.
 
 Supported scientific panels reflow through native Veusz at the target size;
-PDF text and scientific graphics retain physical size. Export produces vector
-PDF, TIFF and editable layout/native sources. Source drift, unsupported native
-geometry and actual text clipping block export with a reason. Preview images
+PDF text and scientific graphics retain physical size. `compose export` produces
+vector PDF, TIFF and editable layout/native sources.
+For layouts with only existing PDF diagrams and images, `compose export-pdf`
+writes a standalone PDF without native rendering or a delivery package. Source drift,
+unsupported native geometry and actual text clipping block export with a reason. Preview images
 do not certify target-size export readiness. See the
 [panel assembly route](skill/references/panel-assembly.md).
 

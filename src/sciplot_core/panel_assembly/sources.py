@@ -52,30 +52,56 @@ def file_binding(path: Path, *, expected_sha256: str | None = None) -> dict[str,
             "identity": {key: value for key, value in snapshot["identity"].items() if key != "ctime_ns"}}
 
 
-def _image(path: Path, *, expected_sha256: str | None = None) -> dict[str, Any]:
-    snapshot = stable_file_snapshot(path, label="assembly image", expected_sha256=expected_sha256)
+def _snapshot_binding(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {"path": str(snapshot["path"]), "sha256": snapshot["sha256"],
+            "identity": {key: value for key, value in snapshot["identity"].items() if key != "ctime_ns"}}
+
+
+def bound_image_snapshot(source: dict[str, Any]) -> dict[str, Any]:
+    """Read exact frozen bytes without re-opening the decoded PDF or image."""
+    bound = source["binding"]["snapshot"]
+    try:
+        snapshot = stable_file_snapshot(Path(source["path"]), label="assembly image", expected_sha256=bound["sha256"])
+    except (ValueError, OSError) as exc:
+        raise AssemblyError("assembly_source_stale", "Selected source is stale or unverifiable: the image bytes changed or could not be read.") from exc
+    if _snapshot_binding(snapshot) != bound:
+        raise AssemblyError("assembly_source_stale", "Selected source is stale or unverifiable: the image identity changed.")
+    return snapshot
+
+
+def pdf_diagram_size(pdf: Any) -> tuple[float, float]:
+    if pdf.is_encrypted or len(pdf) != 1 or pdf[0].rect.is_empty:
+        raise AssemblyError("assembly_image_unsupported", "A diagram PDF must contain one unencrypted page.")
+    bounds = pdf[0].rect
+    return bounds.width, bounds.height
+
+
+def image_media_type(image: Any) -> str:
+    media = {"PNG": "image/png", "JPEG": "image/jpeg", "TIFF": "image/tiff"}.get(image.format)
+    if media is None or getattr(image, "n_frames", 1) != 1:
+        raise AssemblyError("assembly_image_unsupported", "Use a single PNG, JPEG, TIFF or one-page PDF diagram.")
+    return media
+
+
+def _image(path: Path, *, snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    if snapshot is None:
+        snapshot = stable_file_snapshot(path, label="assembly image")
     if path.suffix.lower() == ".pdf":
         pymupdf: Any = import_module("pymupdf")
 
         with pymupdf.open(stream=snapshot["bytes"], filetype="pdf") as pdf:
-            if pdf.is_encrypted or len(pdf) != 1 or pdf[0].rect.is_empty:
-                raise AssemblyError("assembly_image_unsupported", "A diagram PDF must contain one unencrypted page.")
-            width, height = pdf[0].rect.width, pdf[0].rect.height
+            width, height = pdf_diagram_size(pdf)
         media = "application/pdf"
     else:
         from PIL import Image, ImageOps
 
         with Image.open(io.BytesIO(snapshot["bytes"])) as image:
-            if image.format not in {"PNG", "JPEG", "TIFF"} or getattr(image, "n_frames", 1) != 1:
-                raise AssemblyError("assembly_image_unsupported", "Use a single PNG, JPEG, TIFF or one-page PDF diagram.")
-            media = {"PNG": "image/png", "JPEG": "image/jpeg", "TIFF": "image/tiff"}[image.format]
+            media = image_media_type(image)
             image.load()
             oriented = ImageOps.exif_transpose(image)
             width, height = oriented.size
     _assert_snapshot_current(snapshot, label="assembly image", expected_sha256=snapshot["sha256"])
-    bound = {"path": str(snapshot["path"]), "sha256": snapshot["sha256"],
-             "identity": {key: value for key, value in snapshot["identity"].items() if key != "ctime_ns"}}
-    return {"snapshot": bound, "media_type": media, "width": width, "height": height}
+    return {"snapshot": _snapshot_binding(snapshot), "media_type": media, "width": width, "height": height}
 
 
 def managed_head(root: Path, plot_id: str) -> dict[str, Any]:
@@ -131,7 +157,9 @@ def capture_source(reference: dict[str, Any]) -> dict[str, Any]:
         elif kind == "managed":
             result["binding"] = _managed(path, reference["plot_id"])
         else:
+            # _image already decodes and checks the exact captured snapshot.
             result["binding"] = _image(path)
+            return result
         assert_source_current(result)
         return result
     except AssemblyError:
@@ -169,7 +197,7 @@ def assert_source_current(source: dict[str, Any]) -> None:
             if _managed(canonical_path(Path(source["project"])), source["plot_id"],
                         expected_files={item["path"]: item["sha256"] for item in binding["files"]}) != binding:
                 raise ValueError("The managed document version or scientific sources changed.")
-        elif _image(canonical_path(Path(source["path"])), expected_sha256=binding["snapshot"]["sha256"]) != binding:
+        elif _image(canonical_path(Path(source["path"])), snapshot=bound_image_snapshot(source)) != binding:
             raise ValueError("The selected image version changed.")
     except Exception as exc:
         if isinstance(exc, AssemblyError) and exc.code in {"assembly_source_stale", "assembly_managed_reference_required"}:

@@ -37,6 +37,8 @@ def dispatch_composition(args: Any) -> int | None:
         request["check_sources"] = args.check_sources
     elif args.compose_action == "export":
         request.update(out=str(args.out), dpi=args.dpi)
+    elif args.compose_action == "export-pdf":
+        request["out"] = str(args.out)
     result = compose(request)
     _print_json(result)
     return 0 if result.get("status") not in {"blocked", "failed", "needs_revision"} else 1

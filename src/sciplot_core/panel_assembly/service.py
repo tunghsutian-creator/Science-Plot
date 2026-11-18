@@ -37,6 +37,7 @@ def composition_request_schema() -> dict[str, Any]:
         "inspect": ({"check_sources": {"type": "boolean"}}, []),
         "apply": ({"expected_revision": {"type": "integer", "minimum": 0},
                    "operations": _intent_operations_schema()}, ["expected_revision", "operations"]),
+        "export-pdf": ({"out": path}, ["out"]),
         "export": ({"out": path, "dpi": {"type": "integer", "minimum": 72, "maximum": 1200}}, ["out"]),
     }
     return {"oneOf": [{"type": "object", "additionalProperties": False,
@@ -119,6 +120,10 @@ def compose(request: dict[str, Any]) -> dict[str, Any]:
         from .export import export_document
 
         return export_document(document, Path(request["out"]).expanduser().absolute(), dpi=request.get("dpi", 300))
+    if action == "export-pdf":
+        from .export import export_pdf
+
+        return export_pdf(document, request["out"])
     checked = request.get("check_sources", False)
     if checked:
         from .sources import assert_source_current

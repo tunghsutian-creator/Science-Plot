@@ -76,8 +76,8 @@ def _resolve(document: dict[str, Any]) -> dict[str, Any]:
                    for panel in resolved["panels"]]}
 
 
-def validate_document(document: Any) -> dict[str, Any]:
-    """Validate all represented state and physical constraints without reading sources."""
+def validate_and_resolve(document: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Validate represented state and solve its physical layout once."""
     _validate(dict(document) if isinstance(document, _AssemblyDocument) else document, document_schema())
     result = deepcopy(document) if isinstance(document, _AssemblyDocument) else _AssemblyDocument(deepcopy(document))
     integers = [result["version"], result["revision"], result["layout"]["rows"], result["layout"]["columns"]]
@@ -94,12 +94,16 @@ def validate_document(document: Any) -> dict[str, Any]:
                 raise AssemblyError("assembly_crop_kind", "Only image panels support cropping.")
             if crop[0] >= crop[2] or crop[1] >= crop[3]:
                 raise AssemblyError("assembly_crop_bounds", "Image crop bounds must enclose a positive rectangle.")
-    _resolve(result)
-    return result
+    return result, _resolve(result)
+
+
+def validate_document(document: Any) -> dict[str, Any]:
+    """Validate all represented state and physical constraints without reading sources."""
+    return validate_and_resolve(document)[0]
 
 
 def resolve_document(document: Any) -> dict[str, Any]:
-    return _resolve(validate_document(document))
+    return validate_and_resolve(document)[1]
 
 
 def apply_operations(document: Any, operations: Any) -> dict[str, Any]:

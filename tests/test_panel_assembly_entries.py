@@ -79,8 +79,17 @@ def test_cli_and_mcp_share_saved_layout_and_explicit_version_conflicts(tmp_path,
             "expected_revision": 0, "operations": [{"op": "set_label", "id": "panel:a", "label": "SEM"}]}})
         assert stale.is_error
         assert stale.structured_content["error"]["code"] == "assembly_revision_conflict"
+        reply = await adapter.call("sciplot_compose", {"request": {"action": "export-pdf", "layout": str(path),
+                                                                     "out": str(tmp_path / "mcp.pdf")}})
+        assert not reply.is_error and reply.structured_content["kind"] == "sciplot_panel_assembly_pdf"
 
     anyio.run(scenario)
+    before = path.read_bytes()
+    out = tmp_path / "cli.pdf"
+    assert main(["compose", "export-pdf", str(path), "--out", str(out), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["pdf"] == str(out)
+    assert out.read_bytes() == (tmp_path / "mcp.pdf").read_bytes()
+    assert path.read_bytes() == before
     assert main(["compose", "inspect", str(path), "--json"]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["panels"][0]["source_kind"] == "image" and result["revision"] == 1
@@ -122,6 +131,9 @@ def test_capabilities_and_parser_keep_compact_sources_and_explicit_export_scope(
     assert not validator.is_valid({"action": "export", "layout": "/layout.json", "out": "/out", "dpi": 30})
     args = build_parser().parse_args(["compose", "export", "/layout.json", "--out", "/out", "--dpi", "600", "--json"])
     assert args.layout == Path("/layout.json") and args.dpi == 600
+    pdf = {"action": "export-pdf", "layout": "/layout.json", "out": "/assembly.pdf"}
+    assert validator.is_valid(pdf)
+    assert not validator.is_valid(pdf | {"dpi": 300})
     assert caps["authority"]["legacy"] == "exact saved VSZ"
 
 

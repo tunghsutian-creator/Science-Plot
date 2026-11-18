@@ -14,7 +14,7 @@ import pytest
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.panel_assembly.errors import AssemblyError
-from sciplot_core.panel_assembly.export import export_document
+from sciplot_core.panel_assembly.export import export_document, export_pdf
 from sciplot_core.panel_assembly.model import apply_operations, new_document, resolve_document
 from sciplot_core.panel_assembly.preview import render_preview
 from sciplot_core.panel_assembly.sources import assert_source_current, capture_source
@@ -118,7 +118,7 @@ def test_image_capture_closes_bytes_and_replacement_identity(tmp_path, suffix):
     assert error.value.code == "assembly_source_stale"
 
 
-def test_vector_pdf_diagram_is_supported_and_multipage_is_refused(tmp_path):
+def test_vector_pdf_diagram_is_supported_and_multipage_is_refused(tmp_path, monkeypatch):
     path = tmp_path / "diagram.pdf"
     with pymupdf.open() as pdf:
         page = pdf.new_page(width=100, height=100)
@@ -155,11 +155,34 @@ def test_vector_pdf_diagram_is_supported_and_multipage_is_refused(tmp_path):
         with Image.open(io.BytesIO(render_preview(source))) as image:
             displayed = image.convert("RGB")
         crop = [.2, .15, .85, .93]
-        document = add(new_document(rows=1, columns=1, width_mm=60, height_mm=45), source, crop=crop)
+        document = add(new_document(rows=1, columns=2, width_mm=124, height_mm=45), source, crop=crop)
+        document = add(document, capture_source({"kind": "image", "path": str(tmp_path / "diagram.pdf")}),
+                       name="vector-text", column=1)
         output = export_document(document, tmp_path / f"placed-{rotation}", dpi=100)
         x, y, width, height = output["panels"][0]["evidence"]["placement_mm"]
-        with pymupdf.open(output["pdf"]) as pdf:
-            assert not pdf[0].get_images()  # Keep the diagram vector.
+        with monkeypatch.context() as guard:
+            from sciplot_core.panel_assembly import export
+
+            def forbidden(*args, **kwargs):
+                pytest.fail("PDF-only export invoked PIL, native render or source packaging")
+
+            guard.setattr(export, "_scientific", forbidden)
+            guard.setattr(export, "_source_package", forbidden)
+            guard.setattr(subprocess, "Popen", forbidden)
+            guard.setattr(Image, "open", forbidden)
+            guard.setattr(Image, "frombytes", forbidden)
+            pdf_path = tmp_path / f"single-{rotation}.pdf"
+            before_files = set(tmp_path.iterdir())
+            standalone = export_pdf(document, pdf_path)
+            assert set(tmp_path.iterdir()) - before_files == {pdf_path}
+            assert "tiff" not in standalone and "manifest" not in standalone
+        assert pdf_path.read_bytes() == Path(output["pdf"]).read_bytes()
+        with pymupdf.open(pdf_path) as pdf:
+            assert len(pdf) == 1 and not pdf[0].get_images()
+            assert pdf[0].rect.width * 25.4 / 72 == pytest.approx(124, abs=.001)
+            assert pdf[0].rect.height * 25.4 / 72 == pytest.approx(45, abs=.001)
+            assert "Vector diagram" in pdf[0].get_text()
+            assert pdf[0].get_xobjects()  # The two source panels remained vector PDF forms.
         with Image.open(output["tiff"]) as tiff:
             for fx, fy in ((.2, .2), (.8, .2), (.2, .8), (.8, .8)):
                 source_pos = (
@@ -169,6 +192,17 @@ def test_vector_pdf_diagram_is_supported_and_multipage_is_refused(tmp_path):
                 output_pos = (round((x + width * fx) * 100 / 25.4), round((y + height * fy) * 100 / 25.4))
                 assert tiff.getpixel(output_pos) == displayed.getpixel(source_pos)
         assert path.read_bytes() == original
+    with pytest.raises(AssemblyError) as exists:
+        export_pdf(document, path)
+    assert exists.value.code == "assembly_output_exists" and path.read_bytes() == original
+    # A replacement with the same bytes is not the explicitly selected source.
+    replacement = tmp_path / "replacement.pdf"
+    replacement.write_bytes(original)
+    replacement.replace(path)
+    rejected = tmp_path / "rejected.pdf"
+    with pytest.raises(AssemblyError) as stale:
+        export_pdf(document, rejected)
+    assert stale.value.code == "assembly_source_stale" and not rejected.exists()
 
 
 def test_image_crop_deterministic_pdf_tiff_physical_size_and_source_bytes(tmp_path):
@@ -298,6 +332,18 @@ def test_atomic_install_race_preserves_newly_occupied_output(tmp_path, monkeypat
     assert (tmp_path / "occupied/occupied.txt").read_text() == "concurrent output"
     assert not (tmp_path / "occupied/assembly.pdf").exists()
 
+    def file_race(candidate, destination):
+        destination.write_bytes(b"concurrent PDF")
+        install(candidate, destination)
+
+    monkeypatch.setattr(owner, "install_new_delivery", file_race)
+    out = tmp_path / "occupied.pdf"
+    with pytest.raises(AssemblyError) as error:
+        export_pdf(document, out)
+    assert error.value.code == "assembly_output_exists"
+    assert out.read_bytes() == b"concurrent PDF"
+    assert not list(tmp_path.glob(".occupied.pdf.assembly-*"))
+
 
 def test_source_drift_between_image_composition_and_packaging_is_refused(tmp_path, monkeypatch):
     path, source = image_source(tmp_path)
@@ -315,6 +361,21 @@ def test_source_drift_between_image_composition_and_packaging_is_refused(tmp_pat
         export_document(document, tmp_path / "drifted")
     assert error.value.code == "assembly_source_stale"
     assert not (tmp_path / "drifted").exists()
+
+    path, source = image_source(tmp_path, name="late-change.png")
+    document = add(new_document(), source)
+    label = owner._label
+
+    def drift_after_placement(*args):
+        Image.new("RGB", (200, 100), "green").save(path)
+        return label(*args)
+
+    monkeypatch.setattr(owner, "_label", drift_after_placement)
+    out = tmp_path / "late-change.pdf"
+    with pytest.raises(AssemblyError) as error:
+        export_pdf(document, out)
+    assert error.value.code == "assembly_source_stale"
+    assert not out.exists() and not list(tmp_path.glob(".late-change.pdf.assembly-*"))
 
 
 def test_scientific_pdf_size_mismatch_is_never_scaled_to_fit(tmp_path):

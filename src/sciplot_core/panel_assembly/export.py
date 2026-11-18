@@ -1,4 +1,4 @@
-"""Deterministic mixed-panel PDF/TIFF packages with exclusive atomic publication."""
+"""Deterministic panel PDFs and full delivery packages with exclusive publication."""
 
 from __future__ import annotations
 
@@ -16,11 +16,10 @@ from typing import Any
 from sciplot_core.delivery.install import install_new_delivery
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
-from sciplot_core.veusz_runtime import veusz_worker_environment
 
+from .document import validate_and_resolve
 from .errors import AssemblyError
-from .model import resolve_document, validate_document
-from .sources import assert_source_current
+from .sources import assert_source_current, bound_image_snapshot, image_media_type, pdf_diagram_size
 
 POINTS_PER_MM = 72.0 / 25.4
 
@@ -30,6 +29,8 @@ def _json(path: Path, value: Any) -> None:
 
 
 def _scientific(source: dict[str, Any], folder: Path, width: float, height: float) -> dict[str, Any]:
+    from sciplot_core.veusz_runtime import veusz_worker_environment
+
     folder.mkdir(parents=True)
     request = folder / "native-request.json"
     # Qt PDF media boxes use whole points. Reflow the native canvas to the
@@ -119,12 +120,20 @@ def _rect(rectangle: list[float]) -> Any:
     return pymupdf.Rect(x, y, x + width, y + height) * POINTS_PER_MM
 
 
-def _place_image(page: Any, panel: dict[str, Any], source: dict[str, Any], raw: bytes) -> dict[str, Any]:
+def _check_image_binding(source: dict[str, Any], media: str | None, width: float, height: float) -> None:
+    binding = source["binding"]
+    if (media, width, height) != (binding["media_type"], binding["width"], binding["height"]):
+        raise AssemblyError("assembly_source_stale", "The image does not match its frozen format or dimensions.")
+
+
+def _place_image(page: Any, panel: dict[str, Any], source: dict[str, Any], raw: bytes, *, check_binding: bool = False) -> dict[str, Any]:
     pymupdf: Any = import_module("pymupdf")
 
     crop = panel["crop"] or [0., 0., 1., 1.]
-    if source["binding"]["media_type"] == "application/pdf":
+    if Path(source["path"]).suffix.lower() == ".pdf":
         with pymupdf.open(stream=raw, filetype="pdf") as diagram:
+            if check_binding:
+                _check_image_binding(source, "application/pdf", *pdf_diagram_size(diagram))
             diagram_page = diagram[0]
             bounds = diagram_page.rect
             left, top, right, bottom = crop
@@ -144,6 +153,8 @@ def _place_image(page: Any, panel: dict[str, Any], source: dict[str, Any], raw: 
         with Image.open(io.BytesIO(raw)) as image:
             oriented = ImageOps.exif_transpose(image)
             width, height = oriented.size
+            if check_binding:
+                _check_image_binding(source, image_media_type(image), width, height)
             box = (math.floor(crop[0] * width), math.floor(crop[1] * height),
                    math.ceil(crop[2] * width), math.ceil(crop[3] * height))
             cropped = oriented.crop(box)
@@ -221,12 +232,67 @@ def _label(page: Any, label: str, position: list[float] | None, cell: list[float
             "allowed_band_mm": band, "anchor_mm": position, "native_text_scaled": False}
 
 
+def _new_page(composite: Any, solved: dict[str, Any]) -> Any:
+    composite.set_metadata({"producer": "SciPlot panel assembly", "creator": "SciPlot", "title": "Panel assembly"})
+    page = composite.new_page(width=solved["width_mm"] * POINTS_PER_MM, height=solved["height_mm"] * POINTS_PER_MM)
+    page.draw_rect(page.rect, color=None, fill=(1, 1, 1), overlay=False)
+    return page
+
+
+def export_pdf(document: dict[str, Any], out: str | Path) -> dict[str, Any]:
+    """Place frozen diagram/image panels and publish only a new vector PDF."""
+    from sciplot_core.foundation.research_destination import require_data_destination
+
+    validated, solved = validate_and_resolve(document)
+    if not solved["panels"]:
+        raise AssemblyError("assembly_empty", "Add at least one panel before exporting.")
+    if any(panel["source"]["kind"] != "image" for panel in validated["panels"]):
+        raise AssemblyError("assembly_pdf_requires_images", "PDF-only export accepts PDF diagrams and images. Use compose export for saved scientific plots.")
+    destination = Path(out).expanduser().absolute()
+    if destination.suffix.lower() != ".pdf":
+        raise AssemblyError("assembly_output_invalid", "Choose a new .pdf file for PDF-only export.")
+    if destination.exists() or destination.is_symlink():
+        raise AssemblyError("assembly_output_exists", "The output PDF already exists; choose a new file.")
+    destination = require_data_destination(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    originals = {panel["id"]: panel for panel in validated["panels"]}
+    try:
+        pymupdf: Any = import_module("pymupdf")
+
+        with tempfile.TemporaryDirectory(prefix=f".{destination.name}.assembly-", dir=destination.parent) as stage:
+            candidate = Path(stage) / "assembly.pdf"
+            receipts = []
+            with pymupdf.open() as composite:
+                page = _new_page(composite, solved)
+                for placement in solved["panels"]:
+                    panel = {**originals[placement["id"]], **placement}
+                    source = panel["source"]
+                    evidence = _place_image(page, panel, source, bound_image_snapshot(source)["bytes"], check_binding=True)
+                    evidence["panel_label"] = _label(page, panel["label"], panel["label_mm"], panel["cell_mm"], panel["content_mm"])
+                    receipts.append({"id": panel["id"], "label": panel["label"], "cell_mm": panel["cell_mm"],
+                                     "content_mm": panel["content_mm"], "evidence": evidence})
+                composite.save(candidate, garbage=4, deflate=True, no_new_id=True)
+            # Recheck exact bytes and identity immediately before publication,
+            # without reparsing source pages or rendering a TIFF.
+            for panel in validated["panels"]:
+                bound_image_snapshot(panel["source"])
+            install_new_delivery(candidate, destination)
+    except FileExistsError as exc:
+        raise AssemblyError("assembly_output_exists", "The output PDF already exists; choose a new file.") from exc
+    except AssemblyError:
+        raise
+    except Exception as exc:
+        raise AssemblyError("assembly_export_failed", f"Assembly PDF export failed: {exc}") from exc
+    return {"kind": "sciplot_panel_assembly_pdf", "version": 1, "status": "complete",
+            "pdf": str(destination), "width_mm": solved["width_mm"], "height_mm": solved["height_mm"],
+            "panels": receipts, "source_currentness": "passed"}
+
+
 def export_document(document: dict[str, Any], out: str | Path, *, dpi: int = 300) -> dict[str, Any]:
     """Export a new complete package; failed staging never replaces an output."""
     if type(dpi) is not int or not 72 <= dpi <= 1200:
         raise AssemblyError("assembly_dpi_invalid", "Use an integer TIFF resolution from 72 to 1200 dpi.")
-    validated = validate_document(document)
-    solved = resolve_document(validated)
+    validated, solved = validate_and_resolve(document)
     if not solved["panels"]:
         raise AssemblyError("assembly_empty", "Add at least one panel before exporting.")
     destination = Path(out).expanduser().absolute()
@@ -245,9 +311,7 @@ def export_document(document: dict[str, Any], out: str | Path, *, dpi: int = 300
         receipts = []
         originals = {panel["id"]: panel for panel in validated["panels"]}
         with pymupdf.open() as composite:
-            composite.set_metadata({"producer": "SciPlot panel assembly", "creator": "SciPlot", "title": "Panel assembly"})
-            page = composite.new_page(width=solved["width_mm"] * POINTS_PER_MM, height=solved["height_mm"] * POINTS_PER_MM)
-            page.draw_rect(page.rect, color=None, fill=(1, 1, 1), overlay=False)
+            page = _new_page(composite, solved)
             (stage / "panels").mkdir()
             for index, placement in enumerate(solved["panels"], 1):
                 panel = {**originals[placement["id"]], **placement}
