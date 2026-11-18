@@ -10232,7 +10232,8 @@
       "tests/test_managed_dma_temperature.py::test_dma_managed_composes_canonical_pressure_steps_without_clipping_observations",
       "tests/test_frequency_interval_binding.py::test_all_automatic_frequency_metrics_can_replay_individual_condition_data",
       "tests/test_rheology_exact_x_mean.py::test_exact_x_mean_matches_original_grouping_metric_tables_and_analysis",
-      "tests/test_rheology_exact_x_mean.py::test_managed_exact_x_mean_rebuilds_from_its_originals_and_cache"
+      "tests/test_rheology_exact_x_mean.py::test_managed_exact_x_mean_rebuilds_from_its_originals_and_cache",
+      "tests/test_rheology_mean_suite_publication.py::test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_generation"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20798,7 +20799,8 @@
       "tests/test_house_style_native.py::test_current_log_minor_ticks_keep_native_pdf_pixels_and_physical_canvas",
       "tests/test_house_style_native.py::test_current_inside_best_avoids_the_curve_on_reversed_y_pdf",
       "tests/test_frequency_interval_binding.py::test_frequency_managed_native_delivery_replays_registered_storage_modulus",
-      "tests/test_managed_dma_temperature.py::test_dma_managed_composes_canonical_pressure_steps_without_clipping_observations"
+      "tests/test_managed_dma_temperature.py::test_dma_managed_composes_canonical_pressure_steps_without_clipping_observations",
+      "tests/test_rheology_mean_suite_publication.py::test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_generation"
     ]
   },
   "private_failure_responsibilities": [

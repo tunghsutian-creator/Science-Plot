@@ -7,10 +7,10 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10393,
-    "nodeids_sha256": "dc51f3162c0defdd6f5a2c03530ba0b9bbcd942fbcceeacff4fabfd91716d0d8",
-    "test_sources_sha256": "563e3061f6c55718a299192f86d2c59d66e6899f36a8dd2db095838677443d8a",
-    "test_source_count": 657,
+    "nodeid_count": 10394,
+    "nodeids_sha256": "83b822fe16599d518d826e1025bdafb01df5ad913eee698d9e9e68b0de901390",
+    "test_sources_sha256": "3b26cd4be12c2d7830da707ca70ee5f8b6e3e871aa913ce6da2499a10bb90ea3",
+    "test_source_count": 658,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
@@ -5820,7 +5820,8 @@
       "tests/test_managed_dma_temperature.py::test_dma_managed_composes_canonical_pressure_steps_without_clipping_observations",
       "tests/test_frequency_interval_binding.py::test_all_automatic_frequency_metrics_can_replay_individual_condition_data",
       "tests/test_rheology_exact_x_mean.py::test_exact_x_mean_matches_original_grouping_metric_tables_and_analysis",
-      "tests/test_rheology_exact_x_mean.py::test_managed_exact_x_mean_rebuilds_from_its_originals_and_cache"
+      "tests/test_rheology_exact_x_mean.py::test_managed_exact_x_mean_rebuilds_from_its_originals_and_cache",
+      "tests/test_rheology_mean_suite_publication.py::test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_generation"
     ],
     "synthetic_candidates": [
       {
@@ -28398,6 +28399,10 @@
       {
         "nodeid": "tests/test_rheology_exact_x_mean.py::test_managed_exact_x_mean_rebuilds_from_its_originals_and_cache",
         "reason": "Generated replicate rheology input and scratch outputs; no private dataset."
+      },
+      {
+        "nodeid": "tests/test_rheology_mean_suite_publication.py::test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_generation",
+        "reason": "Synthetic rheology source, mean suites, and chart deliveries in tmp_path; no private dataset."
       }
     ],
     "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance. 2026-11-10 storage closure: actual zero-body unfiltered10342-node collection,81 additive generated public-focused cases, original tiers/private dependencies/duties retained. Synthetic host providers isolate unit paths; production has no test-environment placement exemption. Static review is not full/private scientific acceptance. 2026-11-10 CI workspace correction: original10342 full collection plus complete11-node policy-module collection gives10345, three additive generated focused allocator controls. The actual unchanged12-node staged native preflight must freshly confirm full scope before any body; no historical node, tier or scientific duty removed. 2026-11-10 callback migration closure: complete50-node collection for four consumer modules remains exact (49 original focused bodies PASS,one original comprehensive deselected). Five test doubles explicitly accept their real namespace parameter and check containment; no production code,scientific assertion,node,tier,dependency or duty change. Only current test-byte binding changes; earlier c29112-node receipt remains historical under its own SHA. 2026-11-10 public capture carrier consumer: the actual guarded child now receives build_check_spec prepared environment; dropping only the workspace carrier is explicitly refused in the same original node. Thirty unchanged module node IDs, no production guard,scientific assertion,scope classification or dependency change. Previous5299705 successful bodies and one failure remain historical,not a new-SHA pass. 2026-11-11 targeted correctness remediation: actual unfiltered 10370-node collection, zero executed bodies, 25 additive generated public-focused controls. Original private cases, dependencies, tiers, and responsibilities remain unchanged. Static test-byte binding only; no new full-suite or scientific acceptance claim. 2026-11-16: unfiltered collect-only confirmed 10372 nodes, zero bodies, two new generated public-focused worksheet controls. Existing tiers, private dependencies and scientific responsibilities unchanged.",
