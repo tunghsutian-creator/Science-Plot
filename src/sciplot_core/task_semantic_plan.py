@@ -21,7 +21,8 @@ def scientific_adapter(intent: dict[str, Any]) -> str | None:
     return registered.scientific_source_adapter if registered else None
 
 
-def _coordinate_binding(column: dict[str, Any], coordinate: dict[str, Any], role: str) -> dict[str, Any]:
+def _coordinate_binding(column: dict[str, Any], coordinate: dict[str, Any], role: str,
+                        *, adapter: str | None = None) -> dict[str, Any]:
     from sciplot_core.plot_document.errors import DocumentError
     from sciplot_core.plot_transforms.unit_relations import resolve_unit_relation
 
@@ -32,11 +33,19 @@ def _coordinate_binding(column: dict[str, Any], coordinate: dict[str, Any], role
                         "message": "Select a supported original temperature field with recorded units, or remove this optional secondary axis explicitly. Do not change raw units or send an unsupported secondary source_unit field."}
         raise error
     observed = source_unit(column, coordinate, role)
+    target = coordinate.get("unit", observed)
+    context = {"quantity": coordinate["quantity"], "observed_quantity": column["quantity"],
+               "explicit_quantity_binding": any(field in coordinate for field in ("header", "headers", "column_id"))}
     try:
-        target = coordinate.get("unit", observed)
-        relation = resolve_unit_relation(observed, target, quantity=coordinate["quantity"],
-            observed_quantity=column["quantity"], explicit_quantity_binding=any(
-                field in coordinate for field in ("header", "headers", "column_id")))
+        if (adapter == "dma_temperature" and role == "y" and coordinate["quantity"] == "storage_modulus"
+                and observed.strip(" []()") in {"kPa", "GPa"} and target == "MPa"):
+            # The DMA reader projects through canonical Pa. Keep those two
+            # operations distinct, including their binary64 rounding.
+            path = [resolve_unit_relation(observed, "Pa", **context),
+                    resolve_unit_relation("Pa", target, **context)]
+            relation = {"unit_path": path}
+        else:
+            relation = {"unit_relation": resolve_unit_relation(observed, target, **context)}
     except DocumentError as exc:
         error = TaskControlError(exc.reason_code, str(exc))
         error.issues = [{"path": "/intent/" + ("secondary_y" if role == "temperature" else role) + "/unit", "column_id": column["column_id"], "source_unit": observed,
@@ -48,10 +57,8 @@ def _coordinate_binding(column: dict[str, Any], coordinate: dict[str, Any], role
         raise error from exc
     return {"column_id": column["column_id"], "column_index": column["column_index"], "header": column["header"],
             "quantity": coordinate["quantity"], "observed_quantity": column["quantity"], "observed_unit": column["unit"],
-            "source_unit": observed, "unit": target, "unit_relation": relation,
-            "unit_context": {"version": 1, "quantity": coordinate["quantity"], "observed_quantity": column["quantity"],
-                             "source_header": column["header"], "explicit_quantity_binding": any(
-                                 field in coordinate for field in ("header", "headers", "column_id"))}}
+            "source_unit": observed, "unit": target, **relation,
+            "unit_context": {"version": 1, **context, "source_header": column["header"]}}
 
 
 def _coordinate_decisions(sources: list[dict[str, Any]], intent: dict[str, Any],
@@ -90,7 +97,7 @@ def _coordinate_decisions(sources: list[dict[str, Any]], intent: dict[str, Any],
                     if not eligible and derived and not has_selector:
                         eligible = [derived]
                     if len(eligible) == 1 and "method" not in eligible[0]:
-                        bindings[index]["coordinates"][role] = _coordinate_binding(eligible[0], coordinate, role)
+                        bindings[index]["coordinates"][role] = _coordinate_binding(eligible[0], coordinate, role, adapter=adapter)
                     elif len(eligible) == 1 and derived is not None:
                         from sciplot_core.semantic_sources.rheology_frequency_metrics import validate_complex_viscosity_units
                         from sciplot_core.plot_transforms.units import canonical_unit_token

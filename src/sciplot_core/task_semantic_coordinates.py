@@ -59,3 +59,8 @@ def source_unit(column: dict[str, Any], coordinate: dict[str, Any], role: str) -
     error.repair = {"action": "revise_intent", "supported_selectors": ["intent." + role + ".header", "intent." + role + ".headers", "intent." + role + ".column_id"],
                     "required_field": "intent." + role + ".source_unit", "message": "Keep this draft and original source. Record a confirmed original unit separately from the requested output unit; never infer it from values."}
     raise error
+
+
+def unit_path(coordinate: dict[str, Any]) -> list[dict[str, Any]]:
+    """Read composed DMA conversions or its historical single-step representation."""
+    return coordinate["unit_path"] if "unit_path" in coordinate else [coordinate["unit_relation"]]

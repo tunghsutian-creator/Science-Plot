@@ -503,3 +503,18 @@ in the same reviewed edit path, then follow `repair_export_then_retry`. Do not
 weaken QA, regenerate a different experiment, or rename source columns. For a
 requested upper-left sample label, inspect that actual location in the returned
 preview instead of treating the example relative coordinates as a universal fit.
+
+## Explicit DMA storage-modulus plot
+
+For an original DMA table with Kelvin and kPa columns, select the exact
+headers and request °C and MPa:
+
+```bash
+skill/scripts/sciplot task create /absolute/raw.csv --rule dma_temperature_sweep --x temperature --x-header 'Temperature (K)' --x-unit '°C' --y storage_modulus --y-header 'Sample A Storage Modulus (kPa)' --y-unit MPa --task-dir /absolute/new-task --json
+```
+
+The new plot keeps negative observations on the default linear scale. Its
+recorded kPa → Pa → MPa operations round separately, so their floating-point
+values may differ in the last bit from an older automatic DMA plot that
+applied the combined factor once. This explicit route does not change the
+automatic DMA recipe or existing projects.

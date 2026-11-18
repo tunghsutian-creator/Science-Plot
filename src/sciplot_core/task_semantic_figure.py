@@ -1,5 +1,6 @@
 """Compile a confirmed semantic task into the existing Binding/FigureSpec contracts."""
 from copy import deepcopy
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -7,7 +8,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.plot_transforms import builtin_executor, execute_node
 from sciplot_core.task_errors import TaskControlError
 from sciplot_core.task_semantic_axes import axis_spec
-from sciplot_core.task_semantic_coordinates import resolved_binding
+from sciplot_core.task_semantic_coordinates import resolved_binding, unit_path
 from sciplot_core.task_semantic_stages import stage_execution_error, validate_stage_domains
 from sciplot_core.plot_document.errors import DocumentError
 
@@ -29,10 +30,12 @@ def _select_column(candidate: dict[str, Any], block: dict[str, Any], coordinate:
                role=role, block_id=block["block_id"])
     from sciplot_core.plot_transforms.unit_relations import requires_unit_context, resolve_unit_relation
 
-    relation = coordinate["unit_relation"]
-    if relation["from_unit"] != coordinate["source_unit"] or relation["to_unit"] != coordinate["unit"]:
+    relations = unit_path(coordinate)
+    if (relations[0]["from_unit"] != coordinate["source_unit"] or relations[-1]["to_unit"] != coordinate["unit"]
+            or any(a["to_unit"] != b["from_unit"] for a, b in pairwise(relations))):
         _error("semantic_resolved_binding_changed", "The resolved unit relation differs from its exact coordinate binding.", role=role)
-    if coordinate["source_unit"] == coordinate["unit"] and (relation["kind"] != "identity" or relation["factor"] != 1 or relation["offset"] != 0 or relation["canonical_from_unit"] != relation["canonical_to_unit"]):
+    relation = relations[0]
+    if coordinate["source_unit"] == coordinate["unit"] and (len(relations) != 1 or relation["kind"] != "identity" or relation["factor"] != 1 or relation["offset"] != 0 or relation["canonical_from_unit"] != relation["canonical_to_unit"]):
         _error("semantic_resolved_binding_changed", "An unchanged original unit does not match its resolved identity relation.", role=role)
     if requires_unit_context(coordinate["source_unit"], coordinate["unit"]):
         context = coordinate.get("unit_context")
@@ -49,7 +52,7 @@ def _select_column(candidate: dict[str, Any], block: dict[str, Any], coordinate:
                 explicit_quantity_binding=context["explicit_quantity_binding"] if context else False)
         except DocumentError:
             _error("semantic_unit_context_confirmation_required", "This uncommitted coordinate lacks a supported unit context. Explicitly reconfirm its quantity and exact original selector with revise_intent in this same draft; no saved request or source value was changed.", role=role)
-        if admitted != relation:
+        if [admitted] != relations:
             _error("semantic_resolved_binding_changed", "The frozen relation differs from its source-supported unit context; revise this same uncommitted draft.", role=role)
     return {**exact[0], "unit": coordinate["source_unit"]}
 
@@ -239,10 +242,12 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
                     _error("semantic_unit_ambiguous", "Selected stages use different units; declare the requested coordinate unit explicitly.", role=role)
                 units[role] = target
                 if role in selected and selected[role]["unit"] != target:
-                    current = transform("convert_unit", [current], {"columns": [role], "from_unit": selected[role]["unit"], "to_unit": target})
-                    details = datasets[current]["provenance"]["transforms"][-1]["details"]
-                    if any(details[field] != value for field, value in coordinate["unit_relation"].items() if field != "kind"):
-                        _error("semantic_resolved_binding_changed", "The registered unit execution differs from its resolved scientific relation.", role=role)
+                    for relation in unit_path(coordinate):
+                        current = transform("convert_unit", [current], {"columns": [role],
+                            "from_unit": relation["from_unit"], "to_unit": relation["to_unit"]})
+                        details = datasets[current]["provenance"]["transforms"][-1]["details"]
+                        if any(details[field] != value for field, value in relation.items() if field != "kind"):
+                            _error("semantic_resolved_binding_changed", "The registered unit execution differs from its resolved scientific relation.", role=role)
             if derived:
                 current = transform("select", [current], {"columns": list(coordinates)})
             pieces.append(current)
