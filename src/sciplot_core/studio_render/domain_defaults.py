@@ -172,6 +172,8 @@ def _apply_domain_render_defaults(
             if "y_label_override" not in recorded_options:
                 updated["y_label_override"] = "Impact strength (kJ m⁻²)"
     if template_id in STACKED_TEMPLATE_IDS and _looks_like_wavenumber_axis(axis_info):
+        from sciplot_core.studio_render.spectral_axis_display import spectral_frame_size
+
         detected_y_label = str(axis_info.get("y_label") or "").strip()
         series_count = int(axis_info.get("series_count") or 0)
         label_mode = str(updated.get("series_label_mode") or "").strip().casefold()
@@ -182,7 +184,7 @@ def _apply_domain_render_defaults(
             "series_label_side": "left",
             "show_single_series_label": series_count == 1,
             "x_label_override": "Wavenumber (cm⁻¹)",
-            "size": "120x55" if series_count == 1 else "120x110",
+            "size": spectral_frame_size(series_count),
         }
         for key, value in domain_defaults.items():
             if (

@@ -129,7 +129,7 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
 
     for response, unit, values, expected_label, extremum in (
         ("Transmittance", "%", [90, 66, 92], "Transmittance (%)", "minimum"),
-        ("Absorbance", "a.u.", [.10, .8, .5], "Absorbance", "maximum"),
+        ("Absorbance", "a.u.", [.10, .8, .5], "Absorbance (a.u.)", "maximum"),
         ("Spectral response", "a.u.", [.10, .8, .5], None, None),
     ):
         spectrum = tmp_path / (response + ".csv")
@@ -150,7 +150,7 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
         assert (x["direction"], x["unit"]) == ("descending", "cm^-1")
         assert (y["quantity"], y["unit"]) == (response.lower(), unit)
         assert spec["views"][0]["axes"][1]["label"] == expected_label
-        assert spec["layout"] == {"width_mm": 120, "height_mm": 110}
+        assert spec["layout"] == {"width_mm": 120, "height_mm": 55}
         metric, = state["analysis_metrics"]
         assert (metric["metric"], metric["value"], metric["unit"], metric["status"]) == (
             "observed_response_extremum_wavenumber_cm-1", 400., "cm⁻¹", "ok")
@@ -163,6 +163,41 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
         coordinate = data[next(iter(binding["slots"].values()))["x"]["source_id"]]["columns"]
         assert coordinate["x"]["values"] == x_values and coordinate["y"]["values"] == values
         assert spectrum.read_bytes() == original
+
+    gpc = tmp_path / "gpc.csv"
+    chromatogram = b"Molar mass (g/mol),dW/dLogM\n9000,0.1\n3000,0.8\n1000,0.5\n"
+    gpc.write_bytes(chromatogram)
+    plan = build_plan_preview(gpc, request={"rule_id": "gpc_sec_chromatogram"})
+    state = {"request": {**request, "source": str(gpc)}, "task_dir": str(tmp_path / "gpc-task"),
+             "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
+    assert admit_raw_curve(state, plan)
+    result = build_managed_request(state)
+    spec = result["template_definition"]["figure_spec"]
+    x, y = spec["scales"]
+    assert (x["quantity"], x["unit"], x["transform"]) == ("molar_mass", "g/mol", "log")
+    assert (y["quantity"], y["unit"]) == ("differential_weight_fraction", "1")
+    original_y = state["semantic_plan"]["resolved_bindings"][0]["coordinates"]["y"]
+    assert (original_y["observed_unit"], original_y["header"]) == ("", "dW/dLogM")
+    assert spec["views"][0]["axes"][1]["label"] == "dW/dlog M"
+    metric, = state["analysis_metrics"]
+    assert (metric["metric"], metric["value"], metric["unit"], metric["status"]) == (
+        "peak_molar_mass_g_mol", 3000., "g mol⁻¹", "ok")
+    assert "no molecular-weight calibration is inferred from RI" in metric["reason"]
+    binding = result["data_binding"]
+    doc = create_managed_document(result["template_definition"], binding, plot_id="gpc-original")
+    data = load_sources(doc, "gpc_sec_chromatogram")
+    for node in binding["transforms"]:
+        data[node["output"]], _ = execute_node(node, data)
+    gpc_slot, = binding["slots"].values()
+    coordinate = data[gpc_slot["x"]["source_id"]]["columns"]
+    assert gpc_slot["sample"] == "gpc"
+    assert coordinate["x"]["values"] == [9000, 3000, 1000] and coordinate["y"]["values"] == [.1, .8, .5]
+    assert gpc.read_bytes() == chromatogram
+    alternate = tmp_path / "gpc-adjacent.csv"
+    alternate.write_bytes(chromatogram.replace(b"Molar mass (g/mol),dW/dLogM", b"Molar mass,dW/dLogM\ng/mol,\nA,A"))
+    unverified = build_plan_preview(alternate, request={"rule_id": "gpc_sec_chromatogram"})
+    assert unverified["status"] == "planned"
+    assert not admit_raw_curve({"request": {**request, "source": str(alternate)}}, unverified)
 
     path = tmp_path / "signed-xrd.csv"
     path.write_text("2theta,Intensity\ndegree,a.u.\nB,B\n1,-3\n2,6\n3,4\n")

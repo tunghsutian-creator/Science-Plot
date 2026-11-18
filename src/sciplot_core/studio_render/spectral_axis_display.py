@@ -12,6 +12,11 @@ from typing import Any
 from sciplot_core.studio_render.template_resolution import _explicit_render_options
 
 
+def spectral_frame_size(series_count: int) -> str:
+    """A single wavenumber trace uses the short frame; stacked traces need height."""
+    return "120x55" if series_count == 1 else "120x110"
+
+
 def freeze_new_spectral_axis_display(
     request: dict[str, Any],
     *,

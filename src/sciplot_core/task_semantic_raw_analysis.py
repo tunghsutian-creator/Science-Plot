@@ -38,9 +38,11 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
     source = Path(request["source"])
     rule_id = plan["rule_id"]
     ftir = rule_id == "ftir_spectrum"
+    gpc = rule_id == "gpc_sec_chromatogram"
     if (set(request) - {"version", "action", "source", "out", "rule_id", "template"}
             or source.suffix.casefold() not in {".csv", ".tsv"} or not source.is_file()
-            or rule_id not in {"uvvis_spectrum", "dsc_curve", "tga_curve", "dtg_curve", "saxs_profile", "xrd_pattern", "ftir_spectrum"}
+            or rule_id not in {"uvvis_spectrum", "dsc_curve", "tga_curve", "dtg_curve", "saxs_profile", "xrd_pattern", "ftir_spectrum",
+                               "gpc_sec_chromatogram"}
             or plan["template"] != ("stacked_curve" if ftir else "curve") or "data_mapping" in plan or "source_options" in plan):
         return False
     transform = plan.get("scientific_transform") or {}
@@ -66,7 +68,7 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
     if figure_task["metric_binding"] != {"kind": "cartesian_xy", "x_metric": output["x_metric"], "y_metric": output["y_metric"]}:
         return False
     conversions = {(item["sample"], item["role"]): item for item in transform["unit_conversions"]}
-    coordinates = (("x", "x", rule.x_axis), ("y", "response", rule.y_axis))
+    coordinates = (("x", "x", rule.x_axis), ("y", "distribution" if gpc else "response", rule.y_axis))
     intent: dict[str, Any] = {"rule_id": rule_id}
     ftir_mode = output.get("response_mode") if ftir else None
     if ftir and (ftir_mode not in {"transmittance", "absorbance"}
@@ -85,12 +87,21 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
                     and conversion.get("source_unit_declared") and conversion.get("source_unit") == conversion.get("output_unit") == unit
                     if ftir else all(conversion.get(step) == {"factor": 1.0, "offset": 0.0}
                                      for step in ("source_to_canonical", "canonical_to_display")))
+        method = ("detected_dimensionless_distribution_header" if role == "y"
+                  else "detected_from_header") if gpc else "detected_from_adjacent_unit_row"
         if (original["unit"] != unit or output.get(role + "_unit") != unit or not identity
-                or original["unit_detection"]["method"] != "detected_from_adjacent_unit_row"):
+                or original["unit_detection"]["method"] != method):
             return False
         intent[role] = {"quantity": ftir_mode if ftir and role == "y" else output[role + "_metric"], "column_id": f"column:{original['column_index_zero_based']}",
                         "scale": axis.scale, "direction": "descending" if axis.reverse else "ascending"}
 
+    if gpc:
+        # The GPC scientific contract identifies the original instrument-exported
+        # dimensionless dW/dLogM column. Record unit 1 without treating other
+        # blank source units as dimensionless or altering the source cells.
+        if columns[0]["distribution"]["header"].casefold() != "dw/dlogm":
+            return False
+        intent["y"]["source_unit"] = "1"
     if rule_id == "dtg_curve":
         from sciplot_core.source_inspection.semantic_evidence import _quantity
 
@@ -105,7 +116,11 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
     if semantic["decisions"] or len(candidates) != 1 or len(candidates[0]["blocks"]) != 1 or len(bindings) != 1:
         return False
     block = candidates[0]["blocks"][0]
-    if (block["sample"] != series[0]["sample"] or block["point_count"] != series[0]["point_count"]):
+    if (block.get("sample", source.stem if gpc else None) != series[0]["sample"]
+            or block["point_count"] != series[0]["point_count"]
+            or (gpc and block["table_selection"]["header_rows"] != [columns[0]["header_row_index"]])):
+        return False
+    if gpc and block["table_selection"]["data_start_row"] != columns[0]["header_row_index"] + 1:
         return False
     for role, original_role, _ in coordinates:
         actual, original = bindings[0]["coordinates"][role], columns[0][original_role]
@@ -113,14 +128,16 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
         # aliases in the generic table. DTG needs the observed derivative.
         expected = intent[role]["quantity"]
         unit = output[role + "_unit"]
-        allowed = (expected, None) if rule_id in {"saxs_profile", "xrd_pattern"} else (expected,)
+        allowed = (expected, None) if rule_id in {"saxs_profile", "xrd_pattern", "gpc_sec_chromatogram"} else (expected,)
         if ((actual["column_index"], actual["header"], actual["observed_unit"], actual["unit"])
-                != (original["column_index_zero_based"], original["header"], unit, unit)
+                != (original["column_index_zero_based"], original["header"], unit, "1" if gpc and role == "y" else unit)
                 or actual["observed_quantity"] not in allowed
                 or actual["unit_relation"]["kind"] != "identity"):
             return False
 
-    size = size_preset_contract(rule.render_options["size"])
+    from sciplot_core.studio_render.spectral_axis_display import spectral_frame_size
+
+    size = size_preset_contract(spectral_frame_size(len(series)) if ftir else rule.render_options["size"])
     presentation: dict[str, Any] = {}
     if rule_id == "xrd_pattern":
         from sciplot_core.studio_render.spectral_axis_display import freeze_new_spectral_axis_display
@@ -129,7 +146,7 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
         presentation["show_y_ticks"] = display["render_options"]["show_y_ticks"]
     axis_labels = {role: axis.display_label.replace("$^{-1}$", "⁻¹") for role, _, axis in coordinates}
     if ftir:
-        axis_labels["y"] = "Transmittance (%)" if ftir_mode == "transmittance" else "Absorbance"
+        axis_labels["y"] = "Transmittance (%)" if ftir_mode == "transmittance" else "Absorbance (a.u.)"
     analysis = raw_curve_analysis(source, rule_id, plan, frozen["sha256"])
     state.update(initial_request=deepcopy(request), analysis_metrics=analysis,
                  request={"version": 1, "action": "create", "sources": [str(source)], "intent": intent,
