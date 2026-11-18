@@ -66,6 +66,13 @@ def fingerprint_input_roles(binding: dict[str, Any], *, input_document: dict[str
     return inputs, host_files, expected_files
 
 
+def native_build_record(ir_hash: str, evidence: dict[str, Any], compile_id: str) -> dict[str, Any]:
+    """Seal the exact native artifact observed by the Managed compiler."""
+    return {"ir_hash": ir_hash, "document_sha256": evidence["document_sha256"],
+            "native_state_hash": evidence["native_state_hash"],
+            "compiler_identity": evidence.get("compiler_identity") or compiler_identity(), "compile_id": compile_id}
+
+
 class ManagedBackend:
     def __init__(self) -> None:
         self.compiler = ManagedVeuszCompiler()
@@ -189,9 +196,8 @@ class ManagedBackend:
                     if file_sha256(native) != inspected["document_sha256"]:
                         raise EngineError("managed_external_mutation", "The managed artifact changed after recovery inspection.",
                                           action="inspect_external_mutation")
-                    write(marker, {"ir_hash": ir["ir_hash"], "document_sha256": inspected["document_sha256"],
-                          "native_state_hash": inspected["native_state_hash"], "compiler_identity": current_compiler,
-                          "compile_id": intent["compile_id"]})
+                    write(marker, native_build_record(
+                        ir["ir_hash"], {**inspected, "compiler_identity": current_compiler}, intent["compile_id"]))
         if rebuild:
             intent = {"ir_hash": binding["ir_hash"], "canonical_sha256": binding["canonical_sha256"],
                       "compiler_identity": compiler_identity(), "compile_id": uuid4().hex}
@@ -204,9 +210,7 @@ class ManagedBackend:
                 # The durable intent makes interruption before or after deletion recoverable.
                 native.unlink()
             built = self.compiler.compile_ir(ir, native.parent)
-            write(marker, {"ir_hash": ir["ir_hash"], "document_sha256": built["document_sha256"],
-                  "native_state_hash": built["native_state_hash"], "compiler_identity": built["compiler_identity"],
-                  "compile_id": intent["compile_id"]})
+            write(marker, native_build_record(ir["ir_hash"], built, intent["compile_id"]))
         require_inputs(canonical)
         return native, built
 

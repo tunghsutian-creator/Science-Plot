@@ -2,22 +2,22 @@
 from copy import deepcopy
 import csv
 from io import StringIO
-import json
 from pathlib import Path
 import shutil
 
 import pytest
 
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
+from sciplot_core.plot_engine.managed_backend import native_build_record
 from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
 from sciplot_core.plot_engine.managed_state import prepare_binding
 from sciplot_core.plot_ir import create_managed_document
 from sciplot_core.plot_transforms import builtin_executor
-from sciplot_core.project_commands import PreparedMutation, ProjectCommand, ProjectCommands, SourceTreeRead
-from sciplot_core.project_lifecycle.attached_repository import AttachedProjectRepository, _Batch
+from sciplot_core.project_commands import ProjectCommands, SourceTreeRead
+from sciplot_core.project_lifecycle.attached_repository import AttachedProjectRepository
+from sciplot_core.project_lifecycle.attachment_group import PreparedFigure, publish_attachment_group, resume_attachment_group
 from sciplot_core.project_lifecycle.attachment_import import entry_for
-from sciplot_core.project_lifecycle.attachment_index import Attachment, INDEX, encode, read_index
-from sciplot_core.project_lifecycle.attachment_sources import prepared_sources
+from sciplot_core.project_lifecycle.attachment_index import Attachment, encode, read_index
 from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
 from sciplot_core.project_lifecycle.context import repository_scope
 from sciplot_core.project_store import FileProjectStore, state
@@ -63,6 +63,16 @@ def _mean_input(tmp_path):
     root.mkdir()
     one = instrument_source(root / "A.csv", temperatures=(210, 150))
     two = instrument_source(root / "B.csv", temperatures=(210, 170))
+    lines = one.read_text(encoding="utf-16").splitlines()
+    singleton = False
+    for index, line in enumerate(lines):
+        if line.startswith("Result:"):
+            singleton = "150 °C" in line
+        cells = line.split("\t")
+        if singleton and len(cells) > 11 and cells[1] in {"15", "16"}:
+            cells[3], cells[4] = "6.25", "171" if cells[1] == "15" else "169"
+            lines[index] = "\t".join(cells)
+    one.write_text("\n".join(lines), encoding="utf-16")
     # A second original 210°C sweep changes every storage observation by 100
     # Pa. The 150°C condition appears only once and must stay in source order.
     lines = two.read_text(encoding="utf-16").splitlines()
@@ -82,30 +92,26 @@ def _candidate_head(compiler, store, before, task, request, staging):
     entry["origin_root"] = entry["namespace_origin"]
     attachment = Attachment(store, entry)
     repo = AttachedProjectRepository(attachment)
-    # Capture the exact existing Managed repository writes, not its individual
-    # _flush. The real group outer owner is the one PreparedMutation below.
-    batch = _Batch(before)
-    token = repo._batch.set(batch)
-    try:
+    with repo.prepare_new_member(before) as members:
         with repository_scope(repo, capabilities=COMPATIBILITY_CAPABILITIES):
             document = create_managed_document(request["template_definition"], request["data_binding"], plot_id=task.figure_id)
             document = resolved_metadata(document, rule_id=request["rule_id"], executors={})
             document, _ = resolve_science(attachment.root, document)
             binding, ir = prepare_binding(attachment.root, document, output=output)
             repo.commit(attachment.root, document, binding, "frequency_mean_suite")
-    finally:
-        repo._batch.reset(token)
     worker = staging / task.figure_id
     built = compiler.compile_ir(ir, worker)
     assert built["scientific_audit"]["status"] == built["publication_qa"]["status"] == "passed"
     exports = compiler.export_ir(ir, Path(built["document"]), worker / "exports")
     assert exports["ready_to_use"]
-    files = dict(batch.writes)
-    files[store.logical_path(Path(binding["document"]))] = Path(built["document"]).read_bytes()
+    published_native = Path(binding["document"])
+    assets = {store.logical_path(published_native): Path(built["document"]).read_bytes(),
+              store.logical_path(published_native.parent / "build.json"):
+                  encode(native_build_record(ir["ir_hash"], built, ir["ir_hash"]))}
     for export in exports["exports"]:
         path = Path(export["path"])
-        files[store.logical_path(output / path.name)] = path.read_bytes()
-    return attachment, files, ir, binding
+        assets[store.logical_path(output / path.name)] = path.read_bytes()
+    return PreparedFigure(attachment, members, assets), ir, binding
 
 
 @pytest.mark.comprehensive
@@ -128,8 +134,7 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
     workspace.mkdir()
     store = FileProjectStore(workspace)
     before = store.snapshot(import_legacy=True)
-    index = read_index(store, before)
-    writes = {}
+    candidates = []
     evidence = {}
     terminal = []
     compile_order = []
@@ -162,14 +167,13 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
                 assert store.snapshot()["files"] == before["files"]
                 assert not (workspace / "figures").exists()
                 assert compile_order == list(plan.selected_figure_ids[:-1])
-            attachment, files, ir, binding = _candidate_head(compiler, store, before, task, request, tmp_path / "staging")
-            evidence[task.figure_id] = attachment, binding
+            candidate, ir, binding = _candidate_head(compiler, store, before, task, request, tmp_path / "staging")
+            candidates.append(candidate)
+            evidence[task.figure_id] = candidate.attachment, binding
             assert len(evidence) <= len(tasks) and store.snapshot()["generation"] == before["generation"]
             assert store.snapshot()["files"] == before["files"]
-            index["attachments"][attachment.entry["id"]] = attachment.entry
-            writes.update(files)
-            candidates = ir["views"][0]["layers"]
-            for layer, old in zip(candidates, old_samples, strict=True):
+            layers = ir["views"][0]["layers"]
+            for layer, old in zip(layers, old_samples, strict=True):
                 values = ir["datasets"][layer["dataset_id"]]["columns"]
                 assert values["x"]["unit"] == "rad/s" and values["y"]["unit"] == units[task.y_metric]
                 points = [(row["x"], row[task.y_metric]) for row in old.rows if task.y_metric in row]
@@ -177,7 +181,7 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
                 assert actual_x == [x for x, _ in points]
                 assert actual_y == pytest.approx([y for _, y in points], rel=2e-15, abs=0.)
                 if task.y_metric == "storage_modulus":
-                    terminal.append(min(zip(actual_x, actual_y, strict=True))[1])
+                    terminal.append(min(zip(actual_x, actual_y, strict=True), key=lambda pair: pair[0])[1])
     finally:
         compiler.close()
 
@@ -186,27 +190,19 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
                                        resolved_scientific_source=resolved)
     rows = compute_analysis_metrics(source_path=raw, processed_source=Path(prepared["processed_source"]),
                                     semantic=semantic, output_dir=tmp_path / "old-analysis")
-    assert [row["value"] for row in rows] == terminal == [565., 415., 515.]
+    assert [row["value"] for row in rows] == terminal == [565., 171., 515.]
     analysis = StringIO(newline="")
     writer = csv.DictWriter(analysis, fieldnames=["metric", "value", "unit", "status", "reason"])
     writer.writeheader()
     writer.writerows({**row, "value": value} for row, value in zip(rows, terminal, strict=True))
 
-    writes["analysis/frequency.csv"] = analysis.getvalue().encode()
-    writes["figure-plan.json"] = encode(plan.to_payload())
-    writes[INDEX] = encode(index)
-    inventory = [source for attachment, _ in evidence.values()
-                 for name, data in writes.items()
-                 if data and name.startswith(attachment.entry["namespace"] + "/revisions/")
-                 for source in json.loads(data)["document"]["scientific"]["data_sources"]]
-    captured = prepared_sources(store, inventory, snapshot=before)
-    assert {Path(item.locator): item.data for item in captured} == source_bytes
-    mutation = PreparedMutation.from_values(writes, {"figure_ids": list(plan.selected_figure_ids),
-        "analysis": "analysis/frequency.csv"}, prepared_sources=captured)
-    command = ProjectCommand.create("semantic_record", "frequency-mean-suite", project_id=before["project_id"],
-        expected_generation=before["generation"], read_set=dict.fromkeys(writes), write_set=sorted(writes),
-        request={"prepared_digest": mutation.prepared_digest, "plan": plan.to_payload()},
-        source_trees=(SourceTreeRead(str(raw), resolved.source_sha256),))
+    outputs = {"analysis/frequency.csv": analysis.getvalue().encode(), "figure-plan.json": encode(plan.to_payload())}
+    key = "frequency-mean-suite"
+    args = {"key": key, "selected_figures": plan.selected_figure_ids, "outputs": outputs,
+            "source_tree": SourceTreeRead(str(raw), resolved.source_sha256), "required_outputs": tuple(outputs)}
+    with pytest.raises(ValueError, match="Prepare every selected figure"):
+        publish_attachment_group(store, before, figures=tuple(candidates[:-1]), **args)
+    assert ProjectCommands(store).query(key) is None
 
     def interrupt(point):
         if point == "before_head":
@@ -215,7 +211,7 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
     with monkeypatch.context() as fault:
         fault.setattr(state, "boundary", interrupt)
         with pytest.raises(Interrupted):
-            ProjectCommands(store).publish_prepared(command, mutation)
+            publish_attachment_group(store, before, figures=tuple(candidates), **args)
     assert store.snapshot()["generation"] == before["generation"]
     assert store.snapshot()["files"] == before["files"]
     assert not (workspace / "analysis/frequency.csv").exists()
@@ -223,23 +219,42 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
     # The publication must not require caller candidate bytes or native staging.
     shutil.rmtree(tmp_path / "staging")
     restarted = FileProjectStore(workspace)
-    recovery = ProjectCommands(restarted)
-    prior = recovery.query(command.key)
+    prior = ProjectCommands(restarted).query(key)
     assert prior is not None and prior["phase"] == "accepted"
-    completed = recovery.resume(ProjectCommand.from_payload(prior["metadata"]))
+    completed = resume_attachment_group(restarted, key)
     current = restarted.snapshot()
     assert completed["phase"] == "complete"
+    assert len(completed["result"]["artifacts"]) == len(tasks) * 4
     assert current["sequence"] == before["sequence"] + 1
-    assert set(current["files"]) - set(before["files"]) == set(writes)
-    assert restarted.read_bytes("analysis/frequency.csv") == writes["analysis/frequency.csv"]
+    published = set(current["files"]) - set(before["files"])
+    assert set(outputs) <= published
+    assert restarted.read_bytes("analysis/frequency.csv") == outputs["analysis/frequency.csv"]
     assert compile_order == list(plan.selected_figure_ids)
-    assert len([member for member in writes if member.endswith(".pdf")]) == len(tasks)
-    assert len([member for member in writes if member.endswith(".tiff")]) == len(tasks)
-    assert len([member for member in writes if member.endswith(".vsz")]) == len(tasks)
+    for suffix in (".vsz", ".pdf", ".tiff"):
+        assert len([member for member in published if member.endswith(suffix)]) == len(tasks)
     for figure, (old_attachment, binding) in evidence.items():
         entry = read_index(restarted, current)["attachments"][old_attachment.entry["id"]]
         attached = Attachment(restarted, entry)
         saved = AttachedProjectRepository(attached).load_head(attached.root)
         assert saved["document"]["plot_type"] == "ManagedPlot" and saved["document"]["plot_id"] == figure
         assert saved["binding"]["ir_hash"] == binding["ir_hash"]
+    # Reopen and edit a real published aggregate through the same public
+    # semantic service used by other Managed plots, not a suite-specific editor.
+    from sciplot_core.plot_engine.service import PlotService
+
+    service = PlotService()
+    try:
+        primary = service.open(workspace, figure_id=plan.primary_figure_id)
+        assert primary["plot_type"] == "ManagedPlot" and primary["revision"] == 0
+        updated = service.patch(Path(primary["plot"]), {
+            "plot_id": primary["plot_id"], "base_revision": 0, "idempotency_key": "frequency-axis-label",
+            "intent_class": "presentation",
+            "changes": [{"op": "set", "target": ["axis:x"], "property": "axis.label", "value": "Angular frequency (rad/s)"}],
+        })
+        assert updated["revision"] == 1 and updated["ready_to_use"]
+        assert updated["scientific_hash"] == primary["scientific_hash"]
+        other = service.open(workspace, figure_id=tasks[1].figure_id)
+        assert other["revision"] == 0
+    finally:
+        service.close()
     assert {path: path.read_bytes() for path in originals} == source_bytes

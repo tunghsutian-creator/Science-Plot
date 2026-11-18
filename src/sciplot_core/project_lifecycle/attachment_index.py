@@ -119,6 +119,21 @@ class Attachment:
         return str(self.entry["namespace"]) + "/" + relative.as_posix()
 
 
+def register_entry(index: dict[str, Any], attachment: Attachment) -> None:
+    """Preserve one attachment identity across single and group publications."""
+    identity = attachment.entry["id"]
+    existing = index["attachments"].get(identity)
+    if existing is not None and existing != attachment.entry:
+        raise EngineError("semantic_attachment_identity_conflict", "A stable semantic attachment cannot be redirected.")
+    index["attachments"][identity] = attachment.entry
+
+
+def owner_marker(attachment: Attachment, project_id: str) -> bytes:
+    return encode({"kind": "sciplot_semantic_owner", "version": 1,
+                   "origin_root": str(attachment.root), "project": str(attachment.store.root),
+                   "project_id": project_id, "attachment_id": attachment.entry["id"]})
+
+
 def attachment_id(project_id: str, key: str) -> str:
     return canonical_json_sha256(["semantic_attachment_v1", project_id, key], allow_nan=False)[:32]
 

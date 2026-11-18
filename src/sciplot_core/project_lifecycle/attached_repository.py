@@ -15,7 +15,7 @@ from sciplot_core.foundation.writer_lease import exclusive_directory_lease
 from sciplot_core.foundation.source_locations import source_location_scope
 from sciplot_core.project_commands import MembershipRead, ProjectCommand, ProjectCommands, PreparedMutation, SourceAdoption
 from sciplot_core.project_store.member_observation import ObservedMember
-from .attachment_index import Attachment, INDEX, OWNER, encode, read_index
+from .attachment_index import Attachment, INDEX, OWNER, encode, owner_marker, read_index, register_entry
 from .attachment_projection import derived_relative, metadata_view
 from .attachment_sources import AttachmentSourceResolver, prepared_sources, record_sources
 from .errors import EngineError
@@ -159,24 +159,32 @@ class AttachedProjectRepository(FileProjectRepository):
             if token is not None:
                 self._batch.reset(token)
 
+    @contextmanager
+    def prepare_new_member(self, snapshot: dict[str, Any]) -> Iterator[dict[str, bytes | None]]:
+        """Collect this new head's normal canonical writes for the group owner."""
+        if self._batch.get() is not None or self.attachment.logical(self.attachment.root / "head.json") in snapshot["files"]:
+            raise EngineError("semantic_attachment_group_not_new", "A new attachment group cannot replace an existing head.")
+        batch = _Batch(snapshot)
+        token = self._batch.set(batch)
+        try:
+            yield batch.writes
+        finally:
+            self._batch.reset(token)
+
     def _flush(self, batch: _Batch) -> None:
         if not batch.writes:
             return
         with self.attachment.store._validation_window():
             index = read_index(self.attachment.store, batch.snapshot)
             identity = self.attachment.entry["id"]
-            existing = index["attachments"].get(identity)
-            if existing is not None and existing != self.attachment.entry:
-                raise EngineError("semantic_attachment_identity_conflict", "A stable semantic attachment cannot be redirected.")
-            if existing is None:
-                index["attachments"][identity] = self.attachment.entry
+            existing = identity in index["attachments"]
+            register_entry(index, self.attachment)
+            if not existing:
                 batch.writes[INDEX] = encode(index)
                 batch.reads[INDEX] = batch.snapshot["files"].get(INDEX, {}).get("sha256")
             marker = self.attachment.entry["namespace"] + "/" + OWNER
             if marker not in batch.snapshot["files"]:
-                batch.writes[marker] = encode({"kind": "sciplot_semantic_owner", "version": 1,
-                    "origin_root": str(self.attachment.root), "project": str(self.attachment.store.root),
-                    "project_id": batch.snapshot["project_id"], "attachment_id": identity})
+                batch.writes[marker] = owner_marker(self.attachment, batch.snapshot["project_id"])
                 batch.reads[marker] = None
             writes = {name: data for name, data in batch.writes.items()
                       if data is None or hashlib.sha256(data).hexdigest() != batch.snapshot["files"].get(name, {}).get("sha256")}
