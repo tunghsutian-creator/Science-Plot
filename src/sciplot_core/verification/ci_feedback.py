@@ -11,6 +11,9 @@ import sys
 from typing import Any
 
 from sciplot_core.verification.changed import build_changed_verification_plan
+from sciplot_core.verification.frequency_feedback import (
+    FREQUENCY_ENTRY_NATIVE, FREQUENCY_ENTRY_PATHS, FREQUENCY_FOCUSED, FREQUENCY_WORKFLOW_NATIVE, FREQUENCY_WORKFLOW_PATHS,
+)
 from sciplot_core.verification.task_control_owners import TASK_TIMING_FEEDBACK_TARGETS
 from sciplot_core.verification.task_timing_feedback import TASK_TIMING_PATH
 
@@ -32,8 +35,9 @@ NATIVE_EXPECTED = frozenset(NATIVE_PREFIX) | {
 }
 
 
-# Reviewed design prose with no native/runtime reader; README/skill/contracts are not certified.
+# Only isolated design prose can skip the historical native diagnostic.
 _NARRATIVE_PATHS = frozenset({"docs/DESIGN_PROJECT_LIFECYCLE.md", "docs/DESIGN_PROJECT_CORE_MIGRATION.md"})
+_DOCUMENTATION_PATHS = _NARRATIVE_PATHS | {"README.md", "skill/references/ordinary-create.md"}
 
 # Exact reviewed paths, not broad owner prefixes: shared code, unlisted tests,
 # deleted files and changes to the planner itself keep complete public gates.
@@ -61,7 +65,6 @@ _ASSEMBLY_PREVIEW_PATHS = frozenset({
     "src/sciplot_core/panel_assembly/preview.py", "tests/test_panel_assembly_preview.py",
     _ASSEMBLY_NATIVE_PATH,
 })
-_ASSEMBLY_PATHS = _ASSEMBLY_EXPORT_PATHS | _ASSEMBLY_PREVIEW_PATHS
 _ASSEMBLY_CHECKS = (
     "tests/test_panel_assembly_export.py", "tests/test_panel_assembly_preview.py",
     "tests/test_panel_assembly_sources.py",
@@ -74,6 +77,23 @@ _ASSEMBLY_NATIVE_EXPORT_CHECKS = (
 _ASSEMBLY_NATIVE_PREVIEW_CHECKS = (
     "tests/test_panel_assembly_preview.py::test_legacy_preview_uses_current_native_not_adjacent_pdf_and_does_not_accept_export",
     "tests/test_panel_assembly_preview.py::test_managed_preview_compiles_current_semantics_without_native_save_or_qa_claim",
+)
+
+
+_RAW_ANALYSIS_PATH = "src/sciplot_core/task_semantic_raw_analysis.py"
+_RAW_ANALYSIS_CHECKS = ("tests/test_task_shortcuts.py", "tests/test_task_semantic_creation.py")
+_RAW_ANALYSIS_NATIVE = (
+    "tests/test_task_semantic_creation.py::test_native_single_table_ftir_raw_overlay_preserves_sample_membership_and_descending_display",
+    "tests/test_legacy_saved_plot.py::test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project",
+)
+_SCOPE_PATHS = frozenset({
+    "src/sciplot_core/verification/input_scope_manifest.json",
+    "src/sciplot_core/verification/private_corpus_inventory.json",
+})
+_SCOPE_CHECKS = (
+    "tests/test_private_corpus_preflight.py::test_checked_in_inventory_is_explicitly_preliminary",
+    "tests/test_private_corpus_preflight.py::test_complete_inventory_requires_bound_full_access_evidence",
+    "tests/test_public_stage.py",
 )
 
 
@@ -124,19 +144,27 @@ def ci_feedback_plan(paths: list[str], root: Path, *, event: str = "push", ref: 
             reason = "metadata_only_task_timing"
         else:
             reason = "task_timing_contract_not_proven"
-    reviewed = _TABLE_PATHS | _INTAKE_PATHS | _ASSEMBLY_PATHS
+    feedback_groups = (
+        (_TABLE_PATHS, _TABLE_CHECKS, ()),
+        (_INTAKE_PATHS, _INTAKE_CHECKS, ()),
+        (_ASSEMBLY_EXPORT_PATHS, _ASSEMBLY_CHECKS, _ASSEMBLY_NATIVE_EXPORT_CHECKS),
+        (_ASSEMBLY_PREVIEW_PATHS, _ASSEMBLY_CHECKS, _ASSEMBLY_NATIVE_PREVIEW_CHECKS),
+        (FREQUENCY_WORKFLOW_PATHS, FREQUENCY_FOCUSED, FREQUENCY_WORKFLOW_NATIVE),
+        (FREQUENCY_ENTRY_PATHS, FREQUENCY_FOCUSED, FREQUENCY_ENTRY_NATIVE),
+        (frozenset({_RAW_ANALYSIS_PATH}), _RAW_ANALYSIS_CHECKS, _RAW_ANALYSIS_NATIVE),
+        (_SCOPE_PATHS, _SCOPE_CHECKS, ()),
+        (_DOCUMENTATION_PATHS, ("tests/test_documentation_contract.py", "tests/test_repository_policy.py"), ()),
+    )
+    reviewed = frozenset().union(*(owner_paths for owner_paths, _, _ in feedback_groups))
     reviewed_change = (bool(selected) and selected <= reviewed and not result["unowned_paths"]
                        and all((root / path).is_file() and not (root / path).is_symlink() for path in selected))
     if reviewed_change:
-        for owner_paths, owner_checks in (
-            (_TABLE_PATHS, _TABLE_CHECKS), (_INTAKE_PATHS, _INTAKE_CHECKS), (_ASSEMBLY_PATHS, _ASSEMBLY_CHECKS),
-        ):
+        for owner_paths, owner_checks, owner_native in feedback_groups:
             if selected & owner_paths:
                 targets.extend(owner_checks)
-        if selected & _ASSEMBLY_EXPORT_PATHS:
-            native_targets.extend(_ASSEMBLY_NATIVE_EXPORT_CHECKS)
-        if selected & _ASSEMBLY_PREVIEW_PATHS:
-            native_targets.extend(_ASSEMBLY_NATIVE_PREVIEW_CHECKS)
+                native_targets.extend(owner_native)
+        if selected & (FREQUENCY_WORKFLOW_PATHS | FREQUENCY_ENTRY_PATHS | {_RAW_ANALYSIS_PATH} | _DOCUMENTATION_PATHS | _SCOPE_PATHS):
+            targets.extend((*ARCHITECTURE_CORE_TARGETS, *_AFFECTED_GUARDS))
         reason = "reviewed_owner_native_feedback" if native_targets else "reviewed_owner_feedback"
     full_ref = ref in {"refs/heads/integration", "refs/heads/release"} or ref.startswith(
         ("refs/tags/", "refs/heads/integration/", "refs/heads/release/")

@@ -155,8 +155,9 @@ def test_saved_figure_ai_entry_chooses_compact_only_for_known_managed_plots() ->
     assert "plot describe PLOT --scope edit --target-id ID --property NAME --json" in route
     assert '"description":{"scope":"edit","target":"ID", "property":"NAME"}' in route
     assert "status`, `changed_inputs`, `artifact_status`, `pending` and `next_step" in route
-    assert "A LegacyPlot stays under its full description" in route
-    assert "a separate scoped edit read is unnecessary" in route
+    assert "`read_only: true` can be opened and redrawn without changing the old project" in route
+    assert "returned `legacy-redraw` command" in route
+    assert "returned `legacy-convert` command to make a separate" in route
     assert "When authority is unknown or the figure is a LegacyPlot" in readme
     assert "do not read it again solely to get the summary" in intent
     assert "do not guess among duplicates" in intent

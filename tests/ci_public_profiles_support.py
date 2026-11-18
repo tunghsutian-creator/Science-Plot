@@ -71,7 +71,7 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
             (["docs/DESIGN_PROJECT_CORE_MIGRATION.md"], True),
             ([leaf], True), ([leaf, "README.md"], False),
             ([leaf, "docs/DESIGN_PROJECT_LIFECYCLE.md"], False),
-            (["README.md"], False), (["docs/unknown.md"], False),
+            (["README.md"], True), (["docs/unknown.md"], False),
             (["src/sciplot_core/task_contract.py"], False),
             (["src/sciplot_core/veusz_runtime.py"], False),
             (["src/sciplot_core/foundation/iso_timestamps.py"], False),
@@ -125,6 +125,34 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
         for changed in (path, test_file):
             targets = ci_feedback.ci_feedback_plan([changed], root)["native_targets"]
             assert len(targets) == 2 and all(target.startswith(test_file + "::") for target in targets)
+    reviewed = [
+        "src/sciplot_core/studio_core/managed_frequency_query.py",
+        "src/sciplot_core/workflow/frequency_managed_requests.py",
+        "tests/test_managed_frequency_creation.py",
+        "src/sciplot_core/task_semantic_raw_analysis.py",
+        "README.md",
+        "src/sciplot_core/verification/input_scope_manifest.json",
+        "src/sciplot_core/verification/private_corpus_inventory.json",
+    ]
+    mixed = ci_feedback.ci_feedback_plan(reviewed, root, event="pull_request")
+    assert mixed["layer"] == "affected" and not mixed["unowned_paths"]
+    assert "tests/test_managed_frequency_creation.py" in mixed["native_targets"]
+    assert any(target.endswith("test_frequency_suite_preaccept_retry_cold_resumes_only_the_unfinished_figure")
+               for target in mixed["native_targets"])
+    assert "tests/test_documentation_contract.py" in mixed["targets"]
+    assert "tests/test_task_shortcuts.py" in mixed["targets"]
+    assert any(target.endswith("test_checked_in_inventory_is_explicitly_preliminary")
+               for target in mixed["targets"])
+    from sciplot_core.verification.input_scope import load_manifest
+    source = {target.split("::", 1)[0] for key in ("targets", "native_targets") for target in mixed[key]}
+    manifest = load_manifest()
+    assert public_stage._selected_public_nodes(manifest, dict.fromkeys(source, ""), "public-affected", mixed["targets"])
+    assert public_stage._selected_public_nodes(manifest, dict.fromkeys(source, ""), "public-affected-native", mixed["native_targets"])
+    assert mixed["full_public_profiles"] == "NOT_EXECUTED"
+    assert ci_feedback.ci_feedback_plan(reviewed, root, ref="refs/heads/release")["layer"] == "full"
+    assert ci_feedback.ci_feedback_plan(
+        [*reviewed, "src/sciplot_core/workflow/frequency_managed_unknown.py"], root,
+    )["layer"] == "full"
     from sciplot_core.verification.changed import build_changed_verification_plan
 
     for path in ("src/sciplot_core/source_tables/curve_tables.py", "src/sciplot_core/source_tables/heatmap_tables.py"):

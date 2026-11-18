@@ -5,6 +5,7 @@ from __future__ import annotations
 from sciplot_core.verification.axis_owners import GENERIC_AXIS_OWNERS
 from sciplot_core.verification.assembly_owners import PANEL_ASSEMBLY_OWNER
 from sciplot_core.verification.external_ai_owners import EXTERNAL_AI_OWNERS
+from sciplot_core.verification.frequency_feedback import MANAGED_FREQUENCY_OWNER
 from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.ordinary_plotting_owners import ORDINARY_PLOTTING_OWNERS
 from sciplot_core.verification.plot_owners import PLOT_OWNER, TYPED_INTENT_OWNER
@@ -33,6 +34,7 @@ from sciplot_core.verification.type_gate_owners import (
 
 CHANGED_OWNERS = (
     *PROJECT_CORE_OWNERS,
+    MANAGED_FREQUENCY_OWNER,
     *ORDINARY_PLOTTING_OWNERS,
     PANEL_ASSEMBLY_OWNER,
     WHEEL_DISTRIBUTION_OWNER,

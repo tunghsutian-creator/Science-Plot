@@ -346,10 +346,20 @@ def test_provenance_member_names_are_checked_without_private_bytes(
 
 
 def test_checked_in_inventory_is_explicitly_preliminary() -> None:
+    from sciplot_core.verification.input_scope import load_manifest
+    from sciplot_core.verification.private_corpus_audit import nodeids_sha256, test_sources_sha256
+
     payload = json.loads(INVENTORY.read_text(encoding="utf-8"))
     nodeids = [case["nodeid"] for case in payload["cases"]]
     assert payload["inventory_complete"] is False
     assert len(nodeids) == len(set(nodeids))
+    scopes = load_manifest()["scopes"]
+    assert set(nodeids) == set(scopes["private"])
+    collection = scopes["public"] + scopes["private"]
+    static_review = payload["collection_audit"]
+    assert static_review["nodeid_count"] == len(collection)
+    assert static_review["nodeids_sha256"] == nodeids_sha256(collection)
+    assert static_review["test_sources_sha256"] == test_sources_sha256(Path(__file__).resolve().parents[1])
     assert NODE in nodeids and PUBLIC_SIBLING not in nodeids
     assert any(case["evidence"] == "test_source_inspection" for case in payload["cases"])
     dsc_case = next(case for case in payload["cases"] if case["nodeid"] ==
