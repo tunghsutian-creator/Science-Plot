@@ -10227,7 +10227,8 @@
       "tests/test_house_style_grammar.py::test_current_minor_ticks_match_retained_edge_cases_and_separate_the_old_pin",
       "tests/test_house_style_native.py::test_current_log_minor_ticks_keep_native_pdf_pixels_and_physical_canvas",
       "tests/test_house_style_grammar.py::test_current_inside_best_keeps_each_legacy_corner_metric_and_anchor",
-      "tests/test_house_style_native.py::test_current_inside_best_avoids_the_curve_on_reversed_y_pdf"
+      "tests/test_house_style_native.py::test_current_inside_best_avoids_the_curve_on_reversed_y_pdf",
+      "tests/test_frequency_interval_binding.py::test_frequency_managed_native_delivery_replays_registered_storage_modulus"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20788,7 +20789,8 @@
       "tests/test_legacy_conversion.py::test_legacy_conversion_refuses_unmapped_widget_before_allocating_copy",
       "tests/test_legacy_saved_plot.py::test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project",
       "tests/test_house_style_native.py::test_current_log_minor_ticks_keep_native_pdf_pixels_and_physical_canvas",
-      "tests/test_house_style_native.py::test_current_inside_best_avoids_the_curve_on_reversed_y_pdf"
+      "tests/test_house_style_native.py::test_current_inside_best_avoids_the_curve_on_reversed_y_pdf",
+      "tests/test_frequency_interval_binding.py::test_frequency_managed_native_delivery_replays_registered_storage_modulus"
     ]
   },
   "private_failure_responsibilities": [
