@@ -478,6 +478,7 @@ def test_default_frequency_cli_publishes_and_retries_same_managed_editable_group
     first = json.loads(capsys.readouterr().out)
     managed = first["result"]["managed_frequency"]
     assert first["ready_to_use"] is True and first["delivery_package"]["complete"] is True
+    assert first["publication_qa"]["coverage_complete"] is True and first["publication_qa"]["status"] == "passed"
     assert managed["primary_figure_id"] == "storage_modulus_vs_frequency"
     assert [item["figure_id"] for item in managed["figures"]] == first["resolved_figure_plan"]["selected_figure_ids"]
     assert [item["format"] for item in first["result"]["exports"]] == ["pdf", "tiff_300"] * 4
@@ -515,8 +516,42 @@ def test_default_frequency_cli_publishes_and_retries_same_managed_editable_group
     assert json.loads((output / "manifest.json").read_bytes())["ready_to_use"] is True
 
     request.write_text(json.dumps(payload), encoding="utf-8")
+    visible = Path(first["veusz_documents"][0])
+    original = visible.read_bytes()
+    visible.write_bytes(original + b"\n# visible edit\n")
+    assert main(["run", str(request)]) != 0
+    assert "Saved Veusz copy has local edits" in capsys.readouterr().err
+    assert visible.read_bytes() == original + b"\n# visible edit\n"
+    visible.write_bytes(original)
+
     native = next(Path(managed["project"]).glob("figures/*/**/*.vsz"))
     native.write_bytes(native.read_bytes() + b"\n# external edit\n")
     assert main(["run", str(request)]) != 0
     assert "saved Managed frequency project has changed" in capsys.readouterr().err
     assert native.read_bytes().endswith(b"# external edit\n")
+
+
+
+def test_frequency_cli_does_not_fall_back_after_managed_science_replay_mismatch(tmp_path, monkeypatch, capsys):
+    import json
+
+    from sciplot_core.cli import main
+    from sciplot_core.workflow import frequency_managed_requests as owner
+
+    raw, _ = _mean_input(tmp_path)
+    request, output = tmp_path / "request.json", tmp_path / "run"
+    request.write_text(json.dumps({"input": str(raw), "output": str(output), "rule_id": "rheology_frequency_sweep"}),
+                       encoding="utf-8")
+    real = owner.execute_node
+
+    def corrupt(node, values):
+        dataset, proof = real(node, values)
+        if node["kind"] == "rheology_mean_exact_x":
+            dataset["columns"]["storage_modulus"]["values"][0] += 250.0
+        return dataset, proof
+
+    monkeypatch.setattr(owner, "execute_node", corrupt)
+    assert main(["run", str(request)]) != 0
+    assert "does not replay the selected original frequency arrays exactly" in capsys.readouterr().err
+    assert not (output / ".sciplot-frequency").exists()
+    assert not (output / "figures").exists()

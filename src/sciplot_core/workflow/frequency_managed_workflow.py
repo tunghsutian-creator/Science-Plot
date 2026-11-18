@@ -6,10 +6,13 @@ from typing import Any
 from pathlib import Path
 
 from sciplot_core.figure_plan import FigureOutcome, merge_figure_outcomes, resolved_figure_plan_from_payload
+from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.project_session_lease import external_project_session
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
+from sciplot_core.policy.render_options import DELIVERY_DIR, DELIVERY_PROJECT_DIR
+from sciplot_core.project_commands import ProjectCommands
 from sciplot_core.project_lifecycle.attachment_index import Attachment, read_index
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.semantic_sources.rheology_sweep_domain import ResolvedRheologySweepDomain
@@ -45,6 +48,31 @@ def managed_frequency_session(output: Path, request: dict[str, Any], *,
     if standard and (authority.is_dir() or not output.exists()):
         return external_project_session(output), authority
     return nullcontext(), None
+
+
+def _visible_document(output: Path, stem: str) -> Path:
+    return output / "figures" / "_veusz" / stem / "single/studio/document.vsz"
+
+
+def check_visible_frequency_documents(authority: Path, request: dict[str, Any], output: Path) -> None:
+    """Do not move users' edited VSZ projections into the old run backup."""
+    identity = canonical_json_sha256(request)
+    workspace = authority / identity
+    if not (workspace / ".sciplot_store/head.json").is_file():
+        return
+    store = FileProjectStore(workspace)
+    receipt = ProjectCommands(store).query(_COMMAND + ":" + identity)
+    if receipt is None or receipt["phase"] != "complete":
+        return
+    generation = receipt["generation"]
+    plan = resolved_figure_plan_from_payload(json.loads(store.read_bytes("figure-plan.json", generation=generation)))
+    assert plan is not None
+    for task, outcome in zip(plan.tasks, plan.outcomes, strict=True):
+        native = next(Path(path) for path in outcome.artifacts if Path(path).suffix == ".vsz")
+        expected = receipt["result"]["artifacts"][store.logical_path(native)]
+        for path in (_visible_document(output, task.artifact_stem), output / DELIVERY_DIR / DELIVERY_PROJECT_DIR / (task.artifact_stem + ".vsz")):
+            if path.exists() and (not path.is_file() or file_sha256(path) != expected):
+                raise ValueError(f"Saved Veusz copy has local edits; its bytes were kept: {path}")
 
 
 def render_managed_frequency(resolved: ResolvedScientificSource, *, authority: Path, output: Path,
@@ -113,7 +141,7 @@ def _project(store: FileProjectStore, *, output: Path, receipt: dict[str, Any]) 
             if hashlib.sha256(blob).hexdigest() != result["artifacts"].get(logical):
                 raise ValueError("Managed frequency publication does not match its sealed artifact receipt.")
             if source.suffix == ".vsz":
-                target = output / "figures" / "_veusz" / task.artifact_stem / "single/studio/document.vsz"
+                target = _visible_document(output, task.artifact_stem)
                 documents.append(str(target))
             else:
                 suffix = {"pdf": ".pdf", "tiff": "_300dpi.tiff"}[source.suffix.lstrip(".")]

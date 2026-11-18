@@ -88,20 +88,23 @@ def run_request(
     require_data_destination(output_dir)
     from sciplot_core.output_contract import requested_delivery_root
     require_data_destination(requested_delivery_root({"request": source_request}, run_output=output_dir))
-    from .frequency_managed_workflow import managed_frequency_session
+    from .frequency_managed_workflow import check_visible_frequency_documents, managed_frequency_session
 
     session, authority = managed_frequency_session(output_dir, source_request, new_creation=_new_creation)
-    with session, _managed_output_transaction(output_dir):
-        return _run_request_in_managed_output(
-            request_path=request_path,
-            source_request=source_request,
-            base_dir=base_dir,
-            output_dir=output_dir,
-            classifier=_classifier,
-            new_creation=_new_creation,
-            previous_request=_previous_request,
-            frequency_authority=authority,
-        )
+    with session:
+        if authority is not None:
+            check_visible_frequency_documents(authority, source_request, output_dir)
+        with _managed_output_transaction(output_dir):
+            return _run_request_in_managed_output(
+                request_path=request_path,
+                source_request=source_request,
+                base_dir=base_dir,
+                output_dir=output_dir,
+                classifier=_classifier,
+                new_creation=_new_creation,
+                previous_request=_previous_request,
+                frequency_authority=authority,
+            )
 
 
 def _run_request_in_managed_output(

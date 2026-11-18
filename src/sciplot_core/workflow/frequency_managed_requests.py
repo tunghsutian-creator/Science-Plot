@@ -7,6 +7,9 @@ from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.plot_engine.managed_sources import load_sources
 from sciplot_core.plot_transforms import builtin_executor, execute_node
+from sciplot_core.policy.frame_export import DEFAULT_LINE_STYLE_SEQUENCE
+from sciplot_core.policy.template_defaults import POINT_LINE_RENDER_OPTIONS
+from sciplot_core.policy.visual_identity import DEFAULT_PALETTE_COLORS
 from sciplot_core.semantic_sources.rheology_sweep_domain import ResolvedRheologySweepDomain
 from sciplot_core.source_inspection.semantic_evidence import inspect_semantic_tables
 from sciplot_core.task_errors import TaskControlError
@@ -27,8 +30,11 @@ def prepare_frequency_requests(
 ) -> PreparedFrequencyRequests:
     """Reuse semantic composition over the common measured/derived replicate DAG."""
     rule = domain.rule_id
-    if source_tree_sha256(domain.source) != domain.source_sha256 or plan.primary_figure_id is None:
-        _invalid("The selected original source tree or primary figure no longer matches its exact plan.")
+    if source_tree_sha256(domain.source) != domain.source_sha256:
+        _invalid("The selected original source tree no longer matches its exact plan.")
+    markers = POINT_LINE_RENDER_OPTIONS["marker_sequence"]
+    if plan.primary_figure_id is None or len(domain.prepared_samples) > len(markers):
+        _unsupported("This automatic suite requires a primary figure and one distinct marker per condition.")
     observed = [{"path": str(path), "source_id": f"source:{index}", **inspect_semantic_tables(path, rule_id=rule)}
                 for index, path in enumerate(domain.selected_sources)]
     groups = resolve_mean_group_blocks(domain, plan, observed)
@@ -38,10 +44,10 @@ def prepare_frequency_requests(
     units = {task.y_metric: {sample.metric_units.get(task.y_metric) for sample in domain.prepared_samples}
              for task in plan.tasks if task.y_metric is not None}
     if any(len(values) != 1 or None in values for values in units.values()):
-        _invalid("Every selected frequency metric requires compatible units throughout the complete group.")
+        _unsupported("Every selected frequency metric requires compatible units throughout the complete group.")
     if not all(task.x_metric == "angular_frequency" and task.y_metric in units and task.template == "point_line"
                for task in plan.tasks):
-        _invalid("This FigurePlan contains a non-Cartesian or unsupported frequency task.")
+        _unsupported("This FigurePlan contains a non-Cartesian or unsupported frequency task.")
     nodes: list[dict[str, Any]] = []
     sources: list[dict[str, Any]] = []
     aggregate = {}
@@ -97,6 +103,12 @@ def prepare_frequency_requests(
         state = {"request": {"intent": intent}, "intent_revision": 1, "task_dir": str(task_root / task.figure_id),
                  "semantic_plan": {"resolved_rule_id": rule, "resolved_axes": axes, "resolved_bindings": []}}
         request = _compose(state, records, sources, recipes, values, "")
+        layers = request["template_definition"]["figure_spec"]["views"][0]["layers"]
+        for index, layer in enumerate(layers):
+            line, point = layer["marks"]
+            color = DEFAULT_PALETTE_COLORS[index]
+            line["style"].update(line_style=DEFAULT_LINE_STYLE_SEQUENCE[index], line_color=color)
+            point["style"].update(marker=markers[index], marker_color=color)
         provenance = request["data_binding"]["provenance"]
         provenance["figure_task"] = task.to_payload()
         provenance["frequency_mean_original_blocks"] = {name: list(items) for name, items in groups.items()}
@@ -107,4 +119,8 @@ def prepare_frequency_requests(
 
 
 def _invalid(message: str) -> NoReturn:
+    raise TaskControlError("frequency_managed_replay_mismatch", message)
+
+
+def _unsupported(message: str) -> NoReturn:
     raise TaskControlError("frequency_managed_candidates_unavailable", message)

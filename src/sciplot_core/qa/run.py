@@ -89,7 +89,7 @@ def run_qa(
         raise ValueError("Managed publication requires sealed scientific and native QA for each figure.")
     discovered_veusz_documents = _discover_veusz_documents(output_dir, veusz_documents)
     veusz_audit, veusz_audit_error = (
-        _run_veusz_audit(discovered_veusz_documents) if profile and _managed_native is None else (None, None)
+        _run_veusz_audit(discovered_veusz_documents) if profile else (None, None)
     )
     intent = _publication_intent(output_dir)
     publication = (
