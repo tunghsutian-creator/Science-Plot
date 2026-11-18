@@ -275,6 +275,21 @@ while a LegacyPlot keeps its saved VSZ as the complete visual baseline. VSZ is
 therefore still part of the current project and editable delivery; a rebuildable
 Managed artifact does not mean the rendering backend has been removed.
 
+To open or redraw an archived plot without creating an editable project or
+rewriting its saved content, use:
+
+```bash
+skill/scripts/sciplot project legacy-open OLD_PROJECT --json
+skill/scripts/sciplot project legacy-redraw OLD_PROJECT --out NEW_DIRECTORY --formats pdf,png_300 --json
+```
+
+Use `--figure` to select a registered figure in a multi-figure project, or
+give the exact saved `.vsz` instead. The new output directory must be outside
+the original project. Redraw uses the saved native document as-is, not the
+current recipes or raw-data pipeline. If the VSZ links external data, the
+original linked files are still needed. These commands do not convert or edit
+the plot; use a converted copy for new-format features.
+
 New Managed native builds are saved in an owned staging directory, audited and
 previewed before the complete VSZ is published without replacing an existing
 file. An interrupted save can leave diagnostic staging files; retry never
