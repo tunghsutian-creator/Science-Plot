@@ -58,6 +58,7 @@ def create_project(
     output_dir: Path | None = None,
     on_prepared: Callable[[dict[str, Any]], None] | None = None,
     publish: bool = True,
+    _creation_owner: str = "project",
 ) -> dict[str, Any]:
     source = canonical_path(source)
     if (expected_plan.get("rule_id") is not None
@@ -69,6 +70,13 @@ def create_project(
         template=expected_plan.get("template"),
     )
     layout = resolve_user_output_layout(source, requested_delivery_root=output_dir)
+    if publish and verified["rule_id"] == "rheology_frequency_sweep":
+        from .managed_frequency_creation import create_frequency_project
+
+        managed = create_frequency_project(source, verified, layout, require_new=require_new_layout,
+                                           owner=_creation_owner)
+        if managed is not None:
+            return managed
     require_new_layout(layout)
     canonical_path(layout.workspace_root.parent)
     layout.workspace_root.parent.mkdir(parents=True, exist_ok=True)

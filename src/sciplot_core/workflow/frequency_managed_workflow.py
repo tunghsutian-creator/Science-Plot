@@ -18,12 +18,12 @@ from sciplot_core.project_store import FileProjectStore
 from sciplot_core.semantic_sources.rheology_sweep_domain import ResolvedRheologySweepDomain
 from sciplot_core.semantic_sources.scientific_source import ResolvedScientificSource
 from sciplot_core.task_errors import TaskControlError
+from sciplot_core.studio_core.managed_frequency_query import AUTHORITY
 
-from .frequency_managed_requests import prepare_frequency_requests
+from .frequency_managed_requests import PreparedFrequencyRequests, prepare_frequency_requests
 from .frequency_managed_suite import publish_frequency_managed_suite
 
 
-AUTHORITY = ".sciplot-frequency"
 _STANDARD_REQUEST_KEYS = {"input", "output", "rule_id", "recipe", "replicate_mode"}
 _COMMAND = "workflow-frequency"
 _COMPATIBILITY_REFUSALS = {
@@ -54,7 +54,8 @@ def _visible_document(output: Path, stem: str) -> Path:
     return output / "figures" / "_veusz" / stem / "single/studio/document.vsz"
 
 
-def check_visible_frequency_documents(authority: Path, request: dict[str, Any], output: Path) -> None:
+def check_visible_frequency_documents(authority: Path, request: dict[str, Any], output: Path, *,
+                                      delivery: Path | None = None) -> None:
     """Do not move users' edited VSZ projections into the old run backup."""
     identity = canonical_json_sha256(request)
     workspace = authority / identity
@@ -64,19 +65,34 @@ def check_visible_frequency_documents(authority: Path, request: dict[str, Any], 
     receipt = ProjectCommands(store).query(_COMMAND + ":" + identity)
     if receipt is None or receipt["phase"] != "complete":
         return
+    package = delivery if delivery is not None else output / DELIVERY_DIR
     generation = receipt["generation"]
     plan = resolved_figure_plan_from_payload(json.loads(store.read_bytes("figure-plan.json", generation=generation)))
     assert plan is not None
     for task, outcome in zip(plan.tasks, plan.outcomes, strict=True):
         native = next(Path(path) for path in outcome.artifacts if Path(path).suffix == ".vsz")
         expected = receipt["result"]["artifacts"][store.logical_path(native)]
-        for path in (_visible_document(output, task.artifact_stem), output / DELIVERY_DIR / DELIVERY_PROJECT_DIR / (task.artifact_stem + ".vsz")):
+        for path in (_visible_document(output, task.artifact_stem), package / DELIVERY_PROJECT_DIR / (task.artifact_stem + ".vsz")):
             if path.exists() and (not path.is_file() or file_sha256(path) != expected):
                 raise ValueError(f"Saved Veusz copy has local edits; its bytes were kept: {path}")
 
 
+def frequency_candidates(resolved: ResolvedScientificSource, *, authority: Path) -> PreparedFrequencyRequests | None:
+    domain, plan = resolved.domain, resolved.figure_plan
+    if (not isinstance(domain, ResolvedRheologySweepDomain) or plan is None
+            or domain.rule_id != "rheology_frequency_sweep" or domain.replicate_mode != "mean"):
+        return None
+    try:
+        return prepare_frequency_requests(domain, plan, task_root=authority)
+    except TaskControlError as exc:
+        if (not authority.exists() and exc.reason_code in _COMPATIBILITY_REFUSALS
+                and source_tree_sha256(domain.source) == domain.source_sha256):
+            return None
+        raise
+
+
 def render_managed_frequency(resolved: ResolvedScientificSource, *, authority: Path, output: Path,
-                             source_request: dict[str, Any]) -> dict[str, Any] | None:
+                             source_request: dict[str, Any], prepared: PreparedFrequencyRequests | None = None) -> dict[str, Any] | None:
     """Return a projection only for the complete, original-source mean suite."""
     claimed = authority.exists()
     domain, plan = resolved.domain, resolved.figure_plan
@@ -92,15 +108,10 @@ def render_managed_frequency(resolved: ResolvedScientificSource, *, authority: P
                     or any(entry != workspace and entry.name != ".sciplot_session_locks"
                            for entry in authority.iterdir())):
         raise ValueError("The Managed frequency output is reserved for its exact original request.")
-    candidates = None
     if not workspace.exists():
-        try:
-            candidates = prepare_frequency_requests(domain, plan, task_root=authority)
-        except TaskControlError as exc:
-            if (not claimed and exc.reason_code in _COMPATIBILITY_REFUSALS
-                    and source_tree_sha256(domain.source) == domain.source_sha256):
-                return None
-            raise
+        prepared = prepared or frequency_candidates(resolved, authority=authority)
+        if prepared is None:
+            return None
         workspace.mkdir(mode=0o700, parents=True)
     store = FileProjectStore(workspace)
     if not (workspace / ".sciplot_store/head.json").exists():
@@ -108,7 +119,7 @@ def render_managed_frequency(resolved: ResolvedScientificSource, *, authority: P
     compiler = ManagedVeuszCompiler()
     try:
         receipt = publish_frequency_managed_suite(store, key=key, resolved=resolved, compiler=compiler,
-                                                  task_root=authority, prepared=candidates)
+                                                  task_root=authority, prepared=prepared)
     finally:
         compiler.close()
     return _project(store, output=output, receipt=receipt)

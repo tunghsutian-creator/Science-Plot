@@ -72,6 +72,9 @@ def run_request(
     request_path = request_path.expanduser().resolve()
     source_request = _load_request(request_path) if _incoming_request is None else deepcopy(_incoming_request)
     from sciplot_core.workflow.project_requests import recognized_project, run_project_request
+    from sciplot_core.studio_core.managed_frequency_query import is_frequency_project_request
+    if is_frequency_project_request(request_path):
+        raise ValueError("Resume this Managed frequency project with its original project creation or task.")
 
     if recognized_project(request_path):
         return run_project_request(request_path, source_request, execute=_run_request_in_managed_output,
@@ -119,7 +122,8 @@ def _run_request_in_managed_output(
     staged_delivery: tuple[Path, Path] | None = None,
     update_project: bool = True,
     previous_delivery: dict[str, Any] | None = None,
-    frequency_authority: Path | None = None,
+    frequency_authority: Path | None = None, frequency_prepared: Any = None,
+    frequency_required: bool = False,
 ) -> dict[str, Any]:
     """Resolve inputs, enforce semantic gates, then render and publish."""
 
@@ -258,8 +262,8 @@ def _run_request_in_managed_output(
         from .frequency_managed_workflow import render_managed_frequency
 
         managed_result = render_managed_frequency(resolved_scientific_source, authority=frequency_authority,
-                                                  output=output_dir, source_request=source_request)
-    if frequency_authority is not None and frequency_authority.exists() and managed_result is None:
+            output=output_dir, source_request=source_request, prepared=frequency_prepared)
+    if managed_result is None and (frequency_required or (frequency_authority is not None and frequency_authority.exists())):
         raise ValueError("The Managed frequency output belongs to its exact original request.")
     rendered = execute_request_render(
         request=request,
@@ -294,8 +298,6 @@ def _run_request_in_managed_output(
         _update_project=update_project,
         previous_delivery=previous_delivery,
     )
-
-
 
 
 def _initial_transform_steps(

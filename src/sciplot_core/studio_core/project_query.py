@@ -64,7 +64,7 @@ def _inspect_document(document: Path) -> dict[str, Any]:
 
 @with_table_reads
 @project_read_runtime
-def inspect_project(
+def _inspect_legacy_project(
     project: Path,
     *,
     figure_id: str | None = None,
@@ -166,6 +166,19 @@ def inspect_project(
     ):
         raise ValueError("The saved project changed during inspection; query again.")
     return payload
+
+
+def inspect_project(project: Path, **options: Any) -> dict[str, Any]:
+    from sciplot_core.studio_core.managed_frequency_query import inspect_frequency_creation
+
+    managed = inspect_frequency_creation(project)
+    if managed is None:
+        return _inspect_legacy_project(project, **options)
+    if any(options.get(key) for key in ("object_path", "native", "include_annotations", "include_axes")):
+        raise ValueError("Managed figures expose their current objects through plot open; use the reported figure plot path.")
+    if options.get("figure_id") is not None:
+        managed["selected_figure"] = select_figure(project, managed["primary_figure_id"], managed["figures"], options["figure_id"])
+    return managed
 
 
 __all__ = ["inspect_project", "resolve_project_figure", "resolve_project_path"]

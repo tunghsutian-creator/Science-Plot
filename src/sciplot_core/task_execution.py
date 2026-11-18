@@ -41,9 +41,22 @@ def _completed(root: Path, state: dict[str, Any], result: dict[str, Any]) -> Non
     save_task(root, state)
 
 
-def run_creation(root: Path, state: dict[str, Any]) -> None:
-    from sciplot_core.task_prepared_creation import checkpoint_prepared, complete_prepared, is_prepared
+def can_resume_frequency_creation(state: dict[str, Any]) -> bool:
+    if "frequency_creation_plan" not in state:
+        return False
+    from sciplot_core.output_contract import resolve_user_output_layout
+    from sciplot_core.studio_core.managed_frequency_query import is_frequency_creation_owner
 
+    layout = resolve_user_output_layout(state["request"]["source"], requested_delivery_root=creation_output(state))
+    return is_frequency_creation_owner(layout, state["task_dir"])
+
+
+def run_creation(root: Path, state: dict[str, Any]) -> None:
+    from sciplot_core.task_prepared_creation import complete_prepared, is_prepared
+
+    if can_resume_frequency_creation(state):
+        _execute_creation(root, state, state["frequency_creation_plan"])
+        return
     if is_prepared(state):
         complete_prepared(root, state)
         return
@@ -70,7 +83,17 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
             save_task(root, state)
             run_managed(root, state)
             return
+    if (plan.get("rule_id") == "rheology_frequency_sweep" and not state.get("defer_creation_export")
+            and not any(key in plan for key in ("data_mapping", "source_options"))):
+        state["frequency_creation_plan"] = plan
+    _execute_creation(root, state, plan)
+
+
+def _execute_creation(root: Path, state: dict[str, Any], plan: dict[str, Any]) -> None:
+    from sciplot_core.task_prepared_creation import checkpoint_prepared, is_prepared
+
     _phase(root, state, "creating")
+
     def checkpoint(prepared: dict[str, Any]) -> None:
         if state.get("defer_creation_export") is True:
             checkpoint_prepared(root, state, prepared)
@@ -83,7 +106,9 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
                                "on_prepared": checkpoint}
     if state.get("defer_creation_export") is True:
         options["publish"] = False
-    result = create_project(Path(request["source"]), **options)
+    if "frequency_creation_plan" in state:
+        options["_creation_owner"] = state["task_dir"]
+    result = create_project(Path(state["request"]["source"]), **options)
     if state.get("defer_creation_export") is True:
         if result.get("kind") != "sciplot_project_prepared_result" or not is_prepared(state):
             raise TaskControlError("prepared_creation_missing", "Native preparation returned without its durable checkpoint.")

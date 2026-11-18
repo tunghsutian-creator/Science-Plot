@@ -21,7 +21,7 @@ from sciplot_core.task_contract import (
     TaskControlError, task_request_schema, task_response_schema, validate_task_request,
 )
 from sciplot_core.task_execution import (
-    record_failure, run_apply_export, run_creation, run_edit_preview, run_export,
+    can_resume_frequency_creation, record_failure, run_apply_export, run_creation, run_edit_preview, run_export,
 )
 from sciplot_core.task_column_mapping import accept_column_response, accept_table_response
 from sciplot_core.task_planning import accept_worksheet_response, assert_source_current
@@ -330,7 +330,9 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any], *, _pub
         if response != {"retry": True} or type(response.get("retry")) is not bool:
             raise TaskControlError("invalid_task_response", "修复具体问题后使用 retry=true。")
         phase = state["phase"]
-        if phase == "exporting":
+        if can_resume_frequency_creation(state):
+            run_creation(root, state)
+        elif phase == "exporting":
             run_export(root, state)
         elif phase == "applying" and state.get("preview_accepted") is True:
             if state["request"]["action"] == "update_source":
