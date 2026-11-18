@@ -127,6 +127,43 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
             assert axis["visible"] and axis["label_visible"] and axis["ticks_mode"] == "fixed"
             assert not axis["ticks"] and axis["style"]["minor_ticks_visible"] is False
 
+    for response, unit, values, expected_label, extremum in (
+        ("Transmittance", "%", [90, 66, 92], "Transmittance (%)", "minimum"),
+        ("Absorbance", "a.u.", [.10, .8, .5], "Absorbance", "maximum"),
+        ("Spectral response", "a.u.", [.10, .8, .5], None, None),
+    ):
+        spectrum = tmp_path / (response + ".csv")
+        x_values = [1500, 400, 1000]  # Descending display is not sorted source data.
+        original = (f"Wavenumber,{response}\ncm^-1,{unit}\nA,A\n"
+                    + "".join(f"{x},{y}\n" for x, y in zip(x_values, values, strict=True))).encode()
+        spectrum.write_bytes(original)
+        plan = build_plan_preview(spectrum, request={"rule_id": "ftir_spectrum"})
+        state = {"request": {**request, "source": str(spectrum)}, "task_dir": str(tmp_path / response),
+                 "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
+        assert admit_raw_curve(state, plan) == (expected_label is not None)
+        if expected_label is None:
+            assert state["request"]["source"] == str(spectrum)
+            continue
+        result = build_managed_request(state)
+        spec = result["template_definition"]["figure_spec"]
+        x, y = spec["scales"]
+        assert (x["direction"], x["unit"]) == ("descending", "cm^-1")
+        assert (y["quantity"], y["unit"]) == (response.lower(), unit)
+        assert spec["views"][0]["axes"][1]["label"] == expected_label
+        assert spec["layout"] == {"width_mm": 120, "height_mm": 110}
+        metric, = state["analysis_metrics"]
+        assert (metric["metric"], metric["value"], metric["unit"], metric["status"]) == (
+            "observed_response_extremum_wavenumber_cm-1", 400., "cm⁻¹", "ok")
+        assert extremum in metric["reason"] and "no spectral-band or chemical assignment" in metric["reason"]
+        binding = result["data_binding"]
+        doc = create_managed_document(result["template_definition"], binding, plot_id="ftir-original")
+        data = load_sources(doc, "ftir_spectrum")
+        for node in binding["transforms"]:
+            data[node["output"]], _ = execute_node(node, data)
+        coordinate = data[next(iter(binding["slots"].values()))["x"]["source_id"]]["columns"]
+        assert coordinate["x"]["values"] == x_values and coordinate["y"]["values"] == values
+        assert spectrum.read_bytes() == original
+
     path = tmp_path / "signed-xrd.csv"
     path.write_text("2theta,Intensity\ndegree,a.u.\nB,B\n1,-3\n2,6\n3,4\n")
     plan = build_plan_preview(path, request={"rule_id": "xrd_pattern"})

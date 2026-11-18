@@ -7,111 +7,12 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_errors import TaskControlError
-from sciplot_core.task_semantic_raw_analysis import raw_curve_analysis
+from sciplot_core.task_semantic_raw_analysis import admit_raw_curve as admit_raw_curve
 from sciplot_core.task_storage import save_task, task_summary
 
 
 def is_semantic(state: dict[str, Any]) -> bool:
     return state["request"].get("action") == "create" and "intent" in state["request"]
-
-
-def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
-    """Freeze the same source, columns, sample and units under Managed authority."""
-    request = state["request"]
-    source = Path(request["source"])
-    rule_id = plan["rule_id"]
-    if (set(request) - {"version", "action", "source", "out", "rule_id", "template"}
-            or source.suffix.casefold() not in {".csv", ".tsv"} or not source.is_file()
-            or rule_id not in {"uvvis_spectrum", "dsc_curve", "tga_curve", "dtg_curve", "saxs_profile", "xrd_pattern"}
-            or plan["template"] != "curve" or "data_mapping" in plan or "source_options" in plan):
-        return False
-    transform = plan.get("scientific_transform") or {}
-    output = transform.get("output") or {}
-    columns, series = transform.get("source_columns", []), output.get("series", [])
-    if not (len(columns) == len(series) == 1
-            and output.get("series_order") == [series[0]["sample"]]
-            and columns[0]["sample"] == series[0]["sample"]
-            and columns[0]["sources"] == [str(source)]
-            and series[0]["excluded_point_count"] == 0
-            and transform["normalizer"]["operation"] == "none"
-            and transform["anchor"]["scope"] == "none"
-            and transform["x_coordinate_policy"]["operation"] == "preserve_source_coordinate_and_order"
-            and len(plan["resolved_figure_plan"]["selected_figure_ids"]) == 1):
-        return False
-    from sciplot_core.materials_rules.catalog import get_rule
-    from sciplot_core.policy.contract_queries import size_preset_contract
-
-    rule = get_rule(rule_id)
-    selected_id, = plan["resolved_figure_plan"]["selected_figure_ids"]
-    figure_task = next(item for item in plan["resolved_figure_plan"]["tasks"] if item["figure_id"] == selected_id)
-    if figure_task["metric_binding"] != {"kind": "cartesian_xy", "x_metric": output["x_metric"], "y_metric": output["y_metric"]}:
-        return False
-    conversions = {(item["sample"], item["role"]): item for item in transform["unit_conversions"]}
-    coordinates = (("x", "x", rule.x_axis), ("y", "response", rule.y_axis))
-    intent: dict[str, Any] = {"rule_id": rule_id}
-    for role, original_role, axis in coordinates:
-        unit = axis.canonical_unit
-        compatibility = transform["axis_compatibility"][role]
-        if (compatibility["registered_scale"] != axis.scale or not compatibility["finite_compatible"]
-                or (axis.scale == "log" and not compatibility["log_compatible"])):
-            return False
-        original = columns[0][original_role]
-        conversion = conversions.get((series[0]["sample"], original_role), {})
-        if (original["unit"] != unit or output.get(role + "_unit") != unit
-                or any(conversion.get(step) != {"factor": 1.0, "offset": 0.0}
-                       for step in ("source_to_canonical", "canonical_to_display"))
-                or original["unit_detection"]["method"] != "detected_from_adjacent_unit_row"):
-            return False
-        intent[role] = {"quantity": output[role + "_metric"], "column_id": f"column:{original['column_index_zero_based']}",
-                        "scale": axis.scale, "direction": "descending" if axis.reverse else "ascending"}
-
-    if rule_id == "dtg_curve":
-        from sciplot_core.source_inspection.semantic_evidence import _quantity
-
-        if _quantity(columns[0]["response"]["header"]) != "derivative_mass":
-            return False  # A generic "Derivative" header does not prove the DTG unit context.
-    semantic = prepare_plan([source], intent)
-    frozen = semantic["sources"][0]
-    if canonical_json_sha256({"kind": "file", "content_sha256": frozen["sha256"]}) != state["source_sha256"]:
-        raise TaskControlError("source_changed", "The original file changed after the raw scientific plan.")
-    candidates = frozen["candidates"]
-    bindings = semantic.get("resolved_bindings", [])
-    if semantic["decisions"] or len(candidates) != 1 or len(candidates[0]["blocks"]) != 1 or len(bindings) != 1:
-        return False
-    block = candidates[0]["blocks"][0]
-    if (block["sample"] != series[0]["sample"] or block["point_count"] != series[0]["point_count"]):
-        return False
-    for role, original_role, axis in coordinates:
-        actual, original = bindings[0]["coordinates"][role], columns[0][original_role]
-        # Scattering quantities may be known to the registered plan without
-        # aliases in the generic table. DTG needs the observed derivative.
-        expected = output[role + "_metric"]
-        allowed = (expected, None) if rule_id in {"saxs_profile", "xrd_pattern"} else (expected,)
-        if ((actual["column_index"], actual["header"], actual["observed_unit"], actual["unit"])
-                != (original["column_index_zero_based"], original["header"], axis.canonical_unit, axis.canonical_unit)
-                or actual["observed_quantity"] not in allowed
-                or actual["unit_relation"]["kind"] != "identity"):
-            return False
-
-    size = size_preset_contract(rule.render_options["size"])
-    presentation: dict[str, Any] = {}
-    if rule_id == "xrd_pattern":
-        from sciplot_core.studio_render.spectral_axis_display import freeze_new_spectral_axis_display
-
-        display = freeze_new_spectral_axis_display({}, rule_id=rule_id, template="curve", transform_contract=transform)
-        presentation["show_y_ticks"] = display["render_options"]["show_y_ticks"]
-    analysis = raw_curve_analysis(source, rule_id, plan, frozen["sha256"])
-    state.update(initial_request=deepcopy(request), analysis_metrics=analysis,
-                 request={"version": 1, "action": "create", "sources": [str(source)], "intent": intent,
-                          **({"out": request["out"]} if "out" in request else {})},
-                 source_hashes={str(source): frozen["sha256"]}, semantic_plan=semantic, semantic_choices={},
-                 semantic_plan_confirmed=True, intent_revision=1,
-                 plan_confirmation={"mode": "verified_raw_curve", "rule_id": rule_id,
-                                    "figure_plan": plan["resolved_figure_plan"]["plan_sha256"],
-                                    "size_mm": [size.width_mm, size.height_mm], **presentation,
-                                    "axis_labels": {role: axis.display_label.replace("$^{-1}$", "⁻¹")
-                                                    for role, _, axis in coordinates}})
-    return True
 
 
 def normalize_sources(request: dict[str, Any]) -> dict[str, str]:
