@@ -235,6 +235,12 @@ def test_native_single_table_ftir_raw_overlay_preserves_sample_membership_and_de
         assert [label['text'] for label in snapshot['annotations']] == ['A', 'B']
         with loaded_native_document(Path(service.describe(root)['artifact'])) as loaded:
             assert scientific_audit(snapshot, loaded)['status'] == 'passed'
+            from importlib import import_module
+            from rendering_profiles_native import _painted_text
+
+            painted, _ = _painted_text(loaded, import_module('veusz.document'))
+            numeric_labels = sorted(item['text'] for item in painted if item['text'].isdigit())
+            assert numeric_labels == ['1000', '1500', '500']
             for layer, expected in zip(snapshot['views'][0]['layers'], ([90, 66, 92], [10, 13, 11]), strict=True):
                 mark, = layer['marks']
                 widget = loaded.resolveWidgetPath(None, mark_path('view:main', layer['id'], mark['id']))

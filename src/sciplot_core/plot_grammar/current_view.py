@@ -55,6 +55,7 @@ def resolve_current_view(value: Any, datasets: dict[str, dict[str, Any]]) -> dic
     validate_bound_data(spec, datasets)
     geometries = _geometries(spec, datasets)
     ticks_by_scale = {}
+    stack_x_scales = {layer["x_scale"] for view in spec["views"] if "display_stack" in view for layer in view["layers"]}
     for scale in spec["scales"]:
         dimension = scale["dimension"]
         values = [value for view in spec["views"] for layer in view["layers"]
@@ -69,8 +70,17 @@ def resolve_current_view(value: Any, datasets: dict[str, dict[str, Any]]) -> dic
         if rule["minimum"]["mode"] == "auto_zero_if_nonnegative":
             endpoints["minimum"] = nonnegative_minimum(values)
         try:
-            domain, ticks = numeric_axis(values or [endpoints["minimum"], endpoints["maximum"]],
-                quantity=scale["quantity"], transform=scale["transform"], dimension=dimension, **endpoints)
+            if scale["id"] in stack_x_scales and scale["transform"] == "linear" and all(
+                rule[name]["mode"] == "auto" for name in ("minimum", "maximum")
+            ):
+                from sciplot_core.studio_render.axis_limits import _solve_linear_axis_policy
+
+                policy = _solve_linear_axis_policy(min(values), max(values))
+                domain = list(policy.display_bounds)
+                ticks = sorted(policy.major_ticks, reverse=scale["direction"] == "descending")
+            else:
+                domain, ticks = numeric_axis(values or [endpoints["minimum"], endpoints["maximum"]],
+                    quantity=scale["quantity"], transform=scale["transform"], dimension=dimension, **endpoints)
         except (ValueError, OverflowError) as exc:
             fail("figure_current_view_domain", str(exc), "/scales/domain_rule", "resolved_endpoints", scale_id=scale["id"])
         scale["domain"] = domain

@@ -178,6 +178,7 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     assert spec["scales"][0]["direction"] == "descending"
     assert not spec["views"][0]["axes"][1]["ticks"]
     assert [layer["label"] for layer in spec["views"][0]["layers"]] == ["A", "B"]
+    assert spec["views"][0]["axes"][0]["ticks"] == [1500, 1000, 500]
     assert [(row["metric"][-3:], row["value"]) for row in stack_state["analysis_metrics"]] == [("[A]", 400), ("[B]", 1300)]
     from sciplot_core.plot_grammar import compile_figure
     from sciplot_core.plot_grammar.current_view import resolve_current_view
