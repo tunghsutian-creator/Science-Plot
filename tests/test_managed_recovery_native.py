@@ -113,6 +113,16 @@ def _crash_before_build_receipt(monkeypatch):
     return fired
 
 
+def _simulate_renderer_identity_change(monkeypatch):
+    from sciplot_core.plot_backends import managed
+    from sciplot_core.plot_engine import managed_backend
+
+    upgraded = {**managed.compiler_identity(), "content_hash": "f" * 64}
+    monkeypatch.setattr(managed, "compiler_identity", lambda: upgraded)
+    monkeypatch.setattr(managed_backend, "compiler_identity", lambda: upgraded)
+    return upgraded
+
+
 def _assert_semantics_untouched(root, prior):
     head = load_head(root)
     assert head["document"] == prior["document"]
@@ -152,12 +162,17 @@ def test_public_retry_adopts_completed_native_compile_after_receipt_crash(tmp_pa
             assert intent["compile_id"] != previous_build["compile_id"]
         count_at_crash = deepcopy(counts)
         service.close()
-        service = PlotService()  # Recovery also survives daemon/native-worker replacement.
+        current_compiler = _simulate_renderer_identity_change(monkeypatch)
+        assert current_compiler != intent["compiler_identity"]
+        service = PlotService()
         recovered = service.create(request) if when == "initial" else service.export(root)
         assert recovered["ready_to_use"] and recovered["revision"] == 0, recovered
         assert counts == count_at_crash == {"science": 1, "compile": 1 if when == "initial" else 2}
         assert file_sha256(native) == native_hash  # Recovery audits/adopts; it does not compile again.
-        assert read(native.parent / "build.json")["compile_id"] == intent["compile_id"]
+        renewed = read(native.parent / "build.json")
+        assert renewed["compile_id"] == intent["compile_id"]
+        assert renewed["compiler_identity"] == current_compiler
+        assert renewed["document_sha256"] == native_hash
         assert source.read_bytes() == source_bytes
         _assert_semantics_untouched(root, prior)
     finally:
@@ -189,6 +204,9 @@ def test_owned_compile_intent_accepts_only_complete_canonical_native_equivalence
                 "--output-document", str(changed), "--preview-png", str(tmp_path / "manual-native.png")])
             changed.replace(native)
         observed_hash = file_sha256(native)
+        service.close()
+        _simulate_renderer_identity_change(monkeypatch)
+        service = PlotService()
         recovered = service.create(request)
         if change == "metadata_only":
             assert recovered["ready_to_use"], recovered

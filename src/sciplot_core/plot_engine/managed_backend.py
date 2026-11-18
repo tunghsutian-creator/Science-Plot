@@ -79,11 +79,17 @@ class ManagedBackend:
         if not exists(path):
             return None
         value = read(path)
-        expected = {"ir_hash": binding["ir_hash"], "canonical_sha256": binding["canonical_sha256"],
-                    "compiler_identity": compiler_identity()}
-        if any(value.get(key) != item for key, item in expected.items()) or not value.get("compile_id"):
+        compile_id = value.get("compile_id")
+        if (value.get("ir_hash") != binding["ir_hash"] or value.get("canonical_sha256") != binding["canonical_sha256"]
+                or not isinstance(compile_id, str) or not compile_id):
             return None
-        if exists(marker) and read(marker).get("compile_id") == value["compile_id"]:
+        compiler = value.get("compiler_identity")
+        if not isinstance(compiler, dict) or not all(isinstance(compiler.get(key), str) and compiler[key]
+                                                     for key in ("name", "version", "content_hash")):
+            return None
+        # A prior renderer identity does not erase an unfinished attempt. This
+        # identifies a candidate for fresh inspection, not an audited artifact.
+        if exists(marker) and read(marker).get("compile_id") == compile_id:
             return None
         return value
 
@@ -166,7 +172,8 @@ class ManagedBackend:
             record = read(marker) if exists(marker) else None
             # A known previous compiler product can be discarded on compiler
             # version change, after its own byte seal excludes manual edits.
-            rebuild = bool(record and record.get("compiler_identity") != compiler_identity()
+            current_compiler = compiler_identity()
+            rebuild = bool(record and record.get("compiler_identity") != current_compiler
                            and record.get("document_sha256") == existing_file_sha256(native))
             if intent or (verify_existing and not rebuild):
                 inspected = self.compiler.inspect_ir(ir, native)
@@ -176,8 +183,14 @@ class ManagedBackend:
                 if exact:
                     rebuild = False
                 if intent and exact:
+                    if compiler_identity() != current_compiler:
+                        raise EngineError("native_runtime_changed", "The native renderer changed during compile recovery.",
+                                          action="restart_local_plot_service")
+                    if file_sha256(native) != inspected["document_sha256"]:
+                        raise EngineError("managed_external_mutation", "The managed artifact changed after recovery inspection.",
+                                          action="inspect_external_mutation")
                     write(marker, {"ir_hash": ir["ir_hash"], "document_sha256": inspected["document_sha256"],
-                          "native_state_hash": inspected["native_state_hash"], "compiler_identity": compiler_identity(),
+                          "native_state_hash": inspected["native_state_hash"], "compiler_identity": current_compiler,
                           "compile_id": intent["compile_id"]})
         if rebuild:
             intent = {"ir_hash": binding["ir_hash"], "canonical_sha256": binding["canonical_sha256"],
