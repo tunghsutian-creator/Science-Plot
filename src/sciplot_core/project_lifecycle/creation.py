@@ -45,12 +45,14 @@ def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTar
                 raise EngineError("document_idempotency_conflict", "This creation key belongs to a different request.")
         else:
             state = {"request": request, "request_hash": digest(request), "task_request": task_request,
-                     "normalized_command": NormalizedCommand.create("create", request).to_payload()}
+                     "normalized_command": NormalizedCommand.create("create", request).to_payload(),
+                     "raw_admission": "verified_managed_v1"}
             write(path, state)
         task_root = root / "task"
         # start_task already has crash-safe task allocation; its owner handles pending stages.
         task = (inspect_task(task_root) if (task_root / "task.json").exists()
-                else start_task(task_request, task_dir=task_root, _owned_namespace=root))
+                else start_task(task_request, task_dir=task_root, _owned_namespace=root,
+                                _prefer_managed=state.get("raw_admission") == "verified_managed_v1"))
         return _result(service, root, state, task)
 
 

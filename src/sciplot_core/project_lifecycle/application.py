@@ -1,5 +1,6 @@
 """Application owner of the complete Managed and Legacy semantic aggregate lifecycle."""
 
+from contextlib import AbstractContextManager
 from pathlib import Path
 from .context import exists
 
@@ -276,7 +277,8 @@ class ProjectApplication(CommandDispatch):
         if destination.kind == DecisionKind.CREATION:
             from sciplot_core.project_lifecycle.creation import decide_creation
 
-            return decide_creation(self, root, request)
+            with self._managed_task_scope():
+                return decide_creation(self, root, request)
         if set(request) != {"decision_id", "base_revision", "accept"} or type(request.get("accept")) is not bool:
             raise EngineError("document_invalid_decision", "Use decision_id, base_revision and boolean accept.")
         with external_project_session(root):
@@ -388,4 +390,10 @@ class ProjectApplication(CommandDispatch):
 
             return create_managed(request, self.backend, location=self.targets.managed_creation(request))
 
-        return create(self, request, targets=self.targets)
+        with self._managed_task_scope():
+            return create(self, request, targets=self.targets)
+
+    def _managed_task_scope(self) -> AbstractContextManager[None]:
+        from sciplot_core.task_semantic_creation import local_managed_actions
+
+        return local_managed_actions(self.create, lambda plot: self.describe(plot, description={"scope": "summary"}), self.deliver)

@@ -30,9 +30,9 @@ def delivery_request(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def execute_delivery(request: dict[str, Any]) -> dict[str, Any]:
-    from sciplot_core.plot_protocol.socket_client import call
+    from sciplot_core.task_semantic_creation import deliver_managed
 
-    return call("plot.deliver", {"request": request})
+    return deliver_managed(request)
 
 
 def finish_delivery(root: Path, state: dict[str, Any]) -> None:

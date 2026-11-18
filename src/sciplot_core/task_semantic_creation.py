@@ -1,4 +1,7 @@
 """Adapt semantic creation to the existing task journal and Managed plot lifecycle."""
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -9,6 +12,30 @@ from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_errors import TaskControlError
 from sciplot_core.task_semantic_raw_analysis import admit_raw_curve as admit_raw_curve
 from sciplot_core.task_storage import save_task, task_summary
+
+
+_ManagedRequest = Callable[[dict[str, Any]], dict[str, Any]]
+_ManagedDescribe = Callable[[Path], dict[str, Any]]
+_MANAGED_LOCAL: ContextVar[tuple[_ManagedRequest, _ManagedDescribe, _ManagedRequest] | None] = ContextVar("managed_task_local", default=None)
+
+
+@contextmanager
+def local_managed_actions(create: _ManagedRequest, describe: _ManagedDescribe, deliver: _ManagedRequest) -> Iterator[None]:
+    """Reuse the active plot owner; a serialized RPC request cannot call itself."""
+    token = _MANAGED_LOCAL.set((create, describe, deliver))
+    try:
+        yield
+    finally:
+        _MANAGED_LOCAL.reset(token)
+
+
+def deliver_managed(request: dict[str, Any]) -> dict[str, Any]:
+    local = _MANAGED_LOCAL.get()
+    if local is not None:
+        return local[2](request)
+    from sciplot_core.plot_protocol.socket_client import call
+
+    return call("plot.deliver", {"request": request})
 
 
 def is_semantic(state: dict[str, Any]) -> bool:
@@ -68,6 +95,9 @@ def build_managed_request(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def execute_managed(state: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
+    local = _MANAGED_LOCAL.get()
+    if local is not None:
+        return local[0](request)
     from sciplot_core.plot_protocol.socket_client import call
 
     # The established local RPC port owns serialization and lost-reply safety.
@@ -254,7 +284,9 @@ def current_result(state: dict[str, Any]) -> dict[str, Any]:
         from sciplot_core.plot_protocol.socket_client import call
 
         try:
-            current = call("plot.describe", {"plot": state["project"], "description": {"scope": "summary"}})
+            local = _MANAGED_LOCAL.get()
+            current = (local[1](Path(state["project"])) if local is not None
+                       else call("plot.describe", {"plot": state["project"], "description": {"scope": "summary"}}))
         except (ValueError, OSError, RuntimeError) as exc:
             summary.update(status="blocked", ready_to_use=False, current_project={"status": "unknown", "message": str(exc)})
             return summary

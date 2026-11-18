@@ -43,7 +43,7 @@ def _tree(root: Path) -> dict[str, tuple[int, int, bytes | None]]:
 
 
 @pytest.mark.comprehensive
-def test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project(tmp_path, capsys):
+def test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project(tmp_path, capsys, monkeypatch):
     from PIL import Image, ImageChops
     from sciplot_core.veusz_worker.operations import export_document
 
@@ -85,6 +85,66 @@ def test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project(tmp
     reopened = json.loads(capsys.readouterr().out)
     assert reopened["read_only"] and reopened["document"]["path"] == str(snapshot)
     assert _tree(portable) == saved_delivery
+
+    from sciplot_core.plot_protocol import socket_client
+    from sciplot_core.plot_protocol.server import make_service
+
+    def no_nested_rpc(*_args, **_kwargs):
+        pytest.fail("The active public plot owner must not reconnect to itself.")
+
+    monkeypatch.setattr(socket_client, "call", no_nested_rpc)
+    service = make_service()
+    raw = tmp_path / "UVvis.csv"
+    original = b"Wavelength,Absorbance\nnm,a.u.\nA,A\n400,2\n460,5\n500,1\n"
+    raw.write_bytes(original)
+    request = {"source": str(raw), "idempotency_key": "new-public-source-only"}
+    deliver = service.deliver
+
+    def fail_before_delivery(_request):
+        raise OSError("temporary test delivery outage")
+
+    try:
+        monkeypatch.setattr(service, "deliver", fail_before_delivery)
+        blocked = service.create(request)
+        assert blocked["status"] == "blocked" and blocked["plot_type"] == "ManagedPlot"
+        journal = Path(blocked["plot"]) / "task" / "task.json"
+        saved = json.loads(journal.read_text())
+        assert saved["phase"] == "delivering" and saved["result"]["ready_to_use"] is True
+        monkeypatch.setattr(service, "deliver", deliver)
+        ready = service.decide(Path(blocked["plot"]), blocked["next_step"]["request"])
+        assert ready["ready_to_use"] and not ready["read_only"] and ready["plot_type"] == "ManagedPlot"
+        assert (ready["plot_id"], ready["revision"]) == (saved["result"]["plot_id"], 0)
+        assert ready["analysis_metrics"][0]["value"] == 460
+        assert {entry["format"] for entry in ready["exports"]} == {"pdf", "tiff_300", "vsz"}
+        assert all(Path(entry["path"]).is_file() for entry in ready["exports"])
+        persisted = journal.read_bytes()
+        assert service.create(request) == ready
+        assert journal.read_bytes() == persisted and raw.read_bytes() == original
+        assert _tree(project) == old_tree
+
+        # A pre-upgrade receipt, even if interrupted before its task allocation,
+        # is still bound to its original legacy-capable creation route.
+        from sciplot_core.project_lifecycle import creation
+        from sciplot_core.project_lifecycle.context import digest
+
+        historical = {**request, "idempotency_key": "pre-upgrade-source-only"}
+        historical_root = service.targets.creation_root(raw, historical["idempotency_key"])
+        historical_root.mkdir(parents=True)
+        original_record = {"request": historical, "request_hash": digest(historical)}
+        historic_journal = historical_root / "creation.json"
+        historic_journal.write_text(json.dumps(original_record))
+        admitted = []
+
+        def interrupt_historical(_request, **kwargs):
+            admitted.append(kwargs["_prefer_managed"])
+            return {"status": "blocked"}
+
+        monkeypatch.setattr(creation, "start_task", interrupt_historical)
+        assert service.create(historical)["status"] == "blocked"
+        assert admitted == [False] and "raw_admission" not in json.loads(historic_journal.read_bytes())
+    finally:
+        service.close()
+
 
 
 def test_exact_legacy_vsz_rejects_output_inside_original_project(tmp_path, capsys):

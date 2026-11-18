@@ -15,6 +15,8 @@ def _result(service: PlotOpener, root: Path, state: dict[str, Any], task: dict[s
         task = inspect_task(root / "task")
     state["task_result"] = task
     write(root / "creation.json", state)
+    if "source_plan" in task:
+        return _managed_result(root, task)
     if task["status"] == "complete" and task.get("project"):
         current = task.get("current_project") or {}
         gaps = [key for key in ("source", "qa", "delivery") if (current.get(key) or {}).get("current") is not True]
@@ -50,6 +52,30 @@ def _result(service: PlotOpener, root: Path, state: dict[str, Any], task: dict[s
         result.update({"question": compact.get("question"),
                        "next_step": {"action": "plot.decide", "task_continuation": compact.get("next_step")}})
     return result
+
+
+def _managed_result(root: Path, task: dict[str, Any]) -> dict[str, Any]:
+    reply: dict[str, Any] = {"kind": "sciplot_plot_creation", "status": task["status"], "plot": str(root),
+             "plot_type": "ManagedPlot", "ready_to_use": False, "creation_evidence": str(root / "creation.json")}
+    compact = compact_task_result(task)
+    current = task.get("current_project") or {}
+    next_step = compact.get("next_step") or {}
+    if task.get("ready_to_use") is True and current.get("status") == "current":
+        export = task["result"]
+        return {**reply, **{key: current[key] for key in ("plot", "plot_id", "revision", "coverage", "authority")},
+                "ready_to_use": True, "read_only": False, "project": task["project"],
+                "plot_objects": export["plot_objects"], "exports": export["exports"],
+                "analysis_metrics": task.get("analysis_metrics", []), "delivery": task.get("next_step"),
+                "current_evidence": {"source_plan": task["source_plan"], "export": current["export_current"]},
+                "next_step": {"action": "deliver"}}
+    if task.get("blocker"):
+        reply["blocker"] = compact.get("blocker")
+    elif task.get("question"):
+        reply["question"] = compact.get("question")
+    reply["next_step"] = {"action": "plot.decide", "plot": str(root), "task_continuation": next_step}
+    if task["status"] in {"running", "blocked"} and not task.get("question"):
+        reply["next_step"]["request"] = {"response": {"retry": True}}
+    return reply
 
 
 def _stale_result(root: Path, task: dict[str, Any], gaps: list[str], *, plot: dict[str, Any] | None = None) -> dict[str, Any]:
