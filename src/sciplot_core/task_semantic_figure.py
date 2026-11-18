@@ -338,17 +338,14 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
     if "secondary_y" in intent:
         layer(next(record for record in records if record["source_id"] == temperature_source), len(records), temperature=True)
     figure: dict[str, Any] = {"domain_semantics": "current_view_v1", "axis_layout_policy": "decorated_secondary_sides_v1", "kind": "sciplot_figure_spec", "schema_version": 2, "id": "figure:main", "scales": scales,
-              "views": [{"id": "view:main", "panel_label": None, "style": {}, "axes": axes, "layers": layers}],
+              "views": [{"id": "view:main", "panel_label": None, "style": {}, "axes": axes, "layers": layers, **({"display_stack": raw_plan["display_stack"]} if "display_stack" in raw_plan else {})}],
               "composition": {"kind": "single", "rows": 1, "columns": 1,
                   "cells": [{"view_id": "view:main", "row": 0, "column": 0, "row_span": 1, "column_span": 1}],
                   "column_weights": [1], "row_weights": [1], "resolve": []},
               "layout": {}, "theme": {"project": {}, "figure": {}},
               "guides": [{"id": "guide:legend", "type": "legend", "scope": "view", "view_id": "view:main",
-                  "layer_ids": [], "order": [], "labels": {}, "visible": True, "location": "bottom-right" if "secondary_y" in intent else "inside-best", "columns": 1, "style": {}}],
+                  "layer_ids": [], "order": [], "labels": {}, "visible": "display_stack" not in raw_plan, "location": "bottom-right" if "secondary_y" in intent else "inside-best", "columns": 1, "style": {}}],
               "annotations": []}
-    if "display_stack" in raw_plan:
-        figure["views"][0]["display_stack"] = raw_plan["display_stack"]
-        figure["guides"][0]["visible"] = False
     template = "semantic-task-v1"
     key = "task:" + canonical_json_sha256([state["task_dir"], state["intent_revision"]])
     from sciplot_core.plot_grammar import compile_figure
