@@ -22,10 +22,6 @@ from sciplot_core.studio_render.axis_scale import (
 )
 from sciplot_core.studio_render.axis_limits import compute_axis_limits
 
-from sciplot_core.studio_render.legend_visibility import (
-    _veusz_legend_mode,
-)
-
 from sciplot_core.studio_render.value_parsing import (
     _optional_float,
     _float_tuple,
@@ -78,7 +74,6 @@ def _veusz_axis_contract(
                 [item.y_values for item in series],
                 kind="line",
                 axis_mode=str(render_options.get("axis_mode") or "auto"),
-                legend_mode=_veusz_legend_mode(render_options, template_id=template_id),
                 x_values=[item.x_values for item in series],
                 xscale=_axis_scale(render_options, "x"),
                 yscale=_axis_scale(render_options, "y"),

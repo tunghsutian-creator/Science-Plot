@@ -200,7 +200,7 @@ def _coerced_numeric_frame(frame: pd.DataFrame) -> pd.DataFrame:
 def _structured_metadata_prefix_rows(frame: pd.DataFrame) -> int:
     if frame.shape[0] < 3:
         return 0
-    for row_index in range(min(2, frame.shape[0])):
+    for row_index in range(2):
         values = [
             str(value).strip().casefold()
             for value in frame.iloc[row_index].tolist()
@@ -216,14 +216,14 @@ def _structured_metadata_prefix_rows(frame: pd.DataFrame) -> int:
             len(unit_values) >= max(1, math.ceil(len(values) * 0.5))
             and nonnumeric_units
         ):
-            return min(2, frame.shape[0])
+            return 2
     return 0
 
 
 def _series_metadata_order(frame: pd.DataFrame) -> str | None:
     """Identify whether two structured metadata rows store unit/sample or sample/unit."""
 
-    if frame.shape[0] < 2 or _structured_metadata_prefix_rows(frame) != 2:
+    if _structured_metadata_prefix_rows(frame) != 2:
         return None
 
     def unit_density(row_index: int) -> float:
@@ -244,9 +244,9 @@ def _series_metadata_order(frame: pd.DataFrame) -> str | None:
             "The first two metadata rows are both unit-like, so SciPlot "
             "cannot safely determine which row contains sample labels.",
         )
-    if first_density >= 0.5 and first_density > second_density:
+    if first_density >= 0.5:
         return "unit_then_sample"
-    if second_density >= 0.5 and second_density > first_density:
+    if second_density >= 0.5:
         return "sample_then_unit"
     return None
 

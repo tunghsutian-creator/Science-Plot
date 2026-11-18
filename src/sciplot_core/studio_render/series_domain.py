@@ -126,10 +126,12 @@ def _validate_log_domain_series(
         axis_issues: list[dict[str, Any]] = []
         for item in series:
             values = item.x_values if axis == "x" else item.y_values
-            nonfinite_count = sum(1 for value in values if not math.isfinite(value))
-            nonpositive_count = sum(
-                1 for value in values if math.isfinite(value) and value <= 0.0
-            )
+            nonfinite_count = nonpositive_count = 0
+            for value in values:
+                if not math.isfinite(value):
+                    nonfinite_count += 1
+                elif value <= 0.0:
+                    nonpositive_count += 1
             if nonfinite_count or nonpositive_count:
                 axis_issues.append(
                     {

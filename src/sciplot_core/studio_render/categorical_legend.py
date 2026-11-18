@@ -18,11 +18,11 @@ from sciplot_core.studio_render.style_contract import _veusz_style_contract
 from sciplot_core.studio_render.value_parsing import _size_mm
 
 
-def legend_columns(*, series_count: int, mode: str = "inside_best",
+def legend_columns(*, series_count: int,
                    max_label_length: int = 0, figure_width_mm: float | None = None,
                    requested: object = None) -> int:
     if requested is None:
-        return _legend_columns(series_count=series_count, mode=mode,
+        return _legend_columns(series_count=series_count,
             max_label_length=max_label_length, figure_width_mm=figure_width_mm)
     if type(requested) is not int or not 1 <= requested <= 12:
         raise StudioPreparationBlocked("invalid_legend_columns", "Legend columns must be an explicit integer from 1 to 12.")

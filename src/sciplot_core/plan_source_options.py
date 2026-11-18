@@ -21,7 +21,7 @@ def validate_source_options(source: Path, request: dict[str, Any], *, rule_id: s
     options = source_options({**request, "rule_id": rule_id})
     if "sheet" in options:
         sheet = options["sheet"]
-        if rule_id != "tensile_curve" or not source.is_file() or source.suffix.lower() not in {".xlsx", ".xls"} or not isinstance(sheet, str) or not sheet.strip():
+        if not source.is_file() or source.suffix.lower() not in {".xlsx", ".xls"} or not isinstance(sheet, str) or not sheet.strip():
             raise ValueError("Explicit sheet requires a named worksheet in one tensile workbook.")
     if "performance_selection" in options:
         from sciplot_core.performance_comparison.selection import parse_performance_selection

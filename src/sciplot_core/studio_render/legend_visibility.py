@@ -37,7 +37,6 @@ def _veusz_legend_mode(render_options: dict[str, Any], *, template_id: str) -> s
 def _legend_columns(
     *,
     series_count: int,
-    mode: str = "inside_best",
     max_label_length: int = 0,
     figure_width_mm: float | None = None,
 ) -> int:
@@ -70,19 +69,15 @@ def _show_veusz_direct_labels(
 def _series_label_anchor(
     item: StudioSeries, *, reverse_x: bool, side: str
 ) -> tuple[float, float] | None:
-    points = sorted(
-        (
-            (float(x_value), float(y_value))
-            for x_value, y_value in zip(item.x_values, item.y_values, strict=True)
-            if math.isfinite(x_value) and math.isfinite(y_value)
-        ),
-        key=lambda pair: pair[0],
-    )
+    points = [
+        (float(x_value), float(y_value))
+        for x_value, y_value in zip(item.x_values, item.y_values, strict=True)
+        if math.isfinite(x_value) and math.isfinite(y_value)
+    ]
     if not points:
         return None
-    x_values = [point[0] for point in points]
-    x_min = min(x_values)
-    x_max = max(x_values)
+    x_min = min(point[0] for point in points)
+    x_max = max(point[0] for point in points)
     span = x_max - x_min
     if math.isclose(span, 0.0):
         target_x = x_min
@@ -90,8 +85,8 @@ def _series_label_anchor(
         target_x = x_max - span * 0.06 if reverse_x else x_min + span * 0.06
     else:
         target_x = x_min + span * 0.06 if reverse_x else x_max - span * 0.06
-    nearest = min(points, key=lambda pair: abs(pair[0] - target_x))
-    return nearest
+    # Preserve the lower-x tie-break without sorting all the points.
+    return min(points, key=lambda pair: (abs(pair[0] - target_x), pair[0]))
 
 
 def _show_veusz_key(

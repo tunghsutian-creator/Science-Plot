@@ -51,19 +51,19 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         save_task(root, state)
         return
     _phase(root, state, "planning")
-    if "categorical" in state["request"]:
+    request = state["request"]
+    if "categorical" in request:
         from sciplot_core.task_categorical_creation import plan_categorical_task
 
         plan = plan_categorical_task(state)
     else:
         plan = plan_task(root, state)
+        if plan is not None:
+            save_profile(root, state)
     if plan is None:
         save_task(root, state)
         return
-    if "categorical" not in state["request"]:
-        save_profile(root, state)
     _phase(root, state, "creating")
-    request = state["request"]
     def checkpoint(prepared: dict[str, Any]) -> None:
         if state.get("defer_creation_export") is True:
             checkpoint_prepared(root, state, prepared)

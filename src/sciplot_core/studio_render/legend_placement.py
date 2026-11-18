@@ -163,7 +163,6 @@ def _legend_footprint(
     load = _label_load(series)
     columns = _legend_columns(
         series_count=load["series_count"],
-        mode="inside_best",
         max_label_length=load["max_label_length"],
         figure_width_mm=float(width_mm),
     )
