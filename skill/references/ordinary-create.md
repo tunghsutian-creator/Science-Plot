@@ -4,26 +4,48 @@ Use this route for new ordinary plots from original data. The local task owns
 recognition, planning, native creation, QA and export. Separate inspect/rules/plan/
 project-create/Studio commands, repository reading and tests are not prerequisites.
 
-Ordinary creation uses the existing production plan for scientific recognition,
-family templates and supported overrides. The typed `task create`, structured
-CLI `task start` and daily MCP `sciplot_task_start` routes create Managed
-documents directly for eligible single-sample UV–vis, DSC, TGA, DTG, XRD and SAXS curves
-in CSV or TSV. This requires agreement between the registered plan and exact
-table on original headers, observed units, sample name and all rows without
-conversion, normalization or exclusion. SAXS keeps its registered log intensity
-axis and wide page; qualifying XRD keeps the qualitative Y ticks policy and
-only anchors nonnegative coordinate domains at zero. DTG requires an observed
-derivative-mass header and retains the original literal `%/C` values; the
-registered DTG label denotes percent per degree Celsius, not a conversion.
-Current and historical task receipts expose the same registered analysis
-metrics (values, units, status and reasons) for the analyzed source.
-Other source shapes, profiles, manual mappings and families retain their
-production path. An admitted Managed task never falls back after a runtime
-or transport error; resolve the issue and resume the same task.
-Explicit semantic intents remain available for wider cases.
-Do not translate raw input into a FigureTemplate in an AI request.
-Instrument directories are validated by their scientific owner; missing metrics
-remain a source error, not a request for AI to select the same rule again.
+Ordinary creation uses the registered plan for scientific recognition, figure
+selection, and supported presentation. The typed `task create`, structured CLI
+`task start`, daily MCP `sciplot_task_start`, and source-only `plot.create`
+(including expert MCP `sciplot_plot_create`) create Managed plots directly when
+the source and registered plan agree on samples, original columns, units and
+rows. Supported defaults include:
+
+- **UV–vis, DSC, TGA, DTG, XRD, SAXS:** verified single-sample CSV/TSV without
+  conversion, normalization or excluded points. DTG requires an observed
+  derivative-mass header and retains the literal `%/C` values. SAXS retains
+  the registered log intensity axis and wide frame.
+- **FTIR:** one source CSV/TSV with an explicitly identified transmittance
+  (`%`) or absorbance (`a.u.`) response. Fully bound same-mode sample pairs
+  in one file can use the default stack. It preserves each original grid,
+  sample label and per-spectrum analysis; only displayed lines are shifted.
+  Stacks hide numeric Y ticks and retain a descending wavenumber axis.
+- **GPC–SEC:** one verified calibrated molar-mass/`dW/dLogM` distribution,
+  with `g/mol` in the molar-mass header or the supported adjacent unit row.
+  The exact registered `dW/dLogM` header establishes a dimensionless
+  distribution; the original blank unit cell stays blank. There is no
+  inferred calibration from retention time or refractive-index signal.
+
+Single-curve, FTIR and GPC task receipts and `task inspect` retain registered
+analysis values, units, status and reasons. Advanced `task_start` callers can
+use explicit coordinate intent for other verified views. The expert MCP
+catalog remains available; its raw `sciplot_task_start` does not opt into the
+daily profile's direct-curve shortcut.
+
+Separately, supported standard **rheology frequency-sweep mean** workflows
+create a Managed group through ordinary tasks and `project create` when the
+original condition and replicate bindings, metric origins and units are
+verified. The complete selected figure set and its delivery are preserved.
+See [Instrument frequency sweeps](#instrument-frequency-sweeps).
+
+Unverified source shapes, custom profiles or mappings and other families
+may still use their registered compatibility path. After Managed admission,
+a runtime or transport error does not start a Legacy creation. Follow the
+owner's reported recovery, and retry the same task only when it says to.
+If an original changed, inspect the current evidence before continuing.
+Do not translate raw data into a FigureTemplate in an AI request.
+Instrument directories are validated by their scientific owner; missing
+metrics are a source error, not a reason to select the same rule again.
 
 Ordinary numeric XY intents can state `x.scale` and `y.scale` as `linear` or
 `log`, or use `--x-scale`/`--y-scale` in `task create`. A logarithmic coordinate
@@ -148,8 +170,8 @@ Carry the user's explicit display or replicate-statistics requirement in the
 first create call. `--curve-display raw_overlay` requires unshifted response
 values; `--curve-display stacked_offset` requires explicit offsets. These are
 constraints on an existing route, not permission to choose another display.
-Source-only FTIR currently uses `stacked_curve` with offsets, so it cannot satisfy
-`raw_overlay`. The existing semantic numeric-XY attachment route can bind
+The default source-only multi-spectrum FTIR stack uses display offsets. Do not
+use that stack to satisfy `raw_overlay`. The semantic numeric-XY attachment route can bind
 unshifted original values when its coordinate, unit and source-layout contracts
 are met. Express a decreasing wavenumber axis with `--x-direction descending`;
 `--y-direction` likewise declares left-axis direction. Both use existing scale
@@ -390,6 +412,15 @@ an extra step for attachment plotting. Legacy projects retain their complete
 saved VSZ authority and are never silently promoted by this route.
 
 ## Instrument frequency sweeps
+
+For a supported standard original-data mean workflow with no explicit metric
+or replicate override, start with `task create /absolute/original --json`.
+Inspect the complete returned FigurePlan and delivery. A standard default
+group contains storage modulus, loss modulus, loss factor and complex-viscosity
+magnitude. Use the returned figure ID or exact document handle to inspect or
+edit one figure; do not regenerate the whole group for a local edit. The
+explicit-coordinate route below creates a particular requested view instead
+of the automatic mean figure group.
 
 For complex-viscosity magnitude from an original instrument frequency table:
 

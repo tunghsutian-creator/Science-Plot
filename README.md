@@ -340,24 +340,40 @@ and ManagedPlot must pass native structure, data, environment and raster checks.
 See [research compatibility profiles and evidence](docs/RESEARCH_COMPATIBILITY_PROFILES.md)
 for exact coverage, the bounded mechanical antialias difference, and unsupported cases.
 
-Ordinary raw-data entry without an explicit semantic coordinate intent
-(`task create`, source-only `plot.create`, and their MCP routes) keeps the
-existing production workflow: scientific recognition, the
-family's FigurePlan and templates, then shared house policy plus family rules and
-supported explicit overrides. `render --auto` uses that same workflow; plain
-`render --template` remains a low-level plot-ready operation. FigureTemplate v2
-supports both explicit low-level composition and the local task adapter for a
-semantic coordinate intent. `task create`, structured CLI `task start` and
-daily MCP `sciplot_task_start` now create Managed plots directly for eligible
-single-sample UV–vis, DSC, TGA, DTG, XRD and SAXS CSV/TSV. Both the production plan and
-exact original table must agree on columns, units, sample and source rows,
-with no conversion or normalization. The registered SAXS log intensity axis
-and 120 × 55 mm size are retained, as are the published XRD axis policy and
-literal DTG derivative values. Registered analysis results remain in the
-task receipt and `task inspect`. An admitted task that hits a runtime failure
-stays Managed and resumes in place. Other families and source shapes,
-the expert MCP catalog, and source-only `plot.create` retain the compatibility
-path.
+Ordinary raw creation starts with the registered scientific plan. For verified
+CSV/TSV inputs, `task create`, structured `task start`, daily MCP
+`sciplot_task_start`, and source-only `plot.create` (including expert MCP
+`sciplot_plot_create`) can create Managed plots directly:
+
+- Single-sample UV–vis, DSC, TGA, DTG, XRD and SAXS keep their original
+  coordinates, units and registered analysis. SAXS retains its logarithmic
+  intensity axis and 120 × 55 mm frame; XRD retains its qualitative Y axis
+  and uses zero as an automatic lower bound only for nonnegative data.
+- FTIR accepts one explicitly identified response mode per file. Eligible
+  single spectra retain a quantitative Y readout. Fully bound, same-mode
+  paired tables also retain the default multi-spectrum stack, with its
+  display-only offsets, sample labels, descending wavenumber and per-spectrum
+  analysis. Explicit unshifted overlays still use coordinate intent.
+- GPC–SEC accepts eligible single calibrated molar-mass/`dW/dLogM`
+  distributions, including the exact supported adjacent `g/mol` and blank
+  distribution unit row. The registered column header, not a user statement,
+  establishes the dimensionless distribution.
+
+Separately, supported standard `rheology_frequency_sweep` mean workflows
+create a Managed group for the complete selected figure plan. This includes
+ordinary tasks and the public `project create` route. It requires exact
+condition and replicate bindings and supported metric origins and units.
+The returned figure IDs and document handles distinguish the individual
+figures; an ordinary default plan has four.
+
+These are scoped routes, not a migration of every family or input shape.
+Unverified variants, custom profiles or mappings may still use an existing
+compatibility path. Once a Managed creation is admitted, runtime or
+transport failure does not start a Legacy creation; follow the returned
+recovery. See the [ordinary creation guide](skill/references/ordinary-create.md)
+for scope, commands and how to inspect existing results. `render --auto` also
+uses the production planner; plain `render --template` remains a low-level
+plot-ready operation.
 
 Frequency instrument exports preserve explicitly labelled temperature Results as
 separate traces. Complex-viscosity magnitude is distinct from a recorded real or
