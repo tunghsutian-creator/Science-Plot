@@ -245,3 +245,50 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
     output = REPO_ROOT / f".tmp_verify/document_migration_20261007/template_export_count_{'style' if style_change else 'unchanged'}.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2))
+
+
+@pytest.mark.comprehensive
+def test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles(tmp_path):
+    """Reauthor the paired recipe without using the old renderer or changing original cells."""
+    from sciplot_core.plot_protocol.server import make_service
+    from test_plot_ir import managed_example
+
+    source = tmp_path / "UVvis.csv"
+    source.write_text("Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\nE2,E2,E4,E4\n"
+                      "400,1,400,2\n450,2,450,3\n500,3,500,4\n")
+    original = source.read_bytes()
+    request = template_request(source)
+    request["mode"] = "managed"
+    cartesian, *_ = managed_example()
+    old = request["template_definition"]["presentation"]
+    explicit = cartesian["presentation"]
+    layout = deepcopy(explicit["layout"])
+    layout["axes"]["x"].update(label="Wavelength (nm)", unit="nm", limits=[390, 510], ticks=[400, 450, 500])
+    layout["axes"]["y"].update(label="Absorbance (a.u.)", unit="a.u.", limits=[0, 5], ticks=[0, 1, 2, 3, 4, 5])
+    layout["series_styles"] = {slot: deepcopy(explicit["layout"]["series_styles"]["slot:A"])
+                               for slot in request["template_definition"]["series_slots"]}
+    for key in ("axis:x", "axis:y", "legend:main"):
+        old["objects"][key] = deepcopy(explicit["objects"][key])
+    for axis in layout["axes"].values():
+        old["objects"][axis["id"]]["label"] = axis["label"]
+        old["objects"][axis["id"]]["properties"]["axis.limits"] = axis["limits"]
+    old.update(layout=layout, export_configuration={"formats": ["pdf", "tiff_300"]})
+
+    service = make_service()
+    try:
+        result = service.create(request)
+        assert result["plot_type"] == "ManagedPlot" and result["ready_to_use"]
+        head = load_head(Path(result["plot"]))
+        compiled = json.loads(Path(head["binding"]["ir_path"]).read_text())
+        assert [(series["id"], series["label"], series["x"], series["y"], series["style"]["line_color"],
+                 series["style"]["line_width_pt"]) for series in compiled["series"]] == [
+            ("bound:E2", "E2", [400, 450, 500], [1, 2, 3], "#2878b5", .7),
+            ("bound:E4", "E4", [400, 450, 500], [2, 3, 4], "#c82423", .7),
+        ]
+        assert [compiled["axes"][role]["unit"] for role in ("x", "y")] == ["nm", "a.u."]
+        exported = json.loads((Path(result["plot"]) / "export-cache.json").read_text())["export"]
+        assert exported["scientific_audit"]["status"] == "passed"
+        assert {entry["format"] for entry in result["exports"]} == {"pdf", "tiff_300", "vsz"}
+        assert source.read_bytes() == original
+    finally:
+        service.close()

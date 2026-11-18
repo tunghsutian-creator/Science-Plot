@@ -7,11 +7,12 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10407,
-    "nodeids_sha256": "9f2c9a93059aec28d67bbbfc39b862476d5f4697b661de34b4697702e7bc9bcf",
-    "test_sources_sha256": "76dfdffac93af1a9e294dcd5b2f6a8d8c8e0dd93e73c8e994940af44e1fc5525",
+    "nodeid_count": 10408,
+    "nodeids_sha256": "ddf6eeb460fa03d10861b01066c1e1b924acfb40a8a114512c220ce1cdfab409",
+    "test_sources_sha256": "ec682d7a5fb47a2e89c92989e1eab29f5c5ee4c8bf756816e9699e232e53d9c6",
     "test_source_count": 661,
     "candidate_nodeids": [
+      "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",
       "tests/test_plot_template_creation.py::test_public_explicit_legacy_creation_is_recovery_only",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
@@ -5837,6 +5838,10 @@
       "tests/test_ordinary_plotting_owners.py::test_each_domain_has_exact_existing_paths_and_generated_native_controls[managed_curve_project]"
     ],
     "synthetic_candidates": [
+      {
+        "nodeid": "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",
+        "reason": "Real Managed renderer consumes a generated paired UV-vis CSV and explicitly reauthored bindings and styles. No original private science fixture or golden is read."
+      },
       {
         "nodeid": "tests/test_plot_template_creation.py::test_public_explicit_legacy_creation_is_recovery_only",
         "reason": "Synthetic in-test UV-vis table and public service; denial precedes task allocation and native work, with no private data."

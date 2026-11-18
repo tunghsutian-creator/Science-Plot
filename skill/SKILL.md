@@ -21,6 +21,7 @@ Read the matching self-contained route once per session while its contract is un
 | Arrange saved figures and images on one physical page | [Panel assembly](references/panel-assembly.md) |
 | Read performance radar units, normalization and direction | [Radar interpretation](references/performance-radar.md) |
 | Plot original data as a new ordinary task | [Create](references/ordinary-create.md) |
+| Reauthor a compatible legacy template for Managed creation | [Template migration](references/managed-template-migration.md) |
 | Add an original table to an existing Managed XY figure | [Source append](references/source-append.md) |
 | Explicit AI-prepared HDPE/LDPE UDC rheology/TTS suite | [Prepared rheology](references/rheology-prepared.md) |
 | Change or debug this project's implementation | [Development](references/development.md) |
