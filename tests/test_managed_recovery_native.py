@@ -304,11 +304,18 @@ def test_compiler_identity_covers_vendored_renderer_and_shared_helpers(tmp_path,
     (renderer / "veusz").mkdir(parents=True)
     helper = package / "shared_render_helper.py"
     native = renderer / "veusz/widget.py"
+    verification = package / "verification"
+    verification.mkdir()
+    ci_suites = verification / "suites.py"
+    ci_suites.write_text("SUITE_VERSION = 1\n")
     helper.write_text("STYLE_VERSION = 1\n")
     native.write_text("NATIVE_DEFAULT_VERSION = 1\n")
     monkeypatch.setattr(identity, "PACKAGE_ROOT", package)
     monkeypatch.setattr(identity, "VEUSZ_ROOT", renderer)
     initial = compiler_identity()
+    ci_suites.write_text("SUITE_VERSION = 2\n")
+    (verification / "new_check.py").write_text("NEW_CHECK = True\n")
+    assert compiler_identity() == initial
     native.write_text("NATIVE_DEFAULT_VERSION = 2\n")
     renderer_changed = compiler_identity()
     helper.write_text("STYLE_VERSION = 2\n")
