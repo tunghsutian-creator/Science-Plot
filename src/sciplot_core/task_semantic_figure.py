@@ -6,6 +6,7 @@ from typing import Any, NoReturn
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.plot_transforms import builtin_executor, execute_node
 from sciplot_core.task_errors import TaskControlError
+from sciplot_core.task_semantic_axes import ordinary_axis
 from sciplot_core.task_semantic_coordinates import resolved_binding
 from sciplot_core.task_semantic_stages import stage_execution_error, validate_stage_domains
 from sciplot_core.plot_document.errors import DocumentError
@@ -26,7 +27,6 @@ def _select_column(candidate: dict[str, Any], block: dict[str, Any], coordinate:
     if len(exact) != 1:
         _error("semantic_resolved_binding_changed", "An original coordinate differs from its resolved source binding; no replacement column was chosen.",
                role=role, block_id=block["block_id"])
-    from sciplot_core.plot_document.errors import DocumentError
     from sciplot_core.plot_transforms.unit_relations import requires_unit_context, resolve_unit_relation
 
     relation = coordinate["unit_relation"]
@@ -305,8 +305,6 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
         if coordinate["unit"] != unit:
             _error("semantic_resolved_binding_changed", "The compiled coordinate unit differs from its resolved axis.", role=role)
         values = [value for record in selected for value in datasets[record["dataset_id"]]["columns"][role]["values"] if value is not None]
-        from sciplot_core.task_semantic_axes import ordinary_axis
-
         domain, ticks, label, scale_transform = ordinary_axis(role, coordinate, unit, values)
         scales.append({"id": "scale:" + role, "dimension": "x" if role == "x" else "y", "transform": scale_transform,
                        "domain": domain, "unit": unit, "quantity": coordinate["quantity"], "direction": coordinate.get("direction", "ascending"),
