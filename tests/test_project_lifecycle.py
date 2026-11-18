@@ -333,19 +333,30 @@ def test_task_edit_keeps_semantic_reads_on_injected_service_repository(tmp_path,
 def test_task_style_checkpoint_is_filesystem_but_semantic_state_uses_injected_owner(tmp_path, monkeypatch):
     from sciplot_core.plot_engine import compat
 
-    backend, repo = FakeBackend(tmp_path / "legacy"), MemoryRepository()
-    root = tmp_path / "plot"
-    document, binding = backend.initial()
-    repo.commit(root, document, binding, "import")
-    app = application(backend, repo)
-    monkeypatch.setattr(compat, "PlotService", lambda: app)
+    backend, repo = ManagedBackend(), MemoryRepository()
+    service = compat.PlotService
+
+    def injected_service(*, read_only_legacy):
+        assert read_only_legacy
+        return service(backend, repository=repo, capabilities=COMPATIBILITY_CAPABILITIES,
+                       read_only_legacy=read_only_legacy)
+
+    owner = injected_service(read_only_legacy=True)
+    try:
+        created = owner.create(request_for_source(tmp_path))
+    finally:
+        owner.close()
+    assert created["ready_to_use"]
+    root = Path(created["plot"])
+    monkeypatch.setattr(compat, "PlotService", injected_service)
     entry = tmp_path / "style-checkpoint"
-    arguments = {"samples": None, "all_samples": True, "style": {"width": "0.7pt"}, "figure_id": None, "task_dir": entry}
+    arguments = {"samples": None, "all_samples": True, "style": {"width": "1.7pt"}, "figure_id": None, "task_dir": entry}
     first = compat.migrated_style(root, **arguments)
     assert first["ready_to_use"] and (entry / "semantic-style.json").is_file()
+    applied = backend.calls["apply"]
     assert compat.migrated_style(root, **arguments)["replayed"]
     assert repo.load_head(root)["document"]["revision"] == 1 and not (root / "head.json").exists()
-    assert backend.native_writes == 1
+    assert backend.calls["apply"] == applied == 1
 
 
 def test_delivery_checkpoint_cache_and_lease_use_injected_repository(tmp_path):
