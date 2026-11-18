@@ -442,11 +442,22 @@ def test_review_content_budget_preserves_real_locators_at_both_fixture_depths(tm
     _assert_compact_review_content(result, root)
 
 
-def test_migrated_typed_style_reuses_frozen_request_without_another_revision(engine, monkeypatch):
+def _inject_guarded_style_owner(monkeypatch, compat, service):
+    def guarded_owner(*, read_only_legacy):
+        assert read_only_legacy
+        service.read_only_legacy = read_only_legacy
+        return service
+
+    monkeypatch.setattr(compat, "PlotService", guarded_owner)
+
+
+def test_migrated_typed_style_reuses_frozen_request_without_another_revision(tmp_path, monkeypatch):
+    from test_plot_typed_intent_recovery import _engine
+
     from sciplot_core.plot_engine import compat
 
-    service, root, backend = engine
-    monkeypatch.setattr(compat, "PlotService", lambda: service)
+    service, root, backend, _, _ = _engine(tmp_path)
+    _inject_guarded_style_owner(monkeypatch, compat, service)
     kwargs = {"samples": None, "all_samples": True, "style": {"width": "0.7pt"},
               "figure_id": None, "task_dir": root.parent / "typed-entry"}
     first = compat.migrated_style(root, **kwargs)
@@ -455,12 +466,14 @@ def test_migrated_typed_style_reuses_frozen_request_without_another_revision(eng
     assert replayed["revision"] == 1 and backend.native_writes == 1 and backend.calls["preview"] == 1
 
 
-def test_migrated_typed_style_rejects_different_intent_before_any_native_work(engine, monkeypatch):
+def test_migrated_typed_style_rejects_different_intent_before_any_native_work(tmp_path, monkeypatch):
+    from test_plot_typed_intent_recovery import _engine
+
     from sciplot_core.plot_engine import compat
 
-    service, root, backend = engine
-    monkeypatch.setattr(compat, "PlotService", lambda: service)
-    kwargs = {"samples": ["E2"], "all_samples": False, "style": {"width": "0.7pt"},
+    service, root, backend, _, _ = _engine(tmp_path)
+    _inject_guarded_style_owner(monkeypatch, compat, service)
+    kwargs = {"samples": ["layer:modulus"], "all_samples": False, "style": {"width": "0.7pt"},
               "figure_id": None, "task_dir": root.parent / "typed-entry"}
     compat.migrated_style(root, **kwargs)
     counts = deepcopy(backend.calls)
@@ -477,7 +490,7 @@ def test_migrated_typed_style_edits_v2_mark_and_replays_frozen_selection(tmp_pat
     from sciplot_core.task_shortcuts import style_task
 
     service, root, backend, source, original_native = _engine(tmp_path)
-    monkeypatch.setattr(compat, "PlotService", lambda: service)
+    _inject_guarded_style_owner(monkeypatch, compat, service)
     before = load_head(root)["document"]
     raw, native = source.read_bytes(), original_native.read_bytes()
     kwargs = {"samples": ["layer:modulus"], "color": "#123456", "width": "0.7mm",

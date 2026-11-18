@@ -25,6 +25,13 @@ def semantic(tmp_path, monkeypatch):
         capabilities = service.capabilities
         targets = service.targets
 
+        def __init__(self, *, read_only_legacy):
+            assert read_only_legacy
+            service.read_only_legacy = read_only_legacy
+
+        def require_editable(self, plot, *, figure_id):
+            service.require_editable(plot, figure_id=figure_id)
+
         def patch(self, plot, request):
             calls["patch"].append((plot, deepcopy(request)))
             return service.patch(plot, request)
@@ -118,6 +125,12 @@ def test_old_style_record_replays_literal_request_without_inventing_new_intent(t
     before, calls = (entry / "semantic-style.json").read_bytes(), []
 
     class Owner:
+        def __init__(self, *, read_only_legacy):
+            assert read_only_legacy
+
+        def require_editable(self, plot, *, figure_id):
+            assert plot == root and figure_id is None
+
         def patch(self, plot, value):
             calls.append((plot, value))
             return {"status": "blocked", "next_step": {"action": "recover_original"}}
@@ -213,6 +226,12 @@ def test_edit_cleanup_preserves_primary_failure_and_surfaces_standalone_failure(
     cleanup = RuntimeError("cleanup failed")
 
     class Owner:
+        def __init__(self, *, read_only_legacy):
+            assert read_only_legacy
+
+        def require_editable(self, plot, *, figure_id):
+            assert plot == root and figure_id is None
+
         def patch(self, *_a):
             if failure is not None:
                 raise failure

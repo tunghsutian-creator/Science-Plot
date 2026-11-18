@@ -18,35 +18,29 @@ pytestmark = pytest.mark.comprehensive
 
 
 def lifecycle(root, progress):
+    from test_figure_document import request_for_figure
+
     from sciplot_core.plot_engine.service import PlotService
+    from sciplot_core.plot_engine.storage import load_head
     from sciplot_core.project_store.repository import FileProjectStore
-    from sciplot_core.render import render_to_dir
     from sciplot_core.task_common_edits import edit_task
     from sciplot_core.task_shortcuts import style_task
 
     project = root / "project"
-    source = project / "source/values.csv"
-    source.parent.mkdir(parents=True)
-    source.write_text("Time,Force\ns,N\nA,A\n0,1\n1,3\n2,2\n")
+    project.mkdir()
+    request = request_for_figure(root)
+    source = root / "figure.csv"
     raw = source.read_bytes()
-    progress("initial_render")
-    rendered = render_to_dir(source, template="curve", output_dir=root / "rendered",
-                             export_formats=(), options={"size": "60x55"})
-    studio = project / "studio"
-    studio.mkdir()
-    shutil.copy2(rendered["veusz_documents"][0], studio / "document.vsz")
-    shutil.copy2(rendered["veusz_specs"][0], studio / "spec.json")
-    (project / "plot_request.json").write_text(json.dumps({"input": str(source), "template": "curve"}))
-    spec = (studio / "spec.json").read_bytes()
     store = FileProjectStore(project)
     store.snapshot(import_legacy=True)
-    service = PlotService()
+    service = PlotService(read_only_legacy=True)
     try:
-        progress("open")
-        opened = service.open(project, figure_id="primary")
+        progress("create")
+        opened = service.create(request, project=project)
+        assert opened["ready_to_use"] and opened["revision"] == 0, opened
         plot = Path(opened["plot"])
         progress("common_edit")
-        common = edit_task(plot, palette="tol_bright", service=service)
+        common = edit_task(plot, font_size="9pt")
         assert common["ready_to_use"] and common["revision"] == 1, common
         common_entry = Path(common["edit_entry"])
         progress("style")
@@ -67,25 +61,28 @@ def lifecycle(root, progress):
         assert undone["ready_to_use"] and undone["revision"] == 3
         assert undone["presentation_hash"] == opened["presentation_hash"]
         assert undone["scientific_hash"] == opened["scientific_hash"]
-        native = (studio / "document.vsz").read_bytes()
+        native_path = Path(load_head(plot)["binding"]["document"])
+        native = native_path.read_bytes()
     finally:
         progress("close_first_service")
         service.close()
-    assert source.read_bytes() == raw and (studio / "spec.json").read_bytes() == spec
-    service = PlotService()
+    assert source.read_bytes() == raw
+    service = PlotService(read_only_legacy=True)
     try:
         progress("reopen")
         reopened = service.open(project, figure_id=opened["plot_id"])
         assert reopened["revision"] == 3 and reopened["scientific_hash"] == opened["scientific_hash"]
         def no_apply(*_):
             pytest.fail("Checkpoint replay applied native edits after Undo")
-        service.backend.backend.legacy.apply = no_apply
+        service.backend.backend.managed.apply = no_apply
         progress("historical_replay")
-        replayed = edit_task(plot, palette="tol_bright", task_dir=common_entry, service=service)
+        replayed = edit_task(plot, font_size="9pt", task_dir=common_entry, service=service)
         progress("historical_replay_returned")
         assert replayed["replayed"] and replayed["historical"] and replayed["revision"] == 1, replayed
         assert replayed["current_revision"] == 3 and replayed["ready_to_use"] is False
-        assert (studio / "document.vsz").read_bytes() == native
+        assert Path(load_head(plot)["binding"]["document"]) == native_path
+        assert native_path.read_bytes() == native
+        assert source.read_bytes() == raw
         progress("historical_native_bytes_checked")
         assert {name: store.read_bytes(name) for name in originals} == originals
         progress("historical_source_bytes_checked")

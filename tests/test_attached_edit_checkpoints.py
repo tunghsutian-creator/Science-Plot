@@ -6,10 +6,19 @@ from test_attached_semantic_repository import SourceAwareManagedBackend
 from test_figure_document import request_for_figure
 
 from sciplot_core.plot_engine import compat
+from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.project_store.repository import FileProjectStore
 from sciplot_core.task_common_edits import edit_task
 from sciplot_core.task_shortcuts import style_task
+
+
+def _inject_public_style_owner(monkeypatch, service):
+    def owner(*, read_only_legacy):
+        assert read_only_legacy is service.read_only_legacy is True
+        return service
+
+    monkeypatch.setattr(compat, "PlotService", owner)
 
 
 @pytest.mark.parametrize("operation", ["common", "style", "outer_style"])
@@ -18,9 +27,9 @@ def test_public_default_attached_checkpoint_is_committed_before_patch(tmp_path, 
     project.mkdir()
     store = FileProjectStore(project)
     store.snapshot(import_legacy=True)
-    service = PlotService(SourceAwareManagedBackend())
+    service = PlotService(SourceAwareManagedBackend(), read_only_legacy=True)
     monkeypatch.setattr("sciplot_core.task_common_edits.doctor_payload", lambda: {"kind": "doctor", "status": "ready", "checks": []})
-    monkeypatch.setattr(compat, "PlotService", lambda: service)
+    _inject_public_style_owner(monkeypatch, service)
     try:
         created = service.create(request_for_figure(tmp_path), project=project)
         root = Path(created["plot"])
@@ -41,7 +50,7 @@ def test_public_default_attached_checkpoint_is_committed_before_patch(tmp_path, 
 
 
 @pytest.mark.parametrize("operation", ["common", "style"])
-def test_public_default_legacy_checkpoint_preserves_project_guard(tmp_path, monkeypatch, operation):
+def test_legacy_checkpoint_keeps_project_guard_and_public_style_is_read_only(tmp_path, monkeypatch, operation):
     from test_plot_engine import FakeBackend
     from sciplot_core.project_store.runtime import project_runtime
 
@@ -57,19 +66,31 @@ def test_public_default_legacy_checkpoint_preserves_project_guard(tmp_path, monk
         document["presentation"]["objects"]["series:E2"]["capabilities"]["style.line.color"] = {"type": "color", "risk": "presentation"}
         from sciplot_core.plot_document import seal_document
         document = seal_document(document)
-        return document, {**binding, "project": str(project)}
+        binding = {**binding, "project": str(project)}
+        if operation == "style":
+            binding.update(kind="sciplot_veusz_binding", document=str(backend.native))
+        return document, binding
     monkeypatch.setattr(backend, "import_project", import_project)
     service = PlotService(backend, resolve_figure=lambda *_: {"project": str(project), "figure_id": "primary"})
     monkeypatch.setattr("sciplot_core.task_common_edits.doctor_payload", lambda: {"kind": "doctor", "status": "ready", "checks": []})
-    monkeypatch.setattr(compat, "PlotService", lambda: service)
     try:
         with project_runtime(store):
             opened = service.open(project)
         root = Path(opened["plot"])
-        result = (edit_task(root, palette="tol_bright", service=service) if operation == "common" else
-                  style_task(root, all_samples=True, width="1.2pt"))
-        assert result["ready_to_use"] and result["revision"] == 1
-        assert result["scientific_hash"] == opened["scientific_hash"]
+        if operation == "common":
+            result = edit_task(root, palette="tol_bright", service=service)
+            assert result["ready_to_use"] and result["revision"] == 1
+            assert result["scientific_hash"] == opened["scientific_hash"]
+        else:
+            guarded = PlotService(backend, read_only_legacy=True)
+            _inject_public_style_owner(monkeypatch, guarded)
+            before = store.snapshot()
+            original = backend.native.read_bytes()
+            with pytest.raises(EngineError) as blocked:
+                style_task(root, all_samples=True, width="1.2pt")
+            assert blocked.value.reason_code == "legacy_conversion_required"
+            assert store.snapshot() == before and backend.native_writes == 0
+            assert backend.native.read_bytes() == original
     finally:
         service.close()
 
@@ -218,10 +239,10 @@ def test_cold_typed_style_keeps_selected_checkpoint_owner_through_execution(tmp_
     project.mkdir()
     store = FileProjectStore(project)
     store.snapshot(import_legacy=True)
-    original_service = PlotService(SourceAwareManagedBackend())
+    original_service = PlotService(SourceAwareManagedBackend(), read_only_legacy=True)
     created = original_service.create(request_for_figure(tmp_path), project=project)
     old_root = Path(created["plot"])
-    monkeypatch.setattr(compat, "PlotService", lambda: original_service)
+    _inject_public_style_owner(monkeypatch, original_service)
     first = style_task(old_root, all_samples=True, width="1.2pt")
     assert first["ready_to_use"] and first["revision"] == 1
     logical = next(name for name in store.snapshot()["files"] if name.endswith("semantic-style.json"))
@@ -235,8 +256,8 @@ def test_cold_typed_style_keeps_selected_checkpoint_owner_through_execution(tmp_
     moved = FileProjectStore.import_bundle(bundle, tmp_path / "moved")
     entry = (moved.root / logical).parent
     cold_backend = SourceAwareManagedBackend()
-    cold = PlotService(cold_backend)
-    monkeypatch.setattr(compat, "PlotService", lambda: cold)
+    cold = PlotService(cold_backend, read_only_legacy=True)
+    _inject_public_style_owner(monkeypatch, cold)
     monkeypatch.setattr(cold, "open", lambda *_a, **_k: pytest.fail("cold style discovered a fresh baseline"))
     monkeypatch.setattr(cold.targets, "resolve_open", lambda *_a, **_k: pytest.fail("cold style resolved a new target"))
     assert selected_source_resolver() is None
@@ -249,7 +270,10 @@ def test_cold_typed_style_keeps_selected_checkpoint_owner_through_execution(tmp_
 
     assert read_edit_entry(entry, "semantic-style.json") == saved
     assert selected_source_resolver() is None
-    monkeypatch.setattr(compat, "PlotService", lambda: pytest.fail("constructed an owner for a different frozen intent"))
+    def unexpected_owner(*, read_only_legacy):
+        pytest.fail(f"constructed an owner for a different frozen intent ({read_only_legacy=})")
+
+    monkeypatch.setattr(compat, "PlotService", unexpected_owner)
     with pytest.raises(ValueError) as conflict:
         style_task(old_root, all_samples=True, width="2pt", task_dir=entry)
     assert conflict.value.reason_code == "document_idempotency_conflict"
