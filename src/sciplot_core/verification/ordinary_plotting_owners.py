@@ -340,9 +340,28 @@ DIRECT_LABEL_LAYOUT_OWNER = ChangedOwner(
     release_gates=("full_pytest",),
 )
 
+MANAGED_CURVE_PROJECT_PATHS = frozenset({
+    "src/sciplot_core/studio_core/managed_curve_creation.py",
+    "src/sciplot_core/studio_core/managed_curve_query.py",
+    "tests/test_managed_curve_project_creation.py",
+})
+MANAGED_CURVE_PROJECT_FOCUSED = ("tests/test_project_create_cli.py", "tests/test_task_shortcuts.py")
+MANAGED_CURVE_PROJECT_NATIVE = (
+    "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery",
+    "tests/test_project_create_cli.py::test_real_public_create_returns_a_resumable_native_project",
+)
+MANAGED_CURVE_PROJECT_OWNER = ChangedOwner(
+    owner_id="managed_curve_project",
+    exact_paths=MANAGED_CURVE_PROJECT_PATHS,
+    pytest_targets=(*MANAGED_CURVE_PROJECT_FOCUSED, *MANAGED_CURVE_PROJECT_NATIVE, *ARCHITECTURE_CORE_TARGETS),
+)
+
+
+
 ORDINARY_PLOTTING_OWNERS = (
     DIRECT_LABEL_LAYOUT_OWNER,
     ORDINARY_CURVE_OWNER,
+    MANAGED_CURVE_PROJECT_OWNER,
     REPLICATE_DISCLOSURE_OWNER,
     PERFORMANCE_SELECTION_OWNER,
     CATEGORICAL_SOURCE_OWNER,

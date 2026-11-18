@@ -156,6 +156,21 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     assert ci_feedback.ci_feedback_plan(
         [*reviewed, "src/sciplot_core/workflow/frequency_managed_unknown.py"], root,
     )["layer"] == "full"
+    from sciplot_core.verification.ordinary_plotting_owners import (
+        MANAGED_CURVE_PROJECT_NATIVE, MANAGED_CURVE_PROJECT_PATHS,
+    )
+    for path in MANAGED_CURVE_PROJECT_PATHS:
+        leaf_plan = ci_feedback.ci_feedback_plan([path], root, event="pull_request")
+        assert leaf_plan["layer"] == "affected" and not leaf_plan["unowned_paths"]
+        assert "managed_curve_project" in leaf_plan["owners"]
+        assert set(leaf_plan["native_targets"]) == set(MANAGED_CURVE_PROJECT_NATIVE)
+        assert public_stage._selected_public_nodes(manifest, dict.fromkeys(
+            (target.split("::", 1)[0] for target in leaf_plan["native_targets"]), ""),
+            "public-affected-native", leaf_plan["native_targets"])
+    assert ci_feedback.ci_feedback_plan(
+        [*MANAGED_CURVE_PROJECT_PATHS, "src/sciplot_core/studio_core/project_creation.py"], root,
+    )["layer"] == "full"
+
     from sciplot_core.verification.scope_feedback import SCOPE_PATHS, scope_delta_is_reviewed
     import subprocess
 

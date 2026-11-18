@@ -14,6 +14,9 @@ from sciplot_core.verification.changed import build_changed_verification_plan
 from sciplot_core.verification.frequency_feedback import (
     FREQUENCY_ENTRY_NATIVE, FREQUENCY_ENTRY_PATHS, FREQUENCY_FOCUSED, FREQUENCY_WORKFLOW_NATIVE, FREQUENCY_WORKFLOW_PATHS,
 )
+from sciplot_core.verification.ordinary_plotting_owners import (
+    MANAGED_CURVE_PROJECT_FOCUSED, MANAGED_CURVE_PROJECT_NATIVE, MANAGED_CURVE_PROJECT_PATHS,
+)
 from sciplot_core.verification.scope_feedback import SCOPE_PATHS, scope_delta_is_reviewed
 from sciplot_core.verification.task_control_owners import TASK_TIMING_FEEDBACK_TARGETS
 from sciplot_core.verification.task_timing_feedback import TASK_TIMING_PATH
@@ -148,6 +151,7 @@ def ci_feedback_plan(paths: list[str], root: Path, *, event: str = "push", ref: 
         (_ASSEMBLY_PREVIEW_PATHS, _ASSEMBLY_CHECKS, _ASSEMBLY_NATIVE_PREVIEW_CHECKS),
         (FREQUENCY_WORKFLOW_PATHS, FREQUENCY_FOCUSED, FREQUENCY_WORKFLOW_NATIVE),
         (FREQUENCY_ENTRY_PATHS, FREQUENCY_FOCUSED, FREQUENCY_ENTRY_NATIVE),
+        (MANAGED_CURVE_PROJECT_PATHS, MANAGED_CURVE_PROJECT_FOCUSED, MANAGED_CURVE_PROJECT_NATIVE),
         (_RAW_ANALYSIS_PATHS, _RAW_ANALYSIS_CHECKS, _RAW_ANALYSIS_NATIVE),
         (SCOPE_PATHS, _SCOPE_CHECKS, ()),
         (_DOCUMENTATION_PATHS, ("tests/test_documentation_contract.py", "tests/test_repository_policy.py"), ()),
@@ -160,7 +164,8 @@ def ci_feedback_plan(paths: list[str], root: Path, *, event: str = "push", ref: 
             if selected & owner_paths:
                 targets.extend(owner_checks)
                 native_targets.extend(owner_native)
-        if selected & (FREQUENCY_WORKFLOW_PATHS | FREQUENCY_ENTRY_PATHS | _RAW_ANALYSIS_PATHS | _DOCUMENTATION_PATHS | SCOPE_PATHS):
+        if selected & (FREQUENCY_WORKFLOW_PATHS | FREQUENCY_ENTRY_PATHS | MANAGED_CURVE_PROJECT_PATHS
+                       | _RAW_ANALYSIS_PATHS | _DOCUMENTATION_PATHS | SCOPE_PATHS):
             targets.extend((*ARCHITECTURE_CORE_TARGETS, *_AFFECTED_GUARDS))
         reason = "reviewed_owner_native_feedback" if native_targets else "reviewed_owner_feedback"
     if selected & SCOPE_PATHS and reviewed_change and not scope_delta_is_reviewed(root, base, selected, targets, native_targets):

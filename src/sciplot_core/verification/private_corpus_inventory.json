@@ -9,7 +9,7 @@
     "static_review_complete": true,
     "nodeid_count": 10405,
     "nodeids_sha256": "07070e218eceb4d5555dd08acbc5428d77cba5ce3c8d70c5ab344368aef2db9d",
-    "test_sources_sha256": "f3d2d8c8c996881bad78a523122848855cc1c42e9c97acd20f70dde7234bd464",
+    "test_sources_sha256": "230bd8ae2557b70cacca75e22aa1b64f7660c6c3607a8fe749771aac25f65b36",
     "test_source_count": 661,
     "candidate_nodeids": [
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
