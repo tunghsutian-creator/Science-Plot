@@ -36,7 +36,7 @@ def mark_geometry(ir: dict[str, Any], view: dict[str, Any], layer: dict[str, Any
     """Explicit mark geometry retains original source ordering and missing breaks."""
     data = coordinates(ir, layer)
     kind = mark["type"]
-    if kind == "line" and "interpolation" in mark:
+    if kind == "line" and ("interpolation" in mark or mark["id"] in ir.get("display_curves", {})):
         return [{"xData": display_dataset_name(mark["id"], "x"), "yData": display_dataset_name(mark["id"], "y")}]
     if kind in {"line", "point"}:
         return [{"xData": dataset_name(layer["dataset_id"], layer["mappings"]["x"]),

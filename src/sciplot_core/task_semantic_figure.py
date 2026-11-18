@@ -346,6 +346,9 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
               "guides": [{"id": "guide:legend", "type": "legend", "scope": "view", "view_id": "view:main",
                   "layer_ids": [], "order": [], "labels": {}, "visible": True, "location": "bottom-right" if "secondary_y" in intent else "inside-best", "columns": 1, "style": {}}],
               "annotations": []}
+    if "display_stack" in raw_plan:
+        figure["views"][0]["display_stack"] = raw_plan["display_stack"]
+        figure["guides"][0]["visible"] = False
     template = "semantic-task-v1"
     key = "task:" + canonical_json_sha256([state["task_dir"], state["intent_revision"]])
     from sciplot_core.plot_grammar import compile_figure

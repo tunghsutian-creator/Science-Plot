@@ -219,6 +219,30 @@ def test_native_single_table_ftir_raw_overlay_preserves_sample_membership_and_de
                 for role in ('x', 'y'):
                     assert loaded.data[dataset_name(layer['dataset_id'], role)].data.tolist() == dataset['columns'][role]['values']
         assert source.read_bytes() == before
+
+        # The default raw path renders a stack, not the explicit raw overlay.
+        from sciplot_core.plot_backends.figure_marks import mark_path
+        from sciplot_core.plot_backends.native_primitives import display_dataset_name
+
+        default = tmp_path / 'ftir-default.csv'
+        original = (b'Wavenumber,Transmittance,Wavenumber,Transmittance\ncm^-1,%,cm^-1,%\nA,A,B,B\n'
+                    b'1500,90,1300,10\n400,66,500,13\n1000,92,1100,11\n')
+        default.write_bytes(original)
+        stack = service.create({'source': str(default), 'rule_id': 'ftir_spectrum', 'idempotency_key': 'native-ftir-stack'})
+        assert stack['ready_to_use'] and len(stack['analysis_metrics']) == 2, stack
+        root = Path(stack['plot'])
+        snapshot = read(Path(load_head(root)['binding']['ir_path']))
+        assert [label['text'] for label in snapshot['annotations']] == ['A', 'B']
+        with loaded_native_document(Path(service.describe(root)['artifact'])) as loaded:
+            assert scientific_audit(snapshot, loaded)['status'] == 'passed'
+            for layer, expected in zip(snapshot['views'][0]['layers'], ([90, 66, 92], [10, 13, 11]), strict=True):
+                mark, = layer['marks']
+                widget = loaded.resolveWidgetPath(None, mark_path('view:main', layer['id'], mark['id']))
+                display_name = display_dataset_name(mark['id'], 'y')
+                assert widget.settings.get('yData').get() == display_name
+                assert loaded.data[display_name].data.tolist() == snapshot['display_curves'][mark['id']]['curve']['y']
+                assert loaded.data[dataset_name(layer['dataset_id'], 'y')].data.tolist() == expected
+        assert service.export(root)['ready_to_use'] and default.read_bytes() == original
     finally:
         service.close()
 

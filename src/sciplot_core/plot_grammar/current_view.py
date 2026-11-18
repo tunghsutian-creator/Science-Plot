@@ -7,7 +7,7 @@ from typing import Any
 
 from sciplot_core.plot_document.errors import fail
 
-from .mark_geometry import extent_values, layer_geometry, window_intersects
+from .mark_geometry import extent_values, layer_geometry, mark_data_geometry, window_intersects
 from .domain_values import nonnegative_minimum, numeric_axis
 from .validation import validate_bound_data, validate_figure_spec
 
@@ -22,8 +22,18 @@ def _geometries(spec: dict[str, Any], datasets: dict[str, dict[str, Any]]) -> di
     scales = {scale["id"]: scale for scale in spec["scales"]}
     result = {}
     for view in spec["views"]:
+        if "display_stack" in view:
+            from .display import resolve_display_curves
+
+            display = resolve_display_curves([view], datasets)
+        else:
+            display = {}
         for layer in view["layers"]:
-            geometry = layer_geometry(layer, datasets)
+            if display:
+                mark, = layer["marks"]
+                geometry = mark_data_geometry(display[mark["id"]]["curve"], mark)
+            else:
+                geometry = layer_geometry(layer, datasets)
             for dimension in ("x", "y"):
                 scale = scales[layer[dimension + "_scale"]]
                 if scale["transform"] == "log" and any(value <= 0 for value in extent_values(geometry, dimension)):

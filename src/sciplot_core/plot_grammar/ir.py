@@ -15,14 +15,15 @@ from sciplot_core.rendering_contract.registry import CURRENT_HOUSE_CONTRACT_ID
 from .schema import rendering_binding_schema, annotation_schema, axis_schema, guide_schema, layer_schema, scale_schema
 from .styles import COLOR, style_schema
 from .validation import validate_bound_data, validate_axis_presentation, scale_quantity_matches, validate_quantity_members
-from .display import resolve_display_curves
+from .display import resolve_display_curves, validate_stack_view
 
 
 def ir_schema_v2() -> dict[str, Any]:
     view = closed({"id": IDENTIFIER, "panel_label": {"type": ["string", "null"], "maxLength": 16},
         "panel_label_style": style_schema("annotation", resolved=True),
         "axes": {"type": "array", "items": axis_schema(resolved=True)},
-        "layers": {"type": "array", "minItems": 1, "items": layer_schema(resolved=True)}})
+        "layers": {"type": "array", "minItems": 1, "items": layer_schema(resolved=True)},
+        "display_stack": {"const": "spectral_stack_v1"}}, ["id", "panel_label", "panel_label_style", "axes", "layers"])
     qa = closed({"kind": {"const": "sciplot_figure_layout_qa"}, "schema_version": {"const": 1},
         "status": {"enum": ["passed", "failed"]}, "hard": {"type": "array", "items": {"type": "object"}},
         "soft": {"type": "array", "items": {"type": "object"}}, "checks": {"type": "array", "items": {"type": "string"}},
@@ -83,6 +84,8 @@ def _validate(value: Any, *, verify: bool) -> dict[str, Any]:
             _invalid("Resolved scales require a valid increasing domain.", "/scales")
     for view in result["views"]:
         ids.append(view["id"])
+        if "display_stack" in view:
+            validate_stack_view(view, scales)
         bound = set()
         for layer in view["layers"]:
             ids += [layer["id"], *(mark["id"] for mark in layer["marks"])]

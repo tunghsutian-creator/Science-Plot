@@ -152,7 +152,13 @@ def _domain_rules(spec: dict[str, Any], *, pending_domains: bool) -> None:
                            "Fixed log endpoints must be positive.", "/scales/domain_rule")
                     _check(pending_domains or rule["value"] == scale["domain"][index], "figure_domain_projection",
                            "The numeric domain must exactly project its current fixed endpoint.", "/scales/domain")
+    scales = {scale["id"]: scale for scale in spec["scales"]}
     for view in spec["views"]:
+        if "display_stack" in view:
+            from .display import validate_stack_view
+
+            _check(current, "figure_display_stack_scope", "A spectral stack needs current-view domains.", "/views/display_stack")
+            validate_stack_view(view, scales)
         for axis in view["axes"]:
             _check(("ticks_mode" in axis) == current, "figure_ticks_mode_scope",
                    "Current-view axes require explicit automatic or fixed tick ownership.", "/views/axes/ticks_mode")

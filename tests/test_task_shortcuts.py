@@ -164,6 +164,45 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
         assert coordinate["x"]["values"] == x_values and coordinate["y"]["values"] == values
         assert spectrum.read_bytes() == original
 
+    multi = tmp_path / "FTIR-stack.csv"
+    raw_stack = (b"Wavenumber,Transmittance,Wavenumber,Transmittance\ncm^-1,%,cm^-1,%\nA,A,B,B\n"
+                 b"1500,90,1300,10\n400,66,500,13\n1000,92,1100,11\n")
+    multi.write_bytes(raw_stack)
+    plan = build_plan_preview(multi, request={"rule_id": "ftir_spectrum"})
+    stack_state = {"request": {**request, "source": str(multi)}, "task_dir": str(tmp_path / "multi-task"),
+                   "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
+    assert admit_raw_curve(stack_state, plan)
+    result = build_managed_request(stack_state)
+    spec = result["template_definition"]["figure_spec"]
+    assert spec["layout"] == {"width_mm": 120, "height_mm": 110}
+    assert spec["scales"][0]["direction"] == "descending"
+    assert not spec["views"][0]["axes"][1]["ticks"]
+    assert [layer["label"] for layer in spec["views"][0]["layers"]] == ["A", "B"]
+    assert [(row["metric"][-3:], row["value"]) for row in stack_state["analysis_metrics"]] == [("[A]", 400), ("[B]", 1300)]
+    from sciplot_core.plot_grammar import compile_figure
+    from sciplot_core.plot_grammar.current_view import resolve_current_view
+
+    binding = result["data_binding"]
+    doc = create_managed_document(result["template_definition"], binding, plot_id="ftir-stack")
+    data = load_sources(doc, "ftir_spectrum")
+    for node in binding["transforms"]:
+        data[node["output"]], _ = execute_node(node, data)
+    ir = compile_figure(spec, data, scientific_hash="0" * 64, presentation_hash="0" * 64)
+    assert [label["text"] for label in ir["annotations"]] == ["A", "B"]
+    a, b = spec["views"][0]["layers"]
+    assert data[a["dataset_id"]]["columns"]["y"]["values"] == [90, 66, 92]
+    assert data[b["dataset_id"]]["columns"]["y"]["values"] == [10, 13, 11]
+    display_a = a["marks"][0]["id"]
+    assert ir["display_curves"][display_a]["curve"]["y"] == [26.548000000000002, 2.5480000000000005, 28.548000000000002]
+    changed = deepcopy(data)
+    changed[b["dataset_id"]]["columns"]["y"]["values"][1] = 93
+    new_spec = resolve_current_view(spec, changed)
+    refreshed = compile_figure(new_spec, changed, scientific_hash="0" * 64, presentation_hash="0" * 64)
+    assert refreshed["display_curves"][display_a]["curve"] != ir["display_curves"][display_a]["curve"]
+    assert refreshed["display_curves"][display_a]["input_numeric_hash"] == ir["display_curves"][display_a]["input_numeric_hash"]
+    assert refreshed["display_curves"][display_a]["stack_input_hash"] != ir["display_curves"][display_a]["stack_input_hash"]
+    assert multi.read_bytes() == raw_stack
+
     gpc = tmp_path / "gpc.csv"
     chromatogram = b"Molar mass (g/mol),dW/dLogM\n9000,0.1\n3000,0.8\n1000,0.5\n"
     gpc.write_bytes(chromatogram)

@@ -48,6 +48,8 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
     transform = plan.get("scientific_transform") or {}
     output = transform.get("output") or {}
     columns, series = transform.get("source_columns", []), output.get("series", [])
+    if ftir and len(series) >= 2:
+        return _admit_ftir_stack(state, plan, source, transform, output, columns, series)
     if not (len(columns) == len(series) == 1
             and output.get("series_order") == [series[0]["sample"]]
             and columns[0]["sample"] == series[0]["sample"]
@@ -160,14 +162,98 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
     axis_labels = {role: axis.display_label.replace("$^{-1}$", "⁻¹") for role, _, axis in coordinates}
     if ftir:
         axis_labels["y"] = "Transmittance (%)" if ftir_mode == "transmittance" else "Absorbance (a.u.)"
-    analysis = raw_curve_analysis(source, rule_id, plan, frozen["sha256"])
+    return _freeze_raw(state, plan, source, intent, semantic, (size.width_mm, size.height_mm), axis_labels, presentation)
+
+
+def _freeze_raw(state: dict[str, Any], plan: dict[str, Any], source: Path, intent: dict[str, Any],
+                semantic: dict[str, Any], size: tuple[float, float], axis_labels: dict[str, str],
+                presentation: dict[str, Any]) -> bool:
+    request, rule_id = state["request"], plan["rule_id"]
+    digest = semantic["sources"][0]["sha256"]
+    analysis = raw_curve_analysis(source, rule_id, plan, digest)
     state.update(initial_request=deepcopy(request), analysis_metrics=analysis,
                  request={"version": 1, "action": "create", "sources": [str(source)], "intent": intent,
                           **({"out": request["out"]} if "out" in request else {})},
-                 source_hashes={str(source): frozen["sha256"]}, semantic_plan=semantic, semantic_choices={},
+                 source_hashes={str(source): digest}, semantic_plan=semantic, semantic_choices={},
                  semantic_plan_confirmed=True, intent_revision=1,
                  plan_confirmation={"mode": "verified_raw_curve", "rule_id": rule_id,
                                     "figure_plan": plan["resolved_figure_plan"]["plan_sha256"],
-                                    "size_mm": [size.width_mm, size.height_mm], **presentation,
+                                    "size_mm": list(size), **presentation,
                                     "axis_labels": axis_labels})
     return True
+
+
+def _admit_ftir_stack(
+    state: dict[str, Any], plan: dict[str, Any], source: Path, transform: dict[str, Any],
+    output: dict[str, Any], columns: list[dict[str, Any]], series: list[dict[str, Any]],
+) -> bool:
+    """Require every literal sample and paired original measurement in the old plan."""
+    from sciplot_core.policy.contract_queries import size_preset_contract
+    from sciplot_core.studio_render.spectral_axis_display import spectral_frame_size
+    from sciplot_core.task_semantic_plan import prepare_plan
+
+    mode = output.get("response_mode")
+    if mode not in {"transmittance", "absorbance"}:
+        return False
+    y_unit = {"transmittance": "%", "absorbance": "a.u."}[mode]
+    samples = [item["sample"] for item in series]
+    figures = plan["resolved_figure_plan"]
+    if (output.get("x_unit") != "cm^-1" or output.get("y_unit") != y_unit
+            or len(columns) != len(series) or len(set(samples)) != len(samples) or output.get("series_order") != samples
+            or [item["sample"] for item in columns] != samples
+            or len(figures["selected_figure_ids"]) != 1 or transform["normalizer"]["operation"] != "none"
+            or transform["anchor"]["scope"] != "none"
+            or transform["x_coordinate_policy"]["operation"] != "preserve_source_coordinate_and_order"):
+        return False
+    selected = next(item for item in figures["tasks"] if item["figure_id"] == figures["selected_figure_ids"][0])
+    if (selected["metric_binding"] != {"kind": "cartesian_xy", "x_metric": "wavenumber", "y_metric": "spectral_response"}
+            or selected["template"] != "stacked_curve"):
+        return False
+    headers = {"x": columns[0]["x"]["header"], "response": columns[0]["response"]["header"]}
+    units = {"x": "cm^-1", "response": y_unit}
+    conversions = {(item["sample"], item["role"]): item for item in transform["unit_conversions"]}
+    for group, trace in zip(columns, series, strict=True):
+        if (group["sources"] != [str(source)] or trace["response_mode"] != mode or trace["excluded_point_count"]
+                or trace["point_count"] < 2 or group["response"]["response_mode_detection"] != "detected_from_explicit_response_header"):
+            return False
+        for role, header in headers.items():
+            col = group[role]
+            conversion = conversions.get((group["sample"], role), {})
+            if (col["header"] != header or col["unit"] != units[role]
+                    or col["unit_detection"]["method"] != "detected_from_adjacent_unit_row"
+                    or conversion.get("operation") != "identity_no_numeric_conversion" or not conversion.get("source_unit_declared")
+                    or conversion.get("source_unit") != units[role] or conversion.get("output_unit") != units[role]):
+                return False
+    intent: dict[str, Any] = {"rule_id": "ftir_spectrum",
+              "x": {"quantity": "wavenumber", "header": headers["x"], "scale": "linear", "direction": "descending"},
+              "y": {"quantity": mode, "header": headers["response"], "scale": "linear", "direction": "ascending"}}
+    semantic = prepare_plan([source], intent)
+    frozen = semantic["sources"][0]
+    if canonical_json_sha256({"kind": "file", "content_sha256": frozen["sha256"]}) != state["source_sha256"]:
+        raise TaskControlError("source_changed", "The original file changed after the raw FTIR plan.")
+    candidates = frozen["candidates"]
+    bindings = semantic.get("resolved_bindings", [])
+    if semantic["decisions"] or len(candidates) != 1 or len(bindings) != len(series):
+        return False
+    blocks = candidates[0]["blocks"]
+    if [block.get("sample") for block in blocks] != samples:
+        return False
+    for block, binding, group, trace in zip(blocks, bindings, columns, series, strict=True):
+        region = binding["table_selection"]
+        if (binding["block_id"] != block["block_id"] or block["point_count"] != trace["point_count"]
+                or region["header_rows"] != [group["header_row_index"]]
+                or region["data_start_row"] != group["data_start_row_index"]
+                or "sample_row" not in region):
+            return False
+        for role, original in (("x", "x"), ("y", "response")):
+            actual, column = binding["coordinates"][role], group[original]
+            if ((actual["column_index"], actual["header"], actual["observed_unit"], actual["unit"])
+                    != (column["column_index_zero_based"], column["header"], units[original], units[original])
+                    or actual["observed_quantity"] != intent[role]["quantity"]
+                    or actual["unit_relation"]["kind"] != "identity"
+                    or region.get("unit_row") != column["unit_detection"]["row_index_zero_based"]):
+                return False
+    size = size_preset_contract(spectral_frame_size(len(series)))
+    labels = {"x": "Wavenumber (cm⁻¹)", "y": "Transmittance (%)" if mode == "transmittance" else "Absorbance"}
+    return _freeze_raw(state, plan, source, intent, semantic, (size.width_mm, size.height_mm), labels,
+                       {"display_stack": "spectral_stack_v1", "show_y_ticks": False})

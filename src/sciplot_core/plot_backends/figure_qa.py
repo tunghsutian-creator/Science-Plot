@@ -66,7 +66,8 @@ def native_publication_qa(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
         for layer in view["layers"]:
             if not layer.get("visible", True):
                 continue
-            data = coordinates(ir, layer)
+            data = (ir["display_curves"][layer["marks"][0]["id"]]["curve"]
+                    if "display_stack" in view else coordinates(ir, layer))
             for x, y in zip(data["x"], data["y"], strict=True):
                 if x is not None and y is not None:
                     points.append({"view_id": view["id"], "x_mm": x0 + fraction(x, scales[layer["x_scale"]]) * width,

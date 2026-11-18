@@ -12,7 +12,7 @@ from .styles import MARK_TYPES
 from .house_legends import resolve_house_legends
 from .house import StyleResolver, axis_flow, resolved_layout_input
 from .validation import validate_bound_data, validate_figure_spec
-from .display import resolve_display_curves
+from .display import resolve_display_curves, stack_labels
 from .current_view import current_view_qa, is_current_view, validate_current_view_projection
 
 
@@ -120,7 +120,8 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
         view_scopes = scopes + [view["style"]]
         result: dict[str, Any] = {"id": view["id"], "panel_label": view["panel_label"],
             "panel_label_style": resolver.resolve(view["id"] + ":panel-label", "annotation", view_scopes, {"align_h": "left", "align_v": "center"}),
-            "axes": [], "layers": []}
+            "axes": [], "layers": [],
+            **({"display_stack": view["display_stack"]} if "display_stack" in view else {})}
         if resolver.binding is not None:
             trace = resolver.trace[view["id"] + ":panel-label"]
             contract = require_binding(resolver.binding)
@@ -172,7 +173,13 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
                 for entry in guide["entries"]:
                     entry.pop("symbol_mm")
                     entry.pop("label_mm")
-    annotations = _annotations(spec, layout, scopes, resolver)
+    display = resolve_display_curves(views, datasets)
+    annotation_spec = spec
+    if any("display_stack" in view for view in views):
+        label_style = resolver.resolve("display-stack:label-size", "annotation", scopes, {})
+        labels = stack_labels(views, scales, layout, display, font_size_pt=label_style["font_size_pt"])
+        annotation_spec = {**spec, "annotations": [*spec["annotations"], *labels]}
+    annotations = _annotations(annotation_spec, layout, scopes, resolver)
     qa = structural_publication_qa(layout, annotations=annotations)
     qa["soft"].extend(data_warnings)
     if qa["hard"]:
@@ -201,7 +208,6 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
             resolver.trace["figure:additional_axis_layout"] = {"policy": "decorated_secondary_sides_v1",
                 "source": "resolved axis decoration budgets", "base_margins_mm": panel_margins,
                 "panels": additional, "native_text_verified": False}
-    display = resolve_display_curves(views, datasets)
     # The seal owns the detached IR snapshot, including its scientific arrays.
     return seal_ir_v2({"kind": "sciplot_plot_ir", "schema_version": 2, "scientific_hash": scientific_hash,
         "presentation_hash": presentation_hash, "figure": {"id": spec["id"], "background_color": spec["theme"].get("background_color", background).lower()},

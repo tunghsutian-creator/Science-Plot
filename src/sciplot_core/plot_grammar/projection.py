@@ -28,7 +28,7 @@ def split_figure_spec(value: Any) -> tuple[dict[str, Any], dict[str, Any]]:
         presentation["scales"] = [_take(scale, ("id", "domain", "domain_rule")) for scale in spec["scales"]]
     for view in spec["views"]:
         scientific_view: dict[str, Any] = {"id": view["id"], "layers": []}
-        visual_view = {**_take(view, ("id", "panel_label", "style", "axes")), "layers": []}
+        visual_view = {**_take(view, ("id", "panel_label", "style", "axes", "display_stack")), "layers": []}
         for layer in view["layers"]:
             scientific_layer = {**_take(layer, _SCI_LAYER), "marks": []}
             visual_layer = {**_take(layer, _PRES_LAYER), "marks": []}
@@ -69,7 +69,7 @@ def merge_figure_spec(science: Any, presentation: Any) -> dict[str, Any]:
         scientific_views = _index(science["views"])
         for visual_view in presentation["views"]:
             scientific_view = scientific_views[visual_view["id"]]
-            view = {**_take(visual_view, ("id", "panel_label", "style", "axes")), "layers": []}
+            view = {**_take(visual_view, ("id", "panel_label", "style", "axes", "display_stack")), "layers": []}
             scientific_layers = _index(scientific_view["layers"])
             for visual_layer in visual_view["layers"]:
                 scientific_layer = scientific_layers[visual_layer["id"]]

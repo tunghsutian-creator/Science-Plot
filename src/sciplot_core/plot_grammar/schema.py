@@ -156,7 +156,8 @@ def figure_layout_schema() -> dict[str, Any]:
 def figure_spec_schema() -> dict[str, Any]:
     view = closed({"id": IDENTIFIER, "panel_label": {"type": ["string", "null"], "maxLength": 16},
         "style": scope_schema(), "axes": {"type": "array", "items": axis_schema()},
-        "layers": {"type": "array", "minItems": 1, "items": layer_schema()}})
+        "layers": {"type": "array", "minItems": 1, "items": layer_schema()},
+        "display_stack": {"const": "spectral_stack_v1"}}, ["id", "panel_label", "style", "axes", "layers"])
     theme = closed({"project": scope_schema(), "figure": scope_schema(), "background_color": COLOR}, ["project", "figure"])
     fields = {"kind": {"const": "sciplot_figure_spec"}, "schema_version": {"const": 2}, "id": IDENTIFIER,
         "scales": {"type": "array", "minItems": 2, "items": scale_schema()},

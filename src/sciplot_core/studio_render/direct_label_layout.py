@@ -61,22 +61,28 @@ def automatic_label_boxes(series: list[StudioSeries], *, render_options: dict[st
                           axis: _VeuszAxisContract, style: _VeuszStyleContract,
                           side: str) -> list[tuple[float, float]]:
     """Return deterministic axes anchors for whole-label, fixed-frame clearance."""
-    bounds = (axis.x_min, axis.x_max, axis.y_min, axis.y_max)
+    figure_width, figure_height = _size_mm(str(render_options.get("size") or "60x55"))
+    return automatic_label_boxes_for_frame(series, bounds=(axis.x_min, axis.x_max, axis.y_min, axis.y_max),
+        xlog=render_options.get("xscale") == "log", ylog=render_options.get("yscale") == "log",
+        width=figure_width - style.left_margin_mm - style.right_margin_mm,
+        height=figure_height - style.top_margin_mm - style.bottom_margin_mm, style=style, side=side)
+
+
+def automatic_label_boxes_for_frame(
+    series: list[StudioSeries], *, bounds: tuple[float | None, float | None, float | None, float | None],
+    width: float, height: float, style: _VeuszStyleContract, side: str, xlog: bool = False, ylog: bool = False,
+) -> list[tuple[float, float]]:
+    """Use the same full-label clearance solver against resolved physical dimensions."""
     if any(value is None or not math.isfinite(value) for value in bounds):
         raise StudioPreparationBlocked("direct_label_layout_unavailable", "Automatic labels require complete finite axis bounds.")
-    # Above validation establishes these exact optional bounds without changing axes.
     xmin, xmax, ymin, ymax = (float(cast(float, value)) for value in bounds)
     if xmax == xmin or ymax == ymin:
         raise StudioPreparationBlocked("direct_label_layout_unavailable", "Automatic labels require nonzero axis spans.")
-    xlog, ylog = (render_options.get(name) == "log" for name in ("xscale", "yscale"))
     if (xlog and min(xmin, xmax) <= 0) or (ylog and min(ymin, ymax) <= 0):
         raise StudioPreparationBlocked("direct_label_layout_unavailable", "Logarithmic label axes require positive bounds.")
     tx = math.log10 if xlog else float
     ty = math.log10 if ylog else float
     left, right, bottom, top = tx(xmin), tx(xmax), ty(ymin), ty(ymax)
-    figure_width, figure_height = _size_mm(str(render_options.get("size") or "60x55"))
-    width = figure_width - style.left_margin_mm - style.right_margin_mm
-    height = figure_height - style.top_margin_mm - style.bottom_margin_mm
     gap = DEFAULT_LEGEND_CURVE_CLEARANCE_MM
     edge = DIRECT_LABEL_EDGE_PADDING_MM
     if width <= 2*edge or height <= 2*edge:

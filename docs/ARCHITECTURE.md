@@ -511,6 +511,14 @@ and marker geometry retain the source-bound scientific arrays. Gaps and duplicat
 coordinates cannot silently become a fitted continuation. This reuses PlotIR,
 native compilation and exact array audits without a second scientific ledger.
 
+Default multi-sample FTIR from one completely bound paired table records
+`spectral_stack_v1` as a view presentation policy. The existing Studio stack
+math projects shifted display lines from the ordered original traces; PlotIR
+retains both original arrays and a group-bound display derivation. The resolver,
+viewport QA, native marks and inline-label clearance use the same shifted
+coordinates. Scientific metrics and exported numeric source datasets remain
+unshifted, and a confirmed source revision recomputes both offsets and labels.
+
 `plot_backends/` owns current-native import and the Veusz translation. Imported
 projects are `legacy_shadow`, never falsely fully represented: unmodeled objects,
 layout and native state remain in the saved VSZ. Actual native style is imported,

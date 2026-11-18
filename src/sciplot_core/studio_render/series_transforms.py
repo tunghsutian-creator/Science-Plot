@@ -87,56 +87,65 @@ def _stack_studio_series(
 ) -> list[StudioSeries]:
     if len(series) <= 1:
         return series
+    values = stack_display_responses([item.y_values for item in series],
+        spacing_scale=None if full_peak_envelope else _optional_float(render_options.get("stack_spacing_scale")),
+        full_peak_envelope=full_peak_envelope)
+    return [replace(item, y_values=response) for item, response in zip(series, values, strict=True)]
+
+
+def stack_display_responses(
+    responses: list[tuple[float, ...]], *, spacing_scale: float | None = None, full_peak_envelope: bool = False,
+) -> list[tuple[float, ...]]:
+    """The Legacy stack's numeric display projection, without source or style mutation."""
+    if len(responses) <= 1:
+        return responses
 
     if full_peak_envelope:
-        prepared_full: list[tuple[StudioSeries, tuple[float, ...], float]] = []
+        prepared_full: list[tuple[tuple[float, ...], float]] = []
         full_spans: list[float] = []
-        for item in series:
-            finite = _finite_values(item.y_values)
+        for response in responses:
+            finite = _finite_values(response)
             data_min = min(finite) if finite else 0.0
             data_max = max(finite) if finite else data_min
             span = max(data_max - data_min, sys.float_info.epsilon)
             shifted = tuple(
                 y_value - data_min if math.isfinite(y_value) else y_value
-                for y_value in item.y_values
+                for y_value in response
             )
-            prepared_full.append((item, shifted, span))
+            prepared_full.append((shifted, span))
             full_spans.append(span)
         maximum_span = max(full_spans) if full_spans else 1.0
         gap = max(0.22 * maximum_span, sys.float_info.epsilon)
         cursor = 0.08 * maximum_span
-        stacked_full: list[StudioSeries] = []
-        for item, shifted, span in prepared_full:
-            stacked_full.append(
-                replace(item, y_values=tuple(value + cursor for value in shifted))
-            )
+        stacked_full: list[tuple[float, ...]] = []
+        for shifted, span in prepared_full:
+            stacked_full.append(tuple(value + cursor for value in shifted))
             cursor += span + gap
         return stacked_full
 
-    prepared: list[tuple[StudioSeries, tuple[float, ...], float, float]] = []
+    prepared: list[tuple[float, ...]] = []
     spans: list[float] = []
     peak_heights: list[float] = []
     lower_guards: list[float] = []
-    for item in series:
-        finite = _finite_values(item.y_values)
+    for response in responses:
+        finite = _finite_values(response)
         q01 = _quantile(finite, 0.01) if finite else 0.0
         shifted = tuple(
             y_value - q01 if math.isfinite(y_value) else y_value
-            for y_value in item.y_values
+            for y_value in response
         )
         shifted_finite = _finite_values(shifted)
         lower_guards.append(max(0.0, -min(shifted_finite)) if shifted_finite else 0.0)
         peak = _robust_peak_height(finite)
-        prepared.append((item, shifted, peak, peak))
+        prepared.append(shifted)
         spans.append(peak)
         peak_heights.append(peak)
 
     max_span = max(spans) if spans else 1.0
     max_peak = max(peak_heights) if peak_heights else max_span
-    spacing_scale = _optional_float(render_options.get("stack_spacing_scale"))
     if spacing_scale is None:
         peak = max(max_peak, sys.float_info.epsilon)
-        series_count = len(series)
+        series_count = len(responses)
         min_gap = 0.25 * peak
         padding = 0.10 * peak
         lower_guard = max(lower_guards) if lower_guards else 0.0
@@ -158,10 +167,8 @@ def _stack_studio_series(
         peak_clearance = max(max_span * 0.22 * 0.95, max_peak * 0.24)
         step = max(max_span * 1.22, max_peak + peak_clearance) * scale
 
-    stacked: list[StudioSeries] = []
-    for index, (item, shifted, _span, _peak) in enumerate(prepared):
+    stacked: list[tuple[float, ...]] = []
+    for index, shifted in enumerate(prepared):
         offset = floor + index * step
-        stacked.append(
-            replace(item, y_values=tuple(y_value + offset for y_value in shifted))
-        )
+        stacked.append(tuple(y_value + offset for y_value in shifted))
     return stacked
