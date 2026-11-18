@@ -134,7 +134,10 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
         "src/sciplot_core/verification/input_scope_manifest.json",
         "src/sciplot_core/verification/private_corpus_inventory.json",
     ]
-    mixed = ci_feedback.ci_feedback_plan(reviewed, root, event="pull_request")
+    assert ci_feedback.ci_feedback_plan(reviewed, root, event="pull_request")["reason"] == "scope_delta_not_proven"
+    with monkeypatch.context() as context:
+        context.setattr(ci_feedback, "scope_delta_is_reviewed", lambda *_args: True)
+        mixed = ci_feedback.ci_feedback_plan(reviewed, root, event="pull_request", base="a" * 40)
     assert mixed["layer"] == "affected" and not mixed["unowned_paths"]
     assert "tests/test_managed_frequency_creation.py" in mixed["native_targets"]
     assert any(target.endswith("test_frequency_suite_preaccept_retry_cold_resumes_only_the_unfinished_figure")
@@ -153,6 +156,50 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     assert ci_feedback.ci_feedback_plan(
         [*reviewed, "src/sciplot_core/workflow/frequency_managed_unknown.py"], root,
     )["layer"] == "full"
+    from sciplot_core.verification.scope_feedback import SCOPE_PATHS, scope_delta_is_reviewed
+    import subprocess
+
+    scope_checkout = tmp_path / "scope-delta"
+    scope_checkout.mkdir()
+    def git(*args):
+        return subprocess.check_output(["git", *args], cwd=scope_checkout, text=True).strip()
+
+    git("init", "-q")
+    git("config", "user.name", "Generated CI Control")
+    git("config", "user.email", "generated@example.com")
+    scope_path = next(path for path in SCOPE_PATHS if path.endswith("input_scope_manifest.json"))
+    inventory_path = next(path for path in SCOPE_PATHS if path.endswith("private_corpus_inventory.json"))
+    scope_file, inventory_file = scope_checkout / scope_path, scope_checkout / inventory_path
+    scope_file.parent.mkdir(parents=True)
+    test_file = "tests/test_managed_frequency_creation.py"
+    fresh = test_file + "::test_generated_addition"
+    old = "tests/test_dma.py::test_existing"
+    scope = {"scopes": {"public": [], "private": [old]}, "tiers": {"focused": [old], "comprehensive": []}}
+    inv = {"cases": [{"nodeid": old, "dependencies": ["dma"]}],
+           "collection_audit": {"candidate_nodeids": [], "synthetic_candidates": [], "test_sources_sha256": "prior"}}
+    scope_file.write_text(json.dumps(scope))
+    inventory_file.write_text(json.dumps(inv))
+    git("add", ".")
+    git("commit", "-qm", "Historical science membership")
+    base = git("rev-parse", "HEAD")
+    scope["scopes"]["public"].append(fresh)
+    scope["tiers"]["comprehensive"].append(fresh)
+    inv["collection_audit"].update(candidate_nodeids=[fresh], synthetic_candidates=[{"nodeid": fresh}], test_sources_sha256="next")
+    scope_file.write_text(json.dumps(scope))
+    inventory_file.write_text(json.dumps(inv))
+    (scope_checkout / test_file).parent.mkdir(parents=True)
+    (scope_checkout / test_file).write_text("def test_generated_addition(): pass\n")
+    git("add", ".")
+    git("commit", "-qm", "Authorized generated addition")
+    delta = {scope_path, inventory_path, test_file}
+    assert scope_delta_is_reviewed(scope_checkout, base, delta, [], [test_file])
+    assert not scope_delta_is_reviewed(scope_checkout, "", delta, [], [test_file])
+    assert not scope_delta_is_reviewed(scope_checkout, base, delta, [], [])
+    inv["cases"][0]["dependencies"] = ["tga"]
+    inventory_file.write_text(json.dumps(inv))
+    git("commit", "-qam", "Unauthorized private dependency")
+    assert not scope_delta_is_reviewed(scope_checkout, base, delta, [], [test_file])
+
     from sciplot_core.verification.changed import build_changed_verification_plan
 
     for path in ("src/sciplot_core/source_tables/curve_tables.py", "src/sciplot_core/source_tables/heatmap_tables.py"):

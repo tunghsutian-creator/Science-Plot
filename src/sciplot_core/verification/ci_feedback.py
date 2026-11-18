@@ -14,6 +14,7 @@ from sciplot_core.verification.changed import build_changed_verification_plan
 from sciplot_core.verification.frequency_feedback import (
     FREQUENCY_ENTRY_NATIVE, FREQUENCY_ENTRY_PATHS, FREQUENCY_FOCUSED, FREQUENCY_WORKFLOW_NATIVE, FREQUENCY_WORKFLOW_PATHS,
 )
+from sciplot_core.verification.scope_feedback import SCOPE_PATHS, scope_delta_is_reviewed
 from sciplot_core.verification.task_control_owners import TASK_TIMING_FEEDBACK_TARGETS
 from sciplot_core.verification.task_timing_feedback import TASK_TIMING_PATH
 
@@ -80,16 +81,12 @@ _ASSEMBLY_NATIVE_PREVIEW_CHECKS = (
 )
 
 
-_RAW_ANALYSIS_PATH = "src/sciplot_core/task_semantic_raw_analysis.py"
+_RAW_ANALYSIS_PATHS = frozenset({"src/sciplot_core/task_semantic_raw_analysis.py", "tests/test_task_shortcuts.py"})
 _RAW_ANALYSIS_CHECKS = ("tests/test_task_shortcuts.py", "tests/test_task_semantic_creation.py")
 _RAW_ANALYSIS_NATIVE = (
     "tests/test_task_semantic_creation.py::test_native_single_table_ftir_raw_overlay_preserves_sample_membership_and_descending_display",
     "tests/test_legacy_saved_plot.py::test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project",
 )
-_SCOPE_PATHS = frozenset({
-    "src/sciplot_core/verification/input_scope_manifest.json",
-    "src/sciplot_core/verification/private_corpus_inventory.json",
-})
 _SCOPE_CHECKS = (
     "tests/test_private_corpus_preflight.py::test_checked_in_inventory_is_explicitly_preliminary",
     "tests/test_private_corpus_preflight.py::test_complete_inventory_requires_bound_full_access_evidence",
@@ -127,7 +124,7 @@ _AFFECTED_GUARDS = (
 )
 
 
-def ci_feedback_plan(paths: list[str], root: Path, *, event: str = "push", ref: str = "") -> dict[str, Any]:
+def ci_feedback_plan(paths: list[str], root: Path, *, event: str = "push", ref: str = "", base: str = "") -> dict[str, Any]:
     """Select bounded reviewed owner tests; never infer coverage for unknown paths."""
     from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
@@ -151,8 +148,8 @@ def ci_feedback_plan(paths: list[str], root: Path, *, event: str = "push", ref: 
         (_ASSEMBLY_PREVIEW_PATHS, _ASSEMBLY_CHECKS, _ASSEMBLY_NATIVE_PREVIEW_CHECKS),
         (FREQUENCY_WORKFLOW_PATHS, FREQUENCY_FOCUSED, FREQUENCY_WORKFLOW_NATIVE),
         (FREQUENCY_ENTRY_PATHS, FREQUENCY_FOCUSED, FREQUENCY_ENTRY_NATIVE),
-        (frozenset({_RAW_ANALYSIS_PATH}), _RAW_ANALYSIS_CHECKS, _RAW_ANALYSIS_NATIVE),
-        (_SCOPE_PATHS, _SCOPE_CHECKS, ()),
+        (_RAW_ANALYSIS_PATHS, _RAW_ANALYSIS_CHECKS, _RAW_ANALYSIS_NATIVE),
+        (SCOPE_PATHS, _SCOPE_CHECKS, ()),
         (_DOCUMENTATION_PATHS, ("tests/test_documentation_contract.py", "tests/test_repository_policy.py"), ()),
     )
     reviewed = frozenset().union(*(owner_paths for owner_paths, _, _ in feedback_groups))
@@ -163,9 +160,11 @@ def ci_feedback_plan(paths: list[str], root: Path, *, event: str = "push", ref: 
             if selected & owner_paths:
                 targets.extend(owner_checks)
                 native_targets.extend(owner_native)
-        if selected & (FREQUENCY_WORKFLOW_PATHS | FREQUENCY_ENTRY_PATHS | {_RAW_ANALYSIS_PATH} | _DOCUMENTATION_PATHS | _SCOPE_PATHS):
+        if selected & (FREQUENCY_WORKFLOW_PATHS | FREQUENCY_ENTRY_PATHS | _RAW_ANALYSIS_PATHS | _DOCUMENTATION_PATHS | SCOPE_PATHS):
             targets.extend((*ARCHITECTURE_CORE_TARGETS, *_AFFECTED_GUARDS))
         reason = "reviewed_owner_native_feedback" if native_targets else "reviewed_owner_feedback"
+    if selected & SCOPE_PATHS and reviewed_change and not scope_delta_is_reviewed(root, base, selected, targets, native_targets):
+        targets, native_targets, reason = [], [], "scope_delta_not_proven"
     full_ref = ref in {"refs/heads/integration", "refs/heads/release"} or ref.startswith(
         ("refs/tags/", "refs/heads/integration/", "refs/heads/release/")
     )
@@ -188,7 +187,7 @@ def run_affected(root: Path, base: str, *, event: str, ref: str = "") -> dict[st
     """Replan at execution; drift after earlier skip decisions must fail."""
     from sciplot_core.verification.public_stage import run_public_stage
 
-    plan = ci_feedback_plan(changed_paths(root, base), root, event=event, ref=ref)
+    plan = ci_feedback_plan(changed_paths(root, base), root, event=event, ref=ref, base=base)
     if plan["layer"] != "affected":
         raise ValueError("Affected eligibility changed; complete gates were not executed.")
     directory = root / ".tmp_verify/ci_public_affected"
@@ -243,13 +242,13 @@ def main() -> int:
             return subprocess.call([sys.executable, "-m", "ruff", "check", "src", "tests"], cwd=root)
         paths = changed_paths(root, args.base) if not args.run_affected else []
         if args.lint == "affected":
-            plan = ci_feedback_plan(paths, root, event=event, ref=ref)
+            plan = ci_feedback_plan(paths, root, event=event, ref=ref, base=args.base)
             if plan["layer"] != "affected":
                 raise ValueError("Affected lint eligibility changed.")
             files = [path for path in paths if path.endswith(".py") and (root / path).is_file()]
             return subprocess.call([sys.executable, "-m", "ruff", "check", "--", *files], cwd=root) if files else 0
         result = (run_affected(root, args.base, event=event, ref=ref) if args.run_affected else
-                  ci_feedback_plan(paths, root, event=event, ref=ref))
+                  ci_feedback_plan(paths, root, event=event, ref=ref, base=args.base))
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         if args.run_affected or args.lint:
             print(json.dumps({"status": "BLOCKED",

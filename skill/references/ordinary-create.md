@@ -6,7 +6,7 @@ project-create/Studio commands, repository reading and tests are not prerequisit
 
 Ordinary creation uses the registered plan for scientific recognition, figure
 selection, and supported presentation. The typed `task create`, structured CLI
-`task start`, daily MCP `sciplot_task_start`, and source-only `plot.create`
+`task start`, eligible `project create`, daily MCP `sciplot_task_start`, and source-only `plot.create`
 (including expert MCP `sciplot_plot_create`) create Managed plots directly when
 the source and registered plan agree on samples, original columns, units and
 rows. Supported defaults include:

@@ -341,7 +341,7 @@ See [research compatibility profiles and evidence](docs/RESEARCH_COMPATIBILITY_P
 for exact coverage, the bounded mechanical antialias difference, and unsupported cases.
 
 Ordinary raw creation starts with the registered scientific plan. For verified
-CSV/TSV inputs, `task create`, structured `task start`, daily MCP
+CSV/TSV inputs, `task create`, structured `task start`, eligible `project create`, daily MCP
 `sciplot_task_start`, and source-only `plot.create` (including expert MCP
 `sciplot_plot_create`) can create Managed plots directly:
 
