@@ -18,6 +18,10 @@ class _Actions(NamedTuple):
 _MANAGED_LOCAL: ContextVar[_Actions | None] = ContextVar("managed_task_local", default=None)
 
 
+def managed_actions_bound() -> bool:
+    return _MANAGED_LOCAL.get() is not None
+
+
 @contextmanager
 def local_managed_actions(create: _ManagedRequest, describe: _ManagedDescribe, deliver: _ManagedRequest) -> Iterator[None]:
     """Reuse the active plot owner; a serialized RPC request cannot call itself."""

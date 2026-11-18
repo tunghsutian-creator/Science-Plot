@@ -18,7 +18,9 @@ from sciplot_core.plan_preview import build_plan_preview
 
 def _source(root: Path) -> Path:
     source = root / "UVvis.csv"
-    source.write_text("Wavelength,Absorbance\nnm,a.u.\nA,A\n400,1\n450,2\n500,3\n")
+    # Header-only units are planned by Studio, but are outside the exact
+    # original adjacent-unit-row Managed admission covered in the new test.
+    source.write_text("Wavelength (nm),Absorbance (a.u.)\n400,1\n450,2\n500,3\n")
     return source
 
 
