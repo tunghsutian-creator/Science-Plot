@@ -28,7 +28,8 @@ def test_create_retains_original_input_and_existing_question_without_invented_ma
     calls, _ = ready
     question = {"field": "column_mapping", "question_id": "a" * 64, "mapping_candidates": [{"id": "real cells"}]}
     result = {"kind": "sciplot_task", "status": "needs_input", "question": question}
-    def start(request, *, task_dir, entry_intent=None):
+    def start(request, *, task_dir, entry_intent=None, _prefer_managed=False):
+        assert _prefer_managed
         calls.append((request, task_dir))
         return deepcopy(result)
     monkeypatch.setattr(shortcuts, "start_task", start)
@@ -39,11 +40,50 @@ def test_create_retains_original_input_and_existing_question_without_invented_ma
     assert actual == {**result, "doctor": {"kind": "sciplot_doctor", "status": "ready", "failed_checks": []}}
 
 
-def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch):
+def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch, tmp_path):
     requests = []
     monkeypatch.setattr(shortcuts, "start_task", lambda request, **kwargs: requests.append(request) or {"status": "complete"})
     shortcuts.create_task(Path("/original.csv"), profile=Path("/profile.json"))
     assert requests == [{"version": 1, "action": "create", "source": "/original.csv", "profile": "/profile.json"}]
+
+    from sciplot_core.plan_preview import build_plan_preview
+    from sciplot_core.task_semantic_creation import admit_uvvis, build_managed_request
+
+    raw = tmp_path / "UVvis.csv"
+    original = b"Wavelength,Absorbance\nnm,a.u.\nSample A,Sample A\n400,1.5\n460,3.25\n500,-1\n"
+    raw.write_bytes(original)
+    plan = build_plan_preview(raw, request={"rule_id": "uvvis_spectrum"})
+    request = {"version": 1, "action": "create", "source": str(raw)}
+    candidate = {"request": request, "source_sha256": plan["preview_identity"]["source_tree_sha256"],
+                 "task_dir": str(tmp_path / "task")}
+    unmigrated = deepcopy(candidate)
+    unmigrated["request"]["profile"] = "/existing/presentation-profile.json"
+    assert not admit_uvvis(unmigrated, plan)
+    assert unmigrated["request"]["source"] == str(raw) and "intent" not in unmigrated["request"]
+    assert admit_uvvis(candidate, plan)
+    assert candidate["initial_request"] == request
+    assert candidate["plan_confirmation"]["figure_plan"] == plan["resolved_figure_plan"]["plan_sha256"]
+    compiled = build_managed_request(candidate)
+    binding = compiled["data_binding"]
+    assert binding["data_sources"][0]["path"] == str(raw)
+    assert {item["kind"] for item in binding["transforms"]} == {"select", "row_slice", "rename"}
+    slot, = binding["slots"].values()
+    assert (slot["sample"], slot["x_unit"], slot["y_unit"]) == ("Sample A", "nm", "a.u.")
+    layer = compiled["template_definition"]["figure_spec"]["views"][0]["layers"][0]
+    assert [mark["type"] for mark in layer["marks"]] == ["line"]
+
+    from sciplot_core.plot_engine.managed_sources import load_sources
+    from sciplot_core.plot_ir import create_managed_document
+    from sciplot_core.plot_transforms import execute_node
+
+    document = create_managed_document(compiled["template_definition"], binding, plot_id="uvvis-default")
+    sources = load_sources(document, "uvvis_spectrum")
+    for node in binding["transforms"]:
+        sources[node["output"]], _ = execute_node(node, sources)
+    values = sources[slot["x"]["source_id"]]["columns"]
+    assert values["x"]["values"] == [400.0, 460.0, 500.0]
+    assert values["y"]["values"] == [1.5, 3.25, -1.0]
+    assert raw.read_bytes() == original
 
 
 @pytest.mark.parametrize("semantic", [False, True])

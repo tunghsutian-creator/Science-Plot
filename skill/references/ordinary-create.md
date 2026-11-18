@@ -4,9 +4,17 @@ Use this route for new ordinary plots from original data. The local task owns
 recognition, planning, native creation, QA and export. Separate inspect/rules/plan/
 project-create/Studio commands, repository reading and tests are not prerequisites.
 
-Ordinary creation stays on the existing production renderer and its shared house
-policy, family templates and supported explicit overrides. Do not translate raw
-input into a FigureTemplate merely to recreate defaults in an AI request.
+Ordinary creation uses the existing production plan for scientific recognition,
+family templates and supported overrides. The default typed task create route
+uses Managed authority for a single UV–vis sample in CSV or TSV when the
+registered plan and exact original table agree on wavelength (nm), absorbance
+(a.u.), sample name and retained rows with no conversion or normalization.
+This creates the Managed document directly and retains its original source.
+Other source shapes, profiles, manual mapping and families retain their existing
+production path. If a Managed creation hits a runtime or transport failure,
+resolve it and resume the same task; it does not fall back to Legacy.
+Explicit semantic intents remain available for wider cases.
+Do not translate raw input into a FigureTemplate in an AI request.
 Instrument directories are validated by their scientific owner; missing metrics
 remain a source error, not a request for AI to select the same rule again.
 

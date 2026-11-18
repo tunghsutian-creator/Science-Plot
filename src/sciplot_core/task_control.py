@@ -97,6 +97,7 @@ def start_task(
     entry_intent: dict[str, Any] | None = None,
     defer_creation_export: bool = False,
     _owned_namespace: Path | None = None,
+    _prefer_managed: bool = False,
     _public_mutation: bool = False,
 ) -> dict[str, Any]:
     original_request = request
@@ -166,6 +167,7 @@ def start_task(
             "status": "running", "phase": "starting",
             **({"entry_intent": deepcopy(entry_intent)} if entry_intent is not None else {}),
             **({"defer_creation_export": True} if defer_creation_export else {}),
+            **({"prefer_managed_raw": True} if _prefer_managed else {}),
             **({"automatic_corrections": corrections} if corrections else {}),
         }
         save_task(root, state)

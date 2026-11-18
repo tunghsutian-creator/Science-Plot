@@ -310,8 +310,8 @@ previewed before the complete VSZ is published without replacing an existing
 file. An interrupted save can leave diagnostic staging files; retry never
 adopts an unknown partial native file as a successful build.
 
-Existing VSZ imports, source-only task creation and explicit `mode: legacy` remain
-**LegacyPlot** compatibility workflows. FigureSpec v2 adds physical single/concat/grid
+Existing VSZ imports, unmigrated source-only tasks and explicit `mode: legacy`
+remain compatibility workflows. FigureSpec v2 adds physical single/concat/grid
 composition, independent scientific Scales and visual Axes, seven generic Marks,
 scoped themes, semantic legends and data/view/figure annotations. Dual Y and
 multipanel scientific figures use this common grammar. Native text bounds and
@@ -343,9 +343,12 @@ family's FigurePlan and templates, then shared house policy plus family rules an
 supported explicit overrides. `render --auto` uses that same workflow; plain
 `render --template` remains a low-level plot-ready operation. FigureTemplate v2
 supports both explicit low-level composition and the local task adapter for a
-semantic coordinate intent. It is not the automatic source-only default.
-Its RenderingStyleContract is extracted from production policy; unverified
-family compatibility is not a reason to silently switch ordinary plots to it.
+semantic coordinate intent. The default typed `task create` entry now also
+uses Managed authority for single-sample UV–vis CSV/TSV when the production
+plan and exact original table agree on columns, units, sample and source rows
+without conversion or normalization. Other families and source shapes retain
+the production path; structured source-only requests through `task start`
+and `plot.create` retain their existing compatibility contract.
 
 Frequency instrument exports preserve explicitly labelled temperature Results as
 separate traces. Complex-viscosity magnitude is distinct from a recorded real or

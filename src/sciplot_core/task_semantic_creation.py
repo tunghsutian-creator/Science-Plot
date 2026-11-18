@@ -14,6 +14,68 @@ def is_semantic(state: dict[str, Any]) -> bool:
     return state["request"].get("action") == "create" and "intent" in state["request"]
 
 
+def admit_uvvis(state: dict[str, Any], plan: dict[str, Any]) -> bool:
+    """Freeze the same source, columns, sample and units under Managed authority."""
+    request = state["request"]
+    source = Path(request["source"])
+    if (set(request) - {"version", "action", "source", "out", "rule_id", "template"}
+            or source.suffix.casefold() not in {".csv", ".tsv"} or not source.is_file()
+            or (plan["rule_id"], plan["template"]) != ("uvvis_spectrum", "curve")
+            or "data_mapping" in plan or "source_options" in plan):
+        return False
+    transform = plan.get("scientific_transform") or {}
+    output = transform.get("output") or {}
+    columns, series = transform.get("source_columns", []), output.get("series", [])
+    if not (len(columns) == len(series) == 1
+            and output.get("series_order") == [series[0]["sample"]]
+            and columns[0]["sample"] == series[0]["sample"]
+            and columns[0]["sources"] == [str(source)]
+            and series[0]["excluded_point_count"] == 0
+            and transform["normalizer"]["operation"] == "none"
+            and transform["anchor"]["scope"] == "none"
+            and transform["x_coordinate_policy"]["operation"] == "preserve_source_coordinate_and_order"
+            and len(plan["resolved_figure_plan"]["selected_figure_ids"]) == 1):
+        return False
+    conversions = {(item["sample"], item["role"]): item for item in transform["unit_conversions"]}
+    coordinates = (("x", "x", "wavelength", "nm"), ("y", "response", "absorbance", "a.u."))
+    intent: dict[str, Any] = {"rule_id": "uvvis_spectrum"}
+    for role, original_role, quantity, unit in coordinates:
+        original = columns[0][original_role]
+        conversion = conversions.get((series[0]["sample"], original_role), {})
+        if (original["unit"] != unit or output.get(role + "_unit") != unit
+                or any(conversion.get(step) != {"factor": 1.0, "offset": 0.0}
+                       for step in ("source_to_canonical", "canonical_to_display"))
+                or original["unit_detection"]["method"] != "detected_from_adjacent_unit_row"):
+            return False
+        intent[role] = {"quantity": quantity, "column_id": f"column:{original['column_index_zero_based']}"}
+
+    semantic = prepare_plan([source], intent)
+    frozen = semantic["sources"][0]
+    if canonical_json_sha256({"kind": "file", "content_sha256": frozen["sha256"]}) != state["source_sha256"]:
+        raise TaskControlError("source_changed", "The original file changed after the raw scientific plan.")
+    candidates = frozen["candidates"]
+    bindings = semantic.get("resolved_bindings", [])
+    if semantic["decisions"] or len(candidates) != 1 or len(candidates[0]["blocks"]) != 1 or len(bindings) != 1:
+        return False
+    block = candidates[0]["blocks"][0]
+    if (block["sample"] != series[0]["sample"] or block["point_count"] != series[0]["point_count"]):
+        return False
+    for role, original_role, quantity, unit in coordinates:
+        actual, original = bindings[0]["coordinates"][role], columns[0][original_role]
+        if ((actual["column_index"], actual["header"], actual["observed_quantity"], actual["observed_unit"], actual["unit"])
+                != (original["column_index_zero_based"], original["header"], quantity, unit, unit)
+                or actual["unit_relation"]["kind"] != "identity"):
+            return False
+
+    state.update(initial_request=deepcopy(request),
+                 request={"version": 1, "action": "create", "sources": [str(source)], "intent": intent,
+                          **({"out": request["out"]} if "out" in request else {})},
+                 source_hashes={str(source): frozen["sha256"]}, semantic_plan=semantic, semantic_choices={},
+                 semantic_plan_confirmed=True, intent_revision=1,
+                 plan_confirmation={"mode": "verified_raw_uvvis_curve", "figure_plan": plan["resolved_figure_plan"]["plan_sha256"]})
+    return True
+
+
 def normalize_sources(request: dict[str, Any]) -> dict[str, str]:
     paths = [canonical_path(Path(value)) for value in request["sources"]]
     if len(paths) != len(set(paths)):

@@ -63,6 +63,13 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
     if plan is None:
         save_task(root, state)
         return
+    if state.get("prefer_managed_raw") is True and not state.get("defer_creation_export"):
+        from sciplot_core.task_semantic_creation import admit_uvvis, run_creation as run_managed
+
+        if admit_uvvis(state, plan):
+            save_task(root, state)
+            run_managed(root, state)
+            return
     _phase(root, state, "creating")
     def checkpoint(prepared: dict[str, Any]) -> None:
         if state.get("defer_creation_export") is True:

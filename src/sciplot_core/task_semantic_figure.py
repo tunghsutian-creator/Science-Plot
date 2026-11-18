@@ -322,8 +322,9 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
         if not temperature and display.get("interpolation"):
             line["interpolation"] = deepcopy(display["interpolation"])
         marks = [line]
-        marks.append({"id": identifier + ":points", "type": "point", "style": {
-            "marker_thin_factor": display.get("marker_every", 1), **({"marker_color": "#888888"} if temperature else {})}})
+        if state.get("plan_confirmation", {}).get("mode") != "verified_raw_uvvis_curve":
+            marks.append({"id": identifier + ":points", "type": "point", "style": {
+                "marker_thin_factor": display.get("marker_every", 1), **({"marker_color": "#888888"} if temperature else {})}})
         layers.append({"id": identifier, "dataset_id": record["dataset_id"], "mappings": {"x": "x", "y": role},
                        "mapping_semantics": {"x": intent["x"]["quantity"], "y": "temperature" if temperature else record.get("quantities", {}).get("y", intent["y"]["quantity"])},
                        "x_scale": "scale:x", "y_scale": "scale:" + role, "marks": marks,
