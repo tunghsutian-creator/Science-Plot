@@ -1,5 +1,6 @@
 """Explicit ordinary axis transforms using the existing central domain policy."""
 import math
+from copy import deepcopy
 from typing import Any, NoReturn
 
 from sciplot_core.plot_grammar.domain_values import numeric_axis
@@ -28,3 +29,27 @@ def ordinary_axis(role: str, coordinate: dict[str, Any], unit: str, values: list
     except (ValueError, OverflowError) as exc:
         _error("semantic_log_domain" if transform == "log" else "semantic_invalid_domain", str(exc), role=role)
     return domain, ticks, label, transform
+
+
+def axis_spec(role: str, coordinate: dict[str, Any], side: str, unit: str, values: list[float],
+              raw_plan: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    effective = coordinate
+    if raw_plan.get("rule_id") == "xrd_pattern":
+        from sciplot_core.studio_render.series_domain import xrd_default_minimum
+
+        minimum = xrd_default_minimum(values)
+        if minimum is not None:
+            effective = {**coordinate, "minimum": minimum}
+    domain, ticks, label, scale_transform = ordinary_axis(role, effective, unit, values)
+    scale = {"id": "scale:" + role, "dimension": "x" if role == "x" else "y", "transform": scale_transform,
+                   "domain": domain, "unit": unit, "quantity": coordinate["quantity"], "direction": coordinate.get("direction", "ascending"),
+                   "domain_rule": {name: {"mode": "fixed", "value": effective[name]} if name in effective else {"mode": "auto"}
+                                   for name in ("minimum", "maximum")},
+                   **({"quantity_members": deepcopy(coordinate["quantity_members"])} if "quantity_members" in coordinate else {})}
+    label = raw_plan.get("axis_labels", {}).get(role, label)
+    qualitative_y = role == "y" and raw_plan.get("show_y_ticks") is False
+    axis = {"id": "axis:" + role, "scale_id": "scale:" + role, "side": side,
+                 "label": label, "visible": True, "label_visible": True,
+                 "ticks": [] if qualitative_y else ticks, "ticks_mode": "fixed" if qualitative_y else "automatic",
+                 "style": {"minor_ticks_visible": False} if qualitative_y else {}}
+    return scale, axis

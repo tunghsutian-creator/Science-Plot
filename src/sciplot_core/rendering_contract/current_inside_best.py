@@ -70,20 +70,6 @@ def inside_best_geometry(
                      "box_height_mm": min(box_height, graph_height * .82)}
 
 
-def _point_rectangle_distance_mm(
-    point: tuple[float, float],
-    rectangle: tuple[float, float, float, float],
-    *,
-    graph_width_mm: float,
-    graph_height_mm: float,
-) -> float:
-    x_value, y_value = point
-    left, right, bottom, top = rectangle
-    dx = max(left - x_value, 0.0, x_value - right) * graph_width_mm
-    dy = max(bottom - y_value, 0.0, y_value - top) * graph_height_mm
-    return math.hypot(dx, dy)
-
-
 def score_inside_best(samples: list[tuple[float, float]], footprint: dict[str, float | int],
                       *, edge_padding_mm: float, clearance_mm: float) -> dict[str, Any]:
     """Preserve exact legacy corner scoring without importing its footprint owner."""
@@ -122,14 +108,11 @@ def score_inside_best(samples: list[tuple[float, float]], footprint: dict[str, f
     order = ("upper_right", "lower_right", "upper_left", "lower_left")
     metrics: dict[str, dict[str, Any]] = {}
     for name, rectangle in candidates.items():
+        left, right, bottom, top = rectangle
         distances = [
-            _point_rectangle_distance_mm(
-                point,
-                rectangle,
-                graph_width_mm=graph_width_mm,
-                graph_height_mm=graph_height_mm,
-            )
-            for point in samples
+            math.hypot(max(left - x, 0.0, x - right) * graph_width_mm,
+                       max(bottom - y, 0.0, y - top) * graph_height_mm)
+            for x, y in samples
         ]
         minimum = min(distances, default=float("inf"))
         overlaps = sum(distance <= 1e-9 for distance in distances)

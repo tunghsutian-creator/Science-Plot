@@ -7,35 +7,12 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_errors import TaskControlError
+from sciplot_core.task_semantic_raw_analysis import raw_curve_analysis
 from sciplot_core.task_storage import save_task, task_summary
 
 
 def is_semantic(state: dict[str, Any]) -> bool:
     return state["request"].get("action") == "create" and "intent" in state["request"]
-
-
-def _raw_curve_analysis(source: Path, rule_id: str, plan: dict[str, Any], source_sha256: str) -> list[dict[str, Any]]:
-    """Run the same registered scientific analysis on the verified canonical curve."""
-    from tempfile import TemporaryDirectory
-
-    from sciplot_core.materials_rules.analysis import compute_analysis_metrics
-    from sciplot_core.materials_rules.catalog import get_rule, semantic_payload_from_rule
-    from sciplot_core.semantic_sources.curve_output import _write_curve_table
-    from sciplot_core.semantic_sources.scientific_source_single_curve import resolve_single_curve_transform
-
-    rule = get_rule(rule_id)
-    resolved = resolve_single_curve_transform(source, rule=rule)
-    if file_sha256(source) != source_sha256 or resolved.contract.to_payload() != plan["scientific_transform"]:
-        raise TaskControlError("source_changed", "The original scientific curve changed before its analysis.")
-    # The old owner analyzes this normalized table. Using its exact writer
-    # preserves header aliases and per-sample parsing even for TSV originals.
-    with TemporaryDirectory(prefix="sciplot-raw-analysis-") as directory:
-        workspace = Path(directory)
-        canonical = workspace / "curve.csv"
-        _write_curve_table(list(resolved.series), canonical)
-        semantic = semantic_payload_from_rule(rule, confidence=100.0)
-        return compute_analysis_metrics(source_path=canonical, processed_source=canonical,
-                                        semantic=semantic, output_dir=workspace)
 
 
 def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
@@ -123,7 +100,7 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
 
         display = freeze_new_spectral_axis_display({}, rule_id=rule_id, template="curve", transform_contract=transform)
         presentation["show_y_ticks"] = display["render_options"]["show_y_ticks"]
-    analysis = _raw_curve_analysis(source, rule_id, plan, frozen["sha256"])
+    analysis = raw_curve_analysis(source, rule_id, plan, frozen["sha256"])
     state.update(initial_request=deepcopy(request), analysis_metrics=analysis,
                  request={"version": 1, "action": "create", "sources": [str(source)], "intent": intent,
                           **({"out": request["out"]} if "out" in request else {})},
