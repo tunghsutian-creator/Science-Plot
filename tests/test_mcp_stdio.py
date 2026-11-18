@@ -19,10 +19,11 @@ from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
 
 
-def _parameters(*, cli=False):
+def _parameters(*, cli=False, profile=None):
+    args = ["mcp", *(["--profile", profile] if profile else [])] if cli else ["-m", "sciplot_core.mcp_server"]
     return StdioServerParameters(command=str(REPO_ROOT / "skill/scripts/sciplot") if cli else sys.executable,
-        args=["mcp"] if cli else ["-m", "sciplot_core.mcp_server"], cwd=REPO_ROOT,
-        env={**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, (str(REPO_ROOT / "src"), os.environ.get("PYTHONPATH", ""))))})
+        args=args, cwd=REPO_ROOT,
+        env={**os.environ, "SCIPLOT_PYTHON": sys.executable, "PYTHONPATH": os.pathsep.join(filter(None, (str(REPO_ROOT / "src"), os.environ.get("PYTHONPATH", ""))))})
 
 
 async def _call(client, name, arguments):
@@ -41,7 +42,7 @@ def test_stdio_composition_intents_reopen_and_preserve_generated_image(tmp_path)
     layout = tmp_path / "figure layout.json"
 
     async def scenario():
-        async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
+        async with Client(_parameters(cli=True, profile="daily"), read_timeout_seconds=60) as client:
             capabilities = await _call(client, "sciplot_compose_capabilities", {})
             assert capabilities["authority"]["legacy"] == "exact saved VSZ"
             created = await _call(client, "sciplot_compose", {"request": {"action": "new", "layout": str(layout)}})
@@ -109,6 +110,31 @@ def test_official_stdio_client_discovery_and_error_recovery():
             assert error.is_error and error.structured_content["ready_to_use"] is False
             assert (await _call(client, "sciplot_capabilities", {}))["transport"] == "mcp_stdio"
             assert not (await client.list_resources()).resources
+        async with Client(_parameters(cli=True, profile="daily"), read_timeout_seconds=60) as client:
+            from jsonschema import Draft202012Validator
+
+            daily_tools = (await client.list_tools()).tools
+            daily = {tool.name: tool for tool in daily_tools}
+            assert {"sciplot_task_start", "sciplot_task_resume", "sciplot_task_edit", "sciplot_read_result",
+                    "sciplot_plot_export", "sciplot_plot_resume", "sciplot_plot_decide", "sciplot_compose"} <= daily.keys()
+            assert daily.keys() < discovered.keys()
+            for tool in daily_tools:
+                Draft202012Validator.check_schema(tool.input_schema)
+            def discovery_size(items):
+                payload = [tool.model_dump(mode="json", by_alias=True, exclude_none=True) for tool in items]
+                return len(json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode())
+            assert discovery_size(daily_tools) < discovery_size(tools.tools) / 5
+            bad = {"request": {"version": 1, "action": "create", "surprise": True}}
+            assert Draft202012Validator(daily["sciplot_task_start"].input_schema).is_valid(bad)
+            rejected = await client.call_tool("sciplot_task_start", bad)
+            assert rejected.is_error and rejected.structured_content["error"]["code"] == "invalid_arguments"
+            hidden = await client.call_tool("sciplot_plot_create", {})
+            assert hidden.is_error and hidden.structured_content["error"]["code"] == "unknown_tool"
+            assert "--profile expert" in hidden.structured_content["error"]["message"]
+            current = await _call(client, "sciplot_task_capabilities", {"section": "request", "name": "create"})
+            assert current["schema"] == definition["schema"]
+        async with Client(_parameters(cli=True, profile="expert"), read_timeout_seconds=60) as client:
+            assert (await client.list_tools()).tools == tools.tools
 
     anyio.run(scenario)
 
@@ -168,7 +194,7 @@ def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tm
     raw = source.read_bytes()
 
     async def scenario():
-        async with Client(_parameters(), read_timeout_seconds=180) as client:
+        async with Client(_parameters(cli=True, profile="daily"), read_timeout_seconds=180) as client:
             created = await _call(client, "sciplot_task_start", {
                 "request": {"version": 1, "action": "create", "source": str(source), "rule_id": "uvvis_spectrum"},
                 "task_dir": str(tmp_path / "create_task"),

@@ -546,7 +546,7 @@ your assistant uses its own model connection.
 path to your data, as in the example above.
 
 **With an MCP client:** add a local stdio server using the absolute path to
-`skill/scripts/sciplot` as the command and `mcp` as its argument.
+`skill/scripts/sciplot` as the command with arguments `mcp --profile daily`.
 
 <details>
 <summary>Example configuration for clients that use <code>mcpServers</code></summary>
@@ -558,13 +558,18 @@ Replace the example path with your checkout location:
   "mcpServers": {
     "sciplot": {
       "command": "/absolute/path/Science-Plot/skill/scripts/sciplot",
-      "args": ["mcp"]
+      "args": ["mcp", "--profile", "daily"]
     }
   }
 }
 ```
 
 </details>
+
+The daily catalog covers plot creation, edits, recovery, exports and panel assembly.
+For specialized tools and full upfront schemas, use `mcp --profile expert`.
+Existing unflagged `mcp` configurations keep the complete catalog; to opt into
+the daily catalog, update the arguments and reconnect.
 
 The assistant needs access to your local files. See the
 [AI connection guide](skill/references/external-control.md) for CLI and MCP details.

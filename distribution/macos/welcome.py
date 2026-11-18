@@ -57,12 +57,12 @@ def connection_files(command: Path) -> dict[str, str]:
             "# 供审阅后手工添加；SciPlot 不会修改你的 Codex 配置。\n"
             "[mcp_servers.sciplot]\n"
             f"command = {json.dumps(path, ensure_ascii=False)}\n"
-            'args = ["mcp"]\n'
+            'args = ["mcp", "--profile", "daily"]\n'
             "startup_timeout_sec = 30\n"
             "tool_timeout_sec = 300\n"
         ),
         "mcp-server.json": json.dumps(
-            {"mcpServers": {"sciplot": {"command": path, "args": ["mcp"]}}},
+            {"mcpServers": {"sciplot": {"command": path, "args": ["mcp", "--profile", "daily"]}}},
             ensure_ascii=False, indent=2,
         ) + "\n",
     }
@@ -94,7 +94,7 @@ def render_page(command: Path, doctor: dict, mcp_available: bool, status_path: P
 <h2>1. 放好应用，再连接一次</h2>
 <p>把完整的 SciPlot.app 放在一个固定位置，再双击它打开本页。只移动整个应用，不拆开包内文件。移动后，重新打开本页并更新 AI 工具的连接路径。旧交付的打开命令可能仍指向应用的原位置；请先用更新后的 AI 连接继续原项目并重新导出。</p>
 <p>{'MCP 本地服务入口可用。' if mcp_available else '当前构建尚未提供 MCP 入口；请先使用下面的公开 CLI 路径，或取得包含 MCP 的构建。'}</p>
-<p>在支持本地 MCP 的 AI 工具里添加 <b>STDIO</b> 服务：名称 <b>sciplot</b>，命令填下方路径，参数填 <b>mcp</b>。</p>
+<p>在支持本地 MCP 的 AI 工具里添加 <b>STDIO</b> 服务：名称 <b>sciplot</b>，命令填下方路径，依次填参数 <b>mcp</b>、<b>--profile</b>、<b>daily</b>。这个配置只列出日常绘图工具。需要完整工具目录时，把 <b>daily</b> 改成 <b>expert</b>。</p>
 <div class="card"><code id="command">{command_text}</code><p><button onclick="copyCommand()">复制命令路径</button> <span id="copyStatus" role="status"></span></p></div>
 <p>Codex 可在设置中的 MCP servers 添加服务器；也可由你审阅后将下列片段加入配置。这里不会改写任何 AI 工具的设置。</p>
 <p><a href="{codex_download}" download="codex-mcp.toml">下载 Codex 配置片段</a> · <a href="{mcp_download}" download="mcp-server.json">下载通用 MCP JSON</a> · <a href="https://learn.chatgpt.com/docs/extend/mcp?surface=cli">官方连接说明</a></p>

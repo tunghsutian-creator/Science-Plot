@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 
-def run_stdio() -> None:
+if TYPE_CHECKING:
+    from sciplot_core.mcp_server.schemas import ToolProfile
+
+
+def run_stdio(profile: ToolProfile = "expert") -> None:
     """Run the official MCP transport without making the SDK a core dependency."""
     try:
         from sciplot_core.mcp_server.server import serve_stdio
@@ -16,7 +21,7 @@ def run_stdio() -> None:
         raise
     import anyio
 
-    anyio.run(serve_stdio)
+    anyio.run(serve_stdio, profile)
 
 
 __all__ = ["run_stdio"]

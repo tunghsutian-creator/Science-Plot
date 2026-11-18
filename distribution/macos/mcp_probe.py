@@ -11,7 +11,7 @@ def verify_mcp(command: Path, environment: dict[str, str]) -> dict:
     from mcp.client.stdio import StdioServerParameters
 
     async def scenario() -> dict:
-        parameters = StdioServerParameters(command=str(command), args=["mcp"], env=environment)
+        parameters = StdioServerParameters(command=str(command), args=["mcp", "--profile", "daily"], env=environment)
         async with Client(parameters, read_timeout_seconds=60) as client:
             tools = await client.list_tools()
             names = [tool.name for tool in tools.tools]
@@ -23,8 +23,8 @@ def verify_mcp(command: Path, environment: dict[str, str]) -> dict:
                 raise RuntimeError("The bundled MCP capabilities call failed")
             if payload.get("model_configuration_required") is not False:
                 raise RuntimeError("The bundled MCP server unexpectedly requires a model")
-            if "sciplot_task_capabilities" not in names:
-                raise RuntimeError("The bundled MCP server has no task interface")
+            if "sciplot_task_capabilities" not in names or "sciplot_plot_create" in names:
+                raise RuntimeError("The bundled MCP server did not advertise its daily task catalog")
             task_result = await client.call_tool("sciplot_task_capabilities", {})
             task = task_result.structured_content
             if task_result.is_error or task.get("kind") != "sciplot_task_capabilities" or not task.get("contract_sha256"):

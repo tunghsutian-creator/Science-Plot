@@ -34,7 +34,7 @@ def dispatch_interfaces(
     if args.command == "mcp":
         from sciplot_core.mcp_server import run_stdio
 
-        run_stdio()
+        run_stdio(args.profile)
         return 0
     if args.command == "task":
         from sciplot_core.cli.dispatch.tasks import dispatch_task

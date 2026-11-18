@@ -1,5 +1,21 @@
 # Task capability and local plotting measurements
 
+## Daily MCP discovery profile
+
+From the Mac checkout, the official MCP stdio client called tools/list via the
+normal SciPlot wrapper. The table counts only the discovered tool array encoded
+as compact UTF-8 JSON, not transport framing or model context.
+
+| Connection arguments | Tools | Discovery JSON bytes |
+| --- | ---: | ---: |
+| mcp --profile daily | 26 | 29,104 |
+| mcp --profile expert (also unflagged mcp) | 48 | 238,289 |
+
+The daily profile reduced this discovery payload by about 88%. The task and
+decision owners still validate full schemas; the daily catalog defers the three
+large task/decision shapes to the existing section lookup or current owner
+receipt. This measurement does not cover per-model tokens, fees, or latency.
+
 ## 2026-10-13 Mac client telemetry boundary
 
 The Mac verification completed CLI/RPC/MCP native workflows and actual AF_UNIX

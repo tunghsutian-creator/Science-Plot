@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from mcp.types import Tool, ToolAnnotations
 
@@ -10,12 +10,63 @@ from sciplot_core.studio_core.annotation_schema import annotation_operation_capa
 from sciplot_core.task_schema_compaction import compact_schema
 
 
+ToolProfile = Literal["daily", "expert"]
+
+# Daily AI paths keep their existing names and owners, including both task and
+# semantic recovery. Low-level native edits and specialized workflows stay in
+# the full expert catalog.
+_DAILY_TOOLS = frozenset({
+    "capabilities", "task_capabilities", "task_start", "task_continue",
+    "task_edit", "task_inspect", "task_table_region", "task_find", "task_resume",
+    "project_open", "project_inspect", "plot_describe", "plot_patch", "plot_intent",
+    "plot_decide", "plot_resume", "plot_export", "plot_deliver", "preview", "annotation_inspect", "export",
+    "compose_capabilities", "compose", "pdf_review_create", "pdf_review_read", "read_result",
+})
+
+# Exact nested variants are available on demand or in owner-returned templates.
+# These are discovery schemas only; the server always validates the full input.
+_DAILY_CONTRACTS = {
+    "sciplot_task_start": (
+        "request",
+        {"type": "object", "required": ["version", "action"]},
+        'Use request {version:1, action:"create", source:ABSOLUTE_PATH} for ordinary creation. For explicit coordinates, use sources and intent. Get exact request fields with task_capabilities(section="request", name=ACTION).',
+    ),
+    "sciplot_task_resume": (
+        "response", {"type": "object", "minProperties": 1},
+        'Use the saved task’s current response_template unchanged except for the requested answer. If needed, use task_capabilities(section="response", name=ANSWER_FIELD) for that exact variant.',
+    ),
+    "sciplot_plot_decide": (
+        "request", {"type": "object", "minProperties": 1},
+        "Use the current decision or recovery request returned by the plot owner, with its exact guard fields. Do not invent a decision or accept an unreviewed preview.",
+    ),
+}
+
+
+def discovery_tool(tool: Tool) -> Tool:
+    contract = _DAILY_CONTRACTS.get(tool.name)
+    if contract is None:
+        return tool
+    field, envelope, guide = contract
+    if tool.name == "sciplot_task_start":
+        variants = tool.input_schema["properties"][field]["oneOf"]
+        actions = list(dict.fromkeys(item["properties"]["action"]["const"] for item in variants))
+        envelope = {**envelope, "properties": {
+            "version": variants[0]["properties"]["version"], "action": {"enum": actions},
+            "source": {"type": "string", "minLength": 1},
+        }}
+    schema = object_schema(
+        {**tool.input_schema["properties"], field: {**envelope, "description": guide}},
+        tool.input_schema["required"],
+    )
+    return tool.model_copy(update={"input_schema": schema})
+
+
 def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
     return {"type": "object", "properties": properties, "required": required,
             "additionalProperties": False}
 
 
-def tool_definitions() -> list[Tool]:
+def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
     from sciplot_core.plot_document.schema import patch_schema
     from sciplot_core.plot_engine.contracts import (
         create_schema,
@@ -49,6 +100,8 @@ def tool_definitions() -> list[Tool]:
 
     def add(name: str, description: str, properties: dict[str, Any], required: list[str], *,
             read_only: bool = False, idempotent: bool = False, destructive: bool = False) -> None:
+        if profile == "daily" and name not in _DAILY_TOOLS:
+            return
         definitions.append(Tool(
             name=f"sciplot_{name}", description=description,
             input_schema=compact_schema(object_schema(properties, required)),

@@ -22,7 +22,8 @@ def test_connection_files_preserve_unusual_paths_without_host_configuration(tmp_
     toml = tomllib.loads(configs["codex-mcp.toml"])
     wire = json.loads(configs["mcp-server.json"])
     assert toml["mcp_servers"]["sciplot"]["command"] == str(command)
-    assert wire["mcpServers"]["sciplot"] == {"command": str(command), "args": ["mcp"]}
+    assert toml["mcp_servers"]["sciplot"]["args"] == ["mcp", "--profile", "daily"]
+    assert wire["mcpServers"]["sciplot"] == {"command": str(command), "args": ["mcp", "--profile", "daily"]}
     assert not any(tmp_path.iterdir())
 
 

@@ -9,6 +9,21 @@ Run commands from the checkout with `skill/scripts/sciplot`. Use absolute data,
 project and evidence paths. The uppercase names below are placeholders to replace
 with values read from the current command results, not literal arguments.
 
+## Connect an MCP client
+
+Use the local executable as the command and `["mcp", "--profile", "daily"]` as
+its separate arguments. The daily catalog uses the same task, edit, recovery,
+export and panel assembly owners as the complete catalog. Read just the needed
+`task_capabilities` section: for example section="request", name="create" when
+you need fields beyond the source-only request. For a pending task, reuse the
+owner's response template and guard fields; if needed ask for the named
+"response" variant. All requests are still validated against the full contract.
+
+Use `["mcp", "--profile", "expert"]` for specialized tools such as explicit
+Template/Binding construction, experiment groups, native comparison, paper
+packages or low-level native edit diagnostics. Existing `["mcp"]` setups keep
+the expert catalog; change the arguments and reconnect to opt into daily.
+
 ## Start or resume
 
 Read only the section needed for an operation detail or an actual failure;

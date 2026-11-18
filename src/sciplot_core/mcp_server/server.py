@@ -31,7 +31,7 @@ from mcp.types import (
 
 from sciplot_core.mcp_server.errors import AdapterError, error_payload
 from sciplot_core.mcp_server.resources import ResourceSnapshot, ResourceStore
-from sciplot_core.mcp_server.schemas import tool_definitions
+from sciplot_core.mcp_server.schemas import ToolProfile, discovery_tool, tool_definitions
 from sciplot_core.mcp_server.services import invoke_owner
 from sciplot_core.studio_core.control_results import compact_result
 
@@ -64,6 +64,20 @@ INSTRUCTIONS = (
     "Ask only for unresolved meaning or scope. Queries and edits do not certify "
     "delivery; handoff requires ready export evidence. Resource URIs are immutable "
     "snapshots limited to this server connection; inspect again for current state."
+)
+
+
+DAILY_INSTRUCTIONS = (
+    "SciPlot plots locally without calling a model. For new source data use "
+    "task_start; retrieve only the needed contract section from task_capabilities. "
+    "Answer only current scientific questions with task_resume and returned guard IDs. "
+    "For an existing figure use task_edit for common changes, or project_open and "
+    "plot_describe for current capabilities and an exact edit. Use summary/edit scopes "
+    "only when advertised; keep full open for unknown or LegacyPlot authority. "
+    "Review preview resources before accepting; follow returned recovery and export "
+    "receipts without reapplying an edit. For existing PDF diagrams use compose with "
+    "export-pdf for a standalone PDF. Resources are scoped to this server connection. "
+    "For specialized workflows or the full upfront schemas reconnect with --profile expert."
 )
 
 
@@ -100,9 +114,11 @@ def _preview_artifact(payload: dict[str, Any]) -> dict[str, Any] | None:
 
 
 class Adapter:
-    def __init__(self) -> None:
-        self.tools = {item.name: item for item in tool_definitions()}
-        self.validators = {name: Draft202012Validator(item.input_schema) for name, item in self.tools.items()}
+    def __init__(self, profile: ToolProfile = "expert") -> None:
+        self.profile = profile
+        full = {item.name: item for item in tool_definitions(profile)}
+        self.tools = {name: discovery_tool(item) for name, item in full.items()} if profile == "daily" else full
+        self.validators = {name: Draft202012Validator(item.input_schema) for name, item in full.items()}
         self.resources = ResourceStore()
         self.lock = anyio.Lock()
 
@@ -181,7 +197,8 @@ class Adapter:
     async def call(self, name: str, arguments: dict[str, Any]) -> CallToolResult:
         try:
             if name not in self.tools:
-                raise AdapterError("unknown_tool", "Use a tool returned by tools/list.")
+                hint = " For specialized tools, reconnect with --profile expert." if self.profile == "daily" else ""
+                raise AdapterError("unknown_tool", "Use a tool returned by tools/list." + hint)
             self.validators[name].validate(arguments)
             async with self.lock:
                 if name == "sciplot_read_result":
@@ -201,8 +218,8 @@ class Adapter:
                 return self._repair_result(payload)
 
 
-def create_server() -> Server[Any]:
-    adapter = Adapter()
+def create_server(profile: ToolProfile = "expert") -> Server[Any]:
+    adapter = Adapter(profile)
 
     async def list_tools(context: Any, params: Any) -> ListToolsResult:
         return ListToolsResult(tools=list(adapter.tools.values()))
@@ -228,13 +245,13 @@ def create_server() -> Server[Any]:
             return ReadResourceResult(contents=[content])
 
     return Server(
-        "SciPlot", version=version("sciplot-core"), instructions=INSTRUCTIONS,
+        "SciPlot", version=version("sciplot-core"), instructions=DAILY_INSTRUCTIONS if profile == "daily" else INSTRUCTIONS,
         on_list_tools=list_tools, on_call_tool=call_tool,
         on_list_resources=list_resources, on_read_resource=read_resource,
     )
 
 
-async def serve_stdio() -> None:
-    server = create_server()
+async def serve_stdio(profile: ToolProfile = "expert") -> None:
+    server = create_server(profile)
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())

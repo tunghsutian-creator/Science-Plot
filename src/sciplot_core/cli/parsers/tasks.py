@@ -131,4 +131,6 @@ def register_task_commands(subparsers: Any) -> None:
             action.add_argument("target", type=Path)
             if name == "select":
                 action.add_argument("--selection", type=Path, required=True)
-    subparsers.add_parser("mcp", help="Run the optional external-AI MCP stdio server.")
+    mcp = subparsers.add_parser("mcp", help="Run the optional external-AI MCP stdio server.")
+    mcp.add_argument("--profile", choices=("daily", "expert"), default="expert",
+                     help="Daily: smaller AI catalog. Expert: complete catalog (the unflagged compatibility default).")
