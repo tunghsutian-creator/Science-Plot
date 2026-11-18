@@ -4,6 +4,13 @@ from pathlib import Path
 from typing import Any
 
 
+def export_cache_record(build: str, exported: dict[str, Any], artifacts: dict[str, str],
+                        inventories: dict[str, list[str]]) -> dict[str, Any]:
+    """One byte-and-recipe receipt for prepared and interactive publications."""
+    return {"build_key": build, "export": exported, "artifact_files": artifacts,
+            "evidence_inventories": inventories}
+
+
 def current_export(root: Path, head: dict[str, Any], *, eligible: bool,
                    cached_export: Callable[[Path, dict[str, Any]], dict[str, Any] | None]) -> dict[str, Any]:
     """Read recipe and exact inventories; never create, render, export or repair."""

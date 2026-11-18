@@ -3,12 +3,15 @@
 Native work and science run before this storage-only owner. Recovery resumes
 an already accepted exact command, without rerunning that work.
 """
+from copy import deepcopy
 from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.plot_engine.cache_identity import build_key
+from sciplot_core.plot_engine.export_status import export_cache_record
 from sciplot_core.project_commands import PreparedMutation, ProjectCommand, ProjectCommands, SourceTreeRead
 from sciplot_core.project_store import FileProjectStore
 
@@ -44,7 +47,6 @@ def publish_attachment_group(store: FileProjectStore, snapshot: dict[str, Any], 
                 or prefix + "head.json" not in figure.members
                 or not all(name.startswith(prefix) and isinstance(data, bytes) for name, data in figure.members.items())):
             raise EngineError("semantic_attachment_group_member_invalid", "A group member must prepare a new canonical head in this project.")
-        register_entry(index, attachment)
         member = {**figure.members, prefix + OWNER: owner_marker(attachment, snapshot["project_id"])}
         for name, data in figure.members.items():
             if data is not None and ("/revisions/" in name or "/models/" in name):
@@ -53,7 +55,12 @@ def publish_attachment_group(store: FileProjectStore, snapshot: dict[str, Any], 
         if output is None or not output.is_relative_to(store.root):
             raise EngineError("semantic_attachment_group_member_invalid", "Group artifacts must belong to the selected project.")
         asset_prefix = output.relative_to(store.root).as_posix() + "/"
-        _require_assets(figure, prefix, asset_prefix, store)
+        record = _require_assets(figure, prefix, asset_prefix, store)
+        logical = prefix + "archive/export-cache.json"
+        archived_entry = deepcopy(entry)
+        archived_entry["archived_derivatives"]["export-cache.json"] = logical
+        register_entry(index, Attachment(store, archived_entry))
+        member[logical] = encode(record)
         _add_fresh(writes, snapshot, member)
         _add_fresh(writes, snapshot, figure.assets)
     if (not required_outputs or len(set(required_outputs)) != len(required_outputs)
@@ -73,7 +80,7 @@ def publish_attachment_group(store: FileProjectStore, snapshot: dict[str, Any], 
     return ProjectCommands(store).publish_prepared(command, mutation)
 
 
-def _require_assets(figure: PreparedFigure, prefix: str, asset_prefix: str, store: FileProjectStore) -> None:
+def _require_assets(figure: PreparedFigure, prefix: str, asset_prefix: str, store: FileProjectStore) -> dict[str, Any]:
     formats = [Path(name).suffix for name in figure.assets]
     if (any(formats.count(extension) != 1 for extension in (".vsz", ".pdf", ".tiff"))
             or not all(name.startswith(asset_prefix) for name in figure.assets)):
@@ -101,6 +108,7 @@ def _require_assets(figure: PreparedFigure, prefix: str, asset_prefix: str, stor
     proven_native = [sha for name, sha in evidence.get("evidence_files", {}).items() if Path(name).suffix == ".vsz"]
     if [marker["document_sha256"]] != proven_native or sorted(item["format"] for item in returned) != ["pdf", "tiff_300"]:
         raise EngineError("semantic_attachment_group_export_unsealed", "The export evidence must seal the exact native document and required formats.")
+    published = []
     for item in returned:
         source, sha = item["path"], item["sha256"]
         # The established worker chooses each filename; relocation is only to
@@ -110,6 +118,12 @@ def _require_assets(figure: PreparedFigure, prefix: str, asset_prefix: str, stor
         if (content is None or evidence["evidence_files"].get(source) != sha
                 or hashlib.sha256(content).hexdigest() != sha):
             raise EngineError("semantic_attachment_group_export_unsealed", "The prepared PDF or TIFF does not match this figure's audited export.")
+        published.append({**item, "path": str(store.root / logical)})
+    published.append({"path": str(document), "format": "vsz", "sha256": marker["document_sha256"]})
+    files = {item["path"]: item["sha256"] for item in published}
+    exported = {key: evidence[key] for key in ("status", "ready_to_use", "ir_hash", "scientific_audit", "publication_qa")}
+    exported.update(exports=published, evidence_files=files)
+    return export_cache_record(build_key(revision["document"], binding), exported, files, {})
 
 
 def _add_fresh(writes: dict[str, bytes | None], snapshot: dict[str, Any], members: dict[str, Any]) -> None:

@@ -294,10 +294,17 @@ class AttachedProjectRepository(FileProjectRepository):
             batch.reads.setdefault(logical, None)
             batch.writes[logical] = payload
 
+    def _archived_initial_export(self, path: Path) -> str | None:
+        relative = self.attachment.relative(path)
+        if relative == Path("export-cache.json"):
+            return self.attachment.entry.get("archived_derivatives", {}).get("export-cache.json")
+        return None
+
     def exists(self, path: Path) -> bool:
         cache = self._cache_path(path)
         if cache is not None:
-            return cache.exists()
+            archived = self._archived_initial_export(path)
+            return cache.exists() or (archived is not None and self._member(archived).kind == "file")
         relative = self.attachment.relative(path)
         if relative is None:
             raise EngineError("semantic_attachment_path_invalid", "Attached semantic IO cannot escape its registered namespace.")
@@ -309,6 +316,11 @@ class AttachedProjectRepository(FileProjectRepository):
         cache = self._cache_path(path)
         if cache is not None:
             payload = read_json_object(cache)
+            if payload is None and not cache.exists():
+                archived = self._archived_initial_export(path)
+                member = self._member(archived) if archived is not None else None
+                if member is not None and member.data is not None:
+                    payload = json.loads(member.data)
             if payload is None:
                 raise EngineError("document_state_missing", "The disposable semantic cache is absent.", evidence=str(cache))
             result: dict[str, Any] = metadata_view(payload, self.attachment)

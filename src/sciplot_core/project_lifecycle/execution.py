@@ -9,6 +9,7 @@ import json
 from typing import Any
 from uuid import uuid4
 
+from sciplot_core.plot_engine.export_status import export_cache_record
 from sciplot_core.plot_engine.backend import PlotBackend
 from sciplot_core.plot_engine.cache_identity import build_key
 from sciplot_core.plot_engine.content_store import verify_document_content
@@ -200,9 +201,8 @@ def advance(root: Path, tx: dict[str, Any], backend: PlotBackend) -> dict[str, A
             tx["phase"] = "complete"
             tx.pop("error", None)
             persist(root, tx)
-            write(root / "export-cache.json", {"build_key": tx["artifact_build_key"],
-                  "export": exported, "artifact_files": tx["artifact_files"],
-                  "evidence_inventories": tx["evidence_inventories"]})
+            write(root / "export-cache.json", export_cache_record(tx["artifact_build_key"], exported,
+                  tx["artifact_files"], tx["evidence_inventories"]))
         return receipt(root, tx)
     except Exception as exc:
         if stage == "export":

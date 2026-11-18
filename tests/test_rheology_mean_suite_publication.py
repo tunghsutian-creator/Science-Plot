@@ -234,6 +234,7 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
     try:
         primary = service.open(workspace, figure_id=plan.primary_figure_id)
         assert primary["plot_type"] == "ManagedPlot" and primary["revision"] == 0
+        assert primary["export_current"]["current"] and primary["export_current"]["byte_inventory_verified"]
         updated = service.patch(Path(primary["plot"]), {
             "plot_id": primary["plot_id"], "base_revision": 0, "idempotency_key": "frequency-axis-label",
             "intent_class": "presentation",
@@ -268,8 +269,8 @@ def test_automatic_frequency_groups_bind_original_regions_not_condition_display_
         "Anonymous material · 170 °C", "Anonymous material · 150 °C"]
     assert not any(item["kind"] == "rheology_mean_exact_x" for item in spec["data_binding"]["transforms"])
     provenance = spec["data_binding"]["provenance"]["frequency_mean_original_blocks"]
-    assert provenance["Anonymous material"] == (
-        {"source_id": "source:0", "table_id": "table:0", "block_id": "block:0"},)
+    assert provenance["Anonymous material"] == [
+        {"source_id": "source:0", "table_id": "table:0", "block_id": "block:0"}]
     only = spec["data_binding"]["data_sources"][0]
     assert only["path"] == str(first)
     assert (only["table_selection"]["header_rows"], only["table_selection"]["data_start_row"],

@@ -100,7 +100,7 @@ def group_frequency_request(
     view["layers"] = retained
     binding["slots"] = slots
     binding["provenance"]["figure_task"] = task.to_payload()
-    binding["provenance"]["frequency_mean_original_blocks"] = blocks
+    binding["provenance"]["frequency_mean_original_blocks"] = {group: list(items) for group, items in blocks.items()}
     return value
 
 
