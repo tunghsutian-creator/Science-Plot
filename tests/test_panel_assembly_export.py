@@ -147,10 +147,22 @@ def test_vector_pdf_diagram_is_supported_and_multipage_is_refused(tmp_path, monk
                 ((100, 50, 200, 100), (1, 1, 0)),
             ):
                 page.draw_rect(tile, color=None, fill=color)
+            visible = page.add_rect_annot((82, 33, 98, 49))
+            visible.set_colors(stroke=(0, 1, 1), fill=(0, 1, 1))
+            visible.update()
+            hidden = page.add_rect_annot((95, 26, 121, 46))
+            hidden.set_colors(stroke=(1, 0, 1), fill=(1, 0, 1))
+            hidden.update()
+            hidden.set_flags(pymupdf.PDF_ANNOT_IS_NO_VIEW)
             page.set_cropbox(pymupdf.Rect(10, 8, 186, 88))
             page.set_rotation(rotation)
             pdf.save(path)
         original = path.read_bytes()
+        with pymupdf.open(path) as pdf:
+            rotated = pdf[0]
+            positions = [point * rotated.rotation_matrix for point in (pymupdf.Point(80, 33), pymupdf.Point(98, 28))]
+            bounds = rotated.rect
+            assert len(list(rotated.annots())) == 2
         source = capture_source({"kind": "image", "path": str(path)})
         with Image.open(io.BytesIO(render_preview(source))) as image:
             displayed = image.convert("RGB")
@@ -184,7 +196,19 @@ def test_vector_pdf_diagram_is_supported_and_multipage_is_refused(tmp_path, monk
             assert "Vector diagram" in pdf[0].get_text()
             assert pdf[0].get_xobjects()  # The two source panels remained vector PDF forms.
         with Image.open(output["tiff"]) as tiff:
-            for fx, fy in ((.2, .2), (.8, .2), (.2, .8), (.8, .8)):
+            samples = [(.2, .2), (.8, .2), (.2, .8), (.8, .8)]
+            for index, point in enumerate(positions):
+                fx = (point.x / bounds.width - crop[0]) / (crop[2] - crop[0])
+                fy = (point.y / bounds.height - crop[1]) / (crop[3] - crop[1])
+                assert 0 < fx < 1 and 0 < fy < 1
+                preview_pixel = displayed.getpixel((int(displayed.width * point.x / bounds.width),
+                                                    int(displayed.height * point.y / bounds.height)))
+                if index == 0:
+                    assert preview_pixel == (0, 255, 255)  # visible markup is part of the reference
+                else:
+                    assert preview_pixel != (255, 0, 255)  # NoView markup is not
+                samples.append((fx, fy))
+            for fx, fy in samples:
                 source_pos = (
                     int(displayed.width * (crop[0] + fx * (crop[2] - crop[0]))),
                     int(displayed.height * (crop[1] + fy * (crop[3] - crop[1]))),
@@ -203,6 +227,38 @@ def test_vector_pdf_diagram_is_supported_and_multipage_is_refused(tmp_path, monk
     with pytest.raises(AssemblyError) as stale:
         export_pdf(document, rejected)
     assert stale.value.code == "assembly_source_stale" and not rejected.exists()
+
+    form = tmp_path / "form.pdf"
+    with pymupdf.open() as pdf:
+        page = pdf.new_page(width=150, height=100)
+        field = pymupdf.Widget()
+        field.field_type = pymupdf.PDF_WIDGET_TYPE_TEXT
+        field.field_name = "label"
+        field.field_value = "Visible field value"
+        field.rect = pymupdf.Rect(10, 10, 130, 35)
+        page.add_widget(field)
+        pdf.save(form)
+    original = form.read_bytes()
+    form_layout = add(new_document(rows=1, columns=1), capture_source({"kind": "image", "path": str(form)}))
+    receipt = export_pdf(form_layout, tmp_path / "flattened-form.pdf")
+    with pymupdf.open(receipt["pdf"]) as pdf:
+        assert "Visible field value" in pdf[0].get_text()
+        assert not list(pdf[0].widgets()) and not pdf[0].get_images()
+    assert form.read_bytes() == original
+
+    unsupported = tmp_path / "unapplied-redaction.pdf"
+    with pymupdf.open() as pdf:
+        page = pdf.new_page(width=100, height=100)
+        page.insert_text((10, 20), "Source data")
+        page.add_redact_annot((8, 8, 85, 30), fill=(0, 0, 0))
+        pdf.save(unsupported)
+    original = unsupported.read_bytes()
+    redaction = add(new_document(rows=1, columns=1), capture_source({"kind": "image", "path": str(unsupported)}))
+    for exporter, destination in ((export_pdf, tmp_path / "redacted.pdf"), (export_document, tmp_path / "redacted-package")):
+        with pytest.raises(AssemblyError) as cannot_flatten:
+            exporter(redaction, destination)
+        assert cannot_flatten.value.code == "assembly_pdf_annotation_unsupported"
+        assert not destination.exists() and unsupported.read_bytes() == original
 
 
 def test_image_crop_deterministic_pdf_tiff_physical_size_and_source_bytes(tmp_path):

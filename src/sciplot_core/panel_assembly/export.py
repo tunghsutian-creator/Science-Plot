@@ -126,6 +126,35 @@ def _check_image_binding(source: dict[str, Any], media: str | None, width: float
         raise AssemblyError("assembly_source_stale", "The image does not match its frozen format or dimensions.")
 
 
+def _bake_diagram_annotations(diagram: Any, pymupdf: Any) -> None:
+    """Preserve static appearance; show_pdf_page does not copy annotations."""
+    page = diagram[0]
+    hidden = pymupdf.PDF_ANNOT_IS_INVISIBLE | pymupdf.PDF_ANNOT_IS_HIDDEN | pymupdf.PDF_ANNOT_IS_NO_VIEW
+    visible = False
+    # Work on the in-memory PDF opened from frozen source bytes. Links/popups
+    # are not painted by the diagram preview and are not output interactivity.
+    objects = [(item, item.flags, page.delete_annot) for item in page.annots() or ()]
+    for widget in page.widgets() or ():
+        kind, flags = diagram.xref_get_key(widget.xref, "F")
+        objects.append((widget, int(flags) if kind == "int" else 0, page.delete_widget))
+    for item, flags, remove in objects:
+        if flags & hidden:
+            # MuPDF's baker can paint a NoView appearance; the preview omits it.
+            remove(item)
+            continue
+        if (page.rotation and flags & pymupdf.PDF_ANNOT_IS_NO_ROTATE
+                or (isinstance(item, pymupdf.Annot) and item.type[0] == pymupdf.PDF_ANNOT_REDACT)
+                or diagram.xref_get_key(item.xref, "AP/N")[0] == "null"):
+            raise AssemblyError(
+                "assembly_pdf_annotation_unsupported",
+                "A visible PDF annotation cannot be safely flattened. Export a separate PDF with the intended annotations "
+                "flattened (and any redactions applied), then explicitly select that copy.",
+            )
+        visible = True
+    if visible:
+        diagram.bake(annots=True, widgets=True)
+
+
 def _place_image(page: Any, panel: dict[str, Any], source: dict[str, Any], raw: bytes, *, check_binding: bool = False) -> dict[str, Any]:
     pymupdf: Any = import_module("pymupdf")
 
@@ -134,6 +163,7 @@ def _place_image(page: Any, panel: dict[str, Any], source: dict[str, Any], raw: 
         with pymupdf.open(stream=raw, filetype="pdf") as diagram:
             if check_binding:
                 _check_image_binding(source, "application/pdf", *pdf_diagram_size(diagram))
+            _bake_diagram_annotations(diagram, pymupdf)
             diagram_page = diagram[0]
             bounds = diagram_page.rect
             left, top, right, bottom = crop

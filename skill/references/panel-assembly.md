@@ -34,7 +34,11 @@ read no scientific source and call no model. MCP exposes the same owner through
 
 Choose `export-pdf` for a diagram/image-only layout and a single new PDF file.
 PDF diagrams stay vector and use the same physical cells, labels, rotation and
-crops as the full package. Existing TIFF/PNG/JPEG panels remain raster. This route
+crops as the full package. Visible PDF markup and form appearances become
+static page marks in both outputs; hidden marks and interactivity do not carry
+over. When an annotation cannot be flattened safely, use a separately flattened
+PDF copy. For unapplied redactions, apply them in that copy before selecting it.
+Existing TIFF/PNG/JPEG panels remain raster. This route
 checks frozen sources but writes no TIFF, manifest, layout copy or source copies.
 Choose `export` for saved scientific plots or a complete delivery package.
 
