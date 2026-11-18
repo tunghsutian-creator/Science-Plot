@@ -23,9 +23,12 @@ Choose the first read from authority already established for this figure:
 - **Unknown authority or known LegacyPlot:** call `plot open TARGET --json`, or
   `sciplot_project_open` without `description`, once. Inspect `plot_type` and
   `coverage`. Reuse that full result even if it reveals a ManagedPlot; do not
-  immediately read it again as a summary. A LegacyPlot stays under its full
-  description and explicit `legacy_shadow` coverage; scoped edit and typed
-  intent are unavailable. Do not convert it merely to use the compact route.
+  immediately read it again as a summary. An archived plot returned with
+  `read_only: true` can be opened and redrawn without changing the old
+  project. Use the returned `legacy-redraw` command with a new output directory.
+  For new edits, use the returned `legacy-convert` command to make a separate
+  Managed copy of a supported saved Cartesian XY plot first. Never convert it
+  just to read it, and do not send edits to the archived project.
 
 Before a new edit, check `status`, `changed_inputs`, `artifact_status`,
 `pending` and `next_step` in the current result. Follow a stale, dirty, changed
