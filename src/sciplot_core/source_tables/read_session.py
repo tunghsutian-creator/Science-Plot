@@ -66,7 +66,7 @@ def read_table_once(
     key = (*identity, digest, *options)
     cached = session.tables.get(key) if session else None
     if cached is not None:
-        return cached.copy(deep=True)
+        return cached.copy(deep=False)
     result = loader()
     if file_sha256(actual) != digest:
         raise ValueError("Original table changed while reading.")
@@ -77,6 +77,7 @@ def read_table_once(
         if session.bytes_used + size > _MAX_BYTES:
             session.tables.clear()
             session.bytes_used = 0
-        session.tables[key] = result.copy(deep=True)
+        # Pandas 3 copy-on-write isolates frame edits without cloning every cell.
+        session.tables[key] = result.copy(deep=False)
         session.bytes_used += size
     return result

@@ -56,19 +56,20 @@ def load_source_table(source: Path | None) -> pd.DataFrame | None:
             if len(preferred) != 1:
                 return None
             files = preferred
-        source = files[0] if files else None
-    if source is None or not source.exists() or not source.is_file():
+        source = files[0]
+    if not source.is_file():
         return None
     suffix = source.suffix.casefold()
     try:
         if suffix in {".xlsx", ".xls"}:
             return pd.read_excel(source, sheet_name=0, header=None)
         text = decode_text(source)
-        for index, line in enumerate(text.splitlines()):
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
             if "Interval data:" in line:
                 header = line.split("Interval data:", maxsplit=1)[1].lstrip("\t, ")
                 return pd.read_csv(
-                    StringIO("\n".join([header, *text.splitlines()[index + 1 :]])),
+                    StringIO("\n".join([header, *lines[index + 1 :]])),
                     sep="\t",
                     header=None,
                     engine="python",

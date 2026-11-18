@@ -88,6 +88,7 @@ def build_veusz_legend_spec(
         "show": show_key,
         "columns": legend_columns(
             series_count=label_load["series_count"],
+            mode=legend_mode,
             max_label_length=label_load["max_label_length"],
             figure_width_mm=width_mm,
             requested=render_options.get("_ordinary_categorical_legend_columns"),

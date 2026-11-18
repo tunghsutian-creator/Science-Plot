@@ -48,7 +48,9 @@ def build_plot_data_exports(
     # saved figure supplies its own values and axes for a multi-figure export.
     source_table = _load_source_table(source) if len(specs) <= 1 else None
     records: list[dict[str, Any]] = []
-    if source_table is not None and not source_table.empty:
+    if source_table is not None and source_table.empty:
+        source_table = None
+    if source_table is not None:
         output = destination / f"{project_name}_plot_data.csv"
         _write_four_row_csv(
             source_table, output, sample_hint=_sample_hint(manifest, source)
@@ -65,7 +67,7 @@ def build_plot_data_exports(
             records.append({**_data_record(output, source=spec_path, source_kind="audited_categorical_contract"),
                             "data_role": "mean_sample_sd_n", "source_sha256": spec_digest,
                             "original_source_sha256": spec["source_request"]["replicate_summary_disclosure"]["source_sha256"]})
-        if source_table is not None and not source_table.empty:
+        if source_table is not None:
             continue
         table = _spec_to_table(spec, manifest=manifest, spec_path=spec_path)
         if table is None or table.empty:
@@ -84,18 +86,13 @@ def _project_name(manifest: dict[str, Any]) -> str:
 
 
 def _write_four_row_csv(table: pd.DataFrame, output: Path, *, sample_hint: str) -> None:
-    normalized = table.copy()
-    if not _looks_like_four_row_table(normalized):
-        names = (
-            [str(value).strip() for value in normalized.iloc[0].tolist()]
-            if not normalized.empty
-            else []
-        )
-        units = [_unit_from_label(value) for value in names]
-        comments = [sample_hint] * len(names)
-        normalized = pd.DataFrame(
-            [names, units, comments, *normalized.iloc[1:].values.tolist()]
-        )
+    if _looks_like_four_row_table(table):
+        _write_table_csv(table, output)
+        return
+    names = [str(value).strip() for value in table.iloc[0].tolist()]
+    units = [_unit_from_label(value) for value in names]
+    comments = [sample_hint] * len(names)
+    normalized = pd.DataFrame([names, units, comments, *table.iloc[1:].values.tolist()])
     _write_table_csv(normalized, output)
 
 
@@ -127,7 +124,7 @@ def _looks_like_four_row_table(table: pd.DataFrame) -> bool:
 
 def _write_table_csv(table: pd.DataFrame, output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
-    rows = table.fillna("").astype(object).values.tolist()
+    rows = table.fillna("").itertuples(index=False, name=None)
     with output.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
         for row in rows:
