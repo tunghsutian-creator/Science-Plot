@@ -62,6 +62,24 @@ class FilesystemProjectTargets:
                 return canonical_path(Path(binding["project"])), canonical_path(Path(binding["document"]))
             return None
 
+        from sciplot_core.delivery_identity import DELIVERY_IDENTITY
+        from sciplot_core.policy import DELIVERY_LAUNCHER, DELIVERY_PROJECT_DIR
+
+        delivery = target if target.is_dir() else target.parent
+        if (target.is_dir() or target.name in {DELIVERY_IDENTITY, DELIVERY_LAUNCHER}) and (
+                not (delivery / "plot_request.json").is_file() and
+                (delivery / DELIVERY_PROJECT_DIR).is_dir() and any(
+                    (delivery / name).is_file() for name in (DELIVERY_IDENTITY, DELIVERY_LAUNCHER))):
+            from sciplot_core.studio_core.delivery_target import resolve_delivery_target
+
+            resolved = resolve_delivery_target(target)
+            if resolved is not None:
+                if resolved["mode"] == "vsz":
+                    if figure_id is not None:
+                        raise EngineError("legacy_delivery_figure_required", "Pass the exact saved VSZ for a portable secondary figure.")
+                    return canonical_path(delivery), canonical_path(Path(resolved["document"]))
+                return self.read_legacy_saved(canonical_path(Path(resolved["project_dir"])), figure_id)
+
         explicit_vsz = target.is_file() and target.suffix.lower() == ".vsz"
         if explicit_vsz:
             from sciplot_core.studio_core.legacy_saved_plot import _native_file_root

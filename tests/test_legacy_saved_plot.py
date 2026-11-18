@@ -73,6 +73,19 @@ def test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project(tmp
         assert ImageChops.difference(original.convert("RGB"), actual.convert("RGB")).getbbox() is None
     assert _tree(project) == old_tree
 
+    # Historic delivery roots must not fall through to implicit source import.
+    portable = tmp_path / "portable"
+    (portable / "project").mkdir(parents=True)
+    snapshot = portable / "project" / "figure.vsz"
+    snapshot.write_bytes(native.read_bytes())
+    (portable / "SciPlot_delivery.json").write_text(json.dumps({
+        "kind": "sciplot_delivery_identity", "version": 1, "binding": None}))
+    saved_delivery = _tree(portable)
+    assert main(["plot", "open", str(portable), "--direct", "--json"]) == 0
+    reopened = json.loads(capsys.readouterr().out)
+    assert reopened["read_only"] and reopened["document"]["path"] == str(snapshot)
+    assert _tree(portable) == saved_delivery
+
 
 def test_exact_legacy_vsz_rejects_output_inside_original_project(tmp_path, capsys):
     project, native = _old_project(tmp_path)
