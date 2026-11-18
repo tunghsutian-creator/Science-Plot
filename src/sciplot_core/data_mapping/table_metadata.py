@@ -26,7 +26,7 @@ def resolve_column_metadata(
     for position, item in enumerate(confirmations):
         try:
             _validate_declaration(item, source_sha256=source_sha256, sheet=sheet,
-                                  frame=frame, source=source, column_count=len(columns), evidence_frames=evidence_frames)
+                                  frame=frame, source=source, columns=columns, evidence_frames=evidence_frames, rule=rule)
         except ValueError as exc:
             errors.append(f"metadata_confirmations[{position}] target sheet={item['sheet']!r} "
                           f"column={item['column_index']} field={item['field']}: {exc}")
@@ -133,19 +133,25 @@ def resolve_column_metadata(
 
 def _validate_declaration(
     item: dict[str, Any], *, source_sha256: str, sheet: str | None,
-    frame: pd.DataFrame, source: Path | None, column_count: int,
-    evidence_frames: dict[str | None, pd.DataFrame],
+    frame: pd.DataFrame, source: Path | None, columns: list[dict[str, Any]],
+    evidence_frames: dict[str | None, pd.DataFrame], rule: SemanticRule | None,
 ) -> None:
     if item["source_sha256"] != source_sha256:
         raise ValueError(f"Stale source hash; use current source_sha256={source_sha256}.")
     if item["sheet"] != sheet:
         raise ValueError(f"Declaration targets a different worksheet. Target worksheet must be {sheet!r}; "
                          "evidence.sheet names the cited worksheet.")
-    if item["column_index"] >= column_count:
+    if item["column_index"] >= len(columns):
         raise ValueError("Column is outside the original table.")
     evidence = item["evidence"]
-    if evidence["kind"] != "source_cell":
+    registered = evidence["kind"] == "registered_rule"
+    if not registered and evidence["kind"] != "source_cell":
         return
+    if registered and (rule is None or rule.rule_id != evidence["rule_id"]
+            or item["field"] != "unit" or item["value"] != "1" or evidence["sheet"] != sheet
+            or evidence["column_index"] != item["column_index"] or evidence["text"].casefold() != "dw/dlogm"
+            or columns[item["column_index"]]["header"] != evidence["text"]):
+        raise ValueError("Registered dimensionless GPC evidence requires the exact original dW/dLogM header.")
     row, col = evidence["row_index"], evidence["column_index"]
     evidence_sheet = evidence["sheet"]
     if evidence_sheet not in evidence_frames:
@@ -162,6 +168,8 @@ def _validate_declaration(
         raise ValueError("Evidence cell is outside the cited original worksheet.")
     if _original_text(evidence_frame.iat[row, col]) != evidence["text"]:
         raise ValueError("Evidence cell text does not match the original.")
+    if registered:
+        return
     # Only spelling-equivalent explicit units may differ from the cited text.
     # Quantities and samples still need literal evidence; never infer a response.
     observed_unit = explicit_header_unit(evidence["text"])

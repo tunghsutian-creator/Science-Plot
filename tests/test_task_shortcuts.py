@@ -185,6 +185,16 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     assert "no molecular-weight calibration is inferred from RI" in metric["reason"]
     binding = result["data_binding"]
     doc = create_managed_document(result["template_definition"], binding, plot_id="gpc-original")
+    declaration, = doc["scientific"]["data_sources"][0]["metadata_confirmations"]
+    assert declaration["value"] == "1" and declaration["source_sha256"] == state["source_hashes"][str(gpc)]
+    assert declaration["evidence"] == {"kind": "registered_rule", "rule_id": "gpc_sec_chromatogram",
+        "sheet": None, "row_index": 0, "column_index": 1, "text": "dW/dLogM"}
+    wrong = deepcopy(doc)
+    wrong["scientific"]["data_sources"][0]["metadata_confirmations"][0]["evidence"]["row_index"] = 1
+    with pytest.raises(ValueError, match="Evidence cell text does not match"):
+        load_sources(wrong, "gpc_sec_chromatogram")
+    with pytest.raises(ValueError, match="Registered dimensionless GPC evidence"):
+        load_sources(doc, "ordinary_xy")
     data = load_sources(doc, "gpc_sec_chromatogram")
     for node in binding["transforms"]:
         data[node["output"]], _ = execute_node(node, data)

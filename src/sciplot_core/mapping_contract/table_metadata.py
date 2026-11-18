@@ -23,6 +23,8 @@ def metadata_confirmations_schema() -> dict[str, Any]:
             "evidence": {"oneOf": [
                 evidence("source_cell", {"sheet": {"type": ["string", "null"]},
                     "row_index": index, "column_index": index, "text": text}),
+                evidence("registered_rule", {"rule_id": {"const": "gpc_sec_chromatogram"}, "sheet": {"type": ["string", "null"]},
+                    "row_index": index, "column_index": index, "text": text}),
                 evidence("external_reference", {"uri": text, "locator": text, "excerpt": text}),
                 evidence("user_statement", {"asserted_by": text, "statement": text}),
             ]},

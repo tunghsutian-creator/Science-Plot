@@ -139,6 +139,11 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
 
     size = size_preset_contract(spectral_frame_size(len(series)) if ftir else rule.render_options["size"])
     presentation: dict[str, Any] = {}
+    if gpc:
+        original = columns[0]["distribution"]
+        presentation["registered_source_unit_evidence"] = {"kind": "registered_rule", "rule_id": rule_id, "sheet": None,
+            "row_index": columns[0]["header_row_index"], "column_index": original["column_index_zero_based"],
+            "text": original["header"]}
     if rule_id == "xrd_pattern":
         from sciplot_core.studio_render.spectral_axis_display import freeze_new_spectral_axis_display
 

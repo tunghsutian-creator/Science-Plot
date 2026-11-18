@@ -57,7 +57,8 @@ def _select_column(candidate: dict[str, Any], block: dict[str, Any], coordinate:
     return {**exact[0], "unit": coordinate["source_unit"]}
 
 
-def _source_metadata(source: dict[str, Any], candidate: dict[str, Any], bindings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _source_metadata(source: dict[str, Any], candidate: dict[str, Any], bindings: list[dict[str, Any]],
+                     registered: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Archive missing-unit declarations through the existing metadata contract."""
     confirmations = []
     for binding in bindings:
@@ -68,7 +69,7 @@ def _source_metadata(source: dict[str, Any], candidate: dict[str, Any], bindings
             column = _select_column(candidate, block, coordinate, role)
             confirmation = {"source_sha256": source["sha256"], "sheet": candidate["sheet"],
                             "column_index": column["column_index"], "field": "unit", "value": column["unit"],
-                            "evidence": {"kind": "user_statement", "asserted_by": "semantic_task_intent",
+                            "evidence": registered if registered is not None and role == "y" else {"kind": "user_statement", "asserted_by": "semantic_task_intent",
                                          "statement": f"intent.{role}.source_unit explicitly declares the original unit of {column['header']!r} as {column['unit']!r}; the original cell is absent."}}
             if confirmation not in confirmations:
                 confirmations.append(confirmation)
@@ -177,7 +178,7 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
         source_id = source["source_id"]
         curve_intent = {**intent, **candidate.get("curve_coordinates", {})}
         bound = [resolved_binding(plan["resolved_bindings"], source, candidate, block) for block in candidate["blocks"]]
-        metadata = _source_metadata(source, candidate, bound)
+        metadata = _source_metadata(source, candidate, bound, state.get("plan_confirmation", {}).get("registered_source_unit_evidence"))
         # Load through the existing Managed source adapter, including its exact
         # metadata and scientific lineage checks. This is preparation only.
         from sciplot_core.plot_engine.managed_sources import load_sources
