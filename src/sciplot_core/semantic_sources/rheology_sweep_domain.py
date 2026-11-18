@@ -24,6 +24,7 @@ from sciplot_core.semantic_sources.confirmation_contract import request_column_c
 from sciplot_core.semantic_sources.rheology_ordering import _ordered_sweep_samples
 from sciplot_core.semantic_sources.rheology_replicates import (
     _coalesce_replicate_sweep_samples,
+    _normalized_replicate_mode,
 )
 from sciplot_core.semantic_sources.rheology_sweep_sources import (
     _read_rheology_frequency_comparison_samples,
@@ -73,6 +74,7 @@ class ResolvedRheologySweepDomain:
     raw_samples: tuple[RheologySweepSample, ...]
     prepared_samples: tuple[RheologySweepSample, ...]
     facts: RheologySweepSourceFacts
+    replicate_mode: str = "mean"
 
     def __post_init__(self) -> None:
         if self.rule_id not in {TEMPERATURE_RULE_ID, FREQUENCY_RULE_ID}:
@@ -252,6 +254,7 @@ def _build_domain(
         raw_samples=tuple(raw_samples),
         prepared_samples=tuple(prepared_samples),
         facts=facts,
+        replicate_mode=_normalized_replicate_mode(request.get("replicate_mode")),
     )
 
 

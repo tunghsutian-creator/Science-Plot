@@ -30,6 +30,7 @@ from sciplot_core.materials_rules.curve_peak_metrics import (
     _ftir_peak_position_metrics,
     _interior_local_peak_position_metrics,
     _terminal_y_metrics,
+    terminal_y_metrics_from_series,
     _peak_y_metrics,
     _peak_y_metrics_from_series,
 )
@@ -51,6 +52,21 @@ def _analysis_metric_name(semantic: dict[str, Any], fallback: str) -> str:
         if metric:
             return metric
     return fallback
+
+
+def frequency_terminal_analysis(
+    series: list[tuple[str, list[float | None], list[float | None]]],
+    *, semantic: dict[str, Any], output: Path,
+) -> list[dict[str, Any]]:
+    """Write frequency analysis from the ordered canonical storage-modulus pairs."""
+    import pandas as pd
+
+    rows = terminal_y_metrics_from_series(
+        [(name, pd.DataFrame({"x": x, "y": y}, dtype=float)) for name, x, y in series],
+        metric_name=_analysis_metric_name(semantic, "terminal_modulus"),
+        y_unit=semantic["axis_plan"]["y"]["canonical_unit"], x_boundary="lowest")
+    _write_metrics_csv(rows, output)
+    return rows
 
 
 def compute_analysis_metrics(

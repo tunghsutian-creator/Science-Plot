@@ -174,6 +174,13 @@ def _terminal_y_metrics(
         x_tokens=x_tokens,
         y_tokens=y_tokens,
     )
+    return terminal_y_metrics_from_series(series, metric_name=metric_name, y_unit=y_unit, x_boundary=x_boundary)
+
+
+def terminal_y_metrics_from_series(
+    series: list[tuple[str, pd.DataFrame]], *, metric_name: str, y_unit: str, x_boundary: str,
+) -> list[dict[str, Any]]:
+    """Measure the same boundary from canonical paired arrays or legacy tables."""
     rows: list[dict[str, Any]] = []
     for sample, data in series:
         finite = (

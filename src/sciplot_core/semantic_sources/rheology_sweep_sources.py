@@ -288,6 +288,8 @@ def _read_rheology_sweep_sample(
             'source_unit_authority': x_unit_authority,
         },
         metric_conversions=metric_conversions,
+        original_group_region=(header_region["header_row"], header_region["data_start_row"], header_region["data_end_row"])
+            if header_region is not None and len(selected_regions or ()) == 1 else None,
     )
 
 

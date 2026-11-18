@@ -1,8 +1,5 @@
 """An isolated, real generation publishes a whole Managed frequency candidate."""
-from copy import deepcopy
 from dataclasses import replace
-import csv
-from io import StringIO
 from pathlib import Path
 import shutil
 
@@ -13,7 +10,6 @@ from sciplot_core.plot_engine.managed_backend import native_build_record
 from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
 from sciplot_core.plot_engine.managed_state import prepare_binding
 from sciplot_core.plot_ir import create_managed_document
-from sciplot_core.plot_transforms import builtin_executor
 from sciplot_core.project_commands import ProjectCommands, SourceTreeRead
 from sciplot_core.project_lifecycle.attached_repository import AttachedProjectRepository
 from sciplot_core.project_lifecycle.attachment_group import PreparedFigure, publish_attachment_group, resume_attachment_group
@@ -24,39 +20,16 @@ from sciplot_core.project_lifecycle.context import repository_scope
 from sciplot_core.project_store import FileProjectStore, state
 from sciplot_core.task_semantic_creation import build_managed_request
 from sciplot_core.task_semantic_plan import prepare_plan
+from sciplot_core.workflow.frequency_managed_grouping import group_frequency_request, resolve_mean_group_blocks
 from test_frequency_interval_binding import instrument_source, intent
 
 
-def _grouped_request(paths, task, units, task_root):
+def _grouped_request(paths, domain, plan, task, units, task_root):
     value = {**intent(), "y": {"quantity": task.y_metric, "unit": units[task.y_metric]}}
     scientific_plan = prepare_plan(paths, value)
     request = build_managed_request({"request": {"intent": value}, "semantic_plan": scientific_plan,
         "semantic_choices": {}, "intent_revision": 1, "task_dir": str(task_root)})
-    binding = request["data_binding"]
-    view = request["template_definition"]["figure_spec"]["views"][0]
-    original = view["layers"]
-    retained, slots = [], {}
-    for index, (condition, count) in enumerate(task.replicate_counts):
-        members = [layer for layer in original if layer["label"] == condition]
-        assert len(members) == count
-        layer = deepcopy(members[0])
-        mapped = [(name, slot) for name, slot in binding["slots"].items() if slot["series_id"] == layer["id"]]
-        (name, slot), = mapped
-        slot = deepcopy(slot)
-        if count > 1:
-            kind = "rheology_mean_exact_x"
-            output = "group:" + str(index)
-            binding["transforms"].append({"id": "mean:" + str(index), "kind": kind,
-                "inputs": [item["dataset_id"] for item in members], "output": output,
-                "parameters": {"x_column": "x"}, "executor": builtin_executor(kind), "determinism": "deterministic"})
-            layer["dataset_id"] = output
-            slot["x"]["source_id"] = slot["y"]["source_id"] = output
-        retained.append(layer)
-        slots[name] = slot
-    view["layers"] = retained
-    binding["slots"] = slots
-    binding["provenance"]["figure_task"] = task.to_payload()
-    return request
+    return group_frequency_request(request, task, resolve_mean_group_blocks(domain, plan, scientific_plan["sources"]))
 
 
 def _mean_input(tmp_path):
@@ -117,7 +90,7 @@ def _candidate_head(compiler, store, before, task, request, staging):
 
 @pytest.mark.comprehensive
 def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_generation(tmp_path, monkeypatch):
-    from sciplot_core.materials_rules.analysis import compute_analysis_metrics
+    from sciplot_core.materials_rules.analysis import compute_analysis_metrics, frequency_terminal_analysis
     from sciplot_core.semantic import prepare_semantic_source
     from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
 
@@ -155,7 +128,7 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
         for task in tasks:
             expected = (("Anonymous material · 210 °C", 2), ("Anonymous material · 150 °C", 1), ("Anonymous material · 170 °C", 1))
             assert task.replicate_counts == expected
-            request = _grouped_request(originals, task, units, tmp_path / ("task-" + task.figure_id))
+            request = _grouped_request(originals, resolved.domain, plan, task, units, tmp_path / ("task-" + task.figure_id))
             if task is tasks[-1]:
                 def missing_final_figure(*_args):
                     raise Interrupted()
@@ -182,7 +155,7 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
                 assert actual_x == [x for x, _ in points]
                 assert actual_y == pytest.approx([y for _, y in points], rel=2e-15, abs=0.)
                 if task.y_metric == "storage_modulus":
-                    terminal.append(min(zip(actual_x, actual_y, strict=True), key=lambda pair: pair[0])[1])
+                    terminal.append((old.sample, actual_x, actual_y))
     finally:
         compiler.close()
 
@@ -191,13 +164,13 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
                                        resolved_scientific_source=resolved)
     rows = compute_analysis_metrics(source_path=raw, processed_source=Path(prepared["processed_source"]),
                                     semantic=semantic, output_dir=tmp_path / "old-analysis")
-    assert [row["value"] for row in rows] == terminal == [565., 171., 515.]
-    analysis = StringIO(newline="")
-    writer = csv.DictWriter(analysis, fieldnames=["metric", "value", "unit", "status", "reason"])
-    writer.writeheader()
-    writer.writerows({**row, "value": value} for row, value in zip(rows, terminal, strict=True))
+    analysis = tmp_path / "candidate-analysis" / "frequency.csv"
+    managed_rows = frequency_terminal_analysis(terminal, semantic=semantic, output=analysis)
+    assert managed_rows == rows
+    assert [row["value"] for row in rows] == [565., 171., 515.]
+    assert analysis.read_bytes() == (tmp_path / "old-analysis" / "tables" / "analysis_metrics.csv").read_bytes()
 
-    outputs = {"analysis/frequency.csv": analysis.getvalue().encode(), "figure-plan.json": encode(plan.to_payload())}
+    outputs = {"analysis/frequency.csv": analysis.read_bytes(), "figure-plan.json": encode(plan.to_payload())}
     key = "frequency-mean-suite"
     args = {"key": key, "selected_figures": plan.selected_figure_ids, "outputs": outputs,
             "source_tree": SourceTreeRead(str(raw), resolved.source_sha256), "required_outputs": tuple(outputs)}
@@ -273,3 +246,31 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
     finally:
         service.close()
     assert {path: path.read_bytes() for path in originals} == source_bytes
+
+
+def test_automatic_frequency_groups_bind_original_regions_not_condition_display_labels(tmp_path):
+    from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    first = instrument_source(raw / "one.csv", temperatures=(210,))
+    second = instrument_source(raw / "two.csv", temperatures=(170, 150))
+    rule = "rheology_frequency_sweep"
+    resolved = resolve_scientific_source(raw, rule_id=rule, template="point_line", request={})
+    assert resolved is not None and resolved.figure_plan is not None
+    plan = resolved.figure_plan
+    spec = _grouped_request([first, second], resolved.domain, plan, plan.tasks[0],
+                            resolved.domain.prepared_samples[0].metric_units, tmp_path / "task")
+    layers = spec["template_definition"]["figure_spec"]["views"][0]["layers"]
+    # The existing explicit semantic display would suffix the single 210°C
+    # Result. Native automatic identity intentionally retains the short name.
+    assert [layer["label"] for layer in layers] == ["Anonymous material",
+        "Anonymous material · 170 °C", "Anonymous material · 150 °C"]
+    assert not any(item["kind"] == "rheology_mean_exact_x" for item in spec["data_binding"]["transforms"])
+    provenance = spec["data_binding"]["provenance"]["frequency_mean_original_blocks"]
+    assert provenance["Anonymous material"] == (
+        {"source_id": "source:0", "table_id": "table:0", "block_id": "block:0"},)
+    only = spec["data_binding"]["data_sources"][0]
+    assert only["path"] == str(first)
+    assert (only["table_selection"]["header_rows"], only["table_selection"]["data_start_row"],
+            only["table_selection"]["data_end_row"]) == ([7], 10, 26)
