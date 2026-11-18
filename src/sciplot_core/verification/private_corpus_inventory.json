@@ -7,11 +7,12 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10406,
-    "nodeids_sha256": "e89ef6b69ba9350552fdf78a4d3c2ce890a73cf3ef3f84255a63ff87c1e827d6",
-    "test_sources_sha256": "7104337446fc05ec28b4ed9b8f9b8dc355a570a69f58f53b645e9ad5544ef5c1",
+    "nodeid_count": 10407,
+    "nodeids_sha256": "9f2c9a93059aec28d67bbbfc39b862476d5f4697b661de34b4697702e7bc9bcf",
+    "test_sources_sha256": "76dfdffac93af1a9e294dcd5b2f6a8d8c8e0dd93e73c8e994940af44e1fc5525",
     "test_source_count": 661,
     "candidate_nodeids": [
+      "tests/test_plot_template_creation.py::test_public_explicit_legacy_creation_is_recovery_only",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[line]",
       "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[refusal]",
@@ -5836,6 +5837,10 @@
       "tests/test_ordinary_plotting_owners.py::test_each_domain_has_exact_existing_paths_and_generated_native_controls[managed_curve_project]"
     ],
     "synthetic_candidates": [
+      {
+        "nodeid": "tests/test_plot_template_creation.py::test_public_explicit_legacy_creation_is_recovery_only",
+        "reason": "Synthetic in-test UV-vis table and public service; denial precedes task allocation and native work, with no private data."
+      },
       {
         "nodeid": "tests/test_ai_transport_lifecycle.py::test_actual_wire_size_bounds_are_unchanged_and_cleanup_still_runs[event]",
         "reason": "Generated in-memory SSE, fake connections and cancellation events exercise real transport limits, cleanup and dummy-secret redaction. No network, actual credential, model request, private corpus or golden is used."

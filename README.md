@@ -310,8 +310,11 @@ previewed before the complete VSZ is published without replacing an existing
 file. An interrupted save can leave diagnostic staging files; retry never
 adopts an unknown partial native file as a successful build.
 
-Existing VSZ imports, unmigrated source-only tasks and explicit `mode: legacy`
-remain compatibility workflows. FigureSpec v2 adds physical single/concat/grid
+Existing saved VSZ figures can be opened or redrawn read-only. To edit a supported
+XY figure, convert a separate copy with `sciplot project legacy-convert`. Explicit
+`mode: legacy` only resumes an existing frozen template creation; it cannot start
+a new one. Unmigrated source-only tasks retain their compatibility workflows.
+FigureSpec v2 adds physical single/concat/grid
 composition, independent scientific Scales and visual Axes, seven generic Marks,
 scoped themes, semantic legends and data/view/figure annotations. Dual Y and
 multipanel scientific figures use this common grammar. Native text bounds and

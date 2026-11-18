@@ -65,7 +65,7 @@ def test_template_create_two_sources_through_one_public_command_each(tmp_path):
                 started = perf_counter()
                 process = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "plot", "create", "--request", str(request_path), "--json"],
                                          capture_output=True, text=True, env=environment, cwd=REPO_ROOT, timeout=180)
-                measurements.append({"case": f"template_new_source_{index + 1}", "seconds": round(perf_counter() - started, 6),
+                measurements.append({"case": f"resume_frozen_legacy_template_{index + 1}", "seconds": round(perf_counter() - started, 6),
                                      "response_bytes": len(process.stdout.encode()), "public_calls": 1})
                 assert process.returncode == 0, process.stdout + process.stderr
                 result = json.loads(process.stdout)
@@ -124,7 +124,7 @@ def test_template_create_two_sources_through_one_public_command_each(tmp_path):
             assert repeated["replayed"] is True and repeated["revision"] == results[0]["revision"]
             assert load_head(Path(results[0]["plot"])) == baseline
             assert {str(source): file_sha256(source) for source in sources} == source_hashes
-            report = {"status": "passed", "scope": "Two original tables, explicit row/column/unit/sample bindings, identical template/theme, real Veusz backend",
+            report = {"status": "passed", "scope": "Resume two pre-upgrade frozen template creations with exact original bindings on the real Veusz backend",
                       "sources_unchanged": True, "exact_explicit_mapping": True, "native_scientific_audit": "passed",
                       "series_ids_preserved": True, "theme_widths_preserved": True, "coverage": "legacy_shadow",
                       "native_final_width_color_verified": True, "compiled_coordinates_match_original_cells": True,
