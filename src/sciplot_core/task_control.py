@@ -167,7 +167,7 @@ def start_task(
             "status": "running", "phase": "starting",
             **({"entry_intent": deepcopy(entry_intent)} if entry_intent is not None else {}),
             **({"defer_creation_export": True} if defer_creation_export else {}),
-            **({"prefer_managed_raw": True} if _prefer_managed else {}),
+            **({"prefer_managed_raw": True} if _prefer_managed and request["action"] == "create" and "source" in request else {}),
             **({"automatic_corrections": corrections} if corrections else {}),
         }
         save_task(root, state)

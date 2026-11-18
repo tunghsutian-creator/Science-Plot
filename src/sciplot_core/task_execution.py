@@ -64,9 +64,9 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         save_task(root, state)
         return
     if state.get("prefer_managed_raw") is True and not state.get("defer_creation_export"):
-        from sciplot_core.task_semantic_creation import admit_uvvis, run_creation as run_managed
+        from sciplot_core.task_semantic_creation import admit_raw_curve, run_creation as run_managed
 
-        if admit_uvvis(state, plan):
+        if admit_raw_curve(state, plan):
             save_task(root, state)
             run_managed(root, state)
             return

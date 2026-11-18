@@ -346,12 +346,15 @@ family's FigurePlan and templates, then shared house policy plus family rules an
 supported explicit overrides. `render --auto` uses that same workflow; plain
 `render --template` remains a low-level plot-ready operation. FigureTemplate v2
 supports both explicit low-level composition and the local task adapter for a
-semantic coordinate intent. The default typed `task create` entry now also
-uses Managed authority for single-sample UV–vis CSV/TSV when the production
-plan and exact original table agree on columns, units, sample and source rows
-without conversion or normalization. Other families and source shapes retain
-the production path; structured source-only requests through `task start`
-and `plot.create` retain their existing compatibility contract.
+semantic coordinate intent. `task create`, structured CLI `task start` and
+daily MCP `sciplot_task_start` now create Managed plots directly for eligible
+single-sample UV–vis, DSC, TGA and SAXS CSV/TSV. Both the production plan and
+exact original table must agree on columns, units, sample and source rows,
+with no conversion or normalization. The registered SAXS log intensity axis
+and 120 × 55 mm size are retained. An admitted task that hits a runtime
+failure stays Managed and resumes in place. Other families and source shapes,
+the expert MCP catalog, and source-only `plot.create` retain the compatibility
+path.
 
 Frequency instrument exports preserve explicitly labelled temperature Results as
 separate traces. Complex-viscosity magnitude is distinct from a recorded real or

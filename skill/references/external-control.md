@@ -13,7 +13,9 @@ with values read from the current command results, not literal arguments.
 
 Use the local executable as the command and `["mcp", "--profile", "daily"]` as
 its separate arguments. The daily catalog uses the same task, edit, recovery,
-export and panel assembly owners as the complete catalog. Read just the needed
+export and panel assembly owners as the complete catalog. Its source-only task
+entry prefers Managed for verified simple UV–vis, DSC, TGA and SAXS inputs;
+read the returned authority before editing. Read just the needed
 `task_capabilities` section: for example section="request", name="create" when
 you need fields beyond the source-only request. For a pending task, reuse the
 owner's response template and guard fields; if needed ask for the named

@@ -14,14 +14,15 @@ def is_semantic(state: dict[str, Any]) -> bool:
     return state["request"].get("action") == "create" and "intent" in state["request"]
 
 
-def admit_uvvis(state: dict[str, Any], plan: dict[str, Any]) -> bool:
+def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
     """Freeze the same source, columns, sample and units under Managed authority."""
     request = state["request"]
     source = Path(request["source"])
+    rule_id = plan["rule_id"]
     if (set(request) - {"version", "action", "source", "out", "rule_id", "template"}
             or source.suffix.casefold() not in {".csv", ".tsv"} or not source.is_file()
-            or (plan["rule_id"], plan["template"]) != ("uvvis_spectrum", "curve")
-            or "data_mapping" in plan or "source_options" in plan):
+            or rule_id not in {"uvvis_spectrum", "dsc_curve", "tga_curve", "saxs_profile"}
+            or plan["template"] != "curve" or "data_mapping" in plan or "source_options" in plan):
         return False
     transform = plan.get("scientific_transform") or {}
     output = transform.get("output") or {}
@@ -36,10 +37,23 @@ def admit_uvvis(state: dict[str, Any], plan: dict[str, Any]) -> bool:
             and transform["x_coordinate_policy"]["operation"] == "preserve_source_coordinate_and_order"
             and len(plan["resolved_figure_plan"]["selected_figure_ids"]) == 1):
         return False
+    from sciplot_core.materials_rules.catalog import get_rule
+    from sciplot_core.policy.contract_queries import size_preset_contract
+
+    rule = get_rule(rule_id)
+    selected_id, = plan["resolved_figure_plan"]["selected_figure_ids"]
+    figure_task = next(item for item in plan["resolved_figure_plan"]["tasks"] if item["figure_id"] == selected_id)
+    if figure_task["metric_binding"] != {"kind": "cartesian_xy", "x_metric": output["x_metric"], "y_metric": output["y_metric"]}:
+        return False
     conversions = {(item["sample"], item["role"]): item for item in transform["unit_conversions"]}
-    coordinates = (("x", "x", "wavelength", "nm"), ("y", "response", "absorbance", "a.u."))
-    intent: dict[str, Any] = {"rule_id": "uvvis_spectrum"}
-    for role, original_role, quantity, unit in coordinates:
+    coordinates = (("x", "x", rule.x_axis), ("y", "response", rule.y_axis))
+    intent: dict[str, Any] = {"rule_id": rule_id}
+    for role, original_role, axis in coordinates:
+        unit = axis.canonical_unit
+        compatibility = transform["axis_compatibility"][role]
+        if (compatibility["registered_scale"] != axis.scale or not compatibility["finite_compatible"]
+                or (axis.scale == "log" and not compatibility["log_compatible"])):
+            return False
         original = columns[0][original_role]
         conversion = conversions.get((series[0]["sample"], original_role), {})
         if (original["unit"] != unit or output.get(role + "_unit") != unit
@@ -47,7 +61,8 @@ def admit_uvvis(state: dict[str, Any], plan: dict[str, Any]) -> bool:
                        for step in ("source_to_canonical", "canonical_to_display"))
                 or original["unit_detection"]["method"] != "detected_from_adjacent_unit_row"):
             return False
-        intent[role] = {"quantity": quantity, "column_id": f"column:{original['column_index_zero_based']}"}
+        intent[role] = {"quantity": output[role + "_metric"], "column_id": f"column:{original['column_index_zero_based']}",
+                        "scale": axis.scale, "direction": "descending" if axis.reverse else "ascending"}
 
     semantic = prepare_plan([source], intent)
     frozen = semantic["sources"][0]
@@ -60,19 +75,27 @@ def admit_uvvis(state: dict[str, Any], plan: dict[str, Any]) -> bool:
     block = candidates[0]["blocks"][0]
     if (block["sample"] != series[0]["sample"] or block["point_count"] != series[0]["point_count"]):
         return False
-    for role, original_role, quantity, unit in coordinates:
+    for role, original_role, axis in coordinates:
         actual, original = bindings[0]["coordinates"][role], columns[0][original_role]
-        if ((actual["column_index"], actual["header"], actual["observed_quantity"], actual["observed_unit"], actual["unit"])
-                != (original["column_index_zero_based"], original["header"], quantity, unit, unit)
+        # A generic table does not know SAXS q/Intensity aliases, but the
+        # registered plan does and has already bound these exact columns.
+        if ((actual["column_index"], actual["header"], actual["observed_unit"], actual["unit"])
+                != (original["column_index_zero_based"], original["header"], axis.canonical_unit, axis.canonical_unit)
+                or actual["observed_quantity"] not in (None, output[role + "_metric"])
                 or actual["unit_relation"]["kind"] != "identity"):
             return False
 
+    size = size_preset_contract(rule.render_options["size"])
     state.update(initial_request=deepcopy(request),
                  request={"version": 1, "action": "create", "sources": [str(source)], "intent": intent,
                           **({"out": request["out"]} if "out" in request else {})},
                  source_hashes={str(source): frozen["sha256"]}, semantic_plan=semantic, semantic_choices={},
                  semantic_plan_confirmed=True, intent_revision=1,
-                 plan_confirmation={"mode": "verified_raw_uvvis_curve", "figure_plan": plan["resolved_figure_plan"]["plan_sha256"]})
+                 plan_confirmation={"mode": "verified_raw_curve", "rule_id": rule_id,
+                                    "figure_plan": plan["resolved_figure_plan"]["plan_sha256"],
+                                    "size_mm": [size.width_mm, size.height_mm],
+                                    "axis_labels": {role: axis.display_label.replace("$^{-1}$", "⁻¹")
+                                                    for role, _, axis in coordinates}})
     return True
 
 
@@ -271,7 +294,7 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
             "blocker": deepcopy(state.get("blocker"))})
         state["request"]["intent"] = intent
         state["intent_revision"] = int(state.get("intent_revision", 1)) + 1
-        for key in ("semantic_plan", "semantic_plan_confirmed", "semantic_choices", "managed_request", "question", "blocker", "result"):
+        for key in ("semantic_plan", "semantic_plan_confirmed", "semantic_choices", "managed_request", "question", "blocker", "result", "plan_confirmation"):
             state.pop(key, None)
         run_creation(root, state)
         return

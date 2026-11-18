@@ -289,6 +289,8 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
     if "labels" in intent and len(intent["labels"]) != len(records):
         _error("semantic_label_count_mismatch", "Display labels must match the complete retained source-bound curve count and order. Correct this same draft; no label is silently omitted or attached to another sample.",
                expected=len(records), actual=len(intent["labels"]), samples=[record["sample"] for record in records])
+    raw_plan = state.get("plan_confirmation", {})
+    raw_curve = raw_plan.get("mode") in {"verified_raw_curve", "verified_raw_uvvis_curve"}
     scales, axes, layers, slots = [], [], [], {}
     resolved_axes = state["semantic_plan"]["resolved_axes"]
     coordinates = [("x", resolved_axes["x"], "bottom"), ("y", resolved_axes["y"], "left")]
@@ -311,6 +313,7 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
                        "domain_rule": {name: {"mode": "fixed", "value": coordinate[name]} if name in coordinate else {"mode": "auto"}
                                        for name in ("minimum", "maximum")},
                        **({"quantity_members": deepcopy(coordinate["quantity_members"])} if "quantity_members" in coordinate else {})})
+        label = raw_plan.get("axis_labels", {}).get(role, label)
         axes.append({"id": "axis:" + role, "scale_id": "scale:" + role, "side": side,
                      "label": label, "visible": True, "label_visible": True, "ticks": ticks, "ticks_mode": "automatic", "style": {}})
     def layer(record: dict[str, Any], index: int, *, temperature: bool = False) -> None:
@@ -322,7 +325,7 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
         if not temperature and display.get("interpolation"):
             line["interpolation"] = deepcopy(display["interpolation"])
         marks = [line]
-        if state.get("plan_confirmation", {}).get("mode") != "verified_raw_uvvis_curve":
+        if not raw_curve:
             marks.append({"id": identifier + ":points", "type": "point", "style": {
                 "marker_thin_factor": display.get("marker_every", 1), **({"marker_color": "#888888"} if temperature else {})}})
         layers.append({"id": identifier, "dataset_id": record["dataset_id"], "mappings": {"x": "x", "y": role},
@@ -348,16 +351,20 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
     template = "semantic-task-v1"
     key = "task:" + canonical_json_sha256([state["task_dir"], state["intent_revision"]])
     from sciplot_core.plot_grammar import compile_figure
+    from sciplot_core.plot_grammar.current_view import resolve_current_view
     from sciplot_core.rendering_contract import contract_value
     from sciplot_core.rendering_contract.registry import writer_binding
 
     figure["rendering_contract"] = writer_binding(figure)
-    from sciplot_core.plot_grammar.current_view import resolve_current_view
-
     figure = resolve_current_view(figure, datasets)
-    presets = contract_value("canvas.size_presets", figure["rendering_contract"])
-    width_candidates = sorted({float(item["width_mm"]) for item in presets.values()
-                               if float(item["height_mm"]) == float(contract_value("canvas.height_mm", figure["rendering_contract"]))})
+    if "size_mm" in raw_plan:
+        width, figure["layout"]["height_mm"] = raw_plan["size_mm"]
+        width_candidates = [width]
+    else:
+        contract = figure["rendering_contract"]
+        height = float(contract_value("canvas.height_mm", contract))
+        width_candidates = sorted({float(item["width_mm"]) for item in contract_value("canvas.size_presets", contract).values()
+                                   if float(item["height_mm"]) == height})
     layout_attempts = []
     for width in width_candidates:
         figure["layout"]["width_mm"] = width

@@ -5,14 +5,16 @@ recognition, planning, native creation, QA and export. Separate inspect/rules/pl
 project-create/Studio commands, repository reading and tests are not prerequisites.
 
 Ordinary creation uses the existing production plan for scientific recognition,
-family templates and supported overrides. The default typed task create route
-uses Managed authority for a single UV–vis sample in CSV or TSV when the
-registered plan and exact original table agree on wavelength (nm), absorbance
-(a.u.), sample name and retained rows with no conversion or normalization.
-This creates the Managed document directly and retains its original source.
-Other source shapes, profiles, manual mapping and families retain their existing
-production path. If a Managed creation hits a runtime or transport failure,
-resolve it and resume the same task; it does not fall back to Legacy.
+family templates and supported overrides. The typed `task create`, structured
+CLI `task start` and daily MCP `sciplot_task_start` routes create Managed
+documents directly for eligible single-sample UV–vis, DSC, TGA and SAXS curves
+in CSV or TSV. This requires agreement between the registered plan and exact
+table on original headers, observed units, sample name and all rows without
+conversion, normalization or exclusion. SAXS keeps its registered log intensity
+axis and wide page. Other source shapes, profiles, manual mappings and families
+retain their production path, including DTG's compound units and XRD's special
+presentation. An admitted Managed task never falls back after a runtime or
+transport error; resolve the issue and resume the same task.
 Explicit semantic intents remain available for wider cases.
 Do not translate raw input into a FigureTemplate in an AI request.
 Instrument directories are validated by their scientific owner; missing metrics

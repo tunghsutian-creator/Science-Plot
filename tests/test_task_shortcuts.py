@@ -47,7 +47,7 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     assert requests == [{"version": 1, "action": "create", "source": "/original.csv", "profile": "/profile.json"}]
 
     from sciplot_core.plan_preview import build_plan_preview
-    from sciplot_core.task_semantic_creation import admit_uvvis, build_managed_request
+    from sciplot_core.task_semantic_creation import admit_raw_curve, build_managed_request
 
     raw = tmp_path / "UVvis.csv"
     original = b"Wavelength,Absorbance\nnm,a.u.\nSample A,Sample A\n400,1.5\n460,3.25\n500,-1\n"
@@ -58,9 +58,9 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
                  "task_dir": str(tmp_path / "task")}
     unmigrated = deepcopy(candidate)
     unmigrated["request"]["profile"] = "/existing/presentation-profile.json"
-    assert not admit_uvvis(unmigrated, plan)
+    assert not admit_raw_curve(unmigrated, plan)
     assert unmigrated["request"]["source"] == str(raw) and "intent" not in unmigrated["request"]
-    assert admit_uvvis(candidate, plan)
+    assert admit_raw_curve(candidate, plan)
     assert candidate["initial_request"] == request
     assert candidate["plan_confirmation"]["figure_plan"] == plan["resolved_figure_plan"]["plan_sha256"]
     compiled = build_managed_request(candidate)
@@ -84,6 +84,23 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     assert values["x"]["values"] == [400.0, 460.0, 500.0]
     assert values["y"]["values"] == [1.5, 3.25, -1.0]
     assert raw.read_bytes() == original
+
+    for family, header, units, expected_labels, expected_scales, width in (
+        ("dsc_curve", "Temperature,Heat flow", "C,W/g", ["Temperature (°C)", "Heat flow (W g⁻¹)"], ["linear", "linear"], 60),
+        ("tga_curve", "Temperature,Mass", "C,%", ["Temperature (°C)", "Mass (%)"], ["linear", "linear"], 60),
+        ("saxs_profile", "q,Intensity", "nm^-1,a.u.", ["q (nm⁻¹)", "Log intensity (a.u.)"], ["linear", "log"], 120),
+    ):
+        path = tmp_path / (family + ".csv")
+        path.write_text(f"{header}\n{units}\nA,A\n1,3\n2,6\n3,4\n")
+        plan = build_plan_preview(path, request={"rule_id": family})
+        candidate = {"request": {**request, "source": str(path)}, "task_dir": str(tmp_path / family),
+                     "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
+        assert admit_raw_curve(candidate, plan)
+        figure = build_managed_request(candidate)["template_definition"]["figure_spec"]
+        assert [axis["label"] for axis in figure["views"][0]["axes"]] == expected_labels
+        assert [scale["transform"] for scale in figure["scales"]] == expected_scales
+        assert [scale["unit"] for scale in figure["scales"]] == units.split(",")
+        assert figure["layout"] == {"width_mm": width, "height_mm": 55}
 
 
 @pytest.mark.parametrize("semantic", [False, True])

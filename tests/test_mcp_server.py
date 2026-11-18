@@ -201,7 +201,7 @@ def test_resource_failure_does_not_erase_completed_operation(monkeypatch):
     anyio.run(scenario)
 
 
-def test_attachment_task_route_is_shared_with_cli_skill_and_remains_small():
+def test_attachment_task_route_is_shared_with_cli_skill_and_remains_small(tmp_path, monkeypatch):
     from jsonschema import Draft202012Validator
     from sciplot_core.mcp_server.server import INSTRUCTIONS
     from sciplot_core.mcp_server.schemas import tool_definitions
@@ -214,3 +214,33 @@ def test_attachment_task_route_is_shared_with_cli_skill_and_remains_small():
     assert "Explicit expert" in INSTRUCTIONS and "plot_create" in INSTRUCTIONS
     assert "plot_create for source-bound creation" not in INSTRUCTIONS
     assert "sciplot_plot_create" in tools  # The advanced/compatibility API is retained.
+
+    from sciplot_core import task_execution, task_semantic_creation
+    from sciplot_core.plot_protocol.paths import TransportError
+    from sciplot_core.task_storage import load_task
+
+    path = tmp_path / "DSC.csv"
+    original = b"Temperature,Heat flow\nC,W/g\nA,A\n30,-1.5\n50,1.25\n75,3\n"
+    path.write_bytes(original)
+    task_dir = tmp_path / "daily-task"
+    managed = []
+    monkeypatch.setattr(task_execution, "create_project", lambda *a, **k: pytest.fail("Daily eligible raw task tried Legacy"))
+
+    def fail_transport(state, managed_request):
+        managed.append(managed_request)
+        raise TransportError("transport_unavailable", "Local transport unavailable")
+
+    monkeypatch.setattr(task_semantic_creation, "execute_managed", fail_transport)
+
+    async def scenario():
+        adapter = server.Adapter("daily")
+        result = await adapter.call("sciplot_task_start", {"request": {"version": 1, "action": "create",
+            "source": str(path), "rule_id": "dsc_curve"}, "task_dir": str(task_dir)})
+        assert result.is_error and result.structured_content["status"] == "blocked"
+        assert (result.structured_content["blocker"]["reason_code"] == "transport_unavailable")
+        await adapter.call("sciplot_task_resume", {"task": str(task_dir), "response": {"retry": True}})
+
+    anyio.run(scenario)
+    assert len(managed) == 2 and managed[0] == managed[1]
+    assert load_task(task_dir)["plan_confirmation"]["rule_id"] == "dsc_curve"
+    assert path.read_bytes() == original

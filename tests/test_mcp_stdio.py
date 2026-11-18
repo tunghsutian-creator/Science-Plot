@@ -194,7 +194,7 @@ def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tm
     raw = source.read_bytes()
 
     async def scenario():
-        async with Client(_parameters(cli=True, profile="daily"), read_timeout_seconds=180) as client:
+        async with Client(_parameters(cli=True, profile="expert"), read_timeout_seconds=180) as client:
             created = await _call(client, "sciplot_task_start", {
                 "request": {"version": 1, "action": "create", "source": str(source), "rule_id": "uvvis_spectrum"},
                 "task_dir": str(tmp_path / "create_task"),
