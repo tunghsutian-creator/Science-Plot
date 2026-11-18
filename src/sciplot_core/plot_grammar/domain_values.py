@@ -16,7 +16,8 @@ def linear_ticks(domain: list[float]) -> list[float]:
 
 
 def numeric_axis(values: list[float], *, quantity: str, transform: str, dimension: str,
-                 minimum: float | None = None, maximum: float | None = None) -> tuple[list[float], list[float]]:
+                 minimum: float | None = None, maximum: float | None = None,
+                 extend_empty_log_ticks: bool = False) -> tuple[list[float], list[float]]:
     """Project explicit endpoints or ordinary defaults; never remove an observation."""
     if not values or any(not math.isfinite(value) for value in values):
         raise ValueError("An axis requires finite drawable coordinates.")
@@ -41,5 +42,12 @@ def numeric_axis(values: list[float], *, quantity: str, transform: str, dimensio
     else:
         from sciplot_core.policy.axis_defaults import anchored_log_decade_ticks
 
-        ticks = [value for value in anchored_log_decade_ticks(values) if domain[0] <= value <= domain[1]]
+        decades = anchored_log_decade_ticks(values)
+        ticks = [value for value in decades if domain[0] <= value <= domain[1]]
+        if not ticks and decades and extend_empty_log_ticks:
+            if minimum is None:
+                domain[0] = min(domain[0], decades[0])
+            if maximum is None:
+                domain[1] = max(domain[1], decades[-1])
+            ticks = [value for value in decades if domain[0] <= value <= domain[1]]
     return domain, ticks

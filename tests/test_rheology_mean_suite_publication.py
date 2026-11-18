@@ -125,7 +125,7 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
         return real_compile(ir, output)
 
     monkeypatch.setattr(compiler, "compile_ir", compile_once)
-    requests = prepare_frequency_requests(resolved.domain, plan, task_root=tmp_path / "candidate-tasks")
+    requests = prepare_frequency_requests(resolved.domain, plan, task_root=tmp_path / "candidate-tasks").requests
     try:
         for task, request in zip(tasks, requests, strict=True):
             expected = (("Anonymous material · 210 °C", 2), ("Anonymous material · 150 °C", 1), ("Anonymous material · 170 °C", 1))
@@ -319,52 +319,47 @@ def test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reo
 
 
 def _prepare_in_process(root, *, interrupt):
-    """Exercise real candidate preparation under two independent processes."""
+    """Exercise the production coordinator in each independent process."""
     import os
 
-    from sciplot_core.materials_rules.analysis import frequency_terminal_analysis
-    from sciplot_core.plot_backends.managed import compiler_identity
-    from sciplot_core.project_lifecycle.attachment_group_prepare import prepare_attachment_group
-    from sciplot_core.project_lifecycle.repository import digest
     from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
+    from sciplot_core.workflow import frequency_managed_suite as owner
 
     raw_data, workspace = root / "raw", root / "cold-workspace"
-    rule = "rheology_frequency_sweep"
-    resolved = resolve_scientific_source(raw_data, rule_id=rule, template="point_line", request={})
+    resolved = resolve_scientific_source(raw_data, rule_id="rheology_frequency_sweep", template="point_line", request={})
     assert resolved is not None and resolved.figure_plan is not None
     plan = resolved.figure_plan
-    store = FileProjectStore(workspace)
-    snapshot = store.snapshot(import_legacy=True)
-    source_tree = SourceTreeRead(str(raw_data), resolved.source_sha256)
-    requests = prepare_frequency_requests(resolved.domain, plan, task_root=root / "cold-tasks")
-    identity = {task.figure_id: digest(request) for task, request in zip(plan.tasks, requests, strict=True)}
-    compiler = ManagedVeuszCompiler(warm=False)
-    key = "cold-frequency-mean-suite"
-    figures = []
+    real = owner._figure
     computed = []
+    interrupt_next_export = False
+    compiler = ManagedVeuszCompiler(warm=False)
+    export = compiler.export_ir
+
+    def interrupt_after_compile(*args):
+        if interrupt_next_export:
+            assert Path(args[1]).is_file()
+            os._exit(43)
+        return export(*args)
+
+    def prepare(store, snapshot, key, figure_id, request, compiler, private):
+        nonlocal interrupt_next_export
+        interrupt_next_export = interrupt and figure_id == plan.tasks[-1].figure_id
+        computed.append(figure_id)
+        with (root / "native-invocations").open("a", encoding="utf-8") as stream:
+            stream.write(figure_id + "\n")
+        return real(store, snapshot, key, figure_id, request, compiler, private)
+
+    owner._figure = prepare
+    compiler.export_ir = interrupt_after_compile
     try:
-        with prepare_attachment_group(store, key=key, plan=plan.to_payload(), figures=identity,
-                                      source_tree=source_tree, runtime=compiler_identity()) as pending:
-            for task, request in zip(plan.tasks, requests, strict=True):
-                def build(candidate_root, task=task, request=request):
-                    if interrupt and task is plan.tasks[-1]:
-                        os._exit(42)
-                    computed.append(task.figure_id)
-                    with (root / "native-invocations").open("a", encoding="utf-8") as stream:
-                        stream.write(task.figure_id + "\n")
-                    return _candidate_head(compiler, store, snapshot, task, request, candidate_root)[0]
-                figures.append(pending.figure(task.figure_id, build))
-            analysis_path = root / "cold-analysis.csv"
-            samples = [(s.sample, [row["x"] for row in s.rows], [row.get("storage_modulus") for row in s.rows])
-                       for s in resolved.domain.prepared_samples]
-            frequency_terminal_analysis(samples, semantic={"axis_plan": {"y": {"canonical_unit": "Pa"}}},
-                                        output=analysis_path)
-            outputs = {"analysis/frequency.csv": analysis_path.read_bytes(), "figure-plan.json": encode(plan.to_payload())}
-            result = publish_attachment_group(store, snapshot, key=key, selected_figures=plan.selected_figure_ids,
-                figures=tuple(figures), required_outputs=tuple(outputs), outputs=outputs, source_tree=source_tree)
+        result = owner.publish_frequency_managed_suite(FileProjectStore(workspace),
+            key="cold-frequency-mean-suite", resolved=resolved, compiler=compiler, task_root=root / "cold-tasks")
+        assert result["phase"] == "complete" and computed == [plan.tasks[-1].figure_id]
+        repeated = owner.publish_frequency_managed_suite(FileProjectStore(workspace),
+            key="cold-frequency-mean-suite", resolved=resolved, compiler=compiler, task_root=root / "cold-tasks")
+        assert repeated["generation"] == result["generation"] and computed == [plan.tasks[-1].figure_id]
     finally:
         compiler.close()
-    assert result["phase"] == "complete" and computed == [plan.tasks[-1].figure_id]
 
 
 @pytest.mark.comprehensive
@@ -381,7 +376,7 @@ def test_frequency_suite_preaccept_retry_cold_resumes_only_the_unfinished_figure
                "import sys; from pathlib import Path; from test_rheology_mean_suite_publication import _prepare_in_process; "
                "_prepare_in_process(Path(sys.argv[1]), interrupt=sys.argv[2] == 'interrupt')", str(tmp_path)]
     failed = subprocess.run([*command, "interrupt"], capture_output=True, text=True, timeout=120)
-    assert failed.returncode == 42, failed.stderr
+    assert failed.returncode == 43, failed.stderr
     before_retry = FileProjectStore(workspace).snapshot()
     assert before_retry["generation"] == before["generation"] and before_retry["files"] == before["files"]
     assert not (workspace / "figures").exists()
@@ -402,5 +397,27 @@ def test_frequency_suite_preaccept_retry_cold_resumes_only_the_unfinished_figure
     assert actual["sequence"] == before["sequence"] + 1
     names = (tmp_path / "native-invocations").read_text().splitlines()
     assert names == ["storage_modulus_vs_frequency", "loss_modulus_vs_frequency",
-                     "loss_factor_vs_frequency", "complex_viscosity_vs_frequency"]
-    assert (workspace / "analysis/frequency.csv").is_file()
+                     "loss_factor_vs_frequency", "complex_viscosity_vs_frequency", "complex_viscosity_vs_frequency"]
+    assert (workspace / "analysis/analysis_metrics.csv").is_file()
+    import pymupdf
+
+    path = workspace / "figures" / "loss_modulus_vs_frequency" / "document.pdf"
+    with pymupdf.open(path) as pdf:
+        page = pdf[0]
+        assert [page.rect.width * 25.4 / 72, page.rect.height * 25.4 / 72] == pytest.approx([120., 55.], abs=.4)
+        # MuPDF joins the base and superscript in each scientific tick.
+        # Restrict to the y-side before the graph so X ticks cannot pass this.
+        ticks = {word[4] for word in page.get_text("words") if word[2] < 40}
+        assert {"101", "102"} <= ticks, page.get_text("words")
+
+
+def test_frequency_readable_narrow_log_keeps_fixed_endpoints_and_unmarked_specs():
+    from sciplot_core.plot_grammar.domain_values import numeric_axis
+
+    source = [29., 34., 41.]
+    args = {"quantity": "loss_modulus", "transform": "log", "dimension": "y"}
+    assert numeric_axis(source, **args) == ([20., 50.], [])
+    assert numeric_axis(source, **args, extend_empty_log_ticks=True) == ([10., 100.], [10., 100.])
+    assert numeric_axis(source, **args, minimum=20., maximum=50., extend_empty_log_ticks=True) == ([20., 50.], [])
+    assert numeric_axis(source, **args, minimum=20., extend_empty_log_ticks=True) == ([20., 100.], [100.])
+    assert source == [29., 34., 41.]

@@ -44,7 +44,8 @@ def axis_spec(role: str, coordinate: dict[str, Any], side: str, unit: str, value
                    "domain": domain, "unit": unit, "quantity": coordinate["quantity"], "direction": coordinate.get("direction", "ascending"),
                    "domain_rule": {name: ({"mode": "fixed", "value": coordinate[name]} if name in coordinate
                                          else {"mode": "auto_zero_if_nonnegative" if name == "minimum" and automatic_zero else "auto"})
-                                   for name in ("minimum", "maximum")},
+                                   for name in ("minimum", "maximum")} | ({"empty_log_ticks": coordinate["empty_log_ticks"]}
+                                                                              if "empty_log_ticks" in coordinate else {}),
                    **({"quantity_members": deepcopy(coordinate["quantity_members"])} if "quantity_members" in coordinate else {})}
     label = raw_plan.get("axis_labels", {}).get(role, label)
     qualitative_y = role == "y" and raw_plan.get("show_y_ticks") is False

@@ -1,7 +1,7 @@
 """Prepare one exact ordered frequency FigurePlan as Managed create candidates."""
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NamedTuple, NoReturn
 
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.foundation.source_tree import source_tree_sha256
@@ -17,9 +17,14 @@ from .frequency_managed_grouping import resolve_mean_group_blocks
 from .frequency_managed_metrics import prepare_frequency_metric_group
 
 
+class PreparedFrequencyRequests(NamedTuple):
+    requests: list[dict[str, Any]]
+    terminal_pairs: list[tuple[str, list[float | None], list[float | None]]]
+
+
 def prepare_frequency_requests(
     domain: ResolvedRheologySweepDomain, plan: ResolvedFigurePlan, *, task_root: Path,
-) -> list[dict[str, Any]]:
+) -> PreparedFrequencyRequests:
     """Reuse semantic composition over the common measured/derived replicate DAG."""
     rule = domain.rule_id
     if source_tree_sha256(domain.source) != domain.source_sha256 or plan.primary_figure_id is None:
@@ -59,6 +64,7 @@ def prepare_frequency_requests(
     for node in nodes:
         datasets[node["output"]], _ = execute_node(node, datasets)
     requests = []
+    terminal_pairs = []
     for task in plan.tasks:
         metric = str(task.y_metric)
         unit = str(next(iter(units[metric])))
@@ -72,6 +78,10 @@ def prepare_frequency_requests(
                     or metric not in columns
                     or columns[metric]["values"] != [row.get(metric) for row in sample.rows]):
                 _invalid("The candidate does not replay the selected original frequency arrays exactly.")
+            if task.figure_id == plan.primary_figure_id:
+                if metric != "storage_modulus" or unit != "Pa":
+                    _invalid("Frequency terminal analysis requires a canonical primary storage-modulus task in Pa.")
+                terminal_pairs.append((sample.sample, columns["x"]["values"], columns[metric]["values"]))
             final = f"frequency-figure-series:{index}"
             node = {"id": f"frequency-figure-mapping:{index}", "kind": "rename", "inputs": [dataset_id],
                     "output": final, "parameters": {"columns": {metric: {"id": "y", "label": metric}}},
@@ -81,6 +91,9 @@ def prepare_frequency_requests(
             records.append({"source_id": final, "dataset_id": final, "sample": sample.sample, "stages": [],
                             "units": {"x": "rad/s", "y": unit}})
         axes = {role: frequency_coordinate(role, value, value["unit"]) for role, value in (("x", intent["x"]), ("y", intent["y"]))}
+        for coordinate in axes.values():
+            if coordinate["scale"] == "log":
+                coordinate["empty_log_ticks"] = "extend_to_anchors_v1"
         state = {"request": {"intent": intent}, "intent_revision": 1, "task_dir": str(task_root / task.figure_id),
                  "semantic_plan": {"resolved_rule_id": rule, "resolved_axes": axes, "resolved_bindings": []}}
         request = _compose(state, records, sources, recipes, values, "")
@@ -90,7 +103,7 @@ def prepare_frequency_requests(
         requests.append(request)
     if source_tree_sha256(domain.source) != domain.source_sha256:
         _invalid("The original source tree changed during Managed candidate preparation.")
-    return requests
+    return PreparedFrequencyRequests(requests, terminal_pairs)
 
 
 def _invalid(message: str) -> NoReturn:

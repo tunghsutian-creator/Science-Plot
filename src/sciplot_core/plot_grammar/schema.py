@@ -30,7 +30,8 @@ def domain_rule_schema() -> dict[str, Any]:
                            closed({"mode": {"const": "fixed"}, "value": NUMBER})]}
     minimum = {"oneOf": [*endpoint["oneOf"], closed({"mode": {"const": "auto_zero_if_nonnegative",
         "description": "Linear minimum: zero when all visible drawable values are nonnegative; otherwise automatic."}})]}
-    return closed({"minimum": minimum, "maximum": endpoint})
+    return closed({"minimum": minimum, "maximum": endpoint, "empty_log_ticks": {"const": "extend_to_anchors_v1"}},
+                  ["minimum", "maximum"])
 
 
 def scale_schema(*, resolved: bool = False) -> dict[str, Any]:
