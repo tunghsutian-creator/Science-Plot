@@ -1,5 +1,6 @@
 """An isolated, real generation publishes a whole Managed frequency candidate."""
 from copy import deepcopy
+from dataclasses import replace
 import csv
 from io import StringIO
 from pathlib import Path
@@ -111,7 +112,7 @@ def _candidate_head(compiler, store, before, task, request, staging):
     for export in exports["exports"]:
         path = Path(export["path"])
         assets[store.logical_path(output / path.name)] = path.read_bytes()
-    return PreparedFigure(attachment, members, assets), ir, binding
+    return PreparedFigure(attachment, members, assets, exports), ir, binding
 
 
 @pytest.mark.comprehensive
@@ -203,6 +204,20 @@ def test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_g
     with pytest.raises(ValueError, match="Prepare every selected figure"):
         publish_attachment_group(store, before, figures=tuple(candidates[:-1]), **args)
     assert ProjectCommands(store).query(key) is None
+
+    first, second, *others = candidates
+    a_pdf = next(path for path in first.assets if path.endswith(".pdf"))
+    b_pdf = next(path for path in second.assets if path.endswith(".pdf"))
+    a_tiff = next(path for path in first.assets if path.endswith(".tiff"))
+    assert first.assets[a_pdf] != second.assets[b_pdf]
+    swapped = (replace(first, assets={**first.assets, a_pdf: second.assets[b_pdf]}),
+               replace(second, assets={**second.assets, b_pdf: first.assets[a_pdf]}), *others)
+    modified = (replace(first, assets={**first.assets, a_tiff: first.assets[a_tiff] + b"changed"}), second, *others)
+    missing = (replace(first, assets={name: data for name, data in first.assets.items() if name != a_pdf}), second, *others)
+    for altered, message in ((swapped, "audited export"), (modified, "audited export"), (missing, "complete native and export set")):
+        with pytest.raises(ValueError, match=message):
+            publish_attachment_group(store, before, figures=altered, **args)
+        assert ProjectCommands(store).query(key) is None
 
     def interrupt(point):
         if point == "before_head":

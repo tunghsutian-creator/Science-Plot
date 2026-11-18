@@ -22,6 +22,7 @@ class PreparedFigure:
     attachment: Attachment
     members: dict[str, bytes | None]
     assets: dict[str, bytes]
+    export_evidence: dict[str, Any]
 
 
 def publish_attachment_group(store: FileProjectStore, snapshot: dict[str, Any], *, key: str,
@@ -91,6 +92,24 @@ def _require_assets(figure: PreparedFigure, prefix: str, asset_prefix: str, stor
     if native is None or (marker.get("document_sha256"), marker.get("ir_hash")) != (
             hashlib.sha256(native).hexdigest(), binding.get("ir_hash")):
         raise EngineError("semantic_attachment_group_incomplete", "The published native bytes need their exact Managed compiler seal.")
+    evidence = figure.export_evidence
+    if (evidence.get("ready_to_use") is not True or evidence.get("ir_hash") != binding.get("ir_hash")
+            or evidence.get("publication_qa", {}).get("status") != "passed"
+            or evidence.get("scientific_audit", {}).get("status") != "passed"):
+        raise EngineError("semantic_attachment_group_export_unsealed", "The native export evidence must belong to this exact audited PlotIR.")
+    returned = evidence.get("exports", [])
+    proven_native = [sha for name, sha in evidence.get("evidence_files", {}).items() if Path(name).suffix == ".vsz"]
+    if [marker["document_sha256"]] != proven_native or sorted(item["format"] for item in returned) != ["pdf", "tiff_300"]:
+        raise EngineError("semantic_attachment_group_export_unsealed", "The export evidence must seal the exact native document and required formats.")
+    for item in returned:
+        source, sha = item["path"], item["sha256"]
+        # The established worker chooses each filename; relocation is only to
+        # this figure's output root, not a different attachment or metric.
+        logical = asset_prefix + Path(source).name
+        content = figure.assets.get(logical)
+        if (content is None or evidence["evidence_files"].get(source) != sha
+                or hashlib.sha256(content).hexdigest() != sha):
+            raise EngineError("semantic_attachment_group_export_unsealed", "The prepared PDF or TIFF does not match this figure's audited export.")
 
 
 def _add_fresh(writes: dict[str, bytes | None], snapshot: dict[str, Any], members: dict[str, Any]) -> None:
