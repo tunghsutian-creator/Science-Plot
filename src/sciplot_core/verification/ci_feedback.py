@@ -52,19 +52,30 @@ _INTAKE_PATHS = frozenset({
     "src/sciplot_core/intake/table_preview.py", "tests/test_intake_review_recovery.py",
 })
 _INTAKE_CHECKS = ("tests/test_intake_review_recovery.py", "tests/test_intake_session_adapter.py")
-_ASSEMBLY_PATHS = frozenset({
-    "src/sciplot_core/panel_assembly/export.py", "src/sciplot_core/panel_assembly/preview.py",
-    "tests/test_panel_assembly_export.py", "tests/test_panel_assembly_preview.py",
-})
 _ASSEMBLY_NATIVE_PATH = "src/sciplot_core/panel_assembly/native.py"
+_ASSEMBLY_EXPORT_PATHS = frozenset({
+    "src/sciplot_core/panel_assembly/export.py", "tests/test_panel_assembly_export.py",
+    _ASSEMBLY_NATIVE_PATH,
+})
+_ASSEMBLY_PREVIEW_PATHS = frozenset({
+    "src/sciplot_core/panel_assembly/preview.py", "tests/test_panel_assembly_preview.py",
+    _ASSEMBLY_NATIVE_PATH,
+})
+_ASSEMBLY_PATHS = _ASSEMBLY_EXPORT_PATHS | _ASSEMBLY_PREVIEW_PATHS
 _ASSEMBLY_CHECKS = (
     "tests/test_panel_assembly_export.py", "tests/test_panel_assembly_preview.py",
     "tests/test_panel_assembly_sources.py",
 )
-_ASSEMBLY_NATIVE_CHECKS = (
+_ASSEMBLY_NATIVE_EXPORT_CHECKS = (
     "tests/test_panel_assembly_export.py::test_native_legacy_mixed_export_preserves_state_science_and_portable_sources",
     "tests/test_panel_assembly_export.py::test_native_managed_reflows_canonical_document_without_source_artifacts",
 )
+
+_ASSEMBLY_NATIVE_PREVIEW_CHECKS = (
+    "tests/test_panel_assembly_preview.py::test_legacy_preview_uses_current_native_not_adjacent_pdf_and_does_not_accept_export",
+    "tests/test_panel_assembly_preview.py::test_managed_preview_compiles_current_semantics_without_native_save_or_qa_claim",
+)
+
 
 def native_preflight_plan(paths: list[str], root: Path) -> dict[str, Any]:
     """Only mapped narrative leaves can skip repeated diagnostics for now.
@@ -113,25 +124,20 @@ def ci_feedback_plan(paths: list[str], root: Path, *, event: str = "push", ref: 
             reason = "metadata_only_task_timing"
         else:
             reason = "task_timing_contract_not_proven"
-    reviewed = _TABLE_PATHS | _INTAKE_PATHS | _ASSEMBLY_PATHS | {_ASSEMBLY_NATIVE_PATH}
-    reviewed_change = (bool(selected) and selected <= reviewed
+    reviewed = _TABLE_PATHS | _INTAKE_PATHS | _ASSEMBLY_PATHS
+    reviewed_change = (bool(selected) and selected <= reviewed and not result["unowned_paths"]
                        and all((root / path).is_file() and not (root / path).is_symlink() for path in selected))
     if reviewed_change:
-        reviewed_owners = (
-            ("structured_source_tables", _TABLE_PATHS, _TABLE_CHECKS),
-            ("intake_table_preview", _INTAKE_PATHS, _INTAKE_CHECKS),
-            ("local_panel_assembly", _ASSEMBLY_PATHS | {_ASSEMBLY_NATIVE_PATH}, _ASSEMBLY_CHECKS),
-        )
-        for owner, owner_paths, owner_checks in reviewed_owners:
+        for owner_paths, owner_checks in (
+            (_TABLE_PATHS, _TABLE_CHECKS), (_INTAKE_PATHS, _INTAKE_CHECKS), (_ASSEMBLY_PATHS, _ASSEMBLY_CHECKS),
+        ):
             if selected & owner_paths:
-                if owner not in result["owners"]:
-                    result["owners"].append(owner)
                 targets.extend(owner_checks)
-        result["unowned_paths"] = []
-        reason = "reviewed_owner_feedback"
-        if _ASSEMBLY_NATIVE_PATH in selected:
-            native_targets = list(_ASSEMBLY_NATIVE_CHECKS)
-            reason = "reviewed_owner_native_feedback"
+        if selected & _ASSEMBLY_EXPORT_PATHS:
+            native_targets.extend(_ASSEMBLY_NATIVE_EXPORT_CHECKS)
+        if selected & _ASSEMBLY_PREVIEW_PATHS:
+            native_targets.extend(_ASSEMBLY_NATIVE_PREVIEW_CHECKS)
+        reason = "reviewed_owner_native_feedback" if native_targets else "reviewed_owner_feedback"
     full_ref = ref in {"refs/heads/integration", "refs/heads/release"} or ref.startswith(
         ("refs/tags/", "refs/heads/integration/", "refs/heads/release/")
     )

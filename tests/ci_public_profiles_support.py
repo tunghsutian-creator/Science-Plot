@@ -107,7 +107,7 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
              "src/sciplot_core/panel_assembly/export.py", "src/sciplot_core/panel_assembly/preview.py",
              "tests/test_panel_assembly_export.py"]
     panel = ci_feedback.ci_feedback_plan(paths, root, event="pull_request")
-    assert panel["layer"] == "affected" and not panel["native_targets"]
+    assert panel["layer"] == "affected" and len(panel["native_targets"]) == 4
     assert {"tests/test_intake_review_recovery.py", "tests/test_panel_assembly_export.py"} <= set(panel["targets"])
     for ref in ("refs/heads/integration", "refs/heads/release/next", "refs/tags/v1"):
         assert ci_feedback.ci_feedback_plan(paths, root, ref=ref)["layer"] == "full"
@@ -117,7 +117,22 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     assert ci_feedback.ci_feedback_plan(paths, tmp_path)["layer"] == "full"
     native_path = "src/sciplot_core/panel_assembly/native.py"
     native = ci_feedback.ci_feedback_plan([native_path], root)
-    assert native["layer"] == "affected" and len(native["native_targets"]) == 2
+    assert native["layer"] == "affected" and len(native["native_targets"]) == 4
+    for path, test_file in (
+        ("src/sciplot_core/panel_assembly/export.py", "tests/test_panel_assembly_export.py"),
+        ("src/sciplot_core/panel_assembly/preview.py", "tests/test_panel_assembly_preview.py"),
+    ):
+        for changed in (path, test_file):
+            targets = ci_feedback.ci_feedback_plan([changed], root)["native_targets"]
+            assert len(targets) == 2 and all(target.startswith(test_file + "::") for target in targets)
+    from sciplot_core.verification.changed import build_changed_verification_plan
+
+    for path in ("src/sciplot_core/source_tables/curve_tables.py", "src/sciplot_core/source_tables/heatmap_tables.py"):
+        local = build_changed_verification_plan([path], repo_root=root)
+        assert not local["unowned_paths"] and local["status"] == "planned"
+        assert "tests/test_legacy_core_migration.py" in next(
+            check["command"] for check in local["checks"] if check["check_id"] == "pytest_changed_owners"
+        )
 
     workflow = (root / ".github/workflows/minimal-repository.yml").read_text()
     steps = workflow.split("      - name: ")

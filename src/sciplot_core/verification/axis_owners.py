@@ -13,6 +13,8 @@ GENERIC_AXIS_OWNERS = (
                 "src/sciplot_core/source_inspection/intent_recognition.py",
                 "src/sciplot_core/source_inspection/header_matching.py",
                 "src/sciplot_core/source_tables/parsing.py",
+                "src/sciplot_core/source_tables/curve_tables.py",
+                "src/sciplot_core/source_tables/heatmap_tables.py",
                 "src/sciplot_core/render/inspection.py",
                 "src/sciplot_core/studio_core/request_overrides.py",
                 "src/sciplot_core/studio_core/veusz_axis_apply.py",
