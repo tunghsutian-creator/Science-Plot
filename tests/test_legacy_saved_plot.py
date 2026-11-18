@@ -101,7 +101,9 @@ def test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project(tmp
     deliver = service.deliver
 
     def fail_before_delivery(_request):
-        raise OSError("temporary test delivery outage")
+        return {"status": "blocked", "ready_to_use": False,
+                "blocker": {"reason_code": "temporary_delivery_outage", "message": "Simulated delivery interruption."},
+                "next_step": {"action": "retry_same_request"}}
 
     try:
         monkeypatch.setattr(service, "deliver", fail_before_delivery)
@@ -120,6 +122,15 @@ def test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project(tmp
         persisted = journal.read_bytes()
         assert service.create(request) == ready
         assert journal.read_bytes() == persisted and raw.read_bytes() == original
+        raw.write_bytes(original.replace(b"460,5", b"460,6"))
+        stale = service.create(request)
+        assert stale["status"] == "blocked" and not stale["ready_to_use"]
+        action = stale["next_step"]
+        assert action["action"] == "resolve_current_evidence" and "request" not in action
+        assert action["inspect_cli_argv"][1:4] == ["plot", "describe", ready["plot"]]
+        assert action["changed_inputs"] and journal.read_bytes() == persisted
+        raw.write_bytes(original)
+        assert service.create(request) == ready
         assert _tree(project) == old_tree
 
         # A pre-upgrade receipt, even if interrupted before its task allocation,

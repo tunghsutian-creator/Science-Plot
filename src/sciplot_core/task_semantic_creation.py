@@ -266,9 +266,10 @@ def current_result(state: dict[str, Any]) -> dict[str, Any]:
         export_current = current.get("export_current") or {}
         # Only the execution owner can compare its actual render recipe. The
         # client process has a different startup/environment identity.
-        ready = (native_delivery_current and current["status"] == "current" and current.get("pending") is None
-                 and identities_match and bool(exports) and export_current.get("current") is True
-                 and export_current.get("byte_inventory_verified") is True)
+        plot_current = (current["status"] == "current" and current.get("pending") is None
+                        and identities_match and bool(exports) and export_current.get("current") is True
+                        and export_current.get("byte_inventory_verified") is True)
+        ready = native_delivery_current and plot_current
         summary.update(ready_to_use=ready, readiness_evaluated=True)
         if ready:
             from sciplot_core.task_semantic_delivery import handoff_paths
@@ -277,12 +278,14 @@ def current_result(state: dict[str, Any]) -> dict[str, Any]:
                 **handoff_paths(state),
                 "delivery": state["delivery_result"]["delivery"],
                 "message": "Review the actual exported images. The Managed document is the scientific authority; retain original attachments and its .sciplot_documents directory."}
-        elif not native_delivery_current:
+        elif plot_current:
             summary.update(status="blocked", next_step={"action": "finish_native_delivery", "task": state["task_dir"],
                 "cli_argv": ["sciplot", "task", "resume", state["task_dir"], "--retry", "--json"],
                 "response_template": {"retry": True},
                 "message": "The original export is preserved, but the final native snapshot/data/launcher delivery is missing or changed. Resume this same task; packaging never recreates or edits the plot."})
         else:
             summary.update(status="blocked", next_step={"action": "resolve_current_evidence", "task": state["task_dir"],
-                "message": "Historical task completion does not certify current source, native or delivery files. Inspect the returned current state and preserve this task."})
+                "inspect_cli_argv": ["sciplot", "plot", "describe", state["project"], "--scope", "summary", "--json"],
+                "changed_inputs": current.get("changed_inputs", []),
+                "message": "Historical task completion does not certify current source or native files. Inspect this plot and preserve the task; if an original changed, restore the exact original or explicitly confirm a source revision before continuing."})
     return summary

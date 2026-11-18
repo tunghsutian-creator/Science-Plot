@@ -72,9 +72,15 @@ def _managed_result(root: Path, task: dict[str, Any]) -> dict[str, Any]:
         reply["blocker"] = compact.get("blocker")
     elif task.get("question"):
         reply["question"] = compact.get("question")
-    reply["next_step"] = {"action": "plot.decide", "plot": str(root), "task_continuation": next_step}
-    if task["status"] in {"running", "blocked"} and not task.get("question"):
-        reply["next_step"]["request"] = {"response": {"retry": True}}
+    if task.get("question"):
+        reply["next_step"] = {"action": "plot.decide", "plot": str(root), "task_continuation": next_step}
+    elif (next_step.get("action") in {"retry_same_task", "finish_native_delivery"}
+          and next_step.get("response_template") == {"retry": True}):
+        reply["next_step"] = {"action": "plot.decide", "plot": str(root), "request": {"response": {"retry": True}},
+                              "task_continuation": next_step}
+    else:
+        reply["next_step"] = next_step or {"action": "inspect_task",
+            "cli_argv": ["sciplot", "task", "inspect", str(root / "task"), "--json"]}
     return reply
 
 
