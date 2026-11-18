@@ -269,9 +269,49 @@ def test_automatic_frequency_groups_bind_original_regions_not_condition_display_
         "Anonymous material · 170 °C", "Anonymous material · 150 °C"]
     assert not any(item["kind"] == "rheology_mean_exact_x" for item in spec["data_binding"]["transforms"])
     provenance = spec["data_binding"]["provenance"]["frequency_mean_original_blocks"]
-    assert provenance["Anonymous material"] == [
-        {"source_id": "source:0", "table_id": "table:0", "block_id": "block:0"}]
+    [identity] = provenance["Anonymous material"]
+    assert (identity["source_id"], identity["table_id"], identity["block_id"]) == ("source:0", "table:0", "block:0")
+    assert (identity["path"], identity["result"]) == (str(first), "FS 210 °C")
     only = spec["data_binding"]["data_sources"][0]
     assert only["path"] == str(first)
     assert (only["table_selection"]["header_rows"], only["table_selection"]["data_start_row"],
             only["table_selection"]["data_end_row"]) == ([7], 10, 26)
+
+
+def test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reordered(tmp_path):
+    from sciplot_core.plot_engine.managed_sources import load_sources
+    from sciplot_core.plot_transforms import resolve_transforms
+    from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
+
+    raw, originals = _mean_input(tmp_path)
+    rule = "rheology_frequency_sweep"
+    resolved = resolve_scientific_source(raw, rule_id=rule, template="point_line", request={})
+    assert resolved is not None and resolved.figure_plan is not None
+    task = resolved.figure_plan.tasks[0]
+    value = {**intent(), "y": {"quantity": task.y_metric, "unit": "Pa"}}
+    local = prepare_plan(originals, value)
+    blocks = resolve_mean_group_blocks(resolved.domain, resolved.figure_plan, local["sources"])
+
+    def request_for(intent_value, paths):
+        return build_managed_request({"request": {"intent": intent_value}, "semantic_plan": prepare_plan(paths, intent_value),
+            "semantic_choices": {}, "intent_revision": 1, "task_dir": str(tmp_path / "task")})
+
+    wrong = {**value, "y": {"quantity": "loss_modulus", "unit": "Pa"}}
+    with pytest.raises(ValueError, match="match the selected FigureTask metrics"):
+        group_frequency_request(request_for(wrong, originals), task, blocks)
+    hertz = {**value, "x": {"quantity": "angular_frequency", "unit": "Hz"}}
+    with pytest.raises(ValueError, match="coordinate units must match"):
+        group_frequency_request(request_for(hertz, originals), task, blocks)
+    swapped = group_frequency_request(request_for(value, list(reversed(originals))), task, blocks)
+    document = create_managed_document(swapped["template_definition"], swapped["data_binding"], plot_id="physical-order")
+    datasets = resolve_transforms(document, load_sources(document, rule))["datasets"]
+    layers = swapped["template_definition"]["figure_spec"]["views"][0]["layers"]
+    observed = {}
+    for layer in layers:
+        columns = datasets[layer["dataset_id"]]["columns"]
+        observed[layer["label"]] = min(zip(columns["x"]["values"], columns["y"]["values"], strict=True), key=lambda pair: pair[0])[1]
+    assert observed == {
+        "Anonymous material · 210 °C": 565.,
+        "Anonymous material · 150 °C": 171.,
+        "Anonymous material · 170 °C": 515.,
+    }
