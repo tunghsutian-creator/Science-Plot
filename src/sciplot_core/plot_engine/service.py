@@ -64,6 +64,33 @@ class PlotService(ProjectApplication):
                                   cli_argv=["sciplot", "project", "legacy-convert", str(saved[1]), "--out"],
                                   requires=["new_output_directory"])
 
+    @usecase
+    def _require_saved_continuation(self, plot: Path, request: dict[str, Any], *, decision: bool) -> None:
+        if not self.read_only_legacy or not isinstance(self.targets, FilesystemProjectTargets):
+            return
+        root = canonical_path(plot)
+        if self.targets.read_legacy_saved(root, None) is None:
+            return
+        if request.get("reimport") is True:
+            self.require_editable(root)
+        from sciplot_core.project_lifecycle.context import active, exists, read, transaction_path
+
+        with self.repository.query_scope(root):
+            if decision:
+                transaction = active(root)
+                if (transaction is not None and transaction["id"] == request["decision_id"]
+                        and transaction["request"]["base_revision"] == request["base_revision"]):
+                    return
+            else:
+                path = transaction_path(root, request["idempotency_key"])
+                if exists(path):
+                    transaction = read(path)
+                    if (transaction["request"]["base_revision"] == request["base_revision"]
+                            and transaction["document"]["plot_id"] == request["plot_id"]):
+                        return
+        raise EngineError("legacy_transaction_unknown",
+                          "A read-only legacy plot can only continue an already saved transaction.")
+
     def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
         description = require_selector(description)
         target = canonical_path(plot)
@@ -91,11 +118,20 @@ class PlotService(ProjectApplication):
 
         request = validate_decide(request)
         native = native_dispatch("decide", canonical_path(plot), request=request)
-        return native if native is not None else super().decide(plot, request)
+        if native is not None:
+            return native
+        self._require_saved_continuation(plot, request, decision=True)
+        return super().decide(plot, request)
 
     def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         native = native_dispatch("resume", canonical_path(plot), request=request)
-        return native if native is not None else super().resume(plot, request)
+        if native is not None:
+            return native
+        if self.read_only_legacy:
+            from .contracts import validate_resume
+
+            self._require_saved_continuation(plot, validate_resume(request), decision=False)
+        return super().resume(plot, request)
 
     def export(self, plot: Path) -> dict[str, Any]:
         native = native_dispatch("export", canonical_path(plot))

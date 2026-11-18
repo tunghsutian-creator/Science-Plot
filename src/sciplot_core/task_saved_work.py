@@ -326,7 +326,8 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
         code = getattr(exc, "reason_code", "saved_authority_changed")
         if code == "legacy_conversion_required":
             return {**base, "status": "blocked", "reason_code": code, "message": str(exc), "selected": match,
-                    "next_step": {"action": "plot.open", "arguments": {"target": str(selected), "figure_id": identity}}}
+                    "next_step": {"action": "plot.open", "arguments": {"target": str(selected),
+                                                                     "figure_id": figure_id or match.get("primary_figure_id")}}}
         return {**base, "status": "blocked", "reason_code": code,
                 "message": str(exc), "selected": match,
                 "next_step": ({"action": "find_saved_work_again", "arguments": {

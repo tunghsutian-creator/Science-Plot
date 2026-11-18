@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
+from managed_plot_helpers import patch
 from test_legacy_saved_plot import _old_project, _tree
 
 from sciplot_core.cli import main
@@ -60,7 +61,14 @@ def test_legacy_conversion_creates_editable_copy_with_exact_arrays_units_and_mar
         for image in (original, redraw):
             assert ImageChops.difference(image.convert("RGB"), Image.new("RGB", image.size, "white")).getbbox()
     assert main(["plot", "open", str(root), "--direct", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out)["plot_type"] == "ManagedPlot"
+    opened = json.loads(capsys.readouterr().out)
+    assert opened["plot_type"] == "ManagedPlot"
+    change = tmp_path / "change.json"
+    change.write_text(json.dumps(patch(opened, "label-after-conversion", "axis.label", "Elapsed time (s)", "axis:x")))
+    assert main(["plot", "patch", str(root), "--request", str(change), "--direct", "--json"]) == 0
+    edited = json.loads(capsys.readouterr().out)
+    assert edited["ready_to_use"] and edited["revision"] == 1
+    assert edited["scientific_hash"] == converted["scientific_hash"]
     assert _tree(archive) == before
 
 

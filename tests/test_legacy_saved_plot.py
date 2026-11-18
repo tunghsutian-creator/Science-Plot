@@ -164,3 +164,35 @@ def test_public_task_and_native_edit_entrypoints_cannot_allocate_old_project_wri
         invoke_owner("sciplot_export", {"project": str(project)})
     assert error.value.reason_code == "legacy_conversion_required"
     assert _tree(project) == before
+
+
+def test_public_legacy_resume_requires_and_only_finishes_a_saved_transaction(tmp_path, monkeypatch):
+    from test_plot_engine import FakeBackend, commit, request
+    from sciplot_core.plot_engine import external_mutation
+    from sciplot_core.plot_engine.errors import EngineError
+    from sciplot_core.plot_engine.service import PlotService
+
+    backend = FakeBackend(tmp_path / "backend")
+    document, binding = backend.initial()
+    binding.update(kind="sciplot_veusz_binding", project=str(backend.directory), document=str(backend.native))
+    root = tmp_path / "old-shadow"
+    commit(root, document, binding, "import")
+    # The transport exercises the real saved transaction; native output is fake.
+    monkeypatch.setattr(external_mutation, "capture_baseline", lambda _root, result: result)
+    historical = PlotService(backend)
+    public = PlotService(backend, read_only_legacy=True)
+    retry = {"plot_id": "test-plot", "base_revision": 0, "idempotency_key": "saved"}
+    try:
+        with pytest.raises(EngineError) as error:
+            public.resume(root, retry)
+        assert error.value.reason_code == "legacy_transaction_unknown"
+        assert backend.calls["apply"] == 0
+        backend.export_failures = [RuntimeError("interrupted historical export")]
+        prior = historical.patch(root, request(key="saved"))
+        assert prior["commit_status"] == "committed" and not prior["ready_to_use"]
+        assert backend.calls["apply"] == 1
+        assert public.resume(root, retry)["ready_to_use"]
+        assert backend.calls["apply"] == 1
+    finally:
+        public.close()
+        historical.close()
