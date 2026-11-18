@@ -77,5 +77,3 @@ def create_frequency_project(source: Path, verified: dict[str, Any], layout: Use
                 classifier=classify_source, update_project=False, frequency_authority=authority,
                 frequency_prepared=candidates, frequency_required=True)
         return frequency_receipt(canonical_request, output, manifest)
-
-
