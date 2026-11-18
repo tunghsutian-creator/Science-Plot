@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 from typing import Any
+from uuid import uuid4
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.foundation.writer_lease import exclusive_directory_lease
@@ -50,7 +51,9 @@ class GroupPreparation:
             return PreparedFigure(Attachment(self.store, value["entry"]),
                                   self._read(root, value["members"]), self._read(root, value["assets"]),
                                   value["export_evidence"])
-        figure = prepare(root / "native")
+        # A process can leave a valid VSZ or partial export before the group
+        # manifest exists. Native compilation never overwrites those bytes.
+        figure = prepare(root / ("attempt-" + uuid4().hex))
         if figure.attachment.entry["figure_id"] != figure_id:
             raise EngineError("semantic_group_prepare_unknown_figure", "A prepared figure cannot claim another planned identity.")
         value = {"figure_id": figure_id, "figure_request": expected, "command": self.command.command_digest,
