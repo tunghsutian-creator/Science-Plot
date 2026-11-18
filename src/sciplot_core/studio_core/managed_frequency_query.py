@@ -6,6 +6,7 @@ from typing import Any
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding
 from sciplot_core.policy.render_options import DELIVERY_PROJECT_DIR
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.foundation.source_tree import source_tree_sha256
@@ -55,16 +56,17 @@ def is_frequency_project_request(request: Path) -> bool:
 
 def inspect_frequency_creation(project: Path) -> dict[str, Any] | None:
     """Revalidate read-only project/delivery status without native work."""
-    project = project.expanduser().resolve()
+    project = canonical_path(project)
     workspace = project.parent.parent if project.parent.name == AUTHORITY else None
-    visible = None
+    visible = binding = None
+    document = project if project.suffix.casefold() == ".vsz" and project.parent.name == DELIVERY_PROJECT_DIR else None
     if workspace is None:
         if project.name == "plot_request.json":
             workspace = project.parent
         elif project.is_dir() and (project / _RECORD).is_file():
             workspace = project
         else:
-            visible = (project.parent.parent if project.suffix.casefold() == ".vsz" and project.parent.name == DELIVERY_PROJECT_DIR
+            visible = (project.parent.parent if document is not None
                        else project.parent if project.name == DELIVERY_IDENTITY else project)
             if not visible.is_dir() or not (visible / DELIVERY_IDENTITY).is_file():
                 return None
@@ -80,15 +82,26 @@ def inspect_frequency_creation(project: Path) -> dict[str, Any] | None:
     if read_json_object(canonical_request) != request:
         raise ValueError("The saved Managed frequency plotting request changed.")
     authority = workspace / AUTHORITY / canonical_json_sha256(request)
-    if ((visible is not None and visible != Path(request[REQUEST_DELIVERY_ROOT_KEY]))
+    if ((visible is not None and (visible != Path(request[REQUEST_DELIVERY_ROOT_KEY])
+                                  or binding.root != str(visible) or binding.request != str(canonical_request)))
             or (project.parent.name == AUTHORITY and project != authority)):
         raise ValueError("The selected frequency location does not match its exact saved project.")
+    if document is not None:
+        if not document.is_file():
+            raise ValueError(f"The selected delivery document does not exist: {document}")
+        if binding is None or document.name not in dict(binding.documents):
+            raise ValueError(f"The selected VSZ is not registered in this delivery: {document}")
     project = authority
     output = Path(request["output"])
     manifest = read_json_object(output / "manifest.json")
     if manifest is None or manifest.get("result", {}).get("managed_frequency", {}).get("project") != str(project):
         raise ValueError("The Managed frequency project is not yet delivered. Repeat the exact creation.")
     receipt = frequency_receipt(canonical_request, output, manifest)
+    if document is not None:
+        selected = next((item for item in receipt["figures"] if item["document"] == str(document)), None)
+        if selected is None:
+            raise ValueError(f"The selected VSZ is not bound to a saved figure: {document}")
+        receipt["selected_figure"] = selected
     current = FileProjectStore(project).snapshot()
     original = manifest["result"]["managed_frequency"]["generation"]
     source_current = source_tree_sha256(Path(request["input"])) == creation["source_sha256"]

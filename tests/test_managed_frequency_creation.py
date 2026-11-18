@@ -35,6 +35,17 @@ def test_project_create_managed_frequency_keeps_external_delivery_and_reopens(tm
     assert current["ready_to_use"] and current["selected_figure"]["plot"] == result["figures"][0]["plot"]
     assert main(["project", "inspect", str(out), "--full"]) == 0
     assert json.loads(capsys.readouterr().out)["project"] == result["project_dir"]
+    secondary = result["figures"][1]
+    assert main(["project", "inspect", secondary["document"], "--full"]) == 0
+    assert json.loads(capsys.readouterr().out)["selected_figure"]["figure_id"] == secondary["figure_id"]
+    unknown = Path(secondary["document"]).with_name("unregistered.vsz")
+    inspect_unknown = ["project", "inspect", str(unknown), "--full", "--json"]
+    assert main(inspect_unknown) != 0
+    assert "document does not exist" in capsys.readouterr().out
+    unknown.write_bytes(Path(secondary["document"]).read_bytes())
+    assert main(inspect_unknown) != 0
+    assert "not registered in this delivery" in capsys.readouterr().out
+    unknown.unlink()
     store = FileProjectStore(Path(result["project_dir"]))
     generation = store.snapshot()["generation"]
 

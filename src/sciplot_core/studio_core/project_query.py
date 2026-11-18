@@ -177,6 +177,9 @@ def inspect_project(project: Path, **options: Any) -> dict[str, Any]:
     if any(options.get(key) for key in ("object_path", "native", "include_annotations", "include_axes")):
         raise ValueError("Managed figures expose their current objects through plot open; use the reported figure plot path.")
     if options.get("figure_id") is not None:
+        selected = managed.get("selected_figure")
+        if selected is not None and selected["figure_id"] != options["figure_id"]:
+            raise ValueError("The requested figure ID does not match the selected delivery VSZ.")
         managed["selected_figure"] = select_figure(project, managed["primary_figure_id"], managed["figures"], options["figure_id"])
     return managed
 
