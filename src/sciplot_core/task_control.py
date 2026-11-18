@@ -10,6 +10,7 @@ from typing import Any
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import resolve_user_output_layout
+from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.task_timing import timed_task_call, finish_timing, observe_phase
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError, validate_operation_batch
@@ -132,7 +133,6 @@ def start_task(
             request[key] = str(canonical_path(Path(request[key])))
     root = task_location(request, task_dir)
     if _public_mutation and request["action"] != "create" and not root.exists():
-        from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
         require_public_editable(Path(request["project"]), figure_id=request.get("figure_id"))
     if not root.exists():
         from sciplot_core.foundation.research_destination import require_data_destination
@@ -207,7 +207,6 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any], *, _pub
         complete_prepared(root, state)
         return
     if "revise_operations" in response:
-        from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
         if _public_mutation and state["request"].get("project"):
             require_public_editable(Path(state["request"]["project"]), figure_id=state["request"].get("figure_id"))
         if begin_preview_revision(state, response):

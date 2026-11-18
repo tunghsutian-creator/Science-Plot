@@ -10223,7 +10223,9 @@
       "tests/test_legacy_saved_plot.py::test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project",
       "tests/test_legacy_saved_plot.py::test_public_legacy_resume_requires_and_only_finishes_a_saved_transaction",
       "tests/test_legacy_saved_plot.py::test_public_task_and_native_edit_entrypoints_cannot_allocate_old_project_writes",
-      "tests/test_legacy_saved_plot.py::test_registered_project_selects_legacy_or_managed_by_exact_figure_identity"
+      "tests/test_legacy_saved_plot.py::test_registered_project_selects_legacy_or_managed_by_exact_figure_identity",
+      "tests/test_house_style_grammar.py::test_current_minor_ticks_match_retained_edge_cases_and_separate_the_old_pin",
+      "tests/test_house_style_native.py::test_current_log_minor_ticks_keep_native_pdf_pixels_and_physical_canvas"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20278,7 +20280,8 @@
       "tests/test_legacy_saved_plot.py::test_exact_legacy_vsz_rejects_output_inside_original_project",
       "tests/test_legacy_saved_plot.py::test_public_legacy_resume_requires_and_only_finishes_a_saved_transaction",
       "tests/test_legacy_saved_plot.py::test_public_task_and_native_edit_entrypoints_cannot_allocate_old_project_writes",
-      "tests/test_legacy_saved_plot.py::test_registered_project_selects_legacy_or_managed_by_exact_figure_identity"
+      "tests/test_legacy_saved_plot.py::test_registered_project_selects_legacy_or_managed_by_exact_figure_identity",
+      "tests/test_house_style_grammar.py::test_current_minor_ticks_match_retained_edge_cases_and_separate_the_old_pin"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
@@ -20780,7 +20783,8 @@
       "tests/test_legacy_conversion.py::test_legacy_conversion_creates_editable_copy_with_exact_arrays_units_and_marks",
       "tests/test_legacy_conversion.py::test_legacy_conversion_layout_rejection_leaves_no_partial_destination",
       "tests/test_legacy_conversion.py::test_legacy_conversion_refuses_unmapped_widget_before_allocating_copy",
-      "tests/test_legacy_saved_plot.py::test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project"
+      "tests/test_legacy_saved_plot.py::test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project",
+      "tests/test_house_style_native.py::test_current_log_minor_ticks_keep_native_pdf_pixels_and_physical_canvas"
     ]
   },
   "private_failure_responsibilities": [
